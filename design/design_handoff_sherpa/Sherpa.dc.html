@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0e10; }
+  * { box-sizing: border-box; }
+  a { color: #8f9bff; text-decoration: none; }
+  a:hover { color: #b3bcff; }
+  ::selection { background: rgba(127,140,255,.28); }
+  @keyframes shimmer { 0% { opacity: .35 } 50% { opacity: .8 } 100% { opacity: .35 } }
+  @keyframes caret { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+  @keyframes spin { to { transform: rotate(360deg) } }
+</style>
+</helmet>
+
+<div style="min-height:100vh;min-width:1440px;background:#0d0e10;color:#e9eaee;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased">
+
+  <div style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:14px;height:46px;padding:0 14px;background:#0d0e10;border-bottom:1px solid #22252b">
+    <div style="display:flex;align-items:center;gap:8px;min-width:150px">
+      <div style="width:15px;height:15px;border-radius:3px;background:#7f8cff;transform:rotate(45deg);opacity:.9"></div>
+      <span style="font-weight:600;letter-spacing:-.01em">Sherpa</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;padding-top:2px">0.4.1</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9ba1ab">
+      <span>quillmart/quillmart</span>
+      <span style="color:#4a4f57">/</span>
+      <a href="#pr" style="color:#c7cad1">PR 4821</a>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:8px;flex:none;white-space:nowrap">
+      <button onClick="{{ go }}" data-v="overview" style="{{ tabOverview }}">Overview</button>
+      <button onClick="{{ go }}" data-v="route" style="{{ tabRoute }}">Route</button>
+      <button onClick="{{ go }}" data-v="diff" style="{{ tabDiff }}">Full diff</button>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleChat }}" style="display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;background:transparent;border:1px solid #24272d;border-radius:7px;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;flex:none">
+      <span style="{{ agentDotStyle }}"></span>
+      <span style="{{ agentLabelStyle }}">{{ agentLabel }}</span>
+    </button>
+    <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;height:28px;padding:0 9px 0 10px;background:transparent;border:1px solid #24272d;border-radius:7px;color:#6b7078;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;flex:none">
+      Search
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b;border:1px solid #2b2f36;border-radius:4px;padding:1px 4px">⌘K</span>
+    </button>
+    <button style="height:28px;padding:0 10px;background:transparent;border:1px solid #24272d;border-radius:7px;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;flex:none">Feedback</button>
+    <div style="width:24px;height:24px;border-radius:50%;background:#2b2f36;color:#c7cad1;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none">RS</div>
+    <button onClick="{{ toggleDock }}" style="{{ dockBtnStyle }}">SCENARIOS</button>
+  </div>
+
+  <sc-if value="{{ isRoute }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;align-items:flex-start">
+    <div style="flex:1;min-width:0">
+
+      <div style="padding:26px 30px 0 30px;max-width:1560px">
+        <div style="display:flex;align-items:flex-start;gap:18px">
+          <div style="min-width:0">
+            <div style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;margin-bottom:8px">
+              <span style="color:#86d9a8">+806</span><span style="color:#e8a29c">−56</span>
+              <span style="color:#3a3f47">·</span><span>18 files</span>
+              <span style="color:#3a3f47">·</span><span>main ← rs/checkout-4821-edit-window</span>
+              <span style="color:#3a3f47">·</span>
+              <button onClick="{{ togglePci }}" title="Show only the files inside PCI DSS audit scope" style="{{ pciBadge }}">PCI DSS · 3 files</button>
+            </div>
+            <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.015em;line-height:1.25;text-wrap:pretty">Enforce the 30-minute edit window for scheduled deliveries</h1>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:9px;color:#9ba1ab;font-size:12.5px">
+              <div style="width:18px;height:18px;border-radius:50%;background:#33383f;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;color:#c7cad1">AS</div>
+              <span>asha</span>
+              <span style="color:#3a3f47">·</span>
+              <span>opened 6h ago</span>
+              <span style="color:#3a3f47">·</span>
+              <span>you are 1 of 2 reviewers</span>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ toggleSnapshots }}" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;background:#161819;border:1px solid #24272d;border-radius:7px;color:#9ba1ab;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap">
+            snapshot {{ snapshotLabel }}
+            <span style="color:#5e636b">⌄</span>
+          </button>
+        </div>
+      </div>
+
+      <sc-if value="{{ pciOnly }}">
+        <div style="margin:18px 30px 0 30px;max-width:1560px;display:flex;align-items:center;gap:14px;padding:11px 14px;background:#191712;border:1px solid #3d3524;border-radius:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#c9a464;border:1px solid #4a4230;border-radius:4px;padding:2px 6px;flex:none">PCI DSS</span>
+          <div style="min-width:0">
+            <div style="font-size:12.5px;color:#e6d7bd">Showing only the 3 files inside audit scope — 95 of 862 changed lines. Everything else is hidden, not gone.</div>
+            <div style="font-size:12px;color:#9a8f7c;margin-top:2px">Scope comes from CODEOWNERS: <span style="font-family:'IBM Plex Mono',monospace">api/v3/handlers.py</span>, <span style="font-family:'IBM Plex Mono',monospace">api/v3/schemas.py</span>, <span style="font-family:'IBM Plex Mono',monospace">application/order_service.py</span>. Changes here need an audit sign-off before the ship counts.</div>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ togglePci }}" style="height:28px;padding:0 11px;background:transparent;border:1px solid #4a4230;border-radius:6px;color:#c9a464;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap">Show all files</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isStale }}">
+        <div style="margin:18px 30px 0 30px;max-width:1560px;display:flex;align-items:center;gap:14px;padding:11px 14px;background:#191712;border:1px solid #3d3524;border-radius:9px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#e2954c;flex:none"></span>
+          <div style="min-width:0">
+            <div style="font-size:12.5px;color:#e6d7bd">Route was built for <span style="font-family:'IBM Plex Mono',monospace">9f3c1ab</span>, the PR is now on <span style="font-family:'IBM Plex Mono',monospace">a71d4e2</span> — 2 new commits; stops 02, 03 and 07 are affected.</div>
+            <div style="font-size:12px;color:#9a8f7c;margin-top:2px">Your progress carried over: 4 of 7 stops stayed identical and are still marked viewed. Comments on changed ranges are pinned to the old commit.</div>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ showNew }}" style="height:28px;padding:0 11px;background:#e2954c;border:none;border-radius:6px;color:#1b1508;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">What changed since your last pass</button>
+          <button style="height:28px;padding:0 11px;background:transparent;border:1px solid #4a4230;border-radius:6px;color:#c9a464;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap">Regenerate</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isOffline }}">
+        <div style="margin:18px 30px 0 30px;max-width:1560px;display:flex;align-items:flex-start;gap:14px;padding:12px 14px;background:#151619;border:1px solid #2b2f36;border-radius:9px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#6b7078;flex:none;margin-top:6px"></span>
+          <div style="min-width:0">
+            <div style="font-size:12.5px;color:#c7cad1">Agent disconnected. The reader works fully — diff, search, comments, ship. AI zones are read-only.</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+              <code style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9ba1ab;background:#0e0f11;border:1px solid #24272d;border-radius:6px;padding:5px 9px;white-space:nowrap;flex:none">claude /sherpa review 4821</code>
+              <span style="font-size:12px;color:#6b7078;min-width:0">run it in any harness — the session becomes the worker again</span>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <button style="height:28px;padding:0 11px;background:#22252b;border:1px solid #2f333a;border-radius:6px;color:#c7cad1;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap">Copy command</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isFailed }}">
+        <div style="margin:18px 30px 0 30px;max-width:1560px;padding:12px 14px;background:#171315;border:1px solid #3d2a2c;border-radius:9px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#e0736c;flex:none"></span>
+            <div style="font-size:12.5px;color:#e8cfcd">Generation failed on validation: 2 stops referenced <span style="font-family:'IBM Plex Mono',monospace">domain/order_state.py</span>, which is not in this diff.</div>
+            <div style="flex:1"></div>
+            <button style="height:28px;padding:0 11px;background:#22252b;border:1px solid #2f333a;border-radius:6px;color:#c7cad1;font-family:inherit;font-size:12px;cursor:pointer">Retry</button>
+            <button style="height:28px;padding:0 11px;background:transparent;border:1px solid #3d2a2c;border-radius:6px;color:#d99a95;font-family:inherit;font-size:12px;cursor:pointer">Open raw output</button>
+          </div>
+          <div style="margin-top:11px;padding:10px 12px;background:#0e0f11;border:1px solid #24272d;border-radius:7px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8f98;white-space:pre-wrap">validator: fail-closed · dropped 2 of 9 stops · unresolved anchors:
+  stop 04 → domain/order_state.py:88-140
+  stop 07 → domain/order_state.py:12
+hint: fix the anchors in the raw snapshot and re-validate without re-running the model</div>
+          <div style="margin-top:9px;font-size:12px;color:#9ba1ab">The reader below is unaffected — the full diff is available and the previous snapshot <span style="font-family:'IBM Plex Mono',monospace">9f3c1ab</span> is still readable.</div>
+        </div>
+      </sc-if>
+
+      <div style="position:sticky;top:46px;z-index:30;margin-top:20px;padding:10px 30px 11px 30px;background:rgba(13,14,16,.92);backdrop-filter:blur(8px);border-bottom:1px solid #1e2126">
+        <div style="max-width:1560px;display:flex;align-items:center;gap:16px">
+          <div style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:8px;flex:none">
+            <button onClick="{{ setPreset }}" data-p="triage" style="{{ presetTriage }}">Triage</button>
+            <button onClick="{{ setPreset }}" data-p="tour" style="{{ presetTour }}">Full tour</button>
+          </div>
+          <div style="font-size:12px;color:#6b7078;flex:none;max-width:240px;text-wrap:pretty">{{ presetHint }}</div>
+          <div style="flex:1;min-width:120px"></div>
+          <div style="display:flex;align-items:center;gap:8px;flex:none">
+            <sc-if value="{{ isNewFilter }}">
+              <button onClick="{{ showAll }}" style="display:flex;align-items:center;gap:7px;height:27px;padding:0 9px;background:#241f14;border:1px solid #4a4230;border-radius:6px;color:#e2b878;font-family:inherit;font-size:12px;cursor:pointer">Showing changes since your last pass<span style="color:#8a7550">✕</span></button>
+            </sc-if>
+            <div style="display:flex;align-items:center;flex:none">
+              <button onClick="{{ toggleDiffMode }}" title="Switch how every file is shown: one column with changes inline, or old and new side by side" style="display:flex;align-items:center;gap:6px;height:27px;padding:0 7px;background:transparent;border:none;border-radius:6px;color:#5e636b;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap" style-hover="color:#9ba1ab">
+                <span style="font-size:10px">⇄</span>{{ diffModeLabel }}
+              </button>
+            </div>
+            <div style="position:relative;flex:none">
+              <button onClick="{{ toggleFilterMenu }}" style="{{ filterBtn }}" style-hover="border-color:#2f333a;background:#1b1e24">
+                {{ filterLabel }}
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">{{ filterCount }}</span>
+                <span style="color:#5e636b;font-size:10px">⌄</span>
+              </button>
+              <sc-if value="{{ filterOpen }}">
+                <div style="position:absolute;top:32px;right:0;width:250px;background:#181a1e;border:1px solid #303540;border-radius:9px;box-shadow:0 16px 40px rgba(0,0,0,.6);overflow:hidden;z-index:60">
+                  <sc-for list="{{ filters }}" as="fo" hint-placeholder-count="4">
+                    <button onClick="{{ setFilter }}" data-f="{{ fo.id }}" style="{{ fo.rowStyle }}" style-hover="background:#1f2228">
+                      <span style="{{ fo.tickStyle }}">✓</span>
+                      <span style="flex:1;min-width:0;text-align:left">{{ fo.label }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">{{ fo.count }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <div style="width:1px;height:18px;background:#26292f"></div>
+            <span style="font-size:12px;color:#6b7078;white-space:nowrap">Comments from</span>
+            <div style="display:flex;align-items:center;gap:5px">
+              <button onClick="{{ toggleThread }}" data-t="people" title="Threads left by people in the code-review system" style="{{ thrPeople }}" style-hover="border-color:#2f333a;color:#c7cad1">People 3</button>
+              <button onClick="{{ toggleThread }}" data-t="bots" title="Comments from ai-review-bot and other review bots" style="{{ thrBots }}" style-hover="border-color:#2f333a;color:#c7cad1">Bots 2</button>
+              <button onClick="{{ toggleThread }}" data-t="resolved" title="Threads already marked resolved" style="{{ thrResolved }}" style-hover="border-color:#2f333a;color:#c7cad1">Resolved 1</button>
+            </div>
+          </div>
+        </div>
+        <div style="max-width:1560px;margin-top:11px;display:flex;align-items:center;gap:14px">
+          <div style="flex:1;display:flex;height:7px;border-radius:4px;overflow:hidden;background:#181a1e;gap:1px">
+            <div title="high · stops 01–02 · 188 lines" style="width:21.8%;background:#e2954c"></div>
+            <div title="medium · stops 03–04 · 348 lines" style="width:40.4%;background:#4a5160"></div>
+            <div title="low · stops 05–06 · 292 lines" style="width:33.9%;background:#2b2f36"></div>
+            <div title="not explained · 34 lines" style="width:3.9%;background:repeating-linear-gradient(115deg,#33373e 0 3px,#1b1e22 3px 6px)"></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap">862 changed lines · <span style="color:#9ba1ab">96% explained</span> · <a href="#other" style="color:#9ba1ab;border-bottom:1px dashed #4a4f57">34 lines not explained</a></div>
+          <div style="width:1px;height:16px;background:#26292f"></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap"><span style="color:#c7cad1">{{ viewedCount }} / {{ stopTotal }}</span> stops viewed</div>
+        </div>
+      </div>
+
+      <sc-if value="{{ isGenerating }}">
+        <div style="padding:22px 30px 0 30px;max-width:1560px">
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#141518;border:1px solid #24272d;border-radius:9px">
+            <span style="width:12px;height:12px;border:1.5px solid #7f8cff;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none"></span>
+            <span style="font-size:12.5px;color:#c7cad1">{{ routeBanner }}</span>
+            <span style="font-size:12px;color:#6b7078">{{ routeBannerSub }}</span>
+            <div style="flex:1"></div>
+            <a href="#diff" onClick="{{ go }}" data-v="diff" style="font-size:12px;color:#8f9bff">Read the full diff meanwhile →</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="padding:0 30px 180px 30px;max-width:1560px">
+        <sc-for list="{{ stops }}" as="stop" hint-placeholder-count="3">
+          <div id="{{ stop.domId }}" style="display:grid;grid-template-columns:minmax(300px,368px) minmax(0,1fr);gap:40px;padding:30px 0 34px 0;border-bottom:1px solid #1a1d21">
+
+            <div style="{{ stop.leftStyle }}">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+                <span style="{{ stop.tierRule }}"></span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;letter-spacing:.04em;white-space:nowrap">{{ stop.no }} / {{ stop.of }}</span>
+                <sc-if value="{{ stop.tierBadge }}">
+                  <span style="{{ stop.badgeStyle }}">{{ stop.tier }}</span>
+                </sc-if>
+                <sc-if value="{{ stop.isChanged }}">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px">changed</span>
+                </sc-if>
+                <sc-if value="{{ stop.isNew }}">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#86d9a8;background:#132019;border:1px solid #24422f;border-radius:4px;padding:1px 5px">new</span>
+                </sc-if>
+                <sc-if value="{{ stop.queued }}">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;border:1px dashed #2f333a;border-radius:4px;padding:1px 5px;white-space:nowrap">queued</span>
+                </sc-if>
+                <div style="flex:1"></div>
+                <sc-if value="{{ stop.comments }}">
+                  <span style="display:flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">
+                    <span style="width:9px;height:8px;border:1px solid #4a4f57;border-radius:2px;display:inline-block"></span>{{ stop.comments }}
+                  </span>
+                </sc-if>
+                <button onClick="{{ toggleViewed }}" data-s="{{ stop.id }}" style="{{ stop.viewedBtn }}" style-hover="background:#1b1e24">{{ stop.viewedLabel }}</button>
+              </div>
+
+              <h2 style="{{ stop.titleStyle }}">{{ stop.title }}</h2>
+              <sc-if value="{{ stop.para }}" hint-placeholder-val="{{ true }}">
+                <p style="margin:9px 0 0 0;color:#a9aeb7;font-size:13px;line-height:1.62;text-wrap:pretty">{{ stop.para }}</p>
+              </sc-if>
+              <sc-if value="{{ stop.queued }}">
+                <p style="margin:9px 0 0 0;color:#5e636b;font-size:12.5px;line-height:1.6">Title is fixed by the plan. The agent has not filled this stop in yet — it will land here, in this slot.</p>
+              </sc-if>
+
+              <sc-if value="{{ stop.changeReason }}">
+                <div style="margin-top:11px;padding:9px 11px;background:#191712;border-left:2px solid #6b5b39;border-radius:0 6px 6px 0">
+                  <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:#8a7550;margin-bottom:3px">why this stop changed</div>
+                  <div style="font-size:12.5px;color:#d8c9ad;line-height:1.55">{{ stop.changeReason }}</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ stop.bridge }}">
+                <p style="margin:11px 0 0 0;color:#6b7078;font-size:12.5px;line-height:1.55;font-style:italic;text-wrap:pretty">{{ stop.bridge }}</p>
+              </sc-if>
+
+              <div style="display:flex;flex-direction:column;gap:4px;margin-top:14px">
+                <sc-for list="{{ stop.files }}" as="f" hint-placeholder-count="2">
+                  <button onClick="{{ jumpTo }}" data-t="{{ stop.domId }}" title="Jump to this file in the diff next to the stop" style="{{ f.chipStyle }}" style-hover="background:#181a1e;border-color:#2f333a">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#c7cad1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ f.path }}</span>
+                    <span style="flex:1"></span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6cc38f">{{ f.plus }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#dd8a84">{{ f.minus }}</span>
+                    <span style="{{ f.tickStyle }}" title="{{ f.readTitle }}">{{ f.tick }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="min-width:0;display:flex;flex-direction:column;gap:10px">
+              <sc-if value="{{ stop.flash }}">
+                <div style="height:2px;background:#7f8cff;border-radius:2px;animation:shimmer 1s ease-in-out infinite"></div>
+              </sc-if>
+
+              <sc-if value="{{ stop.collapsed }}">
+                <button onClick="{{ toggleStop }}" data-s="{{ stop.id }}" style="display:flex;align-items:center;gap:12px;width:100%;padding:13px 15px;background:#121316;border:1px dashed #2b2f36;border-radius:9px;color:#8a8f98;font-family:inherit;font-size:12.5px;text-align:left;cursor:pointer" style-hover="background:#15171b;border-color:#3a3f47;color:#c7cad1">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">⌄</span>
+                  {{ stop.collapsedLabel }}
+                  <span style="flex:1"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">nothing is hidden — click to expand</span>
+                </button>
+              </sc-if>
+
+              <sc-if value="{{ stop.unexplained }}">
+                <div style="padding:15px 16px;background:linear-gradient(#121316,#121316) padding-box,repeating-linear-gradient(115deg,#33373e 0 3px,#1b1e22 3px 6px) border-box;border:1px solid transparent;border-radius:9px">
+                  <div style="font-size:12.5px;color:#c7cad1;line-height:1.6">The model did not place these ranges. They are <span style="color:#e9eaee">not explained</span>, not <span style="color:#e9eaee">unimportant</span> — read them as raw diff.</div>
+                  <div style="display:flex;gap:8px;margin-top:12px">
+                    <button onClick="{{ go }}" data-v="diff" style="height:28px;padding:0 11px;background:#22252b;border:1px solid #2f333a;border-radius:6px;color:#c7cad1;font-family:inherit;font-size:12px;cursor:pointer">Open the 34 lines</button>
+                    <button style="height:28px;padding:0 11px;background:transparent;border:1px solid #24272d;border-radius:6px;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer">Ask the agent to place them</button>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ stop.tests }}">
+                <div style="background:#121316;border:1px solid #24272d;border-radius:9px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #1e2126">
+                    <span style="font-size:12.5px;color:#c7cad1;font-weight:500">Behavioral digest · 12 assertions</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">test code hidden — assertions are the contract</span>
+                    <div style="flex:1"></div>
+                    <button onClick="{{ toggleTestCode }}" title="Reveals the diff of the test files under the digest" style="height:24px;padding:0 8px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#c7cad1;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap">{{ testCodeLabel }}</button>
+                  </div>
+                  <sc-for list="{{ stop.tests }}" as="t" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:flex-start;gap:11px;padding:10px 14px;border-bottom:1px solid #191c20">
+                      <span style="{{ t.kindStyle }}">{{ t.kind }}</span>
+                      <span style="font-size:12.5px;color:#c7cad1;line-height:1.5;flex:1;text-wrap:pretty">{{ t.text }}</span>
+                      <a href="#test" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap">{{ t.anchor }}</a>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#151316">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#d99a95;border:1px solid #3d2a2c;border-radius:4px;padding:1px 5px;flex:none">uncovered</span>
+                    <span style="font-size:12.5px;color:#c7cad1;line-height:1.5">The disabled edit control on the client is changed behavior with no assertion — verify by hand.</span>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ stop.hunks }}" as="h" hint-placeholder-count="1">
+                <div style="border:1px solid #24272d;border-radius:9px;overflow:hidden;background:#0f1012">
+                  <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#e9eaee">{{ h.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ h.path }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6cc38f">{{ h.plus }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#dd8a84">{{ h.minus }}</span>
+                    <div style="flex:1"></div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">{{ h.entity }}</span>
+                    <button style="height:23px;padding:0 7px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:11px;cursor:pointer" title="Show the unchanged lines around this hunk" style-hover="background:#1b1e24;border-color:#3a3f47">Expand context</button>
+                    <button onClick="{{ toggleFileViewed }}" data-f="{{ h.fid }}" style="{{ h.viewedBtnStyle }}" style-hover="background:#1b1e24">
+                      <span style="{{ h.viewedBoxStyle }}">{{ h.viewedTick }}</span>
+                      {{ h.viewedLabel }}
+                    </button>
+                  </div>
+                  <sc-if value="{{ h.foldTop }}">
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 13px;background:#111214;border-bottom:1px solid #191c20;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">
+                      <span>↕</span>{{ h.foldTop }}
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ h.unified }}" hint-placeholder-val="{{ true }}">
+                    <sc-for list="{{ h.rows }}" as="r" hint-placeholder-count="8">
+                      <div style="{{ r.rowStyle }}">
+                        <span style="{{ r.numStyle }}">{{ r.on }}</span>
+                        <span style="{{ r.numStyle }}">{{ r.nn }}</span>
+                        <span style="{{ r.markStyle }}">{{ r.mark }}</span>
+                        <span style="{{ r.codeStyle }}">{{ r.tokens }}</span>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                  <sc-if value="{{ h.split }}">
+                    <sc-for list="{{ h.pairs }}" as="p" hint-placeholder-count="8">
+                      <div style="display:grid;grid-template-columns:46px 14px minmax(0,1fr) 46px 14px minmax(0,1fr)">
+                        <span style="{{ p.left.numStyle }}">{{ p.left.num }}</span>
+                        <span style="{{ p.left.markStyle }}">{{ p.left.mark }}</span>
+                        <span style="{{ p.left.codeStyle }}">{{ p.left.tokens }}</span>
+                        <span style="{{ p.right.numStyle }}">{{ p.right.num }}</span>
+                        <span style="{{ p.right.markStyle }}">{{ p.right.mark }}</span>
+                        <span style="{{ p.right.codeStyle }}">{{ p.right.tokens }}</span>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                  <sc-if value="{{ h.selection }}">
+                    <div style="display:flex;align-items:center;gap:2px;margin:-1px 13px 12px 13px;padding:4px;width:max-content;background:#1b1e24;border:1px solid #333842;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078;padding:0 8px 0 6px">4 lines selected</span>
+                      <button onClick="{{ toggleChat }}" style="height:25px;padding:0 9px;background:#7f8cff;border:none;border-radius:5px;color:#101223;font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer">Ask the agent</button>
+                      <button style="height:25px;padding:0 9px;background:transparent;border:none;color:#c7cad1;font-family:inherit;font-size:11.5px;cursor:pointer">Comment</button>
+                      <button style="height:25px;padding:0 9px;background:transparent;border:none;color:#c7cad1;font-family:inherit;font-size:11.5px;cursor:pointer">Copy link</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ h.note }}">
+                    <div style="display:flex;align-items:flex-start;gap:11px;padding:11px 13px;background:#131424;border-top:1px solid #262a45">
+                      <span style="width:11px;height:11px;border-radius:2px;background:#7f8cff;transform:rotate(45deg);flex:none;margin-top:3px;opacity:.9"></span>
+                      <div style="min-width:0">
+                        <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+                          <span style="font-size:12px;color:#aeb6ff;font-weight:500">Agent note · asked from lines {{ h.noteRange }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6f76a8">model answer · not published to the review host</span>
+                        </div>
+                        <div style="font-size:12.5px;color:#c9cdf0;line-height:1.6;text-wrap:pretty">{{ h.note }}</div>
+                        <div style="display:flex;gap:14px;margin-top:8px">
+                          <a href="#chat" onClick="{{ toggleChat }}" style="font-size:12px;color:#8f9bff">Open in chat</a>
+                          <a href="#draft" style="font-size:12px;color:#8f9bff">Turn into a comment draft</a>
+                          <span style="font-size:12px;color:#5e636b">Collapse</span>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ h.threads }}">
+                    <sc-for list="{{ h.threads }}" as="th" hint-placeholder-count="1">
+                      <div style="{{ th.wrapStyle }}">
+                        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+                          <div style="{{ th.avatarStyle }}">{{ th.initials }}</div>
+                          <span style="font-size:12px;color:#c7cad1;font-weight:500">{{ th.author }}</span>
+                          <sc-if value="{{ th.source }}">
+                            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9ba1ab;border:1px solid #2f333a;border-radius:4px;padding:1px 5px">{{ th.source }}</span>
+                          </sc-if>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ th.meta }}</span>
+                          <div style="flex:1"></div>
+                          <sc-if value="{{ th.status }}">
+                            <span style="{{ th.statusStyle }}">{{ th.status }}</span>
+                          </sc-if>
+                          <sc-if value="{{ th.toggleLabel }}">
+                            <button onClick="{{ toggleReplies }}" style="{{ th.toggleStyle }}">{{ th.toggleLabel }}</button>
+                          </sc-if>
+                        </div>
+                        <div style="font-size:12.5px;color:#b9bec7;line-height:1.6;text-wrap:pretty">{{ th.body }}</div>
+                        <sc-if value="{{ th.replies }}">
+                          <div style="margin-top:10px;padding-left:12px;border-left:1px solid #26292f">
+                            <sc-for list="{{ th.replies }}" as="rp" hint-placeholder-count="2">
+                              <div style="{{ rp.wrapStyle }}">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                                  <div style="{{ rp.avatarStyle }}">{{ rp.initials }}</div>
+                                  <span style="font-size:11.5px;color:#c7cad1;font-weight:500">{{ rp.author }}</span>
+                                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">{{ rp.meta }}</span>
+                                  <sc-if value="{{ rp.bot }}">
+                                    <span style="{{ rp.botStyle }}">{{ rp.bot }}</span>
+                                  </sc-if>
+                                  <sc-if value="{{ rp.draft }}">
+                                    <span style="{{ rp.draftStyle }}">{{ rp.draft }}</span>
+                                  </sc-if>
+                                  <sc-if value="{{ rp.deep }}">
+                                    <span style="{{ rp.deepStyle }}">{{ rp.deep }}</span>
+                                  </sc-if>
+                                </div>
+                                <div style="font-size:12.5px;color:#b9bec7;line-height:1.6;text-wrap:pretty">{{ rp.body }}</div>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <div style="display:flex;align-items:center;gap:14px;margin-top:8px">
+                          <a href="#reply" style="font-size:12px;color:#8f9bff">{{ th.action }}</a>
+                          <span style="font-size:12px;color:#5e636b">{{ th.hint }}</span>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                </div>
+              </sc-for>
+
+              <sc-if value="{{ stop.skeleton }}">
+                <div style="border:1px solid #1e2126;border-radius:9px;padding:15px;background:#101113;animation:shimmer 1.6s ease-in-out infinite">
+                  <div style="height:9px;width:38%;background:#1e2126;border-radius:3px"></div>
+                  <div style="height:9px;width:72%;background:#1a1d21;border-radius:3px;margin-top:11px"></div>
+                  <div style="height:9px;width:60%;background:#1a1d21;border-radius:3px;margin-top:8px"></div>
+                  <div style="height:9px;width:66%;background:#1a1d21;border-radius:3px;margin-top:8px"></div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{ chatOpen }}">
+      <div style="position:sticky;top:46px;flex:none;width:392px;height:calc(100vh - 46px);border-left:1px solid #22252b;background:#101113;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #1e2126">
+          <span style="font-size:12.5px;font-weight:600">Agent</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">claude-code · sonnet-5</span>
+          <div style="flex:1"></div>
+          <button style="height:24px;padding:0 8px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:11.5px;cursor:pointer">Notes 3</button>
+          <button onClick="{{ toggleChat }}" style="width:24px;height:24px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer">✕</button>
+        </div>
+        <sc-if value="{{ isGenerating }}">
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 14px;background:#141520;border-bottom:1px solid #22253a;font-size:12px;color:#aeb6ff">
+            <span style="width:10px;height:10px;border:1.5px solid #7f8cff;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none"></span>
+            Generating the route · your question is next in the queue
+          </div>
+        </sc-if>
+        <div style="flex:1;overflow:auto;padding:14px">
+          <sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
+            <div style="{{ m.wrapStyle }}">
+              <sc-if value="{{ m.anchor }}">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;padding:5px 8px;background:#15171b;border:1px solid #24272d;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8a8f98">
+                  <span style="color:#5e636b">↳</span>{{ m.anchor }}
+                </div>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                <span style="{{ m.whoStyle }}">{{ m.who }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">{{ m.time }}</span>
+              </div>
+              <div style="font-size:12.5px;color:#c2c7d0;line-height:1.65;text-wrap:pretty">{{ m.body }}</div>
+              <sc-if value="{{ m.pinned }}">
+                <div style="margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#8f9bff">
+                  <span>◆</span>Pinned as a note at {{ m.pinned }}
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:7px;padding:2px 0 0 0;font-size:12.5px;color:#6b7078">
+            <span style="width:2px;height:13px;background:#7f8cff;animation:caret 1s step-end infinite;display:inline-block"></span>
+          </div>
+        </div>
+        <div style="padding:12px 14px;border-top:1px solid #1e2126">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8a8f98">
+            <span style="background:#15171b;border:1px solid #24272d;border-radius:5px;padding:3px 7px">context: PR 4821</span>
+            <span style="background:#15171b;border:1px solid #24272d;border-radius:5px;padding:3px 7px">order_service.py:148–151</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:8px;padding:9px 11px;background:#15171b;border:1px solid #262a30;border-radius:8px">
+            <span style="flex:1;font-size:12.5px;color:#6b7078">Ask about the selected range…</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">⏎</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isOverview }}">
+    <div style="padding:26px 30px 120px 30px;max-width:1300px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;margin-bottom:8px">PR 4821 · <span style="color:#86d9a8">+806</span> <span style="color:#e8a29c">−56</span> · 18 files · <span style="border:1px solid #3d3a2c;color:#c9a464;border-radius:4px;padding:0 5px">PCI DSS</span></div>
+      <h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-.015em">Enforce the 30-minute edit window for scheduled deliveries</h1>
+      <div style="display:flex;align-items:center;gap:9px;margin-top:10px;color:#9ba1ab;font-size:12.5px">
+        <span>asha</span><span style="color:#3a3f47">·</span><span>6h ago</span><span style="color:#3a3f47">·</span><span>main ← rs/checkout-4821-edit-window</span><span style="color:#3a3f47">·</span><span style="color:#86d9a8">checks passed</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 356px;gap:22px;margin-top:24px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="background:#121316;border:1px solid #24272d;border-radius:10px;padding:16px 18px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+              <span style="font-size:12.5px;font-weight:600">Summary</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078">claude-code · sonnet-5 · 9f3c1ab</span>
+              <div style="flex:1"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8f9bff">streaming</span>
+            </div>
+            <p style="margin:0;font-size:13px;color:#c2c7d0;line-height:1.65;text-wrap:pretty">Editing a scheduled delivery is now a domain decision: <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c7cad1">EditPolicy</span> owns the 30-minute dispatch lock, the PATCH endpoint validates against it before loading the aggregate, and the API returns the verdict so the client can disable the control instead of guessing. The order cache is now dropped after the write rather than before it.<span style="display:inline-block;width:2px;height:13px;background:#7f8cff;margin-left:3px;vertical-align:-2px;animation:caret 1s step-end infinite"></span></p>
+          </div>
+
+          <div style="background:#121316;border:1px solid #24272d;border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #1e2126">
+              <span style="font-size:12.5px;font-weight:600">Files by ownership</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078;white-space:nowrap">CODEOWNERS · 12 of 18 files · <span style="color:#c7cad1">570 of 862 lines are yours</span></span>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:7px;flex:none">
+                <button onClick="{{ setZone }}" data-z="mine" style="{{ zoneMine }}">My zone 12</button>
+                <button onClick="{{ setZone }}" data-z="all" style="{{ zoneAll }}">All 18</button>
+              </div>
+            </div>
+            <sc-for list="{{ zones }}" as="z" hint-placeholder-count="3">
+              <div style="padding:12px 16px;border-bottom:1px solid #191c20">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#c7cad1">{{ z.path }}</span>
+                  <span style="{{ z.ownerStyle }}">{{ z.owner }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078;white-space:nowrap">{{ z.files }} files · {{ z.lines }} lines</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6cc38f">{{ z.plus }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#dd8a84">{{ z.minus }}</span>
+                </div>
+                <div style="font-size:12px;color:#8a8f98">{{ z.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="background:#131424;border:1px solid #262a45;border-radius:10px;padding:16px 18px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:11px;height:11px;border:1.5px solid #7f8cff;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none"></span>
+              <span style="font-size:12.5px;font-weight:600;color:#dfe2ff">{{ genTitle }}</span>
+              <div style="flex:1"></div>
+              <sc-if value="{{ isFilling }}">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8f9bff;white-space:nowrap">3 of 7 ready</span>
+              </sc-if>
+              <sc-if value="{{ isReading }}">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6f76a8;white-space:nowrap">~40s</span>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ isReading }}">
+              <div style="margin-top:13px;display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:#c9cdf0"><span style="width:5px;height:5px;border-radius:50%;background:#7f8cff;flex:none"></span>Reading all 18 files of the diff</div>
+                <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:#6f76a8"><span style="width:5px;height:5px;border-radius:50%;background:#3a3f60;flex:none"></span>Deciding how many stops there are and in what order</div>
+                <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:#6f76a8"><span style="width:5px;height:5px;border-radius:50%;background:#3a3f60;flex:none"></span>Filling the stops in, one by one</div>
+              </div>
+              <div style="font-size:12px;color:#a6adde;margin-top:13px;line-height:1.55">The plan comes first — until it is ready there is no stop count to show. The diff is already open below; nothing waits on the agent.</div>
+            </sc-if>
+
+            <sc-if value="{{ isFilling }}">
+              <div style="display:flex;gap:3px;margin-top:12px">
+                <sc-for list="{{ segments }}" as="g" hint-placeholder-count="7">
+                  <div style="{{ g.style }}"></div>
+                </sc-for>
+              </div>
+              <div style="font-size:12px;color:#a6adde;margin-top:11px;line-height:1.55">The plan is fixed — stops are validated independently, so they light up out of order.</div>
+              <div style="display:flex;flex-direction:column;gap:1px;margin-top:12px;padding-top:11px;border-top:1px solid #262a45">
+                <sc-for list="{{ plan }}" as="p" hint-placeholder-count="7">
+                  <div style="{{ p.rowStyle }}" style-hover="background:#1b1e24">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5c6288;width:16px;flex:none">{{ p.no }}</span>
+                    <span style="{{ p.titleStyle }}">{{ p.title }}</span>
+                    <span style="{{ p.stateStyle }}">{{ p.state }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <button onClick="{{ go }}" data-v="route" style="width:100%;height:31px;margin-top:14px;background:#7f8cff;border:none;border-radius:7px;color:#101223;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ genCta }}</button>
+            <div style="font-size:11.5px;color:#6f76a8;margin-top:8px;text-align:center">{{ genCtaHint }}</div>
+          </div>
+
+          <div style="background:#121316;border:1px solid #24272d;border-radius:10px;padding:14px 16px">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:11px">Discussion</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#b9bec7"><span style="width:18px;height:18px;border-radius:50%;background:#33383f;font-size:9px;display:flex;align-items:center;justify-content:center">MP</span>morgan<span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">3 open</span></div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#8a8f98"><span style="width:18px;height:18px;border-radius:50%;background:#22252b;font-size:9px;display:flex;align-items:center;justify-content:center">◆</span>ai-review-bot<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;border:1px solid #2f333a;border-radius:4px;padding:0 4px">bot</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">2</span></div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#6b7078"><span style="width:18px;height:18px;border-radius:50%;background:#22252b;font-size:9px;display:flex;align-items:center;justify-content:center">AO</span>ada<span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">1 resolved</span></div>
+            </div>
+          </div>
+
+          <div style="background:#121316;border:1px solid #24272d;border-radius:10px;padding:14px 16px">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">Snapshots</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px">
+              <div style="display:flex;align-items:center;gap:8px;color:#c7cad1"><span style="width:5px;height:5px;border-radius:50%;background:#7f8cff"></span>9f3c1ab · 6h ago · sonnet-5</div>
+              <div style="display:flex;align-items:center;gap:8px;color:#6b7078"><span style="width:5px;height:5px;border-radius:50%;background:#3a3f47"></span>c14e802 · yesterday · sonnet-5</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isDiff }}">
+    <div style="display:flex;align-items:flex-start">
+      <div style="position:sticky;top:46px;flex:none;width:290px;height:calc(100vh - 46px);border-right:1px solid #22252b;background:#101113;padding:14px;overflow:auto">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#15171b;border:1px solid #262a30;border-radius:7px;margin-bottom:11px">
+          <span style="color:#5e636b;font-size:12px">⌕</span>
+          <span style="font-size:12px;color:#6b7078">Filter files</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:14px">
+          <sc-for list="{{ filters }}" as="fo" hint-placeholder-count="4">
+            <button onClick="{{ setFilter }}" data-f="{{ fo.id }}" style="{{ fo.chipStyle }}">{{ fo.short }} {{ fo.count }}</button>
+          </sc-for>
+        </div>
+        <sc-for list="{{ diffTree }}" as="f" hint-placeholder-count="10">
+          <div onClick="{{ toggleDir }}" data-p="{{ f.path }}" style="{{ f.rowStyle }}" style-hover="background:#1b1e24">
+            <span style="{{ f.iconStyle }}">{{ f.icon }}</span>
+            <span style="{{ f.readStyle }}" title="{{ f.readTitle }}">{{ f.readDot }}</span>
+            <span style="{{ f.labelStyle }}">{{ f.label }}</span>
+            <span style="flex:1"></span>
+            <sc-if value="{{ f.pci }}">
+              <span style="{{ f.pciStyle }}">{{ f.pci }}</span>
+            </sc-if>
+            <span style="{{ f.routeStyle }}">{{ f.route }}</span>
+            <span style="{{ f.plusStyle }}">{{ f.plus }}</span>
+          </div>
+        </sc-for>
+        <div style="margin-top:14px;padding:11px;border:1px dashed #2b2f36;border-radius:8px;font-size:11.5px;color:#8a8f98;line-height:1.55">Hatched marks mean the range has no route stop. 34 lines in 3 files.</div>
+      </div>
+
+      <div style="flex:1;min-width:0;padding:22px 26px 140px 26px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <h2 style="margin:0;font-size:15px;font-weight:600">Full diff</h2>
+          <span style="font-size:12px;color:#6b7078">Classic reader. The route no longer sets the order — it stays in the margin.</span>
+          <div style="flex:1"></div>
+          <button onClick="{{ toggleDiffMode }}" title="Switch how every file is shown: one column with changes inline, or old and new side by side" style="display:flex;align-items:center;gap:6px;height:27px;padding:0 7px;background:transparent;border:none;color:#5e636b;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap" style-hover="color:#9ba1ab">
+            <span style="font-size:10px">⇄</span>{{ diffModeLabel }}
+          </button>
+          <button style="height:27px;padding:0 9px;background:transparent;border:none;color:#5e636b;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap" style-hover="color:#9ba1ab">ignore whitespace</button>
+        </div>
+        <sc-for list="{{ diffHunks }}" as="h" hint-placeholder-count="2">
+          <div style="border:1px solid #24272d;border-radius:9px;overflow:hidden;background:#0f1012;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#e9eaee">{{ h.name }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ h.path }}</span>
+              <div style="flex:1"></div>
+              <span style="{{ h.routeStyle }}">{{ h.route }}</span>
+              <button style="height:23px;padding:0 7px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:11px;cursor:pointer;white-space:nowrap" title="Show the unchanged lines around this hunk" style-hover="background:#1b1e24;border-color:#3a3f47">Expand context</button>
+              <button onClick="{{ toggleFileViewed }}" data-f="{{ h.fid }}" style="{{ h.viewedBtnStyle }}" style-hover="background:#1b1e24">
+                <span style="{{ h.viewedBoxStyle }}">{{ h.viewedTick }}</span>
+                {{ h.viewedLabel }}
+              </button>
+            </div>
+            <sc-if value="{{ h.unified }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ h.rows }}" as="r" hint-placeholder-count="8">
+                <div style="{{ r.rowStyle }}">
+                  <span style="{{ r.numStyle }}">{{ r.on }}</span>
+                  <span style="{{ r.numStyle }}">{{ r.nn }}</span>
+                  <span style="{{ r.markStyle }}">{{ r.mark }}</span>
+                  <span style="{{ r.codeStyle }}">{{ r.tokens }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ h.split }}">
+              <sc-for list="{{ h.pairs }}" as="p" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:46px 14px minmax(0,1fr) 46px 14px minmax(0,1fr)">
+                  <span style="{{ p.left.numStyle }}">{{ p.left.num }}</span>
+                  <span style="{{ p.left.markStyle }}">{{ p.left.mark }}</span>
+                  <span style="{{ p.left.codeStyle }}">{{ p.left.tokens }}</span>
+                  <span style="{{ p.right.numStyle }}">{{ p.right.num }}</span>
+                  <span style="{{ p.right.markStyle }}">{{ p.right.mark }}</span>
+                  <span style="{{ p.right.codeStyle }}">{{ p.right.tokens }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ h.unexplained }}">
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 13px;background:repeating-linear-gradient(115deg,#191c20 0 4px,#141518 4px 8px);border-top:1px solid #24272d">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9ba1ab">no route stop covers lines {{ h.unexplained }}</span>
+                <div style="flex:1"></div>
+                <a href="#other" style="font-size:11.5px;color:#8f9bff">Ask the agent to place it</a>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isInbox }}">
+    <div style="padding:26px 30px 90px 30px;max-width:1080px">
+      <div style="display:flex;align-items:center;gap:11px;padding:10px 13px;margin-bottom:20px;background:#151619;border:1px dashed #333842;border-radius:9px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6b7078;letter-spacing:.06em;white-space:nowrap">NOT IN V1</span>
+        <span style="font-size:12.5px;color:#9ba1ab">In v1 the UI opens for one PR — the one you ran the skill on. This list is kept in the mockups as a later idea.</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <h1 style="margin:0;font-size:19px;font-weight:600">Reviews</h1>
+        <span style="font-size:12px;color:#6b7078">sorted by proximity to production</span>
+      </div>
+      <sc-for list="{{ inbox }}" as="g" hint-placeholder-count="2">
+        <div style="margin-top:26px">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+            <span style="font-size:12px;font-weight:600;color:#c7cad1">{{ g.title }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">{{ g.count }}</span>
+          </div>
+          <div style="border:1px solid #24272d;border-radius:10px;overflow:hidden;background:#121316">
+            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+              <div onClick="{{ go }}" data-v="route" style="{{ r.rowStyle }}" style-hover="background:#181a1e">
+                <span style="{{ r.dotStyle }}"></span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;width:58px">{{ r.pr }}</span>
+                <span style="font-size:12.5px;color:#e0e2e7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">{{ r.title }}</span>
+                <span style="{{ r.routeStyle }}">{{ r.route }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078;width:74px;text-align:right">{{ r.size }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8a8f98;width:96px;text-align:right">{{ r.age }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isDone }}">
+    <div style="display:flex;justify-content:center;padding:64px 30px 90px 30px">
+      <div style="width:100%;max-width:620px">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px">
+          <span style="width:22px;height:22px;border-radius:50%;background:#1f3d2c;color:#86d9a8;font-size:12px;display:flex;align-items:center;justify-content:center">✓</span>
+          <h1 style="margin:0;font-size:19px;font-weight:600">{{ shipVerdict }} · PR 4821</h1>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">{{ shipProvenance }}</span>
+        </div>
+        <div style="background:#121316;border:1px solid #24272d;border-radius:10px;overflow:hidden">
+          <div style="padding:15px 18px;border-bottom:1px solid #1e2126;display:flex;align-items:center;gap:10px">
+            <span style="font-size:12.5px;color:#c7cad1">2 comments published as one batch</span>
+            <div style="flex:1"></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6cc38f">delivered to the PR</span>
+          </div>
+          <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid #191c20">
+              <span style="font-size:12.5px;color:#9ba1ab;flex:1">{{ s.label }}</span>
+              <span style="{{ s.valueStyle }}">{{ s.value }}</span>
+            </div>
+          </sc-for>
+          <div style="padding:14px 18px;background:#151316;display:flex;align-items:center;gap:12px">
+            <span style="font-size:12.5px;color:#d8c9ad;flex:1">1 thread from morgan is still open — it does not block the ship, but it stays on your list.</span>
+            <button style="height:27px;padding:0 10px;background:transparent;border:1px solid #4a4230;border-radius:6px;color:#c9a464;font-family:inherit;font-size:12px;cursor:pointer">Open thread</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:16px">
+          <button onClick="{{ go }}" data-v="route" style="height:32px;padding:0 13px;background:transparent;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-family:inherit;font-size:12.5px;cursor:pointer">Back to the route</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showActions }}">
+    <div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:8px;padding:8px 9px;background:#181a1e;border:1px solid #303540;border-radius:11px;box-shadow:0 16px 44px rgba(0,0,0,.6)">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 6px 0 4px;white-space:nowrap">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">{{ viewedCount }} / {{ stopTotal }}</span>
+        <span style="font-size:12px;color:#6b7078">stops</span>
+      </div>
+      <div style="width:1px;height:20px;background:#2b2f36"></div>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#e2954c"></span>
+        <span style="font-size:12px;color:#e2b878">2 drafts will publish</span>
+      </div>
+      <div style="width:1px;height:20px;background:#2b2f36"></div>
+      <button style="height:29px;padding:0 11px;background:transparent;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-family:inherit;font-size:12.5px;cursor:pointer">Comment on the PR</button>
+      <button style="height:29px;padding:0 11px;background:transparent;border:1px solid #2f333a;border-radius:7px;color:#d99a95;font-family:inherit;font-size:12.5px;cursor:pointer">Request changes</button>
+      <div style="position:relative;display:flex;align-items:center">
+        <button onClick="{{ ship }}" data-mode="ship" style="display:flex;align-items:center;gap:7px;height:29px;padding:0 12px;background:#7f8cff;border:none;border-radius:7px 0 0 7px;color:#101223;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" style="flex:none"><path fill-rule="evenodd" d="m4 7 2.94-5.041a1.932 1.932 0 0 1 3.56 1.378L10.25 4.5 9.93 6h2.94a2 2 0 0 1 1.927 2.535l-.879 3.162A4 4 0 0 1 9.596 14.6L4.5 14zm5.771 6.11-3.863-.455-.379-5.3 2.708-4.64a.432.432 0 0 1 .796.308l-.571 2.663L8.073 7.5h4.796a.5.5 0 0 1 .482.634l-.879 3.162a2.5 2.5 0 0 1-2.7 1.814M2.748 7.447a.75.75 0 1 0-1.496.106l.5 7a.75.75 0 0 0 1.496-.106z" clip-rule="evenodd"></path></svg>Ship
+        </button>
+        <button onClick="{{ toggleShipMenu }}" title="Choose ship or sticky ship" style="height:29px;padding:0 8px;background:#7f8cff;border:none;border-left:1px solid rgba(16,18,35,.25);border-radius:0 7px 7px 0;color:#101223;font-family:inherit;font-size:11px;cursor:pointer">⌄</button>
+        <sc-if value="{{ shipOpen }}">
+          <div style="position:absolute;bottom:38px;right:0;width:330px;background:#181a1e;border:1px solid #303540;border-radius:10px;box-shadow:0 18px 44px rgba(0,0,0,.6);overflow:hidden">
+            <button onClick="{{ ship }}" data-mode="ship" style="display:block;width:100%;padding:11px 13px;background:transparent;border:none;border-bottom:1px solid #22252b;text-align:left;cursor:pointer;font-family:inherit" style-hover="background:#1f2228">
+              <div style="font-size:12.5px;color:#e9eaee;font-weight:500">Ship</div>
+              <div style="font-size:11.5px;color:#8a8f98;margin-top:3px;line-height:1.45">Approves this snapshot only. A new push clears it and asks you again.</div>
+            </button>
+            <button onClick="{{ ship }}" data-mode="sticky" style="display:block;width:100%;padding:11px 13px;background:transparent;border:none;text-align:left;cursor:pointer;font-family:inherit" style-hover="background:#1f2228">
+              <div style="font-size:12.5px;color:#e9eaee;font-weight:500">Sticky ship</div>
+              <div style="font-size:11.5px;color:#8a8f98;margin-top:3px;line-height:1.45">Approval carries to the next pushes until a file in your CODEOWNERS zone changes.</div>
+            </button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ paletteOpen }}">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;z-index:80;background:rgba(7,8,9,.66);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:96px">
+      <div style="width:100%;max-width:560px;background:#141518;border:1px solid #313640;border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.65);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #1e2126">
+          <span style="color:#5e636b">⌕</span>
+          <span style="font-size:13.5px;color:#c7cad1">cache<span style="display:inline-block;width:2px;height:14px;background:#7f8cff;margin-left:2px;vertical-align:-2px;animation:caret 1s step-end infinite"></span></span>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">esc</span>
+        </div>
+        <sc-for list="{{ palette }}" as="p" hint-placeholder-count="5">
+          <div style="{{ p.rowStyle }}" style-hover="background:#1b1e24">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;width:74px;flex:none">{{ p.group }}</span>
+            <span style="font-size:12.5px;color:#e0e2e7;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.label }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">{{ p.key }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ dockOpen }}">
+    <div style="position:fixed;right:14px;top:54px;z-index:70;width:226px;background:#111214;border:1px dashed #333842;border-radius:10px;padding:9px;box-shadow:0 18px 40px rgba(0,0,0,.55)">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:0 2px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5e636b;letter-spacing:.06em">PROTOTYPE · SCENARIOS</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ toggleDock }}" style="background:transparent;border:none;color:#5e636b;font-size:12px;cursor:pointer;padding:0">–</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ scenarios }}" as="s" hint-placeholder-count="6">
+          <button onClick="{{ setScenario }}" data-s="{{ s.id }}" style="{{ s.btnStyle }}" style-hover="background:#1b1e24;color:#e0e2e7">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5e636b;width:26px;flex:none">{{ s.tag }}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.label }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tierBadges&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: 'route', preset: 'triage', routeFilter: 'all', gen: 'ready', stale: false,
+    chat: false, palette: false, dock: false, lowOpen: false, genPhase: 'filling', zone: 'mine',
+    diffMode: 'unified', showTestCode: false, fileViewed: {}, threadsShow: { people: true, bots: false, resolved: false }, dirClosed: {}, fileFilter: 'all', filterOpen: false,
+    scenario: 'f1', viewed: { s1: true, s2: false, s3: false, s4: false, s5: false, s6: true, s7: false },
+    expanded: {}
+  };
+
+  componentDidMount() {
+    this._k = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState({ palette: true }); }
+      if (e.key === 'Escape') this.setState({ palette: false });
+    };
+    window.addEventListener('keydown', this._k);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._k); }
+
+  ZONES = [
+    { path: 'services/orders/domain', owner: 'you \u00b7 owner', files: 5, lines: 361, plus: '+338', minus: '\u221223', mine: true, note: 'EditPolicy, order aggregate, denial reasons and their tests.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#86d9a8;background:#132019;border:1px solid #24422f;border-radius:4px;padding:1px 5px;white-space:nowrap' },
+    { path: 'services/orders/api/v3', owner: 'you \u00b7 owner', files: 4, lines: 160, plus: '+142', minus: '\u221218', mine: true, note: 'PATCH endpoint, response schema, 409 contract, handler tests.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#86d9a8;background:#132019;border:1px solid #24422f;border-radius:4px;padding:1px 5px;white-space:nowrap' },
+    { path: 'services/orders \u00b7 application, misc', owner: 'you \u00b7 owner', files: 3, lines: 49, plus: '+38', minus: '\u221211', mine: true, note: 'Cache ordering, logging fields, CODEOWNERS owners line.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#86d9a8;background:#132019;border:1px solid #24422f;border-radius:4px;padding:1px 5px;white-space:nowrap' },
+    { path: 'front/checkout', owner: 'front-infra', files: 3, lines: 76, plus: '+72', minus: '\u22124', mine: false, note: 'Disabled edit control. Outside your CODEOWNERS zone.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#9ba1ab;border:1px solid #2f333a;border-radius:4px;padding:1px 5px;white-space:nowrap' },
+    { path: 'gen/*', owner: 'generated', files: 3, lines: 216, plus: '+216', minus: '', mine: false, note: 'Regenerated protos \u2014 dimmed by default.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#6b7078;border:1px solid #26292f;border-radius:4px;padding:1px 5px;white-space:nowrap' }
+  ];
+
+  SCEN = [
+    { id: 'inbox', tag: '00', label: 'Review inbox (not in v1)', st: { view: 'inbox', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'overview', tag: '01', label: 'PR card · reading the diff', st: { view: 'overview', gen: 'generating', genPhase: 'reading', chat: false, preset: 'triage', stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'plan', tag: '01b', label: 'PR card · plan ready, filling', st: { view: 'overview', gen: 'generating', genPhase: 'filling', chat: false, preset: 'triage', stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'gen', tag: '02', label: 'Route · partially filled', st: { view: 'route', gen: 'generating', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'f1', tag: 'F1', label: 'Triage · main screen', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'f2', tag: 'F2', label: 'Full tour + chat', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'tour', chat: true, stale: false, routeFilter: 'all' } },
+    { id: 'f3', tag: 'F3', label: 'Second pass · what\u2019s new', st: { view: 'route', gen: 'ready', genPhase: 'filling', stale: true, routeFilter: 'new', chat: false, preset: 'triage' } },
+    { id: 'f4', tag: 'F4', label: 'Threads + AI review', st: { view: 'route', gen: 'ready', genPhase: 'filling', threadsShow: { people: true, bots: true, resolved: false }, chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'f5', tag: 'F5', label: 'Agent disconnected', st: { view: 'route', gen: 'offline', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'failed', tag: '03', label: 'Generation failed', st: { view: 'route', gen: 'failed', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'diff', tag: '04', label: 'Full diff fallback', st: { view: 'diff', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'done', tag: '05', label: 'Review complete', st: { view: 'done', chat: false, gen: 'ready', stale: false, preset: 'triage', routeFilter: 'all' } },
+    { id: 'palette', tag: '06', label: 'Command palette', st: { palette: true } }
+  ];
+
+  // ---------- diff helpers ----------
+  hl(code) {
+    const re = /("[^"]*"|'[^']*'|#[^\n]*|\/\/[^\n]*|@[A-Za-z_.]+|\b(?:async|await|def|return|raise|class|from|import|self|None|True|False|if|not|and|or|for|in|with|try|except|assert|const|let|function|export|interface|type|new|throw|await)\b|\b\d+(?:\.\d+)?\b)/g;
+    const out = []; let last = 0, m, i = 0;
+    while ((m = re.exec(code))) {
+      if (m.index > last) out.push(React.createElement('span', { key: i++ }, code.slice(last, m.index)));
+      const t = m[0];
+      let color = '#9aa6ff', style = null;
+      if (t[0] === '"' || t[0] === "'") color = '#d3b183';
+      else if (t[0] === '#' || t.startsWith('//')) { color = '#5f646d'; style = 'italic'; }
+      else if (t[0] === '@') color = '#d99a5c';
+      else if (/^\d/.test(t)) color = '#d3b183';
+      out.push(React.createElement('span', { key: i++, style: { color, fontStyle: style || 'normal' } }, t));
+      last = m.index + t.length;
+    }
+    if (last < code.length) out.push(React.createElement('span', { key: i++ }, code.slice(last)));
+    return out;
+  }
+
+  diff(oldStart, newStart, text, sel) {
+    let o = oldStart, n = newStart;
+    const NUM = 'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;text-align:right;padding-right:9px;user-select:none;';
+    return text.replace(/^\n/, '').split('\n').filter((l) => l.length).map((l, i) => {
+      const c = l[0];
+      const t = c === '+' ? 'add' : c === '-' ? 'del' : 'ctx';
+      const code = l.slice(1);
+      let on = '', nn = '';
+      if (t === 'ctx') { on = o++; nn = n++; } else if (t === 'add') { nn = n++; } else { on = o++; }
+      const bg = t === 'add' ? 'rgba(66,160,110,.11)' : t === 'del' ? 'rgba(224,108,102,.10)' : 'transparent';
+      const inSel = sel && i + 1 >= sel[0] && i + 1 <= sel[1];
+      return {
+        k: i, t, code, sel: !!inSel, on: String(on), nn: String(nn),
+        mark: t === 'add' ? '+' : t === 'del' ? '\u2212' : ' ',
+        tokens: this.hl(code),
+        rowStyle: 'display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);background:' + (inSel ? 'rgba(127,140,255,.13)' : bg) + ';' + (inSel ? 'box-shadow:inset 2px 0 0 #7f8cff;' : ''),
+        numStyle: NUM + 'color:' + (t === 'add' ? '#4f7f66' : t === 'del' ? '#7f5a56' : '#43474e'),
+        markStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:12px;line-height:20px;color:' + (t === 'add' ? '#6cc38f' : t === 'del' ? '#dd8a84' : '#3a3f47'),
+        codeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:12px;line-height:20px;color:' + (t === 'del' ? '#d5c0be' : '#cfd3da') + ';white-space:pre;overflow-x:auto;padding-right:12px'
+      };
+    });
+  }
+
+  splitPairs(rows) {
+    const NUM = 'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;text-align:right;padding-right:9px;user-select:none;color:#43474e';
+    const cell = (r, side) => {
+      const t = r ? r.t : 'empty';
+      const selected = !!(r && r.sel);
+      const bg = selected ? 'rgba(127,140,255,.13)' : t === 'add' ? 'rgba(66,160,110,.11)' : t === 'del' ? 'rgba(224,108,102,.10)' : t === 'empty' ? '#0c0d0f' : 'transparent';
+      const rule = selected ? ';box-shadow:inset 2px 0 0 #7f8cff' : '';
+      return {
+        num: r ? (side === 'l' ? r.on : r.nn) : '',
+        mark: t === 'add' ? '+' : t === 'del' ? '\u2212' : ' ',
+        tokens: r ? this.hl(r.code) : null,
+        numStyle: NUM + ';background:' + bg + rule,
+        markStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:12px;line-height:20px;background:' + bg + ';color:' + (t === 'add' ? '#6cc38f' : t === 'del' ? '#dd8a84' : '#3a3f47'),
+        codeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:12px;line-height:20px;white-space:pre;overflow-x:auto;padding-right:10px;background:' + bg + ';color:' + (t === 'del' ? '#d5c0be' : '#cfd3da')
+      };
+    };
+    const out = []; let i = 0;
+    while (i < rows.length) {
+      if (rows[i].t === 'ctx') { out.push({ l: rows[i], r: rows[i] }); i++; continue; }
+      const dels = [], adds = [];
+      while (i < rows.length && rows[i].t === 'del') dels.push(rows[i++]);
+      while (i < rows.length && rows[i].t === 'add') adds.push(rows[i++]);
+      const n = Math.max(dels.length, adds.length);
+      for (let k = 0; k < n; k++) out.push({ l: dels[k] || null, r: adds[k] || null });
+      if (!dels.length && !adds.length) i++;
+    }
+    return out.map((p, k) => ({ k, left: cell(p.l, 'l'), right: cell(p.r, 'r') }));
+  }
+
+  PCI = ['handlers.py', 'schemas.py', 'order_service.py'];
+  FILTERS = [
+    { id: 'all', label: 'All files', short: 'All', count: '18' },
+    { id: 'mine', label: 'My files \u00b7 CODEOWNERS', short: 'Mine', count: '12' },
+    { id: 'pci', label: 'PCI DSS files', short: 'PCI', count: '3' },
+    { id: 'generated', label: 'Generated files', short: 'Generated', count: '3' }
+  ];
+  outside(fl) { return /^(front|gen)/.test(fl.path || ''); }
+
+  countReplies(list) {
+    return (list || []).reduce((n, r) => n + 1 + this.countReplies(r.replies), 0);
+  }
+
+  flattenReplies(list, depth, parentAuthor) {
+    const out = [];
+    (list || []).forEach((r, i) => {
+      const indent = Math.min(depth - 1, 3) * 15;
+      out.push({
+        author: r.author, initials: r.initials, meta: r.meta, body: r.body, draft: r.draft, bot: r.bot,
+        deep: depth > 4 ? '\u21b3 replying to ' + parentAuthor : '',
+        wrapStyle: 'padding:9px 0 0 ' + (indent + (depth > 1 ? 12 : 0)) + 'px;margin-top:' + (i || depth > 1 ? '9px' : '0') + ';' + (depth > 1 ? 'border-left:1px solid #22252b;margin-left:' + indent + 'px;padding-left:12px;' : '') + (i && depth === 1 ? 'border-top:1px solid #1e2126;' : ''),
+        avatarStyle: 'width:16px;height:16px;border-radius:' + (r.bot ? '4px' : '50%') + ';background:' + (r.draft ? '#2a2e4a' : '#2b2f36') + ';color:#c7cad1;font-size:8px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none',
+        botStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;color:#9ba1ab;border:1px solid #2f333a;border-radius:4px;padding:1px 5px;white-space:nowrap',
+        draftStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px;white-space:nowrap',
+        deepStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;color:#5e636b;white-space:nowrap'
+      });
+      if (r.replies && r.replies.length) out.push.apply(out, this.flattenReplies(r.replies, depth + 1, r.author));
+    });
+    return out;
+  }
+
+  chip(state) {
+    const st = state === true ? 'full' : state || 'none';
+    const full = st === 'full', partial = st === 'partial';
+    return {
+      read: st,
+      chipStyle: 'display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;background:#131417;border:1px solid ' + (full ? '#22252b' : '#262a30') + ';border-radius:7px;cursor:pointer;text-align:left;opacity:' + (full ? '.62' : '1'),
+      tick: full ? '\u2713' : '',
+      readTitle: full ? 'every changed line of this file has been on your screen' : partial ? 'partly read \u2014 the route showed only some ranges of this file' : 'not read yet',
+      tickStyle: 'width:11px;height:11px;border-radius:3px;flex:none;display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1;color:#0d0e10;border:1px solid ' + (full ? '#3f7a5a' : partial ? '#3f7a5a' : '#33383f') + ';background:' + (full ? '#2b7a55' : partial ? 'linear-gradient(90deg,#2b7a55 0 50%,transparent 50% 100%)' : 'transparent')
+    };
+  }
+  f(name, path, plus, minus, state) { return Object.assign({ name, path, plus, minus }, this.chip(state)); }
+
+  // ---------- content ----------
+  buildStops() {
+    const D = this.diff.bind(this);
+    const all = [
+      {
+        id: 's1', tier: 'high', title: 'The edit window becomes a domain decision',
+        para: 'EditPolicy now owns the 30-minute dispatch lock. The order model no longer decides editability inline, and the API returns the verdict so clients can disable the control instead of guessing at it.',
+        bridge: 'The policy is only trustworthy if the read path sees the same state — which is the next stop.',
+        comments: 0,
+        files: [this.f('edit_policy.py', 'domain/policies', '+96', '', 'full'), this.f('order.py', 'domain', '+42', '\u221218', 'partial')],
+        hunks: [{
+          name: 'edit_policy.py', path: 'services/orders/domain/policies', plus: '+96', minus: '', entity: 'new file \u00b7 class EditPolicy',
+          foldTop: '21 unchanged lines',
+          rows: D(0, 22, `
++DISPATCH_LOCK = timedelta(minutes=30)
++
++class EditPolicy:
++    """Single source of truth for "can this order still be edited"."""
++
++    def __init__(self, order: Order, now: datetime):
++        self._order = order
++        self._now = now
++
++    def editable_now(self) -> bool:
++        if self._order.kind is not OrderKind.SCHEDULED:
++            return False
++        return self._order.dispatch_at - self._now > DISPATCH_LOCK
++
++    @property
++    def reason(self) -> EditDeniedReason | None:
++        if self.editable_now():
++            return None
++        return EditDeniedReason.WINDOW_CLOSED`)
+        }]
+      },
+      {
+        id: 's2', tier: 'high', title: 'The cache is dropped after the write, not before it',
+        para: 'The old flow invalidated the order cache before saving, leaving a window where a concurrent read repopulated stale state. The write commits first and the cache is dropped inside the same unit of work.',
+        bridge: 'With reads consistent, the endpoint can reject bad edits before it ever loads the aggregate.',
+        comments: 3,
+        changeReason: 'The author reworked the transaction boundary in response to your comment about the failure path. Two lines moved into the unit of work.',
+        files: [this.f('order_service.py', 'application', '+23', '\u22129', 'none')],
+        hunks: [{
+          name: 'order_service.py', path: 'services/orders/application', plus: '+23', minus: '\u22129', entity: 'apply_edit \u00b7 142\u2013164',
+          rows: D(142, 142, `
+     async def apply_edit(self, order_id: UUID, patch: EditPatch) -> Order:
+         order = await self._repo.get(order_id)
+-        await self._cache.drop(order_id)
+         policy = EditPolicy(order, self._clock.now())
++        if not policy.editable_now():
++            raise EditWindowClosed(policy.reason)
++
++        async with self._uow.begin():
++            saved = await self._repo.save(order.apply(patch))
++            await self._cache.drop(order_id)
++        return saved`, [3, 6]),
+          threads: 'x'
+        }]
+      },
+      {
+        id: 's3', tier: 'medium', title: 'PATCH validates before it touches the aggregate',
+        para: 'The update endpoint rejects immediate orders, locked scheduled orders, empty patches and invalid delivery slots up front, so a rejected edit costs one query instead of a transaction. The 409 body now carries the policy reason.',
+        comments: 1,
+        files: [this.f('handlers.py', 'api/v3', '+58', '\u221211', 'partial'), this.f('schemas.py', 'api/v3', '+14', '', 'none')],
+        hunks: [{
+          name: 'handlers.py', path: 'services/orders/api/v3', plus: '+58', minus: '\u221211', entity: 'patch_order \u00b7 88\u2013120',
+          foldTop: '64 unchanged lines',
+          rows: D(88, 88, `
+ @router.patch("/orders/{order_id}")
+ async def patch_order(order_id: UUID, body: EditRequest) -> OrderView:
+-    order = await service.apply_edit(order_id, body.to_patch())
+-    return OrderView.from_domain(order)
++    if not body.has_changes():
++        raise HTTPException(422, "empty patch")
++    try:
++        order = await service.apply_edit(order_id, body.to_patch())
++    except EditWindowClosed as exc:
++        raise HTTPException(409, detail={"reason": exc.reason.value})
++    return OrderView.from_domain(order)`)
+        }]
+      },
+      {
+        id: 's4', tier: 'medium', title: 'What the tests now claim',
+        para: 'Test code is machine-written and there is nothing to review line by line, so the digest states the contract instead. One assertion was weakened — that is the line worth your attention.',
+        comments: 0,
+        files: [this.f('test_edit_policy.py', 'domain/tests', '+180', '', 'none'), this.f('test_handlers.py', 'api/v3/tests', '+64', '\u22127', 'none')],
+        testHunks: [{
+          name: 'test_edit_policy.py', path: 'domain/tests', plus: '+180', minus: '', entity: 'test_rejects_edit_after_window \u00b7 41\u201358',
+          rows: this.diff(41, 41, `
++def test_rejects_edit_after_window(clock, order_factory):
++    order = order_factory(kind=OrderKind.SCHEDULED,
++                          dispatch_at=clock.now() + timedelta(minutes=20))
++    policy = EditPolicy(order, clock.now())
++
++    assert policy.editable_now() is False
++    assert policy.reason is EditDeniedReason.WINDOW_CLOSED`)
+        }],
+        tests: [
+          { kind: 'new', text: 'Rejects an edit submitted later than 30 minutes before dispatch.', anchor: 'test_edit_policy:41' },
+          { kind: 'new', text: 'The 409 body carries the machine-readable denial reason.', anchor: 'test_handlers:118' },
+          { kind: 'changed', text: 'An immediate order is now rejected with 409 instead of 422.', anchor: 'test_handlers:96' },
+          { kind: 'weakened', text: 'A read concurrent with the write no longer asserts that the cache is empty — the race this PR is about is no longer covered.', anchor: 'test_order_service:212' }
+        ],
+        hunks: []
+      },
+      {
+        id: 's5', tier: 'low', title: 'Client wiring for the disabled control',
+        para: 'The web client reads the verdict from the order payload and disables the edit button with the policy reason as its tooltip. No new logic on the client.',
+        comments: 0,
+        collapsedLabel: 'Collapsed \u00b7 76 lines in 3 files \u00b7 low importance',
+        files: [this.f('OrderCard.tsx', 'front/checkout', '+38', '\u22124', 'none'), this.f('useOrderEdit.ts', 'front/checkout/hooks', '+20', '', 'none')],
+        hunks: []
+      },
+      {
+        id: 's6', tier: 'low', title: 'Generated protos and schema bump',
+        para: 'Regenerated from the proto change in the same commit: the order view gained editable and edit_denied_reason. Nothing hand-written here.',
+        comments: 0,
+        collapsedLabel: 'Collapsed \u00b7 216 lines in 3 generated files',
+        files: [this.f('order.pb.go', 'gen/go/market', '+186', '', 'full'), this.f('order_pb2.py', 'gen/py/market', '+28', '', 'full')],
+        hunks: []
+      },
+      {
+        id: 's7', tier: 'other', title: 'Other \u00b7 not placed by the model',
+        para: 'Three ranges the model did not fit into any stop: a logging tweak, a fixture rename and an CODEOWNERS owners line. Coverage is guaranteed structurally, so they land here rather than disappearing.',
+        comments: 0, unexplained: true,
+        files: [this.f('logging.py', 'services/orders', '+9', '\u22122', 'none'), this.f('conftest.py', 'domain/tests', '+12', '\u22125', 'none'), this.f('CODEOWNERS', '.github', '+6', '', 'none')],
+        hunks: []
+      }
+    ];
+
+    const st = this.state;
+    const gen = st.gen;
+    let list = all;
+    if (st.preset === 'tour') {
+      const order = ['s3', 's1', 's2', 's4', 's5', 's6', 's7'];
+      list = order.map((id) => all.find((s) => s.id === id));
+    }
+    if (gen === 'generating') list = st.genPhase === 'reading' ? [] : all;
+    if (st.routeFilter === 'new') list = [all[1], all[2], all[6]];
+    if (st.fileFilter === 'pci') list = list.filter((s) => (s.files || []).some((fl) => this.PCI.indexOf(fl.name) > -1));
+    if (st.fileFilter === 'mine') list = list.filter((s) => (s.files || []).some((fl) => !this.outside(fl)));
+    if (st.fileFilter === 'generated') list = list.filter((s) => (s.files || []).some((fl) => /^gen/.test(fl.path || '')));
+
+    const planNo = {};
+    all.forEach((s, i) => { planNo[s.id] = String(i + 1).padStart(2, '0'); });
+    const READY = { s1: true, s2: true, s5: true };
+    const out = list.map((s, i) => {
+      const queued = gen === 'generating' && st.genPhase === 'filling' && !READY[s.id];
+      const viewed = !queued && !!st.viewed[s.id];
+      const tier = s.tier;
+      const isLow = tier === 'low';
+      const collapsed = isLow && !st.lowOpen && !st.expanded[s.id];
+      const changed = st.routeFilter === 'new' && !!s.changeReason;
+      const isNew = st.routeFilter === 'new' && s.id === 's3';
+      return Object.assign({}, s, {
+        no: planNo[s.id], of: '7', queued, domId: 'stop-' + s.id, flash: st.flash === 'stop-' + s.id,
+        para: queued ? '' : s.para, bridge: queued ? null : s.bridge,
+        tests: queued ? null : s.tests, unexplained: queued ? false : s.unexplained,
+        comments: queued ? 0 : s.comments,
+        tier, tierBadge: tier === 'high' && this.props.tierBadges !== false,
+        badgeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px;white-space:nowrap',
+        tierRule: 'width:3px;height:15px;border-radius:2px;background:' + (tier === 'high' ? '#e2954c' : tier === 'medium' ? '#4a5160' : '#2b2f36'),
+        titleStyle: 'margin:0;font-size:' + (tier === 'high' && !queued ? '17px' : '15.5px') + ';font-weight:600;letter-spacing:-.012em;line-height:1.3;color:' + (queued ? '#6b7078' : isLow || tier === 'other' ? '#b9bec7' : '#f0f1f4') + ';text-wrap:pretty',
+        leftStyle: 'position:sticky;top:132px;align-self:start;opacity:' + (viewed ? '.72' : '1'),
+        viewedBtn: 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:' + (viewed ? '#16211a' : 'transparent') + ';border:1px solid ' + (viewed ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (viewed ? '#86d9a8' : '#8a8f98') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;flex:none',
+        viewedLabel: viewed ? '\u2713 Viewed' : 'Mark viewed',
+        collapsed: queued ? false : collapsed, isChanged: changed, isNew,
+        changeReason: changed ? s.changeReason : null,
+        skeleton: queued,
+        viewedBtn: queued ? 'display:none' : 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:' + (viewed ? '#16211a' : 'transparent') + ';border:1px solid ' + (viewed ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (viewed ? '#86d9a8' : '#8a8f98') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;flex:none',
+        hunks: queued || collapsed ? [] : (s.hunks || []).concat(st.showTestCode ? (s.testHunks || []) : []).map((h) => this.decorate(h, s)),
+        files: queued ? [] : s.files.map((f) => Object.assign({}, f, this.chip(viewed ? 'full' : f.read)))
+      });
+    });
+    if (gen === 'generating' && st.genPhase === 'reading') {
+      for (let i = 0; i < 3; i++) {
+        out.push({
+          id: 'r' + i, no: '\u2014', of: '?', title: '', para: '', tier: 'medium', skeleton: true, files: [], hunks: [],
+          leftStyle: 'opacity:1', titleStyle: 'display:none', tierRule: 'width:3px;height:15px;border-radius:2px;background:#22252b',
+          viewedBtn: 'display:none', viewedLabel: '', collapsed: false
+        });
+      }
+      return out;
+    }
+    return out;
+  }
+
+  decorate(h, stop) {
+    const st = this.state;
+    const out = Object.assign({}, h);
+    const fid = (stop.id || 'x') + '-' + h.name;
+    const fv = !!st.fileViewed[fid];
+    out.fid = fid;
+    const rows = h.rows || [];
+    const oneSided = rows.length > 0 && (rows.every((r) => r.t !== 'del') || rows.every((r) => r.t !== 'add'));
+    out.unified = st.diffMode === 'unified' || oneSided;
+    out.split = st.diffMode === 'split' && !oneSided;
+    out.pairs = out.split ? this.splitPairs(rows) : [];
+    out.viewedLabel = fv ? 'Viewed' : 'Mark viewed';
+    out.viewedBoxStyle = 'width:11px;height:11px;border-radius:3px;flex:none;display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1;border:1px solid ' + (fv ? '#3f7a5a' : '#3a3f47') + ';background:' + (fv ? '#2b7a55' : 'transparent') + ';color:#0d0e10',
+    out.viewedTick = fv ? '\u2713' : '';
+    out.viewedBtnStyle = 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:transparent;border:1px solid ' + (fv ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (fv ? '#86d9a8' : '#9ba1ab') + ';font-family:inherit;font-size:11px;cursor:pointer;white-space:nowrap';
+    if (h.threads) {
+      const base = [
+        { author: 'morgan', initials: 'MP', meta: 'order_service.py:148 \u00b7 2h ago', body: 'If save() raises after the commit we never reach drop(), so the stale entry survives until TTL. Is that acceptable, or should the drop be a compensating action?', action: 'Reply', hint: 'reply is saved as a draft and published on ship', status: '2 replies', kind: 'person', replies: [
+          { author: 'asha', initials: 'AS', meta: '1h ago', body: 'The drop moved inside the unit of work \u2014 if save() raises, nothing is committed, so there is no stale entry to invalidate.', replies: [
+            { author: 'morgan', initials: 'MP', meta: '52m ago', body: 'Then the TTL only matters for the retry path. Agreed on the ordering.', replies: [
+              { author: 'ai-review-bot', initials: '\u25c6', bot: 'bot', meta: '40m ago', body: 'The retry path calls drop() outside the unit of work in retry_edit(), line 203.', replies: [
+                { author: 'you', initials: 'RS', meta: 'just now', body: 'Good catch \u2014 please cover retry_edit() with the same test before this lands.', draft: 'draft \u00b7 publishes on ship' }
+              ] }
+            ] }
+          ] }
+        ] },
+        { author: 'ai-review-bot', initials: '\u25c6', source: 'AI review \u00b7 bot', meta: 'order_service.py:150 \u00b7 5h ago', body: 'cache.drop is awaited inside the transaction scope; a slow cache now extends the lock window on the orders table.', action: 'Reply', hint: 'from the review host, counted in this stop\u2019s 3 comments', status: 'open', kind: 'bot' },
+        { author: 'ada', initials: 'AO', meta: 'order_service.py:145 \u00b7 yesterday', body: 'naming: drop() \u2192 invalidate() to match the repo convention.', action: 'View', hint: '', status: 'resolved', kind: 'resolved' }
+      ];
+      const show = st.threadsShow;
+      const open = !!st.repliesOpen;
+      out.threads = base.filter((t) => show[t.kind === 'person' ? 'people' : t.kind === 'bot' ? 'bots' : 'resolved']).map((t) => ({
+        author: t.author, initials: t.initials, source: t.source, meta: t.meta, body: t.body, action: t.action, hint: t.hint,
+        status: t.replies ? '' : t.status,
+        toggleLabel: t.replies ? (this.countReplies(t.replies) + ' replies ' + (open ? '\u2304' : '\u203a')) : '',
+        toggleStyle: 'height:20px;padding:0 7px;background:transparent;border:1px solid #2b2f36;border-radius:4px;color:#9ba1ab;font-family:\'IBM Plex Mono\',monospace;font-size:10px;cursor:pointer;white-space:nowrap',
+        replies: t.replies && open ? this.flattenReplies(t.replies, 1, t.author) : null,
+        wrapStyle: 'padding:12px 14px;border-top:1px solid #1e2126;background:' + (t.kind === 'resolved' ? '#101113' : t.kind === 'bot' ? '#121316' : '#141518') + ';opacity:' + (t.kind === 'person' ? '1' : '.72'),
+        avatarStyle: 'width:18px;height:18px;border-radius:' + (t.kind === 'bot' ? '4px' : '50%') + ';background:#2b2f36;color:#c7cad1;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none',
+        statusStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:' + (t.status === 'resolved' ? '#5e636b' : '#8a8f98') + ';border:1px solid #2b2f36;border-radius:4px;padding:1px 5px;white-space:nowrap'
+      }));
+    }
+    if (st.preset === 'tour' && stop.id === 's2') {
+      out.selection = true;
+      out.noteRange = '148\u2013151';
+      out.note = 'Before this PR the drop came first so a failed save could not leave a fresh cache entry pointing at an uncommitted row. That trade was made when writes were not transactional; with the unit of work in place the ordering is safe to flip, and the remaining risk is exactly the failure path morgan asks about above.';
+    }
+    return out;
+  }
+
+  // ---------- handlers ----------
+  go = (e) => { this.setState({ view: e.currentTarget.dataset.v, palette: false }); };
+  setPreset = (e) => this.setState({ preset: e.currentTarget.dataset.p });
+  setZone = (e) => this.setState({ zone: e.currentTarget.dataset.z });
+  toggleDiffMode = () => this.setState((s) => ({ diffMode: s.diffMode === 'unified' ? 'split' : 'unified' }));
+  toggleTestCode = () => this.setState((s) => ({ showTestCode: !s.showTestCode }));
+  toggleDir = (e) => {
+    const p = e.currentTarget.dataset.p;
+    if (!this.TREE.some((n) => n.path === p && n.kind === 'dir')) return;
+    this.setState((s) => ({ dirClosed: Object.assign({}, s.dirClosed, { [p]: !(s.dirClosed || {})[p] }) }));
+  };
+  toggleFileViewed = (e) => { const id = e.currentTarget.dataset.f; this.setState((s) => ({ fileViewed: Object.assign({}, s.fileViewed, { [id]: !s.fileViewed[id] }) })); };
+  toggleThread = (e) => { const k = e.currentTarget.dataset.t; this.setState((s) => ({ threadsShow: Object.assign({}, s.threadsShow, { [k]: !s.threadsShow[k] }) })); };
+  toggleReplies = () => this.setState((s) => ({ repliesOpen: !s.repliesOpen }));
+  togglePci = () => this.setState((s) => ({ fileFilter: s.fileFilter === 'pci' ? 'all' : 'pci', filterOpen: false }));
+  toggleFilterMenu = () => this.setState((s) => ({ filterOpen: !s.filterOpen }));
+  setFilter = (e) => this.setState({ fileFilter: e.currentTarget.dataset.f, filterOpen: false });
+  jumpTo = (e) => {
+    const id = e.currentTarget.dataset.t;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const target = el.getBoundingClientRect().top + window.scrollY - 150;
+    const sc = document.scrollingElement || document.documentElement;
+    const from = sc.scrollTop, dist = target - from, t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / 320);
+      sc.scrollTop = from + dist * (p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    this.setState({ flash: id });
+    clearTimeout(this._flash);
+    this._flash = setTimeout(() => this.setState({ flash: null }), 900);
+  };
+  toggleViewed = (e) => { const id = e.currentTarget.dataset.s; this.setState((s) => ({ viewed: Object.assign({}, s.viewed, { [id]: !s.viewed[id] }) })); };
+  toggleStop = (e) => { const id = e.currentTarget.dataset.s; this.setState((s) => ({ expanded: Object.assign({}, s.expanded, { [id]: true }) })); };
+  toggleChat = () => this.setState((s) => ({ chat: !s.chat }));
+  toggleDock = () => this.setState((s) => ({ dock: !s.dock }));
+  toggleSnapshots = () => this.setState((s) => ({ stale: !s.stale }));
+  openPalette = () => this.setState({ palette: true });
+  closePalette = () => this.setState({ palette: false });
+  showNew = () => this.setState({ routeFilter: 'new' });
+  showAll = () => this.setState({ routeFilter: 'all' });
+  toggleShipMenu = () => this.setState((s) => ({ shipOpen: !s.shipOpen }));
+  ship = (e) => this.setState({ view: 'done', shipOpen: false, shipMode: (e.currentTarget.dataset.mode || 'ship') });
+  setScenario = (e) => { const id = e.currentTarget.dataset.s; const sc = this.SCEN.find((x) => x.id === id); this.setState(Object.assign({ scenario: id, palette: false }, sc.st)); };
+
+  chipBtn(on) {
+    return 'display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;border:1px solid ' + (on ? '#2f333a' : '#22252b') + ';background:' + (on ? '#22252b' : 'transparent') + ';color:' + (on ? '#e0e2e7' : '#6b7078') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap';
+  }
+
+  seg(active) {
+    return 'height:24px;padding:0 10px;border-radius:6px;border:none;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;background:' + (active ? '#2b2f36' : 'transparent') + ';color:' + (active ? '#f0f1f4' : '#8a8f98') + ';font-weight:' + (active ? '500' : '400');
+  }
+
+  TREE = [
+    { path: 'services/orders', label: 'services/orders', depth: 0, kind: 'dir' },
+    { path: 'services/orders/domain', label: 'domain', depth: 1, kind: 'dir' },
+    { path: 'services/orders/domain/policies', label: 'policies', depth: 2, kind: 'dir' },
+    { path: 'services/orders/domain/policies/edit_policy.py', label: 'edit_policy.py', depth: 3, kind: 'file', plus: '+96', route: '01', read: 'full', seen: '96 of 96 lines' },
+    { path: 'services/orders/domain/order.py', label: 'order.py', depth: 2, kind: 'file', plus: '+42', route: '01', read: 'partial', seen: '24 of 60 lines' },
+    { path: 'services/orders/domain/tests', label: 'tests', depth: 2, kind: 'dir' },
+    { path: 'services/orders/domain/tests/test_edit_policy.py', label: 'test_edit_policy.py', depth: 3, kind: 'file', plus: '+180', route: '04' },
+    { path: 'services/orders/domain/tests/conftest.py', label: 'conftest.py', depth: 3, kind: 'file', plus: '+12', route: 'not placed' },
+    { path: 'services/orders/application', label: 'application', depth: 1, kind: 'dir' },
+    { path: 'services/orders/application/order_service.py', label: 'order_service.py', depth: 2, kind: 'file', plus: '+23', route: '02', active: true, read: 'full', seen: '32 of 32 lines' , pci: true },
+    { path: 'services/orders/api', label: 'api/v3', depth: 1, kind: 'dir' },
+    { path: 'services/orders/api/handlers.py', label: 'handlers.py', depth: 2, kind: 'file', plus: '+58', route: '03', read: 'partial', seen: '32 of 69 lines' , pci: true },
+    { path: 'services/orders/api/schemas.py', label: 'schemas.py', depth: 2, kind: 'file', plus: '+14', route: '03' , pci: true },
+    { path: 'services/orders/api/tests', label: 'tests', depth: 2, kind: 'dir' },
+    { path: 'services/orders/api/tests/test_handlers.py', label: 'test_handlers.py', depth: 3, kind: 'file', plus: '+64', route: '04' },
+    { path: 'services/orders/logging.py', label: 'logging.py', depth: 1, kind: 'file', plus: '+9', route: 'not placed' },
+    { path: '.github/CODEOWNERS', label: 'CODEOWNERS', depth: 1, kind: 'file', plus: '+6', route: 'not placed' },
+    { path: 'front/checkout', label: 'front/checkout', depth: 0, kind: 'dir', foreign: true },
+    { path: 'front/checkout/OrderCard.tsx', label: 'OrderCard.tsx', depth: 1, kind: 'file', plus: '+38', route: '05', foreign: true },
+    { path: 'front/checkout/useOrderEdit.ts', label: 'useOrderEdit.ts', depth: 1, kind: 'file', plus: '+20', route: '05', foreign: true },
+    { path: 'gen', label: 'gen', depth: 0, kind: 'dir', generated: true },
+    { path: 'gen/go/market/order.pb.go', label: 'go/market/order.pb.go', depth: 1, kind: 'file', plus: '+186', route: '06', generated: true, read: 'full', seen: 'generated \u2014 marked read' },
+    { path: 'gen/py/market/order_pb2.py', label: 'py/market/order_pb2.py', depth: 1, kind: 'file', plus: '+28', route: '06', generated: true }
+  ];
+
+  buildTree() {
+    const closed = this.state.dirClosed || {};
+    const mode = this.state.fileFilter;
+    const match = (n) => mode === 'all' ? true : mode === 'pci' ? !!n.pci : mode === 'generated' ? !!n.generated : !(n.foreign || n.generated);
+    const keep = this.TREE.filter((n) => n.kind === 'file' && match(n)).map((n) => n.path);
+    const out = [];
+    this.TREE.forEach((n) => {
+      const hidden = Object.keys(closed).some((c) => closed[c] && n.path !== c && n.path.indexOf(c + '/') === 0);
+      if (hidden) return;
+      if (mode !== 'all') {
+        const self = n.kind === 'file' ? match(n) : keep.some((p) => p.indexOf(n.path + '/') === 0);
+        if (!self) return;
+      }
+      const isDir = n.kind === 'dir';
+      const dim = n.generated ? '#5e636b' : n.foreign ? '#8a8f98' : isDir ? '#9ba1ab' : '#c7cad1';
+      const notPlaced = n.route === 'not placed';
+      const rd = n.read || 'none';
+      out.push({
+        path: n.path, label: n.label,
+        pci: n.pci ? 'pci' : '',
+        pciStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#c9a464;border:1px solid #3d3a2c;border-radius:3px;padding:0 4px;white-space:nowrap',
+        readDot: isDir ? '' : (rd === 'full' ? '\u2713' : ''),
+        readTitle: isDir ? '' : (n.seen ? n.seen + ' seen' : 'not read yet'),
+        readStyle: isDir ? 'display:none' : 'width:10px;height:10px;border-radius:3px;flex:none;display:flex;align-items:center;justify-content:center;font-size:7px;line-height:1;color:#0d0e10;border:1px solid ' + (rd === 'none' ? '#33383f' : '#3f7a5a') + ';background:' + (rd === 'full' ? '#2b7a55' : rd === 'partial' ? 'linear-gradient(90deg,#2b7a55 0 50%,transparent 50% 100%)' : 'transparent'),
+        icon: isDir ? (closed[n.path] ? '\u203a' : '\u2304') : '',
+        iconStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#5e636b;width:9px;flex:none;text-align:center',
+        labelStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;color:' + dim + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:' + (isDir ? '500' : '400'),
+        rowStyle: 'display:flex;align-items:center;gap:6px;padding:4px 8px 4px ' + (8 + n.depth * 13) + 'px;border-radius:6px;cursor:pointer;background:' + (n.active ? '#1b1e24' : 'transparent'),
+        route: isDir ? '' : n.route,
+        routeStyle: isDir ? 'display:none' : 'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;padding:1px 5px;border-radius:4px;white-space:nowrap;' + (notPlaced ? 'color:#9ba1ab;background:repeating-linear-gradient(115deg,#2a2e34 0 3px,#1b1e22 3px 6px)' : 'color:#8a8f98;border:1px solid #2b2f36'),
+        plus: isDir ? '' : n.plus,
+        plusStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#6cc38f;white-space:nowrap'
+      });
+    });
+    return out;
+  }
+
+  DIFF_HUNKS() {
+    return [
+      {
+        name: 'order_service.py', path: 'services/orders/application', route: 'explained in 02 \u00b7 cache dropped after the write',
+        routeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;color:#8a8f98;border:1px solid #2b2f36;border-radius:4px;padding:1px 6px;white-space:nowrap',
+        rows: this.diff(142, 142, `
+     async def apply_edit(self, order_id: UUID, patch: EditPatch) -> Order:
+         order = await self._repo.get(order_id)
+-        await self._cache.drop(order_id)
+         policy = EditPolicy(order, self._clock.now())
++        if not policy.editable_now():
++            raise EditWindowClosed(policy.reason)
++
++        async with self._uow.begin():
++            saved = await self._repo.save(order.apply(patch))
++            await self._cache.drop(order_id)
++        return saved`)
+      },
+      {
+        name: 'logging.py', path: 'services/orders', route: 'no route stop',
+        routeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;color:#9ba1ab;border-radius:4px;padding:1px 6px;white-space:nowrap;background:repeating-linear-gradient(115deg,#2a2e34 0 3px,#1b1e22 3px 6px)',
+        unexplained: '18\u201326',
+        rows: this.diff(18, 18, `
+ def bind_order(logger, order):
+-    return logger.bind(order_id=str(order.id))
++    return logger.bind(
++        order_id=str(order.id),
++        editable=order.editable,
++        denied=order.edit_denied_reason,
++    )`)
+      }
+    ];
+  }
+
+  renderVals() {
+    const s = this.state;
+    const gen = s.gen;
+    const stops = this.buildStops();
+    const viewedCount = Object.keys(s.viewed).filter((k) => s.viewed[k]).length;
+
+    return {
+      isRoute: s.view === 'route', isOverview: s.view === 'overview', isDiff: s.view === 'diff',
+      isInbox: s.view === 'inbox', isDone: s.view === 'done',
+      isGenerating: gen === 'generating', isFailed: gen === 'failed', isOffline: gen === 'offline',
+      isReading: gen === 'generating' && s.genPhase === 'reading',
+      isFilling: gen === 'generating' && s.genPhase === 'filling',
+      genTitle: s.genPhase === 'reading' ? 'Reading the diff, planning the route' : 'Filling the route in',
+      genCta: s.genPhase === 'reading' ? 'Open the route skeleton' : 'Open the route',
+      genCtaHint: s.genPhase === 'reading' ? 'placeholders now, stops as they land' : '3 stops are readable already, 4 are placeholders',
+      routeBanner: s.genPhase === 'reading' ? 'Reading the diff \u00b7 the stop count is not known yet' : 'Filling the route in \u00b7 3 of 7 stops ready \u00b7 stops land out of order',
+      routeBannerSub: s.genPhase === 'reading' ? 'claude-code \u00b7 sonnet-5 \u00b7 planning pass over 18 files' : 'claude-code \u00b7 sonnet-5 \u00b7 task 1 of 2 in queue',
+      segments: [1, 1, 0, 0, 1, 2, 0].map((v, i) => ({
+        style: 'height:4px;flex:1;border-radius:2px;background:' + (v === 1 ? '#7f8cff' : v === 2 ? 'linear-gradient(90deg,#7f8cff,#2a2e4a)' : '#2a2e4a') + (v === 2 ? ';animation:shimmer 1.4s ease-in-out infinite' : '')
+      })),
+      plan: [
+        { no: '01', title: 'The edit window becomes a domain decision', state: 'ready' },
+        { no: '02', title: 'The cache is dropped after the write', state: 'ready' },
+        { no: '03', title: 'PATCH validates before the aggregate', state: 'queued' },
+        { no: '04', title: 'What the tests now claim', state: 'queued' },
+        { no: '05', title: 'Client wiring for the disabled control', state: 'ready' },
+        { no: '06', title: 'Generated protos and schema bump', state: 'filling' },
+        { no: '07', title: 'Other \u00b7 not placed', state: 'queued' }
+      ].map((p) => ({
+        no: p.no, title: p.title, state: p.state === 'ready' ? '\u2713' : p.state === 'filling' ? 'filling' : 'queued',
+        rowStyle: 'display:flex;align-items:center;gap:9px;padding:5px 0',
+        titleStyle: 'flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (p.state === 'ready' ? '#dfe2ff' : p.state === 'filling' ? '#aeb6ff' : '#5c6288'),
+        stateStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;white-space:nowrap;color:' + (p.state === 'ready' ? '#8f9bff' : p.state === 'filling' ? '#aeb6ff' : '#4b5074') + (p.state === 'filling' ? ';animation:shimmer 1.4s ease-in-out infinite' : '')
+      })),
+      zoneMine: this.seg(s.zone === 'mine'), zoneAll: this.seg(s.zone === 'all'), setZone: this.setZone,
+      isStale: s.stale && gen === 'ready', isNewFilter: s.routeFilter === 'new',
+      chatOpen: s.chat && gen !== 'offline', paletteOpen: s.palette,
+      dockOpen: s.dock,
+      dockBtnStyle: 'height:28px;padding:0 9px;background:' + (s.dock ? '#1b1e24' : 'transparent') + ';border:1px dashed #333842;border-radius:7px;color:#6b7078;font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;letter-spacing:.06em;cursor:pointer;flex:none;white-space:nowrap',
+      showActions: s.view === 'route' || s.view === 'diff',
+      stops, stopTotal: 7, viewedCount,
+      snapshotLabel: s.stale ? '9f3c1ab \u00b7 stale' : '9f3c1ab \u00b7 current',
+      agentLabel: gen === 'offline' ? 'Agent disconnected' : gen === 'generating' ? 'Agent working \u00b7 1 in queue' : 'Agent \u00b7 claude-code',
+      agentDotStyle: 'width:6px;height:6px;border-radius:50%;flex:none;background:' + (gen === 'offline' ? '#6b7078' : gen === 'failed' ? '#e0736c' : gen === 'generating' ? '#e2954c' : '#6cc38f'),
+      agentLabelStyle: 'color:' + (gen === 'offline' ? '#8a8f98' : '#c7cad1'),
+      tabOverview: this.seg(s.view === 'overview'), tabRoute: this.seg(s.view === 'route'), tabDiff: this.seg(s.view === 'diff'),
+      presetTriage: this.seg(s.preset === 'triage'), presetTour: this.seg(s.preset === 'tour'),
+      diffModeLabel: s.diffMode === 'unified' ? 'unified' : 'side by side',
+      toggleDiffMode: this.toggleDiffMode, toggleTestCode: this.toggleTestCode, toggleFileViewed: this.toggleFileViewed,
+      toggleThread: this.toggleThread, toggleReplies: this.toggleReplies, jumpTo: this.jumpTo,
+      testCodeLabel: s.showTestCode ? 'Hide test code' : 'Show test code',
+      thrPeople: this.chipBtn(s.threadsShow.people), thrBots: this.chipBtn(s.threadsShow.bots), thrResolved: this.chipBtn(s.threadsShow.resolved),
+      presetHint: s.preset === 'triage' ? 'Most important first — stop whenever you have seen enough.' : 'Reading order: entry point → definitions → consequences → verification.',
+      go: this.go, setPreset: this.setPreset, toggleViewed: this.toggleViewed,
+      toggleStop: this.toggleStop, toggleChat: this.toggleChat, toggleDock: this.toggleDock,
+      toggleSnapshots: this.toggleSnapshots, openPalette: this.openPalette, closePalette: this.closePalette,
+      showNew: this.showNew, showAll: this.showAll, ship: this.ship, setScenario: this.setScenario,
+      shipOpen: !!s.shipOpen, toggleShipMenu: this.toggleShipMenu,
+      pciOnly: s.fileFilter === 'pci', togglePci: this.togglePci,
+      filterOpen: s.filterOpen, toggleFilterMenu: this.toggleFilterMenu, setFilter: this.setFilter,
+      filterLabel: (this.FILTERS.find((x) => x.id === s.fileFilter) || this.FILTERS[0]).label,
+      filterCount: (this.FILTERS.find((x) => x.id === s.fileFilter) || this.FILTERS[0]).count,
+      filterBtn: 'display:flex;align-items:center;gap:7px;height:27px;padding:0 9px;background:' + (s.fileFilter === 'all' ? 'transparent' : '#22252b') + ';border:1px solid ' + (s.fileFilter === 'all' ? '#24272d' : '#2f333a') + ';border-radius:6px;color:#c7cad1;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap',
+      filters: this.FILTERS.map((x) => ({
+        id: x.id, label: x.label, short: x.short, count: x.count,
+        rowStyle: 'display:flex;align-items:center;gap:9px;width:100%;padding:8px 11px;background:' + (s.fileFilter === x.id ? '#1f2228' : 'transparent') + ';border:none;border-bottom:1px solid #1e2126;color:#e0e2e7;font-family:inherit;font-size:12.5px;cursor:pointer',
+        tickStyle: 'width:11px;font-size:9px;color:' + (s.fileFilter === x.id ? '#8f9bff' : 'transparent'),
+        chipStyle: 'height:25px;padding:0 8px;border-radius:5px;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;border:1px solid ' + (s.fileFilter === x.id ? '#2f333a' : '#24272d') + ';background:' + (s.fileFilter === x.id ? '#22252b' : 'transparent') + ';color:' + (s.fileFilter === x.id ? '#c7cad1' : '#8a8f98')
+      })),
+      pciBadge: 'height:17px;padding:0 6px;border-radius:4px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;cursor:pointer;white-space:nowrap;border:1px solid ' + (s.fileFilter === 'pci' ? '#6b5b39' : '#3d3a2c') + ';background:' + (s.fileFilter === 'pci' ? '#241f14' : 'transparent') + ';color:' + (s.fileFilter === 'pci' ? '#e2b878' : '#c9a464'),
+      shipVerdict: s.shipMode === 'sticky' ? 'Sticky ship' : 'Shipped',
+      shipProvenance: s.shipMode === 'sticky' ? 'sticky ship \u00b7 carries to the next pushes \u00b7 9f3c1ab' : 'ship \u00b7 9f3c1ab',
+
+      scenarios: this.SCEN.map((x) => ({
+        id: x.id, tag: x.tag, label: x.label,
+        btnStyle: 'display:flex;align-items:center;gap:8px;width:100%;height:24px;padding:0 6px;background:' + (s.scenario === x.id ? '#22252b' : 'transparent') + ';border:none;border-radius:5px;color:' + (s.scenario === x.id ? '#e0e2e7' : '#8a8f98') + ';font-family:inherit;font-size:11.5px;text-align:left;cursor:pointer'
+      })),
+
+      chat: [
+        { who: 'You', time: '2m', anchor: 'order_service.py:148\u2013151 \u00b7 stop 02', body: 'Why was the cache dropped before the write in the old code? Is flipping the order actually safe?', whoStyle: 'font-size:11.5px;font-weight:600;color:#c7cad1', wrapStyle: 'padding:0 0 16px 0' },
+        { who: 'Agent', time: 'now', body: 'The old ordering came from a time when writes were not transactional: dropping first meant a failed save could not leave a fresh cache entry pointing at an uncommitted row. This PR introduces the unit of work, so the drop can move after the commit — and the entry is now written by readers only. The failure path morgan raises is the one real hole: if drop() raises after commit, the stale entry lives until TTL.', pinned: 'order_service.py:148\u2013151', whoStyle: 'font-size:11.5px;font-weight:600;color:#aeb6ff', wrapStyle: 'padding:0 0 16px 0;border-top:1px solid #1a1d21;padding-top:14px' },
+        { who: 'You', time: 'now', body: 'Which tests cover that failure path?', whoStyle: 'font-size:11.5px;font-weight:600;color:#c7cad1', wrapStyle: 'padding:0 0 10px 0;border-top:1px solid #1a1d21;padding-top:14px' }
+      ],
+
+      zones: (s.zone === 'mine' ? this.ZONES.filter((z) => z.mine) : this.ZONES),
+
+      diffTree: this.buildTree(), toggleDir: this.toggleDir,
+
+      diffHunks: this.DIFF_HUNKS().map((h) => this.decorate(h, { id: 'fulldiff' })),
+
+      inbox: [
+        {
+          title: 'Needs your review', count: '3',
+          rows: [
+            { pr: '4821', title: 'Enforce the 30-minute edit window for scheduled deliveries', route: 'route ready \u00b7 7 stops', size: '+806 \u2212112', age: 'ships in ~2h', tier: 'high', active: true },
+            { pr: '4805', title: 'Move promo eligibility to the pricing service', route: 'building \u00b7 2 / 6', size: '+1.2k \u2212310', age: 'ships in ~6h', tier: 'medium' },
+            { pr: '4799', title: 'Bump grpc to 1.68 across checkout', route: 'route ready \u00b7 3 stops', size: '+62 \u221248', age: 'tomorrow', tier: 'low' }
+          ]
+        },
+        {
+          title: 'You are reviewing', count: '2',
+          rows: [
+            { pr: '4788', title: 'Split delivery slots cache by region', route: 'stale \u00b7 2 commits behind', size: '+318 \u221290', age: 'ships in ~4h', tier: 'high' },
+            { pr: '4770', title: 'Retry policy for the payment callback', route: '4 / 5 stops viewed', size: '+96 \u221212', age: 'tomorrow', tier: 'medium' }
+          ]
+        }
+      ].map((g) => ({
+        title: g.title, count: g.count,
+        rows: g.rows.map((r) => ({
+          pr: r.pr, title: r.title, route: r.route, size: r.size, age: r.age,
+          rowStyle: 'display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #191c20;cursor:pointer;background:' + (r.active ? '#161819' : 'transparent'),
+          dotStyle: 'width:6px;height:6px;border-radius:50%;flex:none;background:' + (r.tier === 'high' ? '#e2954c' : r.tier === 'medium' ? '#4a5160' : '#2b2f36'),
+          routeStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;color:#8a8f98;border:1px solid #2b2f36;border-radius:4px;padding:1px 6px;white-space:nowrap'
+        }))
+      })),
+
+      summary: [
+        { label: 'Stops viewed', value: '7 of 7 \u00b7 Other read as raw diff' },
+        { label: 'Diff you actually saw', value: '100% of 862 lines' },
+        { label: 'Of that, read outside the route', value: '34 lines the model did not place' },
+        { label: 'Comments published', value: '2 \u00b7 1 replying to ai-review-bot' },
+        { label: 'Signed off on snapshot', value: '9f3c1ab \u00b7 PR head 9f3c1ab \u00b7 sonnet-5' }
+      ].map((x) => ({ label: x.label, value: x.value, valueStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;color:#c7cad1' })),
+
+      palette: [
+        { group: 'go to', label: 'Stop 02 \u00b7 The cache is dropped after the write', key: '\u21b5' },
+        { group: 'go to', label: 'order_service.py \u00b7 application', key: '' },
+        { group: 'search', label: 'cache.drop \u2014 6 matches in the diff', key: '' },
+        { group: 'route', label: 'Switch preset to full tour', key: 'T' },
+        { group: 'route', label: 'Regenerate the route for a71d4e2', key: 'R' },
+        { group: 'review', label: 'Ship \u00b7 publishes 2 drafts', key: '\u2318\u21b5' },
+        { group: 'sherpa', label: 'Report a problem with Sherpa \u00b7 attaches PR, snapshot, screen', key: '' }
+      ].map((p, i) => ({
+        group: p.group, label: p.label, key: p.key,
+        rowStyle: 'display:flex;align-items:center;gap:12px;padding:9px 15px;background:' + (i === 0 ? '#1b1e24' : 'transparent') + ';border-bottom:1px solid #191c20;cursor:pointer'
+      }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
