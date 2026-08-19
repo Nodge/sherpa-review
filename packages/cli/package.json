@@ -19,6 +19,8 @@
     "@sherpa/protocol": "workspace:*"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "@sherpa/server": "workspace:*",
+    "esbuild": "^0.28.2",
+    "zod": "^4.4.3"
   }
 }

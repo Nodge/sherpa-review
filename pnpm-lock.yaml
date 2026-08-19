@@ -36,9 +36,15 @@ importers:
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
+      '@sherpa/server':
+        specifier: workspace:*
+        version: link:../server
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/protocol:
     dependencies:
