@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bundlePath = join(packageRoot, 'dist', 'sherpa.mjs');
@@ -12,11 +12,8 @@ const packageVersion = (
     JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
 
+// The bundle is built once in globalSetup (`src/bundle.global-setup.ts`).
 describe('CLI build', () => {
-    beforeAll(() => {
-        execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
-    }, 60_000);
-
     it('leaves no external imports except Node built-in modules', () => {
         const bundle = readFileSync(bundlePath, 'utf8');
         const specifiers = [...bundle.matchAll(/(?:^|\n)\s*import\s[^\n]*?["']([^"']+)["']/g)].map(

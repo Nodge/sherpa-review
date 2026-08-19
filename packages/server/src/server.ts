@@ -42,8 +42,8 @@ export interface StartServerOptions {
     /** Built UI directory (`packages/ui/dist`). When set, the server serves it without a token. */
     uiDir?: string;
     /**
-     * Injectable clock for the worker lifecycle. Defaults to the system clock.
-     * Tests need to pass `WORKER_DEAD_AFTER_SECONDS` without waiting six minutes.
+     * Injectable clock for the queue and worker lifecycle. Uses the system clock by default.
+     * Tests need to advance past `WORKER_DEAD_AFTER_SECONDS` and the lease TTL without waiting minutes.
      */
     now?: () => Date;
 }
@@ -118,7 +118,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         await ensurePrivateDir(sherpaDir, prStateDirOf(sherpaDir, prKey));
         db = openDatabase(databasePathFor(sherpaDir, prKey));
 
-        const queue = new TaskQueue({ db });
+        const queue = new TaskQueue(options.now === undefined ? { db } : { db, now: options.now });
         const workerRegistry = new WorkerRegistry(options.now === undefined ? { db } : { db, now: options.now });
         routes.push(
             ...createWorkerRoutes({
