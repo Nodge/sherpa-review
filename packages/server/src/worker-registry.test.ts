@@ -112,11 +112,12 @@ describe('worker lifecycle', () => {
             expect(events).toHaveLength(1);
         });
 
-        it('lets a new session take the slot after the previous one dies', () => {
-            registry.register('w-1', 'claude-code');
+        it('a new session claims the slot after the old one dies and returns the evicted workerId', () => {
+            expect(registry.register('w-1', 'claude-code')).toBeNull();
             advanceSeconds(WORKER_DEAD_AFTER_SECONDS + 1);
 
-            registry.register('w-2', 'codex');
+            // The caller uses the evicted id to return leases of the dead session to the queue.
+            expect(registry.register('w-2', 'codex')).toBe('w-1');
 
             expect(registry.status()).toMatchObject({
                 kind: 'connected',
@@ -142,10 +143,18 @@ describe('worker lifecycle', () => {
         });
 
         it('a session without register claims a free slot itself', () => {
-            registry.touch('w-1');
+            expect(registry.touch('w-1')).toBeNull();
 
             expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-1' });
             expect(events.map((event) => event.kind)).toEqual(['connected']);
+        });
+
+        it('heartbeat taking a slot from a dead session returns its workerId', () => {
+            registry.register('w-1');
+            advanceSeconds(WORKER_DEAD_AFTER_SECONDS + 1);
+
+            expect(registry.touch('w-2')).toBe('w-1');
+            expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-2' });
         });
 
         it('heartbeat from another worker with a live owner returns worker_conflict', () => {

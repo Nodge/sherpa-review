@@ -87,7 +87,7 @@ Streaming tokens from another session through shell commands is impractical. Ins
 
 Every CLI call is a heartbeat. No calls for more than M minutes (M > the long-poll period, e.g. 6) → the server marks the worker dead → the UI enters the "Agent disconnected" state (the reader works, AI areas offer reduced functionality and reconnection instructions). This is how the state in section 9 of the brief arises from the protocol.
 
-**Reconnection**: the reviewer runs the skill again → the skill finds the live server through the manifest (below), starts no second server and registers a new session as the worker. The queue and state are on disk, so nothing is lost. The old worker's unfinished leases expire on their own.
+**Reconnection**: the reviewer starts the skill again → the skill finds the running server through the manifest (below), reuses it instead of starting another, and registers a new worker session. The queue and state are on disk, so nothing is lost. The old worker's unfinished leases return to the queue immediately when its slot is taken over (incrementing the attempt, as on expiry): the previous worker has already been declared dead, so waiting for TTL expiry would mean up to ten minutes of downtime after reconnection for no reason.
 
 ## 8. Discovery and security
 

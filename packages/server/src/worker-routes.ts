@@ -59,13 +59,20 @@ const completeBodySchema = z.object({
  * `worker_conflict` before the request reaches the queue.
  */
 export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
+    // Taking over the slot means the previous worker is dead: return its leases to the queue immediately, without waiting for TTL.
+    const reclaimLeases = (displaced: string | null): void => {
+        if (displaced !== null) {
+            options.queue.releaseLeasesOf(displaced);
+        }
+    };
+
     return [
         {
             method: 'POST',
             path: WORKER_ENDPOINTS.register,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerRegisterRequestSchema);
-                options.registry.register(request.workerId, request.harness);
+                reclaimLeases(options.registry.register(request.workerId, request.harness));
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
@@ -80,7 +87,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.next,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerNextRequestSchema);
-                options.registry.touch(request.workerId);
+                reclaimLeases(options.registry.touch(request.workerId));
                 const body: WorkerNextResponse = await pollForTask(options, ctx.req, request.workerId);
                 return { status: 200, body };
             }),
@@ -90,7 +97,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.complete,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, completeBodySchema);
-                options.registry.touch(request.workerId);
+                reclaimLeases(options.registry.touch(request.workerId));
                 const body: TaskCompleteResponse = options.queue.complete(
                     request.workerId,
                     request.taskId,
@@ -104,7 +111,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.progress,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskProgressRequestSchema);
-                options.registry.touch(request.workerId);
+                reclaimLeases(options.registry.touch(request.workerId));
                 const body: TaskAckResponse = options.queue.progress(request.workerId, request.taskId, request.text);
                 return { status: 200, body };
             }),
@@ -114,7 +121,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.fail,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskFailRequestSchema);
-                options.registry.touch(request.workerId);
+                reclaimLeases(options.registry.touch(request.workerId));
                 const body: TaskAckResponse = options.queue.fail(request.workerId, request.taskId, request.reason);
                 return { status: 200, body };
             }),

@@ -174,24 +174,22 @@ describe('worker session scenarios', () => {
         expect(empty.stdout).toContain('No tasks yet');
     });
 
-    it('reconnection: the new session gets the task, the old one is told to stop the loop', async () => {
+    it('reconnection gives the task to the new session immediately and tells the old one to stop the loop', async () => {
         await worker.register('claude-code');
         const taskId = enqueue('Task for the first session.');
         await worker.next();
         const deadWorkerId = await worker.workerId();
 
-        // Session A has been silent past the death threshold, but its task lease is still alive.
+        // Session A has been silent beyond the death timeout. Its task lease would only expire minutes later.
         advance(400);
         const reconnected = await worker.register('claude-code');
         expect(reconnected.code).toBe(0);
         expect(await worker.workerId()).not.toBe(deadWorkerId);
 
-        const tooEarly = await worker.next();
-        expect(tooEarly.taskId).toBe(null);
-
-        advance(PAST_LEASE_SECONDS);
+        // Taking over the slot returned the dead session's lease to the queue without waiting for TTL (rpc-design §7).
         const reissued = await worker.next();
         expect(reissued.taskId).toBe(taskId);
+        expect(reissued.stdout).toContain('attempt 2');
         await worker.complete(taskId, 'Answer from the second session.');
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'done' });
 

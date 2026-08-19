@@ -42,8 +42,8 @@ export class WorkerRegistry {
     private readonly now: () => Date;
     private readonly listeners = new Set<WorkerStatusListener>();
 
-    private readonly txRegister: (workerId: string, harness: string | undefined) => Outcome<void>;
-    private readonly txTouch: (workerId: string) => Outcome<void>;
+    private readonly txRegister: (workerId: string, harness: string | undefined) => Outcome<string | null>;
+    private readonly txTouch: (workerId: string) => Outcome<string | null>;
 
     private deathTimer: NodeJS.Timeout | null = null;
     /** Signature of the last broadcast status. Heartbeats must not produce a stream of events. */
@@ -67,19 +67,23 @@ export class WorkerRegistry {
      * PR worker session registration: `sherpa worker register` when the skill starts.
      * Claims a free slot or one with a dead worker. The same workerId renews it idempotently.
      * A different session while the previous worker is alive gets `worker_conflict` (spec §3.7, SPEC §4.4).
+     * Returns the displaced dead session's workerId so the caller can return its leases to the queue.
      */
-    register(workerId: string, harness?: string): void {
-        unwrap(this.txRegister(workerId, harness));
+    register(workerId: string, harness?: string): string | null {
+        const displaced = unwrap(this.txRegister(workerId, harness));
         this.refresh();
+        return displaced;
     }
 
     /**
      * Heartbeat: called on every valid worker request (rpc-design §7).
      * A session without `register` (workerId read from the state file) claims a free slot itself.
+     * Returns the displaced dead session's workerId, like `register`.
      */
-    touch(workerId: string): void {
-        unwrap(this.txTouch(workerId));
+    touch(workerId: string): string | null {
+        const displaced = unwrap(this.txTouch(workerId));
         this.refresh();
+        return displaced;
     }
 
     /**
@@ -132,7 +136,7 @@ export class WorkerRegistry {
         this.listeners.clear();
     }
 
-    private registerInTransaction(workerId: string, harness: string | undefined): Outcome<void> {
+    private registerInTransaction(workerId: string, harness: string | undefined): Outcome<string | null> {
         const row = this.readRow();
         const nowIso = this.nowIso();
 
@@ -143,7 +147,7 @@ export class WorkerRegistry {
                      VALUES (?, ?, ?, ?, ?)`,
                 )
                 .run(SLOT_ID, workerId, harness ?? null, nowIso, nowIso);
-            return ok(undefined);
+            return ok(null);
         }
 
         if (row.worker_id === workerId) {
@@ -152,7 +156,7 @@ export class WorkerRegistry {
             this.db
                 .prepare('UPDATE worker SET harness = ?, last_seen_at = ? WHERE id = ?')
                 .run(harness ?? row.harness, nowIso, SLOT_ID);
-            return ok(undefined);
+            return ok(null);
         }
 
         if (this.isAlive(row)) {
@@ -160,10 +164,10 @@ export class WorkerRegistry {
         }
 
         this.takeOver(workerId, harness ?? null, nowIso);
-        return ok(undefined);
+        return ok(row.worker_id);
     }
 
-    private touchInTransaction(workerId: string): Outcome<void> {
+    private touchInTransaction(workerId: string): Outcome<string | null> {
         const row = this.readRow();
         const nowIso = this.nowIso();
 
@@ -174,12 +178,12 @@ export class WorkerRegistry {
                      VALUES (?, ?, NULL, ?, ?)`,
                 )
                 .run(SLOT_ID, workerId, nowIso, nowIso);
-            return ok(undefined);
+            return ok(null);
         }
 
         if (row.worker_id === workerId) {
             this.db.prepare('UPDATE worker SET last_seen_at = ? WHERE id = ?').run(nowIso, SLOT_ID);
-            return ok(undefined);
+            return ok(null);
         }
 
         if (this.isAlive(row)) {
@@ -188,7 +192,7 @@ export class WorkerRegistry {
 
         // The previous session's harness is unrelated to the new one. It will declare its own through `register`.
         this.takeOver(workerId, null, nowIso);
-        return ok(undefined);
+        return ok(row.worker_id);
     }
 
     private takeOver(workerId: string, harness: string | null, nowIso: string): void {

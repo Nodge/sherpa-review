@@ -156,6 +156,45 @@ describe('queue with leases', () => {
         });
     });
 
+    describe('releasing leases of a displaced worker', () => {
+        it('the lease is requeued immediately without waiting for TTL and the attempt increments', () => {
+            const task = enqueue();
+            takeNext('w-dead');
+
+            queue.releaseLeasesOf('w-dead');
+
+            expect(queue.getTask(task.id)).toMatchObject({ status: 'queued', attempt: 2, workerId: null });
+            expect(takeNext('w-new').task.id).toBe(task.id);
+        });
+
+        it('leaves leases of other workers and closed tasks unchanged', () => {
+            const held = enqueue();
+            takeNext('w-live');
+            const done = enqueue();
+            takeNext('w-dead');
+            queue.complete('w-dead', done.id, 'done');
+
+            queue.releaseLeasesOf('w-dead');
+
+            expect(queue.getTask(held.id)).toMatchObject({ status: 'leased', workerId: 'w-live' });
+            expect(queue.getTask(done.id)).toMatchObject({ status: 'done', result: 'done' });
+        });
+
+        it('releasing after exhausted attempts fails the task just like expiry', () => {
+            const task = enqueue();
+            for (let attempt = 1; attempt < MAX_TASK_ATTEMPTS; attempt += 1) {
+                takeNext(`w-${String(attempt)}`);
+                advanceSeconds(LEASE_TTL_SECONDS.background + 1);
+            }
+            takeNext('w-last');
+
+            queue.releaseLeasesOf('w-last');
+
+            expect(queue.getTask(task.id)?.status).toBe('failed');
+            expect(queue.getTask(task.id)?.failReason).toContain('attempts exhausted');
+        });
+    });
+
     describe('result submission', () => {
         it('accepts the result and returns noop for a repeated complete', () => {
             const task = enqueue();

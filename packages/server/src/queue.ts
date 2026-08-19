@@ -98,6 +98,7 @@ export class TaskQueue {
     private readonly txFail: (workerId: string, taskId: TaskId, reason: string) => Outcome<TaskAckResponse>;
     private readonly txProgress: (workerId: string, taskId: TaskId, text: string) => Outcome<TaskAckResponse>;
     private readonly txCancel: (taskId: TaskId) => Outcome<CancelOutcome>;
+    private readonly txReleaseLeasesOf: (workerId: string) => void;
     private readonly txListTasks: () => TaskRecord[];
     private readonly txGetTask: (taskId: TaskId) => TaskRecord | null;
 
@@ -116,6 +117,9 @@ export class TaskQueue {
             this.progressInTransaction(workerId, taskId, text),
         );
         this.txCancel = this.db.transaction((taskId: TaskId) => this.cancelInTransaction(taskId));
+        this.txReleaseLeasesOf = this.db.transaction((workerId: string) => {
+            this.releaseLeasesInTransaction(workerId);
+        });
         this.txListTasks = this.db.transaction(() => {
             this.expireLeases();
             const rows = this.db.prepare('SELECT * FROM tasks ORDER BY id').all() as TaskRow[];
@@ -200,6 +204,18 @@ export class TaskQueue {
      */
     cancel(taskId: TaskId): CancelOutcome {
         return this.settle(this.txCancel(taskId));
+    }
+
+    /**
+     * Immediately releases leases of a displaced worker when a new session takes its slot
+     * (rpc-design §7): the previous worker is already dead, so there is no reason to wait for TTL expiry.
+     * Otherwise a task could sit for up to ten minutes after reconnection. The semantics match expiry:
+     * increment the attempt, fail the task when attempts run out.
+     */
+    releaseLeasesOf(workerId: string): void {
+        this.txReleaseLeasesOf(workerId);
+        this.flushChanges();
+        this.notify();
     }
 
     /**
@@ -370,30 +386,48 @@ export class TaskQueue {
             .all(nowIso) as { id: number; attempt: number }[];
 
         for (const row of expired) {
-            this.markChanged();
-            const attempt = row.attempt + 1;
-            if (attempt > MAX_TASK_ATTEMPTS) {
-                this.db
-                    .prepare(
-                        `UPDATE tasks SET status = 'failed', worker_id = NULL, lease_expires_at = NULL,
-                         fail_reason = ?, updated_at = ? WHERE id = ?`,
-                    )
-                    .run(
-                        `The worker took the task ${String(MAX_TASK_ATTEMPTS)} times and never completed it. ` +
-                            'No attempts remain.',
-                        nowIso,
-                        row.id,
-                    );
-                continue;
-            }
+            this.requeueLease(row);
+        }
+    }
 
+    /** Leases of a displaced worker take the expiry path without waiting for the expiry time. */
+    private releaseLeasesInTransaction(workerId: string): void {
+        const held = this.db
+            .prepare("SELECT id, attempt FROM tasks WHERE status = 'leased' AND worker_id = ?")
+            .all(workerId) as { id: number; attempt: number }[];
+
+        for (const row of held) {
+            this.requeueLease(row);
+        }
+    }
+
+    /** Requeues one leased task and increments the attempt. Exhausted attempts fail it. */
+    private requeueLease(row: { id: number; attempt: number }): void {
+        const nowIso = this.nowIso();
+        this.markChanged();
+
+        const attempt = row.attempt + 1;
+        if (attempt > MAX_TASK_ATTEMPTS) {
             this.db
                 .prepare(
-                    `UPDATE tasks SET status = 'queued', attempt = ?, worker_id = NULL, lease_expires_at = NULL,
-                     updated_at = ? WHERE id = ?`,
+                    `UPDATE tasks SET status = 'failed', worker_id = NULL, lease_expires_at = NULL,
+                     fail_reason = ?, updated_at = ? WHERE id = ?`,
                 )
-                .run(attempt, nowIso, row.id);
+                .run(
+                    `The worker took the task ${String(MAX_TASK_ATTEMPTS)} times without completing it. ` +
+                        'attempts exhausted.',
+                    nowIso,
+                    row.id,
+                );
+            return;
         }
+
+        this.db
+            .prepare(
+                `UPDATE tasks SET status = 'queued', attempt = ?, worker_id = NULL, lease_expires_at = NULL,
+                 updated_at = ? WHERE id = ?`,
+            )
+            .run(attempt, nowIso, row.id);
     }
 
     private closeTask(
