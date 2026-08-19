@@ -8,11 +8,17 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "dev": "tsx src/dev.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --no-error-on-unmatched-pattern",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@sherpa/protocol": "workspace:*"
+    "@sherpa/protocol": "workspace:*",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "tsx": "^4.23.12"
   }
 }

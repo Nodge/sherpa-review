@@ -1,0 +1,69 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+/** Default Sherpa state root, overridden in tests and development launches. */
+export const DEFAULT_SHERPA_DIR = path.join(os.homedir(), '.sherpa');
+
+/** State directory permissions: only the owner can read the contents (tokens, drafts, history) (spec §6). */
+const DIR_MODE = 0o700;
+
+/**
+ * `prKey` becomes part of the manifest filename and the state directory path,
+ * so only safe characters are allowed, otherwise the key could redirect writes outside `~/.sherpa`.
+ */
+const PR_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+export function assertValidPrKey(prKey: string): string {
+    if (!PR_KEY_PATTERN.test(prKey)) {
+        throw new Error(
+            `Invalid PR key: ${JSON.stringify(prKey)}. ` +
+                'Expected `<host>-<pr>` using letters, digits, dots, hyphens and underscores.',
+        );
+    }
+    return prKey;
+}
+
+/** Discovery manifest directory (rpc-design §8). */
+export function serversDirOf(sherpaDir: string): string {
+    return path.join(sherpaDir, 'servers');
+}
+
+/** State directory for one PR: SQLite file and anything added later (spec §1/C2). */
+export function prStateDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(sherpaDir, 'prs', assertValidPrKey(prKey));
+}
+
+export function manifestPathFor(sherpaDir: string, prKey: string): string {
+    return path.join(serversDirOf(sherpaDir), `${assertValidPrKey(prKey)}.json`);
+}
+
+export function databasePathFor(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'sherpa.db');
+}
+
+/** Creates the directory and its parents, setting 0700 on each level within `sherpaDir`. */
+export async function ensurePrivateDir(sherpaDir: string, dir: string): Promise<void> {
+    await fs.mkdir(dir, { recursive: true, mode: DIR_MODE });
+
+    // mkdir applies mode with umask, and directories may already exist, so set permissions explicitly.
+    for (const level of levelsWithin(sherpaDir, dir)) {
+        await fs.chmod(level, DIR_MODE);
+    }
+}
+
+/** Paths from `sherpaDir` (inclusive) to `dir` (inclusive). */
+function levelsWithin(sherpaDir: string, dir: string): string[] {
+    const relative = path.relative(sherpaDir, dir);
+    const levels = [sherpaDir];
+    if (relative === '' || relative.startsWith('..')) {
+        return levels;
+    }
+
+    let current = sherpaDir;
+    for (const segment of relative.split(path.sep)) {
+        current = path.join(current, segment);
+        levels.push(current);
+    }
+    return levels;
+}

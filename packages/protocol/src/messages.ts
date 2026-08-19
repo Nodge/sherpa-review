@@ -92,6 +92,8 @@ export const rpcErrorCodeSchema = z.enum([
     'worker_conflict',
     /** The `complete` result exceeded the limit, the task failed (spec §3.5). */
     'result_too_large',
+    /** Internal server error. The caller is not at fault, a retry may help. */
+    'internal',
 ]);
 export type RpcErrorCode = z.infer<typeof rpcErrorCodeSchema>;
 
