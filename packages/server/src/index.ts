@@ -1,13 +1,20 @@
 /**
- * Sherpa local server (spec §1/C2): discovery manifest, bearer authentication, storage.
- * Queue, worker endpoints and UI channel arrive in M0-T4…T7.
+ * Sherpa local server (spec §1/C2): discovery manifest, bearer authentication, storage,
+ * queue with leases and worker endpoints. UI channel arrives in M0-T7.
  */
 export { createToken, extractBearerToken, tokenMatches } from './auth.js';
 export type { SherpaDatabase } from './db.js';
 export { applyMigrations, openDatabase, readSchemaVersion } from './db.js';
-export { ServerAlreadyRunningError } from './errors.js';
+export { RpcFailure, ServerAlreadyRunningError } from './errors.js';
 export type { JsonResponse, RequestContext, Route, RouteHandler } from './http.js';
-export { createRequestListener, rpcError } from './http.js';
+export {
+    createRequestListener,
+    handlingRpcFailures,
+    readJsonBody,
+    REQUEST_BODY_MAX_BYTES,
+    rpcError,
+    rpcFailureResponse,
+} from './http.js';
 export {
     claimManifest,
     cleanStaleManifests,
@@ -27,6 +34,17 @@ export {
     prStateDirOf,
     serversDirOf,
 } from './paths.js';
+export type {
+    CancelOutcome,
+    EnqueueInput,
+    LeasedTask,
+    TaskQueueOptions,
+    TaskRecord,
+    TaskStatus,
+} from './queue.js';
+export { TaskQueue } from './queue.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
 export { SERVER_VERSION } from './version.js';
+export type { WorkerRoutesOptions } from './worker-routes.js';
+export { createWorkerRoutes } from './worker-routes.js';

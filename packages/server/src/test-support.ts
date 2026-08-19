@@ -44,3 +44,32 @@ export async function get(port: number, pathname: string, token?: string): Promi
         headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
     });
 }
+
+/** POST with a raw body to test how the server handles invalid JSON. */
+export async function postRaw(
+    port: number,
+    pathname: string,
+    body: string,
+    token?: string,
+    signal?: AbortSignal,
+): Promise<Response> {
+    return fetch(`http://127.0.0.1:${String(port)}${pathname}`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        body,
+        ...(signal === undefined ? {} : { signal }),
+    });
+}
+
+export async function postJson(
+    port: number,
+    pathname: string,
+    body: unknown,
+    token?: string,
+    signal?: AbortSignal,
+): Promise<Response> {
+    return postRaw(port, pathname, JSON.stringify(body), token, signal);
+}

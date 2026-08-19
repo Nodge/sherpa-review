@@ -56,15 +56,16 @@ describe('storage', () => {
         second.close();
     });
 
-    it('does not create queue tables in M0-T3', () => {
+    it('includes service tables and a task queue with a scheduler index in the schema', () => {
         const db = openDatabase(`${sherpaDir}/tables.db`);
         try {
-            const tables = db
-                .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            const objects = db
+                .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'index') ORDER BY name")
                 .all() as { name: string }[];
 
-            expect(tables.map((row) => row.name)).toEqual(expect.arrayContaining(['meta', 'migrations']));
-            expect(tables.map((row) => row.name)).not.toContain('tasks');
+            expect(objects.map((row) => row.name)).toEqual(
+                expect.arrayContaining(['meta', 'migrations', 'tasks', 'tasks_scheduler']),
+            );
         } finally {
             db.close();
         }

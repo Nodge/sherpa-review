@@ -6,7 +6,7 @@ export interface Migration {
 
 /**
  * Migrations run in order. The schema version equals the number of applied migrations
- * and is stored in `meta.schema_version`. Queue tables arrive in M0-T4.
+ * and lives in `meta.schema_version`. The list is append-only. Applied migrations are never rewritten.
  */
 export const MIGRATIONS: readonly Migration[] = [
     {
@@ -16,6 +16,31 @@ export const MIGRATIONS: readonly Migration[] = [
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+        `,
+    },
+    {
+        // Queue with leases (rpc-design §5). `id` is the contract TaskId, shown as `sherpa/<id>` in the UI and prompts.
+        name: '002-queue',
+        sql: `
+            CREATE TABLE tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                priority TEXT NOT NULL CHECK (priority IN ('interactive', 'background')),
+                instructions TEXT NOT NULL,
+                context_files TEXT NOT NULL,
+                result_schema_file TEXT,
+                status TEXT NOT NULL CHECK (status IN ('queued', 'leased', 'done', 'failed', 'cancelled')),
+                attempt INTEGER NOT NULL CHECK (attempt >= 1),
+                worker_id TEXT,
+                lease_expires_at TEXT,
+                progress_text TEXT,
+                result TEXT,
+                fail_reason TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX tasks_scheduler ON tasks (status, priority, id);
         `,
     },
 ];

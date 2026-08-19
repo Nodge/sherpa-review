@@ -1,3 +1,21 @@
+import type { RpcErrorCode } from '@sherpa/protocol';
+
+/**
+ * A domain error with a contract code: endpoints convert it to an `rpcError` body
+ * and the corresponding HTTP status without making assumptions.
+ */
+export class RpcFailure extends Error {
+    readonly code: RpcErrorCode;
+    readonly details: readonly string[] | undefined;
+
+    constructor(code: RpcErrorCode, message: string, details?: readonly string[]) {
+        super(message);
+        this.name = 'RpcFailure';
+        this.code = code;
+        this.details = details;
+    }
+}
+
 /** A live server for the same PR already holds the manifest, so a second process must not start (spec §1/C2). */
 export class ServerAlreadyRunningError extends Error {
     readonly prKey: string;

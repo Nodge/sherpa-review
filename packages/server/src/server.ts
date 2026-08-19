@@ -1,7 +1,7 @@
 import http from 'node:http';
 
 import type { ServerManifest } from '@sherpa/protocol';
-import { PROTOCOL_VERSION } from '@sherpa/protocol';
+import { LONG_POLL_MAX_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
 
 import { createToken } from './auth.js';
 import type { SherpaDatabase } from './db.js';
@@ -26,19 +26,25 @@ import {
     prStateDirOf,
     serversDirOf,
 } from './paths.js';
+import { TaskQueue } from './queue.js';
 import { SERVER_VERSION } from './version.js';
+import { createWorkerRoutes } from './worker-routes.js';
 
 export interface StartServerOptions {
     /** PR key in `<host>-<pr>` format, used as the manifest and state directory name. */
     prKey: string;
     /** State root, defaults to `~/.sherpa`. */
     sherpaDir?: string;
+    /** `worker next` long-poll window, defaults to the contract limit. Shortened in tests. */
+    longPollSeconds?: number;
 }
 
 export interface SherpaServer {
     readonly port: number;
     readonly token: string;
     readonly prKey: string;
+    /** This PR's queue, used by UI endpoints and tests until the UI channel exists. */
+    readonly queue: TaskQueue;
     /** Removes the manifest and closes the port and storage. A repeated call is a no-op. */
     close: () => Promise<void>;
 }
@@ -70,7 +76,11 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     await cleanStaleManifests(serversDir);
 
     const token = createToken();
-    const httpServer = http.createServer(createRequestListener({ token, routes: createRoutes(prKey) }));
+    // Worker endpoints join this array after the database opens. Before claiming the manifest,
+    // the server must respond only to `/healthz`, which competing processes use to check whether we're alive.
+    const routes: Route[] = [healthRoute(prKey)];
+    const httpServer = http.createServer(createRequestListener({ token, routes }));
+    const shutdownController = new AbortController();
     let claimed: ServerManifest | null = null;
     let db: SherpaDatabase | null = null;
 
@@ -95,8 +105,18 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         await ensurePrivateDir(sherpaDir, prStateDirOf(sherpaDir, prKey));
         db = openDatabase(databasePathFor(sherpaDir, prKey));
 
-        return createHandle({ manifest: claimed, manifestPath, httpServer, db });
+        const queue = new TaskQueue({ db });
+        routes.push(
+            ...createWorkerRoutes({
+                queue,
+                longPollSeconds: options.longPollSeconds ?? LONG_POLL_MAX_SECONDS,
+                shutdownSignal: shutdownController.signal,
+            }),
+        );
+
+        return createHandle({ manifest: claimed, manifestPath, httpServer, db, queue, shutdownController });
     } catch (error) {
+        shutdownController.abort();
         if (claimed !== null) {
             await removeOwnManifest(manifestPath, claimed);
         }
@@ -137,23 +157,21 @@ async function claimPr(parts: {
     );
 }
 
-function createRoutes(prKey: string): Route[] {
-    return [
-        {
-            method: 'GET',
-            path: '/healthz',
-            handle: () => {
-                const body: HealthResponse = {
-                    ok: true,
-                    prKey,
-                    pid: process.pid,
-                    serverVersion: SERVER_VERSION,
-                    protocolVersion: PROTOCOL_VERSION,
-                };
-                return { status: 200, body };
-            },
+function healthRoute(prKey: string): Route {
+    return {
+        method: 'GET',
+        path: '/healthz',
+        handle: () => {
+            const body: HealthResponse = {
+                ok: true,
+                prKey,
+                pid: process.pid,
+                serverVersion: SERVER_VERSION,
+                protocolVersion: PROTOCOL_VERSION,
+            };
+            return { status: 200, body };
         },
-    ];
+    };
 }
 
 function createHandle(parts: {
@@ -161,6 +179,8 @@ function createHandle(parts: {
     manifestPath: string;
     httpServer: http.Server;
     db: SherpaDatabase;
+    queue: TaskQueue;
+    shutdownController: AbortController;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -168,8 +188,11 @@ function createHandle(parts: {
         port: parts.manifest.port,
         token: parts.manifest.token,
         prKey: parts.manifest.prKey,
+        queue: parts.queue,
         close: () => {
             closing ??= (async () => {
+                // Abort pending long polls first, or they'll try to write to closed sockets.
+                parts.shutdownController.abort();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

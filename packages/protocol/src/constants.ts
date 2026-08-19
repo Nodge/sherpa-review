@@ -20,3 +20,14 @@ export const MAX_TASK_ATTEMPTS = 3;
 
 /** `task progress` text limit: a status line for the UI, not a result. */
 export const PROGRESS_TEXT_MAX_CHARS = 500;
+
+/**
+ * Worker endpoint paths are part of the CLI↔server contract (rpc-design §3).
+ * All use POST with a JSON body matching the corresponding schema from `messages.ts`.
+ */
+export const WORKER_ENDPOINTS = {
+    next: '/api/worker/next',
+    complete: '/api/task/complete',
+    progress: '/api/task/progress',
+    fail: '/api/task/fail',
+} as const;
