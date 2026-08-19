@@ -4,8 +4,8 @@ import { RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import type { Command } from './args.js';
 import { parseArgs } from './args.js';
-import { requestComplete, requestFail, requestNext, requestProgress } from './client.js';
-import { connect } from './discovery.js';
+import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
+import { connect, connectAs, freshWorkerId, storeWorkerId } from './discovery.js';
 import { CliError, userMessage } from './errors.js';
 import {
     formatCompleteResponse,
@@ -39,6 +39,8 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
             case 'help':
                 io.out(helpText());
                 return 0;
+            case 'worker-register':
+                return await workerRegister(command, io);
             case 'worker-next':
                 return await workerNext(command, io);
             case 'task-complete':
@@ -52,6 +54,21 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
         io.err(userMessage(error));
         return 1;
     }
+}
+
+/**
+ * Registering a session as the PR worker: each session gets a fresh identity (decision log),
+ * and the state file is overwritten only after the server accepts it.
+ */
+async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {
+    const workerId = freshWorkerId(io.env);
+    const connection = await connectAs(command.prKey, io.env, workerId);
+    const response = await requestRegister(connection, command.harness);
+    await storeWorkerId(io.env, connection.prKey, workerId);
+
+    // The server text already contains the next loop step. The CLI prints it as is.
+    io.out(response.message);
+    return 0;
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {

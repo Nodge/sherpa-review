@@ -27,9 +27,26 @@ export async function connect(
 ): Promise<ServerConnection> {
     const prKey = resolvePrKey(prKeyArg, env);
     const sherpaDir = sherpaDirFrom(env);
-    const manifest = await readServerManifest(sherpaDir, prKey);
     const workerId = await resolveWorkerId(sherpaDir, prKey, env);
 
+    return openConnection(sherpaDir, prKey, workerId);
+}
+
+/**
+ * Connects with an explicit identity for `worker register`. The state file is overwritten only
+ * after the server accepts registration, otherwise a rejected session would erase the live one's id.
+ */
+export async function connectAs(
+    prKeyArg: string | undefined,
+    env: Readonly<Record<string, string | undefined>>,
+    workerId: string,
+): Promise<ServerConnection> {
+    const prKey = resolvePrKey(prKeyArg, env);
+    return openConnection(sherpaDirFrom(env), prKey, workerId);
+}
+
+async function openConnection(sherpaDir: string, prKey: string, workerId: string): Promise<ServerConnection> {
+    const manifest = await readServerManifest(sherpaDir, prKey);
     return { prKey, port: manifest.port, token: manifest.token, workerId };
 }
 
@@ -77,8 +94,33 @@ export async function readServerManifest(sherpaDir: string, prKey: string): Prom
 }
 
 /**
+ * Fresh session identity for `worker register`. Reconnection means a new worker, so the previous session's id
+ * from the file isn't reused. The debug `SHERPA_WORKER_ID` still takes priority. Otherwise register
+ * would register one id while subsequent commands used another.
+ */
+export function freshWorkerId(env: Readonly<Record<string, string | undefined>>): string {
+    const override = env.SHERPA_WORKER_ID?.trim();
+    return override === undefined || override === '' ? randomUUID() : override;
+}
+
+/** Saves the session worker. Other commands read the id here. */
+export async function storeWorkerId(
+    env: Readonly<Record<string, string | undefined>>,
+    prKey: string,
+    workerId: string,
+): Promise<void> {
+    const filePath = workerIdPathFor(sherpaDirFrom(env), prKey);
+    try {
+        await fs.mkdir(path.dirname(filePath), { recursive: true, mode: STATE_DIR_MODE });
+        await writeWorkerIdFile(filePath, workerId);
+    } catch (error) {
+        throw new CliError(workerIdNotWritable(filePath, error));
+    }
+}
+
+/**
  * Worker session identity: debug override from env, otherwise the PR state file.
- * Creates the file if missing (in T6, `worker register` takes over writing, reading stays here).
+ * Creates the file if missing, as the session may have started without `worker register`.
  */
 export async function resolveWorkerId(
     sherpaDir: string,
@@ -99,12 +141,16 @@ export async function resolveWorkerId(
     try {
         return await createWorkerIdFile(filePath);
     } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new CliError(
-            `sherpa: failed to write ${filePath}: ${detail}.\n` +
-                'Check permissions on the Sherpa state directory and run the command again.',
-        );
+        throw new CliError(workerIdNotWritable(filePath, error));
     }
+}
+
+function workerIdNotWritable(filePath: string, error: unknown): string {
+    const detail = error instanceof Error ? error.message : String(error);
+    return (
+        `sherpa: could not write ${filePath}: ${detail}.\n` +
+        'Check permissions on the Sherpa state directory and run the command again.'
+    );
 }
 
 /** null means the file is missing or empty (an unfinished write from the previous run). */
@@ -142,6 +188,12 @@ async function createWorkerIdFile(filePath: string): Promise<string> {
     // writeFile applies mode only on creation and subject to umask. Set the permissions explicitly afterward.
     await fs.chmod(filePath, WORKER_ID_FILE_MODE);
     return workerId;
+}
+
+/** Race-free overwrite: the server has accepted the id, and it is the only valid one for this session. */
+async function writeWorkerIdFile(filePath: string, workerId: string): Promise<void> {
+    await fs.writeFile(filePath, `${workerId}\n`, { mode: WORKER_ID_FILE_MODE });
+    await fs.chmod(filePath, WORKER_ID_FILE_MODE);
 }
 
 function isAlreadyExists(error: unknown): boolean {

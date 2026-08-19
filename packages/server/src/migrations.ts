@@ -43,6 +43,20 @@ export const MIGRATIONS: readonly Migration[] = [
             CREATE INDEX tasks_scheduler ON tasks (status, priority, id);
         `,
     },
+    {
+        // PR worker (rpc-design §7). Exactly one row because there is one server and one worker per PR.
+        // Session history is unnecessary in M0. Reconnection overwrites the slot.
+        name: '003-worker',
+        sql: `
+            CREATE TABLE worker (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                worker_id TEXT NOT NULL,
+                harness TEXT,
+                registered_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

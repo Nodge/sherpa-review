@@ -6,6 +6,12 @@ export type Command =
     | { readonly kind: 'help' }
     | { readonly kind: 'worker-next'; readonly prKey: string | undefined }
     | {
+          readonly kind: 'worker-register';
+          readonly prKey: string | undefined;
+          /** Harness label for worker status in the UI. Optional. */
+          readonly harness: string | undefined;
+      }
+    | {
           readonly kind: 'task-complete';
           readonly prKey: string | undefined;
           readonly taskId: number;
@@ -24,7 +30,7 @@ export type Command =
           readonly reason: string;
       };
 
-const OPTIONS = ['--pr', '--file', '--text', '--reason'] as const;
+const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness'] as const;
 type OptionName = (typeof OPTIONS)[number];
 
 type TaskSubcommand = 'complete' | 'progress' | 'fail';
@@ -46,7 +52,7 @@ export function parseArgs(argv: readonly string[]): Command {
     const group = positionals[0];
 
     if (group === 'worker') {
-        return parseWorkerCommand(positionals, prKey);
+        return parseWorkerCommand(positionals, options, prKey);
     }
     if (group === 'task') {
         return parseTaskCommand(positionals, options, prKey);
@@ -59,9 +65,20 @@ export function parseArgs(argv: readonly string[]): Command {
     );
 }
 
-function parseWorkerCommand(positionals: readonly string[], prKey: string | undefined): Command {
-    if (positionals[1] !== 'next' || positionals.length > 2) {
-        throw new CliError('sherpa: the `worker` group has one command, `sherpa worker next`.');
+function parseWorkerCommand(
+    positionals: readonly string[],
+    options: ReadonlyMap<OptionName, string>,
+    prKey: string | undefined,
+): Command {
+    const sub = positionals[1];
+    if ((sub !== 'next' && sub !== 'register') || positionals.length > 2) {
+        throw new CliError(
+            'sherpa: the `worker` group has two commands: `sherpa worker next` and `sherpa worker register`.',
+        );
+    }
+    if (sub === 'register') {
+        const harness = options.get('--harness');
+        return { kind: 'worker-register', prKey, harness: harness === '' ? undefined : harness };
     }
     return { kind: 'worker-next', prKey };
 }

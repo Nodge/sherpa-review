@@ -73,16 +73,23 @@ export function formatFailResponse(response: TaskAckResponse, taskId: number): s
 }
 
 /**
+ * Call role in the worker lifecycle. Determines the next step on `worker_conflict`.
+ * `register`: the session is only asking to become a worker and hasn't been one yet.
+ * `worker`: the session worked as a worker and lost the slot.
+ */
+export type CallRole = 'register' | 'worker';
+
+/**
  * Server error. Contract messages are already human-readable, so the CLI prints them as is
  * and adds the next step only where the message doesn't imply it.
  */
-export function formatRpcError(error: RpcError['error']): string {
+export function formatRpcError(error: RpcError['error'], role: CallRole): string {
     const lines = [`sherpa: ${error.message}`];
     for (const detail of error.details ?? []) {
         lines.push(`  - ${detail}`);
     }
 
-    const nextStep = NEXT_STEP_BY_CODE[error.code];
+    const nextStep = nextStepFor(error.code, role);
     if (nextStep !== undefined) {
         lines.push(nextStep);
     }
@@ -108,16 +115,32 @@ export function helpText(): string {
         `sherpa ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}), Sherpa worker.`,
         '',
         'Commands:',
+        '  sherpa worker register [--harness <name>]    register the session as the PR worker',
         `  sherpa worker next                          get the next task (waits up to ${pollMinutes} minutes)`,
         '  sherpa task complete <id> --file <path>     submit the task result',
         '  sherpa task progress <id> --text "<text>"  interim status for the reviewer',
         '  sherpa task fail <id> --reason "<text>"    decline the task with a reason',
         '',
         'Flags:',
-        '  --pr <key>    PR to connect to. Defaults to SHERPA_PR',
-        '  --version     CLI version',
+        '  --pr <key>       PR to connect to. Defaults to SHERPA_PR',
+        '  --harness <name> harness label in worker status. Only for `worker register`',
+        '  --version        CLI version',
     ].join('\n');
 }
+
+function nextStepFor(code: RpcErrorCode, role: CallRole): string | undefined {
+    // On registration the server asks to wait and retry. The terminal instruction
+    // contradicts that because a session denied worker access was never a worker.
+    if (code === 'worker_conflict') {
+        return role === 'register' ? undefined : WORKER_CONFLICT_STOP;
+    }
+    return NEXT_STEP_BY_CODE[code];
+}
+
+/** Another session took the worker slot during execution. This session cannot continue the loop. */
+const WORKER_CONFLICT_STOP =
+    'This session is no longer the worker for this PR: stop the loop and do not call `sherpa` again. ' +
+    'Another session is continuing the work.';
 
 /**
  * Next step by error code. `version_incompatible`, `lease_not_held` and `unknown_task`
@@ -126,7 +149,6 @@ export function helpText(): string {
 const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, string>> = {
     unauthorized: 'The manifest token is stale. Restart the Sherpa skill.',
     bad_request: 'Check the command arguments and call it again.',
-    worker_conflict: 'Another session is working on this PR. Close it or wait for it to disconnect.',
     result_too_large: 'The task is closed. The reviewer can see the reason. Call `sherpa worker next` for the next task.',
     internal: 'Retry the command. If the error persists, restart the Sherpa skill.',
 };

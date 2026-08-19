@@ -28,6 +28,7 @@ import {
 } from './paths.js';
 import { TaskQueue } from './queue.js';
 import { SERVER_VERSION } from './version.js';
+import { WorkerRegistry } from './worker-registry.js';
 import { createWorkerRoutes } from './worker-routes.js';
 
 export interface StartServerOptions {
@@ -37,6 +38,11 @@ export interface StartServerOptions {
     sherpaDir?: string;
     /** `worker next` long-poll window, defaults to the contract limit. Shortened in tests. */
     longPollSeconds?: number;
+    /**
+     * Injectable clock for the worker lifecycle. Defaults to the system clock.
+     * Tests need to pass `WORKER_DEAD_AFTER_SECONDS` without waiting six minutes.
+     */
+    now?: () => Date;
 }
 
 export interface SherpaServer {
@@ -45,6 +51,8 @@ export interface SherpaServer {
     readonly prKey: string;
     /** This PR's queue, used by UI endpoints and tests until the UI channel exists. */
     readonly queue: TaskQueue;
+    /** This PR's worker lifecycle: status and connected/disconnected events for the UI. */
+    readonly workerRegistry: WorkerRegistry;
     /** Removes the manifest and closes the port and storage. A repeated call is a no-op. */
     close: () => Promise<void>;
 }
@@ -106,15 +114,25 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         db = openDatabase(databasePathFor(sherpaDir, prKey));
 
         const queue = new TaskQueue({ db });
+        const workerRegistry = new WorkerRegistry(options.now === undefined ? { db } : { db, now: options.now });
         routes.push(
             ...createWorkerRoutes({
                 queue,
+                registry: workerRegistry,
                 longPollSeconds: options.longPollSeconds ?? LONG_POLL_MAX_SECONDS,
                 shutdownSignal: shutdownController.signal,
             }),
         );
 
-        return createHandle({ manifest: claimed, manifestPath, httpServer, db, queue, shutdownController });
+        return createHandle({
+            manifest: claimed,
+            manifestPath,
+            httpServer,
+            db,
+            queue,
+            workerRegistry,
+            shutdownController,
+        });
     } catch (error) {
         shutdownController.abort();
         if (claimed !== null) {
@@ -180,6 +198,7 @@ function createHandle(parts: {
     httpServer: http.Server;
     db: SherpaDatabase;
     queue: TaskQueue;
+    workerRegistry: WorkerRegistry;
     shutdownController: AbortController;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
@@ -189,10 +208,13 @@ function createHandle(parts: {
         token: parts.manifest.token,
         prKey: parts.manifest.prKey,
         queue: parts.queue,
+        workerRegistry: parts.workerRegistry,
         close: () => {
             closing ??= (async () => {
                 // Abort pending long polls first, or they'll try to write to closed sockets.
                 parts.shutdownController.abort();
+                // Stop the worker death timer before closing storage. It cannot run after close().
+                parts.workerRegistry.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

@@ -4,8 +4,10 @@ import {
     rpcErrorSchema,
     taskAckResponseSchema,
     taskCompleteResponseSchema,
+    WORKER_DEAD_AFTER_SECONDS,
     WORKER_ENDPOINTS,
     workerNextResponseSchema,
+    workerRegisterResponseSchema,
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -21,10 +23,13 @@ const BASE = { protocolVersion: PROTOCOL_VERSION, cliVersion: '0.1.0', workerId:
 describe('worker endpoints', () => {
     let sherpaDir: string;
     let servers: SherpaServer[];
+    /** Shifts the server clock. Worker death takes 6 minutes, which the test need not wait through. */
+    let clockOffsetMs: number;
 
     beforeEach(async () => {
         sherpaDir = await makeTempSherpaDir();
         servers = [];
+        clockOffsetMs = 0;
     });
 
     afterEach(async () => {
@@ -36,9 +41,18 @@ describe('worker endpoints', () => {
 
     /** The test sets the long-poll window. There is no need to wait the contract's 4 minutes in tests. */
     async function start(longPollSeconds = 0.3): Promise<SherpaServer> {
-        const server = await startServer({ prKey: PR_KEY, sherpaDir, longPollSeconds });
+        const server = await startServer({
+            prKey: PR_KEY,
+            sherpaDir,
+            longPollSeconds,
+            now: () => new Date(Date.now() + clockOffsetMs),
+        });
         servers.push(server);
         return server;
+    }
+
+    function advanceServerClock(seconds: number): void {
+        clockOffsetMs += seconds * 1000;
     }
 
     function enqueueEcho(server: SherpaServer, instructions = 'Return the file contents as is.'): number {
@@ -104,6 +118,128 @@ describe('worker endpoints', () => {
             const body = rpcErrorSchema.parse(await response.json());
             expect(body.error.code).toBe('bad_request');
             expect(body.error.message).toContain(String(REQUEST_BODY_MAX_BYTES));
+        });
+    });
+
+    describe('register', () => {
+        it('session registration: acknowledgement and worker status with harness', async () => {
+            const server = await start();
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, harness: 'claude-code' },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            const body = workerRegisterResponseSchema.parse(await response.json());
+            expect(body.kind).toBe('registered');
+            expect(body.message).toContain('sherpa worker next');
+            expect(server.workerRegistry.status()).toMatchObject({
+                kind: 'connected',
+                workerId: WORKER,
+                harness: 'claude-code',
+            });
+        });
+
+        it('a second live session gets worker_conflict', async () => {
+            const server = await start();
+            await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, harness: 'claude-code' }, server.token);
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, workerId: 'w-2', harness: 'codex' },
+                server.token,
+            );
+
+            expect(response.status).toBe(409);
+            const body = rpcErrorSchema.parse(await response.json());
+            expect(body.error.code).toBe('worker_conflict');
+            expect(body.error.message).toContain('another live session');
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+        });
+
+        it('checks the version handshake here too', async () => {
+            const server = await start();
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, protocolVersion: '9.9.9' },
+                server.token,
+            );
+
+            expect(response.status).toBe(409);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('version_incompatible');
+            expect(server.workerRegistry.status().kind).toBe('never');
+        });
+
+        it('allows registration after the previous session dies', async () => {
+            const server = await start();
+            await postJson(server.port, WORKER_ENDPOINTS.register, BASE, server.token);
+            advanceServerClock(WORKER_DEAD_AFTER_SECONDS + 1);
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, workerId: 'w-2' },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: 'w-2' });
+        });
+    });
+
+    describe('heartbeat', () => {
+        it('registers a session as the worker on next, even without register', async () => {
+            const server = await start();
+
+            await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+        });
+
+        it('rejects another session before accessing the queue', async () => {
+            const server = await start();
+            const taskId = enqueueEcho(server);
+            await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.complete,
+                { ...BASE, workerId: 'w-2', taskId, result: 'result from another session' },
+                server.token,
+            );
+
+            expect(response.status).toBe(409);
+            // Specifically worker_conflict, not lease_not_held: the request never reached the queue.
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('worker_conflict');
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', workerId: WORKER });
+        });
+
+        it('a new worker registered during long-poll does not give a task to the old one', async () => {
+            const server = await start(30);
+            const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // The old session is waiting in a call, but the server clock says it has gone silent. The new one takes the slot.
+            advanceServerClock(WORKER_DEAD_AFTER_SECONDS + 1);
+            const registered = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, workerId: 'w-2' },
+                server.token,
+            );
+            expect(registered.status).toBe(200);
+            const taskId = enqueueEcho(server, 'task for the new session');
+
+            const response = await pending;
+            expect(response.status).toBe(409);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('worker_conflict');
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
         });
     });
 

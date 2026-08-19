@@ -7,6 +7,8 @@ import type {
     TaskProgressRequest,
     WorkerNextRequest,
     WorkerNextResponse,
+    WorkerRegisterRequest,
+    WorkerRegisterResponse,
 } from '@sherpa/protocol';
 import {
     LONG_POLL_MAX_SECONDS,
@@ -20,12 +22,15 @@ import {
     WORKER_ENDPOINTS,
     workerNextRequestSchema,
     workerNextResponseSchema,
+    workerRegisterRequestSchema,
+    workerRegisterResponseSchema,
 } from '@sherpa/protocol';
 import type { ZodType } from 'zod';
 
 import type { ServerConnection } from './discovery.js';
 import { serverUnavailable } from './discovery.js';
 import { CliError } from './errors.js';
+import type { CallRole } from './format.js';
 import { formatRpcError } from './format.js';
 import { CLI_VERSION } from './version.js';
 
@@ -36,6 +41,21 @@ const NEXT_TIMEOUT_MS = (LONG_POLL_MAX_SECONDS + LONG_POLL_SLACK_SECONDS) * 1000
 /** Other endpoints respond immediately, so there is no need for a long wait. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Registers the session as the PR worker (rpc-design §7) on the first skill call and every reconnection. */
+export async function requestRegister(
+    connection: ServerConnection,
+    harness: string | undefined,
+): Promise<WorkerRegisterResponse> {
+    return callWorker<WorkerRegisterRequest, WorkerRegisterResponse>(connection, {
+        endpoint: WORKER_ENDPOINTS.register,
+        payload: harness === undefined ? {} : { harness },
+        requestSchema: workerRegisterRequestSchema,
+        responseSchema: workerRegisterResponseSchema,
+        timeoutMs: DEFAULT_TIMEOUT_MS,
+        role: 'register',
+    });
+}
+
 export async function requestNext(connection: ServerConnection): Promise<WorkerNextResponse> {
     return callWorker<WorkerNextRequest, WorkerNextResponse>(connection, {
         endpoint: WORKER_ENDPOINTS.next,
@@ -43,6 +63,7 @@ export async function requestNext(connection: ServerConnection): Promise<WorkerN
         requestSchema: workerNextRequestSchema,
         responseSchema: workerNextResponseSchema,
         timeoutMs: NEXT_TIMEOUT_MS,
+        role: 'worker',
     });
 }
 
@@ -57,6 +78,7 @@ export async function requestComplete(
         requestSchema: taskCompleteRequestSchema,
         responseSchema: taskCompleteResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
+        role: 'worker',
     });
 }
 
@@ -71,6 +93,7 @@ export async function requestProgress(
         requestSchema: taskProgressRequestSchema,
         responseSchema: taskAckResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
+        role: 'worker',
     });
 }
 
@@ -85,6 +108,7 @@ export async function requestFail(
         requestSchema: taskFailRequestSchema,
         responseSchema: taskAckResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
+        role: 'worker',
     });
 }
 
@@ -100,6 +124,8 @@ interface WorkerCall<TRequest extends WorkerRequestBase, TResponse> {
     readonly requestSchema: ZodType<TRequest>;
     readonly responseSchema: ZodType<TResponse>;
     readonly timeoutMs: number;
+    /** Call role. Determines the next-step message on a worker conflict. */
+    readonly role: CallRole;
 }
 
 /**
@@ -138,7 +164,7 @@ async function callWorker<TRequest extends WorkerRequestBase, TResponse>(
 
     const text = await readText(response, connection);
     if (!response.ok) {
-        throw new CliError(formatRpcError(parseRpcError(text)));
+        throw new CliError(formatRpcError(parseRpcError(text), call.role));
     }
 
     const parsed = call.responseSchema.safeParse(parseJson(text));

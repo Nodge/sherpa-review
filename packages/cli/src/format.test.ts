@@ -67,13 +67,21 @@ describe('complete responses', () => {
     });
 });
 
+/** Server text for `worker_conflict` (worker-registry) asks to retry registration itself. */
+const CONFLICT_MESSAGE =
+    'The worker for this PR is already another live session (w-1). Two sessions per PR are not supported. ' +
+    'If this is a reconnection, wait 6 min, or stop it and call `sherpa worker register` again.';
+
 describe('errors', () => {
     it('prints the server message and details as a list', () => {
-        const output = formatRpcError({
-            code: 'bad_request',
-            message: 'The request failed contract validation.',
-            details: ['taskId: expected a number'],
-        });
+        const output = formatRpcError(
+            {
+                code: 'bad_request',
+                message: 'The request failed contract validation.',
+                details: ['taskId: expected number'],
+            },
+            'worker',
+        );
 
         expect(output).toContain('The request failed contract validation.');
         expect(output).toContain('- taskId: expected a number');
@@ -83,7 +91,21 @@ describe('errors', () => {
     it('does not duplicate hints when the server already says what to do', () => {
         const message = 'CLI protocol version 9.9.9 is incompatible. Update the skill together with the CLI.';
 
-        expect(formatRpcError({ code: 'version_incompatible', message })).toBe(`sherpa: ${message}`);
+        expect(formatRpcError({ code: 'version_incompatible', message }, 'worker')).toBe(`sherpa: ${message}`);
+    });
+
+    it('worker conflict in the loop gives a terminal instruction to stop', () => {
+        const output = formatRpcError({ code: 'worker_conflict', message: CONFLICT_MESSAGE }, 'worker');
+
+        expect(output).toContain(CONFLICT_MESSAGE);
+        expect(output).toContain('stop the loop');
+    });
+
+    it('conflict at registration leaves only the server message, as this session was never a worker', () => {
+        const output = formatRpcError({ code: 'worker_conflict', message: CONFLICT_MESSAGE }, 'register');
+
+        expect(output).toBe(`sherpa: ${CONFLICT_MESSAGE}`);
+        expect(output).not.toContain('stop the loop');
     });
 
     it('explains an exceeded limit in kilobytes and leaves the task assigned to the worker', () => {

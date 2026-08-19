@@ -19,6 +19,47 @@ const workerRequestBase = z.object({
     workerId: workerIdSchema,
 });
 
+/**
+ * `sherpa worker register` registers the session as the PR worker at skill startup (rpc-design §7).
+ * Reconnection is a new registration with a new workerId. The old worker's leases expire on their own.
+ * While the previous worker is alive, a second is rejected with `worker_conflict` (spec §3.7).
+ */
+export const workerRegisterRequestSchema = workerRequestBase.extend({
+    /** Harness label for UI status ("claude-code", "codex"), a free-form string. */
+    harness: z.string().min(1).max(64).optional(),
+});
+export type WorkerRegisterRequest = z.infer<typeof workerRegisterRequestSchema>;
+
+export const workerRegisterResponseSchema = z.object({
+    kind: z.literal('registered'),
+    message: z.string(),
+});
+export type WorkerRegisterResponse = z.infer<typeof workerRegisterResponseSchema>;
+
+/**
+ * PR worker state as seen by the server (rpc-design §7), displayed in the UI.
+ * `disconnected` means more than `WORKER_DEAD_AFTER_SECONDS` have passed since the last CLI call.
+ */
+export const workerStatusSchema = z.discriminatedUnion('kind', [
+    /** No worker has ever registered for this PR. */
+    z.object({ kind: z.literal('never') }),
+    z.object({
+        kind: z.literal('connected'),
+        workerId: workerIdSchema,
+        harness: z.string().optional(),
+        registeredAt: z.iso.datetime(),
+        lastSeenAt: z.iso.datetime(),
+    }),
+    z.object({
+        kind: z.literal('disconnected'),
+        workerId: workerIdSchema,
+        harness: z.string().optional(),
+        registeredAt: z.iso.datetime(),
+        lastSeenAt: z.iso.datetime(),
+    }),
+]);
+export type WorkerStatus = z.infer<typeof workerStatusSchema>;
+
 /** `sherpa worker next` long-polls for the next task. */
 export const workerNextRequestSchema = workerRequestBase;
 export type WorkerNextRequest = z.infer<typeof workerNextRequestSchema>;

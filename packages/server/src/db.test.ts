@@ -64,7 +64,7 @@ describe('storage', () => {
                 .all() as { name: string }[];
 
             expect(objects.map((row) => row.name)).toEqual(
-                expect.arrayContaining(['meta', 'migrations', 'tasks', 'tasks_scheduler']),
+                expect.arrayContaining(['meta', 'migrations', 'tasks', 'tasks_scheduler', 'worker']),
             );
         } finally {
             db.close();

@@ -10,6 +10,9 @@ import {
     taskProgressRequestSchema,
     workerNextRequestSchema,
     workerNextResponseSchema,
+    workerRegisterRequestSchema,
+    workerRegisterResponseSchema,
+    workerStatusSchema,
 } from './messages.js';
 import { leaseSchema, taskSchema } from './task.js';
 
@@ -21,6 +24,9 @@ export function generateJsonSchemas(): Record<string, unknown> {
     const sources = {
         task: taskSchema,
         lease: leaseSchema,
+        workerRegisterRequest: workerRegisterRequestSchema,
+        workerRegisterResponse: workerRegisterResponseSchema,
+        workerStatus: workerStatusSchema,
         workerNextRequest: workerNextRequestSchema,
         workerNextResponse: workerNextResponseSchema,
         taskCompleteRequest: taskCompleteRequestSchema,

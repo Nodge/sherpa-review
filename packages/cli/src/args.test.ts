@@ -25,6 +25,19 @@ describe('argument parsing', () => {
         });
     });
 
+    it('worker register, harness is optional', () => {
+        expect(parseArgs(['worker', 'register'])).toEqual({
+            kind: 'worker-register',
+            prKey: undefined,
+            harness: undefined,
+        });
+        expect(parseArgs(['worker', 'register', '--harness', 'claude-code', '--pr', 'github-quillmart--quillmart--1'])).toEqual({
+            kind: 'worker-register',
+            prKey: 'github-quillmart--quillmart--1',
+            harness: 'claude-code',
+        });
+    });
+
     it('three task commands with their required flags', () => {
         expect(parseArgs(['task', 'complete', '42', '--file', 'answer.md'])).toEqual({
             kind: 'task-complete',

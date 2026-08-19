@@ -42,16 +42,25 @@ describe('CLI against server', () => {
     }
 
     async function sherpa(...argv: string[]): Promise<Invocation> {
+        return sherpaWithEnv({}, ...argv);
+    }
+
+    /** The same call with extra environment variables to simulate a second session on the same PR. */
+    async function sherpaWithEnv(extraEnv: Record<string, string>, ...argv: string[]): Promise<Invocation> {
         const stdout: string[] = [];
         const stderr: string[] = [];
         const io: CliIo = {
-            env: { SHERPA_DIR: sherpaDir, SHERPA_PR: PR_KEY },
+            env: { SHERPA_DIR: sherpaDir, SHERPA_PR: PR_KEY, ...extraEnv },
             out: (text) => stdout.push(text),
             err: (text) => stderr.push(text),
         };
 
         const code = await run(argv, io);
         return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
+    }
+
+    async function readWorkerIdFile(): Promise<string> {
+        return (await fs.readFile(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'), 'utf8')).trim();
     }
 
     function enqueueEcho(running: SherpaServer, instructions = 'Return the file contents unchanged.'): number {
@@ -68,6 +77,70 @@ describe('CLI against server', () => {
         await fs.writeFile(file, content);
         return file;
     }
+
+    it('register makes the session a worker and saves it in the state file', async () => {
+        const running = await start();
+
+        const result = await sherpa('worker', 'register', '--harness', 'claude-code');
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('sherpa worker next');
+        const workerId = await readWorkerIdFile();
+        expect(running.workerRegistry.status()).toMatchObject({
+            kind: 'connected',
+            workerId,
+            harness: 'claude-code',
+        });
+
+        const stats = await fs.stat(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'));
+        expect(stats.mode & 0o777).toBe(0o600);
+    });
+
+    it('reconnection creates a new identity: register does not reuse the previous id', async () => {
+        const running = await start();
+        await fs.mkdir(path.join(sherpaDir, 'prs', PR_KEY), { recursive: true });
+        await fs.writeFile(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'), 'session-from-a-past-life\n');
+
+        await sherpa('worker', 'register');
+
+        const workerId = await readWorkerIdFile();
+        expect(workerId).not.toBe('session-from-a-past-life');
+        expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
+
+        // Subsequent commands use the saved id, so the server sees the same worker.
+        await sherpa('worker', 'next');
+        expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
+    });
+
+    it('rejects a second live session and keeps the worker file owned by the first', async () => {
+        await start();
+        await sherpa('worker', 'register', '--harness', 'claude-code');
+        const first = await readWorkerIdFile();
+
+        const second = await sherpa('worker', 'register', '--harness', 'codex');
+
+        expect(second.code).toBe(1);
+        expect(second.stderr).toContain('another live session');
+        expect(second.stderr).toContain('claude-code');
+        // The server asks to wait and retry register. Appending "stop the loop" contradicts that
+        // and is also wrong because this session was never a worker.
+        expect(second.stderr).toContain('`sherpa worker register` again');
+        expect(second.stderr).not.toContain('stop the loop');
+        expect(await readWorkerIdFile()).toBe(first);
+    });
+
+    it('a displaced session gets an instruction to stop instead of advice to retry', async () => {
+        const running = await start();
+        await sherpa('worker', 'register');
+        const taskId = enqueueEcho(running);
+
+        const displaced = await sherpaWithEnv({ SHERPA_WORKER_ID: 'other-session' }, 'worker', 'next');
+
+        expect(displaced.code).toBe(1);
+        expect(displaced.stderr).toContain('stop the loop');
+        expect(displaced.stderr).not.toContain('worker_conflict');
+        expect(running.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
+    });
 
     it('empty queue: next returns on timeout and asks to be called again', async () => {
         await start();

@@ -1,6 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 
-import type { TaskAckResponse, TaskCompleteResponse, WorkerNextResponse } from '@sherpa/protocol';
+import type {
+    TaskAckResponse,
+    TaskCompleteResponse,
+    WorkerNextResponse,
+    WorkerRegisterResponse,
+} from '@sherpa/protocol';
 import {
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
@@ -11,6 +16,7 @@ import {
     WORKER_ENDPOINTS,
     workerIdSchema,
     workerNextRequestSchema,
+    workerRegisterRequestSchema,
 } from '@sherpa/protocol';
 import { z } from 'zod';
 
@@ -18,9 +24,11 @@ import { RpcFailure } from './errors.js';
 import type { RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
 import type { TaskQueue } from './queue.js';
+import type { WorkerRegistry } from './worker-registry.js';
 
 export interface WorkerRoutesOptions {
     readonly queue: TaskQueue;
+    readonly registry: WorkerRegistry;
     /** Upper bound for `next` long-poll. Shortened in tests. */
     readonly longPollSeconds: number;
     /** Server shutdown: aborts pending long-polls so close() does not wait for them. */
@@ -45,14 +53,34 @@ const completeBodySchema = z.object({
     result: z.string(),
 });
 
-/** Worker endpoints (rpc-design §3): session pull channel, all POST with contract JSON bodies. */
+/**
+ * Worker endpoints (rpc-design §3): the session's pull channel, all POST with a contract JSON body.
+ * Every valid call is a worker heartbeat (rpc-design §7). Another live session gets
+ * `worker_conflict` before the request reaches the queue.
+ */
 export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
     return [
+        {
+            method: 'POST',
+            path: WORKER_ENDPOINTS.register,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readWorkerRequest(ctx, workerRegisterRequestSchema);
+                options.registry.register(request.workerId, request.harness);
+                const body: WorkerRegisterResponse = {
+                    kind: 'registered',
+                    message:
+                        'The session is registered as the worker for this PR. Call `sherpa worker next` ' +
+                        'and follow the instructions in its output.',
+                };
+                return { status: 200, body };
+            }),
+        },
         {
             method: 'POST',
             path: WORKER_ENDPOINTS.next,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerNextRequestSchema);
+                options.registry.touch(request.workerId);
                 const body: WorkerNextResponse = await pollForTask(options, ctx.req, request.workerId);
                 return { status: 200, body };
             }),
@@ -62,6 +90,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.complete,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, completeBodySchema);
+                options.registry.touch(request.workerId);
                 const body: TaskCompleteResponse = options.queue.complete(
                     request.workerId,
                     request.taskId,
@@ -75,6 +104,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.progress,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskProgressRequestSchema);
+                options.registry.touch(request.workerId);
                 const body: TaskAckResponse = options.queue.progress(request.workerId, request.taskId, request.text);
                 return { status: 200, body };
             }),
@@ -84,6 +114,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.fail,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskFailRequestSchema);
+                options.registry.touch(request.workerId);
                 const body: TaskAckResponse = options.queue.fail(request.workerId, request.taskId, request.reason);
                 return { status: 200, body };
             }),
@@ -138,6 +169,10 @@ async function pollForTask(
             if (abort.signal.aborted) {
                 break;
             }
+
+            // While the call was waiting, a new session may have taken the slot (the previous one exceeded the silence timeout).
+            // Otherwise the old worker would take a task from it.
+            options.registry.assertOwner(workerId);
 
             const leased = options.queue.next(workerId);
             if (leased !== null) {

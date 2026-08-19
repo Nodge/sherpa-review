@@ -26,6 +26,7 @@ export const PROGRESS_TEXT_MAX_CHARS = 500;
  * All use POST with a JSON body matching the corresponding schema from `messages.ts`.
  */
 export const WORKER_ENDPOINTS = {
+    register: '/api/worker/register',
     next: '/api/worker/next',
     complete: '/api/task/complete',
     progress: '/api/task/progress',

@@ -46,5 +46,7 @@ export { TaskQueue } from './queue.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
 export { SERVER_VERSION } from './version.js';
+export type { WorkerRegistryOptions, WorkerStatusListener } from './worker-registry.js';
+export { WorkerRegistry } from './worker-registry.js';
 export type { WorkerRoutesOptions } from './worker-routes.js';
 export { createWorkerRoutes } from './worker-routes.js';
