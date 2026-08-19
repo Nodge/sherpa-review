@@ -1,0 +1,11 @@
+{
+  "name": "@sherpa/skill",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "echo \"@sherpa/skill: nothing to typecheck\"",
+    "lint": "eslint . --no-error-on-unmatched-pattern",
+    "test": "vitest run --passWithNoTests"
+  }
+}
