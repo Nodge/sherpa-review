@@ -2,20 +2,16 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { prKeySchema } from '@sherpa/protocol';
+
 /** Default Sherpa state root, overridden in tests and development launches. */
 export const DEFAULT_SHERPA_DIR = path.join(os.homedir(), '.sherpa');
 
 /** State directory permissions: only the owner can read the contents (tokens, drafts, history) (spec §6). */
 const DIR_MODE = 0o700;
 
-/**
- * `prKey` becomes part of the manifest filename and the state directory path,
- * so only safe characters are allowed, otherwise the key could redirect writes outside `~/.sherpa`.
- */
-const PR_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
 export function assertValidPrKey(prKey: string): string {
-    if (!PR_KEY_PATTERN.test(prKey)) {
+    if (!prKeySchema.safeParse(prKey).success) {
         throw new Error(
             `Invalid PR key: ${JSON.stringify(prKey)}. ` +
                 'Expected `<host>-<pr>` using letters, digits, dots, hyphens and underscores.',

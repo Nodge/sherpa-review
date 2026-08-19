@@ -1,16 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import { prKeySchema } from '@sherpa/protocol';
+
 import { CliError } from './errors.js';
 
-/**
- * The PR key alphabet copies the server one (`packages/server/src/paths.ts`). The key is used
- * in state paths, so the CLI must validate it itself instead of relying on the server.
- */
-const PR_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
 export function assertValidPrKey(prKey: string): string {
-    if (!PR_KEY_PATTERN.test(prKey)) {
+    if (!prKeySchema.safeParse(prKey).success) {
         throw new CliError(
             `sherpa: invalid PR key ${JSON.stringify(prKey)}.\n` +
                 'Expected `<host>-<pr>` using letters, digits, dots, hyphens and underscores.',
