@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "tsx src/dev.ts",
+    "start": "tsx src/start.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "test": "vitest run"

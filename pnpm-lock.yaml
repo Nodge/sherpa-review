@@ -71,7 +71,11 @@ importers:
         specifier: ^4.23.12
         version: 4.23.12
 
-  packages/skill: {}
+  packages/skill:
+    devDependencies:
+      '@sherpa/cli':
+        specifier: workspace:*
+        version: link:../cli
 
   packages/ui:
     dependencies:
