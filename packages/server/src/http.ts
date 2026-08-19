@@ -4,6 +4,7 @@ import type { RpcError, RpcErrorCode } from '@sherpa/protocol';
 
 import { extractBearerToken, tokenMatches } from './auth.js';
 import { RpcFailure } from './errors.js';
+import { isStaticPath, serveStatic } from './static.js';
 
 /**
  * Request body limit. Set above the result limit (`RESULT_MAX_BYTES`) so a moderate
@@ -35,11 +36,36 @@ export interface RequestContext {
 
 export type RouteHandler = (ctx: RequestContext) => JsonResponse | Promise<JsonResponse>;
 
-export interface Route {
+/** An endpoint that writes its own response (SSE). The router sends nothing after it. */
+export type StreamHandler = (ctx: StreamContext) => void | Promise<void>;
+
+export interface StreamContext extends RequestContext {
+    readonly res: ServerResponse;
+}
+
+/**
+ * Endpoint authentication policy. All API endpoints require a token (rpc-design §8).
+ * `bearer-or-query` is an exception for SSE because EventSource cannot set headers, so the token
+ * arrives as a `?token=` parameter (the server listens only on localhost, decision log).
+ */
+export type RouteAuth = 'bearer' | 'bearer-or-query';
+
+interface RouteBase {
     readonly method: string;
     readonly path: string;
+    /** Defaults to `bearer`. */
+    readonly auth?: RouteAuth;
+}
+
+export interface JsonRoute extends RouteBase {
     readonly handle: RouteHandler;
 }
+
+export interface StreamRoute extends RouteBase {
+    readonly stream: StreamHandler;
+}
+
+export type Route = JsonRoute | StreamRoute;
 
 /** Error body in contract format (`rpcErrorSchema`), read by both the CLI and UI. */
 export function rpcError(code: RpcErrorCode, message: string, details?: readonly string[]): RpcError {
@@ -120,11 +146,20 @@ function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
     });
 }
 
+export interface RequestListenerOptions {
+    readonly token: string;
+    readonly routes: readonly Route[];
+    /** Built UI directory. When set, the server serves static files without a token (see `serveStatic`). */
+    readonly uiDir?: string;
+}
+
 /**
- * Minimal router on node:http: bearer authentication before routing
- * (every endpoint requires a token, rpc-design §8), then an exact method and path match.
+ * A small router on top of node:http. Matches the method and path exactly, then applies
+ * authentication of the matched route (all API endpoints require a token, rpc-design §8).
+ * Requests that match no route go to UI static assets (no token required because they contain no secrets,
+ * and the token reaches the browser in the URL fragment, which never reaches the server).
  */
-export function createRequestListener(options: { token: string; routes: readonly Route[] }): RequestListener {
+export function createRequestListener(options: RequestListenerOptions): RequestListener {
     return (req, res) => {
         void handle(req, res, options).catch((error: unknown) => {
             const message = error instanceof Error ? error.message : 'unknown error';
@@ -136,22 +171,26 @@ export function createRequestListener(options: { token: string; routes: readonly
     };
 }
 
-async function handle(
-    req: IncomingMessage,
-    res: ServerResponse,
-    options: { token: string; routes: readonly Route[] },
-): Promise<void> {
-    if (!tokenMatches(options.token, extractBearerToken(req.headers.authorization))) {
-        sendJson(res, {
-            status: 401,
-            body: rpcError('unauthorized', 'An `Authorization: Bearer <token>` header with the token from the manifest is required.'),
-        });
-        return;
-    }
-
+async function handle(req: IncomingMessage, res: ServerResponse, options: RequestListenerOptions): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const route = options.routes.find((item) => item.method === req.method && item.path === url.pathname);
+
     if (route === undefined) {
+        if (options.uiDir !== undefined && req.method === 'GET' && isStaticPath(url.pathname)) {
+            if (!(await serveStatic(res, options.uiDir, url.pathname))) {
+                sendJson(res, {
+                    status: 404,
+                    body: rpcError('bad_request', `UI file ${url.pathname} is not in the build.`),
+                });
+            }
+            return;
+        }
+        // This order is intentional. An unrelated process without a token must not use response codes
+        // to discover which endpoints the server has.
+        if (!authorized(options.token, req, url, 'bearer')) {
+            sendJson(res, unauthorizedResponse());
+            return;
+        }
         sendJson(res, {
             status: 404,
             body: rpcError('bad_request', `Unknown endpoint: ${req.method ?? 'GET'} ${url.pathname}.`),
@@ -159,12 +198,74 @@ async function handle(
         return;
     }
 
+    if (!authorized(options.token, req, url, route.auth ?? 'bearer')) {
+        sendJson(res, unauthorizedResponse());
+        return;
+    }
+
+    if ('stream' in route) {
+        await route.stream({ req, url, res });
+        return;
+    }
     sendJson(res, await route.handle({ req, url }));
+}
+
+function authorized(token: string, req: IncomingMessage, url: URL, auth: RouteAuth): boolean {
+    if (tokenMatches(token, extractBearerToken(req.headers.authorization))) {
+        return true;
+    }
+    return auth === 'bearer-or-query' && tokenMatches(token, url.searchParams.get('token'));
+}
+
+function unauthorizedResponse(): JsonResponse {
+    return {
+        status: 401,
+        body: rpcError('unauthorized', 'An `Authorization: Bearer <token>` header with the manifest token is required.'),
+    };
+}
+
+/**
+ * Signals that there is nobody left to wait for: the client disconnected or the server is stopping. Used by
+ * long-running endpoints, the long-poll `next` and the UI SSE channel.
+ * Watches the socket for disconnects because the request body has already been read by the time waiting starts,
+ * and `close` on `IncomingMessage` itself no longer fires when the connection breaks.
+ */
+export function abortOnDisconnect(
+    req: IncomingMessage,
+    shutdownSignal: AbortSignal,
+): { signal: AbortSignal; dispose: () => void } {
+    const controller = new AbortController();
+    const abort = (): void => {
+        controller.abort();
+    };
+
+    const socket = req.socket;
+    if (shutdownSignal.aborted || socket.destroyed) {
+        abort();
+    }
+    shutdownSignal.addEventListener('abort', abort);
+    socket.on('close', abort);
+
+    return {
+        signal: controller.signal,
+        dispose: () => {
+            shutdownSignal.removeEventListener('abort', abort);
+            socket.off('close', abort);
+        },
+    };
 }
 
 export function sendJson(res: ServerResponse, response: JsonResponse): void {
     // Long-poll may have unblocked after the connection closed (including during server shutdown).
     if (res.writableEnded || res.destroyed) {
+        return;
+    }
+
+    // Headers have already been sent, so a streaming endpoint failed partway through its response.
+    // A second writeHead would throw ERR_HTTP_HEADERS_SENT inside the router error handler,
+    // leaving closing the connection as the only option.
+    if (res.headersSent) {
+        res.end();
         return;
     }
 

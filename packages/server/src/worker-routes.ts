@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import { RpcFailure } from './errors.js';
 import type { RequestContext, Route } from './http.js';
-import { handlingRpcFailures, readJsonBody } from './http.js';
+import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
 import type { TaskQueue } from './queue.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
@@ -214,32 +214,3 @@ function waitForWork(queue: TaskQueue, signal: AbortSignal, timeoutMs: number): 
     });
 }
 
-/**
- * Signal that nobody is waiting anymore: the client disconnected or the server is stopping.
- * Watches the socket for disconnects because the request body has already been read by the time waiting starts,
- * and `close` on `IncomingMessage` itself no longer fires when the connection breaks.
- */
-function abortOnDisconnect(
-    req: IncomingMessage,
-    shutdownSignal: AbortSignal,
-): { signal: AbortSignal; dispose: () => void } {
-    const controller = new AbortController();
-    const abort = (): void => {
-        controller.abort();
-    };
-
-    const socket = req.socket;
-    if (shutdownSignal.aborted || socket.destroyed) {
-        abort();
-    }
-    shutdownSignal.addEventListener('abort', abort);
-    socket.on('close', abort);
-
-    return {
-        signal: controller.signal,
-        dispose: () => {
-            shutdownSignal.removeEventListener('abort', abort);
-            socket.off('close', abort);
-        },
-    };
-}

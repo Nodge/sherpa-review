@@ -1,0 +1,170 @@
+import type { UiState } from '@sherpa/protocol';
+import { UI_ENDPOINTS, UI_STATE_EVENT, uiStateSchema } from '@sherpa/protocol';
+
+/**
+ * The store lives outside the React tree (spec §1/C3). State arrives over SSE, and React reads it
+ * through `useSyncExternalStore`. Anything that fails the protocol schema never enters the store.
+ */
+
+export type ConnectionState =
+    /** The connection has not delivered its first snapshot yet. */
+    | 'connecting'
+    /** A snapshot has arrived and the channel is alive. */
+    | 'online'
+    /** The channel broke and the browser reconnects itself. The last snapshot stays on screen. */
+    | 'reconnecting'
+    /** The server sent something the UI does not understand: the channel can no longer be trusted. */
+    | 'fatal';
+
+export interface StoreSnapshot {
+    readonly connection: ConnectionState;
+    readonly state: UiState | null;
+    /** Fatal error text, set only in `fatal`. */
+    readonly error: string | null;
+}
+
+export interface Store {
+    subscribe: (listener: () => void) => () => void;
+    getSnapshot: () => StoreSnapshot;
+    close: () => void;
+}
+
+export interface StreamHandlers {
+    readonly onMessage: (data: string) => void;
+    /**
+     * `recoverable: true` means the channel reconnects itself (the browser retries after a stream interruption).
+     * `false` means the connection is permanently closed, so the store must retry.
+     */
+    readonly onError: (recoverable: boolean) => void;
+}
+
+export interface StreamConnection {
+    readonly close: () => void;
+}
+
+export interface StoreOptions {
+    readonly token: string;
+    /** SSE connection. Replaced in tests, `EventSource` in the browser. */
+    readonly connect?: (url: string, handlers: StreamHandlers) => StreamConnection;
+    /** Delay before a store-initiated reconnection attempt. Defaults to `RECONNECT_DELAY_MS`. */
+    readonly reconnectDelayMs?: number;
+}
+
+const INVALID_STATE_MESSAGE =
+    'The server sent state this UI does not understand. Update Sherpa. The skill, server and UI are distributed together.';
+
+/** Delay before a store-initiated reconnection attempt: the browser does not always retry (see `onError`). */
+const RECONNECT_DELAY_MS = 2000;
+
+export function createStore(options: StoreOptions): Store {
+    const listeners = new Set<() => void>();
+    let snapshot: StoreSnapshot = { connection: 'connecting', state: null, error: null };
+    let closed = false;
+
+    const update = (next: StoreSnapshot): void => {
+        snapshot = next;
+        for (const listener of [...listeners]) {
+            listener();
+        }
+    };
+
+    const connect = options.connect ?? connectEventSource;
+    const reconnectDelayMs = options.reconnectDelayMs ?? RECONNECT_DELAY_MS;
+    const url = `${UI_ENDPOINTS.events}?token=${encodeURIComponent(options.token)}`;
+
+    let connection: StreamConnection | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+
+    const handlers: StreamHandlers = {
+        onMessage: (data) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+
+            const state = parseState(data);
+            if (state === null) {
+                update({ connection: 'fatal', state: snapshot.state, error: INVALID_STATE_MESSAGE });
+                // The channel is no longer a source of truth. Reconnecting to it makes no sense.
+                connection?.close();
+                return;
+            }
+            update({ connection: 'online', state, error: null });
+        },
+        onError: (recoverable) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+            if (snapshot.connection !== 'reconnecting') {
+                update({ connection: 'reconnecting', state: snapshot.state, error: null });
+            }
+            if (recoverable) {
+                return;
+            }
+
+            // The connection is permanently closed (the server is not responding). Retry ourselves.
+            connection?.close();
+            retry = setTimeout(open, reconnectDelayMs);
+        },
+    };
+
+    function open(): void {
+        retry = null;
+        if (closed) {
+            return;
+        }
+        connection = connect(url, handlers);
+    }
+
+    open();
+
+    return {
+        subscribe: (listener) => {
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
+        },
+        getSnapshot: () => snapshot,
+        close: () => {
+            closed = true;
+            listeners.clear();
+            if (retry !== null) {
+                clearTimeout(retry);
+                retry = null;
+            }
+            connection?.close();
+        },
+    };
+}
+
+/** `null` means the data failed the protocol schema (fail-closed). */
+function parseState(data: string): UiState | null {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(data);
+    } catch {
+        return null;
+    }
+
+    const parsed = uiStateSchema.safeParse(payload);
+    return parsed.success ? parsed.data : null;
+}
+
+function connectEventSource(url: string, handlers: StreamHandlers): StreamConnection {
+    const source = new EventSource(url);
+    // The event name is not in `EventSourceEventMap`, so the listener receives a base `Event`.
+    source.addEventListener(UI_STATE_EVENT, (event) => {
+        handlers.onMessage((event as MessageEvent<string>).data);
+    });
+    source.addEventListener('error', () => {
+        // The browser retries an interrupted established stream, but not a failed
+        // connection attempt (server not running): its `readyState` goes straight to `CLOSED`.
+        handlers.onError(source.readyState !== EventSource.CLOSED);
+    });
+
+    return {
+        close: () => {
+            source.close();
+        },
+    };
+}

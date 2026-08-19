@@ -7,4 +7,5 @@ export * from './json-schema.js';
 export * from './manifest.js';
 export * from './messages.js';
 export * from './task.js';
+export * from './ui.js';
 export * from './version.js';

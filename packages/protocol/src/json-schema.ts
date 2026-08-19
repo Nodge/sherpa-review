@@ -15,6 +15,14 @@ import {
     workerStatusSchema,
 } from './messages.js';
 import { leaseSchema, taskSchema } from './task.js';
+import {
+    uiCancelRequestSchema,
+    uiCancelResponseSchema,
+    uiEnqueueRequestSchema,
+    uiEnqueueResponseSchema,
+    uiStateSchema,
+    uiTaskSchema,
+} from './ui.js';
 
 /**
  * Contract JSON schemas generated from zod (spec §5): zod schemas are canonical,
@@ -36,6 +44,12 @@ export function generateJsonSchemas(): Record<string, unknown> {
         taskAckResponse: taskAckResponseSchema,
         rpcError: rpcErrorSchema,
         serverManifest: serverManifestSchema,
+        uiTask: uiTaskSchema,
+        uiState: uiStateSchema,
+        uiEnqueueRequest: uiEnqueueRequestSchema,
+        uiEnqueueResponse: uiEnqueueResponseSchema,
+        uiCancelRequest: uiCancelRequestSchema,
+        uiCancelResponse: uiCancelResponseSchema,
     };
 
     // io: 'input' describes what the sender must supply.

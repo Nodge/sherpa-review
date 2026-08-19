@@ -27,6 +27,7 @@ import {
     serversDirOf,
 } from './paths.js';
 import { TaskQueue } from './queue.js';
+import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
 import { WorkerRegistry } from './worker-registry.js';
 import { createWorkerRoutes } from './worker-routes.js';
@@ -38,6 +39,8 @@ export interface StartServerOptions {
     sherpaDir?: string;
     /** `worker next` long-poll window, defaults to the contract limit. Shortened in tests. */
     longPollSeconds?: number;
+    /** Built UI directory (`packages/ui/dist`). When set, the server serves it without a token. */
+    uiDir?: string;
     /**
      * Injectable clock for the worker lifecycle. Defaults to the system clock.
      * Tests need to pass `WORKER_DEAD_AFTER_SECONDS` without waiting six minutes.
@@ -87,7 +90,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     // Worker endpoints join this array after the database opens. Before claiming the manifest,
     // the server must respond only to `/healthz`, which competing processes use to check whether we're alive.
     const routes: Route[] = [healthRoute(prKey)];
-    const httpServer = http.createServer(createRequestListener({ token, routes }));
+    const httpServer = http.createServer(
+        createRequestListener(options.uiDir === undefined ? { token, routes } : { token, routes, uiDir: options.uiDir }),
+    );
     const shutdownController = new AbortController();
     let claimed: ServerManifest | null = null;
     let db: SherpaDatabase | null = null;
@@ -120,6 +125,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 queue,
                 registry: workerRegistry,
                 longPollSeconds: options.longPollSeconds ?? LONG_POLL_MAX_SECONDS,
+                shutdownSignal: shutdownController.signal,
+            }),
+            ...createUiRoutes({
+                prKey,
+                queue,
+                registry: workerRegistry,
                 shutdownSignal: shutdownController.signal,
             }),
         );

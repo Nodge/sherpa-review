@@ -5,15 +5,13 @@ import type {
     TaskAckResponse,
     TaskCompleteResponse,
     TaskId,
+    TaskStatus,
     TaskType,
 } from '@sherpa/protocol';
 import { LEASE_TTL_SECONDS, MAX_TASK_ATTEMPTS, RESULT_MAX_BYTES, taskSchema } from '@sherpa/protocol';
 
 import type { SherpaDatabase } from './db.js';
 import { RpcFailure } from './errors.js';
-
-/** Task lifecycle (rpc-design §5). Closed statuses are irreversible. */
-export type TaskStatus = 'queued' | 'leased' | 'done' | 'failed' | 'cancelled';
 
 const CLOSED_STATUSES: readonly TaskStatus[] = ['done', 'failed', 'cancelled'];
 
@@ -86,6 +84,14 @@ export class TaskQueue {
     private readonly db: SherpaDatabase;
     private readonly now: () => Date;
     private readonly listeners = new Set<() => void>();
+    private readonly changeListeners = new Set<() => void>();
+
+    /**
+     * Storage write count and the last count broadcast. Notifications go out after
+     * the transaction commits and only if something changed. Pure reads stay silent.
+     */
+    private mutations = 0;
+    private announcedMutations = 0;
 
     private readonly txNext: (workerId: string) => Outcome<LeasedTask | null>;
     private readonly txComplete: (workerId: string, taskId: TaskId, result: string) => Outcome<TaskCompleteResponse>;
@@ -133,6 +139,18 @@ export class TaskQueue {
         };
     }
 
+    /**
+     * Subscribes to any queue change for the UI SSE channel: enqueue, lease assignment,
+     * `complete`/`fail`/`progress`/`cancel` and returning tasks after lease expiry, including
+     * lazy expiry inside another operation. Returns an unsubscribe function.
+     */
+    subscribeChanges(listener: () => void): () => void {
+        this.changeListeners.add(listener);
+        return () => {
+            this.changeListeners.delete(listener);
+        };
+    }
+
     enqueue(input: EnqueueInput): TaskRecord {
         const nowIso = this.nowIso();
         const info = this.db
@@ -153,25 +171,27 @@ export class TaskQueue {
             );
 
         const record = this.requireRecord(Number(info.lastInsertRowid));
+        this.markChanged();
+        this.flushChanges();
         this.notify();
         return record;
     }
 
     /** Leases the next task. `null` means an empty queue (the endpoint turns this into long-poll). */
     next(workerId: string): LeasedTask | null {
-        return unwrap(this.txNext(workerId));
+        return this.settle(this.txNext(workerId));
     }
 
     complete(workerId: string, taskId: TaskId, result: string): TaskCompleteResponse {
-        return unwrap(this.txComplete(workerId, taskId, result));
+        return this.settle(this.txComplete(workerId, taskId, result));
     }
 
     fail(workerId: string, taskId: TaskId, reason: string): TaskAckResponse {
-        return unwrap(this.txFail(workerId, taskId, reason));
+        return this.settle(this.txFail(workerId, taskId, reason));
     }
 
     progress(workerId: string, taskId: TaskId, text: string): TaskAckResponse {
-        return unwrap(this.txProgress(workerId, taskId, text));
+        return this.settle(this.txProgress(workerId, taskId, text));
     }
 
     /**
@@ -179,7 +199,7 @@ export class TaskQueue {
      * the worker learns on its next call for this task (receives `noop`).
      */
     cancel(taskId: TaskId): CancelOutcome {
-        return unwrap(this.txCancel(taskId));
+        return this.settle(this.txCancel(taskId));
     }
 
     /**
@@ -187,11 +207,15 @@ export class TaskQueue {
      * operations on its tasks, would leave a seemingly live lease in the UI forever.
      */
     listTasks(): TaskRecord[] {
-        return this.txListTasks();
+        const records = this.txListTasks();
+        this.flushChanges();
+        return records;
     }
 
     getTask(taskId: TaskId): TaskRecord | null {
-        return this.txGetTask(taskId);
+        const record = this.txGetTask(taskId);
+        this.flushChanges();
+        return record;
     }
 
     private nextInTransaction(workerId: string): Outcome<LeasedTask | null> {
@@ -225,6 +249,7 @@ export class TaskQueue {
                  WHERE id = ?`,
             )
             .run(workerId, expiresAt, nowIso, candidate.id);
+        this.markChanged();
 
         return ok(this.toLeasedTask(this.requireRow(candidate.id)));
     }
@@ -286,6 +311,7 @@ export class TaskQueue {
         this.db
             .prepare('UPDATE tasks SET progress_text = ?, updated_at = ? WHERE id = ?')
             .run(text, this.nowIso(), taskId);
+        this.markChanged();
         return ok({ kind: 'accepted' });
     }
 
@@ -344,6 +370,7 @@ export class TaskQueue {
             .all(nowIso) as { id: number; attempt: number }[];
 
         for (const row of expired) {
+            this.markChanged();
             const attempt = row.attempt + 1;
             if (attempt > MAX_TASK_ATTEMPTS) {
                 this.db
@@ -381,6 +408,7 @@ export class TaskQueue {
                  WHERE id = ?`,
             )
             .run(status, fields.result ?? null, fields.failReason ?? null, this.nowIso(), taskId);
+        this.markChanged();
     }
 
     private toLeasedTask(row: TaskRow): LeasedTask {
@@ -419,6 +447,32 @@ export class TaskQueue {
 
     private notify(): void {
         for (const listener of [...this.listeners]) {
+            listener();
+        }
+    }
+
+    /**
+     * Finishes a transactional operation: first notifies listeners (the transaction is already committed),
+     * then throws a domain error. Otherwise subscribers would miss changes already written
+     * (for example, moving a task to `failed` on `result_too_large`).
+     */
+    private settle<T>(outcome: Outcome<T>): T {
+        this.flushChanges();
+        return unwrap(outcome);
+    }
+
+    /** Records a storage write inside transactions. `flushChanges` broadcasts it. */
+    private markChanged(): void {
+        this.mutations += 1;
+    }
+
+    private flushChanges(): void {
+        if (this.mutations === this.announcedMutations) {
+            return;
+        }
+
+        this.announcedMutations = this.mutations;
+        for (const listener of [...this.changeListeners]) {
             listener();
         }
     }

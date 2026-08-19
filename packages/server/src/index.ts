@@ -1,13 +1,25 @@
 /**
  * Sherpa local server (spec §1/C2): discovery manifest, bearer authentication, storage,
- * queue with leases and worker endpoints. UI channel arrives in M0-T7.
+ * leased task queue, worker endpoints and a UI channel (REST + SSE, serving the built UI).
  */
 export { createToken, extractBearerToken, tokenMatches } from './auth.js';
 export type { SherpaDatabase } from './db.js';
 export { applyMigrations, openDatabase, readSchemaVersion } from './db.js';
 export { RpcFailure, ServerAlreadyRunningError } from './errors.js';
-export type { JsonResponse, RequestContext, Route, RouteHandler } from './http.js';
+export type {
+    JsonResponse,
+    JsonRoute,
+    RequestContext,
+    RequestListenerOptions,
+    Route,
+    RouteAuth,
+    RouteHandler,
+    StreamContext,
+    StreamHandler,
+    StreamRoute,
+} from './http.js';
 export {
+    abortOnDisconnect,
     createRequestListener,
     handlingRpcFailures,
     readJsonBody,
@@ -34,17 +46,13 @@ export {
     prStateDirOf,
     serversDirOf,
 } from './paths.js';
-export type {
-    CancelOutcome,
-    EnqueueInput,
-    LeasedTask,
-    TaskQueueOptions,
-    TaskRecord,
-    TaskStatus,
-} from './queue.js';
+export type { CancelOutcome, EnqueueInput, LeasedTask, TaskQueueOptions, TaskRecord } from './queue.js';
 export { TaskQueue } from './queue.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
+export { isStaticPath, serveStatic } from './static.js';
+export type { UiRoutesOptions } from './ui-routes.js';
+export { createUiRoutes } from './ui-routes.js';
 export { SERVER_VERSION } from './version.js';
 export type { WorkerRegistryOptions, WorkerStatusListener } from './worker-registry.js';
 export { WorkerRegistry } from './worker-registry.js';
