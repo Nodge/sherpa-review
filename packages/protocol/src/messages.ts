@@ -21,9 +21,10 @@ const workerRequestBase = z.object({
 
 /**
  * `sherpa worker register` registers the session as the PR worker at skill startup (rpc-design §7).
- * Reconnect means a new registration: usually with a fresh workerId, with the old one if its own slot is live
- * (renewal). Leases of a displaced worker return to the queue when its slot is taken over.
- * While the previous worker is alive and belongs to another session, the second is rejected with `worker_conflict` (spec §3.7).
+ * A new session always wins: registration with a fresh workerId takes the slot even from a live
+ * worker (decision 2026-08-20, amendment to spec §3.7), the displaced worker's leases return to the queue immediately.
+ * The same workerId renews registration idempotently. Registration does not throw `worker_conflict`. The
+ * displaced session receives it on subsequent calls.
  */
 export const workerRegisterRequestSchema = workerRequestBase.extend({
     /** Harness label for UI status ("claude-code", "codex"), a free-form string. */
@@ -134,7 +135,7 @@ export const rpcErrorCodeSchema = z.enum([
     'unknown_task',
     /** The task is not leased to this worker. */
     'lease_not_held',
-    /** A live worker already exists for the PR, a second one is rejected (spec §3.7). */
+    /** Another (newer) live session holds the worker slot. The caller must stop the loop. */
     'worker_conflict',
     /** The `complete` result exceeded the limit, the task failed (spec §3.5). */
     'result_too_large',

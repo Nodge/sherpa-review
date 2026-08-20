@@ -146,7 +146,7 @@ describe('CLI against server', () => {
         expect(running.workerRegistry.status()).not.toHaveProperty('model');
     });
 
-    it('repeated up renews the same slot without starting another server', async () => {
+    it('repeated up takes over its own slot without starting a second server', async () => {
         const running = await start();
         // No pinned identity. Each CLI invocation takes a fresh id, as in real use.
         await sherpaWith({}, 'up', '--harness', 'claude-code');
@@ -156,14 +156,15 @@ describe('CLI against server', () => {
 
         expect(again.code).toBe(0);
         expect(again.stdout).toContain('http://127.0.0.1:');
-        // The live slot for this PR is ours: renew it instead of rejecting it with a conflict.
-        expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
-        expect(await readWorkerIdFile()).toBe(workerId);
+        // A live session holds the slot, but the fresh session still takes it. There is no conflict here anymore.
+        const renewed = await readWorkerIdFile();
+        expect(renewed).not.toBe(workerId);
+        expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: renewed });
         // No second server started. The PR manifest still describes the same process.
         expect(await readManifestPid()).toBe(process.pid);
     });
 
-    it('up after a session breaks picks up the previous session\'s live slot without waiting for its death', async () => {
+    it('up after a session disconnect takes over its live slot without waiting for it to die', async () => {
         const running = await start();
         // The previous session registered and disconnected. The server still considers it alive.
         running.workerRegistry.register('session-from-a-past-life', 'claude-code');
@@ -174,38 +175,47 @@ describe('CLI against server', () => {
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('http://127.0.0.1:');
+        // The identity from the file is not reused. A fresh identity takes the slot and now owns the file.
+        const workerId = await readWorkerIdFile();
+        expect(workerId).not.toBe('session-from-a-past-life');
         expect(running.workerRegistry.status()).toMatchObject({
             kind: 'connected',
-            workerId: 'session-from-a-past-life',
+            workerId,
             harness: 'codex',
         });
     });
 
-    it('up with another live worker returns the server text and code 1', async () => {
+    it('up takes the slot from another live worker: the new session always wins', async () => {
         const running = await start();
         running.workerRegistry.register('other-session', 'codex');
-        // The state file holds a different session, so it cannot be used to pick up another session's slot.
-        await fs.mkdir(path.join(sherpaDir, 'prs', PR_KEY), { recursive: true });
-        await fs.writeFile(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'), 'our-previous-session\n');
 
         const second = await sherpaWith({}, 'up', '--harness', 'claude-code');
 
-        expect(second.code).toBe(1);
-        expect(second.stderr).toContain('Another live session');
-        expect(second.stdout).not.toContain('http://127.0.0.1:');
-        expect(running.workerRegistry.status()).toMatchObject({ workerId: 'other-session' });
+        expect(second.code).toBe(0);
+        expect(second.stdout).toContain('http://127.0.0.1:');
+        expect(second.stderr).toBe('');
+        expect(running.workerRegistry.status()).toMatchObject({
+            kind: 'connected',
+            workerId: await readWorkerIdFile(),
+            harness: 'claude-code',
+        });
     });
 
-    it('up with a pinned SHERPA_WORKER_ID does not pick up another slot: all commands use the pinned id', async () => {
+    it('two consecutive sessions: the second up takes the first slot and owns the worker file', async () => {
         const running = await start();
-        await sherpaWith({}, 'up');
-        const workerId = await readWorkerIdFile();
+        await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-1' } }, 'up', '--harness', 'claude-code');
+        expect(await readWorkerIdFile()).toBe('session-1');
 
-        const pinned = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-2' } }, 'up');
+        const second = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-2' } }, 'up', '--harness', 'codex');
 
-        expect(pinned.code).toBe(1);
-        expect(pinned.stderr).toContain('Another live session');
-        expect(running.workerRegistry.status()).toMatchObject({ workerId });
+        expect(second.code).toBe(0);
+        expect(await readWorkerIdFile()).toBe('session-2');
+        expect(running.workerRegistry.status()).toMatchObject({ workerId: 'session-2', harness: 'codex' });
+
+        // The first session gets an instruction to stop when it resumes the loop.
+        const displaced = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-1' } }, 'worker', 'next');
+        expect(displaced.code).toBe(1);
+        expect(displaced.stderr).toContain('stop the loop');
     });
 
     it('up without a server beside the CLI reports an incomplete distribution and never starts the loop', async () => {
@@ -261,21 +271,43 @@ describe('CLI against server', () => {
         expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
     });
 
-    it('rejects a second live session and keeps the worker file owned by the first', async () => {
-        await start();
+    it('a second live session takes the slot and owns the worker file', async () => {
+        const running = await start();
         await sherpa('worker', 'register', '--harness', 'claude-code');
         const first = await readWorkerIdFile();
 
         const second = await sherpa('worker', 'register', '--harness', 'codex');
 
-        expect(second.code).toBe(1);
-        expect(second.stderr).toContain('Another live session');
-        expect(second.stderr).toContain('claude-code');
-        // The server says to wait and restart the skill. Appending "stop the loop" contradicts that.
-        // and is also wrong because this session was never a worker.
-        expect(second.stderr).toContain('run the Sherpa skill again');
-        expect(second.stderr).not.toContain('stop the loop');
-        expect(await readWorkerIdFile()).toBe(first);
+        expect(second.code).toBe(0);
+        expect(second.stdout).toContain('sherpa worker next');
+        const workerId = await readWorkerIdFile();
+        expect(workerId).not.toBe(first);
+        expect(running.workerRegistry.status()).toMatchObject({
+            kind: 'connected',
+            workerId,
+            harness: 'codex',
+        });
+    });
+
+    it('two sessions register at once: the worker file describes the slot owner', async () => {
+        const running = await start();
+
+        // Both registrations succeed, and one gets the slot. The file must belong to that session:
+        // network response order does not determine registration order, so the server writes the file.
+        const [first, second] = await Promise.all([
+            sherpaWithEnv({ SHERPA_WORKER_ID: 'session-1' }, 'worker', 'register', '--harness', 'claude-code'),
+            sherpaWithEnv({ SHERPA_WORKER_ID: 'session-2' }, 'worker', 'register', '--harness', 'codex'),
+        ]);
+
+        expect(first.code).toBe(0);
+        expect(second.code).toBe(0);
+        const status = running.workerRegistry.status();
+        expect(await readWorkerIdFile()).toBe(status.kind === 'never' ? null : status.workerId);
+
+        // The slot owner continues the loop. Its next command reads the id from the file without a conflict.
+        const next = await sherpa('worker', 'next');
+        expect(next.code).toBe(0);
+        expect(next.stderr).toBe('');
     });
 
     it('a displaced session gets an instruction to stop instead of advice to retry', async () => {

@@ -106,25 +106,24 @@ export class WorkerRegistry {
 
     /**
      * PR worker session registration: `sherpa worker register` when the skill starts.
-     * Claims a free slot or one with a dead worker. The same workerId renews it idempotently.
-     * A different session while the previous worker is alive gets `worker_conflict` (spec §3.7, SPEC §4.4).
-     * Returns the displaced dead session's workerId so the caller can return its leases to the queue.
+     * Fresh registration always wins (decision 2026-08-20, superseding spec §3.7): takes a free slot,
+     * takes over from another session (even a live one), or renews the same workerId.
+     * This never returns `worker_conflict`. The displaced session learns it has lost the slot on
+     * its next call (`touch`/`assertOwner`).
+     * Returns the displaced session's workerId so the caller can return its leases to the queue.
      */
     register(workerId: string, harness?: string, model?: string): string | null {
-        const displaced = unwrap(this.txRegister(workerId, harness, model));
-        this.refresh();
-        return displaced;
+        return this.claim(this.txRegister(workerId, harness, model));
     }
 
     /**
      * Heartbeat: called on every valid worker request (rpc-design §7).
-     * A session without `register` (workerId read from the state file) claims a free slot itself.
+     * A session without `register` (its workerId came from the state file) claims a free slot itself,
+     * but does not displace a live owner. That requires `register`.
      * Returns the displaced dead session's workerId, like `register`.
      */
     touch(workerId: string): string | null {
-        const displaced = unwrap(this.txTouch(workerId));
-        this.refresh();
-        return displaced;
+        return this.claim(this.txTouch(workerId));
     }
 
     /**
@@ -136,7 +135,7 @@ export class WorkerRegistry {
         if (row === null || row.worker_id === workerId || !this.isAlive(row)) {
             return;
         }
-        throw conflict(row, this.now(), this.deadlineOf(row));
+        throw conflict(row);
     }
 
     /**
@@ -226,10 +225,9 @@ export class WorkerRegistry {
             return ok(null);
         }
 
-        if (this.isAlive(row)) {
-            return fail(conflict(row, this.now(), this.deadlineOf(row)));
-        }
-
+        // A live previous worker is displaced too. Starting a new session is a deliberate action
+        // by the reviewer, and it takes priority (decision 2026-08-20). Otherwise two parallel sessions on one PR
+        // compete for the slot, and whoever goes silent first determines the winner.
         this.takeOver(workerId, harness ?? null, model ?? null, nowIso);
         return ok(row.worker_id);
     }
@@ -254,12 +252,26 @@ export class WorkerRegistry {
         }
 
         if (this.isAlive(row)) {
-            return fail(conflict(row, this.now(), this.deadlineOf(row)));
+            return fail(conflict(row));
         }
 
         // The previous session's harness and model have nothing to do with the new one. It declares its own through `register`.
         this.takeOver(workerId, null, null, nowIso);
         return ok(row.worker_id);
+    }
+
+    /**
+     * Shared slot-claim logic: forget the displaced session's connections. Its pending long-poll and
+     * the time it closes have no bearing on the new owner's liveness.
+     */
+    private claim(outcome: Outcome<string | null>): string | null {
+        const displaced = unwrap(outcome);
+        if (displaced !== null) {
+            this.openConnections.delete(displaced);
+            this.lastCloseMs.delete(displaced);
+        }
+        this.refresh();
+        return displaced;
     }
 
     private takeOver(workerId: string, harness: string | null, model: string | null, nowIso: string): void {
@@ -389,22 +401,18 @@ export class WorkerRegistry {
 }
 
 /**
- * Two sessions per PR are not supported (SPEC §4.4). The model reads this text in CLI output,
- * so it offers both ways out: wait or stop the previous session. While the previous session
- * holds an open connection, it has no death deadline. There is nothing to wait for, so it must be stopped.
+ * Another live session owns the slot: a non-owner called `touch`/`assertOwner`. Registration no longer
+ * reaches this path because a new session takes over the slot. There is no reason to suggest waiting N minutes:
+ * the recipient must stop its loop (the CLI adds the terminal instruction).
+ * Two sessions per PR are not supported (SPEC §4.4).
  */
-function conflict(row: WorkerRow, now: Date, deadline: number | null): RpcFailure {
+function conflict(row: WorkerRow): RpcFailure {
     const owner = row.harness === null ? row.worker_id : `${row.worker_id}, harness ${row.harness}`;
-    const advice =
-        deadline === null
-            ? 'If this is a reconnect, stop the previous session'
-            : `If this is a reconnect, wait ${String(Math.ceil((deadline - now.getTime()) / 60_000))} min ` +
-              'until the previous session is considered disconnected, or stop it';
 
     return new RpcFailure(
         'worker_conflict',
-        `Another live session (${owner}) is already the worker of this PR — ` +
-            `two sessions per PR are not supported. ${advice} — and run the Sherpa skill again.`,
+        `Another live session (${owner}) is the worker of this PR — two sessions per PR are not ` +
+            'supported, and the slot belongs to the session that started last. This one is not it.',
     );
 }
 

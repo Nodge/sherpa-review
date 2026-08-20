@@ -5,6 +5,7 @@ import type {
     TaskCompleteResponse,
     WorkerNextResponse,
     WorkerRegisterResponse,
+    WorkerStatus,
 } from '@sherpa/protocol';
 import {
     PROTOCOL_VERSION,
@@ -33,6 +34,11 @@ export interface WorkerRoutesOptions {
     readonly longPollSeconds: number;
     /** Server shutdown: aborts pending long-polls so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
+    /**
+     * Writes the slot owner to the PR state file (`writeWorkerIdFile`) synchronously in the same tick
+     * as claiming the slot, so writes follow registration order.
+     */
+    readonly publishWorkerId: (workerId: string) => void;
 }
 
 /**
@@ -55,11 +61,14 @@ const completeBodySchema = z.object({
 
 /**
  * Worker endpoints (rpc-design §3): the session's pull channel, all POST with a contract JSON body.
- * Every valid call is a worker heartbeat (rpc-design §7). Another live session gets
- * `worker_conflict` before the request reaches the queue.
+ * Each valid call is a worker heartbeat (rpc-design §7): a non-owner call is rejected with
+ * `worker_conflict` before reaching the queue. `register` is the exception: a new session
+ * takes the slot even from a live session (decision 2026-08-20).
  */
 export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
-    // Taking over the slot means the previous worker is dead: return its leases to the queue immediately, without waiting for TTL.
+    const subscribeSlotChange = watchSlotOwner(options.registry);
+
+    // The slot changed owners. Return the previous worker's leases to the queue immediately, without waiting for TTL.
     const reclaimLeases = (displaced: string | null): void => {
         if (displaced !== null) {
             options.queue.releaseLeasesOf(displaced);
@@ -85,6 +94,9 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
                 heartbeat(ctx, request.workerId, () =>
                     options.registry.register(request.workerId, request.harness, request.model),
                 );
+                // Immediately after claiming the slot, with no await in between: the identity file must
+                // change in the same order as the slot owner.
+                options.publishWorkerId(request.workerId);
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
@@ -100,7 +112,12 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerNextRequestSchema);
                 heartbeat(ctx, request.workerId, () => options.registry.touch(request.workerId));
-                const body: WorkerNextResponse = await pollForTask(options, ctx.req, request.workerId);
+                const body: WorkerNextResponse = await pollForTask(
+                    options,
+                    subscribeSlotChange,
+                    ctx.req,
+                    request.workerId,
+                );
                 return { status: 200, body };
             }),
         },
@@ -176,6 +193,7 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
  */
 async function pollForTask(
     options: WorkerRoutesOptions,
+    subscribeSlotChange: SubscribeSlotChange,
     req: IncomingMessage,
     workerId: string,
 ): Promise<WorkerNextResponse> {
@@ -190,8 +208,8 @@ async function pollForTask(
                 break;
             }
 
-            // While the call was waiting, a new session may have taken the slot (the previous one exceeded the silence timeout).
-            // Otherwise the old worker would take a task from it.
+            // While the call was pending, a new session could have taken the slot by registering,
+            // without waiting for the old one to die. Otherwise the old worker would take its task.
             options.registry.assertOwner(workerId);
 
             const leased = options.queue.next(workerId);
@@ -203,7 +221,12 @@ async function pollForTask(
             if (remaining <= 0) {
                 break;
             }
-            await waitForWork(options.queue, abort.signal, Math.min(remaining, SAFETY_POLL_INTERVAL_MS));
+            await waitForWork(
+                options.queue,
+                subscribeSlotChange,
+                abort.signal,
+                Math.min(remaining, SAFETY_POLL_INTERVAL_MS),
+            );
         }
     } finally {
         abort.dispose();
@@ -213,8 +236,13 @@ async function pollForTask(
     return { kind: 'idle', message: 'No tasks yet. Call `sherpa worker next` again.' };
 }
 
-/** Waits for a task to be enqueued, a fallback tick or disconnection. The timer does not keep the process alive. */
-function waitForWork(queue: TaskQueue, signal: AbortSignal, timeoutMs: number): Promise<void> {
+/** Waits for a task, slot ownership change, fallback tick or disconnect. The timer does not keep the process alive. */
+function waitForWork(
+    queue: TaskQueue,
+    subscribeSlotChange: SubscribeSlotChange,
+    signal: AbortSignal,
+    timeoutMs: number,
+): Promise<void> {
     return new Promise<void>((resolve) => {
         if (signal.aborted) {
             resolve();
@@ -223,15 +251,54 @@ function waitForWork(queue: TaskQueue, signal: AbortSignal, timeoutMs: number): 
 
         const finish = (): void => {
             clearTimeout(timer);
-            unsubscribe();
+            unsubscribeQueue();
+            unsubscribeSlot();
             signal.removeEventListener('abort', finish);
             resolve();
         };
 
         const timer = setTimeout(finish, timeoutMs);
         timer.unref();
-        const unsubscribe = queue.subscribe(finish);
+        const unsubscribeQueue = queue.subscribe(finish);
+        const unsubscribeSlot = subscribeSlotChange(finish);
         signal.addEventListener('abort', finish);
     });
+}
+
+/** Subscribes to slot ownership changes. Returns an unsubscribe function like other server subscriptions. */
+type SubscribeSlotChange = (listener: () => void) => () => void;
+
+/**
+ * Tracks the slot owner for pending long-polls: takeover displaces a session immediately, so its
+ * `next` must return `worker_conflict` in the same second instead of waiting out the window.
+ * No need to unsubscribe from the registry: the endpoints have the same lifetime, and `WorkerRegistry.close()`
+ * clears listeners itself.
+ */
+function watchSlotOwner(registry: WorkerRegistry): SubscribeSlotChange {
+    const waiters = new Set<() => void>();
+    let owner = ownerOf(registry.status());
+
+    registry.subscribe((status) => {
+        const next = ownerOf(status);
+        if (next === owner) {
+            return;
+        }
+
+        owner = next;
+        for (const wake of [...waiters]) {
+            wake();
+        }
+    });
+
+    return (listener) => {
+        waiters.add(listener);
+        return () => {
+            waiters.delete(listener);
+        };
+    };
+}
+
+function ownerOf(status: WorkerStatus): string | null {
+    return status.kind === 'never' ? null : status.workerId;
 }
 

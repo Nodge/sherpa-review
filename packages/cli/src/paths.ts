@@ -45,7 +45,10 @@ function prStateDirOf(sherpaDir: string, prKey: string): string {
     return path.join(sherpaDir, 'prs', assertValidPrKey(prKey));
 }
 
-/** The worker session identity lives in a PR state file because env does not survive separate harness calls. */
+/**
+ * Worker session identity lives in a PR state file because env doesn't survive separate harness calls.
+ * The CLI reads it, and the server writes it at registration (`workerIdPathFor` in the server package). The path is shared.
+ */
 export function workerIdPathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'worker-id');
 }

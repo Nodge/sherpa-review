@@ -7,16 +7,8 @@ import type { Command } from './args.js';
 import { parseArgs } from './args.js';
 import type { WorkerLabels } from './client.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
-import {
-    connect,
-    connectAs,
-    freshWorkerId,
-    resolvePrKey,
-    storedWorkerId,
-    storeWorkerId,
-    workerIdOverride,
-} from './discovery.js';
-import { CliError, RpcCallError, userMessage } from './errors.js';
+import { connect, connectAs, freshWorkerId, resolvePrKey } from './discovery.js';
+import { CliError, userMessage } from './errors.js';
 import {
     formatCompleteResponse,
     formatDone,
@@ -88,33 +80,12 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
     });
-    await claimWorkerSlot(prKey, labelsOf(command), io);
+    // A fresh session always gets the worker slot: the server takes it even from a live previous session
+    // (decision 2026-08-20), so `up` registers through the normal path with no fallback.
+    await registerWorker(prKey, labelsOf(command), io);
 
     io.out(formatUpReady(uiUrl, prKey));
     return 0;
-}
-
-/**
- * Claims the worker slot for this session. Normally registers a new identity (reconnection = new
- * worker). If a live worker holds the slot, try the identity from the PR state file: `up` can be called
- * again or after a session breaks. In both cases the slot is already ours, and the server renews the same id.
- * A refusal remains a refusal only when the live worker really belongs to another session.
- * A pinned `SHERPA_WORKER_ID` prevents substitution: the other commands will use it anyway.
- */
-async function claimWorkerSlot(prKey: string, labels: WorkerLabels, io: CliIo): Promise<void> {
-    try {
-        await registerWorker(prKey, labels, io);
-        return;
-    } catch (error) {
-        if (!(error instanceof RpcCallError) || error.code !== 'worker_conflict') {
-            throw error;
-        }
-        const previous = workerIdOverride(io.env) === null ? await storedWorkerId(io.env, prKey) : null;
-        if (previous === null) {
-            throw error;
-        }
-        await registerAs(previous, prKey, labels, io);
-    }
 }
 
 async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {
@@ -126,27 +97,18 @@ async function workerRegister(command: Extract<Command, { kind: 'worker-register
 }
 
 /**
- * Registering a session as the PR worker: each session gets a fresh identity (decision log),
- * and the state file is overwritten only after the server accepts it.
+ * Registers a session as the PR worker: each session has a fresh identity (decision log).
+ * The server writes it to the state file while handling `register` (`worker-id-file.ts`):
+ * two parallel sessions must have exactly as many writers to the shared file as there are
+ * owners of the slot: one.
  */
 async function registerWorker(
     prKeyArg: string | undefined,
     labels: WorkerLabels,
     io: CliIo,
 ): Promise<WorkerRegisterResponse> {
-    return registerAs(freshWorkerId(io.env), prKeyArg, labels, io);
-}
-
-async function registerAs(
-    workerId: string,
-    prKeyArg: string | undefined,
-    labels: WorkerLabels,
-    io: CliIo,
-): Promise<WorkerRegisterResponse> {
-    const connection = await connectAs(prKeyArg, io.env, workerId);
-    const response = await requestRegister(connection, labels);
-    await storeWorkerId(io.env, connection.prKey, workerId);
-    return response;
+    const connection = await connectAs(prKeyArg, io.env, freshWorkerId(io.env));
+    return requestRegister(connection, labels);
 }
 
 /** Session labels from command arguments. `up` and `worker register` declare them the same way. */

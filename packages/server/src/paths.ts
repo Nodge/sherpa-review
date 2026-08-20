@@ -38,6 +38,14 @@ export function databasePathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'sherpa.db');
 }
 
+/**
+ * PR worker identity file: the server writes it at registration, and the CLI reads it because env does not
+ * survive separate harness calls. The path must match `workerIdPathFor` in the CLI.
+ */
+export function workerIdPathFor(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'worker-id');
+}
+
 /** Creates the directory and its parents, setting 0700 on each level within `sherpaDir`. */
 export async function ensurePrivateDir(sherpaDir: string, dir: string): Promise<void> {
     await fs.mkdir(dir, { recursive: true, mode: DIR_MODE });

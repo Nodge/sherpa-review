@@ -127,19 +127,35 @@ describe('worker lifecycle', () => {
             expect(registry.status()).toMatchObject({ model: 'claude-sonnet-5' });
         });
 
-        it('rejects a second live session with a readable message', () => {
+        it('fresh registration takes the slot from a live session and returns the evicted workerId', () => {
             registry.register('w-1', 'claude-code');
+            advanceSeconds(1);
 
-            const failure = failureOf(() => {
-                registry.register('w-2', 'codex');
+            // The previous session is still alive but yields anyway: the new session always wins.
+            expect(registry.register('w-2', 'codex')).toBe('w-1');
+
+            expect(registry.status()).toMatchObject({
+                kind: 'connected',
+                workerId: 'w-2',
+                harness: 'codex',
+                registeredAt: new Date(START.getTime() + 1000).toISOString(),
             });
+            expect(events.map((event) => event.kind)).toEqual(['connected', 'connected']);
+        });
 
-            expect(failure.code).toBe('worker_conflict');
-            expect(failure.message).toContain('Another live session');
-            expect(failure.message).toContain('claude-code');
-            expect(failure.message).toContain('run the Sherpa skill again');
-            expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-1' });
-            expect(events).toHaveLength(1);
+        it('evicted session connections do not affect the lifetime of the new owner', () => {
+            registry.register('w-1');
+            // The previous session is in long-poll: its connection is open during takeover.
+            const closeOld = registry.holdConnection('w-1');
+
+            expect(registry.register('w-2')).toBe('w-1');
+            // ...and closes after it.
+            closeOld();
+
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 1);
+            expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-2' });
+            advanceSeconds(2);
+            expect(registry.status().kind).toBe('disconnected');
         });
 
         it('a new session claims the slot after the old one dies and returns the evicted workerId', () => {

@@ -67,10 +67,10 @@ describe('complete responses', () => {
     });
 });
 
-/** Server text for `worker_conflict` (worker-registry) asks to retry registration itself. */
+/** Server message for `worker_conflict` (worker-registry): the fact without the next step. */
 const CONFLICT_MESSAGE =
-    'Another live session (w-1) is already the worker of this PR — two sessions per PR are not supported. ' +
-    'If this is a reconnect, wait 6 min, or stop it and run the Sherpa skill again.';
+    'Another live session (w-1) is the worker of this PR — two sessions per PR are not supported, ' +
+    'and the slot belongs to the session that started last. This one is not it.';
 
 describe('errors', () => {
     it('prints the server message and details as a list', () => {
@@ -101,6 +101,8 @@ describe('errors', () => {
         expect(output).toContain('stop the loop');
     });
 
+    // Registration no longer rejects with a conflict (the server takes over the slot), but the call role
+    // remains. A different server running an older version may still return a conflict for register.
     it('conflict at registration leaves only the server message, as this session was never a worker', () => {
         const output = formatRpcError({ code: 'worker_conflict', message: CONFLICT_MESSAGE }, 'register');
 

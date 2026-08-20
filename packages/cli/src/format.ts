@@ -166,8 +166,8 @@ function twoColumns(rows: readonly (readonly [string, string])[]): string[] {
 }
 
 function nextStepFor(code: RpcErrorCode, role: CallRole): string | undefined {
-    // On registration the server asks to wait and retry. The terminal instruction
-    // contradicts that because a session denied worker access was never a worker.
+    // Our server doesn't return a conflict for registration, as it takes over the slot. But if one responds
+    // (a different build), the terminal suffix is wrong: this session was never a worker.
     if (code === 'worker_conflict') {
         return role === 'register' ? undefined : WORKER_CONFLICT_STOP;
     }

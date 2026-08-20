@@ -85,9 +85,15 @@ Streaming tokens from another session through shell commands is impractical. Ins
 
 ## 7. Heartbeat and the "Agent disconnected" state
 
-Every CLI call is a heartbeat. No calls for more than M minutes (M > the long-poll period, e.g. 6) → the server marks the worker dead → the UI enters the "Agent disconnected" state (the reader works, AI areas offer reduced functionality and reconnection instructions). This is how the state in section 9 of the brief arises from the protocol.
+Each CLI call is a heartbeat, but liveness is not based on silence alone: a closed connection is a strong signal, silence is weak (clarified 2026-08-20, M0-T15). A worker is alive while at least one condition holds:
 
-**Reconnection**: the reviewer starts the skill again → the skill finds the running server through the manifest (below), reuses it instead of starting another, and registers a new worker session. The queue and state are on disk, so nothing is lost. The old worker's unfinished leases return to the queue immediately when its slot is taken over (incrementing the attempt, as on expiry): the previous worker has already been declared dead, so waiting for TTL expiry would mean up to ten minutes of downtime after reconnection for no reason.
+1. **its worker connection is open**: an idle worker hangs in long-poll `next`, and the OS immediately signals a killed session by closing its socket.
+2. **it holds a task lease** and has been silent for less than M minutes (M > long-poll period, e.g. 6). During task execution the model can legitimately be silent for minutes.
+3. Without a connection or lease, it has been silent for less than a short grace period (~1 min): the pause between one `next` returning and the next call.
+
+Otherwise the server marks the worker dead → the UI switches to "Agent disconnected" (reader works, AI areas have reduced functionality, reconnect instructions shown). This directly produces the state from section 9 of the brief. Killing an idle session is visible in ~a minute. Killing during task execution takes M minutes (the server cannot distinguish "killed with a lease" from "working silently").
+
+**Reconnect and displacement**: a new session always wins (decision 2026-08-20, amendment to spec §3.7, M0-T16). The reviewer starts the skill → the skill finds a live server through its manifest (below), does not start another → fresh session registration takes the worker slot even if the previous worker is still alive. Queue and state are on disk, so nothing is lost: unfinished leases of the displaced worker return to the queue immediately (attempt incremented, as on expiry), its pending long-polls are forcibly woken and receive `worker_conflict`, "stop the loop". No scenario requires waiting for the previous session to be declared dead.
 
 ## 8. Discovery and security
 

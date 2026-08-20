@@ -209,8 +209,8 @@ export class TaskQueue {
 
     /**
      * Immediately releases leases of a displaced worker when a new session takes its slot
-     * (rpc-design §7): the previous worker is already dead, so there is no reason to wait for TTL expiry.
-     * Otherwise a task could sit for up to ten minutes after reconnection. The semantics match expiry:
+     * (rpc-design §7): the slot is no longer its own, so there is no reason to wait for natural TTL expiry. Otherwise after
+     * reconnect the task would sit for up to ten minutes. Semantics match expiry:
      * increment the attempt, fail the task when attempts run out.
      */
     releaseLeasesOf(workerId: string): void {

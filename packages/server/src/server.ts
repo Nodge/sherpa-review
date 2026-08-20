@@ -26,11 +26,13 @@ import {
     manifestPathFor,
     prStateDirOf,
     serversDirOf,
+    workerIdPathFor,
 } from './paths.js';
 import { TaskQueue } from './queue.js';
 import type { StaticAssets } from './static.js';
 import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
+import { writeWorkerIdFile } from './worker-id-file.js';
 import { WorkerRegistry } from './worker-registry.js';
 import { createWorkerRoutes } from './worker-routes.js';
 
@@ -142,6 +144,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
 
         await ensurePrivateDir(sherpaDir, prStateDirOf(sherpaDir, prKey));
         db = openDatabase(databasePathFor(sherpaDir, prKey));
+        const workerIdPath = workerIdPathFor(sherpaDir, prKey);
 
         const queue = new TaskQueue(options.now === undefined ? { db } : { db, now: options.now });
         const workerRegistry = new WorkerRegistry({
@@ -163,6 +166,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 registry: workerRegistry,
                 longPollSeconds: options.longPollSeconds ?? LONG_POLL_MAX_SECONDS,
                 shutdownSignal: shutdownController.signal,
+                publishWorkerId: (workerId) => {
+                    writeWorkerIdFile(workerIdPath, workerId);
+                },
             }),
             ...createUiRoutes({
                 prKey,

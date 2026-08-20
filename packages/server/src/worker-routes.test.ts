@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+
 import type { WorkerStatus } from '@sherpa/protocol';
 import {
     PROTOCOL_VERSION,
@@ -13,6 +15,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { REQUEST_BODY_MAX_BYTES } from './http.js';
+import { workerIdPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
@@ -145,7 +148,7 @@ describe('worker endpoints', () => {
             });
         });
 
-        it('a second live session gets worker_conflict', async () => {
+        it('lets a second session take over the slot from a live first session', async () => {
             const server = await start();
             await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, harness: 'claude-code' }, server.token);
 
@@ -156,11 +159,21 @@ describe('worker endpoints', () => {
                 server.token,
             );
 
-            expect(response.status).toBe(409);
-            const body = rpcErrorSchema.parse(await response.json());
+            expect(response.status).toBe(200);
+            expect(workerRegisterResponseSchema.parse(await response.json()).kind).toBe('registered');
+            expect(server.workerRegistry.status()).toMatchObject({
+                kind: 'connected',
+                workerId: 'w-2',
+                harness: 'codex',
+            });
+
+            // The displaced session learns about this only on its next call.
+            const displaced = await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            expect(displaced.status).toBe(409);
+            const body = rpcErrorSchema.parse(await displaced.json());
             expect(body.error.code).toBe('worker_conflict');
             expect(body.error.message).toContain('Another live session');
-            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+            expect(body.error.message).toContain('codex');
         });
 
         it('checks the version handshake here too', async () => {
@@ -222,30 +235,132 @@ describe('worker endpoints', () => {
             expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', workerId: WORKER });
         });
 
-        it('a pending long-poll keeps the session alive: a second session cannot take its slot', async () => {
+        it('keeps the session alive during a pending long-poll and retains its slot without another registration', async () => {
             const server = await start(30);
             const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // The clock is far past the death timeout, but the session has a pending call. The connection keeps it alive.
             advanceServerClock(WORKER_DEAD_AFTER_SECONDS + 1);
-            const registered = await postJson(
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+
+            // Another session's heartbeat cannot take the slot. Only registration of a new session can.
+            const foreign = await postJson(
                 server.port,
-                WORKER_ENDPOINTS.register,
+                WORKER_ENDPOINTS.next,
                 { ...BASE, workerId: 'w-2' },
                 server.token,
             );
+            expect(foreign.status).toBe(409);
+            expect(rpcErrorSchema.parse(await foreign.json()).error.code).toBe('worker_conflict');
 
-            expect(registered.status).toBe(409);
-            expect(rpcErrorSchema.parse(await registered.json()).error.code).toBe('worker_conflict');
-            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
-
-            // The task goes to the slot owner, not the second session.
             const taskId = enqueueEcho(server, 'slot owner task');
             const response = await pending;
             expect(response.status).toBe(200);
             const body = workerNextResponseSchema.parse(await response.json());
             expect(body.kind === 'task' && body.task.id).toBe(taskId);
+        });
+    });
+
+    describe('slot takeover', () => {
+        it('wakes the pending long-poll of a displaced session immediately when a new session registers', async () => {
+            const server = await start(30);
+            const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const started = Date.now();
+            const registered = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, workerId: 'w-2', harness: 'codex' },
+                server.token,
+            );
+            expect(registered.status).toBe(200);
+
+            const response = await pending;
+            // Faster than the queue's fallback polling tick and much faster than the long-poll window:
+            // the displaced session receives "stop the loop" in the same second.
+            expect(Date.now() - started).toBeLessThan(500);
+            expect(response.status).toBe(409);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('worker_conflict');
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: 'w-2' });
+        });
+
+        it('returns the lease of a displaced session to the queue for the new session to claim', async () => {
+            const server = await start();
+            const taskId = enqueueEcho(server);
+            const issued = await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            expect(workerNextResponseSchema.parse(await issued.json()).kind).toBe('task');
+
+            await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, workerId: 'w-2' }, server.token);
+
+            // No need to wait for lease TTL. Takeover returned the task to the queue immediately.
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
+            const reissued = workerNextResponseSchema.parse(
+                await (
+                    await postJson(server.port, WORKER_ENDPOINTS.next, { ...BASE, workerId: 'w-2' }, server.token)
+                ).json(),
+            );
+            expect(reissued).toMatchObject({ kind: 'task', task: { id: taskId, attempt: 2 } });
+
+            // A late result from the previous session is not saved. Its call never reaches the queue.
+            const late = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.complete,
+                { ...BASE, taskId, result: 'displaced session result' },
+                server.token,
+            );
+            expect(late.status).toBe(409);
+            expect(rpcErrorSchema.parse(await late.json()).error.code).toBe('worker_conflict');
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', workerId: 'w-2' });
+        });
+    });
+
+    describe('worker identity file', () => {
+        async function readWorkerIdFile(): Promise<string> {
+            return (await fs.readFile(workerIdPathFor(sherpaDir, PR_KEY), 'utf8')).trim();
+        }
+
+        it('writes the slot owner to the owner-only PR state file on register', async () => {
+            const server = await start();
+
+            await postJson(server.port, WORKER_ENDPOINTS.register, BASE, server.token);
+            expect(await readWorkerIdFile()).toBe(WORKER);
+
+            // Takeover rewrites the file. The session's next calls read its identity from there.
+            await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, workerId: 'w-2' }, server.token);
+            expect(await readWorkerIdFile()).toBe('w-2');
+
+            const stats = await fs.stat(workerIdPathFor(sherpaDir, PR_KEY));
+            expect(stats.mode & 0o777).toBe(0o600);
+        });
+
+        it('keeps the slot owner in the file regardless of concurrent registration races', async () => {
+            const server = await start();
+
+            // Both registrations succeed (register no longer returns a conflict), and one claims the slot.
+            // The file must describe that session, regardless of the order of network responses.
+            const responses = await Promise.all([
+                postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, workerId: 'w-a' }, server.token),
+                postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, workerId: 'w-b' }, server.token),
+            ]);
+
+            expect(responses.map((response) => response.status)).toEqual([200, 200]);
+            const status = server.workerRegistry.status();
+            expect(await readWorkerIdFile()).toBe(status.kind === 'never' ? null : status.workerId);
+        });
+
+        it('returns internal with an instruction to stop the loop when the file is unwritable: slot claimed, identity not saved', async () => {
+            const server = await start();
+            // A directory at the file path: writing fails just as it would with permissions revoked.
+            await fs.mkdir(workerIdPathFor(sherpaDir, PR_KEY), { recursive: true });
+
+            const response = await postJson(server.port, WORKER_ENDPOINTS.register, BASE, server.token);
+
+            expect(response.status).toBe(500);
+            const body = rpcErrorSchema.parse(await response.json());
+            expect(body.error.code).toBe('internal');
+            expect(body.error.message).toContain('identity file');
         });
     });
 

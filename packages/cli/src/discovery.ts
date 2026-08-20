@@ -33,8 +33,8 @@ export async function connect(
 }
 
 /**
- * Connects with an explicit identity for `worker register`. The state file is overwritten only
- * after the server accepts registration, otherwise a rejected session would erase the live one's id.
+ * Connection with an explicit identity for `worker register`. The session declares the id, and the server
+ * writes it to the state file after accepting registration. Otherwise two parallel sessions would race to write there.
  */
 export async function connectAs(
     prKeyArg: string | undefined,
@@ -115,29 +115,6 @@ export function workerIdOverride(env: Readonly<Record<string, string | undefined
     return override === undefined || override === '' ? null : override;
 }
 
-/** Previous session's worker for this PR, read from the state file. null if absent. Does not create the file. */
-export async function storedWorkerId(
-    env: Readonly<Record<string, string | undefined>>,
-    prKey: string,
-): Promise<string | null> {
-    return readWorkerIdFile(workerIdPathFor(sherpaDirFrom(env), prKey));
-}
-
-/** Saves the session worker. Other commands read the id here. */
-export async function storeWorkerId(
-    env: Readonly<Record<string, string | undefined>>,
-    prKey: string,
-    workerId: string,
-): Promise<void> {
-    const filePath = workerIdPathFor(sherpaDirFrom(env), prKey);
-    try {
-        await fs.mkdir(path.dirname(filePath), { recursive: true, mode: STATE_DIR_MODE });
-        await writeWorkerIdFile(filePath, workerId);
-    } catch (error) {
-        throw new CliError(workerIdNotWritable(filePath, error));
-    }
-}
-
 /**
  * Worker session identity: debug override from env, otherwise the PR state file.
  * Creates the file if missing, as the session may have started without `worker register`.
@@ -208,12 +185,6 @@ async function createWorkerIdFile(filePath: string): Promise<string> {
     // writeFile applies mode only on creation and subject to umask. Set the permissions explicitly afterward.
     await fs.chmod(filePath, WORKER_ID_FILE_MODE);
     return workerId;
-}
-
-/** Race-free overwrite: the server has accepted the id, and it is the only valid one for this session. */
-async function writeWorkerIdFile(filePath: string, workerId: string): Promise<void> {
-    await fs.writeFile(filePath, `${workerId}\n`, { mode: WORKER_ID_FILE_MODE });
-    await fs.chmod(filePath, WORKER_ID_FILE_MODE);
 }
 
 function isAlreadyExists(error: unknown): boolean {
