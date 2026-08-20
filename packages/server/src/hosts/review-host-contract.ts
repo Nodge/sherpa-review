@@ -133,6 +133,18 @@ export function describeReviewHostContract(
             feed.stop();
         });
 
+        it('getThreads returns the same state as the initial subscription snapshot', async () => {
+            const host = makeHost();
+            const threads = await host.getThreads();
+            for (const thread of threads) {
+                expect(() => threadSchema.parse(thread)).not.toThrow();
+            }
+            const feed = subscribe(host);
+            await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
+            expect(threads).toEqual(feed.snapshots[0]);
+            feed.stop();
+        });
+
         it('lenses pass schema validation', async () => {
             const host = makeHost();
             const ownership = await host.ownershipLens();

@@ -179,6 +179,7 @@ export type PublishResult = z.infer<typeof publishResultSchema>;
 export const lensSchema = z.object({
     id: z.string().min(1),
     label: z.string().min(1),
+    /** Specific file paths in the current diff (not directory prefixes). The UI filter checks membership. */
     paths: z.array(z.string()),
     available: z.boolean(),
     note: z.string().nullable(),

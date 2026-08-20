@@ -16,6 +16,9 @@ export interface ReviewHost {
      */
     getDiff(opts?: { base?: string; head?: string }): Promise<PrDiff>;
 
+    /** One-time thread read: current state without a subscription. */
+    getThreads(): Promise<Thread[]>;
+
     /**
      * Thread subscription: the callback receives a full snapshot on every change
      * (and once immediately after subscribing). Transport is an adapter detail. The common
@@ -36,10 +39,14 @@ export interface ReviewHost {
     /**
      * Publish accumulated drafts as one batch and apply the verdict.
      * The verdict applies only if every draft is published (SPEC §4.5).
+     * The result carries no final PR state. Read it again through `getPr`.
      */
     publishBatch(verdict: Verdict): Promise<PublishResult>;
 
-    /** Synchronize viewed marks with the host. Absent on hosts without this feature (capabilities.fileViewedSync). */
+    /**
+     * Synchronize viewed marks with the host. Method presence must match
+     * `capabilities.fileViewedSync`, as checked by the contract suite.
+     */
     setFileViewed?(fileId: HostId, viewed: boolean): Promise<void>;
 
     /** "My files" lens (CODEOWNERS or host equivalent). null if the host has no ownership concept. */

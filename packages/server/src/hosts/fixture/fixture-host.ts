@@ -130,6 +130,10 @@ export class FixtureHost implements ReviewHost {
         return Promise.resolve(structuredClone(this.data.diff));
     }
 
+    getThreads(): Promise<Thread[]> {
+        return Promise.resolve(this.threadsSnapshot());
+    }
+
     watchThreads(onChange: (threads: Thread[]) => void): () => void {
         this.watchers.add(onChange);
         onChange(this.threadsSnapshot());
