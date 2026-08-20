@@ -3,6 +3,7 @@ import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.j
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
+import { directoryAssets } from './static.js';
 
 /**
  * Dev server launch: `pnpm --filter @sherpa/server dev --pr <key> [--sherpa-dir <path>] [--ui <path>]`.
@@ -20,7 +21,9 @@ async function main(argv: readonly string[]): Promise<number> {
 
     let server: SherpaServer;
     try {
-        server = await startServer(uiDir === null ? { prKey, sherpaDir } : { prKey, sherpaDir, uiDir });
+        server = await startServer(
+            uiDir === null ? { prKey, sherpaDir } : { prKey, sherpaDir, assets: directoryAssets(uiDir) },
+        );
     } catch (error) {
         if (error instanceof ServerAlreadyRunningError) {
             process.stderr.write(`${error.message}\n`);

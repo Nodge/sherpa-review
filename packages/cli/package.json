@@ -7,7 +7,7 @@
     "sherpa": "./dist/sherpa.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "node build.mjs",

@@ -1,18 +1,36 @@
-import Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
+import type * as NodeSqlite from 'node:sqlite';
 
 import type { Migration } from './migrations.js';
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from './migrations.js';
 
-export type SherpaDatabase = Database.Database;
+export type SherpaDatabase = NodeSqlite.DatabaseSync;
+
+/**
+ * `node:sqlite` loads on demand instead of through a static import. The module does not exist before Node 22.13,
+ * so a static import would kill the process with a raw Node error during linking, before
+ * `checkNodeVersion` (see `runtime.ts`) could explain what to do. The import above
+ * is for types only and is erased during the build.
+ */
+function loadSqlite(): typeof NodeSqlite {
+    return createRequire(import.meta.url)('node:sqlite') as typeof NodeSqlite;
+}
+
+/**
+ * A query row as returned by node:sqlite, an unnamed record of columns. The caller defines
+ * the table shape. Its row interface extends this type, otherwise TS rejects a cast
+ * from the query result to that interface.
+ */
+export type SqlRow = Record<string, NodeSqlite.SQLOutputValue>;
 
 /**
  * Opens (or creates) PR storage and brings its schema up to date.
  * WAL allows concurrent UI reads and worker writes (spec §1/C2).
  */
 export function openDatabase(file: string, migrations: readonly Migration[] = MIGRATIONS): SherpaDatabase {
-    const db = new Database(file);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    const db = new (loadSqlite().DatabaseSync)(file);
+    db.exec('PRAGMA journal_mode = WAL;');
+    db.exec('PRAGMA foreign_keys = ON;');
 
     try {
         applyMigrations(db, migrations);
@@ -21,6 +39,36 @@ export function openDatabase(file: string, migrations: readonly Migration[] = MI
         throw error;
     }
     return db;
+}
+
+/**
+ * Wraps a function in a transaction. The built-in `node:sqlite` has no helper of its own.
+ * `BEGIN IMMEDIATE` takes the lock up front because every server transaction intends to write,
+ * instead of taking it midway through an operation. A returned value commits, an exception rolls back.
+ * The queue and worker registry `Outcome` pattern relies on this: a domain error travels as a value
+ * (and stays in storage), while an exception cancels everything.
+ *
+ * Nested calls are unsupported (no savepoints). The second `BEGIN` fails.
+ */
+export function transaction<A extends unknown[], R>(db: SherpaDatabase, body: (...args: A) => R): (...args: A) => R {
+    return (...args: A): R => {
+        db.exec('BEGIN IMMEDIATE;');
+
+        try {
+            const result = body(...args);
+            // Commit inside try: a failed COMMIT (I/O, disk full) must leave the connection
+            // outside a transaction, otherwise every later server operation fails with "transaction within a transaction".
+            db.exec('COMMIT;');
+            return result;
+        } catch (error) {
+            try {
+                db.exec('ROLLBACK;');
+            } catch {
+                // SQLite may have rolled back the transaction itself, leaving nothing to roll back.
+            }
+            throw error;
+        }
+    };
 }
 
 /** Applies pending migrations in order, each in its own transaction. */
@@ -41,7 +89,7 @@ export function applyMigrations(db: SherpaDatabase, migrations: readonly Migrati
             continue;
         }
 
-        const run = db.transaction(() => {
+        const run = transaction(db, () => {
             db.exec(migration.sql);
             db.prepare('INSERT INTO migrations (name, applied_at) VALUES (?, ?)').run(
                 migration.name,

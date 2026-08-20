@@ -2,202 +2,286 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
+import type { ServerManifest } from '@sherpa/protocol';
+
+import { readManifestFile } from './discovery.js';
 import { CliError } from './errors.js';
+import { formatUiUrl } from './format.js';
+import { manifestPathFor, serverLogPathFor } from './paths.js';
 
-/** Marker file for the Sherpa workspace root. */
-const WORKSPACE_MARKER = 'pnpm-workspace.yaml';
+/** The server bundle is a sibling file in the skill directory, beside the CLI itself. */
+const SERVER_BIN_NAME = 'sherpa-server.mjs';
 
-/** How long to wait for the startup command: it starts a daemon and returns immediately. */
-const SERVER_START_TIMEOUT_MS = 60_000;
+/** How long to wait for the daemon to publish a live manifest. */
+const STARTUP_TIMEOUT_MS = 10_000;
+const POLL_INTERVAL_MS = 200;
 
-/** How long to wait after SIGTERM before killing a hung startup process. */
-const KILL_GRACE_MS = 2_000;
+/** Liveness probe for the adjacent server. It is a local request, so a longer wait buys nothing. */
+const HEALTH_PROBE_TIMEOUT_MS = 1_000;
 
-/** Number of output lines to show when server startup fails. */
-const OUTPUT_TAIL_LINES = 30;
+/** Number of log lines to show when the daemon fails to start. */
+const LOG_TAIL_LINES = 20;
 
-/** Information the server startup command needs. */
-export interface ServerStartOptions {
-    /** Sherpa checkout root, from which the server package starts. */
-    readonly root: string;
+/** State directory permissions: only the owner can see its contents (requirements §6). */
+const STATE_DIR_MODE = 0o700;
+
+/** How long to wait for exit after each signal in `terminateChild`. */
+const TERMINATE_GRACE_MS = 2_000;
+const EXIT_POLL_INTERVAL_MS = 20;
+
+export interface EnsureServerOptions {
     readonly prKey: string;
-    /** State directory from `SHERPA_DIR`, if set: the server does not read this variable itself. */
-    readonly sherpaDir: string | undefined;
+    /** State root: the server does not read `SHERPA_DIR`. The CLI passes it the path. */
+    readonly sherpaDir: string;
+    /** Path to the running CLI file (`process.argv[1]`): the server bundle is beside it. */
+    readonly entry: string | undefined;
+    /** Explicit server bundle path from `SHERPA_SERVER_BIN`, for development scenarios. */
+    readonly serverBin?: string | undefined;
+    /** How long to wait for manifest publication. Shortened in tests. */
+    readonly startupTimeoutMs?: number;
 }
 
-/** Server startup result: output is shown to the user unchanged, so stdout and stderr are merged. */
-export interface ServerStartResult {
-    readonly code: number;
-    readonly output: string;
+/** Spawned daemon and its spawn error, which arrives asynchronously as a separate event. */
+interface Daemon {
+    readonly process: ChildProcess;
+    spawnError: Error | null;
 }
-
-/** PR server startup, replaced in unit tests to avoid running real pnpm. */
-export type ServerStarter = (options: ServerStartOptions) => Promise<ServerStartResult>;
 
 /**
- * Finds the Sherpa checkout root from the CLI file. The bundle lives in `<root>/packages/{cli/dist,skill/bin}`,
- * and the skill directory is installed as a symlink (`~/.claude/skills/sherpa`), so first resolve the real path,
- * then walk up to the directory with `pnpm-workspace.yaml`.
+ * Ensures the PR server is running and returns a UI link for the reviewer. Idempotent: a live server for this PR
+ * is found through the manifest (rpc-design §8) and reused, otherwise the server bundle starts as a daemon
+ * that outlives the CLI. Neither pnpm nor a repository checkout is required.
  */
-export async function findRepoRoot(entryPath: string | undefined): Promise<string> {
-    if (entryPath === undefined || entryPath.trim() === '') {
-        throw new CliError(NOT_IN_CHECKOUT);
+export async function ensureServer(options: EnsureServerOptions): Promise<string> {
+    const manifestPath = manifestPathFor(options.sherpaDir, options.prKey);
+
+    const running = await readManifestFile(manifestPath);
+    if (running !== null && running.prKey === options.prKey && (await isManifestServerAlive(running))) {
+        return formatUiUrl(running.port, running.token);
     }
 
-    let dir: string;
+    const serverBin = await resolveServerBin(options.entry, options.serverBin);
+    const logPath = await prepareLogPath(options.sherpaDir, options.prKey);
+    const daemon = await spawnDaemon(serverBin, options, logPath);
+
+    const timeoutMs = options.startupTimeoutMs ?? STARTUP_TIMEOUT_MS;
+    const manifest = await waitForLiveManifest(manifestPath, options.prKey, daemon, timeoutMs);
+    if (manifest === null) {
+        // Without a manifest, neither the next launch nor a person can find this daemon. Terminate it here.
+        const reaped = await terminateChild(daemon.process);
+        throw new CliError(await startupFailed(options.prKey, daemon, logPath, timeoutMs, reaped));
+    }
+
+    return formatUiUrl(manifest.port, manifest.token);
+}
+
+/**
+ * Server bundle path. Normally a sibling file in the skill directory. The real path is resolved
+ * through realpath because the skill directory is installed as a symlink (`~/.claude/skills/sherpa`).
+ * `SHERPA_SERVER_BIN` overrides discovery for development runs and tests.
+ */
+export async function resolveServerBin(entry: string | undefined, override: string | undefined): Promise<string> {
+    if (override !== undefined && override.trim() !== '') {
+        const explicit = path.resolve(override.trim());
+        if (!(await isFile(explicit))) {
+            throw new CliError(
+                `sherpa: SHERPA_SERVER_BIN points at ${explicit}, but there is no file there.\n` +
+                    'Fix the path or unset the variable to take the server from the skill directory.',
+            );
+        }
+        return explicit;
+    }
+
+    const neighbour = await neighbourServerBin(entry);
+    if (neighbour === null || !(await isFile(neighbour))) {
+        throw new CliError(INCOMPLETE_DISTRIBUTION);
+    }
+    return neighbour;
+}
+
+async function neighbourServerBin(entry: string | undefined): Promise<string | null> {
+    if (entry === undefined || entry.trim() === '') {
+        return null;
+    }
     try {
-        dir = path.dirname(await fs.realpath(entryPath));
+        return path.join(path.dirname(await fs.realpath(entry)), SERVER_BIN_NAME);
     } catch {
-        throw new CliError(NOT_IN_CHECKOUT);
-    }
-
-    for (;;) {
-        if (await isFile(path.join(dir, WORKSPACE_MARKER))) {
-            return dir;
-        }
-        const parent = path.dirname(dir);
-        if (parent === dir) {
-            throw new CliError(NOT_IN_CHECKOUT);
-        }
-        dir = parent;
+        return null;
     }
 }
 
 /**
- * Starts the PR server and returns a string with the UI link.
- * The startup command is idempotent: it finds a live server for this PR through the manifest (rpc-design §8).
+ * The manifest server really is running: its PID is alive AND `/healthz` responds with the same prKey
+ * using the manifest token (otherwise anyone could own the port). The server uses the same check.
  */
-export async function ensureServer(start: ServerStarter, options: ServerStartOptions): Promise<string> {
-    const result = await start(options);
-    if (result.code !== 0) {
-        throw new CliError(
-            `sherpa: could not start the Sherpa server for PR ${options.prKey}. Startup command output:\n` +
-                `${tailOf(result.output)}\n` +
-                'Show this text to the user and stop — do not start the worker loop.',
-        );
+export async function isManifestServerAlive(manifest: ServerManifest): Promise<boolean> {
+    if (!isProcessAlive(manifest.pid)) {
+        return false;
     }
 
-    const uiUrl = extractUiUrl(result.output);
-    if (uiUrl === null) {
-        throw new CliError(
-            `sherpa: server for PR ${options.prKey} started, but its output has no UI link. ` +
-                'CLI and server versions probably differ. Startup command output:\n' +
-                `${tailOf(result.output)}\n` +
-                'Update the Sherpa skill together with the server. Show this text to the user and stop.',
-        );
+    try {
+        const response = await fetch(`http://127.0.0.1:${String(manifest.port)}/healthz`, {
+            headers: { authorization: `Bearer ${manifest.token}` },
+            signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+        });
+        if (!response.ok) {
+            return false;
+        }
+
+        const body: unknown = await response.json();
+        return isRecord(body) && body.ok === true && body.prKey === manifest.prKey;
+    } catch {
+        return false;
     }
-    return uiUrl;
 }
 
-/** UI link in server startup output: the stable `UI: <url>` line (see the server's `launch.ts`). */
-export function extractUiUrl(output: string): string | null {
-    return /^UI: (\S+)\s*$/mu.exec(output)?.[1] ?? null;
-}
-
-/** Command and timeout for server startup, replaced in timeout tests. */
-export interface SpawnStartConfig {
-    readonly command: string;
-    readonly timeoutMs: number;
-}
-
-const PNPM_START: SpawnStartConfig = { command: 'pnpm', timeoutMs: SERVER_START_TIMEOUT_MS };
-
-/** Real server startup: `pnpm -C <root> --filter @sherpa/server start --pr <key>`. */
-export const spawnServerStart: ServerStarter = async (options) => spawnServerStartWith(options, PNPM_START);
-
-/** The same startup with a replaceable command and timeout, for testing spawn errors. */
-export const spawnServerStartWith = async (
-    options: ServerStartOptions,
-    config: SpawnStartConfig,
-): Promise<ServerStartResult> => {
-    const args = ['-C', options.root, '--filter', '@sherpa/server', 'start', '--pr', options.prKey];
-    if (options.sherpaDir !== undefined) {
-        args.push('--sherpa-dir', options.sherpaDir);
+/** Checks whether a PID is alive. Signal 0 sends nothing and only checks for existence. */
+function isProcessAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        // EPERM: the process exists but belongs to someone else. For this check, it counts as alive.
+        return error instanceof Error && 'code' in error && error.code === 'EPERM';
     }
+}
 
-    return new Promise<ServerStartResult>((resolve, reject) => {
-        const child = spawn(config.command, args, { cwd: options.root, stdio: ['ignore', 'pipe', 'pipe'] });
-        const chunks: string[] = [];
-        let settled = false;
+/**
+ * Server daemon: detached + unref so it outlives the CLI. stdio goes to a log file,
+ * which nothing reads at runtime, but the user can inspect when the server fails to start.
+ * No token in the log: the CLI reads the manifest and builds the link with the token.
+ */
+async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logPath: string): Promise<Daemon> {
+    const args = [serverBin, '--pr', options.prKey, '--sherpa-dir', options.sherpaDir];
 
-        const collect = (chunk: Buffer): void => {
-            chunks.push(chunk.toString('utf8'));
-        };
-        child.stdout.on('data', collect);
-        child.stderr.on('data', collect);
-
-        const settle = (action: () => void): void => {
-            if (settled) {
-                return;
-            }
-            settled = true;
-            clearTimeout(timer);
-            action();
-        };
-
-        // Return the timeout response immediately, without waiting for `close`: pnpm may ignore
-        // SIGTERM, and its child may keep inherited pipes open, so `close` may never fire.
-        const timer: NodeJS.Timeout = setTimeout(() => {
-            settle(() => {
-                reject(new CliError(startTimedOut(options.prKey, chunks.join(''), config.timeoutMs)));
-            });
-            terminate(child);
-        }, config.timeoutMs);
-
+    const log = await fs.open(logPath, 'a');
+    try {
+        const child = spawn(process.execPath, args, {
+            detached: true,
+            stdio: ['ignore', log.fd, log.fd],
+        });
+        const daemon: Daemon = { process: child, spawnError: null };
+        // Without a listener, an 'error' event (such as ENOENT on execPath) would crash the CLI with an exception.
         child.once('error', (error: Error) => {
-            settle(() => {
-                reject(new CliError(spawnFailed(error, options.root)));
-            });
+            daemon.spawnError = error;
         });
-        child.once('close', (code: number | null) => {
-            settle(() => {
-                resolve({ code: code ?? 1, output: chunks.join('') });
-            });
-        });
-    });
-};
-
-/** Terminates a hung startup process, gently first, then forcefully after a grace period so the CLI cannot wait forever. */
-function terminate(child: ChildProcess): void {
-    child.kill('SIGTERM');
-
-    const hardKill = setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS);
-    hardKill.unref();
-    child.once('close', () => {
-        clearTimeout(hardKill);
-    });
-}
-
-const NOT_IN_CHECKOUT =
-    'sherpa: could not find the Sherpa repository checkout: no directory above the CLI file has `pnpm-workspace.yaml`.\n' +
-    'Run sherpa from a Sherpa repository checkout (`<root>/packages/skill/bin/sherpa.mjs`, ' +
-    'a symlink to the skill directory also works).';
-
-function spawnFailed(error: Error, root: string): string {
-    return (
-        `sherpa: could not start pnpm in ${root}: ${error.message}.\n` +
-        'The Sherpa server starts through pnpm: install it (`npm i -g pnpm`) and run `pnpm install` ' +
-        'in the Sherpa checkout. Show this text to the user and stop.'
-    );
-}
-
-function startTimedOut(prKey: string, output: string, timeoutMs: number): string {
-    return (
-        `sherpa: server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s. ` +
-        `Startup command output:\n${tailOf(output)}\n` +
-        'Show this text to the user and stop — do not start the worker loop.'
-    );
-}
-
-/** Output tail: the model does not need long build logs, only the end with the error. */
-function tailOf(output: string): string {
-    const trimmed = output.trim();
-    if (trimmed === '') {
-        return '(no output)';
+        child.unref();
+        return daemon;
+    } finally {
+        // spawn duplicated the descriptor into the child process. Our copy can now close.
+        await log.close();
     }
-    return trimmed.split('\n').slice(-OUTPUT_TAIL_LINES).join('\n');
 }
+
+/** Waits for the daemon to publish a manifest and answer `/healthz`. No point waiting if it died or failed to start. */
+async function waitForLiveManifest(
+    manifestPath: string,
+    prKey: string,
+    daemon: Daemon,
+    timeoutMs: number,
+): Promise<ServerManifest | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        await delay(POLL_INTERVAL_MS);
+
+        const manifest = await readManifestFile(manifestPath);
+        if (manifest !== null && manifest.prKey === prKey && (await isManifestServerAlive(manifest))) {
+            return manifest;
+        }
+        if (hasExited(daemon.process) || daemon.spawnError !== null) {
+            return null;
+        }
+    }
+    return null;
+}
+
+async function startupFailed(
+    prKey: string,
+    daemon: Daemon,
+    logPath: string,
+    timeoutMs: number,
+    reaped: boolean,
+): Promise<string> {
+    const lines = [`sherpa: the server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s.`];
+    if (daemon.spawnError !== null) {
+        lines.push(`The process could not be started: ${daemon.spawnError.message}`);
+    }
+    if (!reaped && daemon.process.pid !== undefined) {
+        lines.push(`Process ${String(daemon.process.pid)} did not exit — kill it manually.`);
+    }
+    lines.push(
+        `Log: ${logPath}`,
+        await readLogTail(logPath),
+        'Show this text to the user and stop — do not start the worker loop.',
+    );
+    return lines.join('\n');
+}
+
+async function prepareLogPath(sherpaDir: string, prKey: string): Promise<string> {
+    const logPath = serverLogPathFor(sherpaDir, prKey);
+    try {
+        await fs.mkdir(path.dirname(logPath), { recursive: true, mode: STATE_DIR_MODE });
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new CliError(
+            `sherpa: could not prepare the state directory for the log ${logPath} — ${detail}.\n` +
+                'Check the permissions on the Sherpa state directory and call the command again.',
+        );
+    }
+    return logPath;
+}
+
+/** Log tail: the error at the end matters, not the full launch history. */
+async function readLogTail(logPath: string): Promise<string> {
+    let text: string;
+    try {
+        text = await fs.readFile(logPath, 'utf8');
+    } catch {
+        return '(log is empty)';
+    }
+    const tail = text.split('\n').slice(-LOG_TAIL_LINES).join('\n').trim();
+    return tail === '' ? '(the log is empty)' : tail;
+}
+
+/**
+ * Terminates the child process with SIGTERM, then SIGKILL if it does not exit within the allotted time.
+ * Needed for a daemon that never published a manifest: there is nothing to find it by later,
+ * and a detached process outlives the CLI and keeps the port open.
+ * Returns false if the process survives even SIGKILL.
+ */
+export async function terminateChild(child: ChildProcess, graceMs = TERMINATE_GRACE_MS): Promise<boolean> {
+    if (hasExited(child)) {
+        return true;
+    }
+
+    child.kill('SIGTERM');
+    if (await waitForExit(child, graceMs)) {
+        return true;
+    }
+
+    child.kill('SIGKILL');
+    return waitForExit(child, graceMs);
+}
+
+/** unref detaches the process from the event loop, but exit events still reach us. */
+export function hasExited(child: ChildProcess): boolean {
+    return child.exitCode !== null || child.signalCode !== null;
+}
+
+async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (!hasExited(child) && Date.now() < deadline) {
+        await delay(EXIT_POLL_INTERVAL_MS);
+    }
+    return hasExited(child);
+}
+
+const INCOMPLETE_DISTRIBUTION =
+    `sherpa: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa.mjs.\n` +
+    'Reinstall the Sherpa skill as a whole (the directory with SKILL.md and bin/). ' +
+    'Show this text to the user and stop — do not start the worker loop.';
 
 async function isFile(filePath: string): Promise<boolean> {
     try {
@@ -205,4 +289,8 @@ async function isFile(filePath: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
 }

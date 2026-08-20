@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
-import type { ServerStartOptions } from './up.js';
 
 const PR_KEY = 'github-quillmart--quillmart--777';
 
@@ -57,8 +56,6 @@ describe('CLI against server', () => {
 
     interface Overrides {
         readonly extraEnv?: Record<string, string>;
-        /** Mock server startup: the test already runs it in-process, so there is no need to call pnpm. */
-        readonly startServer?: CliIo['startServer'];
     }
 
     async function sherpaWith(overrides: Overrides, ...argv: string[]): Promise<Invocation> {
@@ -68,29 +65,24 @@ describe('CLI against server', () => {
             env: { SHERPA_DIR: sherpaDir, SHERPA_PR: PR_KEY, ...overrides.extraEnv },
             out: (text) => stdout.push(text),
             err: (text) => stderr.push(text),
-            // The test file is in a Sherpa checkout: find the root from it just as from the CLI bundle.
+            // No server bundle beside the test file: it is not needed when the server is already running.
             entry: fileURLToPath(import.meta.url),
-            ...(overrides.startServer === undefined ? {} : { startServer: overrides.startServer }),
         };
 
         const code = await run(argv, io);
         return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
     }
 
-    /** Server startup as `up` would see it: a live server is already running, and the output matches `start`. */
-    function fakeStart(calls: ServerStartOptions[]): CliIo['startServer'] {
-        return async (options) => {
-            calls.push(options);
-            const manifest = JSON.parse(
-                await fs.readFile(path.join(sherpaDir, 'servers', `${PR_KEY}.json`), 'utf8'),
-            ) as { port: number; token: string };
-            return {
-                code: 0,
-                output:
-                    `sherpa: server for PR ${PR_KEY} is already running (PID 4242)\n` +
-                    `UI: http://127.0.0.1:${String(manifest.port)}/#token=${manifest.token}\n`,
-            };
-        };
+    /** Executable server bundle substitute: these tests only care about process behaviour. */
+    async function fakeServerBin(body: string): Promise<string> {
+        const file = path.join(workDir, 'sherpa-server.mjs');
+        await fs.writeFile(file, `${body}\n`, { mode: 0o755 });
+        return file;
+    }
+
+    async function readManifestPid(): Promise<number> {
+        const raw = await fs.readFile(path.join(sherpaDir, 'servers', `${PR_KEY}.json`), 'utf8');
+        return (JSON.parse(raw) as { pid: number }).pid;
     }
 
     async function readWorkerIdFile(): Promise<string> {
@@ -112,11 +104,10 @@ describe('CLI against server', () => {
         return file;
     }
 
-    it('up starts the server, registers the worker and prints the link with instructions', async () => {
+    it('up finds a live server, registers the worker and prints the link with instructions', async () => {
         const running = await start();
-        const calls: ServerStartOptions[] = [];
 
-        const result = await sherpaWith({ startServer: fakeStart(calls) }, 'up', '--harness', 'claude-code');
+        const result = await sherpaWith({}, 'up', '--harness', 'claude-code');
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain(`http://127.0.0.1:${String(running.port)}/#token=`);
@@ -130,26 +121,23 @@ describe('CLI against server', () => {
             workerId: await readWorkerIdFile(),
             harness: 'claude-code',
         });
-        // Pass the state directory from the environment to the server: it does not read SHERPA_DIR itself.
-        expect(calls).toEqual([{ root: expect.any(String) as string, prKey: PR_KEY, sherpaDir }]);
     });
 
     it('repeated up renews the same slot without starting another server', async () => {
         const running = await start();
-        const calls: ServerStartOptions[] = [];
         // No pinned identity. Each CLI invocation takes a fresh id, as in real use.
-        await sherpaWith({ startServer: fakeStart(calls) }, 'up', '--harness', 'claude-code');
+        await sherpaWith({}, 'up', '--harness', 'claude-code');
         const workerId = await readWorkerIdFile();
 
-        const again = await sherpaWith({ startServer: fakeStart(calls) }, 'up', '--harness', 'claude-code');
+        const again = await sherpaWith({}, 'up', '--harness', 'claude-code');
 
         expect(again.code).toBe(0);
         expect(again.stdout).toContain('http://127.0.0.1:');
         // The live slot for this PR is ours: renew it instead of rejecting it with a conflict.
         expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
         expect(await readWorkerIdFile()).toBe(workerId);
-        // Server startup is itself idempotent: both calls found the live server through the manifest.
-        expect(calls).toHaveLength(2);
+        // No second server started. The PR manifest still describes the same process.
+        expect(await readManifestPid()).toBe(process.pid);
     });
 
     it('up after a session breaks picks up the previous session\'s live slot without waiting for its death', async () => {
@@ -159,7 +147,7 @@ describe('CLI against server', () => {
         await fs.mkdir(path.join(sherpaDir, 'prs', PR_KEY), { recursive: true });
         await fs.writeFile(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'), 'session-from-a-past-life\n');
 
-        const result = await sherpaWith({ startServer: fakeStart([]) }, 'up', '--harness', 'codex');
+        const result = await sherpaWith({}, 'up', '--harness', 'codex');
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('http://127.0.0.1:');
@@ -177,7 +165,7 @@ describe('CLI against server', () => {
         await fs.mkdir(path.join(sherpaDir, 'prs', PR_KEY), { recursive: true });
         await fs.writeFile(path.join(sherpaDir, 'prs', PR_KEY, 'worker-id'), 'our-previous-session\n');
 
-        const second = await sherpaWith({ startServer: fakeStart([]) }, 'up', '--harness', 'claude-code');
+        const second = await sherpaWith({}, 'up', '--harness', 'claude-code');
 
         expect(second.code).toBe(1);
         expect(second.stderr).toContain('another live session');
@@ -187,26 +175,34 @@ describe('CLI against server', () => {
 
     it('up with a pinned SHERPA_WORKER_ID does not pick up another slot: all commands use the pinned id', async () => {
         const running = await start();
-        await sherpaWith({ startServer: fakeStart([]) }, 'up');
+        await sherpaWith({}, 'up');
         const workerId = await readWorkerIdFile();
 
-        const pinned = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-2' }, startServer: fakeStart([]) }, 'up');
+        const pinned = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-2' } }, 'up');
 
         expect(pinned.code).toBe(1);
         expect(pinned.stderr).toContain('another live session');
         expect(running.workerRegistry.status()).toMatchObject({ workerId });
     });
 
-    it('up without a server: startup errors reach the model unchanged', async () => {
-        const failing: CliIo['startServer'] = () =>
-            Promise.resolve({ code: 1, output: 'sherpa: UI is not built. Build the UI.\n' });
-
-        const result = await sherpaWith({ startServer: failing }, 'up');
+    it('up without a server beside the CLI reports an incomplete distribution and never starts the loop', async () => {
+        // The server is not running and its bundle is missing beside the CLI, so there is no way forward.
+        const result = await sherpaWith({}, 'up');
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('sherpa: UI is not built');
+        expect(result.stderr).toContain('skill distribution is incomplete');
         expect(result.stderr).toContain('do not start the worker loop');
     });
+
+    it('up with a failed server bundle passes its output to the model unchanged', async () => {
+        const failing = await fakeServerBin("console.error('cannot open storage'); process.exit(1);");
+
+        const result = await sherpaWith({ extraEnv: { SHERPA_SERVER_BIN: failing } }, 'up');
+
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('cannot open storage');
+        expect(result.stderr).toContain('do not start the worker loop');
+    }, 20_000);
 
     it('register makes the session a worker and saves it in the state file', async () => {
         const running = await start();

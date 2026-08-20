@@ -4,6 +4,7 @@ import type { RpcError, RpcErrorCode } from '@sherpa/protocol';
 
 import { extractBearerToken, tokenMatches } from './auth.js';
 import { RpcFailure } from './errors.js';
+import type { StaticAssets } from './static.js';
 import { isStaticPath, serveStatic } from './static.js';
 
 /**
@@ -149,8 +150,8 @@ function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
 export interface RequestListenerOptions {
     readonly token: string;
     readonly routes: readonly Route[];
-    /** Built UI directory. When set, the server serves static files without a token (see `serveStatic`). */
-    readonly uiDir?: string;
+    /** UI static asset source. When set, the server serves it without a token (see `serveStatic`). */
+    readonly assets?: StaticAssets;
 }
 
 /**
@@ -176,8 +177,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Reques
     const route = options.routes.find((item) => item.method === req.method && item.path === url.pathname);
 
     if (route === undefined) {
-        if (options.uiDir !== undefined && req.method === 'GET' && isStaticPath(url.pathname)) {
-            if (!(await serveStatic(res, options.uiDir, url.pathname))) {
+        if (options.assets !== undefined && req.method === 'GET' && isStaticPath(url.pathname)) {
+            if (!(await serveStatic(res, options.assets, url.pathname))) {
                 sendJson(res, {
                     status: 404,
                     body: rpcError('bad_request', `UI file ${url.pathname} is not in the build.`),

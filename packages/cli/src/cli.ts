@@ -26,9 +26,8 @@ import {
     formatUpReady,
     helpText,
 } from './format.js';
-import { sherpaDirOverrideFrom } from './paths.js';
-import type { ServerStarter } from './up.js';
-import { ensureServer, findRepoRoot, spawnServerStart } from './up.js';
+import { serverBinOverrideFrom, sherpaDirFrom } from './paths.js';
+import { ensureServer } from './up.js';
 import { CLI_VERSION } from './version.js';
 
 /** Invocation environment. Tests supply their own to run commands as functions instead of processes. */
@@ -36,10 +35,8 @@ export interface CliIo {
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly out: (text: string) => void;
     readonly err: (text: string) => void;
-    /** Path to the running CLI file: `up` uses it to find the checkout root. Defaults to `process.argv[1]`. */
+    /** Path to the running CLI file: `up` looks for the server bundle beside it. Defaults to `process.argv[1]`. */
     readonly entry?: string;
-    /** How `up` starts the server. Defaults to running the server package through pnpm. */
-    readonly startServer?: ServerStarter;
 }
 
 /**
@@ -83,12 +80,12 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
 async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise<number> {
     // Validate the PR key before starting the server: the server would reject a bad key too, but later and at greater cost.
     const prKey = resolvePrKey(command.prKey, io.env);
-    const root = await findRepoRoot(io.entry ?? process.argv[1]);
 
-    const uiUrl = await ensureServer(io.startServer ?? spawnServerStart, {
-        root,
+    const uiUrl = await ensureServer({
         prKey,
-        sherpaDir: sherpaDirOverrideFrom(io.env),
+        sherpaDir: sherpaDirFrom(io.env),
+        entry: io.entry ?? process.argv[1],
+        serverBin: serverBinOverrideFrom(io.env),
     });
     await claimWorkerSlot(prKey, command.harness, io);
 

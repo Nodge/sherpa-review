@@ -32,6 +32,14 @@ export function formatTask(task: Task): string {
 }
 
 /**
+ * The only link the skill shows the reviewer. Keep its format stable.
+ * The token is in the fragment: it is not sent to the server, but survives page reloads (rpc-design §8).
+ */
+export function formatUiUrl(port: number, token: string): string {
+    return `http://127.0.0.1:${String(port)}/#token=${token}`;
+}
+
+/**
  * `sherpa up` output: a link for the reviewer and the session's next step.
  * The output hides the server and registration. The model doesn't need to know about them.
  */

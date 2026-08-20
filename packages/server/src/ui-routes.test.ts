@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import {
     PROTOCOL_VERSION,
@@ -13,12 +14,12 @@ import {
     workerNextResponseSchema,
 } from '@sherpa/protocol';
 import type { UiState } from '@sherpa/protocol';
-import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { databasePathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
+import { directoryAssets } from './static.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 const PR_KEY = 'github-quillmart--quillmart--4242';
@@ -50,7 +51,7 @@ describe('UI endpoints', () => {
         const server = await startServer(
             uiDir === undefined
                 ? { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3 }
-                : { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3, uiDir },
+                : { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3, assets: directoryAssets(uiDir) },
         );
         servers.push(server);
         return server;
@@ -360,7 +361,7 @@ describe('UI endpoints', () => {
 
 /** Corrupts a task row outside the server to test how it handles damaged storage. */
 function corruptTasks(sherpaDir: string): void {
-    const db = new Database(databasePathFor(sherpaDir, PR_KEY));
+    const db = new DatabaseSync(databasePathFor(sherpaDir, PR_KEY));
     try {
         db.prepare("UPDATE tasks SET context_files = 'this is not json'").run();
     } finally {

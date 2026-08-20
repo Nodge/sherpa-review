@@ -10,7 +10,8 @@ import type {
 } from '@sherpa/protocol';
 import { LEASE_TTL_SECONDS, MAX_TASK_ATTEMPTS, RESULT_MAX_BYTES, taskSchema } from '@sherpa/protocol';
 
-import type { SherpaDatabase } from './db.js';
+import type { SherpaDatabase, SqlRow } from './db.js';
+import { transaction } from './db.js';
 import { RpcFailure } from './errors.js';
 
 const CLOSED_STATUSES: readonly TaskStatus[] = ['done', 'failed', 'cancelled'];
@@ -57,7 +58,7 @@ export type CancelOutcome = 'cancelled' | 'noop';
  */
 type Outcome<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly failure: RpcFailure };
 
-interface TaskRow {
+interface TaskRow extends SqlRow {
     id: number;
     type: string;
     priority: string;
@@ -106,26 +107,26 @@ export class TaskQueue {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
 
-        this.txNext = this.db.transaction((workerId: string) => this.nextInTransaction(workerId));
-        this.txComplete = this.db.transaction((workerId: string, taskId: TaskId, result: string) =>
+        this.txNext = transaction(this.db, (workerId: string) => this.nextInTransaction(workerId));
+        this.txComplete = transaction(this.db, (workerId: string, taskId: TaskId, result: string) =>
             this.completeInTransaction(workerId, taskId, result),
         );
-        this.txFail = this.db.transaction((workerId: string, taskId: TaskId, reason: string) =>
+        this.txFail = transaction(this.db, (workerId: string, taskId: TaskId, reason: string) =>
             this.failInTransaction(workerId, taskId, reason),
         );
-        this.txProgress = this.db.transaction((workerId: string, taskId: TaskId, text: string) =>
+        this.txProgress = transaction(this.db, (workerId: string, taskId: TaskId, text: string) =>
             this.progressInTransaction(workerId, taskId, text),
         );
-        this.txCancel = this.db.transaction((taskId: TaskId) => this.cancelInTransaction(taskId));
-        this.txReleaseLeasesOf = this.db.transaction((workerId: string) => {
+        this.txCancel = transaction(this.db, (taskId: TaskId) => this.cancelInTransaction(taskId));
+        this.txReleaseLeasesOf = transaction(this.db, (workerId: string) => {
             this.releaseLeasesInTransaction(workerId);
         });
-        this.txListTasks = this.db.transaction(() => {
+        this.txListTasks = transaction(this.db, () => {
             this.expireLeases();
             const rows = this.db.prepare('SELECT * FROM tasks ORDER BY id').all() as TaskRow[];
             return rows.map(toRecord);
         });
-        this.txGetTask = this.db.transaction((taskId: TaskId) => {
+        this.txGetTask = transaction(this.db, (taskId: TaskId) => {
             this.expireLeases();
             const row = this.findRow(taskId);
             return row === null ? null : toRecord(row);

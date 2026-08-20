@@ -70,27 +70,31 @@ export function resolvePrKey(
  * invalid or for a different PR. Cleaning up stale manifests is the skill's job, not the CLI's.
  */
 export async function readServerManifest(sherpaDir: string, prKey: string): Promise<ServerManifest> {
-    const manifestPath = manifestPathFor(sherpaDir, prKey);
+    const manifest = await readManifestFile(manifestPathFor(sherpaDir, prKey));
+    if (manifest?.prKey !== prKey) {
+        throw new CliError(serverUnavailable(prKey));
+    }
+    return manifest;
+}
 
+/** Manifest at a path. Missing, invalid and schema-invalid all return `null` (fail-closed). */
+export async function readManifestFile(manifestPath: string): Promise<ServerManifest | null> {
     let raw: string;
     try {
         raw = await fs.readFile(manifestPath, 'utf8');
     } catch {
-        throw new CliError(serverUnavailable(prKey));
+        return null;
     }
 
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
     } catch {
-        throw new CliError(serverUnavailable(prKey));
+        return null;
     }
 
     const manifest = serverManifestSchema.safeParse(parsed);
-    if (!manifest.success || manifest.data.prKey !== prKey) {
-        throw new CliError(serverUnavailable(prKey));
-    }
-    return manifest.data;
+    return manifest.success ? manifest.data : null;
 }
 
 /**

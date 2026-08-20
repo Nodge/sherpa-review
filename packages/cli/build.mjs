@@ -16,7 +16,7 @@ await build({
     bundle: true,
     format: 'esm',
     platform: 'node',
-    target: 'node20',
+    target: 'node22.13',
     packages: 'bundle',
     banner: { js: '#!/usr/bin/env node' },
     define: { __SHERPA_VERSION__: JSON.stringify(pkg.version) },

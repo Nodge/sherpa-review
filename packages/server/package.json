@@ -8,19 +8,22 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "node build-server.mjs",
     "dev": "tsx src/dev.ts",
-    "start": "tsx src/start.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "test": "vitest run"
   },
   "dependencies": {
     "@sherpa/protocol": "workspace:*",
-    "better-sqlite3": "^13.0.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
+    "@sherpa/ui": "workspace:*",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.12"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

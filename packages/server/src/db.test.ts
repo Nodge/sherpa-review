@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 
-import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { openDatabase, readSchemaVersion } from './db.js';
@@ -31,9 +31,9 @@ describe('storage', () => {
 
         await expect(fs.stat(file)).resolves.toBeDefined();
 
-        const reader = new Database(file, { readonly: true });
+        const reader = new DatabaseSync(file, { readOnly: true });
         try {
-            expect(reader.pragma('journal_mode', { simple: true })).toBe('wal');
+            expect(reader.prepare('PRAGMA journal_mode').get()).toMatchObject({ journal_mode: 'wal' });
         } finally {
             reader.close();
         }
@@ -81,7 +81,7 @@ describe('storage', () => {
             ]),
         ).toThrow();
 
-        const db = new Database(file, { readonly: true });
+        const db = new DatabaseSync(file, { readOnly: true });
         try {
             const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
                 name: string;

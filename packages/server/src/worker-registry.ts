@@ -1,7 +1,8 @@
 import type { WorkerStatus } from '@sherpa/protocol';
 import { WORKER_DEAD_AFTER_SECONDS } from '@sherpa/protocol';
 
-import type { SherpaDatabase } from './db.js';
+import type { SherpaDatabase, SqlRow } from './db.js';
+import { transaction } from './db.js';
 import { RpcFailure } from './errors.js';
 
 export interface WorkerRegistryOptions {
@@ -19,7 +20,7 @@ export type WorkerStatusListener = (status: WorkerStatus) => void;
  */
 type Outcome<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly failure: RpcFailure };
 
-interface WorkerRow {
+interface WorkerRow extends SqlRow {
     worker_id: string;
     harness: string | null;
     registered_at: string;
@@ -54,10 +55,10 @@ export class WorkerRegistry {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
 
-        this.txRegister = this.db.transaction((workerId: string, harness: string | undefined) =>
+        this.txRegister = transaction(this.db, (workerId: string, harness: string | undefined) =>
             this.registerInTransaction(workerId, harness),
         );
-        this.txTouch = this.db.transaction((workerId: string) => this.touchInTransaction(workerId));
+        this.txTouch = transaction(this.db, (workerId: string) => this.touchInTransaction(workerId));
 
         this.announced = signatureOf(this.status());
         this.scheduleDeathCheck();

@@ -7,6 +7,21 @@ import path from 'node:path';
  * and the browser gets the token in the URL fragment without sending it to the server (rpc-design §8).
  */
 
+/** UI build file ready to send. */
+export interface StaticAsset {
+    readonly content: Buffer;
+    readonly contentType: string;
+}
+
+/**
+ * UI static asset source with two implementations: a build directory on disk (development) and a file map
+ * embedded in the server bundle at build time (skill distribution). The router sees no difference.
+ */
+export interface StaticAssets {
+    /** `null` means the file isn't in the UI build. */
+    readonly read: (pathname: string) => Promise<StaticAsset | null>;
+}
+
 /** Static paths: the root serves `index.html`, the rest are Vite build assets. */
 export function isStaticPath(pathname: string): boolean {
     return pathname === '/' || pathname.startsWith('/assets/');
@@ -22,47 +37,79 @@ const CONTENT_TYPES: Record<string, string> = {
     '.map': 'application/json; charset=utf-8',
 };
 
-/** Serves a build file. Returns `false` if it is missing or outside the directory (the router sends the response). */
-export async function serveStatic(res: ServerResponse, uiDir: string, pathname: string): Promise<boolean> {
-    const file = resolveStaticFile(uiDir, pathname);
-    if (file === null) {
-        return false;
+export function contentTypeOf(file: string): string {
+    return CONTENT_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+}
+
+/** Static assets from disk: development server under tsx, using the `packages/ui/dist` directory. */
+export function directoryAssets(uiDir: string): StaticAssets {
+    const root = path.resolve(uiDir);
+
+    return {
+        read: async (pathname) => {
+            const relative = normalizeStaticPath(pathname);
+            if (relative === null) {
+                return null;
+            }
+
+            // `new URL` resolves `..` itself, but percent encoding survives until here,
+            // so check the resolved path.
+            const file = path.resolve(root, `.${relative}`);
+            if (!file.startsWith(root + path.sep)) {
+                return null;
+            }
+
+            try {
+                return { content: await fs.readFile(file), contentType: contentTypeOf(file) };
+            } catch {
+                return null;
+            }
+        },
+    };
+}
+
+/**
+ * Static assets in memory: a "path → base64" map embedded in the server bundle at build time.
+ * The skill distribution has 2 files, with no `ui/dist` directory beside them.
+ */
+export function bundledAssets(files: Readonly<Record<string, string>>): StaticAssets {
+    const decoded = new Map<string, StaticAsset>();
+    for (const [pathname, base64] of Object.entries(files)) {
+        decoded.set(pathname, { content: Buffer.from(base64, 'base64'), contentType: contentTypeOf(pathname) });
     }
 
-    let content: Buffer;
-    try {
-        content = await fs.readFile(file);
-    } catch {
+    return {
+        read: (pathname) => {
+            const relative = normalizeStaticPath(pathname);
+            return Promise.resolve(relative === null ? null : (decoded.get(relative) ?? null));
+        },
+    };
+}
+
+/** Serves a build file. `false` means it is missing or the path leaves the build directory (the router responds). */
+export async function serveStatic(res: ServerResponse, assets: StaticAssets, pathname: string): Promise<boolean> {
+    const asset = await assets.read(pathname);
+    if (asset === null) {
         return false;
     }
 
     res.writeHead(200, {
-        'content-type': CONTENT_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
-        'content-length': String(content.byteLength),
+        'content-type': asset.contentType,
+        'content-length': String(asset.content.byteLength),
         // Dev loop: the built UI changes under the same name, so the browser cache gets in the way.
         'cache-control': 'no-store',
     });
-    res.end(content);
+    res.end(asset.content);
     return true;
 }
 
-/**
- * File path inside the UI directory. Returns `null` for an attempt to escape it.
- * `new URL` collapses `..` itself, but percent encoding survives until here,
- * so the check uses the resolved path.
- */
-function resolveStaticFile(uiDir: string, pathname: string): string | null {
+/** Maps a request path to a UI build path (`/` → `/index.html`). `null` means the path cannot be decoded. */
+function normalizeStaticPath(pathname: string): string | null {
     let decoded: string;
     try {
         decoded = decodeURIComponent(pathname);
     } catch {
         return null;
     }
-
-    const root = path.resolve(uiDir);
-    const target = path.resolve(root, `.${decoded === '/' ? '/index.html' : decoded}`);
-    if (!target.startsWith(root + path.sep)) {
-        return null;
-    }
-    return target;
+    return decoded === '/' ? '/index.html' : decoded;
 }

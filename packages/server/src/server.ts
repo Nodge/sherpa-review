@@ -27,6 +27,7 @@ import {
     serversDirOf,
 } from './paths.js';
 import { TaskQueue } from './queue.js';
+import type { StaticAssets } from './static.js';
 import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
 import { WorkerRegistry } from './worker-registry.js';
@@ -39,8 +40,8 @@ export interface StartServerOptions {
     sherpaDir?: string;
     /** `worker next` long-poll window, defaults to the contract limit. Shortened in tests. */
     longPollSeconds?: number;
-    /** Built UI directory (`packages/ui/dist`). When set, the server serves it without a token. */
-    uiDir?: string;
+    /** UI static asset source (build directory or a map embedded in the bundle). Served without a token when provided. */
+    assets?: StaticAssets;
     /**
      * Injectable clock for the queue and worker lifecycle. Uses the system clock by default.
      * Tests need to advance past `WORKER_DEAD_AFTER_SECONDS` and the lease TTL without waiting minutes.
@@ -91,7 +92,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     // the server must respond only to `/healthz`, which competing processes use to check whether we're alive.
     const routes: Route[] = [healthRoute(prKey)];
     const httpServer = http.createServer(
-        createRequestListener(options.uiDir === undefined ? { token, routes } : { token, routes, uiDir: options.uiDir }),
+        createRequestListener(
+            options.assets === undefined ? { token, routes } : { token, routes, assets: options.assets },
+        ),
     );
     const shutdownController = new AbortController();
     let claimed: ServerManifest | null = null;

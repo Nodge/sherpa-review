@@ -5,17 +5,29 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const cliRoot = resolve(root, '../cli');
+const binDir = resolve(root, 'bin');
 
-// Same as `pnpm --filter @sherpa/cli build`, without nested pnpm: a test also invokes the build.
-// @sherpa/cli is in the skill's devDependencies to order `pnpm -r` topologically:
-// otherwise this build and the CLI tests' build write packages/cli/dist/sherpa.mjs in parallel.
-execFileSync(process.execPath, ['build.mjs'], { cwd: cliRoot, stdio: 'inherit' });
+/**
+ * The package directory is the skill distribution: SKILL.md beside two bundles. There are two because
+ * the worker loop invokes the CLI on every call, and a server with an embedded UI would add unnecessary weight.
+ *
+ * Builds run directly, without nested pnpm (tests call them too). The packages are listed
+ * in the skill's devDependencies for `pnpm -r` topological order. Otherwise these builds and the builds
+ * in the packages' own tests would write the same files to dist in parallel.
+ */
+const bundles = [
+    { pkg: '../server', script: 'build-server.mjs', file: 'dist/sherpa-server.mjs', out: 'sherpa-server.mjs' },
+    { pkg: '../cli', script: 'build.mjs', file: 'dist/sherpa.mjs', out: 'sherpa.mjs' },
+];
 
-// The skill is distributed as a directory: SKILL.md beside the single CLI executable.
-const outfile = resolve(root, 'bin/sherpa.mjs');
-mkdirSync(dirname(outfile), { recursive: true });
-copyFileSync(resolve(cliRoot, 'dist/sherpa.mjs'), outfile);
-chmodSync(outfile, 0o755);
+mkdirSync(binDir, { recursive: true });
 
-process.stdout.write(`@sherpa/skill: ${outfile}\n`);
+for (const bundle of bundles) {
+    const packageRoot = resolve(root, bundle.pkg);
+    execFileSync(process.execPath, [bundle.script], { cwd: packageRoot, stdio: 'inherit' });
+
+    const outfile = resolve(binDir, bundle.out);
+    copyFileSync(resolve(packageRoot, bundle.file), outfile);
+    chmodSync(outfile, 0o755);
+    process.stdout.write(`@sherpa/skill: ${outfile}\n`);
+}

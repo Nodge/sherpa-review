@@ -4,7 +4,7 @@
  */
 export { createToken, extractBearerToken, tokenMatches } from './auth.js';
 export type { SherpaDatabase } from './db.js';
-export { applyMigrations, openDatabase, readSchemaVersion } from './db.js';
+export { applyMigrations, openDatabase, readSchemaVersion, transaction } from './db.js';
 export { RpcFailure, ServerAlreadyRunningError } from './errors.js';
 export type {
     JsonResponse,
@@ -50,7 +50,8 @@ export type { CancelOutcome, EnqueueInput, LeasedTask, TaskQueueOptions, TaskRec
 export { TaskQueue } from './queue.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
-export { isStaticPath, serveStatic } from './static.js';
+export type { StaticAsset, StaticAssets } from './static.js';
+export { bundledAssets, contentTypeOf, directoryAssets, isStaticPath, serveStatic } from './static.js';
 export type { UiRoutesOptions } from './ui-routes.js';
 export { createUiRoutes } from './ui-routes.js';
 export { SERVER_VERSION } from './version.js';
