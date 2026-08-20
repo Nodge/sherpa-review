@@ -21,12 +21,15 @@ const workerRequestBase = z.object({
 
 /**
  * `sherpa worker register` registers the session as the PR worker at skill startup (rpc-design §7).
- * Reconnection is a new registration with a new workerId. The old worker's leases expire on their own.
- * While the previous worker is alive, a second is rejected with `worker_conflict` (spec §3.7).
+ * Reconnect means a new registration: usually with a fresh workerId, with the old one if its own slot is live
+ * (renewal). Leases of a displaced worker return to the queue when its slot is taken over.
+ * While the previous worker is alive and belongs to another session, the second is rejected with `worker_conflict` (spec §3.7).
  */
 export const workerRegisterRequestSchema = workerRequestBase.extend({
     /** Harness label for UI status ("claude-code", "codex"), a free-form string. */
     harness: z.string().min(1).max(64).optional(),
+    /** Worker model name for UI status ("claude-opus-5", "gpt-5"), a free-form string reported by the model itself. */
+    model: z.string().min(1).max(64).optional(),
 });
 export type WorkerRegisterRequest = z.infer<typeof workerRegisterRequestSchema>;
 
@@ -47,6 +50,7 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
         kind: z.literal('connected'),
         workerId: workerIdSchema,
         harness: z.string().optional(),
+        model: z.string().optional(),
         registeredAt: z.iso.datetime(),
         lastSeenAt: z.iso.datetime(),
     }),
@@ -54,6 +58,7 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
         kind: z.literal('disconnected'),
         workerId: workerIdSchema,
         harness: z.string().optional(),
+        model: z.string().optional(),
         registeredAt: z.iso.datetime(),
         lastSeenAt: z.iso.datetime(),
     }),
