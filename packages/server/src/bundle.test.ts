@@ -113,6 +113,25 @@ describe('server bundle', () => {
     );
 
     it(
+        'shuts down when idle: removes the manifest and logs the reason',
+        async () => {
+            // The threshold is shortened with an undocumented variable. The test cannot wait a quarter of an hour.
+            child = spawn(process.execPath, [bundlePath, '--pr', PR_KEY, '--sherpa-dir', sherpaDir], {
+                cwd: workDir,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, SHERPA_IDLE_SECONDS: '2' },
+            });
+
+            const { code, stdout } = await collectExit(child);
+            expect(code).toBe(0);
+            expect(stdout).toContain('start: PR');
+            expect(stdout).toContain('idle shutdown: 2 s');
+            expect(await readManifest(manifestPathFor(sherpaDir, PR_KEY))).toBeNull();
+        },
+        TEST_TIMEOUT_MS,
+    );
+
+    it(
         'prints usage and exits with a nonzero code when the PR key is missing',
         async () => {
             const server = launch();
@@ -159,12 +178,17 @@ describe('server bundle', () => {
     );
 });
 
-async function collectExit(server: ChildProcess): Promise<{ code: number | null; stderr: string }> {
+async function collectExit(
+    server: ChildProcess,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    let stdout = '';
     let stderr = '';
+    server.stdout?.setEncoding('utf8');
+    server.stdout?.on('data', (chunk: string) => (stdout += chunk));
     server.stderr?.setEncoding('utf8');
     server.stderr?.on('data', (chunk: string) => (stderr += chunk));
     const code = await new Promise<number | null>((resolve) => server.once('close', resolve));
-    return { code, stderr };
+    return { code, stdout, stderr };
 }
 
 /** Asset link from index.html: Vite build filenames contain a hash and change. */

@@ -4,6 +4,7 @@ import type { RpcError, RpcErrorCode } from '@sherpa/protocol';
 
 import { extractBearerToken, tokenMatches } from './auth.js';
 import { RpcFailure } from './errors.js';
+import type { ActivityTracker } from './idle.js';
 import type { StaticAssets } from './static.js';
 import { isStaticPath, serveStatic } from './static.js';
 
@@ -152,6 +153,8 @@ export interface RequestListenerOptions {
     readonly routes: readonly Route[];
     /** UI static asset source. When set, the server serves it without a token (see `serveStatic`). */
     readonly assets?: StaticAssets;
+    /** Tracks activity for shutdown on idle. A single point for the entire HTTP layer. */
+    readonly activity?: ActivityTracker;
 }
 
 /**
@@ -162,6 +165,13 @@ export interface RequestListenerOptions {
  */
 export function createRequestListener(options: RequestListenerOptions): RequestListener {
     return (req, res) => {
+        // A connection is open until its response closes. For a regular request, this is a moment,
+        // for SSE and long-poll, it lasts as long as the stream.
+        const connectionClosed = options.activity?.open();
+        if (connectionClosed !== undefined) {
+            res.once('close', connectionClosed);
+        }
+
         void handle(req, res, options).catch((error: unknown) => {
             const message = error instanceof Error ? error.message : 'unknown error';
             sendJson(res, {

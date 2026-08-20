@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { ServerAlreadyRunningError } from './errors.js';
+import { formatIdlePeriod, readIdleSeconds } from './idle.js';
 import { readOption } from './launch.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
 import { checkNodeVersion } from './runtime.js';
@@ -12,7 +13,8 @@ import { UI_ASSETS } from './ui-assets.js';
 /**
  * Server bundle entry point `sherpa-server.mjs`: foreground server process for one PR.
  * `sherpa up` handles daemonization, logging and waiting for the manifest. This is just the server,
- * which runs until SIGINT/SIGTERM. The UI is embedded in the bundle and served from memory (rpc-design §2).
+ * that lives until SIGINT/SIGTERM or the idle threshold (`idle.ts`). The UI is embedded in the bundle and served
+ * from memory (rpc-design §2).
  *
  * No token in stdout: output goes to a log file that outlives the server, and the CLI prints the link with the token
  * after reading the manifest.
@@ -35,9 +37,19 @@ async function main(argv: readonly string[]): Promise<number> {
     // The process inherits its launcher's cwd, so resolve the state path to an absolute path.
     const sherpaDir = path.resolve(readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR);
 
+    const idleSeconds = readIdleSeconds(process.env);
+
     let server: SherpaServer;
     try {
-        server = await startServer({ prKey, sherpaDir, assets: bundledAssets(UI_ASSETS) });
+        server = await startServer({
+            prKey,
+            sherpaDir,
+            assets: bundledAssets(UI_ASSETS),
+            idleSeconds,
+            onIdleStop: (seconds) => {
+                writeLog(`idle shutdown: ${formatIdlePeriod(seconds)} without requests or open connections`);
+            },
+        });
     } catch (error) {
         // Two launches raced: another server already claimed the manifest, so this process exits.
         const prefix = error instanceof ServerAlreadyRunningError ? 'not starting' : 'startup error';

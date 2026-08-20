@@ -7,8 +7,9 @@ import { createToken } from './auth.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { ServerAlreadyRunningError } from './errors.js';
-import type { Route } from './http.js';
+import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
+import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
 import {
     claimManifest,
     cleanStaleManifests,
@@ -43,10 +44,20 @@ export interface StartServerOptions {
     /** UI static asset source (build directory or a map embedded in the bundle). Served without a token when provided. */
     assets?: StaticAssets;
     /**
-     * Injectable clock for the queue and worker lifecycle. Uses the system clock by default.
+     * Injectable clock for the queue, worker lifecycle and idle tracking. Defaults to the system clock.
      * Tests need to advance past `WORKER_DEAD_AFTER_SECONDS` and the lease TTL without waiting minutes.
      */
     now?: () => Date;
+    /**
+     * Idle time before the server stops itself (`DEFAULT_IDLE_SECONDS`). `0` disables shutdown.
+     * Internal daemon policy, outside the contract. The CLI and UI don't know about it.
+     */
+    idleSeconds?: number;
+    /**
+     * Reason for automatic shutdown, before normal shutdown begins. The entry point writes it to a log
+     * that outlives the process.
+     */
+    onIdleStop?: (idleSeconds: number) => void;
 }
 
 export interface SherpaServer {
@@ -91,11 +102,17 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     // Worker endpoints join this array after the database opens. Before claiming the manifest,
     // the server must respond only to `/healthz`, which competing processes use to check whether we're alive.
     const routes: Route[] = [healthRoute(prKey)];
-    const httpServer = http.createServer(
-        createRequestListener(
-            options.assets === undefined ? { token, routes } : { token, routes, assets: options.assets },
-        ),
+    const idleSeconds = options.idleSeconds ?? DEFAULT_IDLE_SECONDS;
+    const idleWatch = new IdleWatch(
+        options.now === undefined ? { idleSeconds } : { idleSeconds, now: options.now },
     );
+    const listenerOptions: RequestListenerOptions = {
+        token,
+        routes,
+        activity: idleWatch,
+        ...(options.assets === undefined ? {} : { assets: options.assets }),
+    };
+    const httpServer = http.createServer(createRequestListener(listenerOptions));
     const shutdownController = new AbortController();
     let claimed: ServerManifest | null = null;
     let db: SherpaDatabase | null = null;
@@ -138,7 +155,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             }),
         );
 
-        return createHandle({
+        const handle = createHandle({
             manifest: claimed,
             manifestPath,
             httpServer,
@@ -146,8 +163,18 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             queue,
             workerRegistry,
             shutdownController,
+            idleWatch,
         });
+        // Arm automatic shutdown last. Before this point, there's nothing to stop.
+        idleWatch.arm(() => {
+            options.onIdleStop?.(idleSeconds);
+            void handle.close().catch((error: unknown) => {
+                process.stderr.write(`sherpa-server: error during automatic shutdown: ${messageOf(error)}\n`);
+            });
+        });
+        return handle;
     } catch (error) {
+        idleWatch.close();
         shutdownController.abort();
         if (claimed !== null) {
             await removeOwnManifest(manifestPath, claimed);
@@ -214,6 +241,7 @@ function createHandle(parts: {
     queue: TaskQueue;
     workerRegistry: WorkerRegistry;
     shutdownController: AbortController;
+    idleWatch: IdleWatch;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -225,6 +253,8 @@ function createHandle(parts: {
         workerRegistry: parts.workerRegistry,
         close: () => {
             closing ??= (async () => {
+                // Stop the idle timer first. Shutdown is already in progress, so there's no need to call it again.
+                parts.idleWatch.close();
                 // Abort pending long polls first, or they'll try to write to closed sockets.
                 parts.shutdownController.abort();
                 // Stop the worker death timer before closing storage. It cannot run after close().
@@ -252,6 +282,10 @@ async function shutdown(httpServer: http.Server, db: SherpaDatabase | null): Pro
         });
     }
     db?.close();
+}
+
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 async function listen(httpServer: http.Server): Promise<number> {

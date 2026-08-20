@@ -19,11 +19,13 @@ async function main(argv: readonly string[]): Promise<number> {
     const sherpaDir = readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR;
     const uiDir = await resolveUiDir(readOption(argv, '--ui'));
 
+    // Idle shutdown is disabled. The dev server holds the developer terminal open,
+    // and dying unexpectedly during coding would get in the way. Ctrl+C stops it.
+    const base = { prKey, sherpaDir, idleSeconds: 0 };
+
     let server: SherpaServer;
     try {
-        server = await startServer(
-            uiDir === null ? { prKey, sherpaDir } : { prKey, sherpaDir, assets: directoryAssets(uiDir) },
-        );
+        server = await startServer(uiDir === null ? base : { ...base, assets: directoryAssets(uiDir) });
     } catch (error) {
         if (error instanceof ServerAlreadyRunningError) {
             process.stderr.write(`${error.message}\n`);
