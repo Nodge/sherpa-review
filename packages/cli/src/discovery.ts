@@ -99,8 +99,24 @@ export async function readServerManifest(sherpaDir: string, prKey: string): Prom
  * would register one id while subsequent commands used another.
  */
 export function freshWorkerId(env: Readonly<Record<string, string | undefined>>): string {
+    return workerIdOverride(env) ?? randomUUID();
+}
+
+/**
+ * Debug identity pinned through `SHERPA_WORKER_ID`. null means unset.
+ * The pin overrides any CLI guesses. All session commands will use it.
+ */
+export function workerIdOverride(env: Readonly<Record<string, string | undefined>>): string | null {
     const override = env.SHERPA_WORKER_ID?.trim();
-    return override === undefined || override === '' ? randomUUID() : override;
+    return override === undefined || override === '' ? null : override;
+}
+
+/** Previous session's worker for this PR, read from the state file. null if absent. Does not create the file. */
+export async function storedWorkerId(
+    env: Readonly<Record<string, string | undefined>>,
+    prKey: string,
+): Promise<string | null> {
+    return readWorkerIdFile(workerIdPathFor(sherpaDirFrom(env), prKey));
 }
 
 /** Saves the session worker. Other commands read the id here. */
@@ -127,8 +143,8 @@ export async function resolveWorkerId(
     prKey: string,
     env: Readonly<Record<string, string | undefined>>,
 ): Promise<string> {
-    const override = env.SHERPA_WORKER_ID?.trim();
-    if (override !== undefined && override !== '') {
+    const override = workerIdOverride(env);
+    if (override !== null) {
         return override;
     }
 

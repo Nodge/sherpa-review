@@ -279,7 +279,7 @@ function conflict(row: WorkerRow, now: Date): RpcFailure {
         'worker_conflict',
         `The worker for this PR is already another live session (${owner}). Two sessions per PR are not supported. ` +
             `If this is a reconnection, wait ${minutes} min for the previous session to be considered disconnected, ` +
-            'or stop it and call `sherpa worker register` again.',
+            'or stop it, then start the Sherpa skill again.',
     );
 }
 

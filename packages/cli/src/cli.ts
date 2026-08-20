@@ -1,12 +1,21 @@
 import fs from 'node:fs/promises';
 
+import type { WorkerRegisterResponse } from '@sherpa/protocol';
 import { RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import type { Command } from './args.js';
 import { parseArgs } from './args.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
-import { connect, connectAs, freshWorkerId, storeWorkerId } from './discovery.js';
-import { CliError, userMessage } from './errors.js';
+import {
+    connect,
+    connectAs,
+    freshWorkerId,
+    resolvePrKey,
+    storedWorkerId,
+    storeWorkerId,
+    workerIdOverride,
+} from './discovery.js';
+import { CliError, RpcCallError, userMessage } from './errors.js';
 import {
     formatCompleteResponse,
     formatDone,
@@ -14,8 +23,12 @@ import {
     formatOversizedResult,
     formatProgressResponse,
     formatTask,
+    formatUpReady,
     helpText,
 } from './format.js';
+import { sherpaDirOverrideFrom } from './paths.js';
+import type { ServerStarter } from './up.js';
+import { ensureServer, findRepoRoot, spawnServerStart } from './up.js';
 import { CLI_VERSION } from './version.js';
 
 /** Invocation environment. Tests supply their own to run commands as functions instead of processes. */
@@ -23,6 +36,10 @@ export interface CliIo {
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly out: (text: string) => void;
     readonly err: (text: string) => void;
+    /** Path to the running CLI file: `up` uses it to find the checkout root. Defaults to `process.argv[1]`. */
+    readonly entry?: string;
+    /** How `up` starts the server. Defaults to running the server package through pnpm. */
+    readonly startServer?: ServerStarter;
 }
 
 /**
@@ -39,6 +56,8 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
             case 'help':
                 io.out(helpText());
                 return 0;
+            case 'up':
+                return await up(command, io);
             case 'worker-register':
                 return await workerRegister(command, io);
             case 'worker-next':
@@ -57,18 +76,79 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
 }
 
 /**
- * Registering a session as the PR worker: each session gets a fresh identity (decision log),
- * and the state file is overwritten only after the server accepts it.
+ * Bootstraps the session in one command (rpc-design §3): start the PR server, register
+ * as a worker and return the UI link. The model knows nothing about the server or registration. It sees only the link
+ * and the next step of the loop.
  */
+async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise<number> {
+    // Validate the PR key before starting the server: the server would reject a bad key too, but later and at greater cost.
+    const prKey = resolvePrKey(command.prKey, io.env);
+    const root = await findRepoRoot(io.entry ?? process.argv[1]);
+
+    const uiUrl = await ensureServer(io.startServer ?? spawnServerStart, {
+        root,
+        prKey,
+        sherpaDir: sherpaDirOverrideFrom(io.env),
+    });
+    await claimWorkerSlot(prKey, command.harness, io);
+
+    io.out(formatUpReady(uiUrl, prKey));
+    return 0;
+}
+
+/**
+ * Claims the worker slot for this session. Normally registers a new identity (reconnection = new
+ * worker). If a live worker holds the slot, try the identity from the PR state file: `up` can be called
+ * again or after a session breaks. In both cases the slot is already ours, and the server renews the same id.
+ * A refusal remains a refusal only when the live worker really belongs to another session.
+ * A pinned `SHERPA_WORKER_ID` prevents substitution: the other commands will use it anyway.
+ */
+async function claimWorkerSlot(prKey: string, harness: string | undefined, io: CliIo): Promise<void> {
+    try {
+        await registerWorker(prKey, harness, io);
+        return;
+    } catch (error) {
+        if (!(error instanceof RpcCallError) || error.code !== 'worker_conflict') {
+            throw error;
+        }
+        const previous = workerIdOverride(io.env) === null ? await storedWorkerId(io.env, prKey) : null;
+        if (previous === null) {
+            throw error;
+        }
+        await registerAs(previous, prKey, harness, io);
+    }
+}
+
 async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {
-    const workerId = freshWorkerId(io.env);
-    const connection = await connectAs(command.prKey, io.env, workerId);
-    const response = await requestRegister(connection, command.harness);
-    await storeWorkerId(io.env, connection.prKey, workerId);
+    const response = await registerWorker(command.prKey, command.harness, io);
 
     // The server text already contains the next loop step. The CLI prints it as is.
     io.out(response.message);
     return 0;
+}
+
+/**
+ * Registering a session as the PR worker: each session gets a fresh identity (decision log),
+ * and the state file is overwritten only after the server accepts it.
+ */
+async function registerWorker(
+    prKeyArg: string | undefined,
+    harness: string | undefined,
+    io: CliIo,
+): Promise<WorkerRegisterResponse> {
+    return registerAs(freshWorkerId(io.env), prKeyArg, harness, io);
+}
+
+async function registerAs(
+    workerId: string,
+    prKeyArg: string | undefined,
+    harness: string | undefined,
+    io: CliIo,
+): Promise<WorkerRegisterResponse> {
+    const connection = await connectAs(prKeyArg, io.env, workerId);
+    const response = await requestRegister(connection, harness);
+    await storeWorkerId(io.env, connection.prKey, workerId);
+    return response;
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {

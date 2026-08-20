@@ -17,8 +17,16 @@ export function assertValidPrKey(prKey: string): string {
 
 /** Sherpa state root: `SHERPA_DIR` for tests and development runs, otherwise `~/.sherpa`. */
 export function sherpaDirFrom(env: Readonly<Record<string, string | undefined>>): string {
+    return sherpaDirOverrideFrom(env) ?? path.join(os.homedir(), '.sherpa');
+}
+
+/**
+ * Only an explicit state directory override, without a default. `up` needs it: the server does not read `SHERPA_DIR`,
+ * so without passing `--sherpa-dir` it would write state somewhere other than where the CLI looks for it.
+ */
+export function sherpaDirOverrideFrom(env: Readonly<Record<string, string | undefined>>): string | undefined {
     const override = env.SHERPA_DIR?.trim();
-    return override === undefined || override === '' ? path.join(os.homedir(), '.sherpa') : override;
+    return override === undefined || override === '' ? undefined : override;
 }
 
 /** Discovery manifest written by the server (rpc-design §8). */

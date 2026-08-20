@@ -4,6 +4,12 @@ import { CliError } from './errors.js';
 export type Command =
     | { readonly kind: 'version' }
     | { readonly kind: 'help' }
+    | {
+          readonly kind: 'up';
+          readonly prKey: string | undefined;
+          /** Harness label for worker status in the UI. Optional. */
+          readonly harness: string | undefined;
+      }
     | { readonly kind: 'worker-next'; readonly prKey: string | undefined }
     | {
           readonly kind: 'worker-register';
@@ -51,6 +57,9 @@ export function parseArgs(argv: readonly string[]): Command {
     const prKey = options.get('--pr');
     const group = positionals[0];
 
+    if (group === 'up') {
+        return parseUpCommand(positionals, options, prKey);
+    }
     if (group === 'worker') {
         return parseWorkerCommand(positionals, options, prKey);
     }
@@ -60,9 +69,25 @@ export function parseArgs(argv: readonly string[]): Command {
 
     throw new CliError(
         `sherpa: unknown command ${JSON.stringify(positionals.join(' '))}.\n` +
-            'Available commands: `sherpa worker next`, `sherpa task complete|progress|fail <id>`. ' +
+            'Available: `sherpa up`, `sherpa worker next`, `sherpa task complete|progress|fail <id>`. ' +
             '`sherpa --help` shows the full list.',
     );
+}
+
+function parseUpCommand(
+    positionals: readonly string[],
+    options: ReadonlyMap<OptionName, string>,
+    prKey: string | undefined,
+): Command {
+    if (positionals.length > 1) {
+        throw new CliError(
+            `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
+                'Expected `sherpa up --pr <PR key> [--harness <harness name>]`.',
+        );
+    }
+
+    const harness = options.get('--harness');
+    return { kind: 'up', prKey, harness: harness === '' ? undefined : harness };
 }
 
 function parseWorkerCommand(

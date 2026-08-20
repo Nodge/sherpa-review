@@ -107,7 +107,7 @@ describe('worker lifecycle', () => {
             expect(failure.code).toBe('worker_conflict');
             expect(failure.message).toContain('another live session');
             expect(failure.message).toContain('claude-code');
-            expect(failure.message).toContain('sherpa worker register');
+            expect(failure.message).toContain('start the Sherpa skill again');
             expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-1' });
             expect(events).toHaveLength(1);
         });

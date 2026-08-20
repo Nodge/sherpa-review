@@ -25,12 +25,21 @@ describe('skill package build', () => {
         expect(stdout.trim()).toBe(cliVersion);
     });
 
-    it('SKILL.md describes the worker loop and server startup', () => {
+    it('describes startup and the worker loop in SKILL.md', () => {
         const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
 
         expect(skill).toMatch(/^---\nname: sherpa\n/u);
-        expect(skill).toContain('--filter @sherpa/server start --pr');
+        expect(skill).toContain('bin/sherpa.mjs up --pr');
         expect(skill).toContain('bin/sherpa.mjs worker next --pr');
         expect(skill).toContain('DONE');
+    });
+
+    // Bootstrap is inside `sherpa up`. Mentioning the server or registration in SKILL.md again
+    // gives the model extra knowledge that will diverge from the CLI at the next startup change.
+    it('keeps server and registration details out of SKILL.md', () => {
+        const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
+
+        expect(skill).not.toContain('@sherpa/server');
+        expect(skill).not.toContain('worker register');
     });
 });

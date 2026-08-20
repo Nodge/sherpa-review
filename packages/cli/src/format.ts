@@ -31,6 +31,19 @@ export function formatTask(task: Task): string {
     return lines.join('\n');
 }
 
+/**
+ * `sherpa up` output: a link for the reviewer and the session's next step.
+ * The output hides the server and registration. The model doesn't need to know about them.
+ */
+export function formatUpReady(uiUrl: string, prKey: string): string {
+    return [
+        uiUrl,
+        '',
+        'Show this link to the user in full — it opens the review in their browser.',
+        `Then run \`sherpa worker next --pr ${prKey}\` and follow the instructions in its output.`,
+    ].join('\n');
+}
+
 /** Worker work is finished: DONE signals the session to exit (rpc-design §3). */
 export function formatDone(message: string): string {
     return `${message}\n\nDONE`;
@@ -115,6 +128,7 @@ export function helpText(): string {
         `sherpa ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}), Sherpa worker.`,
         '',
         'Commands:',
+        '  sherpa up [--harness <name>]                start the PR server and register as its worker',
         '  sherpa worker register [--harness <name>]    register the session as the PR worker',
         `  sherpa worker next                          get the next task (waits up to ${pollMinutes} minutes)`,
         '  sherpa task complete <id> --file <path>     submit the task result',
@@ -123,7 +137,7 @@ export function helpText(): string {
         '',
         'Flags:',
         '  --pr <key>       PR to connect to. Defaults to SHERPA_PR',
-        '  --harness <name> harness label in worker status. Only for `worker register`',
+        '  --harness <name>  harness label in worker status, for `up` and `worker register`',
         '  --version        CLI version',
     ].join('\n');
 }

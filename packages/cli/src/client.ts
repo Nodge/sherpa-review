@@ -29,7 +29,7 @@ import type { ZodType } from 'zod';
 
 import type { ServerConnection } from './discovery.js';
 import { serverUnavailable } from './discovery.js';
-import { CliError } from './errors.js';
+import { CliError, RpcCallError } from './errors.js';
 import type { CallRole } from './format.js';
 import { formatRpcError } from './format.js';
 import { CLI_VERSION } from './version.js';
@@ -164,7 +164,8 @@ async function callWorker<TRequest extends WorkerRequestBase, TResponse>(
 
     const text = await readText(response, connection);
     if (!response.ok) {
-        throw new CliError(formatRpcError(parseRpcError(text), call.role));
+        const failure = parseRpcError(text);
+        throw new RpcCallError(failure.code, formatRpcError(failure, call.role));
     }
 
     const parsed = call.responseSchema.safeParse(parseJson(text));

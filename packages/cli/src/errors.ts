@@ -1,3 +1,5 @@
+import type { RpcErrorCode } from '@sherpa/protocol';
+
 /**
  * An error with a message ready for the model: what happened and what to do next.
  * Stack traces and dumps stay out of the output because a language model reads the CLI output (rpc-design §3).
@@ -6,6 +8,20 @@ export class CliError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'CliError';
+    }
+}
+
+/**
+ * Server rejection under the contract. Prints the message as is. Commands use the code
+ * to respond to specific rejections with their own action instead of exiting with an error.
+ */
+export class RpcCallError extends CliError {
+    readonly code: RpcErrorCode;
+
+    constructor(code: RpcErrorCode, message: string) {
+        super(message);
+        this.name = 'RpcCallError';
+        this.code = code;
     }
 }
 

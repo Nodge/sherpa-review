@@ -13,6 +13,16 @@ describe('argument parsing', () => {
         expect(parseArgs(['worker', 'next', '--version']).kind).toBe('version');
     });
 
+    it('up: PR and harness, rejects extra arguments', () => {
+        expect(parseArgs(['up', '--pr', 'github-quillmart--quillmart--1', '--harness', 'claude-code'])).toEqual({
+            kind: 'up',
+            prKey: 'github-quillmart--quillmart--1',
+            harness: 'claude-code',
+        });
+        expect(parseArgs(['up'])).toEqual({ kind: 'up', prKey: undefined, harness: undefined });
+        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up --pr');
+    });
+
     it('worker next, with and without a PR flag', () => {
         expect(parseArgs(['worker', 'next'])).toEqual({ kind: 'worker-next', prKey: undefined });
         expect(parseArgs(['worker', 'next', '--pr', 'github-quillmart--quillmart--1'])).toEqual({
