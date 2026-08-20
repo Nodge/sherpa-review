@@ -64,7 +64,10 @@ export const fileDiffSchema = z.object({
     oldPath: z.string().nullable(),
     changeType: fileChangeTypeSchema,
     binary: z.boolean(),
-    /** Computed locally by the adapter (glob registry + header markers). Hosts do not supply this flag. */
+    /**
+     * "The team does not require review of this file": the file is excluded from the active review rules
+     * (CODEOWNERS or host equivalent). This is not a heuristic, the review tool follows team policy.
+     */
     generated: z.boolean(),
     additions: z.number().int().min(0),
     deletions: z.number().int().min(0),
