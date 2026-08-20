@@ -220,6 +220,23 @@ export class TaskQueue {
     }
 
     /**
+     * How long the worker has a lease, the latest expiry among its leases. `null` means no leases.
+     * Returns the time unchanged, even if it is in the past. The worker lifecycle uses it to determine
+     * both whether it is working now and when work ends. Otherwise there is no time to use
+     * for the worker death timer. Pure read with no side effects. Frequent calls must not move the queue,
+     * so expired leases are not requeued here.
+     */
+    leaseExpiryOf(workerId: string): string | null {
+        const row = this.db
+            .prepare(
+                `SELECT MAX(lease_expires_at) AS expires_at FROM tasks
+                 WHERE status = 'leased' AND worker_id = ? AND lease_expires_at IS NOT NULL`,
+            )
+            .get(workerId) as { expires_at: string | null } | undefined;
+        return row?.expires_at ?? null;
+    }
+
+    /**
      * Reads also expire leases. Otherwise a worker that dies silently, with nobody else calling
      * operations on its tasks, would leave a seemingly live lease in the UI forever.
      */

@@ -9,6 +9,13 @@ export interface WorkerRegistryOptions {
     readonly db: SherpaDatabase;
     /** Injectable clock: tests exercise worker death without actually waiting. */
     readonly now?: () => Date;
+    /**
+     * Worker task lease expiry (ISO), read-only access to the queue
+     * (`TaskQueue.leaseExpiryOf`). Defaults to assuming there are no leases.
+     */
+    readonly leaseExpiryOf?: (workerId: string) => string | null;
+    /** Grace period between calls (`WORKER_GAP_GRACE_SECONDS`), shortened in tests. */
+    readonly gapGraceSeconds?: number;
 }
 
 /** Listener for worker status changes, to be used by the UI channel (M0-T7). */
@@ -34,15 +41,39 @@ const SLOT_ID = 1;
 const DEAD_AFTER_MS = WORKER_DEAD_AFTER_SECONDS * 1000;
 
 /**
+ * Pause without an open connection or lease after which the session is considered dead
+ * (decision 2026-08-20). An idle worker hangs in long-poll `next`, so it has no connection
+ * only between one call returning and the next call, a few seconds of model work.
+ * Internal server policy, outside the contract.
+ */
+export const WORKER_GAP_GRACE_SECONDS = 60;
+
+/**
  * PR worker lifecycle (rpc-design §7): session registration, heartbeat on every CLI call,
- * transition to "Agent disconnected" after silence longer than `WORKER_DEAD_AFTER_SECONDS`.
+ * transition to "Agent disconnected" on either a broken connection or silence.
+ *
+ * A worker is alive if at least one condition holds:
+ * 1. its worker connection is open (a pending long-poll `next` or any request in flight).
+ *    The OS closes the socket as soon as a session is killed, which is a strong signal.
+ * 2. it holds a task lease and less than `WORKER_DEAD_AFTER_SECONDS` has passed since its last call.
+ *    The model can stay silent for minutes while working on a task. An expired lease no longer
+ *    counts as work.
+ * 3. with no connection or lease, the time since the last call or connection closure is less than
+ *    `WORKER_GAP_GRACE_SECONDS`.
+ *
  * Liveness is evaluated lazily on reads, like lease expiry in the queue. The timer is only needed
  * to emit the "Agent disconnected" event without incoming requests. Nothing else would emit it.
  */
 export class WorkerRegistry {
     private readonly db: SherpaDatabase;
     private readonly now: () => Date;
+    private readonly leaseExpiryOf: (workerId: string) => string | null;
+    private readonly gapGraceMs: number;
     private readonly listeners = new Set<WorkerStatusListener>();
+
+    /** Open worker connections by workerId and the time the last one closed. */
+    private readonly openConnections = new Map<string, number>();
+    private readonly lastCloseMs = new Map<string, number>();
 
     private readonly txRegister: (
         workerId: string,
@@ -59,6 +90,8 @@ export class WorkerRegistry {
     constructor(options: WorkerRegistryOptions) {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
+        this.leaseExpiryOf = options.leaseExpiryOf ?? ((): string | null => null);
+        this.gapGraceMs = (options.gapGraceSeconds ?? WORKER_GAP_GRACE_SECONDS) * 1000;
 
         this.txRegister = transaction(
             this.db,
@@ -103,7 +136,28 @@ export class WorkerRegistry {
         if (row === null || row.worker_id === workerId || !this.isAlive(row)) {
             return;
         }
-        throw conflict(row, this.now());
+        throw conflict(row, this.now(), this.deadlineOf(row));
+    }
+
+    /**
+     * Tracks an open worker connection. While it is open, the session is alive without a heartbeat,
+     * closing it signals session death (rpc-design §7, decision 2026-08-20). Returns a function
+     * for the HTTP layer to call when the connection closes. Repeated calls are a no-op.
+     */
+    holdConnection(workerId: string): () => void {
+        this.openConnections.set(workerId, (this.openConnections.get(workerId) ?? 0) + 1);
+        this.lastCloseMs.delete(workerId);
+        this.refresh();
+
+        let released = false;
+        return () => {
+            if (released) {
+                return;
+            }
+            released = true;
+            this.releaseConnection(workerId);
+            this.refresh();
+        };
     }
 
     status(): WorkerStatus {
@@ -173,7 +227,7 @@ export class WorkerRegistry {
         }
 
         if (this.isAlive(row)) {
-            return fail(conflict(row, this.now()));
+            return fail(conflict(row, this.now(), this.deadlineOf(row)));
         }
 
         this.takeOver(workerId, harness ?? null, model ?? null, nowIso);
@@ -200,7 +254,7 @@ export class WorkerRegistry {
         }
 
         if (this.isAlive(row)) {
-            return fail(conflict(row, this.now()));
+            return fail(conflict(row, this.now(), this.deadlineOf(row)));
         }
 
         // The previous session's harness and model have nothing to do with the new one. It declares its own through `register`.
@@ -237,19 +291,24 @@ export class WorkerRegistry {
     }
 
     /**
-     * Timer for `lastSeenAt + WORKER_DEAD_AFTER_SECONDS`. Its delay uses the same clock
-     * as liveness, so it never gets a chance to fire in tests with a fake clock.
-     * Tests trigger the transition through `checkNow()`.
+     * Timer for when the worker dies. The delay uses the same clock as liveness, so
+     * in tests with fake clocks it never gets a chance to fire. Tests trigger the transition through
+     * `checkNow()`. While a worker connection is open, there is nothing to wake: time does not run.
      */
     private scheduleDeathCheck(): void {
         this.clearDeathCheck();
 
         const row = this.readRow();
-        if (row === null || !this.isAlive(row)) {
+        if (row === null) {
             return;
         }
 
-        const delay = deadlineOf(row) - this.now().getTime();
+        const deadline = this.deadlineOf(row);
+        if (deadline === null || deadline <= this.now().getTime()) {
+            return;
+        }
+
+        const delay = deadline - this.now().getTime();
         const timer = setTimeout(() => {
             this.deathTimer = null;
             this.checkNow();
@@ -266,7 +325,57 @@ export class WorkerRegistry {
     }
 
     private isAlive(row: WorkerRow): boolean {
-        return deadlineOf(row) > this.now().getTime();
+        const deadline = this.deadlineOf(row);
+        return deadline === null || deadline > this.now().getTime();
+    }
+
+    /**
+     * Time when the worker is considered dead. `null` means its connection is open and time does not run.
+     * The countdown starts from the later of the last call and the last connection closing, because
+     * a long-poll can take minutes between those events.
+     *
+     * The longer silence timeout applies only while the worker is working on a task, and work ends
+     * no later than lease expiry. The lease expires relative to claim time, which `progress` does not change,
+     * so it can end before `last_seen_at + WORKER_DEAD_AFTER_SECONDS`. After that,
+     * the grace period between calls applies, as it does to a worker without a lease.
+     */
+    private deadlineOf(row: WorkerRow): number | null {
+        if ((this.openConnections.get(row.worker_id) ?? 0) > 0) {
+            return null;
+        }
+
+        const silentSince = Math.max(
+            new Date(row.last_seen_at).getTime(),
+            this.lastCloseMs.get(row.worker_id) ?? 0,
+        );
+        const gapDeadline = silentSince + this.gapGraceMs;
+
+        const leaseExpiry = this.leaseExpiryOf(row.worker_id);
+        if (leaseExpiry === null) {
+            return gapDeadline;
+        }
+
+        const workingUntil = Math.min(new Date(leaseExpiry).getTime(), silentSince + DEAD_AFTER_MS);
+        return Math.max(workingUntil, gapDeadline);
+    }
+
+    /** Connection closure: the grace period starts now, not at the last call. */
+    private releaseConnection(workerId: string): void {
+        const rest = (this.openConnections.get(workerId) ?? 1) - 1;
+        if (rest > 0) {
+            this.openConnections.set(workerId, rest);
+            return;
+        }
+
+        this.openConnections.delete(workerId);
+        const nowMs = this.now().getTime();
+        // Identities of past sessions no longer affect liveness, so don't let the map grow.
+        for (const [id, closedAt] of this.lastCloseMs) {
+            if (nowMs - closedAt > DEAD_AFTER_MS) {
+                this.lastCloseMs.delete(id);
+            }
+        }
+        this.lastCloseMs.set(workerId, nowMs);
     }
 
     private readRow(): WorkerRow | null {
@@ -279,23 +388,23 @@ export class WorkerRegistry {
     }
 }
 
-function deadlineOf(row: WorkerRow): number {
-    return new Date(row.last_seen_at).getTime() + DEAD_AFTER_MS;
-}
-
 /**
  * Two sessions per PR are not supported (SPEC §4.4). The model reads this text in CLI output,
- * so it offers both ways out: wait or stop the previous session.
+ * so it offers both ways out: wait or stop the previous session. While the previous session
+ * holds an open connection, it has no death deadline. There is nothing to wait for, so it must be stopped.
  */
-function conflict(row: WorkerRow, now: Date): RpcFailure {
-    const minutes = String(Math.ceil((deadlineOf(row) - now.getTime()) / 60_000));
+function conflict(row: WorkerRow, now: Date, deadline: number | null): RpcFailure {
     const owner = row.harness === null ? row.worker_id : `${row.worker_id}, harness ${row.harness}`;
+    const advice =
+        deadline === null
+            ? 'If this is a reconnect, stop the previous session'
+            : `If this is a reconnect, wait ${String(Math.ceil((deadline - now.getTime()) / 60_000))} min ` +
+              'until the previous session is considered disconnected, or stop it';
 
     return new RpcFailure(
         'worker_conflict',
         `Another live session (${owner}) is already the worker of this PR — ` +
-            `two sessions per PR are not supported. If this is a reconnect, wait ${minutes} min until the ` +
-            'previous session is considered disconnected, or stop it — and run the Sherpa skill again.',
+            `two sessions per PR are not supported. ${advice} — and run the Sherpa skill again.`,
     );
 }
 

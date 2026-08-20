@@ -255,6 +255,36 @@ describe('UI endpoints', () => {
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('unauthorized');
         });
 
+        it('reports a broken worker connection to the UI without incoming requests', async () => {
+            // Shorten the grace period between calls: no need to wait a minute in a test.
+            const server = await startServer({
+                prKey: PR_KEY,
+                sherpaDir,
+                longPollSeconds: 30,
+                workerGapGraceSeconds: 0.3,
+            });
+            servers.push(server);
+            const stream = await openEvents(server);
+            expect(uiStateSchema.parse(JSON.parse((await stream.next()).data)).worker.kind).toBe('never');
+
+            const aborter = new AbortController();
+            const pending = postJson(
+                server.port,
+                WORKER_ENDPOINTS.next,
+                WORKER_BASE,
+                server.token,
+                aborter.signal,
+            ).catch(() => null);
+            expect(uiStateSchema.parse(JSON.parse((await stream.next()).data)).worker.kind).toBe('connected');
+
+            // The session died during long-poll: nobody calls the server again, and the timer changes the status.
+            aborter.abort();
+            await pending;
+
+            const state = uiStateSchema.parse(JSON.parse((await stream.next()).data));
+            expect(state.worker).toMatchObject({ kind: 'disconnected', workerId: WORKER });
+        });
+
         it('closes the channel if snapshot assembly fails, while the server keeps responding', async () => {
             const server = await start();
             server.queue.enqueue({

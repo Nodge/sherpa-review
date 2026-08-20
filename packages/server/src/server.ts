@@ -58,6 +58,11 @@ export interface StartServerOptions {
      * that outlives the process.
      */
     onIdleStop?: (idleSeconds: number) => void;
+    /**
+     * Grace period between worker calls (`WORKER_GAP_GRACE_SECONDS`). For this long, a session without
+     * an open connection or a lease counts as alive. Internal policy, shortened in tests.
+     */
+    workerGapGraceSeconds?: number;
 }
 
 export interface SherpaServer {
@@ -139,7 +144,19 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         db = openDatabase(databasePathFor(sherpaDir, prKey));
 
         const queue = new TaskQueue(options.now === undefined ? { db } : { db, now: options.now });
-        const workerRegistry = new WorkerRegistry(options.now === undefined ? { db } : { db, now: options.now });
+        const workerRegistry = new WorkerRegistry({
+            db,
+            leaseExpiryOf: (workerId) => queue.leaseExpiryOf(workerId),
+            ...(options.now === undefined ? {} : { now: options.now }),
+            ...(options.workerGapGraceSeconds === undefined
+                ? {}
+                : { gapGraceSeconds: options.workerGapGraceSeconds }),
+        });
+        // A lease is one condition for liveness, so the registry must see it appear and disappear:
+        // otherwise, cancelling a task would leave the worker's death time calculated from stale data.
+        const unsubscribeQueue = queue.subscribeChanges(() => {
+            workerRegistry.checkNow();
+        });
         routes.push(
             ...createWorkerRoutes({
                 queue,
@@ -162,6 +179,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             db,
             queue,
             workerRegistry,
+            unsubscribeQueue,
             shutdownController,
             idleWatch,
         });
@@ -240,6 +258,7 @@ function createHandle(parts: {
     db: SherpaDatabase;
     queue: TaskQueue;
     workerRegistry: WorkerRegistry;
+    unsubscribeQueue: () => void;
     shutdownController: AbortController;
     idleWatch: IdleWatch;
 }): SherpaServer {
@@ -257,7 +276,9 @@ function createHandle(parts: {
                 parts.idleWatch.close();
                 // Abort pending long polls first, or they'll try to write to closed sockets.
                 parts.shutdownController.abort();
-                // Stop the worker death timer before closing storage. It cannot run after close().
+                // Unsubscribe from the queue and stop the worker death timer before closing storage:
+                // after close(), nothing should read from it.
+                parts.unsubscribeQueue();
                 parts.workerRegistry.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);

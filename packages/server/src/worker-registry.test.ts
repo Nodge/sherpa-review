@@ -6,7 +6,7 @@ import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { RpcFailure } from './errors.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
-import { WorkerRegistry } from './worker-registry.js';
+import { WORKER_GAP_GRACE_SECONDS, WorkerRegistry } from './worker-registry.js';
 
 const START = new Date('2026-08-19T12:00:00.000Z');
 
@@ -18,16 +18,16 @@ describe('worker lifecycle', () => {
     let runningSince: number | null;
     let registry: WorkerRegistry;
     let events: WorkerStatus[];
+    /** Worker lease expiry, the same read-only value the queue exposes to the registry. */
+    let leaseExpiries: Map<string, string>;
 
     beforeEach(async () => {
         sherpaDir = await makeTempSherpaDir();
         db = openDatabase(`${sherpaDir}/worker.db`);
         offsetMs = 0;
         runningSince = null;
-        registry = new WorkerRegistry({
-            db,
-            now: () => new Date(START.getTime() + offsetMs + (runningSince === null ? 0 : Date.now() - runningSince)),
-        });
+        leaseExpiries = new Map();
+        registry = createRegistry();
         events = [];
         registry.subscribe((status) => events.push(status));
     });
@@ -37,6 +37,24 @@ describe('worker lifecycle', () => {
         db.close();
         await removeTempSherpaDir(sherpaDir);
     });
+
+    function now(): Date {
+        return new Date(START.getTime() + offsetMs + (runningSince === null ? 0 : Date.now() - runningSince));
+    }
+
+    function createRegistry(gapGraceSeconds?: number): WorkerRegistry {
+        return new WorkerRegistry({
+            db,
+            now,
+            leaseExpiryOf: (workerId) => leaseExpiries.get(workerId) ?? null,
+            ...(gapGraceSeconds === undefined ? {} : { gapGraceSeconds }),
+        });
+    }
+
+    /** The worker claimed a task: its lease expires in `seconds` and does not renew itself. */
+    function leaseFor(workerId: string, seconds: number): void {
+        leaseExpiries.set(workerId, new Date(now().getTime() + seconds * 1000).toISOString());
+    }
 
     function advanceSeconds(seconds: number): void {
         offsetMs += seconds * 1000;
@@ -142,12 +160,13 @@ describe('worker lifecycle', () => {
     });
 
     describe('heartbeat', () => {
-        it('calls keep the worker alive and silence past the timeout kills it', () => {
+        it('calls extend liveness, a pause longer than the grace period kills the session', () => {
             registry.register('w-1');
 
-            advanceSeconds(WORKER_DEAD_AFTER_SECONDS - 1);
+            // Without an open connection or a lease, a session lives only for the gap between calls.
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 1);
             registry.touch('w-1');
-            advanceSeconds(WORKER_DEAD_AFTER_SECONDS - 1);
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 1);
             expect(registry.status().kind).toBe('connected');
 
             advanceSeconds(2);
@@ -220,6 +239,116 @@ describe('worker lifecycle', () => {
         });
     });
 
+    describe('connection-based liveness', () => {
+        it('an open worker connection keeps the session alive indefinitely', () => {
+            registry.register('w-1');
+            registry.holdConnection('w-1');
+
+            advanceSeconds(WORKER_DEAD_AFTER_SECONDS * 10);
+
+            expect(registry.status().kind).toBe('connected');
+            expect(events.map((event) => event.kind)).toEqual(['connected']);
+        });
+
+        it('a broken connection without a lease kills the session after the grace period', () => {
+            registry.register('w-1');
+            const close = registry.holdConnection('w-1');
+            advanceSeconds(600);
+
+            close();
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 1);
+            // The countdown starts when the connection closes, not at the last call: minutes passed between them.
+            expect(registry.status().kind).toBe('connected');
+
+            advanceSeconds(2);
+            expect(registry.status().kind).toBe('disconnected');
+        });
+
+        it('a broken connection with a lease keeps the session alive until the overall death deadline', () => {
+            registry.register('w-1');
+            // The lease lasts longer than the silence timeout, so the timeout expires first.
+            leaseFor('w-1', WORKER_DEAD_AFTER_SECONDS * 2);
+            registry.holdConnection('w-1')();
+
+            advanceSeconds(WORKER_DEAD_AFTER_SECONDS - 1);
+            expect(registry.status().kind).toBe('connected');
+
+            advanceSeconds(2);
+            expect(registry.status().kind).toBe('disconnected');
+        });
+
+        it('an expired lease does not keep the session alive: work ends with the lease', () => {
+            registry.register('w-1');
+            // The lease expires before the silence timeout, leaving only the gap grace period,
+            // which has long since expired by then.
+            leaseFor('w-1', WORKER_DEAD_AFTER_SECONDS / 2);
+            registry.holdConnection('w-1')();
+
+            advanceSeconds(WORKER_DEAD_AFTER_SECONDS / 2 - 1);
+            expect(registry.status().kind).toBe('connected');
+
+            advanceSeconds(2);
+            expect(registry.status().kind).toBe('disconnected');
+        });
+
+        it('a new connection cancels the grace period countdown', () => {
+            registry.register('w-1');
+            registry.holdConnection('w-1')();
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 1);
+
+            registry.holdConnection('w-1');
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS * 10);
+
+            expect(registry.status().kind).toBe('connected');
+            expect(events.map((event) => event.kind)).toEqual(['connected']);
+        });
+
+        it('a connection from another worker does not keep the slot owner alive', () => {
+            registry.register('w-1');
+            registry.holdConnection('w-2');
+
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS + 1);
+
+            expect(registry.status()).toMatchObject({ kind: 'disconnected', workerId: 'w-1' });
+        });
+
+        it('timer announces disconnection after a broken connection without incoming requests', async () => {
+            registry.close();
+            registry = createRegistry(0.15);
+            events = [];
+            registry.subscribe((status) => events.push(status));
+
+            startClock();
+            registry.register('w-1');
+            const close = registry.holdConnection('w-1');
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            expect(events.map((event) => event.kind)).toEqual(['connected']);
+
+            close();
+            await new Promise((resolve) => setTimeout(resolve, 300));
+
+            expect(events.map((event) => event.kind)).toEqual(['connected', 'disconnected']);
+        });
+
+        it('sets the death timer to lease expiry, not the overall silence timeout', async () => {
+            registry.close();
+            registry = createRegistry(0.15);
+            events = [];
+            registry.subscribe((status) => events.push(status));
+
+            startClock();
+            registry.register('w-1');
+            // `progress` advances the last call time but not lease expiry, so the lease can expire
+            // well before 6 minutes of silence. The event must arrive when the lease expires.
+            leaseFor('w-1', 0.2);
+            registry.holdConnection('w-1')();
+
+            await new Promise((resolve) => setTimeout(resolve, 400));
+
+            expect(events.map((event) => event.kind)).toEqual(['connected', 'disconnected']);
+        });
+    });
+
     describe('events', () => {
         it('checkNow announces disconnection of a silent session', () => {
             registry.register('w-1', 'claude-code');
@@ -236,7 +365,7 @@ describe('worker lifecycle', () => {
             registry.register('w-1');
             // Leave 80 ms until the death deadline and rearm the timer for the shifted clock,
             // which runs in sync with real time from this point.
-            advanceSeconds(WORKER_DEAD_AFTER_SECONDS - 0.08);
+            advanceSeconds(WORKER_GAP_GRACE_SECONDS - 0.08);
             startClock();
             registry.checkNow();
             expect(events.map((event) => event.kind)).toEqual(['connected']);

@@ -34,6 +34,12 @@ export interface JsonResponse {
 export interface RequestContext {
     readonly req: IncomingMessage;
     readonly url: URL;
+    /**
+     * Subscribes to this response connection closing. For a regular request, this is just after sending,
+     * for SSE and long-poll, it is a disconnect or the end of the stream. Endpoints use it to count open connections.
+     * Calls the listener immediately if the connection is already closed.
+     */
+    readonly onClose: (listener: () => void) => void;
 }
 
 export type RouteHandler = (ctx: RequestContext) => JsonResponse | Promise<JsonResponse>;
@@ -214,11 +220,19 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Reques
         return;
     }
 
+    const onClose = (listener: () => void): void => {
+        if (res.closed || res.destroyed) {
+            listener();
+            return;
+        }
+        res.once('close', listener);
+    };
+
     if ('stream' in route) {
-        await route.stream({ req, url, res });
+        await route.stream({ req, url, res, onClose });
         return;
     }
-    sendJson(res, await route.handle({ req, url }));
+    sendJson(res, await route.handle({ req, url, onClose }));
 }
 
 function authorized(token: string, req: IncomingMessage, url: URL, auth: RouteAuth): boolean {

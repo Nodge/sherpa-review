@@ -66,13 +66,25 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
         }
     };
 
+    /**
+     * Call heartbeat and connection tracking: while the request is in flight (all the minutes of
+     * a `next` long-poll), the session is alive. The server sees disconnection at once and detects death soon.
+     * The connection only counts for a session that passed the slot ownership check.
+     */
+    const heartbeat = (ctx: RequestContext, workerId: string, claim: () => string | null): void => {
+        reclaimLeases(claim());
+        ctx.onClose(options.registry.holdConnection(workerId));
+    };
+
     return [
         {
             method: 'POST',
             path: WORKER_ENDPOINTS.register,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerRegisterRequestSchema);
-                reclaimLeases(options.registry.register(request.workerId, request.harness, request.model));
+                heartbeat(ctx, request.workerId, () =>
+                    options.registry.register(request.workerId, request.harness, request.model),
+                );
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
@@ -87,7 +99,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.next,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerNextRequestSchema);
-                reclaimLeases(options.registry.touch(request.workerId));
+                heartbeat(ctx, request.workerId, () => options.registry.touch(request.workerId));
                 const body: WorkerNextResponse = await pollForTask(options, ctx.req, request.workerId);
                 return { status: 200, body };
             }),
@@ -97,7 +109,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.complete,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, completeBodySchema);
-                reclaimLeases(options.registry.touch(request.workerId));
+                heartbeat(ctx, request.workerId, () => options.registry.touch(request.workerId));
                 const body: TaskCompleteResponse = options.queue.complete(
                     request.workerId,
                     request.taskId,
@@ -111,7 +123,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.progress,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskProgressRequestSchema);
-                reclaimLeases(options.registry.touch(request.workerId));
+                heartbeat(ctx, request.workerId, () => options.registry.touch(request.workerId));
                 const body: TaskAckResponse = options.queue.progress(request.workerId, request.taskId, request.text);
                 return { status: 200, body };
             }),
@@ -121,7 +133,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.fail,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, taskFailRequestSchema);
-                reclaimLeases(options.registry.touch(request.workerId));
+                heartbeat(ctx, request.workerId, () => options.registry.touch(request.workerId));
                 const body: TaskAckResponse = options.queue.fail(request.workerId, request.taskId, request.reason);
                 return { status: 200, body };
             }),

@@ -1,3 +1,4 @@
+import type { WorkerStatus } from '@sherpa/protocol';
 import {
     PROTOCOL_VERSION,
     RESULT_MAX_BYTES,
@@ -221,12 +222,12 @@ describe('worker endpoints', () => {
             expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', workerId: WORKER });
         });
 
-        it('a new worker registered during long-poll does not give a task to the old one', async () => {
+        it('a pending long-poll keeps the session alive: a second session cannot take its slot', async () => {
             const server = await start(30);
             const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            // The old session is waiting in a call, but the server clock says it has gone silent. The new one takes the slot.
+            // The clock is far past the death timeout, but the session has a pending call. The connection keeps it alive.
             advanceServerClock(WORKER_DEAD_AFTER_SECONDS + 1);
             const registered = await postJson(
                 server.port,
@@ -234,13 +235,86 @@ describe('worker endpoints', () => {
                 { ...BASE, workerId: 'w-2' },
                 server.token,
             );
-            expect(registered.status).toBe(200);
-            const taskId = enqueueEcho(server, 'task for the new session');
 
+            expect(registered.status).toBe(409);
+            expect(rpcErrorSchema.parse(await registered.json()).error.code).toBe('worker_conflict');
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+
+            // The task goes to the slot owner, not the second session.
+            const taskId = enqueueEcho(server, 'slot owner task');
             const response = await pending;
-            expect(response.status).toBe(409);
-            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('worker_conflict');
-            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
+            expect(response.status).toBe(200);
+            const body = workerNextResponseSchema.parse(await response.json());
+            expect(body.kind === 'task' && body.task.id).toBe(taskId);
+        });
+    });
+
+    describe('death on disconnection', () => {
+        /** Grace period between calls. The test need not wait a minute. */
+        const GAP_GRACE_SECONDS = 0.3;
+
+        async function startWithShortGrace(longPollSeconds: number): Promise<SherpaServer> {
+            const server = await startServer({
+                prKey: PR_KEY,
+                sherpaDir,
+                longPollSeconds,
+                workerGapGraceSeconds: GAP_GRACE_SECONDS,
+                now: () => new Date(Date.now() + clockOffsetMs),
+            });
+            servers.push(server);
+            return server;
+        }
+
+        /** Waits for the "Agent disconnected" event emitted by the server timer, without polling. */
+        function disconnection(server: SherpaServer, timeoutMs: number): Promise<WorkerStatus> {
+            return new Promise<WorkerStatus>((resolve, reject) => {
+                const timer = setTimeout(() => {
+                    unsubscribe();
+                    reject(new Error(`no disconnection event within ${String(timeoutMs)} ms`));
+                }, timeoutMs);
+                const unsubscribe = server.workerRegistry.subscribe((status) => {
+                    if (status.kind !== 'disconnected') {
+                        return;
+                    }
+                    clearTimeout(timer);
+                    unsubscribe();
+                    resolve(status);
+                });
+            });
+        }
+
+        it('considers an idle session dead within the grace period after its long-poll disconnects', async () => {
+            const server = await startWithShortGrace(30);
+            const aborter = new AbortController();
+            const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token, aborter.signal).catch(
+                () => null,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(server.workerRegistry.status().kind).toBe('connected');
+
+            // The session was killed. The OS closed the socket, and no more requests will arrive.
+            const dead = disconnection(server, 2000);
+            aborter.abort();
+            await pending;
+
+            expect(await dead).toMatchObject({ kind: 'disconnected', workerId: WORKER });
+        });
+
+        it('keeps a session with a claimed task alive after disconnection', async () => {
+            const server = await startWithShortGrace(0.3);
+            const taskId = enqueueEcho(server);
+            const issued = await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            expect(workerNextResponseSchema.parse(await issued.json()).kind).toBe('task');
+
+            // Silence with a lease is valid. The model reads files for minutes, so the gap grace period does not apply.
+            advanceServerClock(WORKER_DEAD_AFTER_SECONDS - 1);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', workerId: WORKER });
+
+            advanceServerClock(2);
+            expect(server.workerRegistry.status().kind).toBe('disconnected');
         });
     });
 

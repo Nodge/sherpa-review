@@ -156,6 +156,38 @@ describe('queue with leases', () => {
         });
     });
 
+    describe('read-only lease expiry time', () => {
+        it('a live lease exposes its expiry, another worker and a completed task have no lease', () => {
+            const task = enqueue();
+            const lease = takeNext('w-1');
+
+            expect(queue.leaseExpiryOf('w-1')).toBe(lease.lease.expiresAt);
+            expect(queue.leaseExpiryOf('w-2')).toBeNull();
+
+            queue.complete('w-1', task.id, 'done');
+            expect(queue.leaseExpiryOf('w-1')).toBeNull();
+        });
+
+        it('an expired lease exposes its expiry unchanged without moving the queue', () => {
+            const task = enqueue();
+            const lease = takeNext('w-1');
+            advanceSeconds(LEASE_TTL_SECONDS.background + 1);
+
+            let changes = 0;
+            queue.subscribeChanges(() => {
+                changes += 1;
+            });
+
+            // A past expiry says when work ended. It determines when the worker is considered dead.
+            expect(queue.leaseExpiryOf('w-1')).toBe(lease.lease.expiresAt);
+            // Pure read. Queue operations remain responsible for requeuing tasks.
+            expect(changes).toBe(0);
+            expect(db.prepare('SELECT status FROM tasks WHERE id = ?').get(task.id)).toMatchObject({
+                status: 'leased',
+            });
+        });
+    });
+
     describe('releasing leases of a displaced worker', () => {
         it('the lease is requeued immediately without waiting for TTL and the attempt increments', () => {
             const task = enqueue();
