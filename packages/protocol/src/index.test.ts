@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    commentDraftSchema,
+    commentSchema,
     generateJsonSchemas,
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
@@ -9,6 +11,7 @@ import {
     taskCompleteRequestSchema,
     taskCompleteResponseSchema,
     taskSchema,
+    threadSchema,
     workerNextResponseSchema,
 } from './index.js';
 
@@ -101,6 +104,53 @@ describe('discovery manifest', () => {
         expect(serverManifestSchema.parse(manifest)).toEqual(manifest);
         expect(serverManifestSchema.safeParse({ ...manifest, port: 0 }).success).toBe(false);
         expect(serverManifestSchema.safeParse({ ...manifest, port: 70000 }).success).toBe(false);
+    });
+});
+
+describe('review domain', () => {
+    const author = { login: 'alice', displayName: null, bot: false };
+    const comment = (id: string, replies: unknown[] = []) => ({
+        id,
+        author,
+        body: 'text',
+        draft: false,
+        createdAt: '2026-08-20T12:00:00.000Z',
+        editedAt: null,
+        replies,
+    });
+
+    it('accepts a thread as a tree with a deep branching reply chain', () => {
+        const deep = comment('1', [comment('2', [comment('3', [comment('4')]), comment('5')])]);
+        const thread = {
+            id: '1',
+            anchor: {
+                fileId: 'eid:1:abc',
+                path: 'src/index.ts',
+                position: { side: 'new', line: 20, size: 11 },
+            },
+            resolved: false,
+            resolvedBy: null,
+            outdated: false,
+            root: deep,
+        };
+        expect(threadSchema.parse(thread)).toEqual(thread);
+    });
+
+    it('fails closed: an invalid reply deep in the tree rejects the entire thread', () => {
+        const broken = comment('1', [comment('2', [{ id: '3' }])]);
+        expect(commentSchema.safeParse(broken).success).toBe(false);
+    });
+
+    it('accepts drafts with both fields null at PR level, or an inline anchor without a position for a file comment', () => {
+        expect(commentDraftSchema.safeParse({ body: 'lgtm', parentId: null, anchor: null }).success).toBe(true);
+        expect(
+            commentDraftSchema.safeParse({
+                body: 'question',
+                parentId: null,
+                anchor: { fileId: 'eid:1:abc', path: 'a.ts', position: null },
+            }).success,
+        ).toBe(true);
+        expect(commentDraftSchema.safeParse({ body: '', parentId: null, anchor: null }).success).toBe(false);
     });
 });
 
