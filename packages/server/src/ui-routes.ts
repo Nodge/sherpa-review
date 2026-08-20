@@ -181,12 +181,13 @@ function toUiTask(record: TaskRecord): UiTask {
 
 /**
  * Echo task instructions are built on the server: the UI sends only text, and the prompt is part of the contract.
- * The CLI provides the submit command itself (`formatTask`), so there is no reason to duplicate it here.
+ * The model reads task text, so it is in English. The CLI supplies the submission command itself
+ * (`formatTask`), so there is no reason to duplicate it here.
  */
 function echoInstructions(text: string): string {
     return [
-        'This is a test echo task for the Sherpa loop.',
-        'Save exactly this text to a file (without quotes or comments) and submit it as the result:',
+        'This is a check echo task of the Sherpa loop.',
+        'Save exactly this text to a file (no quotes, no comments) and submit it as the result:',
         '',
         text,
     ].join('\n');

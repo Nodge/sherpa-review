@@ -41,14 +41,23 @@ const NEXT_TIMEOUT_MS = (LONG_POLL_MAX_SECONDS + LONG_POLL_SLACK_SECONDS) * 1000
 /** Other endpoints respond immediately, so there is no need for a long wait. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Session labels for the worker status in the UI: both optional, supplied by the model itself. */
+export interface WorkerLabels {
+    readonly harness: string | undefined;
+    readonly model: string | undefined;
+}
+
 /** Registers the session as the PR worker (rpc-design §7) on the first skill call and every reconnection. */
 export async function requestRegister(
     connection: ServerConnection,
-    harness: string | undefined,
+    labels: WorkerLabels,
 ): Promise<WorkerRegisterResponse> {
     return callWorker<WorkerRegisterRequest, WorkerRegisterResponse>(connection, {
         endpoint: WORKER_ENDPOINTS.register,
-        payload: harness === undefined ? {} : { harness },
+        payload: {
+            ...(labels.harness === undefined ? {} : { harness: labels.harness }),
+            ...(labels.model === undefined ? {} : { model: labels.model }),
+        },
         requestSchema: workerRegisterRequestSchema,
         responseSchema: workerRegisterResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -203,15 +212,15 @@ function parseJson(text: string): unknown {
 /** Request failed local contract validation: a long `--text`, invalid `SHERPA_WORKER_ID` and similar cases. */
 function invalidRequest(details: readonly string[]): string {
     return [
-        'sherpa: the command does not meet the contract, the server will reject it:',
+        'sherpa: the command does not pass the contract, the server would reject it:',
         ...details.map((detail) => `  - ${detail}`),
-        'Fix the command arguments (and `SHERPA_WORKER_ID` if set) and call it again.',
+        'Fix the command arguments (and `SHERPA_WORKER_ID`, if it is set) and call it again.',
     ].join('\n');
 }
 
 function contractMismatch(): string {
     return (
-        'sherpa: the server response does not meet the contract. The CLI and server versions have probably diverged.\n' +
+        'sherpa: the server replied off-contract — most likely the CLI and the server versions diverged.\n' +
         'Update the Sherpa skill together with the CLI and restart the server.'
     );
 }

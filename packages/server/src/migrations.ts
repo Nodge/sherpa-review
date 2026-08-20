@@ -57,6 +57,13 @@ export const MIGRATIONS: readonly Migration[] = [
             );
         `,
     },
+    {
+        // Worker model name beside its harness: the session reports it and the UI shows it in the status.
+        name: '004-worker-model',
+        sql: `
+            ALTER TABLE worker ADD COLUMN model TEXT;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

@@ -82,10 +82,18 @@ function workerLabel(worker: WorkerStatus): string {
         case 'never':
             return 'Agent has not connected yet';
         case 'connected':
-            return `Agent · ${worker.harness ?? worker.workerId}`;
+            return `Agent · ${workerIdentity(worker.harness, worker.model, worker.workerId)}`;
         case 'disconnected':
             return 'Agent disconnected';
     }
+}
+
+/**
+ * Worker identity: harness and model are free-form strings, both optional.
+ * Without a harness, workerId remains, otherwise the status has nothing to identify it by.
+ */
+function workerIdentity(harness: string | undefined, model: string | undefined, workerId: string): string {
+    return [harness ?? workerId, ...(model === undefined ? [] : [model])].join(' · ');
 }
 
 /** The "Agent disconnected" banner (SPEC §4.4): what happened, its consequence, one action. */

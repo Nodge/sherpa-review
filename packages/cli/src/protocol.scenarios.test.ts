@@ -122,7 +122,7 @@ describe('worker session scenarios', () => {
         const repeated = await worker.complete(taskId, 'Second, accidental result.');
 
         expect(repeated.code).toBe(0);
-        expect(repeated.stdout).toContain('already complete');
+        expect(repeated.stdout).toContain('is already finished');
         expect(repeated.stdout).toContain('sherpa worker next');
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'done', result: 'First result.' });
     });
@@ -171,7 +171,7 @@ describe('worker session scenarios', () => {
 
         const empty = await worker.next();
         expect(empty.taskId).toBe(null);
-        expect(empty.stdout).toContain('No tasks yet');
+        expect(empty.stdout).toContain('No tasks');
     });
 
     it('reconnection gives the task to the new session immediately and tells the old one to stop the loop', async () => {

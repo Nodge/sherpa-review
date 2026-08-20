@@ -102,15 +102,15 @@ export function handlingRpcFailures(handle: RouteHandler): RouteHandler {
 export async function readJsonBody(req: IncomingMessage, maxBytes = REQUEST_BODY_MAX_BYTES): Promise<unknown> {
     const raw = await readBody(req, maxBytes);
     if (raw.trim() === '') {
-        throw new RpcFailure('bad_request', 'Empty request body: expected a JSON object.');
+        throw new RpcFailure('bad_request', 'Empty request body: a JSON object is expected.');
     }
 
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'cannot parse';
-        throw new RpcFailure('bad_request', `Request body is not JSON: ${message}`);
+        const message = error instanceof Error ? error.message : 'cannot be parsed';
+        throw new RpcFailure('bad_request', `The request body is not JSON: ${message}`);
     }
     return parsed;
 }
@@ -134,7 +134,7 @@ function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
             reject(
                 new RpcFailure(
                     'bad_request',
-                    `Request body exceeds ${String(maxBytes)} bytes, the server does not accept that much.`,
+                    `The request body is larger than ${String(maxBytes)} bytes — the server does not accept that much.`,
                 ),
             );
         };
@@ -221,7 +221,10 @@ function authorized(token: string, req: IncomingMessage, url: URL, auth: RouteAu
 function unauthorizedResponse(): JsonResponse {
     return {
         status: 401,
-        body: rpcError('unauthorized', 'An `Authorization: Bearer <token>` header with the manifest token is required.'),
+        body: rpcError(
+            'unauthorized',
+            'An `Authorization: Bearer <token>` header with the token from the manifest is required.',
+        ),
     };
 }
 

@@ -58,8 +58,8 @@ export function resolvePrKey(
     const raw = (prKeyArg ?? env.SHERPA_PR ?? '').trim();
     if (raw === '') {
         throw new CliError(
-            'sherpa: cannot determine which PR to connect to.\n' +
-                'Run the command through the Sherpa skill (it supplies the PR) or pass `--pr <key>`.',
+            'sherpa: it is unclear which PR to connect to.\n' +
+                'Run the command through the Sherpa skill (it fills the PR in) or pass `--pr <pr key>`.',
         );
     }
     return assertValidPrKey(raw);
@@ -168,8 +168,8 @@ export async function resolveWorkerId(
 function workerIdNotWritable(filePath: string, error: unknown): string {
     const detail = error instanceof Error ? error.message : String(error);
     return (
-        `sherpa: could not write ${filePath}: ${detail}.\n` +
-        'Check permissions on the Sherpa state directory and run the command again.'
+        `sherpa: could not write ${filePath} — ${detail}.\n` +
+        'Check the permissions on the Sherpa state directory and run the command again.'
     );
 }
 
@@ -222,7 +222,7 @@ function isAlreadyExists(error: unknown): boolean {
 
 export function serverUnavailable(prKey: string): string {
     return (
-        `sherpa: Sherpa server for PR ${prKey} was not found or is not responding.\n` +
-        'Restart the Sherpa skill. It will start the server and write the manifest.'
+        `sherpa: the Sherpa server for PR ${prKey} is not found or not responding.\n` +
+        'Run the Sherpa skill again — it will start the server and write the manifest.'
     );
 }

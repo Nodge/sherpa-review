@@ -23,6 +23,7 @@ type Outcome<T> = { readonly ok: true; readonly value: T } | { readonly ok: fals
 interface WorkerRow extends SqlRow {
     worker_id: string;
     harness: string | null;
+    model: string | null;
     registered_at: string;
     last_seen_at: string;
 }
@@ -43,7 +44,11 @@ export class WorkerRegistry {
     private readonly now: () => Date;
     private readonly listeners = new Set<WorkerStatusListener>();
 
-    private readonly txRegister: (workerId: string, harness: string | undefined) => Outcome<string | null>;
+    private readonly txRegister: (
+        workerId: string,
+        harness: string | undefined,
+        model: string | undefined,
+    ) => Outcome<string | null>;
     private readonly txTouch: (workerId: string) => Outcome<string | null>;
 
     private deathTimer: NodeJS.Timeout | null = null;
@@ -55,8 +60,10 @@ export class WorkerRegistry {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
 
-        this.txRegister = transaction(this.db, (workerId: string, harness: string | undefined) =>
-            this.registerInTransaction(workerId, harness),
+        this.txRegister = transaction(
+            this.db,
+            (workerId: string, harness: string | undefined, model: string | undefined) =>
+                this.registerInTransaction(workerId, harness, model),
         );
         this.txTouch = transaction(this.db, (workerId: string) => this.touchInTransaction(workerId));
 
@@ -70,8 +77,8 @@ export class WorkerRegistry {
      * A different session while the previous worker is alive gets `worker_conflict` (spec §3.7, SPEC §4.4).
      * Returns the displaced dead session's workerId so the caller can return its leases to the queue.
      */
-    register(workerId: string, harness?: string): string | null {
-        const displaced = unwrap(this.txRegister(workerId, harness));
+    register(workerId: string, harness?: string, model?: string): string | null {
+        const displaced = unwrap(this.txRegister(workerId, harness, model));
         this.refresh();
         return displaced;
     }
@@ -109,6 +116,7 @@ export class WorkerRegistry {
             kind: this.isAlive(row) ? 'connected' : 'disconnected',
             workerId: row.worker_id,
             ...(row.harness === null ? {} : { harness: row.harness }),
+            ...(row.model === null ? {} : { model: row.model }),
             registeredAt: row.registered_at,
             lastSeenAt: row.last_seen_at,
         };
@@ -137,17 +145,21 @@ export class WorkerRegistry {
         this.listeners.clear();
     }
 
-    private registerInTransaction(workerId: string, harness: string | undefined): Outcome<string | null> {
+    private registerInTransaction(
+        workerId: string,
+        harness: string | undefined,
+        model: string | undefined,
+    ): Outcome<string | null> {
         const row = this.readRow();
         const nowIso = this.nowIso();
 
         if (row === null) {
             this.db
                 .prepare(
-                    `INSERT INTO worker (id, worker_id, harness, registered_at, last_seen_at)
-                     VALUES (?, ?, ?, ?, ?)`,
+                    `INSERT INTO worker (id, worker_id, harness, model, registered_at, last_seen_at)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
                 )
-                .run(SLOT_ID, workerId, harness ?? null, nowIso, nowIso);
+                .run(SLOT_ID, workerId, harness ?? null, model ?? null, nowIso, nowIso);
             return ok(null);
         }
 
@@ -155,8 +167,8 @@ export class WorkerRegistry {
             // Repeated register for the same session renews it without registering a new one.
             // `registered_at` holds the session start time, which the UI uses to calculate uptime (SPEC §2.2).
             this.db
-                .prepare('UPDATE worker SET harness = ?, last_seen_at = ? WHERE id = ?')
-                .run(harness ?? row.harness, nowIso, SLOT_ID);
+                .prepare('UPDATE worker SET harness = ?, model = ?, last_seen_at = ? WHERE id = ?')
+                .run(harness ?? row.harness, model ?? row.model, nowIso, SLOT_ID);
             return ok(null);
         }
 
@@ -164,7 +176,7 @@ export class WorkerRegistry {
             return fail(conflict(row, this.now()));
         }
 
-        this.takeOver(workerId, harness ?? null, nowIso);
+        this.takeOver(workerId, harness ?? null, model ?? null, nowIso);
         return ok(row.worker_id);
     }
 
@@ -175,8 +187,8 @@ export class WorkerRegistry {
         if (row === null) {
             this.db
                 .prepare(
-                    `INSERT INTO worker (id, worker_id, harness, registered_at, last_seen_at)
-                     VALUES (?, ?, NULL, ?, ?)`,
+                    `INSERT INTO worker (id, worker_id, harness, model, registered_at, last_seen_at)
+                     VALUES (?, ?, NULL, NULL, ?, ?)`,
                 )
                 .run(SLOT_ID, workerId, nowIso, nowIso);
             return ok(null);
@@ -191,15 +203,18 @@ export class WorkerRegistry {
             return fail(conflict(row, this.now()));
         }
 
-        // The previous session's harness is unrelated to the new one. It will declare its own through `register`.
-        this.takeOver(workerId, null, nowIso);
+        // The previous session's harness and model have nothing to do with the new one. It declares its own through `register`.
+        this.takeOver(workerId, null, null, nowIso);
         return ok(row.worker_id);
     }
 
-    private takeOver(workerId: string, harness: string | null, nowIso: string): void {
+    private takeOver(workerId: string, harness: string | null, model: string | null, nowIso: string): void {
         this.db
-            .prepare('UPDATE worker SET worker_id = ?, harness = ?, registered_at = ?, last_seen_at = ? WHERE id = ?')
-            .run(workerId, harness, nowIso, nowIso, SLOT_ID);
+            .prepare(
+                `UPDATE worker SET worker_id = ?, harness = ?, model = ?, registered_at = ?, last_seen_at = ?
+                 WHERE id = ?`,
+            )
+            .run(workerId, harness, model, nowIso, nowIso, SLOT_ID);
     }
 
     /** Recalculates status, resets the death timer and broadcasts an event if the status changed. */
@@ -269,8 +284,8 @@ function deadlineOf(row: WorkerRow): number {
 }
 
 /**
- * Two sessions per PR are not supported (SPEC §4.4). Both the model in CLI output
- * and the reviewer in the UI read this text, so it gives both options: wait or stop the previous session.
+ * Two sessions per PR are not supported (SPEC §4.4). The model reads this text in CLI output,
+ * so it offers both ways out: wait or stop the previous session.
  */
 function conflict(row: WorkerRow, now: Date): RpcFailure {
     const minutes = String(Math.ceil((deadlineOf(row) - now.getTime()) / 60_000));
@@ -278,9 +293,9 @@ function conflict(row: WorkerRow, now: Date): RpcFailure {
 
     return new RpcFailure(
         'worker_conflict',
-        `The worker for this PR is already another live session (${owner}). Two sessions per PR are not supported. ` +
-            `If this is a reconnection, wait ${minutes} min for the previous session to be considered disconnected, ` +
-            'or stop it, then start the Sherpa skill again.',
+        `Another live session (${owner}) is already the worker of this PR — ` +
+            `two sessions per PR are not supported. If this is a reconnect, wait ${minutes} min until the ` +
+            'previous session is considered disconnected, or stop it — and run the Sherpa skill again.',
     );
 }
 
@@ -289,7 +304,7 @@ function signatureOf(status: WorkerStatus): string {
     if (status.kind === 'never') {
         return status.kind;
     }
-    return [status.kind, status.workerId, status.harness ?? '', status.registeredAt].join('|');
+    return [status.kind, status.workerId, status.harness ?? '', status.model ?? '', status.registeredAt].join('|');
 }
 
 function ok<T>(value: T): Outcome<T> {

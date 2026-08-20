@@ -79,7 +79,7 @@ describe('worker lifecycle', () => {
         });
 
         it('repeated register from the same session renews it without a new registration', () => {
-            registry.register('w-1', 'claude-code');
+            registry.register('w-1', 'claude-code', 'claude-opus-5');
             advanceSeconds(60);
             registry.register('w-1');
 
@@ -87,14 +87,26 @@ describe('worker lifecycle', () => {
             expect(status).toMatchObject({
                 kind: 'connected',
                 workerId: 'w-1',
-                // The harness from the previous registration stays, and the session start time does not shift.
+                // Keeps the harness and model from the previous registration, and preserves the session start time.
                 harness: 'claude-code',
+                model: 'claude-opus-5',
                 registeredAt: START.toISOString(),
             });
             expect(status.kind === 'connected' && status.lastSeenAt).toBe(
                 new Date(START.getTime() + 60_000).toISOString(),
             );
             expect(events).toHaveLength(1);
+        });
+
+        it('announces the model with the harness and updates it on renewal', () => {
+            registry.register('w-1', 'claude-code');
+            expect(registry.status()).not.toHaveProperty('model');
+
+            registry.register('w-1', 'claude-code', 'claude-opus-5');
+            expect(registry.status()).toMatchObject({ harness: 'claude-code', model: 'claude-opus-5' });
+
+            registry.register('w-1', 'claude-code', 'claude-sonnet-5');
+            expect(registry.status()).toMatchObject({ model: 'claude-sonnet-5' });
         });
 
         it('rejects a second live session with a readable message', () => {
@@ -105,9 +117,9 @@ describe('worker lifecycle', () => {
             });
 
             expect(failure.code).toBe('worker_conflict');
-            expect(failure.message).toContain('another live session');
+            expect(failure.message).toContain('Another live session');
             expect(failure.message).toContain('claude-code');
-            expect(failure.message).toContain('start the Sherpa skill again');
+            expect(failure.message).toContain('run the Sherpa skill again');
             expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-1' });
             expect(events).toHaveLength(1);
         });
@@ -150,11 +162,15 @@ describe('worker lifecycle', () => {
         });
 
         it('heartbeat taking a slot from a dead session returns its workerId', () => {
-            registry.register('w-1');
+            registry.register('w-1', 'claude-code', 'claude-opus-5');
             advanceSeconds(WORKER_DEAD_AFTER_SECONDS + 1);
 
             expect(registry.touch('w-2')).toBe('w-1');
-            expect(registry.status()).toMatchObject({ kind: 'connected', workerId: 'w-2' });
+            const status = registry.status();
+            expect(status).toMatchObject({ kind: 'connected', workerId: 'w-2' });
+            // The previous session's harness and model have nothing to do with the new one.
+            expect(status).not.toHaveProperty('harness');
+            expect(status).not.toHaveProperty('model');
         });
 
         it('heartbeat from another worker with a live owner returns worker_conflict', () => {
@@ -245,12 +261,17 @@ describe('worker lifecycle', () => {
     });
 
     it('status survives a server restart: the slot is in storage', () => {
-        registry.register('w-1', 'claude-code');
+        registry.register('w-1', 'claude-code', 'claude-opus-5');
         registry.close();
 
         const restarted = new WorkerRegistry({ db, now: () => new Date(START.getTime() + offsetMs) });
         try {
-            expect(restarted.status()).toMatchObject({ kind: 'connected', workerId: 'w-1', harness: 'claude-code' });
+            expect(restarted.status()).toMatchObject({
+                kind: 'connected',
+                workerId: 'w-1',
+                harness: 'claude-code',
+                model: 'claude-opus-5',
+            });
         } finally {
             restarted.close();
         }

@@ -85,7 +85,7 @@ export function formatFailResponse(response: TaskAckResponse, taskId: number): s
     switch (response.kind) {
         case 'accepted':
             return (
-                `Task sherpa/${String(taskId)} declined successfully. The reviewer can see the reason.\n` +
+                `The refusal of task sherpa/${String(taskId)} is accepted, the reviewer sees the reason.\n` +
                 'Call `sherpa worker next` for the next task.'
             );
         case 'noop':
@@ -123,31 +123,46 @@ export function formatRpcError(error: RpcError['error'], role: CallRole): string
  */
 export function formatOversizedResult(taskId: number, file: string, bytes: number): string {
     return (
-        `sherpa: result is ${kilobytes(bytes)}, limit is ${kilobytes(RESULT_MAX_BYTES)}. Cannot submit this much.\n` +
-        `Shorten ${file} and call \`sherpa task complete ${String(taskId)} --file ${file}\` again. ` +
-        'The task is still yours. Nothing has been lost.'
+        `sherpa: the result is ${kilobytes(bytes)} while the limit is ${kilobytes(RESULT_MAX_BYTES)} — ` +
+        `too large to submit.\nShorten ${file} and call ` +
+        `\`sherpa task complete ${String(taskId)} --file ${file}\` again. ` +
+        'The task stays yours, nothing is lost.'
     );
 }
 
 export function helpText(): string {
     const pollMinutes = String(Math.round(LONG_POLL_MAX_SECONDS / 60));
 
+    const commands: readonly (readonly [string, string])[] = [
+        ['sherpa up [--harness <name>] [--model <name>]', 'start the PR server and become its worker'],
+        ['sherpa worker register [--harness <name>] [--model <name>]', 'register this session as the PR worker'],
+        ['sherpa worker next', `take the next task (waits up to ${pollMinutes} minutes)`],
+        ['sherpa task complete <id> --file <path>', 'submit the result of a task'],
+        ['sherpa task progress <id> --text "<text>"', 'interim status for the reviewer'],
+        ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
+    ];
+    const flags: readonly (readonly [string, string])[] = [
+        ['--pr <key>', 'the PR to connect to; defaults to SHERPA_PR'],
+        ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
+        ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
+        ['--version', 'CLI version'],
+    ];
+
     return [
-        `sherpa ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}), Sherpa worker.`,
+        `sherpa ${CLI_VERSION} (protocol ${PROTOCOL_VERSION}) — the Sherpa worker CLI.`,
         '',
         'Commands:',
-        '  sherpa up [--harness <name>]                start the PR server and register as its worker',
-        '  sherpa worker register [--harness <name>]    register the session as the PR worker',
-        `  sherpa worker next                          get the next task (waits up to ${pollMinutes} minutes)`,
-        '  sherpa task complete <id> --file <path>     submit the task result',
-        '  sherpa task progress <id> --text "<text>"  interim status for the reviewer',
-        '  sherpa task fail <id> --reason "<text>"    decline the task with a reason',
+        ...twoColumns(commands),
         '',
         'Flags:',
-        '  --pr <key>       PR to connect to. Defaults to SHERPA_PR',
-        '  --harness <name>  harness label in worker status, for `up` and `worker register`',
-        '  --version        CLI version',
+        ...twoColumns(flags),
     ].join('\n');
+}
+
+/** Help alignment. The description column is shared across the whole block. */
+function twoColumns(rows: readonly (readonly [string, string])[]): string[] {
+    const width = Math.max(...rows.map(([left]) => left.length));
+    return rows.map(([left, right]) => `  ${left.padEnd(width)}  ${right}`);
 }
 
 function nextStepFor(code: RpcErrorCode, role: CallRole): string | undefined {
@@ -159,20 +174,24 @@ function nextStepFor(code: RpcErrorCode, role: CallRole): string | undefined {
     return NEXT_STEP_BY_CODE[code];
 }
 
-/** Another session took the worker slot during execution. This session cannot continue the loop. */
+/**
+ * The worker slot went to another session during work, so the loop can't continue.
+ * The phrase "stop the loop" is a marker from SKILL.md. Don't change it independently of that file.
+ */
 const WORKER_CONFLICT_STOP =
-    'This session is no longer the worker for this PR: stop the loop and do not call `sherpa` again. ' +
-    'Another session is continuing the work.';
+    'This session is no longer the worker of this PR: stop the loop and do not call `sherpa` again — ' +
+    'another session has taken over.';
 
 /**
  * Next step by error code. `version_incompatible`, `lease_not_held` and `unknown_task`
  * already come with server instructions, so they are not repeated.
  */
 const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, string>> = {
-    unauthorized: 'The manifest token is stale. Restart the Sherpa skill.',
+    unauthorized: 'The token from the manifest is stale — restart the Sherpa skill.',
     bad_request: 'Check the command arguments and call it again.',
-    result_too_large: 'The task is closed. The reviewer can see the reason. Call `sherpa worker next` for the next task.',
-    internal: 'Retry the command. If the error persists, restart the Sherpa skill.',
+    result_too_large:
+        'The task is closed and the reviewer sees why — call `sherpa worker next` for the next one.',
+    internal: 'Repeat the command; if it keeps failing, restart the Sherpa skill.',
 };
 
 function kilobytes(bytes: number): string {

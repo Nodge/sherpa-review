@@ -9,6 +9,8 @@ export type Command =
           readonly prKey: string | undefined;
           /** Harness label for worker status in the UI. Optional. */
           readonly harness: string | undefined;
+          /** Worker model name for worker status in the UI. Optional. */
+          readonly model: string | undefined;
       }
     | { readonly kind: 'worker-next'; readonly prKey: string | undefined }
     | {
@@ -16,6 +18,8 @@ export type Command =
           readonly prKey: string | undefined;
           /** Harness label for worker status in the UI. Optional. */
           readonly harness: string | undefined;
+          /** Worker model name for worker status in the UI. Optional. */
+          readonly model: string | undefined;
       }
     | {
           readonly kind: 'task-complete';
@@ -36,10 +40,13 @@ export type Command =
           readonly reason: string;
       };
 
-const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness'] as const;
+const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model'] as const;
 type OptionName = (typeof OPTIONS)[number];
 
 type TaskSubcommand = 'complete' | 'progress' | 'fail';
+
+/** Contract limit for free-form `harness` and `model` strings (`@sherpa/protocol`). */
+const LABEL_MAX_CHARS = 64;
 
 /**
  * Parse arguments. Any malformed input raises `CliError` with a hint for the correct invocation.
@@ -69,9 +76,27 @@ export function parseArgs(argv: readonly string[]): Command {
 
     throw new CliError(
         `sherpa: unknown command ${JSON.stringify(positionals.join(' '))}.\n` +
-            'Available: `sherpa up`, `sherpa worker next`, `sherpa task complete|progress|fail <id>`. ' +
-            '`sherpa --help` shows the full list.',
+            'Available: `sherpa up`, `sherpa worker next`, `sherpa task complete|progress|fail <id>`; ' +
+            '`sherpa --help` lists them all.',
     );
+}
+
+/**
+ * Harness or model label from an argument. The model supplies it in whatever form it chooses:
+ * in quotes, in backticks, with surrounding whitespace, sometimes beyond the contract limit.
+ * A string that is empty after sanitizing is equivalent to an absent parameter.
+ */
+export function sanitizeLabel(raw: string | undefined): string | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+
+    const trimmed = raw
+        .replace(/^[\s'"`]+/u, '')
+        .replace(/[\s'"`]+$/u, '')
+        .slice(0, LABEL_MAX_CHARS)
+        .trim();
+    return trimmed === '' ? undefined : trimmed;
 }
 
 function parseUpCommand(
@@ -82,12 +107,16 @@ function parseUpCommand(
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up --pr <PR key> [--harness <harness name>]`.',
+                'Expected `sherpa up --pr <pr key> [--harness <harness name>] [--model <model name>]`.',
         );
     }
 
-    const harness = options.get('--harness');
-    return { kind: 'up', prKey, harness: harness === '' ? undefined : harness };
+    return {
+        kind: 'up',
+        prKey,
+        harness: sanitizeLabel(options.get('--harness')),
+        model: sanitizeLabel(options.get('--model')),
+    };
 }
 
 function parseWorkerCommand(
@@ -98,12 +127,16 @@ function parseWorkerCommand(
     const sub = positionals[1];
     if ((sub !== 'next' && sub !== 'register') || positionals.length > 2) {
         throw new CliError(
-            'sherpa: the `worker` group has two commands: `sherpa worker next` and `sherpa worker register`.',
+            'sherpa: group `worker` has two commands — `sherpa worker next` and `sherpa worker register`.',
         );
     }
     if (sub === 'register') {
-        const harness = options.get('--harness');
-        return { kind: 'worker-register', prKey, harness: harness === '' ? undefined : harness };
+        return {
+            kind: 'worker-register',
+            prKey,
+            harness: sanitizeLabel(options.get('--harness')),
+            model: sanitizeLabel(options.get('--model')),
+        };
     }
     return { kind: 'worker-next', prKey };
 }
@@ -116,13 +149,13 @@ function parseTaskCommand(
     const sub = positionals[1];
     if (sub !== 'complete' && sub !== 'progress' && sub !== 'fail') {
         throw new CliError(
-            'sherpa: the `task` group has three commands: `complete`, `progress`, `fail`.\n' +
+            'sherpa: group `task` has three commands — `complete`, `progress`, `fail`.\n' +
                 'For example: `sherpa task complete 42 --file answer.md`.',
         );
     }
     if (positionals.length > 3) {
         throw new CliError(
-            `sherpa: extra arguments for \`task ${sub}\`: ${positionals.slice(3).join(' ')}.\n` +
+            `sherpa: unexpected arguments after \`task ${sub}\`: ${positionals.slice(3).join(' ')}.\n` +
                 `Expected \`sherpa task ${sub} <id> ${requiredOptionOf(sub)} "..."\`.`,
         );
     }
@@ -142,8 +175,8 @@ function parseTaskCommand(
 function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     if (raw === undefined) {
         throw new CliError(
-            `sherpa: task number is missing.\nCall \`sherpa task ${sub} <id> ${requiredOptionOf(sub)} "..."\`, ` +
-                'using the task number from the output of `sherpa worker next`.',
+            `sherpa: no task number given.\nCall \`sherpa task ${sub} <id> ${requiredOptionOf(sub)} "..."\`; ` +
+                'the task number comes from the output of `sherpa worker next`.',
         );
     }
 
@@ -152,7 +185,7 @@ function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     const taskId = Number(digits);
     if (!Number.isInteger(taskId) || taskId <= 0) {
         throw new CliError(
-            `sherpa: task number must be a positive number, got ${JSON.stringify(raw)}.\n` +
+            `sherpa: the task number must be a positive number, got ${JSON.stringify(raw)}.\n` +
                 'Take the number from the output of `sherpa worker next` (the `TASK sherpa/<id>` line).',
         );
     }
@@ -200,7 +233,7 @@ function splitArgs(argv: readonly string[]): {
         const name = separator === -1 ? arg : arg.slice(0, separator);
         if (!isOption(name)) {
             throw new CliError(
-                `sherpa: unknown flag ${name}.\nAvailable flags: ${OPTIONS.join(', ')}, --version, --help.`,
+                `sherpa: unknown flag ${name}.\nAvailable: ${OPTIONS.join(', ')}, --version, --help.`,
             );
         }
 

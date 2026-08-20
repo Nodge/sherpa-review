@@ -48,7 +48,27 @@ describe('skill package build', () => {
         expect(skill).toMatch(/^---\nname: sherpa\n/u);
         expect(skill).toContain('bin/sherpa.mjs up --pr');
         expect(skill).toContain('bin/sherpa.mjs worker next --pr');
+        expect(skill).toContain('--model');
         expect(skill).toContain('DONE');
+    });
+
+    /**
+     * The SKILL.md loop identifies situations by exact output phrases: "No tasks" is not an error,
+     * "stop the loop" ends the loop, DONE ends the work. If the wording drifts, the model
+     * silently stops recognizing these situations, so the build checks the agreement.
+     */
+    it('uses the exact loop marker phrases from SKILL.md in CLI and server output', () => {
+        const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
+        const cli = readFileSync(cliPath, 'utf8');
+        const server = readFileSync(serverPath, 'utf8');
+
+        // Quotes in SKILL.md surround exactly the phrases the model looks for in output.
+        const markers = [...skill.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+        expect(markers).toEqual(expect.arrayContaining(['No tasks', 'stop the loop']));
+
+        for (const marker of [...markers, 'DONE']) {
+            expect(`${cli}\n${server}`, marker).toContain(marker);
+        }
     });
 
     // Bootstrap is inside `sherpa up`. Mentioning the server or registration in SKILL.md again

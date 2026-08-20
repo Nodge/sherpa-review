@@ -122,13 +122,13 @@ describe('worker endpoints', () => {
     });
 
     describe('register', () => {
-        it('session registration: acknowledgement and worker status with harness', async () => {
+        it('acknowledges session registration and reports worker status with harness and model', async () => {
             const server = await start();
 
             const response = await postJson(
                 server.port,
                 WORKER_ENDPOINTS.register,
-                { ...BASE, harness: 'claude-code' },
+                { ...BASE, harness: 'claude-code', model: 'claude-opus-5' },
                 server.token,
             );
 
@@ -140,6 +140,7 @@ describe('worker endpoints', () => {
                 kind: 'connected',
                 workerId: WORKER,
                 harness: 'claude-code',
+                model: 'claude-opus-5',
             });
         });
 
@@ -157,7 +158,7 @@ describe('worker endpoints', () => {
             expect(response.status).toBe(409);
             const body = rpcErrorSchema.parse(await response.json());
             expect(body.error.code).toBe('worker_conflict');
-            expect(body.error.message).toContain('another live session');
+            expect(body.error.message).toContain('Another live session');
             expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
         });
 

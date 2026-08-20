@@ -204,7 +204,9 @@ async function startupFailed(
     timeoutMs: number,
     reaped: boolean,
 ): Promise<string> {
-    const lines = [`sherpa: the server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s.`];
+    const lines = [
+        `sherpa: the server for PR ${prKey} did not start within ${String(Math.round(timeoutMs / 1000))} s.`,
+    ];
     if (daemon.spawnError !== null) {
         lines.push(`The process could not be started: ${daemon.spawnError.message}`);
     }
@@ -239,7 +241,7 @@ async function readLogTail(logPath: string): Promise<string> {
     try {
         text = await fs.readFile(logPath, 'utf8');
     } catch {
-        return '(log is empty)';
+        return '(the log is empty)';
     }
     const tail = text.split('\n').slice(-LOG_TAIL_LINES).join('\n').trim();
     return tail === '' ? '(the log is empty)' : tail;

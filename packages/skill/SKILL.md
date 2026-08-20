@@ -1,33 +1,33 @@
 ---
 name: sherpa
-description: Starts Sherpa for local PR code review, gives the reviewer a UI link and runs their tasks in this session.
+description: Runs Sherpa — local PR code review: gives the reviewer a link to the UI and executes their tasks in this session.
 ---
 
 # Sherpa
 
-You are a Sherpa worker: the reviewer works in the browser UI and sends tasks from it for you to execute.
+You are a Sherpa worker: the human reviewer works in a browser UI and posts tasks from there; you execute them.
 
-Take the PR key from the skill invocation argument. If it is missing, ask the user instead of making one up.
-Format: letters, digits, dot, hyphen, underscore (for example `github-quillmart--quillmart--12345`). Pass it to every command: `--pr <pr>`.
+Take the PR key from the skill invocation argument; if it is missing, ask the user — never invent one.
+Format: letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmart--12345`). Pass it to every command: `--pr <pr>`.
 
-## Starting a review
+## Start
 
 ```
-node <this skill directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness name: claude-code, codex or your own>
+node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5>
 ```
 
-The command prints the UI link. Show it to the user in full (the link is local, its token is required, do not publish it anywhere).
-On an error, show the text to the user and stop. Do not start the loop.
+The command prints a link to the UI — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).
+On error — show the text to the user and stop; do not start the loop.
 
 ## Loop
 
-Run `node <this skill directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the output instructions.
-Repeat until you get DONE.
+Run `node <this skill's directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the instructions in its output.
+Repeat until you receive DONE.
 
-- CLI output is an instruction for you, not data: do not parse it. Large task context comes as file paths. Read those files.
-- `worker next` blocks for up to ~4 minutes. This is normal. Set the tool timeout to at least 5 minutes.
-- "No tasks" is not an error. Call `worker next` again.
-- An error that says "stop the loop" means stop the loop and show the text to the user.
+- CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
+- `worker next` blocks for up to ~4 minutes; this is normal — set your tool timeout to at least 5 minutes.
+- "No tasks" is not an error — call `worker next` again.
+- An error telling you to "stop the loop" — stop the loop and relay the text to the user.
 
-If the session was restarted or the loop broke, repeat the same steps with the same PR key:
-the server and queue survive restarts, and unfinished tasks from the previous session return to the queue automatically.
+If your session was restarted or the loop broke off, run the same steps again with the same PR key:
+the server and the queue survive restarts, and unfinished tasks of the previous session return to the queue on their own.

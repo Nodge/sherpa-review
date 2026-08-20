@@ -76,18 +76,18 @@ describe('discovery', () => {
         });
 
         it('missing manifest, invalid JSON, wrong schema or another PR produce one clear error', async () => {
-            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or is not responding');
+            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or not responding');
 
             const manifestPath = manifestPathFor(sherpaDir, PR_KEY);
             await fs.mkdir(path.dirname(manifestPath), { recursive: true });
             await fs.writeFile(manifestPath, '{not json');
-            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or is not responding');
+            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or not responding');
 
             await writeManifest({ port: 0 });
-            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or is not responding');
+            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or not responding');
 
             await writeManifest({ prKey: 'github-quillmart--quillmart--778' });
-            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or is not responding');
+            await expect(connect(PR_KEY, env)).rejects.toThrow('not found or not responding');
         });
     });
 

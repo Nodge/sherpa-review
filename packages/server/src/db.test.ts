@@ -56,6 +56,29 @@ describe('storage', () => {
         second.close();
     });
 
+    // The PR database survives skill upgrades. New migrations apply to existing state.
+    it('applies the latest migration to an existing database without losing its data', () => {
+        const file = `${sherpaDir}/upgrade.db`;
+
+        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        before
+            .prepare('INSERT INTO worker (id, worker_id, harness, registered_at, last_seen_at) VALUES (1, ?, ?, ?, ?)')
+            .run('w-1', 'claude-code', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(readSchemaVersion(after)).toBe(String(MIGRATIONS.length));
+            expect(after.prepare('SELECT worker_id, harness, model FROM worker').get()).toMatchObject({
+                worker_id: 'w-1',
+                harness: 'claude-code',
+                model: null,
+            });
+        } finally {
+            after.close();
+        }
+    });
+
     it('includes service tables and a task queue with a scheduler index in the schema', () => {
         const db = openDatabase(`${sherpaDir}/tables.db`);
         try {

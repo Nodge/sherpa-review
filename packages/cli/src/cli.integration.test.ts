@@ -123,6 +123,29 @@ describe('CLI against server', () => {
         });
     });
 
+    it('passes --model to worker status and strips wrapping', async () => {
+        const running = await start();
+
+        // The model names itself in whatever form it chooses, here in backticks.
+        const result = await sherpaWith({}, 'up', '--harness', 'claude-code', '--model', '`claude-opus-5[1m]`');
+
+        expect(result.code).toBe(0);
+        expect(running.workerRegistry.status()).toMatchObject({
+            kind: 'connected',
+            harness: 'claude-code',
+            model: 'claude-opus-5[1m]',
+        });
+    });
+
+    it('leaves status without a model when --model is missing or empty', async () => {
+        const running = await start();
+
+        const blank = await sherpaWith({}, 'up', '--harness=claude-code', '--model=   ');
+
+        expect(blank.code).toBe(0);
+        expect(running.workerRegistry.status()).not.toHaveProperty('model');
+    });
+
     it('repeated up renews the same slot without starting another server', async () => {
         const running = await start();
         // No pinned identity. Each CLI invocation takes a fresh id, as in real use.
@@ -168,7 +191,7 @@ describe('CLI against server', () => {
         const second = await sherpaWith({}, 'up', '--harness', 'claude-code');
 
         expect(second.code).toBe(1);
-        expect(second.stderr).toContain('another live session');
+        expect(second.stderr).toContain('Another live session');
         expect(second.stdout).not.toContain('http://127.0.0.1:');
         expect(running.workerRegistry.status()).toMatchObject({ workerId: 'other-session' });
     });
@@ -181,7 +204,7 @@ describe('CLI against server', () => {
         const pinned = await sherpaWith({ extraEnv: { SHERPA_WORKER_ID: 'session-2' } }, 'up');
 
         expect(pinned.code).toBe(1);
-        expect(pinned.stderr).toContain('another live session');
+        expect(pinned.stderr).toContain('Another live session');
         expect(running.workerRegistry.status()).toMatchObject({ workerId });
     });
 
@@ -246,11 +269,11 @@ describe('CLI against server', () => {
         const second = await sherpa('worker', 'register', '--harness', 'codex');
 
         expect(second.code).toBe(1);
-        expect(second.stderr).toContain('another live session');
+        expect(second.stderr).toContain('Another live session');
         expect(second.stderr).toContain('claude-code');
-        // The server says to wait and restart the skill. Adding "stop the loop" would contradict that.
+        // The server says to wait and restart the skill. Appending "stop the loop" contradicts that.
         // and is also wrong because this session was never a worker.
-        expect(second.stderr).toContain('start the Sherpa skill again');
+        expect(second.stderr).toContain('run the Sherpa skill again');
         expect(second.stderr).not.toContain('stop the loop');
         expect(await readWorkerIdFile()).toBe(first);
     });
@@ -330,7 +353,7 @@ describe('CLI against server', () => {
 
         expect(refused.code).toBe(1);
         expect(refused.stderr).toContain('the limit is 256 KB');
-        expect(refused.stderr).toContain('stays yours');
+        expect(refused.stderr).toContain('The task stays yours');
         // The server never saw the attempt. The task is still leased, not failed.
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
     });
@@ -358,7 +381,7 @@ describe('CLI against server', () => {
         const repeated = await sherpa('task', 'complete', String(taskId), '--file', file);
 
         expect(repeated.code).toBe(0);
-        expect(repeated.stdout).toContain('already complete');
+        expect(repeated.stdout).toContain('is already finished');
         expect(repeated.stdout).toContain('sherpa worker next');
     });
 
@@ -401,8 +424,8 @@ describe('CLI against server', () => {
         const result = await sherpa('worker', 'next');
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain(`Sherpa server for PR ${PR_KEY} was not found or is not responding`);
-        expect(result.stderr).toContain('Restart the Sherpa skill');
+        expect(result.stderr).toContain(`the Sherpa server for PR ${PR_KEY} is not found or not responding`);
+        expect(result.stderr).toContain('Run the Sherpa skill again');
     });
 
     it('manifest exists but the server is dead: the same error', async () => {
@@ -418,7 +441,7 @@ describe('CLI against server', () => {
         const result = await sherpa('worker', 'next');
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('not found or is not responding');
+        expect(result.stderr).toContain('not found or not responding');
     });
 
     it('wrong token: server rejects it, CLI hides the error code', async () => {

@@ -5,6 +5,7 @@ import { RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import type { Command } from './args.js';
 import { parseArgs } from './args.js';
+import type { WorkerLabels } from './client.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
 import {
     connect,
@@ -87,7 +88,7 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
     });
-    await claimWorkerSlot(prKey, command.harness, io);
+    await claimWorkerSlot(prKey, labelsOf(command), io);
 
     io.out(formatUpReady(uiUrl, prKey));
     return 0;
@@ -100,9 +101,9 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
  * A refusal remains a refusal only when the live worker really belongs to another session.
  * A pinned `SHERPA_WORKER_ID` prevents substitution: the other commands will use it anyway.
  */
-async function claimWorkerSlot(prKey: string, harness: string | undefined, io: CliIo): Promise<void> {
+async function claimWorkerSlot(prKey: string, labels: WorkerLabels, io: CliIo): Promise<void> {
     try {
-        await registerWorker(prKey, harness, io);
+        await registerWorker(prKey, labels, io);
         return;
     } catch (error) {
         if (!(error instanceof RpcCallError) || error.code !== 'worker_conflict') {
@@ -112,12 +113,12 @@ async function claimWorkerSlot(prKey: string, harness: string | undefined, io: C
         if (previous === null) {
             throw error;
         }
-        await registerAs(previous, prKey, harness, io);
+        await registerAs(previous, prKey, labels, io);
     }
 }
 
 async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {
-    const response = await registerWorker(command.prKey, command.harness, io);
+    const response = await registerWorker(command.prKey, labelsOf(command), io);
 
     // The server text already contains the next loop step. The CLI prints it as is.
     io.out(response.message);
@@ -130,22 +131,27 @@ async function workerRegister(command: Extract<Command, { kind: 'worker-register
  */
 async function registerWorker(
     prKeyArg: string | undefined,
-    harness: string | undefined,
+    labels: WorkerLabels,
     io: CliIo,
 ): Promise<WorkerRegisterResponse> {
-    return registerAs(freshWorkerId(io.env), prKeyArg, harness, io);
+    return registerAs(freshWorkerId(io.env), prKeyArg, labels, io);
 }
 
 async function registerAs(
     workerId: string,
     prKeyArg: string | undefined,
-    harness: string | undefined,
+    labels: WorkerLabels,
     io: CliIo,
 ): Promise<WorkerRegisterResponse> {
     const connection = await connectAs(prKeyArg, io.env, workerId);
-    const response = await requestRegister(connection, harness);
+    const response = await requestRegister(connection, labels);
     await storeWorkerId(io.env, connection.prKey, workerId);
     return response;
+}
+
+/** Session labels from command arguments. `up` and `worker register` declare them the same way. */
+function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>): WorkerLabels {
+    return { harness: command.harness, model: command.model };
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
@@ -196,12 +202,12 @@ export async function readResultFile(file: string, taskId: number): Promise<stri
     const stats = await fs.stat(file).catch(() => null);
     if (stats === null) {
         throw new CliError(
-            `sherpa: file ${file} does not exist.\nSave the result to a file and call ` +
+            `sherpa: there is no file ${file}.\nSave the result to a file and call ` +
                 `\`sherpa task complete ${String(taskId)} --file <path>\` again.`,
         );
     }
     if (!stats.isFile()) {
-        throw new CliError(`sherpa: ${file} is not a file.\nProvide the path to the file with the task result.`);
+        throw new CliError(`sherpa: ${file} is not a file.\nPass the path of the file with the task result.`);
     }
     if (stats.size > RESULT_MAX_BYTES) {
         throw new CliError(formatOversizedResult(taskId, file, stats.size));
@@ -212,7 +218,7 @@ export async function readResultFile(file: string, taskId: number): Promise<stri
         result = await fs.readFile(file, 'utf8');
     } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        throw new CliError(`sherpa: cannot read ${file}: ${detail}.\nCheck the path and file permissions.`);
+        throw new CliError(`sherpa: cannot read ${file} — ${detail}.\nCheck the path and the file permissions.`);
     }
 
     // File size and string length differ with invalid encoding. Count again using what will go into the body.

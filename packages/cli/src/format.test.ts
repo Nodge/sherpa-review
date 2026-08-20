@@ -15,7 +15,7 @@ const task: Task = {
     type: 'echo',
     priority: 'interactive',
     attempt: 1,
-    instructions: 'Return the file contents as is.',
+    instructions: 'Return the contents of the file as is.',
     contextFiles: ['/tmp/sherpa/task-42-context.md'],
 };
 
@@ -24,7 +24,7 @@ describe('task prompt format', () => {
         const output = formatTask(task);
 
         expect(output.startsWith('TASK sherpa/42 (echo), attempt 1')).toBe(true);
-        expect(output).toContain('Return the file contents as is.');
+        expect(output).toContain('Return the contents of the file as is.');
         expect(output).toContain('Context: /tmp/sherpa/task-42-context.md');
         expect(output).toContain('sherpa task complete 42 --file <path>');
         expect(output).toContain('sherpa task progress 42 --text');
@@ -40,37 +40,37 @@ describe('task prompt format', () => {
     });
 
     it('prints DONE as a separate word that ends the session', () => {
-        expect(formatDone('No more work.').split('\n')).toContain('DONE');
+        expect(formatDone('There is no more work.').split('\n')).toContain('DONE');
     });
 });
 
 describe('complete responses', () => {
     it('accepted asks for the next task', () => {
-        const output = formatCompleteResponse({ kind: 'accepted', message: 'Result accepted.' }, 42);
+        const output = formatCompleteResponse({ kind: 'accepted', message: 'The result is accepted.' }, 42);
 
-        expect(output).toContain('Result accepted.');
+        expect(output).toContain('The result is accepted.');
         expect(output).toContain('sherpa worker next');
     });
 
     it('rejected lists errors and asks to call complete again', () => {
-        const output = formatCompleteResponse({ kind: 'rejected', errors: ['empty', 'missing "summary" section'] }, 42);
+        const output = formatCompleteResponse({ kind: 'rejected', errors: ['empty', 'no summary section'] }, 42);
 
         expect(output).toContain('1. empty');
-        expect(output).toContain('2. missing "summary" section');
+        expect(output).toContain('2. no summary section');
         expect(output).toContain('sherpa task complete 42 --file <path>');
     });
 
     it('noop prints the server message', () => {
-        const output = formatCompleteResponse({ kind: 'noop', message: 'Task sherpa/42 is already complete.' }, 42);
+        const output = formatCompleteResponse({ kind: 'noop', message: 'Task sherpa/42 is already finished.' }, 42);
 
-        expect(output).toContain('already complete');
+        expect(output).toContain('is already finished');
     });
 });
 
 /** Server text for `worker_conflict` (worker-registry) asks to retry registration itself. */
 const CONFLICT_MESSAGE =
-    'The worker for this PR is already another live session (w-1). Two sessions per PR are not supported. ' +
-    'If this is a reconnection, wait 6 min, or stop it and call `sherpa worker register` again.';
+    'Another live session (w-1) is already the worker of this PR — two sessions per PR are not supported. ' +
+    'If this is a reconnect, wait 6 min, or stop it and run the Sherpa skill again.';
 
 describe('errors', () => {
     it('prints the server message and details as a list', () => {
@@ -78,18 +78,18 @@ describe('errors', () => {
             {
                 code: 'bad_request',
                 message: 'The request failed contract validation.',
-                details: ['taskId: expected number'],
+                details: ['taskId: a number is expected'],
             },
             'worker',
         );
 
         expect(output).toContain('The request failed contract validation.');
-        expect(output).toContain('- taskId: expected a number');
+        expect(output).toContain('- taskId: a number is expected');
         expect(output).not.toContain('bad_request');
     });
 
     it('does not duplicate hints when the server already says what to do', () => {
-        const message = 'CLI protocol version 9.9.9 is incompatible. Update the skill together with the CLI.';
+        const message = 'The CLI protocol version 9.9.9 is incompatible. Update the skill together with the CLI.';
 
         expect(formatRpcError({ code: 'version_incompatible', message }, 'worker')).toBe(`sherpa: ${message}`);
     });
@@ -114,6 +114,6 @@ describe('errors', () => {
         expect(output).toContain('512 KB');
         expect(output).toContain('256 KB');
         expect(output).toContain('sherpa task complete 42 --file /tmp/answer.md');
-        expect(output).toContain('stays yours');
+        expect(output).toContain('The task stays yours');
     });
 });

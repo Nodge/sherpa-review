@@ -72,11 +72,11 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             path: WORKER_ENDPOINTS.register,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerRegisterRequestSchema);
-                reclaimLeases(options.registry.register(request.workerId, request.harness));
+                reclaimLeases(options.registry.register(request.workerId, request.harness, request.model));
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
-                        'The session is registered as the worker for this PR. Call `sherpa worker next` ' +
+                        'This session is registered as the worker of this PR. Run `sherpa worker next` ' +
                         'and follow the instructions in its output.',
                 };
                 return { status: 200, body };
@@ -139,7 +139,7 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
     if (!parsed.success) {
         throw new RpcFailure(
             'bad_request',
-            'The request failed contract validation. Fix the fields and call the command again.',
+            'The request failed contract validation — fix the fields and call the command again.',
             parsed.error.issues.map((issue) => {
                 const path = issue.path.join('.');
                 return path === '' ? issue.message : `${path}: ${issue.message}`;
@@ -150,8 +150,9 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
     if (!protocolVersionsCompatible(parsed.data.protocolVersion, PROTOCOL_VERSION)) {
         throw new RpcFailure(
             'version_incompatible',
-            `CLI protocol version ${parsed.data.protocolVersion} is incompatible with server version ${PROTOCOL_VERSION}. ` +
-                'Update the skill together with the CLI and restart the Sherpa server. They are installed as one distribution.',
+            `The CLI protocol version ${parsed.data.protocolVersion} is incompatible with the server one ` +
+                `${PROTOCOL_VERSION}. Update the skill together with the CLI and restart the Sherpa server — ` +
+                'they ship together.',
         );
     }
     return parsed.data;
@@ -196,6 +197,7 @@ async function pollForTask(
         abort.dispose();
     }
 
+    // "No tasks" is a marker from SKILL.md: it says this is not an error and `next` must be called again.
     return { kind: 'idle', message: 'No tasks yet. Call `sherpa worker next` again.' };
 }
 

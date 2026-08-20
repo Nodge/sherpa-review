@@ -44,6 +44,6 @@ describe('result size precheck', () => {
         await expect(readResultFile(path.join(workDir, 'missing.md'), 42)).rejects.toThrow(
             'sherpa task complete 42 --file <path>',
         );
-        await expect(readResultFile(workDir, 42)).rejects.toThrow('not a file');
+        await expect(readResultFile(workDir, 42)).rejects.toThrow('is not a file');
     });
 });

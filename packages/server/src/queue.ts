@@ -283,11 +283,19 @@ export class TaskQueue {
         const bytes = Buffer.byteLength(result, 'utf8');
         if (bytes > RESULT_MAX_BYTES) {
             // Spec §3.5: exceeding the limit fails the task, rather than asking to try again.
-            const reason =
-                `Result exceeds the limit: ${String(bytes)} bytes, maximum ${String(RESULT_MAX_BYTES)}. ` +
-                'The task has failed.';
-            this.closeTask(taskId, 'failed', { failReason: reason });
-            return fail(new RpcFailure('result_too_large', reason));
+            // The card reason is for the reviewer (Russian), the error text is for the model (English).
+            this.closeTask(taskId, 'failed', {
+                failReason:
+                    `Result exceeds the limit: ${String(bytes)} bytes with a maximum of ` +
+                    `${String(RESULT_MAX_BYTES)}. The task has failed.`,
+            });
+            return fail(
+                new RpcFailure(
+                    'result_too_large',
+                    `The result exceeds the limit: ${String(bytes)} bytes against the allowed ` +
+                        `${String(RESULT_MAX_BYTES)}. The task is closed with an error.`,
+                ),
+            );
         }
 
         // Fail-closed acceptance against a result schema arrives with typed tasks (M2).
@@ -295,7 +303,7 @@ export class TaskQueue {
         if (result.trim() === '') {
             return ok({
                 kind: 'rejected',
-                errors: ['The result is empty. Return nonempty text and call `complete` again.'],
+                errors: ['The result is empty. Return a non-empty text and call `complete` again.'],
             });
         }
 
@@ -415,6 +423,7 @@ export class TaskQueue {
                      fail_reason = ?, updated_at = ? WHERE id = ?`,
                 )
                 .run(
+                    // Only the reviewer sees the failure reason in the UI, so the text is Russian.
                     `The worker took the task ${String(MAX_TASK_ATTEMPTS)} times without completing it. ` +
                         'attempts exhausted.',
                     nowIso,
@@ -555,11 +564,11 @@ function closedMessage(row: TaskRow): string {
     const id = `sherpa/${String(row.id)}`;
     switch (row.status as TaskStatus) {
         case 'cancelled':
-            return `Task ${id} was cancelled, nothing needs to be done.`;
+            return `Task ${id} has been cancelled — there is nothing to do.`;
         case 'done':
-            return `Task ${id} is already complete, a repeated call changes nothing.`;
+            return `Task ${id} is already finished, calling again changes nothing.`;
         default:
-            return `Task ${id} has already failed, a repeated call changes nothing.`;
+            return `Task ${id} is already closed with an error, calling again changes nothing.`;
     }
 }
 
