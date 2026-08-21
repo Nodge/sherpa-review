@@ -7,6 +7,7 @@ import { createStore } from './store.js';
 
 const STATE: UiState = {
     prKey: 'github-quillmart--quillmart--1',
+    reviewHost: 'github',
     worker: { kind: 'never' },
     tasks: [
         {

@@ -15,11 +15,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sherpa/fixtures": "workspace:*",
     "@sherpa/protocol": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@sherpa/fixtures": "workspace:*",
     "@sherpa/ui": "workspace:*",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12"

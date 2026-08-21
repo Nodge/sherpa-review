@@ -48,10 +48,11 @@ describe('UI endpoints', () => {
     });
 
     async function start(uiDir?: string): Promise<SherpaServer> {
+        // This suite uses a hosted review key, but tests must not call a live service (requirements §7):
+        // no host means review endpoints return `no_review_host` and SSE only sends state.
+        const base = { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3, reviewHostFactory: () => null };
         const server = await startServer(
-            uiDir === undefined
-                ? { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3 }
-                : { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3, assets: directoryAssets(uiDir) },
+            uiDir === undefined ? base : { ...base, assets: directoryAssets(uiDir) },
         );
         servers.push(server);
         return server;
@@ -262,6 +263,7 @@ describe('UI endpoints', () => {
                 sherpaDir,
                 longPollSeconds: 30,
                 workerGapGraceSeconds: 0.3,
+                reviewHostFactory: () => null,
             });
             servers.push(server);
             const stream = await openEvents(server);

@@ -139,6 +139,10 @@ export const rpcErrorCodeSchema = z.enum([
     'worker_conflict',
     /** The `complete` result exceeded the limit, the task failed (spec §3.5). */
     'result_too_large',
+    /** This server's prKey maps to no host, so review endpoints are unavailable (M1-T10). */
+    'no_review_host',
+    /** The host adapter failed: network, token or response schema validation. The text gives a human-readable reason. */
+    'host_unavailable',
     /** Internal server error. The caller is not at fault, a retry may help. */
     'internal',
 ]);

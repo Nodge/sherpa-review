@@ -27,6 +27,14 @@ export {
     rpcError,
     rpcFailureResponse,
 } from './http.js';
+
+
+
+
+
+
+export type { ReviewHostFactory, SelectedHost } from './hosts/select.js';
+export { selectReviewHost } from './hosts/select.js';
 export {
     claimManifest,
     cleanStaleManifests,
@@ -48,6 +56,9 @@ export {
 } from './paths.js';
 export type { CancelOutcome, EnqueueInput, LeasedTask, TaskQueueOptions, TaskRecord } from './queue.js';
 export { TaskQueue } from './queue.js';
+export { ReviewFeed } from './review-feed.js';
+export type { ReviewRoutesOptions } from './review-routes.js';
+export { createReviewRoutes } from './review-routes.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
 export type { StaticAsset, StaticAssets } from './static.js';

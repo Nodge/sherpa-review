@@ -1,8 +1,9 @@
 import type { ServerResponse } from 'node:http';
 
-import type { UiCancelResponse, UiEnqueueResponse, UiState, UiTask } from '@sherpa/protocol';
+import type { UiCancelResponse, UiEnqueueResponse, UiReviewEvent, UiState, UiTask } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
+    UI_REVIEW_EVENT,
     UI_STATE_EVENT,
     uiCancelRequestSchema,
     uiEnqueueRequestSchema,
@@ -14,12 +15,17 @@ import { RpcFailure } from './errors.js';
 import type { RequestContext, Route, StreamContext } from './http.js';
 import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
 import type { TaskQueue, TaskRecord } from './queue.js';
+import type { ReviewFeed } from './review-feed.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 export interface UiRoutesOptions {
     readonly prKey: string;
     readonly queue: TaskQueue;
     readonly registry: WorkerRegistry;
+    /** This PR's host adapter name. null means no host and no review endpoints. */
+    readonly reviewHost: string | null;
+    /** Thread revision for SSE. null means this server never has review events. */
+    readonly reviewFeed: ReviewFeed | null;
     /** Server shutdown: closes pending SSE connections so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
 }
@@ -123,16 +129,28 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         });
     };
 
+    const pushReview = (revision: number): void => {
+        if (abort.signal.aborted || res.writableEnded || res.destroyed) {
+            return;
+        }
+        const event: UiReviewEvent = { threadsRevision: revision };
+        sendEvent(res, UI_REVIEW_EVENT, JSON.stringify(event));
+    };
+
     const keepalive = setInterval(push, KEEPALIVE_INTERVAL_MS);
     keepalive.unref();
 
     const unsubscribeQueue = options.queue.subscribeChanges(schedule);
     const unsubscribeWorker = options.registry.subscribe(schedule);
+    // Thread subscription starts with the first SSE client and stops with the last (see ReviewFeed).
+    // It starts after the first state snapshot so that the channel begins with `state`.
+    let unsubscribeReview: (() => void) | null = null;
 
     const stop = (): void => {
         clearInterval(keepalive);
         unsubscribeQueue();
         unsubscribeWorker();
+        unsubscribeReview?.();
         abort.dispose();
         if (!res.writableEnded && !res.destroyed) {
             res.end();
@@ -146,6 +164,12 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     }
 
     push();
+    // Send the current revision immediately: a reconnected client must learn that threads changed.
+    // The channel may have closed during `push` (snapshot assembly failed), leaving nothing to subscribe to.
+    if (options.reviewFeed !== null && !res.writableEnded && !res.destroyed) {
+        pushReview(options.reviewFeed.revision);
+        unsubscribeReview = options.reviewFeed.subscribe(pushReview);
+    }
 }
 
 function sendEvent(res: ServerResponse, event: string, data: string): void {
@@ -159,6 +183,7 @@ function buildState(options: UiRoutesOptions): UiState {
         prKey: options.prKey,
         worker: options.registry.status(),
         tasks: options.queue.listTasks().map(toUiTask),
+        reviewHost: options.reviewHost,
     };
 }
 

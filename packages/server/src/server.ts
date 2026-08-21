@@ -7,6 +7,8 @@ import { createToken } from './auth.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { ServerAlreadyRunningError } from './errors.js';
+import type { ReviewHostFactory } from './hosts/select.js';
+import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
 import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
@@ -29,6 +31,8 @@ import {
     workerIdPathFor,
 } from './paths.js';
 import { TaskQueue } from './queue.js';
+import { ReviewFeed } from './review-feed.js';
+import { createReviewRoutes } from './review-routes.js';
 import type { StaticAssets } from './static.js';
 import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
@@ -65,6 +69,11 @@ export interface StartServerOptions {
      * an open connection or a lease counts as alive. Internal policy, shortened in tests.
      */
     workerGapGraceSeconds?: number;
+    /**
+     * Selects a host adapter by PR key. Defaults to `selectReviewHost`. Tests can inject a host
+     * without a live service (`() => null` runs the server without review endpoints).
+     */
+    reviewHostFactory?: ReviewHostFactory;
 }
 
 export interface SherpaServer {
@@ -160,6 +169,10 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const unsubscribeQueue = queue.subscribeChanges(() => {
             workerRegistry.checkNow();
         });
+        const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
+        // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
+        const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
+
         routes.push(
             ...createWorkerRoutes({
                 queue,
@@ -174,8 +187,11 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 prKey,
                 queue,
                 registry: workerRegistry,
+                reviewHost: reviewHost?.name ?? null,
+                reviewFeed,
                 shutdownSignal: shutdownController.signal,
             }),
+            ...createReviewRoutes({ host: reviewHost?.host ?? null }),
         );
 
         const handle = createHandle({
@@ -188,6 +204,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             unsubscribeQueue,
             shutdownController,
             idleWatch,
+            reviewFeed,
         });
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
         idleWatch.arm(() => {
@@ -267,6 +284,7 @@ function createHandle(parts: {
     unsubscribeQueue: () => void;
     shutdownController: AbortController;
     idleWatch: IdleWatch;
+    reviewFeed: ReviewFeed | null;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -286,6 +304,8 @@ function createHandle(parts: {
                 // after close(), nothing should read from it.
                 parts.unsubscribeQueue();
                 parts.workerRegistry.close();
+                // Stop host polling here too, or the subscription would outlive server shutdown.
+                parts.reviewFeed?.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

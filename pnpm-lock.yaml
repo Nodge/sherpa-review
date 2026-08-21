@@ -60,6 +60,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@sherpa/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
       '@sherpa/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -67,9 +70,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@sherpa/fixtures':
-        specifier: workspace:*
-        version: link:../fixtures
       '@sherpa/ui':
         specifier: workspace:*
         version: link:../ui

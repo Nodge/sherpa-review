@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
+import { lensSchema, prDiffSchema, prMetaSchema, threadSchema } from './review.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
 /**
@@ -41,6 +42,11 @@ export const uiStateSchema = z.object({
     prKey: prKeySchema,
     worker: workerStatusSchema,
     tasks: z.array(uiTaskSchema),
+    /**
+     * Name of this PR's host adapter (`fixture`). null means prKey maps to no host,
+     * so review endpoints are unavailable (an M0-style server only has the queue).
+     */
+    reviewHost: z.string().nullable(),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -64,8 +70,40 @@ export const uiCancelResponseSchema = z.object({ outcome: z.enum(['cancelled', '
 export type UiCancelResponse = z.infer<typeof uiCancelResponseSchema>;
 
 /**
+ * PR review data (M1-T10). Separate endpoints keep diffs and threads out of `uiState`.
+ * They weigh megabytes (host comments have no pagination), too much for every SSE snapshot.
+ * The `UI_REVIEW_EVENT` event signals changes, and the UI refetches the relevant endpoint.
+ */
+export const uiReviewPrResponseSchema = z.object({ pr: prMetaSchema });
+export type UiReviewPrResponse = z.infer<typeof uiReviewPrResponseSchema>;
+
+export const uiReviewDiffResponseSchema = z.object({ diff: prDiffSchema });
+export type UiReviewDiffResponse = z.infer<typeof uiReviewDiffResponseSchema>;
+
+export const uiReviewThreadsResponseSchema = z.object({ threads: z.array(threadSchema) });
+export type UiReviewThreadsResponse = z.infer<typeof uiReviewThreadsResponseSchema>;
+
+/** File filter lenses: ownership ("mine") is separate from additional lenses (PCI DSS). */
+export const uiReviewLensesResponseSchema = z.object({
+    ownership: lensSchema.nullable(),
+    extra: z.array(lensSchema),
+});
+export type UiReviewLensesResponse = z.infer<typeof uiReviewLensesResponseSchema>;
+
+/**
+ * "Threads changed" event. The revision is a monotonic counter since server startup:
+ * if it exceeds the last seen value, reread `reviewThreads`. A thread snapshot
+ * is not sent in the event. See the comment on review endpoints.
+ */
+export const uiReviewEventSchema = z.object({
+    threadsRevision: z.number().int().min(0),
+});
+export type UiReviewEvent = z.infer<typeof uiReviewEventSchema>;
+
+/**
  * UI channel endpoints. All require a bearer token except `events`: EventSource does not support
  * headers, so the SSE endpoint accepts the token in the `?token=` query parameter (localhost, own logs).
+ * Review endpoints return the `no_review_host` error when `reviewHost: null`.
  */
 export const UI_ENDPOINTS = {
     /** GET → `uiStateSchema`. */
@@ -74,9 +112,20 @@ export const UI_ENDPOINTS = {
     enqueue: '/api/ui/tasks',
     /** POST `uiCancelRequestSchema` → `uiCancelResponseSchema`. */
     cancel: '/api/ui/tasks/cancel',
-    /** GET, SSE: `state` events with `uiStateSchema` JSON. */
+    /** GET, SSE: `state` (`uiStateSchema`) and `review` (`uiReviewEventSchema`) events. */
     events: '/api/ui/events',
+    /** GET → `uiReviewPrResponseSchema`. */
+    reviewPr: '/api/ui/review/pr',
+    /** GET → `uiReviewDiffResponseSchema` (active host iteration). */
+    reviewDiff: '/api/ui/review/diff',
+    /** GET → `uiReviewThreadsResponseSchema`. */
+    reviewThreads: '/api/ui/review/threads',
+    /** GET → `uiReviewLensesResponseSchema`. */
+    reviewLenses: '/api/ui/review/lenses',
 } as const;
 
 /** SSE event name for a state snapshot. */
 export const UI_STATE_EVENT = 'state';
+
+/** SSE event name for review data changes (`uiReviewEventSchema`). */
+export const UI_REVIEW_EVENT = 'review';

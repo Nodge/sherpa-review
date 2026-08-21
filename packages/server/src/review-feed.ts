@@ -1,0 +1,89 @@
+import type { ReviewHost, Thread } from '@sherpa/protocol';
+
+/**
+ * One server subscription to host threads and a monotonic revision for SSE (`UI_REVIEW_EVENT`).
+ * The event omits the thread snapshot. The UI rereads the endpoint when the revision advances.
+ *
+ * Subscribes lazily with the first SSE client and stops with no clients. Otherwise host polling
+ * would run with no clients (the server's idle shutdown does not count internal timers as activity,
+ * see `idle.ts`).
+ */
+export class ReviewFeed {
+    private readonly host: ReviewHost | null;
+    private readonly listeners = new Set<(revision: number) => void>();
+
+    private revisionValue = 0;
+    private unwatch: (() => void) | null = null;
+    /** Last seen snapshot survives unsubscription so reconnecting does not advance the revision falsely. */
+    private lastSnapshot: string | null = null;
+    private closed = false;
+
+    constructor(host: ReviewHost | null) {
+        this.host = host;
+    }
+
+    get revision(): number {
+        return this.revisionValue;
+    }
+
+    subscribe(listener: (revision: number) => void): () => void {
+        if (this.closed) {
+            return () => undefined;
+        }
+
+        this.listeners.add(listener);
+        this.start();
+
+        let released = false;
+        return () => {
+            if (released) {
+                return;
+            }
+            released = true;
+            this.listeners.delete(listener);
+            if (this.listeners.size === 0) {
+                this.stop();
+            }
+        };
+    }
+
+    /** Stops the subscription and releases listeners as the server shuts down. */
+    close(): void {
+        this.closed = true;
+        this.listeners.clear();
+        this.stop();
+    }
+
+    private start(): void {
+        if (this.host === null || this.unwatch !== null) {
+            return;
+        }
+        this.unwatch = this.host.watchThreads((threads) => {
+            this.onThreads(threads);
+        });
+    }
+
+    private stop(): void {
+        this.unwatch?.();
+        this.unwatch = null;
+    }
+
+    private onThreads(threads: Thread[]): void {
+        let snapshot: string;
+        try {
+            snapshot = JSON.stringify(threads);
+        } catch {
+            // The snapshot is unserializable. Counting it as changed is safer than swallowing it.
+            snapshot = `unserializable#${String(this.revisionValue + 1)}`;
+        }
+        if (snapshot === this.lastSnapshot) {
+            return;
+        }
+
+        this.lastSnapshot = snapshot;
+        this.revisionValue += 1;
+        for (const listener of [...this.listeners]) {
+            listener(this.revisionValue);
+        }
+    }
+}

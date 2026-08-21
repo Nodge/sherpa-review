@@ -185,7 +185,13 @@ describe('server idle shutdown', () => {
     });
 
     async function start(longPollSeconds?: number): Promise<SherpaServer> {
-        const base = { prKey: PR_KEY, sherpaDir, idleSeconds: SHORT_IDLE_SECONDS };
+        // The review host is irrelevant here, and live hosts are forbidden in tests (requirements §7).
+        const base = {
+            prKey: PR_KEY,
+            sherpaDir,
+            idleSeconds: SHORT_IDLE_SECONDS,
+            reviewHostFactory: () => null,
+        };
         const server = await startServer(
             longPollSeconds === undefined ? base : { ...base, longPollSeconds },
         );

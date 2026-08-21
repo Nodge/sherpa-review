@@ -1,6 +1,6 @@
 /**
  * Fixture host adapter: deterministic PRs for the UI, state gallery and tests.
- * Not connected to server HTTP endpoints yet. That is M1-T10.
+ * The server selects it for prKey values like `fixture-<name>` (see `hosts/select.ts`), for development and e2e.
  */
 export { FixtureHost, makeFixtureHost } from './fixture-host.js';
 export type { FixtureHostOptions } from './fixture-host.js';
