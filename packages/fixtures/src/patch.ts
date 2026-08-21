@@ -59,7 +59,17 @@ function hashHex(input: string, length: number): string {
  * consumers must not parse it, and its appearance makes this clear.
  */
 export function makeFileId(diffId: HostId, path: string): HostId {
-    return `eid:1:${Buffer.from(`${diffId}/${path}`, 'utf8').toString('base64url')}`;
+    return `eid:1:${base64url(`${diffId}/${path}`)}`;
+}
+
+/**
+ * base64url without `Buffer`: the fixture package also loads in the browser (state gallery, e2e),
+ * where Node's `Buffer` is unavailable.
+ */
+function base64url(value: string): string {
+    const bytes = new TextEncoder().encode(value);
+    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function countLines(lines: readonly PatchLine[]): { additions: number; deletions: number; context: number } {

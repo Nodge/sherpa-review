@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8765", "--directory", "design/design_handoff_sherpa"],
       "port": 8765
+    },
+    {
+      "name": "sherpa-ui",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@sherpa/ui", "dev", "--port", "5173", "--strictPort"],
+      "port": 5173
     }
   ]
 }

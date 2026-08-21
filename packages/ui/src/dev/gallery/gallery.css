@@ -1,0 +1,169 @@
+/* Gallery shell. This is a dev tool: the handoff does not describe it, but the tokens are the same. */
+
+.gallery {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.gallery__sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: var(--space-control) 0 var(--space-page);
+    background: var(--surface-panel);
+    border-right: 1px solid var(--border-standard);
+}
+
+.gallery__brand {
+    padding: 0 var(--space-control) var(--space-control);
+    font-size: var(--font-size-control);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.gallery__group {
+    padding: 0 var(--space-inner-tight) var(--space-inner);
+}
+
+.gallery__group-title {
+    margin: 0 0 4px;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim-strong);
+}
+
+.gallery__item {
+    display: block;
+    width: 100%;
+    padding: 5px 6px;
+    border: none;
+    border-radius: var(--radius-button);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.gallery__item:hover {
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+}
+
+.gallery__item[aria-current='true'] {
+    background: var(--surface-selected);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.gallery__stage {
+    min-width: 0;
+}
+
+.gallery__stage-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    padding: var(--space-inner) var(--space-control);
+    border-bottom: 1px solid var(--border-hairline-strong);
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+.gallery__stage-id {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim-strong);
+}
+
+.gallery__canvas {
+    padding: var(--space-card);
+}
+
+/* --- Token display --- */
+
+.showcase {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-card);
+}
+
+.showcase__group-title {
+    margin: 0 0 var(--space-inner);
+    font-size: var(--font-size-section-title);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.showcase__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-inner-tight);
+}
+
+.swatch {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 0 var(--space-inner-tight);
+    padding: 6px var(--space-inner-tight);
+    border: 1px solid var(--border-hairline-strong);
+    border-radius: var(--radius-button);
+    background: var(--surface-panel);
+}
+
+.swatch__paint {
+    grid-row: span 2;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-key);
+}
+
+.swatch__paint--empty {
+    background: var(--surface-app);
+}
+
+.swatch__name {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-secondary);
+}
+
+.swatch__value {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-scope);
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sample {
+    margin: 0 0 var(--space-inner-tight);
+    color: var(--text-primary-soft);
+}
+
+.sample--sans {
+    font-family: var(--font-sans);
+}
+
+.sample--mono {
+    font-family: var(--font-mono);
+}
+
+.sample__label {
+    display: inline-block;
+    min-width: 220px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-scope);
+    color: var(--text-dim-strong);
+}

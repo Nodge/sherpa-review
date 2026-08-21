@@ -18,6 +18,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@ibm/plex-mono": "^2.5.0",
+    "@ibm/plex-sans": "^1.1.0",
+    "@sherpa/fixtures": "workspace:*",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",

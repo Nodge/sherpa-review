@@ -2,5 +2,9 @@ packages:
   - 'packages/*'
 
 # esbuild installs its platform binary in postinstall. The CLI cannot build without it.
+# IBM Plex fonts use postinstall for ibm-telemetry. It accesses the network during installation, which is unnecessary here.
+# The package already contains ready-to-use woff2 files.
 allowBuilds:
+  '@ibm/plex-mono': false
+  '@ibm/plex-sans': false
   esbuild: true

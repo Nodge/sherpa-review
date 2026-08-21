@@ -1,13 +1,11 @@
 import type { Thread } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { describeReviewHostContract } from '../review-host-contract.js';
-import { FIXTURE_NAMES, fixtureData } from './data/index.js';
+import { fixtureData } from './data/index.js';
 import { makeFixtureHost } from './fixture-host.js';
 
-for (const name of FIXTURE_NAMES) {
-    describeReviewHostContract(`FixtureHost(${name})`, () => makeFixtureHost(name));
-}
+// The shared `ReviewHost` contract suite runs on these same fixtures from the server package,
+// where it lives: `packages/server/src/hosts/fixture-host.contract.test.ts`.
 
 /** The first subscription snapshot is synchronous, so fixture tests can take it directly. */
 function threadsOf(host: ReturnType<typeof makeFixtureHost>): Thread[] {
@@ -108,8 +106,8 @@ describe('FixtureHost', () => {
             throw new Error('expected threads in the medium fixture');
         }
 
-        await expect(host.updateDraft(published.id, 'nope')).rejects.toThrow(/published/);
-        await expect(host.deleteDraft(published.id)).rejects.toThrow(/published/);
+        await expect(host.updateDraft(published.id, 'nope')).rejects.toThrow(/already published/);
+        await expect(host.deleteDraft(published.id)).rejects.toThrow(/already published/);
     });
 
     it('does not apply the verdict after partial publication failure (SPEC §4.5)', async () => {

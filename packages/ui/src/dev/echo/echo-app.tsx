@@ -1,19 +1,20 @@
 import type { PriorityClass, TaskStatus, UiState, UiTask, WorkerStatus } from '@sherpa/protocol';
 import { useState, useSyncExternalStore } from 'react';
 
-import { ApiError, cancelTask, enqueueEchoTask } from './api.js';
-import type { Store, StoreSnapshot } from './store.js';
+import { ApiError, cancelTask, enqueueEchoTask } from '../../api.js';
+import type { Store, StoreSnapshot } from '../../store.js';
 
 /**
- * M0 UI shell: worker status, echo task creation and the queue with results.
- * Handoff states and design tokens start in M1. This only covers the full loop.
+ * M0 loop demo: worker status, echo task enqueueing and a queue with results.
+ * Lives in dev mode (`dev.html`) as a tool for running the manual harness matrix,
+ * instead of a product screen. Since M1-T4, the main page is the PR reader.
  */
-export interface AppProps {
+export interface EchoAppProps {
     readonly store: Store;
     readonly token: string;
 }
 
-export function App({ store, token }: AppProps) {
+export function EchoApp({ store, token }: EchoAppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
 
     if (snapshot.connection === 'fatal') {

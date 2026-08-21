@@ -1,0 +1,223 @@
+/*
+ * Top bar, README §0. All dimensions and colors come from there. Hex is forbidden in this file,
+ * only tokens. Control state matrix: SPEC §1.1 (hover, active, focus-visible, disabled).
+ */
+
+.top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+    height: 46px;
+    padding: 0 14px;
+    background: var(--surface-app);
+    border-bottom: 1px solid var(--border-standard);
+}
+
+.top-bar__spacer {
+    flex: 1;
+}
+
+/* --- Mark and wordmark --- */
+
+.top-bar__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    min-width: 150px;
+}
+
+.top-bar__mark {
+    width: 15px;
+    height: 15px;
+    border-radius: var(--radius-mark);
+    background: var(--accent);
+    transform: rotate(45deg);
+    opacity: 0.9;
+}
+
+.top-bar__wordmark {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary-soft);
+}
+
+.top-bar__version {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+    padding-top: 2px;
+}
+
+/* --- Brandcrumb --- */
+
+.top-bar__breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--text-muted);
+}
+
+.top-bar__breadcrumb-item {
+    overflow: hidden;
+    /* SPEC §1.2: truncate paths from the left, since the end matters more than the start. */
+    direction: rtl;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.top-bar__breadcrumb-item:last-child {
+    color: var(--text-secondary);
+}
+
+.top-bar__breadcrumb-separator {
+    color: var(--text-separator);
+}
+
+/* --- View segmented control --- */
+
+.view-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+    padding: 3px;
+    background: var(--surface-control);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-popover);
+    white-space: nowrap;
+}
+
+.view-tabs__tab {
+    height: 24px;
+    padding: 0 var(--space-inner);
+    border: none;
+    border-radius: var(--radius-button);
+    background: transparent;
+    color: var(--text-muted-dim);
+    font-size: var(--font-size-secondary);
+    font-weight: 400;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color var(--motion-hover) var(--motion-hover-ease),
+        color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.view-tabs__tab:hover {
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+}
+
+.view-tabs__tab:active {
+    background: var(--surface-control);
+    transition: none;
+}
+
+/* The selected tab also differs in font weight (SPEC §1.1). */
+.view-tabs__tab[aria-selected='true'] {
+    background: var(--surface-segment-active);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* --- Ghost buttons: agent pill and search --- */
+
+.ghost-button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    height: 28px;
+    padding: 0 var(--space-inner);
+    background: transparent;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease), color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.ghost-button:hover {
+    background: var(--surface-raised);
+    border-color: var(--border-strong-lifted);
+    color: var(--text-secondary);
+}
+
+/* Pressed is one shade darker than idle, without a transition (SPEC §1.1). */
+.ghost-button:active {
+    background: var(--surface-control);
+    transition: none;
+}
+
+.ghost-button:disabled:hover {
+    background: transparent;
+    border-color: var(--border-control);
+    color: var(--text-muted);
+}
+
+/* --- Agent pill (SPEC §2.2) --- */
+
+.agent-pill__dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--text-dim);
+}
+
+.agent-pill--connected .agent-pill__dot {
+    background: var(--diff-add-text);
+}
+
+.agent-pill--working .agent-pill__dot {
+    background: var(--attention);
+}
+
+.agent-pill--failed .agent-pill__dot {
+    background: var(--error);
+}
+
+.agent-pill__label {
+    color: var(--text-secondary);
+}
+
+.agent-pill--disconnected .agent-pill__label {
+    color: var(--text-muted-dim);
+}
+
+/* --- Search --- */
+
+.search-button {
+    padding: 0 9px 0 var(--space-inner);
+    gap: var(--space-inner-tight);
+    color: var(--text-dim);
+}
+
+.search-button__hint {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-key);
+    padding: 1px 4px;
+}
+
+/* --- Avatar --- */
+
+.top-bar__avatar {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--surface-segment-active);
+}

@@ -1,0 +1,22 @@
+/* View frame: handoff page padding, screen heading 19px/600. */
+
+.view-frame {
+    padding: 26px var(--space-page) var(--space-page);
+    max-width: 1560px;
+}
+
+.view-frame__title {
+    margin: 0;
+    font-size: var(--font-size-screen-title);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+}
+
+.view-frame__note {
+    margin: 9px 0 0;
+    max-width: 640px;
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    color: var(--text-body);
+}

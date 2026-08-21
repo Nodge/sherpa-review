@@ -1,10 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { App } from './App.tsx';
-import './app.css';
+import { App, MessageScreen } from './app.tsx';
+import { readFragmentParam, readToken, updateFragment } from './fragment.js';
+import type { SessionState } from './session/session-store.js';
+import { createSessionStore } from './session/session-store.js';
+import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
+import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import { createStore } from './store.js';
-import { readToken } from './token.js';
+import './styles/base.css';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -18,18 +22,40 @@ if (token === null) {
     // Make no requests without a token. The skill/server launch prints a URL containing it.
     root.render(
         <StrictMode>
-            <main className="screen screen--message">
-                <h1>Sherpa</h1>
+            <MessageScreen title="Sherpa">
                 <p>Open the UI using the link printed by the Sherpa skill or server. It contains the access token.</p>
-                <p className="muted">The link looks like this: http://127.0.0.1:&lt;port&gt;/#token=&lt;token&gt;</p>
-            </main>
+                <p className="message-screen__hint">http://127.0.0.1:&lt;port&gt;/#token=&lt;token&gt;</p>
+            </MessageScreen>
         </StrictMode>,
     );
 } else {
     const store = createStore({ token });
+
+    const session = createSessionStore({
+        initial: { view: parseViewId(readFragmentParam(window.location.hash, 'view')) ?? DEFAULT_VIEW },
+        persist: (state: SessionState) => {
+            // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
+            history.replaceState(null, '', updateFragment(window.location.hash, { view: state.view }));
+        },
+    });
+
+    // The only keyboard listener on the page. Commands are declared only here (requirements §3.3).
+    const shortcuts = createShortcutRegistry();
+    VIEWS.forEach((view, index) => {
+        shortcuts.register({
+            id: `view.${view.id}`,
+            keys: [String(index + 1)],
+            label: `View "${view.label}"`,
+            action: () => {
+                session.setView(view.id);
+            },
+        });
+    });
+    attachShortcuts(window, shortcuts);
+
     root.render(
         <StrictMode>
-            <App store={store} token={token} />
+            <App store={store} session={session} />
         </StrictMode>,
     );
 }
