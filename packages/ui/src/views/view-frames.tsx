@@ -22,7 +22,7 @@ const FRAMES: Record<ViewId, Frame> = {
     },
     diff: {
         title: 'Full diff',
-        note: 'Diff cards render in `views/full-diff.tsx`. The file tree and filters arrive with M1-T7.',
+        note: 'The full view is in `views/full-diff.tsx`: file tree, lens filters and diff cards. This frame remains only in the state gallery.',
     },
 };
 

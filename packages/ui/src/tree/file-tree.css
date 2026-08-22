@@ -1,0 +1,307 @@
+/*
+ * Full diff left panel, README §10: 290px wide, its own scrolling, panel surface
+ * and standard right border. Tree rows are 26px (SPEC §2.20).
+ */
+
+.file-panel {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: 290px;
+    min-height: 0;
+    padding: var(--space-control) 0 0;
+    border-right: 1px solid var(--border-standard);
+    background: var(--surface-panel);
+}
+
+.file-panel__search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    flex: none;
+    margin: 0 var(--space-control) 11px;
+    padding: 0 var(--space-inner);
+    height: 30px;
+    border: 1px solid var(--border-chip);
+    border-radius: var(--radius-input);
+    background: var(--surface-input);
+}
+
+.file-panel__search-icon {
+    color: var(--text-dim-strong);
+    font-size: var(--font-size-secondary);
+}
+
+.file-panel__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+}
+
+.file-panel__input::placeholder {
+    color: var(--text-dim);
+}
+
+.file-panel__input:focus {
+    outline: none;
+}
+
+.file-panel__search:focus-within {
+    border-color: var(--border-strong-lifted);
+}
+
+.file-panel__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: none;
+    margin: 0 var(--space-control) var(--space-control);
+}
+
+.file-panel__chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--border-standard);
+    border-radius: var(--radius-button);
+    background: transparent;
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease),
+        color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.file-panel__chip:hover:not([disabled]) {
+    border-color: var(--border-strong-lifted);
+    color: var(--text-secondary);
+}
+
+.file-panel__chip.is-on {
+    border-color: var(--border-strong-lifted);
+    background: var(--border-standard);
+    color: var(--text-on-selected);
+}
+
+.file-panel__chip-count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim-strong);
+}
+
+.file-panel__empty {
+    margin: 0 var(--space-control);
+    font-size: var(--font-size-secondary);
+    line-height: 1.55;
+    color: var(--text-muted-dim);
+}
+
+.file-panel__link {
+    margin-left: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent-hover);
+    cursor: pointer;
+}
+
+/* --- Tree --- */
+
+.file-tree {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 var(--space-inner-tight) var(--space-control);
+}
+
+.file-tree:focus-visible {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: -2px;
+}
+
+.file-tree__inner {
+    position: relative;
+    width: 100%;
+}
+
+.file-tree__row {
+    position: absolute;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    height: 26px;
+    padding-right: var(--space-inner-tight);
+    border-radius: var(--radius-button);
+    cursor: pointer;
+    transition: background var(--motion-hover) var(--motion-hover-ease);
+}
+
+.file-tree__row:hover {
+    background: var(--surface-raised);
+}
+
+/* The active file has the topmost card in the right panel (README §10). */
+.file-tree__row.is-active {
+    background: var(--surface-popover);
+}
+
+.file-tree__row.is-cursor {
+    box-shadow: inset 0 0 0 1px var(--border-strong-lifted);
+}
+
+.file-tree__chevron {
+    flex: none;
+    width: 9px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim-strong);
+}
+
+/* The read checkbox has the same three states as the card (SPEC §2.12). */
+.file-tree__read {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--read-box-border);
+    border-radius: var(--radius-mark);
+    /* ✓ in a 10px box: the handoff scale has no such size. Value from prototype §10. */
+    font-size: 7px;
+    line-height: 1;
+    color: var(--surface-app);
+}
+
+.file-tree__read--partial {
+    border-color: var(--read-border);
+    background: linear-gradient(90deg, var(--read-fill) 0 50%, transparent 50%);
+}
+
+.file-tree__read--full {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+}
+
+/*
+ * Truncation per SPEC §1.2: trim the path from the left (`…/api/v3/handlers.py`), preserving the last segment
+ * with its extension while space allows. Left truncation uses `direction: rtl` with left
+ * alignment. `bdi` isolates the content so character order does not reverse.
+ */
+.file-tree__label {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--text-secondary);
+}
+
+.file-tree__label-dir,
+.file-tree__label-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+}
+
+/* The directory chain shrinks first, down to zero. */
+.file-tree__label-dir {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* The name gives up space only to itself. */
+.file-tree__label-name {
+    flex: 0 0 auto;
+    max-width: 100%;
+}
+
+.file-tree__row--dir .file-tree__label {
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* Roots outside your ownership zone and generated files are dimmed (README §10). */
+.file-tree__row.is-foreign .file-tree__label {
+    color: var(--text-muted-dim);
+}
+
+.file-tree__row.is-generated .file-tree__label {
+    color: var(--text-dim-strong);
+}
+
+.file-tree__tag {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid var(--tag-pci-border);
+    border-radius: var(--radius-mark);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-tag);
+    color: var(--attention-text-dim);
+    white-space: nowrap;
+}
+
+.file-tree__tag--gen {
+    border-color: var(--border-strong);
+    color: var(--text-dim-strong);
+}
+
+.file-tree__counts {
+    display: flex;
+    gap: 4px;
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+}
+
+.file-tree__add {
+    color: var(--diff-add-text);
+}
+
+.file-tree__del {
+    color: var(--diff-del-text);
+}
+
+/* --- Single-file PR outline --- */
+
+.file-tree--outline {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.file-tree__row--outline {
+    position: static;
+    border: 0;
+    background: none;
+    padding-left: var(--space-inner-tight);
+    text-align: left;
+}
+
+.file-tree__outline-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--text-secondary);
+}

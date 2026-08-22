@@ -83,6 +83,9 @@ const EXPECTED: Record<string, string> = {
     '--attention-border': '#4a4230',
     '--attention-border-alt': '#3d3524',
     '--attention-border-strong': '#6b5b39',
+    // README §10 (full diff tree): "an optional `pci` tag (9px mono `#c9a464`,
+    // border `#3d3a2c`)". The token table does not list the tag border.
+    '--tag-pci-border': '#3d3a2c',
 
     // Diff / status — add bg `rgba(66,160,110,.11)`, text `#6cc38f`/`#86d9a8`, gutter `#4f7f66`;
     // del bg `rgba(224,108,102,.10)`, text `#dd8a84`/`#e8a29c`, gutter `#7f5a56`; read/viewed fill
@@ -171,6 +174,8 @@ const EXPECTED: Record<string, string> = {
     '--font-size-gutter': '10.5px',
     '--font-size-badge': '10px',
     '--font-size-scope': '9.5px',
+    // README §10: the `pci` tag is 9px mono. The README scale has no such size.
+    '--font-size-tag': '9px',
     '--font-size-code': '12px',
     '--line-height-body': '1.62',
     '--line-height-code': '20px',

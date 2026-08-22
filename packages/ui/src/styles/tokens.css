@@ -73,6 +73,8 @@
     --attention-border: #4a4230;
     --attention-border-alt: #3d3524;
     --attention-border-strong: #6b5b39;
+    /* README §10: the tree row `pci` tag has a distinct border shade. */
+    --tag-pci-border: #3d3a2c;
 
     /* --- Diff and statuses --- */
     --diff-add-bg: rgba(66, 160, 110, 0.11);
@@ -150,6 +152,8 @@
     --font-size-gutter: 10.5px;
     --font-size-badge: 10px;
     --font-size-scope: 9.5px;
+    /* README §10: the tree `pci` tag is the only 9px size in the system. */
+    --font-size-tag: 9px;
     --font-size-code: 12px;
 
     --line-height-body: 1.62;

@@ -32,6 +32,8 @@ interface CardStateProps {
     readonly selection?: { hunk: number; from: number; to: number };
     /** File opened despite the size-based collapse. */
     readonly opened?: boolean;
+    /** Card kept on screen despite the filter (SPEC §2.7). */
+    readonly keptInView?: boolean;
 }
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
@@ -43,7 +45,16 @@ function fileOf(fixture: FixtureName, path: string): FileDiff {
 }
 
 /** Fixture-backed card: the store is populated immediately, so the first frame is already final. */
-function CardState({ fixture, path, mode = 'unified', expansion = 0, viewed, selection, opened }: CardStateProps) {
+function CardState({
+    fixture,
+    path,
+    mode = 'unified',
+    expansion = 0,
+    viewed,
+    selection,
+    opened,
+    keptInView = false,
+}: CardStateProps) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
     const contentAvailable = data.pr.capabilities.fileContent;
@@ -95,6 +106,7 @@ function CardState({ fixture, path, mode = 'unified', expansion = 0, viewed, sel
             expansion={snapshot.expansion.get(file.fileId) ?? 0}
             viewed={snapshot.viewed.get(file.fileId) ?? false}
             opened={snapshot.opened.has(file.fileId)}
+            keptInView={keptInView}
             selection={snapshot.selection}
             actions={actions}
         />
@@ -281,6 +293,11 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-parse-error',
         title: 'diff parsing failed, retry available',
         render: () => <ParseErrorState fixture="medium" path={ORDER} />,
+    },
+    {
+        id: 'diff-kept-in-view',
+        title: 'kept on screen: card outside the current filter',
+        render: () => <CardState fixture="medium" path={ORDER} keptInView />,
     },
     {
         id: 'diff-list-large',

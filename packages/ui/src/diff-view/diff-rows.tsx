@@ -2,6 +2,7 @@ import type { FileContent } from '@sherpa/protocol';
 import { memo, useMemo } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
+import { formatCount, plural } from '../text.js';
 import { hiddenLinesOf } from './expand.js';
 import type { LineSegment } from './line-segments.js';
 import { hasTabs, lineSegments } from './line-segments.js';
@@ -23,10 +24,16 @@ interface LineCell {
     readonly line: DiffLine;
 }
 
-type Row =
+/**
+ * `hunk` is set on the first line of each hunk so the single-file PR outline (T7)
+ * can find the hunk start in the DOM. Other lines omit it. An attribute on every line
+ * of a thousand-line file has a cost.
+ */
+type Row = { readonly hunk?: number } & (
     | { readonly kind: 'gap'; readonly gap: DiffGap }
     | { readonly kind: 'line'; readonly cell: LineCell }
-    | { readonly kind: 'pair'; readonly left: LineCell | null; readonly right: LineCell | null };
+    | { readonly kind: 'pair'; readonly left: LineCell | null; readonly right: LineCell | null }
+);
 
 export interface DiffRowsProps {
     readonly model: DiffFileModel;
@@ -59,7 +66,12 @@ export function DiffRows({ model, mode, content, selection }: DiffRowsProps) {
                 }
                 if (row.kind === 'line') {
                     return (
-                        <UnifiedRow key={`row-${String(index)}`} cell={row.cell} selected={isSelected(selected, row.cell)} />
+                        <UnifiedRow
+                            key={`row-${String(index)}`}
+                            cell={row.cell}
+                            selected={isSelected(selected, row.cell)}
+                            hunk={row.hunk}
+                        />
                     );
                 }
                 return (
@@ -69,6 +81,7 @@ export function DiffRows({ model, mode, content, selection }: DiffRowsProps) {
                         right={row.right}
                         leftSelected={isSelected(selected, row.left)}
                         rightSelected={isSelected(selected, row.right)}
+                        hunk={row.hunk}
                     />
                 );
             })}
@@ -86,16 +99,27 @@ function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
     }
 
     const rows: Row[] = [];
+    let hunkIndex = 0;
     for (const item of model.content.blocks) {
         if (item.kind === 'gap') {
             rows.push({ kind: 'gap', gap: item });
             continue;
         }
 
+        const first = rows.length;
+        const markFirst = (): void => {
+            const row = rows[first];
+            if (row !== undefined) {
+                rows[first] = { ...row, hunk: hunkIndex };
+            }
+            hunkIndex += 1;
+        };
+
         if (mode === 'unified') {
             for (const value of item.lines) {
                 rows.push({ kind: 'line', cell: { key: lineKey(value), line: value } });
             }
+            markFirst();
             continue;
         }
 
@@ -134,6 +158,7 @@ function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
                 rows.push({ kind: 'pair', left: dels[i] ?? null, right: adds[i] ?? null });
             }
         }
+        markFirst();
     }
     return rows;
 }
@@ -154,12 +179,21 @@ function GapRow({ gap, content, mode }: { gap: DiffGap; content: FileContent | n
     );
 }
 
-const UnifiedRow = memo(function UnifiedRow({ cell, selected }: { cell: LineCell; selected: boolean }) {
+const UnifiedRow = memo(function UnifiedRow({
+    cell,
+    selected,
+    hunk,
+}: {
+    cell: LineCell;
+    selected: boolean;
+    hunk: number | undefined;
+}) {
     const { line } = cell;
     return (
         <div
             className={`diff-row diff-row--${line.kind}${selected ? ' is-selected' : ''}`}
             data-key={cell.key ?? undefined}
+            data-hunk={hunk}
         >
             <span className="diff-row__gutter">{line.oldLine ?? ''}</span>
             <span className="diff-row__gutter">{line.newLine ?? ''}</span>
@@ -174,14 +208,16 @@ const SplitRow = memo(function SplitRow({
     right,
     leftSelected,
     rightSelected,
+    hunk,
 }: {
     left: LineCell | null;
     right: LineCell | null;
     leftSelected: boolean;
     rightSelected: boolean;
+    hunk: number | undefined;
 }) {
     return (
-        <div className="diff-row diff-row--pair">
+        <div className="diff-row diff-row--pair" data-hunk={hunk}>
             <Side cell={left} side="old" selected={leftSelected} />
             <Side cell={right} side="new" selected={rightSelected} />
         </div>
@@ -255,21 +291,4 @@ function sign(line: DiffLine): string {
         return '+';
     }
     return line.kind === 'del' ? '−' : '';
-}
-
-/** Non-breaking spaces group digits: "2 412 changed lines", the Russian notation of SPEC §2.13. */
-export function formatCount(value: number): string {
-    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
-}
-
-export function plural(value: number, one: string, few: string, many: string): string {
-    const mod100 = value % 100;
-    if (mod100 >= 11 && mod100 <= 14) {
-        return many;
-    }
-    const mod10 = value % 10;
-    if (mod10 === 1) {
-        return one;
-    }
-    return mod10 >= 2 && mod10 <= 4 ? few : many;
 }

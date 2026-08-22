@@ -2,7 +2,8 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { memo, useMemo, useState } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
-import { DiffRows, formatCount, plural } from './diff-rows.tsx';
+import { formatCount, plural } from '../text.js';
+import { DiffRows } from './diff-rows.tsx';
 import type { ExpandAmount } from './expand.js';
 import { expandFileContext, remainingHiddenLines } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
@@ -52,6 +53,8 @@ export interface FileCardProps {
     readonly viewed: boolean;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
+    /** Card kept on screen despite the filter (SPEC §2.7). */
+    readonly keptInView?: boolean;
     readonly selection: LineSelection | null;
     readonly actions: FileCardActions;
 }
@@ -67,6 +70,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         expansion,
         viewed,
         opened,
+        keptInView = false,
         selection,
         actions,
     } = props;
@@ -157,6 +161,10 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     {viewed ? 'Viewed' : 'Mark viewed'}
                 </label>
             </header>
+
+            {keptInView ? (
+                <p className="file-card__kept">kept on screen, outside current filter</p>
+            ) : null}
 
             {hint === null ? null : (
                 <p className="file-card__hint" role="status">

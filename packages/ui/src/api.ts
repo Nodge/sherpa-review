@@ -6,6 +6,7 @@ import type {
     UiCancelResponse,
     UiEnqueueResponse,
     UiOpenInEditorResponse,
+    UiReviewLensesResponse,
     UiTask,
 } from '@sherpa/protocol';
 import {
@@ -16,6 +17,7 @@ import {
     uiOpenInEditorResponseSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
+    uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
@@ -49,6 +51,11 @@ export async function fetchReviewPr(token: string): Promise<PrMeta> {
 
 export async function fetchReviewDiff(token: string): Promise<PrDiff> {
     return (await get(UI_ENDPOINTS.reviewDiff, token, uiReviewDiffResponseSchema)).diff;
+}
+
+/** File filter lenses: ownership is separate from extra lenses (README §Filters). */
+export async function fetchReviewLenses(token: string): Promise<UiReviewLensesResponse> {
+    return get(UI_ENDPOINTS.reviewLenses, token, uiReviewLensesResponseSchema);
 }
 
 /**

@@ -2,10 +2,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App, MessageScreen } from './app.tsx';
+import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import type { SessionState } from './session/session-store.js';
 import { createSessionStore } from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
+import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import { createStore } from './store.js';
 import './styles/base.css';
@@ -32,10 +34,21 @@ if (token === null) {
     const store = createStore({ token });
 
     const session = createSessionStore({
-        initial: { view: parseViewId(readFragmentParam(window.location.hash, 'view')) ?? DEFAULT_VIEW },
+        initial: {
+            view: parseViewId(readFragmentParam(window.location.hash, 'view')) ?? DEFAULT_VIEW,
+            // The filter model validates the id, since only it knows which lenses the host provides.
+            filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
+        },
         persist: (state: SessionState) => {
             // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
-            history.replaceState(null, '', updateFragment(window.location.hash, { view: state.view }));
+            history.replaceState(
+                null,
+                '',
+                updateFragment(window.location.hash, {
+                    view: state.view,
+                    filter: filterFragmentValue(state.filter),
+                }),
+            );
         },
     });
 
@@ -55,7 +68,9 @@ if (token === null) {
 
     root.render(
         <StrictMode>
-            <App store={store} session={session} token={token} />
+            <ShortcutsProvider registry={shortcuts}>
+                <App store={store} session={session} token={token} />
+            </ShortcutsProvider>
         </StrictMode>,
     );
 }

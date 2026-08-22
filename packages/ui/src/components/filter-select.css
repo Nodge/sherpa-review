@@ -1,0 +1,87 @@
+/* File filter select, README §Filters ("button + 250px dropdown"), prototype §toolbar. */
+
+.filter-select {
+    position: relative;
+    flex: none;
+}
+
+.filter-select__button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 27px;
+    padding: 0 9px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    background: transparent;
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.filter-select__button:hover {
+    border-color: var(--border-strong-lifted);
+    background: var(--surface-popover);
+}
+
+/* The filled button identifies the active filter without relying on colour (SPEC §1.1). */
+.filter-select__button.is-active {
+    border-color: var(--border-strong-lifted);
+    background: var(--border-standard);
+}
+
+.filter-select__count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim-strong);
+}
+
+.filter-select__caret {
+    font-size: var(--font-size-badge);
+    color: var(--text-dim-strong);
+}
+
+.filter-select__menu {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    z-index: 60;
+    width: 250px;
+    overflow: hidden;
+    border: 1px solid var(--border-raised-bar);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-menu);
+}
+
+.filter-select__option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    padding: 7px 11px;
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.filter-select__option.is-cursor {
+    background: var(--surface-selected);
+}
+
+.filter-select__tick {
+    width: 10px;
+    flex: none;
+    color: var(--accent-hover);
+}
+
+.filter-select__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

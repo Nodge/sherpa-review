@@ -1,0 +1,113 @@
+/*
+ * Full diff view, README §10: a 290px panel with its own scroll on the left, PR header,
+ * toolbar and cards on the right. The right side is measured separately from the window. Below 1100px wide,
+ * side-by-side is unavailable (SPEC §2.6).
+ */
+
+/* The page shell (`#root > main`) sets the view height. The panel and list scroll independently. */
+.full-diff {
+    display: flex;
+    align-items: stretch;
+    /* In the app, `#root > main` sets the height. In the gallery, the state stand does. */
+    flex: 1;
+    min-height: 0;
+}
+
+.full-diff__main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.full-diff__toolbar {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: var(--space-control);
+    padding: var(--space-control) var(--space-page) 11px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+.full-diff__title {
+    margin: 0;
+    font-size: var(--font-size-section-title);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.full-diff__subtitle {
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+.full-diff__spacer {
+    flex: 1;
+}
+
+.full-diff__mode {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.full-diff__mode:hover {
+    color: var(--text-muted);
+}
+
+.full-diff__count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.full-diff__status {
+    padding: 0 var(--space-page);
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+/*
+ * An empty filter result explains itself and offers a way out (SPEC §2.7). The panel sits ABOVE
+ * the list instead of replacing it. A card kept on screen may remain under the filter.
+ */
+.full-diff__zero {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: var(--space-control);
+    margin: var(--space-page) var(--space-page) var(--space-card);
+    padding: var(--space-control) 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-card);
+}
+
+.full-diff__zero-text {
+    margin: 0;
+    font-size: var(--font-size-body);
+    color: var(--text-body);
+}
+
+.full-diff__zero-action {
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--border-strong-lifted);
+    border-radius: var(--radius-button);
+    background: var(--border-standard);
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.full-diff__zero-action:hover {
+    background: var(--hover-selected);
+}

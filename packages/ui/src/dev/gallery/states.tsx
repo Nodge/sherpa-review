@@ -8,6 +8,7 @@ import type { ViewId } from '../../session/views.js';
 import { UI_VERSION } from '../../version.js';
 import { ViewFrame } from '../../views/view-frames.tsx';
 import { DIFF_STATES } from './diff-states.tsx';
+import { FULL_DIFF_STATES } from './full-diff-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
 /**
@@ -103,6 +104,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...DIFF_STATES.map((state) => ({
         id: state.id,
         group: 'Diff',
+        title: state.title,
+        render: state.render,
+    })),
+    ...FULL_DIFF_STATES.map((state) => ({
+        id: state.id,
+        group: 'Full diff',
         title: state.title,
         render: state.render,
     })),

@@ -1,6 +1,7 @@
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
 import { updateFragment } from '../fragment.js';
@@ -28,6 +29,11 @@ const OVERSCAN = 3;
 /** Frames to adjust scrolling to a linked file, giving the cards time to measure. */
 const SCROLL_TO_FILE_FRAMES = 12;
 
+/** Imperative list control. The file tree requests scrolling to its row. */
+export interface DiffListHandle {
+    readonly scrollToFile: (fileId: string) => void;
+}
+
 export interface DiffFileListProps {
     readonly files: readonly FileDiff[];
     readonly store: DiffViewStore;
@@ -39,6 +45,19 @@ export interface DiffFileListProps {
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
+    /**
+     * File kept on screen despite the filter (SPEC §2.7): the card gets an
+     * "outside current filter" notice. The view decides which file to keep.
+     */
+    readonly keptFileId?: string | null;
+    /** Top card in the viewport, used by scroll-spy for the active tree row. */
+    readonly onTopFileChange?: (fileId: string | null) => void;
+    /**
+     * Reviewer scrolling lets the view clear the "kept on screen" mark. The list's own adjustments
+     * (file link, tree navigation, repositioning after a filter change) do not trigger this.
+     */
+    readonly onScroll?: () => void;
+    readonly ref?: Ref<DiffListHandle>;
 }
 
 export function DiffFileList({
@@ -49,6 +68,10 @@ export function DiffFileList({
     loadContent,
     onOpenInEditor,
     initialFileId = null,
+    keptFileId = null,
+    onTopFileChange,
+    onScroll,
+    ref,
 }: DiffFileListProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -101,19 +124,21 @@ export function DiffFileList({
         });
     }, []);
 
-    // Width available to the diff: below 1100px, side by side is unavailable (SPEC §2.6).
+    // Width available to the diff: side by side is unavailable below 1100px (SPEC §2.6). Measure the
+    // list itself, not the window. The tree panel on its left takes 290px that the diff cannot use.
+    // Use the padding-box (`clientWidth`), since page padding is part of the space given to the diff.
+    // otherwise the reference 1440px viewport (README "Fidelity") would never meet the threshold.
+    // Read the initial value immediately. ResizeObserver does not fire in a background tab.
     useEffect(() => {
         const element = scrollRef.current;
         if (element === null) {
             return;
         }
-        store.setAvailableWidth(element.clientWidth);
-        const observer = new ResizeObserver((entries) => {
-            const width = entries[0]?.contentRect.width;
-            if (width !== undefined) {
-                store.setAvailableWidth(width);
-            }
-        });
+        const report = (): void => {
+            store.setAvailableWidth(element.clientWidth);
+        };
+        report();
+        const observer = new ResizeObserver(report);
         observer.observe(element);
         return () => {
             observer.disconnect();
@@ -141,44 +166,85 @@ export function DiffFileList({
         };
     }, [store]);
 
-    // A file link (`#file=`) opens the diff scrolled to that file. Scrolling repeats
-    // for several frames: before cards are measured, heights are estimates and the target moves.
+    // While the list adjusts scrolling itself (a `#file=` link, tree navigation, repositioning after
+    // a filter change), no scroll event is reported upward. These are not reviewer gestures and
+    // must not clear the "kept on screen" notice (SPEC §2.7).
+    const settling = useRef(0);
+    const converge = useCallback(
+        (index: number) => {
+            settling.current += 1;
+            return convergeScroll(
+                () => {
+                    virtualizer.scrollToIndex(index, { align: 'start' });
+                },
+                () => scrollRef.current?.scrollTop ?? 0,
+                () => {
+                    // One frame later. The browser dispatches scroll events after the final step.
+                    requestAnimationFrame(() => {
+                        settling.current -= 1;
+                    });
+                },
+            );
+        },
+        [virtualizer],
+    );
+
+    const handleScroll = useCallback(() => {
+        if (settling.current === 0) {
+            onScroll?.();
+        }
+    }, [onScroll]);
+
+    // A file link (`#file=`) opens the diff scrolled to that file.
     const scrolled = useRef(false);
     useEffect(() => {
         if (scrolled.current || initialFileId === null) {
             return;
         }
         const index = files.findIndex((file) => file.fileId === initialFileId);
+        scrolled.current = true;
         if (index < 0) {
-            scrolled.current = true;
             return;
         }
 
-        scrolled.current = true;
-        let attempts = 0;
-        let previousTop = -1;
-        let frame = requestAnimationFrame(function tick() {
-            virtualizer.scrollToIndex(index, { align: 'start' });
-            attempts += 1;
-            // The position stopped shifting. Cards above the target have been measured, so no adjustment is needed.
-            const top = scrollRef.current?.scrollTop ?? 0;
-            const converged = top === previousTop;
-            previousTop = top;
-            if (!converged && attempts < SCROLL_TO_FILE_FRAMES) {
-                frame = requestAnimationFrame(tick);
-                return;
-            }
-            attempts = SCROLL_TO_FILE_FRAMES;
-        });
+        const run = converge(index);
         return () => {
-            cancelAnimationFrame(frame);
             // Adjustment was interrupted before completion (StrictMode unmounts effects twice), so
             // scrolling did not finish and the next pass must repeat it.
-            if (attempts < SCROLL_TO_FILE_FRAMES) {
+            if (!run.cancel()) {
                 scrolled.current = false;
             }
         };
-    }, [files, initialFileId, virtualizer]);
+    }, [files, initialFileId, converge]);
+
+    // Scroll to the file requested by the tree. Cancel the previous adjustment, because two overlapping
+    // loops would pull the list in different directions.
+    const pending = useRef<ConvergingScroll | null>(null);
+    useImperativeHandle(
+        ref,
+        () => ({
+            scrollToFile: (fileId: string) => {
+                const index = files.findIndex((file) => file.fileId === fileId);
+                if (index < 0) {
+                    return;
+                }
+                pending.current?.cancel();
+                pending.current = converge(index);
+            },
+        }),
+        [files, converge],
+    );
+
+    // Tree scroll-spy uses the top card in the viewport. The virtualizer rerenders the list
+    // on every scroll frame, so no separate listener is needed.
+    const topFileId = topFile(files, items, virtualizer.scrollOffset ?? 0);
+    const reportedTop = useRef<string | null>(null);
+    useEffect(() => {
+        if (onTopFileChange !== undefined && topFileId !== reportedTop.current) {
+            reportedTop.current = topFileId;
+            onTopFileChange(topFileId);
+        }
+    }, [topFileId, onTopFileChange]);
 
     const expand = useCallback(
         async (fileId: string, amount?: ExpandAmount): Promise<Feedback> => {
@@ -230,7 +296,7 @@ export function DiffFileList({
     );
 
     return (
-        <div className="diff-list" ref={scrollRef}>
+        <div className="diff-list" ref={scrollRef} onScroll={handleScroll}>
             <div className="diff-list__inner" style={{ height: `${String(virtualizer.getTotalSize())}px` }}>
                 {items.map((item) => {
                     const file = files[item.index];
@@ -258,6 +324,7 @@ export function DiffFileList({
                                 expansion={snapshot.expansion.get(file.fileId) ?? 0}
                                 viewed={snapshot.viewed.get(file.fileId) ?? false}
                                 opened={snapshot.opened.has(file.fileId)}
+                                keptInView={file.fileId === keptFileId}
                                 selection={
                                     snapshot.selection?.fileId === file.fileId ? snapshot.selection : null
                                 }
@@ -269,6 +336,65 @@ export function DiffFileList({
             </div>
         </div>
     );
+}
+
+interface ConvergingScroll {
+    /** `true` once adjustment has finished on its own. */
+    readonly cancel: () => boolean;
+}
+
+/**
+ * Adjust virtualizer scrolling. Heights are estimates until cards are first measured, so
+ * the target moves and a single call is not enough. Repeat until the position stops changing.
+ * `onDone` runs exactly once, on both natural completion and cancellation.
+ */
+function convergeScroll(step: () => void, currentTop: () => number, onDone: () => void): ConvergingScroll {
+    let attempts = 0;
+    let previousTop = -1;
+    let done = false;
+    const finish = (): void => {
+        if (!done) {
+            done = true;
+            onDone();
+        }
+    };
+
+    let frame = requestAnimationFrame(function tick() {
+        step();
+        attempts += 1;
+        const top = currentTop();
+        const converged = top === previousTop;
+        previousTop = top;
+        if (!converged && attempts < SCROLL_TO_FILE_FRAMES) {
+            frame = requestAnimationFrame(tick);
+            return;
+        }
+        attempts = SCROLL_TO_FILE_FRAMES;
+        finish();
+    });
+
+    return {
+        cancel: () => {
+            cancelAnimationFrame(frame);
+            const completed = attempts >= SCROLL_TO_FILE_FRAMES;
+            finish();
+            return completed;
+        },
+    };
+}
+
+/** First card whose bottom is still below the viewport's top edge. null means nothing to show. */
+function topFile(
+    files: readonly FileDiff[],
+    items: readonly { index: number; end: number }[],
+    offset: number,
+): string | null {
+    for (const item of items) {
+        if (item.end > offset) {
+            return files[item.index]?.fileId ?? null;
+        }
+    }
+    return null;
 }
 
 function estimateHeight(file: FileDiff | undefined): number {

@@ -245,6 +245,16 @@
     background: var(--attention-surface-alt);
 }
 
+/* Card kept on screen despite the filter (SPEC §2.7). */
+.file-card__kept {
+    margin: 0;
+    padding: 6px 13px;
+    font-size: var(--font-size-meta);
+    color: var(--attention-text-dim);
+    background: var(--attention-surface-alt);
+    border-bottom: 1px solid var(--attention-border-alt);
+}
+
 .file-card__collapsed,
 .file-card__notice--button {
     width: 100%;
@@ -403,47 +413,4 @@
 
 .syntax-decorator {
     color: var(--syntax-decorator);
-}
-
-/* --- Full diff view header (quiet mode toggle, README §1 toolbar) --- */
-
-.diff-view {
-    display: flex;
-    flex-direction: column;
-}
-
-.diff-view__toolbar {
-    display: flex;
-    align-items: center;
-    flex: none;
-    gap: var(--space-control);
-    padding: var(--space-inner) var(--space-page) 11px;
-    border-bottom: 1px solid var(--border-hairline-strong);
-}
-
-.diff-view__title {
-    margin: 0;
-    font-size: var(--font-size-section-title);
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.diff-view__mode {
-    padding: 0;
-    border: 0;
-    background: none;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.diff-view__mode:hover {
-    color: var(--text-muted);
-}
-
-.diff-view__status {
-    font-size: var(--font-size-secondary);
-    color: var(--text-dim);
 }

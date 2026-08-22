@@ -66,7 +66,11 @@ export function App({ store, session, token }: AppProps) {
                 </div>
             ) : null}
 
-            {view === 'diff' ? <FullDiffView token={token} /> : <ViewFrame view={view} />}
+            {view === 'diff' ? (
+                <FullDiffView token={token} prKey={state.prKey} session={session} />
+            ) : (
+                <ViewFrame view={view} />
+            )}
         </>
     );
 }

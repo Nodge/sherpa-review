@@ -5,18 +5,21 @@ import type { ViewId } from './views.js';
  * rather than its contents. The store lives outside the React tree (requirements §1/C3), with subscriptions
  * and `useSyncExternalStore`, without synchronization effects.
  *
- * In M1-T4, the state holds only the active view. Later tasks add their own fields (diff mode,
- * filter, panels), which is why the mechanism is generic.
+ * State holds the active view and selected file filter. Later tasks add their own fields
+ * (panels, palette), which is why the mechanism is generic.
  */
 
 export interface SessionState {
     readonly view: ViewId;
+    /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
+    readonly filter: string;
 }
 
 export interface SessionStore {
     readonly subscribe: (listener: () => void) => () => void;
     readonly getSnapshot: () => SessionState;
     readonly setView: (view: ViewId) => void;
+    readonly setFilter: (filter: string) => void;
 }
 
 export interface SessionStoreOptions {
@@ -51,6 +54,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setView: (view) => {
             if (view !== state.view) {
                 update({ ...state, view });
+            }
+        },
+        setFilter: (filter) => {
+            if (filter !== state.filter) {
+                update({ ...state, filter });
             }
         },
     };
