@@ -1,13 +1,13 @@
 export const meta = {
   name: 'task-cycle',
-  description: 'One Sherpa task cycle: Opus coder → checks → dual review (Fable + Codex) → triage → fixes',
+  description: 'One Sherpa task cycle: Opus coder → checks → two reviews (Opus + Codex) → triage → fixes',
   whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds? }. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
   phases: [
     { title: 'Implement', detail: 'Opus coder implements the brief', model: 'opus' },
     { title: 'Gates', detail: 'typecheck / lint / tests' },
-    { title: 'Review', detail: 'two independent reviews: Fable and Codex' },
+    { title: 'Review', detail: 'two independent reviews: Opus and Codex', model: 'opus' },
     { title: 'Triage', detail: 'arbitration and finding deduplication' },
-    { title: 'Fix', detail: 'fix confirmed findings', model: 'opus' },
+    { title: 'Fix', detail: 'fix confirmed findings and verify with evidence', model: 'opus' },
   ],
 }
 
@@ -92,8 +92,22 @@ const TRIAGE_SCHEMA = {
 
 const VERIFY_SCHEMA = {
   type: 'object',
-  required: ['unresolvedIds', 'gatesPassed'],
+  required: ['resolved', 'unresolvedIds', 'gatesPassed'],
   properties: {
+    resolved: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'evidence'],
+        properties: {
+          id: { type: 'string' },
+          evidence: {
+            type: 'string',
+            description: 'Evidence of the fix: file:line after the fix and what is there now, so the process owner can recheck without rereading the whole diff',
+          },
+        },
+      },
+    },
     unresolvedIds: { type: 'array', items: { type: 'string' } },
     gatesPassed: { type: 'boolean' },
     notes: { type: 'string' },
@@ -165,11 +179,11 @@ Fix the failures without changing the intent of the changes. Get the checks pass
   }
 }
 
-// ---------- 3. Dual review: Fable + Codex ----------
+// ---------- 3. Two reviews: Opus + Codex ----------
 // The barrier is deliberate: triage needs both lists at once to deduplicate between reviewers.
 
 phase('Review')
-log('Dual review: Fable and Codex in parallel')
+log('Two reviews: Opus and Codex in parallel')
 
 const reviewPrompt = (who) => `You are an independent code reviewer (${who}). ${commonContext}
 ${diffInstruction}
@@ -180,19 +194,19 @@ Check the changes along four axes:
 4. Quality: unnecessary complexity, duplication, departures from repo style.
 Only findings in this diff, do not review unrelated old code. Use severity honestly: blocker means cannot commit, major means must fix, minor can be deferred. If there are no findings, return an empty list. Do not invent any.`
 
-const [fableReview, codexReview] = await parallel([
-  () => agent(reviewPrompt('Fable perspective'), {
-    label: `review-fable:${taskId}`, phase: 'Review', effort: 'high', schema: FINDINGS_SCHEMA,
+const [opusReview, codexReview] = await parallel([
+  () => agent(reviewPrompt('Claude/Opus perspective'), {
+    label: `review-opus:${taskId}`, phase: 'Review', model: 'opus', effort: 'high', schema: FINDINGS_SCHEMA,
   }),
   () => agent(reviewPrompt('Codex/GPT perspective'), {
     label: `review-codex:${taskId}`, phase: 'Review', agentType: 'codex', schema: FINDINGS_SCHEMA,
   }),
 ])
 
-if (!fableReview && !codexReview) throw new Error('Both reviewers failed, cycle aborted')
+if (!opusReview && !codexReview) throw new Error('Both reviewers failed. Cycle aborted')
 
 const allFindings = []
-for (const [source, review] of [['fable', fableReview], ['codex', codexReview]]) {
+for (const [source, review] of [['opus', opusReview], ['codex', codexReview]]) {
   if (!review) { log(`Reviewer ${source} returned no result, continuing with one`); continue }
   for (const f of review.findings) {
     allFindings.push({ id: `f${allFindings.length + 1}`, source, ...f })
@@ -227,6 +241,8 @@ phase('Fix')
 
 let remaining = confirmed
 let round = 0
+// The report lists what was declared fixed and its evidence for the process owner to spot-check
+const resolvedLog = []
 while (remaining.length > 0 && round < maxFixRounds) {
   round++
   log(`Fix round ${round}/${maxFixRounds}: ${remaining.length} findings`)
@@ -245,13 +261,25 @@ Fix the underlying problems without patching over them. If a finding cannot be f
 ${diffInstruction}
 Check the code to verify that each finding is actually resolved (be skeptical, the fix may be a patch or may have broken adjacent behaviour):
 ${JSON.stringify(remaining, null, 2)}
-Then run the checks: \`${gateCmd}\`. Return the ids of unresolved findings and the check status. Do not edit anything.`,
-    { label: `verify-r${round}:${taskId}`, phase: 'Fix', effort: 'high', schema: VERIFY_SCHEMA },
+Then run the checks: \`${gateCmd}\`. Do not edit anything.
+Every id must appear in either resolved (with evidence: file:line after the fix and what is there now) or unresolvedIds. Do not declare a finding fixed unless you can point to a specific place in the code. When in doubt, mark it unresolved.`,
+    { label: `verify-r${round}:${taskId}`, phase: 'Fix', model: 'opus', effort: 'high', schema: VERIFY_SCHEMA },
   )
   if (!verify) throw new Error('Verifier failed')
 
+  // Fail closed: only findings explicitly declared fixed with evidence leave remaining.
+  // A finding the verifier omits stays open instead of disappearing from the report
   const unresolvedIds = new Set(verify.unresolvedIds)
-  remaining = remaining.filter((f) => unresolvedIds.has(f.id))
+  const byId = Object.fromEntries(remaining.map((f) => [f.id, f]))
+  const resolvedIds = new Set()
+  for (const r of verify.resolved) {
+    const f = byId[r.id]
+    if (!f || unresolvedIds.has(r.id) || resolvedIds.has(r.id)) continue
+    resolvedIds.add(r.id)
+    resolvedLog.push({ id: f.id, file: f.file, title: f.title, severity: f.severity, evidence: r.evidence })
+  }
+  remaining = remaining.filter((f) => !resolvedIds.has(f.id))
+  log(`Round ${round}: fixed ${resolvedIds.size}, remaining ${remaining.length}`)
   if (!verify.gatesPassed) {
     log('Checks still fail after fixes. Another round')
     if (remaining.length === 0) remaining = confirmed.slice(0, 0).concat([{ id: 'gates', file: '(gates)', title: 'Checks still fail after fixes', severity: 'blocker', description: verify.notes || `Command: ${gateCmd}` }])
@@ -268,11 +296,11 @@ return {
   review: {
     total: allFindings.length,
     confirmed: confirmed.length,
-    fixed: confirmed.length - remaining.length,
+    fixed: resolvedLog,
     remaining,
   },
   fixRounds: round,
   next: blockers.length > 0
     ? 'Unresolved blockers remain. Review them manually before committing'
-    : 'Changes are in the working tree: visual acceptance (for UI tasks) → commit → update plan/',
+    : 'Changes in the working tree: spot-check fixed[].evidence → visual acceptance (for UI tasks) → commit → update plan/',
 }
