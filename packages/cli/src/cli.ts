@@ -20,6 +20,7 @@ import {
     helpText,
 } from './format.js';
 import { serverBinOverrideFrom, sherpaDirFrom } from './paths.js';
+import type { CommandRunner } from './pr-discovery.js';
 import { ensureServer } from './up.js';
 import { CLI_VERSION } from './version.js';
 
@@ -30,6 +31,8 @@ export interface CliIo {
     readonly err: (text: string) => void;
     /** Path to the running CLI file: `up` looks for the server bundle beside it. Defaults to `process.argv[1]`. */
     readonly entry?: string;
+    /** External command runner for PR discovery from cwd. Defaults to the real Git executable. */
+    readonly runCommand?: CommandRunner;
 }
 
 /**
@@ -71,8 +74,9 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
  * and the next step of the loop.
  */
 async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise<number> {
-    // Validate the PR key before starting the server: the server would reject a bad key too, but later and at greater cost.
-    const prKey = resolvePrKey(command.prKey, io.env);
+    // Resolve the PR key before starting the server. The server would reject an invalid one too, but later and at a higher cost,
+    // and discovery from cwd (`pr-discovery.ts`) must happen exactly once per command.
+    const prKey = await resolvePrKey(command.prKey, io.env, io.runCommand);
 
     const uiUrl = await ensureServer({
         prKey,
@@ -107,7 +111,7 @@ async function registerWorker(
     labels: WorkerLabels,
     io: CliIo,
 ): Promise<WorkerRegisterResponse> {
-    const connection = await connectAs(prKeyArg, io.env, freshWorkerId(io.env));
+    const connection = await connectAs(prKeyArg, io.env, freshWorkerId(io.env), io.runCommand);
     return requestRegister(connection, labels);
 }
 
@@ -117,7 +121,7 @@ function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>)
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env);
+    const connection = await connect(command.prKey, io.env, io.runCommand);
     const response = await requestNext(connection);
 
     switch (response.kind) {
@@ -136,21 +140,21 @@ async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io
 async function taskComplete(command: Extract<Command, { kind: 'task-complete' }>, io: CliIo): Promise<number> {
     const result = await readResultFile(command.file, command.taskId);
 
-    const connection = await connect(command.prKey, io.env);
+    const connection = await connect(command.prKey, io.env, io.runCommand);
     const response = await requestComplete(connection, command.taskId, result);
     io.out(formatCompleteResponse(response, command.taskId));
     return 0;
 }
 
 async function taskProgress(command: Extract<Command, { kind: 'task-progress' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env);
+    const connection = await connect(command.prKey, io.env, io.runCommand);
     const response = await requestProgress(connection, command.taskId, command.text);
     io.out(formatProgressResponse(response, command.taskId));
     return 0;
 }
 
 async function taskFail(command: Extract<Command, { kind: 'task-fail' }>, io: CliIo): Promise<number> {
-    const connection = await connect(command.prKey, io.env);
+    const connection = await connect(command.prKey, io.env, io.runCommand);
     const response = await requestFail(connection, command.taskId, command.reason);
     io.out(formatFailResponse(response, command.taskId));
     return 0;

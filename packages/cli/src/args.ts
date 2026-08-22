@@ -107,7 +107,8 @@ function parseUpCommand(
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up --pr <pr key> [--harness <harness name>] [--model <model name>]`.',
+                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>]`; ' +
+                'without `--pr` the PR is taken from the Git branch of the current directory.',
         );
     }
 

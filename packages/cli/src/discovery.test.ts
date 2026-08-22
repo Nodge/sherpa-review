@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { connect, resolvePrKey, resolveWorkerId } from './discovery.js';
 import { CliError } from './errors.js';
 import { manifestPathFor, sherpaDirFrom, workerIdPathFor } from './paths.js';
+import type { CommandRunner } from './pr-discovery.js';
 
 const PR_KEY = 'github-quillmart--quillmart--777';
 
@@ -43,18 +44,47 @@ describe('discovery', () => {
     }
 
     describe('PR key', () => {
-        it('uses the flag, otherwise SHERPA_PR', () => {
-            expect(resolvePrKey('github-quillmart--quillmart--1', { SHERPA_PR: 'github-quillmart--quillmart--2' })).toBe('github-quillmart--quillmart--1');
-            expect(resolvePrKey(undefined, { SHERPA_PR: 'github-quillmart--quillmart--2' })).toBe('github-quillmart--quillmart--2');
+        /** Discovery from cwd reads the current branch, then its PR. */
+        function vcsOnBranch(prId: number): CommandRunner {
+            return (_command, args) =>
+                Promise.resolve({
+                    exitCode: 0,
+                    stdout: args[0] === 'info' ? '{"branch":"issue-1"}' : `{"id":${String(prId)}}`,
+                    stderr: '',
+                    failure: null,
+                });
+        }
+
+        const noCheckout: CommandRunner = () =>
+            Promise.resolve({
+                exitCode: 1,
+                stdout: '',
+                stderr: 'Not a Git repository.',
+                failure: null,
+            });
+
+        it('comes from the flag, otherwise from SHERPA_PR', async () => {
+            await expect(resolvePrKey('github-quillmart--quillmart--1', { SHERPA_PR: 'github-quillmart--quillmart--2' }, gitOnBranch(3))).resolves.toBe(
+                'github-quillmart--quillmart--1',
+            );
+            await expect(resolvePrKey(undefined, { SHERPA_PR: 'github-quillmart--quillmart--2' }, gitOnBranch(3))).resolves.toBe(
+                'github-quillmart--quillmart--2',
+            );
         });
 
-        it('without either, asks to launch through the skill or pass --pr', () => {
-            expect(() => resolvePrKey(undefined, {})).toThrow(CliError);
-            expect(() => resolvePrKey(undefined, { SHERPA_PR: '  ' })).toThrow('--pr');
+        it('uses the PR of the current Git checkout branch when neither is set', async () => {
+            await expect(resolvePrKey(undefined, {}, gitOnBranch(9002))).resolves.toBe('github-quillmart--quillmart--9002');
+            await expect(resolvePrKey(undefined, { SHERPA_PR: '  ' }, gitOnBranch(7))).resolves.toBe('github-quillmart--quillmart--7');
         });
 
-        it('rejects a key that escapes the state directory', () => {
-            expect(() => resolvePrKey('../../etc', {})).toThrow('invalid PR key');
+        it('keeps the skill and --pr prompt on discovery failure, with a one-line reason', async () => {
+            await expect(resolvePrKey(undefined, {}, noCheckout)).rejects.toThrow(CliError);
+            await expect(resolvePrKey(undefined, {}, noCheckout)).rejects.toThrow('--pr');
+            await expect(resolvePrKey(undefined, {}, noCheckout)).rejects.toThrow('not a Git checkout');
+        });
+
+        it('rejects a key that escapes the state directory', async () => {
+            await expect(resolvePrKey('../../etc', {}, vcsOnBranch(3))).rejects.toThrow('invalid PR key');
         });
     });
 

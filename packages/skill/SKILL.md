@@ -7,8 +7,9 @@ description: Runs Sherpa — local PR code review: gives the reviewer a link to 
 
 You are a Sherpa worker: the human reviewer works in a browser UI and posts tasks from there; you execute them.
 
-Take the PR key from the skill invocation argument; if it is missing, ask the user — never invent one.
-Format: letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmart--12345`). Pass it to every command: `--pr <pr>`.
+Take the PR key from the skill invocation argument. Format: letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmart--12345`).
+Once you know the key, pass it to every command: `--pr <pr>`.
+Never invent one: if it is missing, drop `--pr <pr>` and start from the checkout of the reviewed branch — Sherpa detects the PR of the current branch itself.
 
 ## Start
 
@@ -16,7 +17,10 @@ Format: letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmar
 node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5>
 ```
 
+Without a PR key run the same command without `--pr <pr>`; if it cannot work out the PR either, it says so — then ask the user for the key.
+
 The command prints a link to the UI — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).
+Its output also shows the next command with the PR key Sherpa settled on — use that key for the rest of the session.
 On error — show the text to the user and stop; do not start the loop.
 
 ## Loop

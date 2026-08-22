@@ -142,7 +142,7 @@ export function helpText(): string {
         ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
     ];
     const flags: readonly (readonly [string, string])[] = [
-        ['--pr <key>', 'the PR to connect to; defaults to SHERPA_PR'],
+        ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
         ['--version', 'CLI version'],

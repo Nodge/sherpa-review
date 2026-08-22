@@ -3,7 +3,8 @@
 The Sherpa skill package for harnesses (requirements §1/C1) is also the distribution: `SKILL.md` with session instructions
 and two built bundles in `bin/`. Nothing reads the repository checkout at runtime, and pnpm is not called.
 
-- `SKILL.md` describes what the harness does: determine the PR key, run `sherpa up` (which starts the server
+- `SKILL.md` describes what the harness does: determine the PR key (or leave it to `sherpa up`, which
+  resolves the PR from the Git branch of the launch directory), run `sherpa up` (it starts the server
   and registers the session as a worker), give the reviewer the UI link and run the `sherpa worker next` loop
   (rpc-design §3, §7).
 - `bin/sherpa.mjs` is the thin CLI without the server or UI: the worker loop calls it on every invocation,

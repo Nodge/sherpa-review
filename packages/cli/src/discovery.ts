@@ -7,6 +7,8 @@ import { serverManifestSchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
 import { assertValidPrKey, manifestPathFor, sherpaDirFrom, workerIdPathFor } from './paths.js';
+import type { CommandRunner } from './pr-discovery.js';
+import { discoverPrKeyFromCheckout, runVcsCommand } from './pr-discovery.js';
 
 /** Everything the CLI needs to call the PR server. */
 export interface ServerConnection {
@@ -24,8 +26,9 @@ const STATE_DIR_MODE = 0o700;
 export async function connect(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
+    run?: CommandRunner,
 ): Promise<ServerConnection> {
-    const prKey = resolvePrKey(prKeyArg, env);
+    const prKey = await resolvePrKey(prKeyArg, env, run);
     const sherpaDir = sherpaDirFrom(env);
     const workerId = await resolveWorkerId(sherpaDir, prKey, env);
 
@@ -40,8 +43,9 @@ export async function connectAs(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
     workerId: string,
+    run?: CommandRunner,
 ): Promise<ServerConnection> {
-    const prKey = resolvePrKey(prKeyArg, env);
+    const prKey = await resolvePrKey(prKeyArg, env, run);
     return openConnection(sherpaDirFrom(env), prKey, workerId);
 }
 
@@ -50,19 +54,36 @@ async function openConnection(sherpaDir: string, prKey: string, workerId: string
     return { prKey, port: manifest.port, token: manifest.token, workerId };
 }
 
-/** PR comes from `--pr` or `SHERPA_PR`. Resolution from cwd arrives with the host adapter in M1. */
-export function resolvePrKey(
+/**
+ * PR key: `--pr` → `SHERPA_PR` → PR of the current Git checkout branch (`pr-discovery.ts`).
+ * Explicit sources take priority over discovery. The session may have started from a different directory,
+ * so a discovered PR must not silently replace the supplied one.
+ */
+export async function resolvePrKey(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,
-): string {
-    const raw = (prKeyArg ?? env.SHERPA_PR ?? '').trim();
-    if (raw === '') {
-        throw new CliError(
-            'sherpa: it is unclear which PR to connect to.\n' +
-                'Run the command through the Sherpa skill (it fills the PR in) or pass `--pr <pr key>`.',
-        );
+    run: CommandRunner = runVcsCommand,
+): Promise<string> {
+    const explicit = (prKeyArg ?? env.SHERPA_PR ?? '').trim();
+    if (explicit !== '') {
+        return assertValidPrKey(explicit);
     }
-    return assertValidPrKey(raw);
+
+    const discovered = await discoverPrKeyFromCheckout(run);
+    if (discovered.kind === 'found') {
+        return assertValidPrKey(discovered.prKey);
+    }
+    throw new CliError(unclearWhichPr(discovered.hint));
+}
+
+/** Failed discovery asks the user for input, with a reason and three ways to answer. */
+function unclearWhichPr(hint: string): string {
+    return (
+        'sherpa: it is unclear which PR to connect to.\n' +
+        `Tried to detect it from the current directory: ${hint}.\n` +
+        'Run the command through the Sherpa skill (it fills the PR in), pass `--pr <pr key>`, ' +
+        'or run it from a Git checkout with the PR branch checked out.'
+    );
 }
 
 /**

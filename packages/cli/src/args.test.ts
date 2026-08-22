@@ -23,7 +23,7 @@ describe('argument parsing', () => {
             },
         );
         expect(parseArgs(['up'])).toEqual({ kind: 'up', prKey: undefined, harness: undefined, model: undefined });
-        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up --pr');
+        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up [--pr <pr key>]');
     });
 
     it('worker next, with and without a PR flag', () => {
