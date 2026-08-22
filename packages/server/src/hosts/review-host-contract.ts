@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Shared `ReviewHost` contract suite (requirements §7): the same tests run against every
- * implementation, currently `FixtureHost`, later review host mocks (M1-T10/T12).
+ * implementations, using `FixtureHost` and recorded host responses (M1-T10/T12).
  *
  * Checks interface promises rather than internals: response shapes
  * (fail-closed through protocol schemas), the `watchThreads` promise of an initial snapshot and a snapshot
