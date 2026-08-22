@@ -97,11 +97,36 @@ const EXPECTED: Record<string, string> = {
     '--diff-del-text-strong': '#e8a29c',
     '--diff-del-gutter': '#7f5a56',
     '--read-fill': '#2b7a55',
+    // SPEC §2.10 (Mark viewed): "box fills to 25% accent-green", the same `#2b7a55` = rgb(43,122,85).
+    '--read-fill-hover': 'rgba(43,122,85,.25)',
     '--read-border': '#3f7a5a',
     '--error': '#e0736c',
     '--error-text': '#d99a95',
     '--error-surface': '#171315',
     '--error-border': '#3d2a2c',
+
+    // README §1 (diff rows): code `#cfd3da` (del `#d5c0be`), empty side of split `#0c0d0f`,
+    // collapsed-context row `#111214`, Mark viewed unchecked box border `#3a3f47`.
+    // SPEC §2.12: unread box border `#33383f`. SPEC §2.14: word-level highlight
+    // `rgba(66,160,110,.22)` / `rgba(224,108,102,.22)`, trailing whitespace `rgba(224,108,102,.25)`,
+    // "hover a row: bg lifts by 4%" is the only highlight step with no hex value in the handoff.
+    '--code-text': '#cfd3da',
+    '--code-text-del': '#d5c0be',
+    '--surface-diff-empty': '#0c0d0f',
+    '--surface-diff-gap': '#111214',
+    '--diff-add-word': 'rgba(66,160,110,.22)',
+    '--diff-del-word': 'rgba(224,108,102,.22)',
+    '--diff-trailing-space': 'rgba(224,108,102,.25)',
+    '--row-hover': 'rgba(255,255,255,.04)',
+    '--checkbox-border': '#3a3f47',
+    '--read-box-border': '#33383f',
+
+    // README §1 — «Syntax highlighting is intentionally minimal: keywords `#9aa6ff`,
+    // strings/numbers `#d3b183`, comments `#5f646d` italic, decorators `#d99a5c`».
+    '--syntax-keyword': '#9aa6ff',
+    '--syntax-string': '#d3b183',
+    '--syntax-comment': '#5f646d',
+    '--syntax-decorator': '#d99a5c',
 
     // Neutral tier fills — medium `#4a5160`, low `#2b2f36`, unfilled `#2a2e4a`.
     '--tier-medium': '#4a5160',

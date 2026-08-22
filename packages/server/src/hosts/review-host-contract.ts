@@ -1,5 +1,5 @@
 import type { Comment, ReviewHost, Thread } from '@sherpa/protocol';
-import { lensSchema, prDiffSchema, prMetaSchema, threadSchema } from '@sherpa/protocol';
+import { fileContentSchema, lensSchema, prDiffSchema, prMetaSchema, threadSchema } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -95,6 +95,34 @@ function countDrafts(threads: readonly Thread[]): number {
     return threads.reduce((total, thread) => total + countDraftsIn(thread.root), 0);
 }
 
+const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/** Patch context lines with their new-side line numbers. */
+function patchContextLines(patch: string): { line: number; text: string }[] {
+    const found: { line: number; text: string }[] = [];
+    let line = 0;
+
+    for (const raw of patch.split('\n')) {
+        const header = HUNK_HEADER.exec(raw);
+        if (header !== null) {
+            line = Number(header[1]);
+            continue;
+        }
+        if (line === 0) {
+            continue;
+        }
+
+        const prefix = raw.slice(0, 1);
+        if (prefix === '+') {
+            line += 1;
+        } else if (prefix === ' ') {
+            found.push({ line, text: raw.slice(1) });
+            line += 1;
+        }
+    }
+    return found;
+}
+
 export function describeReviewHostContract(
     name: string,
     makeHost: () => ReviewHost,
@@ -120,6 +148,45 @@ export function describeReviewHostContract(
             const [pr, diff] = await Promise.all([host.getPr(), host.getDiff()]);
             for (const file of diff.files) {
                 expect(file.viewed === null).toBe(!pr.capabilities.fileViewedSync);
+            }
+        });
+
+        it('getFileContent agrees with capabilities.fileContent', async () => {
+            const host = makeHost();
+            const pr = await host.getPr();
+            const getContent = host.getFileContent?.bind(host);
+
+            if (!pr.capabilities.fileContent) {
+                expect(getContent).toBeUndefined();
+                return;
+            }
+            if (getContent === undefined) {
+                throw new Error('host declared fileContent but did not provide getFileContent');
+            }
+
+            const diff = await host.getDiff();
+            const binary = diff.files.find((file) => file.binary);
+            if (binary !== undefined) {
+                expect(await getContent(binary.fileId)).toBeNull();
+            }
+
+            // A text file with hunks must have text that matches the patch by line
+            // number, otherwise "Expand context" would show context from the wrong place.
+            const text = diff.files.find((file) => !file.binary && file.patch !== null && file.changeType === 'modify');
+            if (text?.patch == null) {
+                return;
+            }
+
+            const content = await getContent(text.fileId);
+            if (content === null) {
+                throw new Error(`host did not return the contents of text file ${text.path}`);
+            }
+            expect(() => fileContentSchema.parse(content)).not.toThrow();
+
+            const newLines = content.newText?.split('\n') ?? [];
+            expect(newLines.length).toBeGreaterThan(0);
+            for (const context of patchContextLines(text.patch)) {
+                expect(newLines[context.line - 1], `${text.path}:${String(context.line)}`).toBe(context.text);
             }
         });
 

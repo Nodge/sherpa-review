@@ -1,0 +1,449 @@
+/*
+ * Diff rendering: file cards and diff rows. All sizes and colours come from README §1
+ * ("Right column: one card per hunk…") and SPEC §2.13–2.14. Values use tokens only.
+ */
+
+/* --- Card list: its own scroll area for virtualization --- */
+
+.diff-list {
+    position: relative;
+    overflow: auto;
+    /* Height fills the rest of the view column (set by the page shell). A fixed calculation from 100vh
+       would miss the view toolbar and connection banner, giving the page a second scrollbar. */
+    flex: 1;
+    min-height: 0;
+    padding: 0 var(--space-page) var(--space-page);
+    contain: strict;
+}
+
+.diff-list__inner {
+    position: relative;
+    width: 100%;
+}
+
+.diff-list__item {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    padding-bottom: var(--space-card);
+}
+
+/* --- File card --- */
+
+.file-card {
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-diff-card);
+    /* `clip` clips rounded corners like `hidden`, but does not make the card
+       a scroll container. Otherwise the sticky header would stick to the card instead of the screen. */
+    overflow: clip;
+}
+
+/* Generated files are dimmed (README §10: generated → dim). */
+.file-card--generated .file-card__name,
+.file-card--generated .file-card__path {
+    color: var(--text-dim-strong);
+}
+
+.file-card__header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    padding: 9px 13px;
+    background: var(--surface-card-header);
+    border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+.file-card__title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.file-card__name {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--text-primary-soft);
+    white-space: nowrap;
+}
+
+.file-card__name--deleted {
+    text-decoration: line-through;
+}
+
+.file-card__path {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim-strong);
+    /* The path truncates from the left (SPEC §1.2), never the filename: rtl cuts the start of the line,
+       plaintext keeps the path itself in its usual order. */
+    direction: rtl;
+    unicode-bidi: plaintext;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-card__old-path {
+    color: var(--text-dim);
+}
+
+.file-card__counts {
+    display: flex;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+}
+
+.file-card__add {
+    color: var(--diff-add-text);
+}
+
+.file-card__del {
+    color: var(--diff-del-text);
+}
+
+.file-card__entity {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Hover actions (README §1): hidden at rest, but available to the keyboard. */
+.file-card__actions {
+    display: flex;
+    gap: var(--space-inner-tight);
+    opacity: 0;
+    transition: opacity var(--motion-hover) var(--motion-hover-ease);
+}
+
+.file-card:hover .file-card__actions,
+.file-card__actions:focus-within {
+    opacity: 1;
+}
+
+.file-card__expand {
+    display: flex;
+    gap: 6px;
+}
+
+.file-card__action {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    cursor: pointer;
+    transition: color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.file-card__action:hover {
+    color: var(--text-muted);
+}
+
+.file-card__action:active {
+    color: var(--text-dim);
+}
+
+.file-card__action[disabled]:hover {
+    color: var(--text-dim-strong);
+}
+
+/* "Viewed" checkbox (README §1, SPEC §2.10): an 11px box, with ✓ when filled. */
+.file-card__viewed {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.file-card__viewed input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.file-card__viewed-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 11px;
+    height: 11px;
+    border: 1px solid var(--checkbox-border);
+    border-radius: var(--radius-mark);
+    /* ✓ is always in the markup, but only visible in the filled state (SPEC §2.12). */
+    font-size: var(--font-size-scope);
+    line-height: 1;
+    color: transparent;
+    transition:
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+/* SPEC §2.10: hover brightens the border and fills the box to a quarter. */
+.file-card__viewed:hover .file-card__viewed-box {
+    border-color: var(--read-border);
+    background: var(--read-fill-hover);
+}
+
+.file-card__viewed input:checked + .file-card__viewed-box {
+    background: var(--read-fill);
+    border-color: var(--read-border);
+    color: var(--surface-app);
+}
+
+/* SPEC §2.10: pressing fills instantly, without the 90ms hover transition. */
+.file-card__viewed:active .file-card__viewed-box {
+    background: var(--read-fill);
+    border-color: var(--read-border);
+    transition: none;
+}
+
+.file-card__viewed input:focus-visible + .file-card__viewed-box {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 1px;
+}
+
+.file-card__viewed.is-viewed {
+    color: var(--diff-add-text-strong);
+}
+
+/* --- Notices and system states --- */
+
+.file-card__notice,
+.file-card__hint,
+.file-card__loading,
+.file-card__collapsed {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner);
+    margin: 0;
+    padding: 7px 13px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    background: var(--surface-diff-gap);
+    border-bottom: 1px solid var(--border-hairline);
+}
+
+.file-card__hint {
+    color: var(--attention-text);
+    background: var(--attention-surface-alt);
+}
+
+.file-card__collapsed,
+.file-card__notice--button {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--border-hairline);
+    text-align: left;
+    cursor: pointer;
+}
+
+.file-card__collapsed:hover,
+.file-card__notice--button:hover {
+    color: var(--text-muted);
+}
+
+/* --- Diff rows --- */
+
+.diff-rows {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-code);
+    line-height: var(--line-height-code);
+}
+
+.diff-gap {
+    padding: 0 13px;
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    background: var(--surface-diff-gap);
+    border-top: 1px solid var(--border-hairline);
+    border-bottom: 1px solid var(--border-hairline);
+}
+
+.diff-row {
+    display: grid;
+    /* README §1: unified has the old gutter, new gutter, sign and code. */
+    grid-template-columns: 46px 46px 16px minmax(0, 1fr);
+}
+
+.diff-rows--split .diff-row {
+    /* README §1: side by side has a gutter, sign and code for each side. */
+    grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
+}
+
+.diff-row:hover {
+    background: var(--row-hover);
+}
+
+.diff-row__gutter {
+    padding-right: 8px;
+    font-size: var(--font-size-gutter);
+    text-align: right;
+    color: var(--text-gutter);
+    user-select: none;
+    cursor: default;
+}
+
+.diff-row__sign {
+    text-align: center;
+    color: var(--text-gutter);
+    user-select: none;
+    cursor: default;
+}
+
+.diff-row__code {
+    padding-right: 13px;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--code-text);
+    /* Long lines scroll individually. In split mode, each panel scrolls independently (SPEC §2.14). */
+    scrollbar-width: thin;
+}
+
+.diff-row--add,
+.diff-side--add {
+    background: var(--diff-add-bg);
+}
+
+.diff-row--del,
+.diff-side--del {
+    background: var(--diff-del-bg);
+}
+
+.diff-row--add .diff-row__gutter,
+.diff-row__gutter.diff-side--add {
+    color: var(--diff-add-gutter);
+}
+
+.diff-row--del .diff-row__gutter,
+.diff-row__gutter.diff-side--del {
+    color: var(--diff-del-gutter);
+}
+
+.diff-row--add .diff-row__sign,
+.diff-row__sign.diff-side--add {
+    color: var(--diff-add-text);
+}
+
+.diff-row--del .diff-row__sign,
+.diff-row__sign.diff-side--del {
+    color: var(--diff-del-text);
+}
+
+.diff-row--del .diff-row__code,
+.diff-row__code.diff-side--del {
+    color: var(--code-text-del);
+}
+
+/* Empty side of a pair in split mode (README §1). */
+.diff-row__gutter--empty,
+.diff-row__sign--empty,
+.diff-row__code--empty {
+    background: var(--surface-diff-empty);
+}
+
+/* The selected range is the same in both modes (README §1, SPEC §2.14). */
+.diff-row.is-selected,
+.diff-side.is-selected {
+    background: var(--accent-selection);
+}
+
+.diff-row.is-selected > :first-child,
+.diff-row__gutter.diff-side.is-selected {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.diff-word {
+    background: var(--diff-add-word);
+    border-radius: var(--radius-rule);
+}
+
+.diff-row--del .diff-word,
+.diff-side--del .diff-word {
+    background: var(--diff-del-word);
+}
+
+.diff-trailing {
+    background: var(--diff-trailing-space);
+}
+
+.diff-row__no-newline {
+    color: var(--text-dim-strong);
+}
+
+/* Syntax highlighting follows README §1, with exactly four categories. */
+.syntax-keyword {
+    color: var(--syntax-keyword);
+}
+
+.syntax-string {
+    color: var(--syntax-string);
+}
+
+.syntax-comment {
+    color: var(--syntax-comment);
+    font-style: italic;
+}
+
+.syntax-decorator {
+    color: var(--syntax-decorator);
+}
+
+/* --- Full diff view header (quiet mode toggle, README §1 toolbar) --- */
+
+.diff-view {
+    display: flex;
+    flex-direction: column;
+}
+
+.diff-view__toolbar {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: var(--space-control);
+    padding: var(--space-inner) var(--space-page) 11px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+.diff-view__title {
+    margin: 0;
+    font-size: var(--font-size-section-title);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.diff-view__mode {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    cursor: pointer;
+    transition: color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.diff-view__mode:hover {
+    color: var(--text-muted);
+}
+
+.diff-view__status {
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}

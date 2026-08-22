@@ -1,4 +1,4 @@
-import type { CommentDraft, Comment, HostId, Lens, PrDiff, PrMeta, PublishResult, Thread, Verdict } from './review.js';
+import type { CommentDraft, Comment, FileContent, HostId, Lens, PrDiff, PrMeta, PublishResult, Thread, Verdict } from './review.js';
 
 /**
  * Host adapter interface (requirements §1/C4, brief §4a). One abstraction, implemented by:
@@ -48,6 +48,14 @@ export interface ReviewHost {
      * `capabilities.fileViewedSync`, as checked by the contract suite.
      */
     setFileViewed?(fileId: HostId, viewed: boolean): Promise<void>;
+
+    /**
+     * Full file contents on both diff sides, for "Expand context".
+     * Method presence must match `capabilities.fileContent` (checked by the contract
+     * suite). null means contents are unavailable for this specific file (binary,
+     * too large). The UI disables expansion for it.
+     */
+    getFileContent?(fileId: HostId): Promise<FileContent | null>;
 
     /** "My files" lens (CODEOWNERS or host equivalent). null if the host has no ownership concept. */
     ownershipLens(): Promise<Lens | null>;

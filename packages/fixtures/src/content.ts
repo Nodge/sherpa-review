@@ -53,6 +53,22 @@ export function tsLines(prefix: string, count: number, offset = 0): string[] {
     return lines;
 }
 
+/**
+ * Unchanged context line `line` in file `path`, outside the hunks and available only
+ * through "Expand context". It is derived from the line number, so
+ * two calls return the same result, and unchanged parts match across two file versions
+ * (the caller passes the line number from one side for both).
+ */
+export function contextLineAt(path: string, line: number): string {
+    if (path.endsWith('.yaml') || path.endsWith('.yml')) {
+        return lockLines(' ', 1, line)[0]?.slice(1) ?? '';
+    }
+    if (path.endsWith('.md')) {
+        return line % 4 === 0 ? '' : `- ${identifierAt(line)}: see the checkout runbook.`;
+    }
+    return tsLines(' ', 1, line)[0]?.slice(1) ?? '';
+}
+
 /** pnpm lockfile lines: there are always plenty, and nobody reads them. Only the shape matters. */
 export function lockLines(prefix: string, count: number, offset = 0): string[] {
     const lines: string[] = [];

@@ -84,11 +84,31 @@
     --diff-del-text-strong: #e8a29c;
     --diff-del-gutter: #7f5a56;
     --read-fill: #2b7a55;
+    /* SPEC §2.10, hovering over "viewed": the box fills a quarter with green. */
+    --read-fill-hover: rgba(43, 122, 85, 0.25);
     --read-border: #3f7a5a;
     --error: #e0736c;
     --error-text: #d99a95;
     --error-surface: #171315;
     --error-border: #3d2a2c;
+
+    /* --- Diff rendering: rows, highlighting, checkboxes (README §1, SPEC §2.12, §2.14) --- */
+    --code-text: #cfd3da;
+    --code-text-del: #d5c0be;
+    --surface-diff-empty: #0c0d0f;
+    --surface-diff-gap: #111214;
+    --diff-add-word: rgba(66, 160, 110, 0.22);
+    --diff-del-word: rgba(224, 108, 102, 0.22);
+    --diff-trailing-space: rgba(224, 108, 102, 0.25);
+    --row-hover: rgba(255, 255, 255, 0.04);
+    --checkbox-border: #3a3f47;
+    --read-box-border: #33383f;
+
+    /* --- Syntax highlighting: deliberately sparse (README §1) --- */
+    --syntax-keyword: #9aa6ff;
+    --syntax-string: #d3b183;
+    --syntax-comment: #5f646d;
+    --syntax-decorator: #d99a5c;
 
     /* --- Neutral tier fills --- */
     --tier-medium: #4a5160;

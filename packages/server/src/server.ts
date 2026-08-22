@@ -32,6 +32,7 @@ import {
 } from './paths.js';
 import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
+import type { EditorOptions } from './review-routes.js';
 import { createReviewRoutes } from './review-routes.js';
 import type { StaticAssets } from './static.js';
 import { createUiRoutes } from './ui-routes.js';
@@ -74,6 +75,8 @@ export interface StartServerOptions {
      * without a live service (`() => null` runs the server without review endpoints).
      */
     reviewHostFactory?: ReviewHostFactory;
+    /** "Open in external editor" settings. Defaults to the server's cwd and `SHERPA_EDITOR`. */
+    editor?: EditorOptions;
 }
 
 export interface SherpaServer {
@@ -191,7 +194,10 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 reviewFeed,
                 shutdownSignal: shutdownController.signal,
             }),
-            ...createReviewRoutes({ host: reviewHost?.host ?? null }),
+            ...createReviewRoutes({
+                host: reviewHost?.host ?? null,
+                ...(options.editor === undefined ? {} : { editor: options.editor }),
+            }),
         );
 
         const handle = createHandle({

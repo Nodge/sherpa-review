@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
-import { lensSchema, prDiffSchema, prMetaSchema, threadSchema } from './review.js';
+import { fileContentSchema, hostIdSchema, lensSchema, prDiffSchema, prMetaSchema, threadSchema } from './review.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
 /**
@@ -83,6 +83,35 @@ export type UiReviewDiffResponse = z.infer<typeof uiReviewDiffResponseSchema>;
 export const uiReviewThreadsResponseSchema = z.object({ threads: z.array(threadSchema) });
 export type UiReviewThreadsResponse = z.infer<typeof uiReviewThreadsResponseSchema>;
 
+/**
+ * File contents for "Expand context". The UI calls this endpoint only with
+ * `capabilities.fileContent`. `content: null` means contents are unavailable for this file.
+ */
+export const uiReviewFileContentRequestSchema = z.object({ fileId: hostIdSchema });
+export type UiReviewFileContentRequest = z.infer<typeof uiReviewFileContentRequestSchema>;
+
+export const uiReviewFileContentResponseSchema = z.object({ content: fileContentSchema.nullable() });
+export type UiReviewFileContentResponse = z.infer<typeof uiReviewFileContentResponseSchema>;
+
+/**
+ * "Open in external editor" (MUST in the brief). The path matches the diff. The server resolves
+ * it relative to its cwd (inherited from `sherpa up` in the checkout). The editor command is
+ * `SHERPA_EDITOR` (a template with `{file}` and `{line}`), defaulting to `code -g {file}:{line}`.
+ * Failure (file missing on disk, editor failed to start) returns `unavailable` with a reason:
+ * reduced functionality with an inline hint, not a UI error state.
+ */
+export const uiOpenInEditorRequestSchema = z.object({
+    path: z.string().min(1),
+    line: z.number().int().positive().optional(),
+});
+export type UiOpenInEditorRequest = z.infer<typeof uiOpenInEditorRequestSchema>;
+
+export const uiOpenInEditorResponseSchema = z.object({
+    outcome: z.enum(['opened', 'unavailable']),
+    message: z.string().nullable(),
+});
+export type UiOpenInEditorResponse = z.infer<typeof uiOpenInEditorResponseSchema>;
+
 /** File filter lenses: ownership ("mine") is separate from additional lenses (PCI DSS). */
 export const uiReviewLensesResponseSchema = z.object({
     ownership: lensSchema.nullable(),
@@ -122,6 +151,10 @@ export const UI_ENDPOINTS = {
     reviewThreads: '/api/ui/review/threads',
     /** GET → `uiReviewLensesResponseSchema`. */
     reviewLenses: '/api/ui/review/lenses',
+    /** GET `?fileId=` (`uiReviewFileContentRequestSchema`) → `uiReviewFileContentResponseSchema`. */
+    reviewFileContent: '/api/ui/review/file-content',
+    /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
+    openInEditor: '/api/ui/open-in-editor',
 } as const;
 
 /** SSE event name for a state snapshot. */

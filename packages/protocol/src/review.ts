@@ -28,6 +28,8 @@ export type ReviewUser = z.infer<typeof reviewUserSchema>;
 export const hostCapabilitiesSchema = z.object({
     stickyShip: z.boolean(),
     fileViewedSync: z.boolean(),
+    /** The host can return full file contents (`getFileContent`). Without it, "Expand context" is unavailable. */
+    fileContent: z.boolean(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -75,8 +77,21 @@ export const fileDiffSchema = z.object({
     patch: z.string().nullable(),
     /** Host-side viewed mark. null if unsupported by the host (see capabilities). */
     viewed: z.boolean().nullable(),
+    /** Link to this file's blame view on the host. null if the host has no link to offer. */
+    blameUrl: z.string().nullable(),
 });
 export type FileDiff = z.infer<typeof fileDiffSchema>;
+
+/**
+ * File content on both sides of the diff supplies "Expand context" (SPEC §2.13):
+ * the UI fills in lines outside the hunks from this text. The host needs no protocol for context
+ * width. A null side means the file does not exist on that side (add/delete).
+ */
+export const fileContentSchema = z.object({
+    oldText: z.string().nullable(),
+    newText: z.string().nullable(),
+});
+export type FileContent = z.infer<typeof fileContentSchema>;
 
 /** Full PR diff: one host iteration. */
 export const prDiffSchema = z.object({

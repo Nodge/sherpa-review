@@ -1,6 +1,7 @@
 import type {
     Comment,
     CommentDraft,
+    FileContent,
     HostId,
     Lens,
     PrDiff,
@@ -14,6 +15,7 @@ import { commentDraftSchema, verdictSchema } from '@sherpa/protocol';
 
 import type { FixtureData, FixtureName } from './data/index.js';
 import { fixtureData } from './data/index.js';
+import { fileContentOf } from './file-content.js';
 
 /**
  * Third `ReviewHost` implementation (requirements §1/C4), with deterministic fixtures. Used for
@@ -99,12 +101,18 @@ export class FixtureHost implements ReviewHost {
     /** Present only when the fixture host supports viewed marks (`capabilities.fileViewedSync`). */
     setFileViewed?: (fileId: HostId, viewed: boolean) => Promise<void>;
 
+    /** Present only when the fixture host supports file content (`capabilities.fileContent`). */
+    getFileContent?: (fileId: HostId) => Promise<FileContent | null>;
+
     constructor(name: FixtureName, options: FixtureHostOptions = {}) {
         this.data = fixtureData(name);
         this.failPublishFor = new Set(options.failPublishFor ?? []);
 
         if (this.data.pr.capabilities.fileViewedSync) {
             this.setFileViewed = (fileId, viewed) => this.applyFileViewed(fileId, viewed);
+        }
+        if (this.data.pr.capabilities.fileContent) {
+            this.getFileContent = (fileId) => this.loadFileContent(fileId);
         }
     }
 
@@ -266,6 +274,15 @@ export class FixtureHost implements ReviewHost {
     /** Fixture inspection: the last applied verdict (null if none). */
     appliedVerdict(): Verdict | null {
         return this.verdict;
+    }
+
+    /** An unknown file is a host error. A known file without content (binary) returns null. */
+    private loadFileContent(fileId: HostId): Promise<FileContent | null> {
+        const file = this.data.diff.files.find((candidate) => candidate.fileId === fileId);
+        if (file === undefined) {
+            return Promise.reject(new Error(`file ${fileId} not found in the diff`));
+        }
+        return Promise.resolve(fileContentOf(file));
     }
 
     private applyFileViewed(fileId: HostId, viewed: boolean): Promise<void> {

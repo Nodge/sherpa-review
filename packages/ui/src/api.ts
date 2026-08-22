@@ -1,9 +1,22 @@
-import type { PriorityClass, UiCancelResponse, UiEnqueueResponse, UiTask } from '@sherpa/protocol';
+import type {
+    FileContent,
+    PrDiff,
+    PriorityClass,
+    PrMeta,
+    UiCancelResponse,
+    UiEnqueueResponse,
+    UiOpenInEditorResponse,
+    UiTask,
+} from '@sherpa/protocol';
 import {
     rpcErrorSchema,
     UI_ENDPOINTS,
     uiCancelResponseSchema,
     uiEnqueueResponseSchema,
+    uiOpenInEditorResponseSchema,
+    uiReviewDiffResponseSchema,
+    uiReviewFileContentResponseSchema,
+    uiReviewPrResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -30,6 +43,42 @@ export async function cancelTask(token: string, taskId: number): Promise<UiCance
     return body.outcome;
 }
 
+export async function fetchReviewPr(token: string): Promise<PrMeta> {
+    return (await get(UI_ENDPOINTS.reviewPr, token, uiReviewPrResponseSchema)).pr;
+}
+
+export async function fetchReviewDiff(token: string): Promise<PrDiff> {
+    return (await get(UI_ENDPOINTS.reviewDiff, token, uiReviewDiffResponseSchema)).diff;
+}
+
+/**
+ * File contents for "Expand context". Called only with `capabilities.fileContent`.
+ * `null` means this file has no available contents (binary or too large).
+ */
+export async function fetchFileContent(token: string, fileId: string): Promise<FileContent | null> {
+    const path = `${UI_ENDPOINTS.reviewFileContent}?fileId=${encodeURIComponent(fileId)}`;
+    return (await get(path, token, uiReviewFileContentResponseSchema)).content;
+}
+
+export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {
+    return post(
+        UI_ENDPOINTS.openInEditor,
+        token,
+        line === undefined ? { path } : { path, line },
+        uiOpenInEditorResponseSchema,
+    );
+}
+
+async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promise<T> {
+    let response: Response;
+    try {
+        response = await fetch(path, { headers: { authorization: `Bearer ${token}` } });
+    } catch {
+        throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
+    }
+    return validate(response, schema);
+}
+
 async function post<T>(path: string, token: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
     let response: Response;
     try {
@@ -41,7 +90,10 @@ async function post<T>(path: string, token: string, body: unknown, schema: z.Zod
     } catch {
         throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
     }
+    return validate(response, schema);
+}
 
+async function validate<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
         throw new ApiError(errorMessage(payload));

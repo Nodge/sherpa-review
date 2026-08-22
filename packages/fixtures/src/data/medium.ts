@@ -137,7 +137,10 @@ const HAND_WRITTEN: readonly FileSpec[] = [
         ],
     },
     {
+        // Not every fixture file has Blame. The "Blame" action in the card header must
+        // hide when the host has no target to offer (`blameUrl: null`).
         path: 'services/orders/src/domain/policies/edit-policy.ts',
+        blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/policies/edit-policy.ts',
         changeType: 'modify',
         hunks: [
             {
@@ -208,6 +211,7 @@ const HAND_WRITTEN: readonly FileSpec[] = [
     },
     {
         path: 'services/orders/src/domain/order.ts',
+        blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/order.ts',
         changeType: 'modify',
         hunks: [
             {
@@ -1222,7 +1226,7 @@ export function makeMediumFixture(): FixtureData {
             state: 'open',
             statusLabel: 'review_in_progress',
             updatedAt: '2026-08-19T16:42:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: true },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
         },
         diff: {
             diffId: DIFF_ID,

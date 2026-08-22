@@ -29,7 +29,7 @@ export function makeSmallFixture(): FixtureData {
             state: 'open',
             statusLabel: 'waiting_for_review',
             updatedAt: '2026-08-20T07:18:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: false },
+            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true },
         },
         diff: {
             diffId: DIFF_ID,

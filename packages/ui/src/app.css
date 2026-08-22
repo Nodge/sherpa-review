@@ -1,5 +1,22 @@
 /* Main page shell: message screens and connection banners left over from M0. */
 
+/*
+ * The page is a window-height column with a toolbar, connection banner and view. The view gets
+ * exactly the remaining height and scrolls its own content (the full diff is a virtualized list).
+ * Otherwise the entire page would scroll in addition to its contents.
+ */
+#root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+#root > main {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
 .message-screen {
     max-width: 720px;
     padding: 60px var(--space-page);

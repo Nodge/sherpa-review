@@ -1,4 +1,5 @@
 import { anchor, comment, human, lens, thread } from '../builders.js';
+import { tsLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff } from '../patch.js';
 import type { FixtureData } from './types.js';
@@ -14,6 +15,9 @@ import type { FixtureData } from './types.js';
 
 const PR_ID = '5122';
 const DIFF_ID = '196301';
+
+/** Count from the SPEC §2.13 example ("2,412 changed lines — open file"). */
+const HUGE_FILE_LINES = 2412;
 
 const FILES: readonly FileSpec[] = [
     {
@@ -127,6 +131,14 @@ const FILES: readonly FileSpec[] = [
         ],
     },
     {
+        // File above the collapse threshold (SPEC §2.13): its card starts collapsed
+        // with "2,412 changed lines — open file".
+        path: 'services/orders/src/payments/generated/psp-client.ts',
+        changeType: 'add',
+        generated: true,
+        hunks: [{ oldStart: 0, newStart: 1, lines: tsLines('+', HUGE_FILE_LINES) }],
+    },
+    {
         // Mode change without content changes: the patch has only an `old mode`/`new mode` header,
         // No hunks, zero counts. The UI shows a single-line notice (SPEC §2.14).
         path: 'services/orders/scripts/rollout.sh',
@@ -151,7 +163,7 @@ export function makeEdgeFixture(): FixtureData {
             state: 'open',
             statusLabel: 'needs_work',
             updatedAt: '2026-08-19T13:20:00.000Z',
-            capabilities: { stickyShip: false, fileViewedSync: true },
+            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false },
         },
         diff: {
             diffId: DIFF_ID,

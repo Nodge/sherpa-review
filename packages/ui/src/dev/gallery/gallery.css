@@ -87,6 +87,14 @@
     padding: var(--space-card);
 }
 
+/* Frame for states with their own scrolling (the virtualized diff list):
+   the app's view column gives them height, and this frame does so here. */
+.gallery__viewport {
+    display: flex;
+    flex-direction: column;
+    height: 70vh;
+}
+
 /* --- Token display --- */
 
 .showcase {

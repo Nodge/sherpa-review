@@ -8,6 +8,7 @@ import { breadcrumbFromPrKey } from './pr-key.js';
 import type { SessionStore } from './session/session-store.js';
 import type { Store } from './store.js';
 import { UI_VERSION } from './version.js';
+import { FullDiffView } from './views/full-diff.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
 
 /**
@@ -18,9 +19,11 @@ import { ViewFrame } from './views/view-frames.tsx';
 export interface AppProps {
     readonly store: Store;
     readonly session: SessionStore;
+    /** Access token from the URL fragment. Views use it to call review endpoints. */
+    readonly token: string;
 }
 
-export function App({ store, session }: AppProps) {
+export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const { view } = useSyncExternalStore(session.subscribe, session.getSnapshot);
 
@@ -63,7 +66,7 @@ export function App({ store, session }: AppProps) {
                 </div>
             ) : null}
 
-            <ViewFrame view={view} />
+            {view === 'diff' ? <FullDiffView token={token} /> : <ViewFrame view={view} />}
         </>
     );
 }

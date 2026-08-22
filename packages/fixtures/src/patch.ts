@@ -29,6 +29,8 @@ export interface FileSpec {
     generated?: boolean;
     /** null means the host does not support viewed marks (see `capabilities.fileViewedSync`). */
     viewed?: boolean | null;
+    /** Link to blame on the host website, absent by default. */
+    blameUrl?: string;
     hunks?: readonly HunkSpec[];
     /** File mode in the git header, defaults to a regular file. */
     mode?: string;
@@ -177,6 +179,7 @@ export function makeFileDiff(diffId: HostId, spec: FileSpec): FileDiff {
         deletions: totals.deletions,
         patch: hasPatch ? [...renderFileHeader(spec), ...hunks.map(renderHunk), ''].join('\n') : null,
         viewed: spec.viewed === undefined ? false : spec.viewed,
+        blameUrl: spec.blameUrl ?? null,
     };
 }
 

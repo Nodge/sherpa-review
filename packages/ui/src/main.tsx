@@ -55,7 +55,7 @@ if (token === null) {
 
     root.render(
         <StrictMode>
-            <App store={store} session={session} />
+            <App store={store} session={session} token={token} />
         </StrictMode>,
     );
 }
