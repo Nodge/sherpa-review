@@ -64,6 +64,30 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE worker ADD COLUMN model TEXT;
         `,
     },
+    {
+        // PR reading progress (T8, requirements §5). One DB per PR, so there are no prKey keys inside.
+        // A row in `file_progress` appears only after an explicit reviewer action. Its absence means
+        // the default state, which the UI interprets. `file_seen_ranges` prepares for M2 stops:
+        // range writes arrive with them, while reads already work.
+        // Boundary columns are `start_line`/`end_line` because `end` is an SQLite keyword.
+        name: '005-progress',
+        sql: `
+            CREATE TABLE file_progress (
+                file_id TEXT PRIMARY KEY,
+                viewed INTEGER NOT NULL CHECK (viewed IN (0, 1)),
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE file_seen_ranges (
+                file_id TEXT NOT NULL,
+                side TEXT NOT NULL CHECK (side IN ('old', 'new')),
+                start_line INTEGER NOT NULL CHECK (start_line >= 1),
+                end_line INTEGER NOT NULL CHECK (end_line >= start_line)
+            );
+
+            CREATE INDEX file_seen_ranges_file ON file_seen_ranges (file_id);
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

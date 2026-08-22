@@ -7,6 +7,8 @@ import type {
     UiEnqueueResponse,
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
+    UiReviewProgressResponse,
+    UiSetFileViewedResponse,
     UiTask,
 } from '@sherpa/protocol';
 import {
@@ -19,6 +21,8 @@ import {
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
+    uiReviewProgressResponseSchema,
+    uiSetFileViewedResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -65,6 +69,23 @@ export async function fetchReviewLenses(token: string): Promise<UiReviewLensesRe
 export async function fetchFileContent(token: string, fileId: string): Promise<FileContent | null> {
     const path = `${UI_ENDPOINTS.reviewFileContent}?fileId=${encodeURIComponent(fileId)}`;
     return (await get(path, token, uiReviewFileContentResponseSchema)).content;
+}
+
+/**
+ * PR reading progress (T8): explicit marks and seen ranges. The endpoint is local, so it also works when
+ * the PR has no review host.
+ */
+export async function fetchReviewProgress(token: string): Promise<UiReviewProgressResponse> {
+    return get(UI_ENDPOINTS.reviewProgress, token, uiReviewProgressResponseSchema);
+}
+
+/** Explicit "viewed" mark. Returns the progress revision after the write. */
+export async function setFileViewed(
+    token: string,
+    fileId: string,
+    viewed: boolean,
+): Promise<UiSetFileViewedResponse> {
+    return post(UI_ENDPOINTS.reviewFileViewed, token, { fileId, viewed }, uiSetFileViewedResponseSchema);
 }
 
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {

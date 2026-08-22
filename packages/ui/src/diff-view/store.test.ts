@@ -21,6 +21,10 @@ function file(fileId: string, viewed: boolean | null = false): FileDiff {
     };
 }
 
+function generated(fileId: string): FileDiff {
+    return { ...file(fileId), generated: true };
+}
+
 function memoryStorage(initial?: string): Pick<Storage, 'getItem' | 'setItem'> & { value: string | null } {
     return {
         value: initial ?? null,
@@ -34,11 +38,80 @@ function memoryStorage(initial?: string): Pick<Storage, 'getItem' | 'setItem'> &
 }
 
 describe('diff view store', () => {
-    it('takes initial marks from the host diff', () => {
-        const store = createDiffViewStore({ files: [file('a', true), file('b', false), file('c', null)], storage: null });
+    it('derives read-state from the file itself when no progress records exist', () => {
+        const store = createDiffViewStore({
+            files: [file('a', true), file('b', false), file('c', null), generated('d')],
+            storage: null,
+        });
 
-        const { viewed } = store.getSnapshot();
-        expect([viewed.get('a'), viewed.get('b'), viewed.get('c')]).toEqual([true, false, false]);
+        const { readState } = store.getSnapshot();
+        expect([readState.get('a'), readState.get('b'), readState.get('c'), readState.get('d')].map(
+            (state) => state?.state,
+        )).toEqual(['read', 'unread', 'unread', 'read']);
+    });
+
+    it('server progress overrides defaults: a cleared generated-file mark survives loading', () => {
+        const store = createDiffViewStore({ files: [generated('d'), file('a')], storage: null });
+
+        store.setProgress([
+            { fileId: 'd', viewed: false, seenRanges: [] },
+            { fileId: 'a', viewed: true, seenRanges: [] },
+        ]);
+
+        const { readState } = store.getSnapshot();
+        expect([readState.get('d')?.state, readState.get('a')?.state]).toEqual(['unread', 'read']);
+    });
+
+    it('receives initial progress in the constructor', () => {
+        const store = createDiffViewStore({
+            files: [generated('d')],
+            progress: [{ fileId: 'd', viewed: false, seenRanges: [] }],
+            storage: null,
+        });
+
+        expect(store.getSnapshot().readState.get('d')?.state).toBe('unread');
+    });
+
+    it('sets an optimistic mark and rolls back to the previous record', () => {
+        const store = createDiffViewStore({ files: [file('a')], storage: null });
+
+        store.markViewed('a', true);
+        expect(store.getSnapshot().readState.get('a')?.state).toBe('read');
+        expect(store.getSnapshot().progress.get('a')).toEqual({ fileId: 'a', viewed: true, seenRanges: [] });
+
+        // No record existed before the mark. Rollback must remove it, without leaving `viewed: false`.
+        store.restoreProgress('a', null);
+        expect(store.getSnapshot().progress.has('a')).toBe(false);
+        expect(store.getSnapshot().readState.get('a')?.state).toBe('unread');
+
+        store.markViewed('a', true);
+        store.restoreProgress('a', { fileId: 'a', viewed: false, seenRanges: [] });
+        expect(store.getSnapshot().progress.get('a')).toEqual({ fileId: 'a', viewed: false, seenRanges: [] });
+    });
+
+    it('marking changes only the flag and preserves the record\'s ranges', () => {
+        const ranges = [{ side: 'new' as const, start: 1, end: 2 }];
+        const store = createDiffViewStore({
+            files: [file('a')],
+            progress: [{ fileId: 'a', viewed: false, seenRanges: ranges }],
+            storage: null,
+        });
+
+        store.markViewed('a', true);
+        expect(store.getSnapshot().progress.get('a')).toEqual({ fileId: 'a', viewed: true, seenRanges: ranges });
+
+        // Clearing the mark restores the state derived from ranges, not "nothing read".
+        store.markViewed('a', false);
+        expect(store.getSnapshot().readState.get('a')?.state).toBe('partial');
+    });
+
+    it('preserves read-state object identity for other files when marking', () => {
+        const store = createDiffViewStore({ files: [file('a'), file('b')], storage: null });
+        const before = store.getSnapshot().readState.get('b');
+
+        store.markViewed('a', true);
+
+        expect(store.getSnapshot().readState.get('b')).toBe(before);
     });
 
     it('persists the diff mode and restores it from storage', () => {
@@ -100,12 +173,12 @@ describe('diff view store', () => {
             calls += 1;
         });
 
-        store.setViewed('a', true);
+        store.markViewed('a', true);
         store.clearSelection();
         expect(calls).toBe(1);
 
         stop();
-        store.setViewed('a', false);
+        store.markViewed('a', false);
         expect(calls).toBe(1);
     });
 });

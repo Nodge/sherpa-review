@@ -1,5 +1,11 @@
 import type { UiState } from '@sherpa/protocol';
-import { UI_ENDPOINTS, UI_STATE_EVENT, uiStateSchema } from '@sherpa/protocol';
+import {
+    UI_ENDPOINTS,
+    UI_PROGRESS_EVENT,
+    UI_STATE_EVENT,
+    uiProgressEventSchema,
+    uiStateSchema,
+} from '@sherpa/protocol';
 
 /**
  * The store lives outside the React tree (spec §1/C3). State arrives over SSE, and React reads it
@@ -21,6 +27,11 @@ export interface StoreSnapshot {
     readonly state: UiState | null;
     /** Fatal error text, set only in `fatal`. */
     readonly error: string | null;
+    /**
+     * Last reading progress revision from the channel (T8). null means no event has arrived yet.
+     * When it exceeds the revision seen by the view, the view rereads the progress endpoint.
+     */
+    readonly progressRevision: number | null;
 }
 
 export interface Store {
@@ -31,6 +42,8 @@ export interface Store {
 
 export interface StreamHandlers {
     readonly onMessage: (data: string) => void;
+    /** `progress` event: carries only the revision. The view rereads the data through the endpoint. */
+    readonly onProgress: (data: string) => void;
     /**
      * `recoverable: true` means the channel reconnects itself (the browser retries after a stream interruption).
      * `false` means the connection is permanently closed, so the store must retry.
@@ -58,7 +71,7 @@ const RECONNECT_DELAY_MS = 2000;
 
 export function createStore(options: StoreOptions): Store {
     const listeners = new Set<() => void>();
-    let snapshot: StoreSnapshot = { connection: 'connecting', state: null, error: null };
+    let snapshot: StoreSnapshot = { connection: 'connecting', state: null, error: null, progressRevision: null };
     let closed = false;
 
     const update = (next: StoreSnapshot): void => {
@@ -83,19 +96,30 @@ export function createStore(options: StoreOptions): Store {
 
             const state = parseState(data);
             if (state === null) {
-                update({ connection: 'fatal', state: snapshot.state, error: INVALID_STATE_MESSAGE });
+                update({ ...snapshot, connection: 'fatal', error: INVALID_STATE_MESSAGE });
                 // The channel is no longer a source of truth. Reconnecting to it makes no sense.
                 connection?.close();
                 return;
             }
-            update({ connection: 'online', state, error: null });
+            update({ ...snapshot, connection: 'online', state, error: null });
+        },
+        onProgress: (data) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+            // Fail-closed: anything that fails the schema never enters the store. The progress revision is not channel
+            // state, so one malformed event is no reason to declare the channel dead.
+            const revision = parseProgressRevision(data);
+            if (revision !== null && revision !== snapshot.progressRevision) {
+                update({ ...snapshot, progressRevision: revision });
+            }
         },
         onError: (recoverable) => {
             if (closed || snapshot.connection === 'fatal') {
                 return;
             }
             if (snapshot.connection !== 'reconnecting') {
-                update({ connection: 'reconnecting', state: snapshot.state, error: null });
+                update({ ...snapshot, connection: 'reconnecting', error: null });
             }
             if (recoverable) {
                 return;
@@ -150,11 +174,27 @@ function parseState(data: string): UiState | null {
     return parsed.success ? parsed.data : null;
 }
 
+/** `null` means the event failed the protocol schema (fail-closed). */
+function parseProgressRevision(data: string): number | null {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(data);
+    } catch {
+        return null;
+    }
+
+    const parsed = uiProgressEventSchema.safeParse(payload);
+    return parsed.success ? parsed.data.progressRevision : null;
+}
+
 function connectEventSource(url: string, handlers: StreamHandlers): StreamConnection {
     const source = new EventSource(url);
     // The event name is not in `EventSourceEventMap`, so the listener receives a base `Event`.
     source.addEventListener(UI_STATE_EVENT, (event) => {
         handlers.onMessage((event as MessageEvent<string>).data);
+    });
+    source.addEventListener(UI_PROGRESS_EVENT, (event) => {
+        handlers.onProgress((event as MessageEvent<string>).data);
     });
     source.addEventListener('error', () => {
         // The browser retries an interrupted established stream, but not a failed

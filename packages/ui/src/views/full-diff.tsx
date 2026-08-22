@@ -1,7 +1,22 @@
-import type { FileContent, FileDiff, PrDiff, PrMeta, UiReviewLensesResponse } from '@sherpa/protocol';
+import type {
+    FileContent,
+    FileDiff,
+    PrDiff,
+    PrMeta,
+    UiReviewLensesResponse,
+    UiReviewProgressResponse,
+} from '@sherpa/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { fetchFileContent, fetchReviewDiff, fetchReviewLenses, fetchReviewPr, openInEditor } from '../api.js';
+import {
+    fetchFileContent,
+    fetchReviewDiff,
+    fetchReviewLenses,
+    fetchReviewPr,
+    fetchReviewProgress,
+    openInEditor,
+    setFileViewed,
+} from '../api.js';
 import { AuditScopeBanner } from '../components/audit-banner.tsx';
 import { FilterSelect } from '../components/filter-select.tsx';
 import { PrHeader } from '../components/pr-header.tsx';
@@ -27,6 +42,7 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
+import { createProgressWriter } from '../progress/progress-writer.js';
 import type { SessionStore } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import { formatCount, plural } from '../text.js';
@@ -46,9 +62,18 @@ interface Loaded {
     readonly pr: PrMeta;
     readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
+    readonly progress: UiReviewProgressResponse;
 }
 
-export function FullDiffView({ token, prKey, session }: { token: string; prKey: string; session: SessionStore }) {
+export interface FullDiffViewProps {
+    readonly token: string;
+    readonly prKey: string;
+    readonly session: SessionStore;
+    /** Progress revision from SSE. Reread the endpoint if it grew since last seen (tab convergence). */
+    readonly progressRevision: number | null;
+}
+
+export function FullDiffView({ token, prKey, session, progressRevision }: FullDiffViewProps) {
     const [state, setState] = useState<{ loaded: Loaded | null; error: string | null }>({
         loaded: null,
         error: null,
@@ -56,10 +81,15 @@ export function FullDiffView({ token, prKey, session }: { token: string; prKey: 
 
     useEffect(() => {
         let alive = true;
-        void Promise.all([fetchReviewPr(token), fetchReviewDiff(token), fetchReviewLenses(token)]).then(
-            ([pr, diff, lenses]) => {
+        void Promise.all([
+            fetchReviewPr(token),
+            fetchReviewDiff(token),
+            fetchReviewLenses(token),
+            fetchReviewProgress(token),
+        ]).then(
+            ([pr, diff, lenses, progress]) => {
                 if (alive) {
-                    setState({ loaded: { pr, diff, lenses }, error: null });
+                    setState({ loaded: { pr, diff, lenses, progress }, error: null });
                 }
             },
             (error: unknown) => {
@@ -93,6 +123,12 @@ export function FullDiffView({ token, prKey, session }: { token: string; prKey: 
         [diffId],
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
+    const writeViewed = useCallback(
+        async (fileId: string, viewed: boolean): Promise<number> =>
+            (await setFileViewed(token, fileId, viewed)).progressRevision,
+        [token],
+    );
+    const reloadProgress = useCallback(() => fetchReviewProgress(token), [token]);
     const openFileInEditor = useCallback(
         async (path: string): Promise<Feedback> => {
             const result = await openInEditor(token, path);
@@ -121,11 +157,15 @@ export function FullDiffView({ token, prKey, session }: { token: string; prKey: 
             pr={state.loaded.pr}
             diff={state.loaded.diff}
             lenses={state.loaded.lenses}
+            progress={state.loaded.progress}
             prKey={prKey}
             session={session}
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
+            onSetViewed={writeViewed}
+            reloadProgress={reloadProgress}
+            progressRevision={progressRevision}
             initialFileId={readFragmentParam(window.location.hash, 'file')}
         />
     );
@@ -135,12 +175,19 @@ export interface DiffWorkspaceProps {
     readonly pr: PrMeta;
     readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
+    /** Initial reading progress. Without it, the store uses defaults (the gallery supplies a store). */
+    readonly progress?: UiReviewProgressResponse;
     readonly prKey: string;
     readonly session: SessionStore;
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
+    /** Write a viewed mark. Returns the progress revision after the write. */
+    readonly onSetViewed: (fileId: string, viewed: boolean) => Promise<number>;
+    /** Refetch progress on an SSE event. Without it tabs do not converge (gallery, tests). */
+    readonly reloadProgress?: () => Promise<UiReviewProgressResponse>;
+    readonly progressRevision?: number | null;
     readonly initialFileId?: string | null;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
     readonly store?: DiffViewStore;
@@ -149,9 +196,30 @@ export interface DiffWorkspaceProps {
 }
 
 export function DiffWorkspace(props: DiffWorkspaceProps) {
-    const { pr, diff, lenses, prKey, session, parse, loadContent, onOpenInEditor, initialFileId = null } = props;
+    const {
+        pr,
+        diff,
+        lenses,
+        prKey,
+        session,
+        parse,
+        loadContent,
+        onOpenInEditor,
+        onSetViewed,
+        reloadProgress,
+        progressRevision = null,
+        initialFileId = null,
+    } = props;
 
-    const createdStore = useMemo(() => createDiffViewStore({ files: diff.files }), [diff]);
+    const initialProgress = props.progress;
+    const createdStore = useMemo(
+        () =>
+            createDiffViewStore({
+                files: diff.files,
+                ...(initialProgress === undefined ? {} : { progress: initialProgress.files }),
+            }),
+        [diff, initialProgress],
+    );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
@@ -170,6 +238,88 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             session.setFilter(filter.id);
         }
     }, [filter.id, filterId, session]);
+
+    // Reading progress (T8): optimistic writes, rollback on failure and tab convergence through SSE.
+    // `ProgressWriter` handles write order, rollback and revisions. The view only renders.
+    const [writesSettled, setWritesSettled] = useState(0);
+    const [writeError, setWriteError] = useState<{ fileId: string; viewed: boolean } | null>(null);
+    const writer = useMemo(
+        () =>
+            createProgressWriter({
+                initialRevision: initialProgress?.progressRevision ?? 0,
+                read: (fileId) => store.getSnapshot().progress.get(fileId) ?? null,
+                apply: (fileId, viewed) => {
+                    store.markViewed(fileId, viewed);
+                },
+                restore: (fileId, record) => {
+                    store.restoreProgress(fileId, record);
+                },
+                send: onSetViewed,
+                // In-flight writes defer the reread. The decision is reconsidered after the response.
+                onSettled: () => {
+                    setWritesSettled((settled) => settled + 1);
+                },
+            }),
+        [initialProgress, onSetViewed, store],
+    );
+
+    const markViewed = useCallback(
+        async function mark(fileId: string, viewed: boolean): Promise<Feedback> {
+            setWriteError(null);
+            if (await writer.write(fileId, viewed)) {
+                return null;
+            }
+            // The optimistic write failed. The control has already returned to its previous state (SPEC §1.2),
+            // so all that remains is offering a retry.
+            return { text: 'not saved', retry: () => mark(fileId, viewed) };
+        },
+        [writer],
+    );
+
+    /**
+     * A write from the tree: the tree row has no room for a hint, so the panel shows
+     * the failure. The marked file card may not even be in the DOM (virtualization).
+     */
+    const writeFromTree = useCallback(
+        (fileId: string, viewed: boolean) => {
+            void markViewed(fileId, viewed).then((feedback) => {
+                setWriteError(feedback === null ? null : { fileId, viewed });
+            });
+        },
+        [markViewed],
+    );
+
+    // Toggle with `v`: read the state from the store because the key event carries none.
+    const toggleViewed = useCallback(
+        (fileId: string) => {
+            writeFromTree(fileId, store.getSnapshot().readState.get(fileId)?.state !== 'read');
+        },
+        [store, writeFromTree],
+    );
+
+    // `writesSettled` is a dependency for the deferred decision: our write event arrives
+    // before the endpoint response, and without reevaluation it would leave an extra request.
+    useEffect(() => {
+        if (reloadProgress === undefined || progressRevision === null || !writer.shouldReload(progressRevision)) {
+            return;
+        }
+        let alive = true;
+        const mark = writer.beginReload();
+        void reloadProgress().then(
+            (response) => {
+                const files = alive ? writer.finishReload(response, mark) : null;
+                if (files !== null) {
+                    store.setProgress(files);
+                }
+            },
+            () => {
+                // Progress could not be reread. Keep the last known state on screen.
+            },
+        );
+        return () => {
+            alive = false;
+        };
+    }, [progressRevision, writesSettled, reloadProgress, store, writer]);
 
     const listRef = useRef<DiffListHandle | null>(null);
     const [topFileId, setTopFileId] = useState<string | null>(null);
@@ -297,9 +447,20 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 onFilter={changeFilter}
                 pciFileIds={pciFileIds}
                 mineFileIds={mineFileIds}
-                viewed={snapshot.viewed}
+                readState={snapshot.readState}
                 activeFileId={topFileId}
                 onOpenFile={openFile}
+                onToggleViewed={toggleViewed}
+                writeError={
+                    writeError === null
+                        ? null
+                        : {
+                              text: 'not saved',
+                              onRetry: () => {
+                                  writeFromTree(writeError.fileId, writeError.viewed);
+                              },
+                          }
+                }
                 outline={outline}
                 onOpenHunk={openHunk}
                 prKey={prKey}
@@ -369,6 +530,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     parse={parse}
                     loadContent={loadContent}
                     onOpenInEditor={onOpenInEditor}
+                    onViewed={markViewed}
                     initialFileId={initialFileId}
                     keptFileId={keptFileId}
                     onTopFileChange={setTopFileId}

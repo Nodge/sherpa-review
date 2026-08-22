@@ -5,6 +5,8 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 
 import type { DiffFileModel } from '../diff/model.js';
 import { updateFragment } from '../fragment.js';
+import type { FileReadState } from '../progress/read-state.js';
+import { readStateOf as computeReadState } from '../progress/read-state.js';
 import type { ExpandAmount } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
@@ -43,6 +45,8 @@ export interface DiffFileListProps {
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
+    /** Viewed mark. The view owns the optimistic write, the list only calls it. */
+    readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
     /**
@@ -67,6 +71,7 @@ export function DiffFileList({
     parse,
     loadContent,
     onOpenInEditor,
+    onViewed,
     initialFileId = null,
     keptFileId = null,
     onTopFileChange,
@@ -277,7 +282,7 @@ export function DiffFileList({
 
     const actions = useMemo<FileCardActions>(
         () => ({
-            onViewed: store.setViewed,
+            onViewed,
             onExpand: expand,
             onRetryParse: retryParse,
             onOpenFile: store.openFile,
@@ -292,7 +297,7 @@ export function DiffFileList({
             onOpenInEditor,
             onCopyLink: copyFileLink,
         }),
-        [expand, onOpenInEditor, retryParse, store],
+        [expand, onOpenInEditor, onViewed, retryParse, store],
     );
 
     return (
@@ -322,7 +327,7 @@ export function DiffFileList({
                                 content={snapshot.content.get(file.fileId)}
                                 contentAvailable={contentAvailable}
                                 expansion={snapshot.expansion.get(file.fileId) ?? 0}
-                                viewed={snapshot.viewed.get(file.fileId) ?? false}
+                                read={readStateOf(snapshot, file)}
                                 opened={snapshot.opened.has(file.fileId)}
                                 keptInView={file.fileId === keptFileId}
                                 selection={
@@ -381,6 +386,14 @@ function convergeScroll(step: () => void, currentTop: () => number, onDone: () =
             return completed;
         },
     };
+}
+
+/**
+ * File read state from the snapshot. If the file is absent from the map (the store was built
+ * for a different set), use the file's own defaults instead of showing an empty box.
+ */
+function readStateOf(snapshot: { readState: ReadonlyMap<string, FileReadState> }, file: FileDiff): FileReadState {
+    return snapshot.readState.get(file.fileId) ?? computeReadState({ file, record: null });
 }
 
 /** First card whose bottom is still below the viewport's top edge. null means nothing to show. */

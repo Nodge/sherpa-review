@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { readStateOf } from '../progress/read-state.js';
 import type { TreeRow } from './file-tree.js';
 import { treeKeyCommand } from './tree-keys.js';
 
@@ -12,7 +13,7 @@ function dir(path: string, depth: number, collapsed = false): TreeRow {
         additions: 0,
         deletions: 0,
         files: 1,
-        viewedFiles: 0,
+        readFiles: 0,
         generated: false,
         foreign: false,
         collapsed,
@@ -30,7 +31,7 @@ function file(path: string, depth: number): TreeRow {
         deletions: 0,
         generated: false,
         pci: false,
-        viewed: false,
+        read: readStateOf({ file: { generated: false, viewed: null, additions: 1, deletions: 0 }, record: null }),
     };
 }
 

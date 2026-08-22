@@ -159,22 +159,19 @@
     color: var(--text-dim-strong);
 }
 
-/* "Viewed" checkbox (README §1, SPEC §2.10): an 11px box, with ✓ when filled. */
+/* Viewed toggle (README §1, SPEC §2.10): 11px box, ✓ when filled. */
 .file-card__viewed {
     display: flex;
     align-items: center;
     gap: 5px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
     font-size: var(--font-size-meta);
     color: var(--text-dim);
     white-space: nowrap;
     cursor: pointer;
-}
-
-.file-card__viewed input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
 }
 
 .file-card__viewed-box {
@@ -194,16 +191,23 @@
         border-color var(--motion-hover) var(--motion-hover-ease);
 }
 
-/* SPEC §2.10: hover brightens the border and fills the box to a quarter. */
-.file-card__viewed:hover .file-card__viewed-box {
+/* SPEC §2.10: on hover the border brightens and the box gets quarter-opacity fill. The quarter-opacity
+   fill applies to an empty box. On a filled box it would remove the background and hide ✓. */
+.file-card__viewed:hover .file-card__viewed-box--unread {
     border-color: var(--read-border);
     background: var(--read-fill-hover);
 }
 
-.file-card__viewed input:checked + .file-card__viewed-box {
+/* SPEC §2.12: read is filled with ✓, partial is half-filled, unread is empty. */
+.file-card__viewed-box--read {
     background: var(--read-fill);
     border-color: var(--read-border);
     color: var(--surface-app);
+}
+
+.file-card__viewed-box--partial {
+    background: linear-gradient(90deg, var(--read-fill) 0 50%, transparent 50%);
+    border-color: var(--read-border);
 }
 
 /* SPEC §2.10: pressing fills instantly, without the 90ms hover transition. */
@@ -213,7 +217,12 @@
     transition: none;
 }
 
-.file-card__viewed input:focus-visible + .file-card__viewed-box {
+/* The box draws the focus ring, since the adjacent label does not need an outline. */
+.file-card__viewed:focus-visible {
+    outline: none;
+}
+
+.file-card__viewed:focus-visible .file-card__viewed-box {
     outline: 2px solid var(--focus-ring-color);
     outline-offset: 1px;
 }

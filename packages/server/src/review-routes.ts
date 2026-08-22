@@ -12,13 +12,17 @@ import {
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
+    uiReviewProgressResponseSchema,
     uiReviewThreadsResponseSchema,
+    uiSetFileViewedRequestSchema,
+    uiSetFileViewedResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
+import type { ProgressStore } from './progress-store.js';
 
 /**
  * UI review endpoints (M1-T10): PR metadata, active iteration diff, threads, lenses and file content.
@@ -28,6 +32,9 @@ import { handlingRpcFailures, readJsonBody } from './http.js';
  * Fail-closed in both directions: the adapter validates host responses against its schemas, and the server validates
  * what it sends to the UI against the contract schemas. No host (prKey did not map to anything) means `no_review_host`.
  * A host failure (network, token, invalid response) means `host_unavailable` with a readable reason.
+ *
+ * Reading progress (T8) is the exception. It is local, stored in this PR SQLite DB, and works without a host.
+ * Its endpoints never return `no_review_host`.
  */
 
 /** Default editor command: VS Code with a jump to the line. */
@@ -44,10 +51,13 @@ export interface EditorOptions {
 
 export interface ReviewRoutesOptions {
     readonly host: ReviewHost | null;
+    /** Reading progress for this PR: the local source of truth for viewed marks. */
+    readonly progress: ProgressStore;
     readonly editor?: EditorOptions;
 }
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
+    const mirrorFileViewed = createViewedMirror(options.host);
     return [
         {
             method: 'GET',
@@ -103,9 +113,31 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             method: 'POST',
             path: UI_ENDPOINTS.openInEditor,
             handle: handlingRpcFailures(async (ctx) => {
-                const request = await readOpenRequest(ctx);
+                const request = await readRequest(ctx, uiOpenInEditorRequestSchema, '"open in editor"');
                 const body = await openInEditor(request.path, request.line, options.editor ?? {});
                 return respond(uiOpenInEditorResponseSchema, body);
+            }),
+        },
+        {
+            method: 'GET',
+            path: UI_ENDPOINTS.reviewProgress,
+            handle: handlingRpcFailures(() =>
+                respond(
+                    uiReviewProgressResponseSchema,
+                    { files: options.progress.read(), progressRevision: options.progress.revision },
+                    'local',
+                ),
+            ),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewFileViewed,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiSetFileViewedRequestSchema, 'setting a viewed mark');
+                // The local record is the source of truth. The host learns about it next, and only if it supports it.
+                const progressRevision = options.progress.setFileViewed(request.fileId, request.viewed);
+                mirrorFileViewed(request.fileId, request.viewed);
+                return respond(uiSetFileViewedResponseSchema, { progressRevision }, 'local');
             }),
         },
         {
@@ -122,16 +154,62 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     ];
 }
 
-async function readOpenRequest(ctx: RequestContext): Promise<{ path: string; line?: number | undefined }> {
-    const parsed = uiOpenInEditorRequestSchema.safeParse(await readJsonBody(ctx.req));
+/** Request body under the contract schema. `what` appears in the rejection message as "request for what". */
+async function readRequest<T>(ctx: RequestContext, schema: z.ZodType<T>, what: string): Promise<T> {
+    const parsed = schema.safeParse(await readJsonBody(ctx.req));
     if (!parsed.success) {
         throw new RpcFailure(
             'bad_request',
-            'The "open in editor" request failed contract validation.',
+            `The request for ${what} failed contract validation.`,
             parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
         );
     }
     return parsed.data;
+}
+
+/**
+ * Mirroring a mark to the host (`capabilities.fileViewedSync`) is best-effort after the local
+ * write: failure does not roll it back and is not an endpoint error. Method availability matches
+ * the capability by contract (checked by the host contract suite), so there is no extra `getPr`
+ * just to read the flag.
+ *
+ * Per-file queue: host network calls (with retries inside the adapter) can finish in the reverse
+ * order of the marks, leaving the host with a value the reviewer has already undone. A value
+ * that is stale by the time its turn comes is not mirrored at all. The next write supersedes it.
+ */
+function createViewedMirror(host: ReviewHost | null): (fileId: string, viewed: boolean) => void {
+    const setFileViewed = host?.setFileViewed?.bind(host);
+    if (setFileViewed === undefined) {
+        return () => undefined;
+    }
+
+    const queues = new Map<string, Promise<void>>();
+    const latest = new Map<string, number>();
+    let seq = 0;
+
+    return (fileId, viewed) => {
+        const mine = (seq += 1);
+        latest.set(fileId, mine);
+        const queued = (queues.get(fileId) ?? Promise.resolve())
+            .then(async () => {
+                if (latest.get(fileId) === mine) {
+                    await setFileViewed(fileId, viewed);
+                }
+            })
+            .catch((error: unknown) => {
+                process.stderr.write(
+                    `sherpa-server: the host did not accept the viewed mark for ${fileId}: ${messageOf(error)}\n`,
+                );
+            });
+        queues.set(fileId, queued);
+        void queued.then(() => {
+            // The file queue is empty, so forget it. Otherwise the map would grow throughout the session.
+            if (queues.get(fileId) === queued) {
+                queues.delete(fileId);
+                latest.delete(fileId);
+            }
+        });
+    };
 }
 
 /**
@@ -220,13 +298,18 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
     }
 }
 
-/** The contract schema validates the response body. Invalid data never leaves the server (requirements §7). */
-function respond<T>(schema: z.ZodType<T>, body: unknown): JsonResponse {
+/**
+ * The contract schema validates the response body. Invalid data never leaves the server (requirements §7).
+ * `local` means the server built the response itself (reading progress), so any mismatch is its own fault.
+ */
+function respond<T>(schema: z.ZodType<T>, body: unknown, source: 'host' | 'local' = 'host'): JsonResponse {
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
         throw new RpcFailure(
-            'host_unavailable',
-            'The host response does not match the review contract.',
+            source === 'host' ? 'host_unavailable' : 'internal',
+            source === 'host'
+                ? 'The host response did not match the review contract.'
+                : 'The server response did not match the review contract.',
             parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
         );
     }

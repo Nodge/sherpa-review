@@ -1,8 +1,16 @@
 import type { ServerResponse } from 'node:http';
 
-import type { UiCancelResponse, UiEnqueueResponse, UiReviewEvent, UiState, UiTask } from '@sherpa/protocol';
+import type {
+    UiCancelResponse,
+    UiEnqueueResponse,
+    UiProgressEvent,
+    UiReviewEvent,
+    UiState,
+    UiTask,
+} from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
+    UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
     UI_STATE_EVENT,
     uiCancelRequestSchema,
@@ -14,6 +22,7 @@ import type { z } from 'zod';
 import { RpcFailure } from './errors.js';
 import type { RequestContext, Route, StreamContext } from './http.js';
 import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
+import type { ProgressStore } from './progress-store.js';
 import type { TaskQueue, TaskRecord } from './queue.js';
 import type { ReviewFeed } from './review-feed.js';
 import type { WorkerRegistry } from './worker-registry.js';
@@ -26,6 +35,8 @@ export interface UiRoutesOptions {
     readonly reviewHost: string | null;
     /** Thread revision for SSE. null means this server never has review events. */
     readonly reviewFeed: ReviewFeed | null;
+    /** Reading progress: its revision is sent over the channel to synchronize the second tab. */
+    readonly progress: ProgressStore;
     /** Server shutdown: closes pending SSE connections so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
 }
@@ -137,6 +148,14 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         sendEvent(res, UI_REVIEW_EVENT, JSON.stringify(event));
     };
 
+    const pushProgress = (revision: number): void => {
+        if (abort.signal.aborted || res.writableEnded || res.destroyed) {
+            return;
+        }
+        const event: UiProgressEvent = { progressRevision: revision };
+        sendEvent(res, UI_PROGRESS_EVENT, JSON.stringify(event));
+    };
+
     const keepalive = setInterval(push, KEEPALIVE_INTERVAL_MS);
     keepalive.unref();
 
@@ -145,12 +164,14 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     // Thread subscription starts with the first SSE client and stops with the last (see ReviewFeed).
     // It starts after the first state snapshot so that the channel begins with `state`.
     let unsubscribeReview: (() => void) | null = null;
+    let unsubscribeProgress: (() => void) | null = null;
 
     const stop = (): void => {
         clearInterval(keepalive);
         unsubscribeQueue();
         unsubscribeWorker();
         unsubscribeReview?.();
+        unsubscribeProgress?.();
         abort.dispose();
         if (!res.writableEnded && !res.destroyed) {
             res.end();
@@ -169,6 +190,11 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     if (options.reviewFeed !== null && !res.writableEnded && !res.destroyed) {
         pushReview(options.reviewFeed.revision);
         unsubscribeReview = options.reviewFeed.subscribe(pushReview);
+    }
+    // Reading progress is local and independent of the host: the event always exists, even without a review host.
+    if (!res.writableEnded && !res.destroyed) {
+        pushProgress(options.progress.revision);
+        unsubscribeProgress = options.progress.subscribe(pushProgress);
     }
 }
 

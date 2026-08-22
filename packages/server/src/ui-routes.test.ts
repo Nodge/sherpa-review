@@ -207,16 +207,16 @@ describe('UI endpoints', () => {
         it('sends a fresh snapshot after enqueueing and after result submission', async () => {
             const server = await start();
             const stream = await openEvents(server);
-            await stream.next();
+            await nextState(stream);
 
             await postJson(server.port, UI_ENDPOINTS.enqueue, { type: 'echo', text: 'loop' }, server.token);
-            const afterEnqueue = uiStateSchema.parse(JSON.parse((await stream.next()).data));
+            const afterEnqueue = await nextState(stream);
             expect(afterEnqueue.tasks).toHaveLength(1);
             expect(afterEnqueue.tasks[0]?.status).toBe('queued');
 
             const taskId = afterEnqueue.tasks[0]?.id ?? 0;
             await postJson(server.port, WORKER_ENDPOINTS.next, WORKER_BASE, server.token);
-            const afterLease = uiStateSchema.parse(JSON.parse((await stream.next()).data));
+            const afterLease = await nextState(stream);
             expect(afterLease.tasks[0]?.status).toBe('leased');
 
             await postJson(
@@ -225,7 +225,7 @@ describe('UI endpoints', () => {
                 { ...WORKER_BASE, taskId, result: 'loop' },
                 server.token,
             );
-            const afterComplete = uiStateSchema.parse(JSON.parse((await stream.next()).data));
+            const afterComplete = await nextState(stream);
             expect(afterComplete.tasks[0]?.status).toBe('done');
             expect(afterComplete.tasks[0]?.result).toBe('loop');
         });
@@ -267,7 +267,7 @@ describe('UI endpoints', () => {
             });
             servers.push(server);
             const stream = await openEvents(server);
-            expect(uiStateSchema.parse(JSON.parse((await stream.next()).data)).worker.kind).toBe('never');
+            expect((await nextState(stream)).worker.kind).toBe('never');
 
             const aborter = new AbortController();
             const pending = postJson(
@@ -277,13 +277,13 @@ describe('UI endpoints', () => {
                 server.token,
                 aborter.signal,
             ).catch(() => null);
-            expect(uiStateSchema.parse(JSON.parse((await stream.next()).data)).worker.kind).toBe('connected');
+            expect((await nextState(stream)).worker.kind).toBe('connected');
 
             // The session died during long-poll: nobody calls the server again, and the timer changes the status.
             aborter.abort();
             await pending;
 
-            const state = uiStateSchema.parse(JSON.parse((await stream.next()).data));
+            const state = await nextState(stream);
             expect(state.worker).toMatchObject({ kind: 'disconnected', workerId: WORKER });
         });
 
@@ -398,6 +398,19 @@ function corruptTasks(sherpaDir: string): void {
         db.prepare("UPDATE tasks SET context_files = 'this is not json'").run();
     } finally {
         db.close();
+    }
+}
+
+/**
+ * The next state snapshot: the channel also carries other events (reading progress revisions),
+ * but this suite only cares about state.
+ */
+async function nextState(stream: SseStream): Promise<UiState> {
+    for (;;) {
+        const event = await stream.next();
+        if (event.event === UI_STATE_EVENT) {
+            return uiStateSchema.parse(JSON.parse(event.data));
+        }
     }
 }
 

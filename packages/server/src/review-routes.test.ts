@@ -5,18 +5,22 @@ import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
 import {
     rpcErrorSchema,
     UI_ENDPOINTS,
+    UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
     UI_STATE_EVENT,
     uiOpenInEditorResponseSchema,
+    uiProgressEventSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
     uiReviewEventSchema,
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
+    uiReviewProgressResponseSchema,
+    uiSetFileViewedResponseSchema,
     uiReviewThreadsResponseSchema,
     uiStateSchema,
 } from '@sherpa/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { selectReviewHost } from './hosts/select.js';
 import type { EditorOptions } from './review-routes.js';
@@ -272,6 +276,150 @@ describe('server review endpoints', () => {
         expect(body.error.message).toContain('host is down');
     });
 
+    describe('reading progress', () => {
+        async function readProgress(server: SherpaServer): Promise<{
+            files: { fileId: string; viewed: boolean; seenRanges: unknown[] }[];
+            progressRevision: number;
+        }> {
+            const response = await get(server.port, UI_ENDPOINTS.reviewProgress, server.token);
+            expect(response.status).toBe(200);
+            return uiReviewProgressResponseSchema.parse(await response.json());
+        }
+
+        async function setViewed(server: SherpaServer, fileId: string, viewed: boolean): Promise<Response> {
+            return postJson(server.port, UI_ENDPOINTS.reviewFileViewed, { fileId, viewed }, server.token);
+        }
+
+        it('an empty PR has no records and revision zero', async () => {
+            const server = await start(FIXTURE_PR);
+
+            expect(await readProgress(server)).toEqual({ files: [], progressRevision: 0 });
+        });
+
+        it('progress works without a review host', async () => {
+            const server = await start(UNKNOWN_PR);
+
+            const written = await setViewed(server, 'file-1', true);
+
+            expect(written.status).toBe(200);
+            expect((await readProgress(server)).files).toEqual([
+                { fileId: 'file-1', viewed: true, seenRanges: [] },
+            ]);
+        });
+
+        it('marking and clearing a mark survive a server restart', async () => {
+            const first = await start(FIXTURE_PR);
+            const [file, other] = await fileIds(first);
+            if (file === undefined || other === undefined) {
+                throw new Error('the fixture diff has fewer than two files');
+            }
+
+            const marked = uiSetFileViewedResponseSchema.parse(await (await setViewed(first, file, true)).json());
+            expect(marked.progressRevision).toBe(1);
+            // Explicit clearing is also a write. Unpinning the generated default must survive a reload.
+            await setViewed(first, other, false);
+            await first.close();
+            servers.splice(servers.indexOf(first), 1);
+
+            // The same state directory and prKey start the server on the same database.
+            const restarted = await start(FIXTURE_PR);
+            const after = await readProgress(restarted);
+            expect(after.files).toEqual(
+                expect.arrayContaining([
+                    { fileId: file, viewed: true, seenRanges: [] },
+                    { fileId: other, viewed: false, seenRanges: [] },
+                ]),
+            );
+            // The revision is monotonic from process start, independent of stored contents.
+            expect(after.progressRevision).toBe(0);
+        });
+
+        it('a host with fileViewedSync receives the mirrored mark', async () => {
+            const host = makeFixtureHost('medium');
+            const server = await start(FIXTURE_PR, host);
+            const file = (await firstFileId(server)) ?? '';
+
+            expect((await setViewed(server, file, true)).status).toBe(200);
+
+            await expect
+                .poll(async () => (await host.getDiff()).files.find((candidate) => candidate.fileId === file)?.viewed)
+                .toBe(true);
+        });
+
+        it('a host without fileViewedSync only writes locally', async () => {
+            const host = makeFixtureHost('small');
+            const server = await start('fixture-small', host);
+            const file = (await firstFileId(server)) ?? '';
+
+            expect((await setViewed(server, file, true)).status).toBe(200);
+
+            expect((await readProgress(server)).files).toEqual([{ fileId: file, viewed: true, seenRanges: [] }]);
+            expect((await host.getDiff()).files.find((candidate) => candidate.fileId === file)?.viewed).toBeNull();
+        });
+
+        it('a mirror failure does not roll back the write or break the response', async () => {
+            const host = makeFixtureHost('medium');
+            const server = await start(FIXTURE_PR, host);
+            const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+            try {
+                // The diff has no file with this id, so the fixture host rejects it.
+                const response = await setViewed(server, 'no-such-file', true);
+
+                expect(response.status).toBe(200);
+                expect((await readProgress(server)).files).toEqual([
+                    { fileId: 'no-such-file', viewed: true, seenRanges: [] },
+                ]);
+                await expect
+                    .poll(() => stderr.mock.calls.map((call) => String(call[0])).join(''))
+                    .toContain('the host did not accept the viewed mark');
+            } finally {
+                stderr.mockRestore();
+            }
+        });
+
+        it('a write advances the revision in the SSE channel', async () => {
+            // A key without a host: the progress event is independent of the host, and there is no host to mirror the mark to.
+            const server = await start(UNKNOWN_PR);
+            const stream = await openEvents(server);
+
+            expect((await nextProgress(stream)).progressRevision).toBe(0);
+
+            await setViewed(server, 'file-1', true);
+            expect((await nextProgress(stream)).progressRevision).toBe(1);
+
+            // Repeating the mark with the same value changes nothing, so there is no event.
+            await setViewed(server, 'file-1', true);
+            await expect(nextProgress(stream, 300)).rejects.toThrow(/timed out waiting for an SSE event/);
+        });
+
+        it('mirrors two opposite marks on the same file in order', async () => {
+            const host = makeFixtureHost('medium');
+            const applied: boolean[] = [];
+            const original = host.setFileViewed?.bind(host);
+            if (original === undefined) {
+                throw new Error('the medium fixture host must support fileViewedSync');
+            }
+            // The first mark is slow: without a queue, the second would reach the host before it.
+            host.setFileViewed = async (fileId, viewed) => {
+                if (viewed) {
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                }
+                await original(fileId, viewed);
+                applied.push(viewed);
+            };
+
+            const server = await start(FIXTURE_PR, host);
+            const file = (await firstFileId(server)) ?? '';
+
+            await setViewed(server, file, true);
+            await setViewed(server, file, false);
+
+            await expect.poll(() => applied).toEqual([true, false]);
+            expect((await host.getDiff()).files.find((candidate) => candidate.fileId === file)?.viewed).toBe(false);
+        });
+    });
+
     describe('review SSE event', () => {
         it('sends the current revision to a new client immediately and advances it when threads change', async () => {
             const host = makeFixtureHost('medium');
@@ -300,7 +448,8 @@ describe('server review endpoints', () => {
             const stream = await openEvents(server);
 
             expect((await stream.next()).event).toBe(UI_STATE_EVENT);
-            await expect(stream.next(300)).rejects.toThrow(/timed out/);
+            // Reading progress is local, so its event is in the channel even without a host. The review event is absent.
+            await expect(nextReview(stream, 300)).rejects.toThrow(/timed out waiting for an SSE event/);
         });
     });
 });
@@ -318,10 +467,35 @@ describe('host selection by PR key', () => {
     });
 });
 
-async function nextReview(stream: SseStream): Promise<{ threadsRevision: number }> {
-    const event = await stream.next();
-    expect(event.event).toBe(UI_REVIEW_EVENT);
-    return uiReviewEventSchema.parse(JSON.parse(event.data));
+/** The next event with the given name: skips other channel events without breaking the wait. */
+/** Host diff file IDs: these are opaque, so tests get them from the host itself. */
+async function fileIds(server: SherpaServer): Promise<string[]> {
+    const diff = uiReviewDiffResponseSchema.parse(
+        await (await get(server.port, UI_ENDPOINTS.reviewDiff, server.token)).json(),
+    );
+    return diff.diff.files.map((file) => file.fileId);
+}
+
+async function firstFileId(server: SherpaServer): Promise<string | undefined> {
+    return (await fileIds(server))[0];
+}
+
+async function nextNamed(stream: SseStream, name: string, timeoutMs = 2000): Promise<SseEvent> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const event = await stream.next(Math.max(deadline - Date.now(), 1));
+        if (event.event === name) {
+            return event;
+        }
+    }
+}
+
+async function nextReview(stream: SseStream, timeoutMs?: number): Promise<{ threadsRevision: number }> {
+    return uiReviewEventSchema.parse(JSON.parse((await nextNamed(stream, UI_REVIEW_EVENT, timeoutMs)).data));
+}
+
+async function nextProgress(stream: SseStream, timeoutMs?: number): Promise<{ progressRevision: number }> {
+    return uiProgressEventSchema.parse(JSON.parse((await nextNamed(stream, UI_PROGRESS_EVENT, timeoutMs)).data));
 }
 
 interface SseEvent {

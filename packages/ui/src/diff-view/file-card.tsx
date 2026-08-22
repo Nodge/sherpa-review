@@ -2,6 +2,7 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { memo, useMemo, useState } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { FileReadState } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { ExpandAmount } from './expand.js';
@@ -22,11 +23,19 @@ import type { DiffMode } from './store.js';
 /** Above this threshold, the file starts collapsed (SPEC §2.13). */
 export const COLLAPSE_THRESHOLD = 2000;
 
-/** Inline hint text below the header. null means there is nothing to say. */
-export type Feedback = string | null;
+/**
+ * Inline hint below the header (SPEC §1.2: no modals). null means there is nothing to say.
+ * `retry` renders "retry" alongside it and updates the hint with its own result.
+ */
+export interface FeedbackHint {
+    readonly text: string;
+    readonly retry?: () => Promise<Feedback>;
+}
+export type Feedback = string | FeedbackHint | null;
 
 export interface FileCardActions {
-    readonly onViewed: (fileId: string, viewed: boolean) => void;
+    /** Optimistic viewed mark. The response reports a failed write. */
+    readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
     /** Without `amount`, the next step is +20 lines. Returned text describes a failed load. */
     readonly onExpand: (fileId: string, amount?: ExpandAmount) => Promise<Feedback>;
     /** Retry patch parsing after a worker failure. */
@@ -50,11 +59,14 @@ export interface FileCardProps {
     /** The host can supply file contents (`capabilities.fileContent`). */
     readonly contentAvailable: boolean;
     readonly expansion: ExpandAmount;
-    readonly viewed: boolean;
+    /** File reading progress (SPEC §2.12): box state and tooltip counts. */
+    readonly read: FileReadState;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
+    /** Initial hint lets the gallery show a failed write without a click. */
+    readonly initialHint?: Feedback;
     readonly selection: LineSelection | null;
     readonly actions: FileCardActions;
 }
@@ -68,13 +80,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         content,
         contentAvailable,
         expansion,
-        viewed,
+        read,
         opened,
         keptInView = false,
+        initialHint = null,
         selection,
         actions,
     } = props;
-    const [hint, setHint] = useState<Feedback>(null);
+    const [hint, setHint] = useState<Feedback>(initialHint);
     const [showWhitespace, setShowWhitespace] = useState(false);
 
     // Model with context already expanded. Expansion is a pure function of the original model.
@@ -147,19 +160,22 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     }}
                 />
 
-                <label className={`file-card__viewed${viewed ? ' is-viewed' : ''}`}>
-                    <input
-                        type="checkbox"
-                        checked={viewed}
-                        onChange={(event) => {
-                            actions.onViewed(file.fileId, event.target.checked);
-                        }}
-                    />
-                    <span className="file-card__viewed-box" aria-hidden="true">
+                {/* A toggle, not a checkbox. `aria-pressed` announces the state (SPEC §2.10),
+                    and the tooltip always carries progress counts (SPEC §2.12). */}
+                <button
+                    type="button"
+                    className={`file-card__viewed${read.state === 'read' ? ' is-viewed' : ''}`}
+                    aria-pressed={read.state === 'read'}
+                    title={read.tooltip}
+                    onClick={() => {
+                        run(actions.onViewed(file.fileId, read.state !== 'read'));
+                    }}
+                >
+                    <span className={`file-card__viewed-box file-card__viewed-box--${read.state}`} aria-hidden="true">
                         ✓
                     </span>
-                    {viewed ? 'Viewed' : 'Mark viewed'}
-                </label>
+                    {read.state === 'read' ? 'Viewed' : 'Mark viewed'}
+                </button>
             </header>
 
             {keptInView ? (
@@ -168,7 +184,25 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
             {hint === null ? null : (
                 <p className="file-card__hint" role="status">
-                    {hint}
+                    {typeof hint === 'string' ? hint : hint.text}
+                    {typeof hint !== 'string' && hint.retry !== undefined ? (
+                        <>
+                            {' · '}
+                            <button
+                                type="button"
+                                className="file-card__action"
+                                onClick={() => {
+                                    const retry = hint.retry;
+                                    if (retry !== undefined) {
+                                        setHint(null);
+                                        run(retry());
+                                    }
+                                }}
+                            >
+                                retry
+                            </button>
+                        </>
+                    ) : null}
                 </p>
             )}
 

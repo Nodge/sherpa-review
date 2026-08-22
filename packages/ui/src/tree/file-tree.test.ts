@@ -1,17 +1,24 @@
 import type { FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import type { FileReadState, ReadState } from '../progress/read-state.js';
 import {
     buildFileTree,
     filterByQuery,
     isCollapsed,
     matchesQuery,
+    readBox,
     readSummary,
     rowKey,
     splitLabel,
     toggleDirectory,
 } from './file-tree.js';
-import type { FileTreeInput, TreeDirRow } from './file-tree.js';
+import type { FileTreeInput, TreeDirRow, TreeFileRow } from './file-tree.js';
+
+/** Ready-made progress state for tree rows. Tooltip counts are not checked here. */
+function read(state: ReadState): FileReadState {
+    return { state, seen: state === 'read' ? 12 : state === 'partial' ? 5 : 0, total: 12, pinned: false, generatedDefault: false, tooltip: 'tooltip' };
+}
 
 function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
     return {
@@ -35,7 +42,7 @@ function input(files: readonly FileDiff[], patch: Partial<FileTreeInput> = {}): 
         files,
         pciFileIds: new Set(),
         mineFileIds: null,
-        viewed: new Map(),
+        readState: new Map(),
         collapsed: new Map(),
         ...patch,
     };
@@ -87,8 +94,8 @@ describe('buildFileTree', () => {
 
     it('summarizes read state: all read → full, some → partial, none → none', () => {
         const files = [file('a/one.ts'), file('a/two.ts')];
-        const dirOf = (viewed: ReadonlyMap<string, boolean>): TreeDirRow => {
-            const row = buildFileTree(input(files, { viewed })).rows.find(
+        const dirOf = (readState: ReadonlyMap<string, FileReadState>): TreeDirRow => {
+            const row = buildFileTree(input(files, { readState })).rows.find(
                 (candidate): candidate is TreeDirRow => candidate.kind === 'dir',
             );
             if (row === undefined) {
@@ -98,10 +105,33 @@ describe('buildFileTree', () => {
         };
 
         expect(readSummary(dirOf(new Map()))).toBe('none');
-        expect(readSummary(dirOf(new Map([['f-a/one.ts', true]])))).toBe('partial');
+        expect(readSummary(dirOf(new Map([['f-a/one.ts', read('read')]])))).toBe('partial');
         expect(
-            readSummary(dirOf(new Map([['f-a/one.ts', true], ['f-a/two.ts', true]]))),
+            readSummary(dirOf(new Map([['f-a/one.ts', read('read')], ['f-a/two.ts', read('read')]]))),
         ).toBe('full');
+        // A partially read file does not count in the directory summary. Read means fully read.
+        expect(readSummary(dirOf(new Map([['f-a/one.ts', read('partial')]])))).toBe('none');
+    });
+
+    it('gives file rows three read-state values', () => {
+        const files = [file('a/one.ts'), file('a/two.ts'), file('a/three.ts')];
+        const tree = buildFileTree(
+            input(files, {
+                readState: new Map([
+                    ['f-a/one.ts', read('read')],
+                    ['f-a/two.ts', read('partial')],
+                ]),
+            }),
+        );
+
+        expect(
+            tree.rows.filter((row): row is TreeFileRow => row.kind === 'file').map((row) => [row.path, row.read.state]),
+        ).toEqual([
+            ['a/one.ts', 'read'],
+            ['a/three.ts', 'unread'],
+            ['a/two.ts', 'partial'],
+        ]);
+        expect([readBox('read'), readBox('partial'), readBox('unread')]).toEqual(['full', 'partial', 'none']);
     });
 
     it('treats a directory as generated when its whole subtree is generated', () => {

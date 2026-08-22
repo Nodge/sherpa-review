@@ -1,5 +1,8 @@
 import type { FileDiff } from '@sherpa/protocol';
 
+import type { FileReadState, ReadState } from '../progress/read-state.js';
+import { readStateOf } from '../progress/read-state.js';
+
 /**
  * File tree in the left panel of the full diff (SPEC §2.20, README §10). Pure module:
  * building, aggregates, collapsing and search run without React or the DOM. Rendering only draws
@@ -26,7 +29,8 @@ export interface TreeFileRow {
     readonly generated: boolean;
     /** The file belongs to the extra `pci` lens, shown as a row tag (README §10). */
     readonly pci: boolean;
-    readonly viewed: boolean;
+    /** File reading progress (SPEC §2.12): three states and tooltip counts. */
+    readonly read: FileReadState;
 }
 
 export interface TreeDirRow {
@@ -37,7 +41,8 @@ export interface TreeDirRow {
     readonly additions: number;
     readonly deletions: number;
     readonly files: number;
-    readonly viewedFiles: number;
+    /** Fully read files in the subtree. `partial` does not count. */
+    readonly readFiles: number;
     /** The entire subtree is generated, so it dims like generated files (README §10). */
     readonly generated: boolean;
     /**
@@ -65,7 +70,8 @@ export interface FileTreeInput {
     readonly pciFileIds: ReadonlySet<string>;
     /** Ownership-lens files. null means no lens, so roots outside the ownership zone are not computed. */
     readonly mineFileIds: ReadonlySet<string> | null;
-    readonly viewed: ReadonlyMap<string, boolean>;
+    /** File read-state. Files missing from the map use their own defaults. */
+    readonly readState: ReadonlyMap<string, FileReadState>;
     /** Reviewer's explicit choice: path → collapsed. Missing keys use the default. */
     readonly collapsed: ReadonlyMap<string, boolean>;
 }
@@ -78,7 +84,7 @@ interface Node {
     additions: number;
     deletions: number;
     fileCount: number;
-    viewedCount: number;
+    readCount: number;
     generatedCount: number;
     mineCount: number;
 }
@@ -92,7 +98,7 @@ function makeNode(segment: string, path: string): Node {
         additions: 0,
         deletions: 0,
         fileCount: 0,
-        viewedCount: 0,
+        readCount: 0,
         generatedCount: 0,
         mineCount: 0,
     };
@@ -116,7 +122,7 @@ export function buildFileTree(input: FileTreeInput): FileTree {
     for (const file of input.files) {
         const segments = file.path.split('/');
         const name = segments.pop() ?? file.path;
-        const viewed = input.viewed.get(file.fileId) ?? false;
+        const read = input.readState.get(file.fileId) ?? readStateOf({ file, record: null });
         const mine = input.mineFileIds?.has(file.fileId) ?? false;
 
         let node = root;
@@ -141,14 +147,14 @@ export function buildFileTree(input: FileTreeInput): FileTree {
             deletions: file.deletions,
             generated: file.generated,
             pci: input.pciFileIds.has(file.fileId),
-            viewed,
+            read,
         });
 
         for (const ancestor of chain) {
             ancestor.additions += file.additions;
             ancestor.deletions += file.deletions;
             ancestor.fileCount += 1;
-            ancestor.viewedCount += viewed ? 1 : 0;
+            ancestor.readCount += read.state === 'read' ? 1 : 0;
             ancestor.generatedCount += file.generated ? 1 : 0;
             ancestor.mineCount += mine ? 1 : 0;
         }
@@ -207,7 +213,7 @@ function emit(node: Node, depth: number, prefix: string, visible: boolean, conte
                 additions: dir.additions,
                 deletions: dir.deletions,
                 files: dir.fileCount,
-                viewedFiles: dir.viewedCount,
+                readFiles: dir.readCount,
                 generated: dir.generatedCount === dir.fileCount,
                 // A "foreign root" only applies at the top level (README §10). Further down,
                 // the files themselves already make ownership visible, so no extra dimming is needed.
@@ -309,8 +315,16 @@ export function filterByQuery(files: readonly FileDiff[], query: string): readon
 export type ReadSummary = 'none' | 'partial' | 'full';
 
 export function readSummary(row: TreeDirRow): ReadSummary {
-    if (row.viewedFiles === 0) {
+    if (row.readFiles === 0) {
         return 'none';
     }
-    return row.viewedFiles === row.files ? 'full' : 'partial';
+    return row.readFiles === row.files ? 'full' : 'partial';
+}
+
+/** Read-state box in the row: the same three forms as the directory summary (SPEC §2.12). */
+export function readBox(state: ReadState): ReadSummary {
+    if (state === 'read') {
+        return 'full';
+    }
+    return state === 'partial' ? 'partial' : 'none';
 }

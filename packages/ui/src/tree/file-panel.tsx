@@ -4,11 +4,13 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import type { FileReadState } from '../progress/read-state.js';
+import { useShortcut } from '../shortcuts/context.tsx';
 import { formatCount } from '../text.js';
 import type { CollapsedStorage } from './collapsed-storage.js';
 import { readCollapsed, writeCollapsed } from './collapsed-storage.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
-import { buildFileTree, filterByQuery, readSummary, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
+import { buildFileTree, filterByQuery, readBox, readSummary, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
 import { treeKeyCommand } from './tree-keys.js';
 
@@ -53,10 +55,14 @@ export interface FilePanelProps {
     readonly pciFileIds: ReadonlySet<string>;
     /** null means no ownership lens. Roots outside your ownership zone are not dimmed. */
     readonly mineFileIds: ReadonlySet<string> | null;
-    readonly viewed: ReadonlyMap<string, boolean>;
+    readonly readState: ReadonlyMap<string, FileReadState>;
     /** The active file is the top card in the viewport (right-panel scroll-spy). */
     readonly activeFileId: string | null;
     readonly onOpenFile: (fileId: string) => void;
+    /** The `v` key on a file row (SPEC §2.10). The tree has no checkbox of its own. */
+    readonly onToggleViewed: (fileId: string) => void;
+    /** Failed mark write from the tree: an inline hint with retry (SPEC §1.2, §2.10). */
+    readonly writeError: { readonly text: string; readonly onRetry: () => void } | null;
     /** Outline instead of a tree. null means the PR has more than one file. */
     readonly outline: FileOutlineModel | null;
     readonly onOpenHunk: (index: number) => void;
@@ -68,7 +74,7 @@ export interface FilePanelProps {
 }
 
 export function FilePanel(props: FilePanelProps) {
-    const { files, filters, activeFilter, onFilter, outline, inputRef } = props;
+    const { files, filters, activeFilter, onFilter, outline, inputRef, writeError } = props;
     const [query, setQuery] = useState('');
 
     return (
@@ -113,6 +119,15 @@ export function FilePanel(props: FilePanelProps) {
                 ))}
             </div>
 
+            {writeError === null ? null : (
+                <p className="file-panel__notice" role="status">
+                    {writeError.text}
+                    <button type="button" className="file-panel__link" onClick={writeError.onRetry}>
+                        retry
+                    </button>
+                </p>
+            )}
+
             {outline === null ? (
                 <FileTreeView
                     {...props}
@@ -139,9 +154,10 @@ function FileTreeView({
     onClearQuery,
     pciFileIds,
     mineFileIds,
-    viewed,
+    readState,
     activeFileId,
     onOpenFile,
+    onToggleViewed,
     prKey,
     storage,
 }: FileTreeViewProps) {
@@ -158,10 +174,10 @@ function FileTreeView({
                 files: filterByQuery(files, query),
                 pciFileIds,
                 mineFileIds,
-                viewed,
+                readState,
                 collapsed,
             }),
-        [files, query, pciFileIds, mineFileIds, viewed, collapsed],
+        [files, query, pciFileIds, mineFileIds, readState, collapsed],
     );
 
     const persist = useCallback(
@@ -220,6 +236,19 @@ function FileTreeView({
     };
 
     const cursorRow = cursor < 0 ? undefined : tree.rows[cursor];
+    // `v` is a registry command (requirements §3.3), not a separate key handler, so it appears in the palette
+    // and shortcuts sheet. It acts on the row under the cursor, only while the tree has focus.
+    useShortcut({
+        id: 'diff.markViewed',
+        keys: ['v'],
+        label: 'Mark the file viewed',
+        when: () => cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
+        action: () => {
+            if (cursorRow?.kind === 'file') {
+                onToggleViewed(cursorRow.fileId);
+            }
+        },
+    });
 
     if (files.length === 0) {
         return <p className="file-panel__empty">No files in this filter.</p>;
@@ -312,7 +341,7 @@ function DirRow({ row }: { row: TreeDirRow }) {
             </span>
             <span
                 className={`file-tree__read file-tree__read--${summary}`}
-                title={`${String(row.viewedFiles)} of ${String(row.files)} read`}
+                title={`${String(row.readFiles)} of ${String(row.files)} read`}
             >
                 {summary === 'full' ? '✓' : ''}
             </span>
@@ -326,11 +355,9 @@ function FileRow({ row }: { row: TreeFileRow }) {
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
-            <span
-                className={`file-tree__read file-tree__read--${row.viewed ? 'full' : 'none'}`}
-                title={row.viewed ? 'viewed' : 'not yet viewed'}
-            >
-                {row.viewed ? '✓' : ''}
+            {/* Three read-state values (SPEC §2.12). The tooltip always has counts. */}
+            <span className={`file-tree__read file-tree__read--${readBox(row.read.state)}`} title={row.read.tooltip}>
+                {row.read.state === 'read' ? '✓' : ''}
             </span>
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}

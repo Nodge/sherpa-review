@@ -105,6 +105,14 @@
     color: var(--text-muted-dim);
 }
 
+/* Failed mark write (SPEC §2.10): the hint sits beside the tree, with no modals. */
+.file-panel__notice {
+    margin: 0 var(--space-control) var(--space-inner);
+    font-size: var(--font-size-secondary);
+    line-height: 1.55;
+    color: var(--attention-text);
+}
+
 .file-panel__link {
     margin-left: 6px;
     padding: 0;

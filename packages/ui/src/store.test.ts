@@ -29,6 +29,8 @@ const STATE: UiState = {
 interface Harness {
     readonly store: Store;
     readonly emit: (data: string) => void;
+    /** `progress` event: reading progress revision. */
+    readonly progress: (data: string) => void;
     /** Channel interruption. `recoverable: false` means the connection is permanently closed. */
     readonly error: (recoverable?: boolean) => void;
     /** URL the store used to connect. */
@@ -64,6 +66,9 @@ function makeStore(): Harness {
         emit: (data) => {
             handlers?.onMessage(data);
         },
+        progress: (data) => {
+            handlers?.onProgress(data);
+        },
         error: (recoverable = true) => {
             handlers?.onError(recoverable);
         },
@@ -83,7 +88,12 @@ describe('UI store', () => {
     it('stays connecting without state until the first event', () => {
         const { store } = makeStore();
 
-        expect(store.getSnapshot()).toEqual({ connection: 'connecting', state: null, error: null });
+        expect(store.getSnapshot()).toEqual({
+            connection: 'connecting',
+            state: null,
+            error: null,
+            progressRevision: null,
+        });
     });
 
     it('a valid snapshot switches to online and notifies subscribers', () => {
@@ -98,6 +108,27 @@ describe('UI store', () => {
         expect(notifications).toBe(1);
         expect(store.getSnapshot().connection).toBe('online');
         expect(store.getSnapshot().state).toEqual(STATE);
+    });
+
+    it('a progress event brings the revision without changing state', () => {
+        const { store, emit, progress } = makeStore();
+        emit(JSON.stringify(STATE));
+
+        progress(JSON.stringify({ progressRevision: 3 }));
+
+        expect(store.getSnapshot()).toMatchObject({ connection: 'online', progressRevision: 3, state: STATE });
+    });
+
+    it('ignores a malformed progress event and keeps the channel alive', () => {
+        const { store, emit, progress, closed } = makeStore();
+        emit(JSON.stringify(STATE));
+        progress(JSON.stringify({ progressRevision: 3 }));
+
+        progress(JSON.stringify({ progressRevision: 'three' }));
+        progress('{not json');
+
+        expect(store.getSnapshot()).toMatchObject({ connection: 'online', progressRevision: 3 });
+        expect(closed()).toBe(0);
     });
 
     it('a snapshot that fails schema validation never enters the store and causes fatal', () => {

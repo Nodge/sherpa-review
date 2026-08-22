@@ -8,7 +8,8 @@ import { parseFileDiff } from '../../diff/parse.js';
 import type { DiffHunk } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
 import { lineKey } from '../../diff-view/selection.js';
-import type { FileCardActions } from '../../diff-view/file-card.tsx';
+import { readStateOf } from '../../progress/read-state.js';
+import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
 import { DiffFileList } from '../../diff-view/file-list.tsx';
 import type { DiffMode, DiffViewStore } from '../../diff-view/store.js';
@@ -34,6 +35,8 @@ interface CardStateProps {
     readonly opened?: boolean;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
+    /** Initial card hint: shows a write failure that cannot occur without a click. */
+    readonly hint?: Feedback;
 }
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
@@ -54,6 +57,7 @@ function CardState({
     selection,
     opened,
     keptInView = false,
+    hint,
 }: CardStateProps) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
@@ -70,7 +74,7 @@ function CardState({
             created.expand(file.fileId, expansion);
         }
         if (viewed === true) {
-            created.setViewed(file.fileId, true);
+            created.markViewed(file.fileId, true);
         }
         if (opened === true) {
             created.openFile(file.fileId);
@@ -104,9 +108,10 @@ function CardState({
             content={snapshot.content.get(file.fileId)}
             contentAvailable={contentAvailable}
             expansion={snapshot.expansion.get(file.fileId) ?? 0}
-            viewed={snapshot.viewed.get(file.fileId) ?? false}
+            read={snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null })}
             opened={snapshot.opened.has(file.fileId)}
             keptInView={keptInView}
+            initialHint={hint ?? null}
             selection={snapshot.selection}
             actions={actions}
         />
@@ -132,6 +137,10 @@ function ListState({ fixture }: { fixture: FixtureName }) {
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
                 onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
+                onViewed={(fileId, viewed) => {
+                    store.markViewed(fileId, viewed);
+                    return Promise.resolve(null);
+                }}
             />
         </div>
     );
@@ -158,6 +167,10 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
                 }}
                 loadContent={() => Promise.resolve(null)}
                 onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
+                onViewed={(fileId, viewed) => {
+                    store.markViewed(fileId, viewed);
+                    return Promise.resolve(null);
+                }}
             />
         </div>
     );
@@ -165,7 +178,10 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
 
 function galleryActions(store: DiffViewStore): FileCardActions {
     return {
-        onViewed: store.setViewed,
+        onViewed: (fileId, viewed) => {
+            store.markViewed(fileId, viewed);
+            return Promise.resolve(null);
+        },
         onExpand: (fileId, amount) => {
             store.expand(fileId, amount);
             return Promise.resolve(null);
@@ -298,6 +314,18 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-kept-in-view',
         title: 'kept on screen: card outside the current filter',
         render: () => <CardState fixture="medium" path={ORDER} keptInView />,
+    },
+    {
+        id: 'diff-viewed-not-saved',
+        title: 'viewed mark not saved: control rolls back and offers retry',
+        render: () => (
+            // A write failure cannot occur without a click, so the card receives the hint as its initial state.
+            <CardState
+                fixture="medium"
+                path={ORDER}
+                hint={{ text: 'not saved', retry: () => Promise.resolve(null) }}
+            />
+        ),
     },
     {
         id: 'diff-list-large',
