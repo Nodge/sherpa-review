@@ -120,6 +120,56 @@ export const uiReviewLensesResponseSchema = z.object({
 export type UiReviewLensesResponse = z.infer<typeof uiReviewLensesResponseSchema>;
 
 /**
+ * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
+ * tracking. A file record exists only after an explicit reviewer action:
+ * `viewed: true` is a manual mark that pins `read` permanently. `viewed: false` is
+ * an explicit removal (unpin the generated default or undo a manual mark). A missing
+ * record means the default state, interpreted by the UI (generated → `read`).
+ *
+ * Seen ranges prepare for M2 stops: line ranges covered by manually
+ * marked stops. Always empty in M1 (there is no endpoint for range writes).
+ * The UI calculates tri-state (`unread`/`partial`/`read`) and "N of M lines seen" tooltips
+ * from these data and its own diff model. The server does not interpret patches.
+ */
+export const uiSeenRangeSchema = z.object({
+    /** Line numbering side: added lines use `new`, removed lines use `old`. */
+    side: z.enum(['old', 'new']),
+    start: z.number().int().positive(),
+    /** Inclusive, `end >= start`. */
+    end: z.number().int().positive(),
+});
+export type UiSeenRange = z.infer<typeof uiSeenRangeSchema>;
+
+export const uiFileProgressSchema = z.object({
+    fileId: hostIdSchema,
+    viewed: z.boolean(),
+    seenRanges: z.array(uiSeenRangeSchema),
+});
+export type UiFileProgress = z.infer<typeof uiFileProgressSchema>;
+
+export const uiReviewProgressResponseSchema = z.object({
+    files: z.array(uiFileProgressSchema),
+    progressRevision: z.number().int().min(0),
+});
+export type UiReviewProgressResponse = z.infer<typeof uiReviewProgressResponseSchema>;
+
+/**
+ * A file's viewed mark. The server writes it to SQLite (the UI's source of truth) and, if the host
+ * supports it (`capabilities.fileViewedSync`), mirrors the mark to the host on a best-effort basis:
+ * a mirror failure does not roll back the local write or fail the endpoint.
+ */
+export const uiSetFileViewedRequestSchema = z.object({
+    fileId: hostIdSchema,
+    viewed: z.boolean(),
+});
+export type UiSetFileViewedRequest = z.infer<typeof uiSetFileViewedRequestSchema>;
+
+export const uiSetFileViewedResponseSchema = z.object({
+    progressRevision: z.number().int().min(0),
+});
+export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSchema>;
+
+/**
  * "Threads changed" event. The revision is a monotonic counter since server startup:
  * if it exceeds the last seen value, reread `reviewThreads`. A thread snapshot
  * is not sent in the event. See the comment on review endpoints.
@@ -128,6 +178,15 @@ export const uiReviewEventSchema = z.object({
     threadsRevision: z.number().int().min(0),
 });
 export type UiReviewEvent = z.infer<typeof uiReviewEventSchema>;
+
+/**
+ * "Reading progress changed" event, to keep multiple tabs in sync.
+ * Revision semantics match `uiReviewEventSchema`.
+ */
+export const uiProgressEventSchema = z.object({
+    progressRevision: z.number().int().min(0),
+});
+export type UiProgressEvent = z.infer<typeof uiProgressEventSchema>;
 
 /**
  * UI channel endpoints. All require a bearer token except `events`: EventSource does not support
@@ -153,6 +212,10 @@ export const UI_ENDPOINTS = {
     reviewLenses: '/api/ui/review/lenses',
     /** GET `?fileId=` (`uiReviewFileContentRequestSchema`) → `uiReviewFileContentResponseSchema`. */
     reviewFileContent: '/api/ui/review/file-content',
+    /** GET → `uiReviewProgressResponseSchema`. Also available without a review host, since progress is local. */
+    reviewProgress: '/api/ui/review/progress',
+    /** POST `uiSetFileViewedRequestSchema` → `uiSetFileViewedResponseSchema`. */
+    reviewFileViewed: '/api/ui/review/file-viewed',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
 } as const;
@@ -162,3 +225,6 @@ export const UI_STATE_EVENT = 'state';
 
 /** SSE event name for review data changes (`uiReviewEventSchema`). */
 export const UI_REVIEW_EVENT = 'review';
+
+/** SSE event name for reading progress changes (`uiProgressEventSchema`). */
+export const UI_PROGRESS_EVENT = 'progress';
