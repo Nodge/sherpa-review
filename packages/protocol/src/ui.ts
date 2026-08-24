@@ -2,7 +2,16 @@ import { z } from 'zod';
 
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
-import { fileContentSchema, hostIdSchema, lensSchema, prDiffSchema, prMetaSchema, threadSchema } from './review.js';
+import {
+    commentDraftSchema,
+    commentSchema,
+    fileContentSchema,
+    hostIdSchema,
+    lensSchema,
+    prDiffSchema,
+    prMetaSchema,
+    threadSchema,
+} from './review.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
 /**
@@ -170,6 +179,38 @@ export const uiSetFileViewedResponseSchema = z.object({
 export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSchema>;
 
 /**
+ * Comment writes (M1-T13, the brief two-stage model): a draft is saved
+ * to the host immediately, a verdict publishes the batch (T14). A successful write increments
+ * `threadsRevision`. The source of truth arrives when the threads endpoint is reread after the SSE event
+ * `review`. Until then, the UI uses optimistic state. `saveDraft` returns
+ * the created comment: the composer needs its id for `updateDraft`/`deleteDraft`.
+ */
+export const uiSaveDraftRequestSchema = z.object({ draft: commentDraftSchema });
+export type UiSaveDraftRequest = z.infer<typeof uiSaveDraftRequestSchema>;
+
+export const uiSaveDraftResponseSchema = z.object({ comment: commentSchema });
+export type UiSaveDraftResponse = z.infer<typeof uiSaveDraftResponseSchema>;
+
+export const uiUpdateDraftRequestSchema = z.object({
+    commentId: hostIdSchema,
+    body: z.string().min(1),
+});
+export type UiUpdateDraftRequest = z.infer<typeof uiUpdateDraftRequestSchema>;
+
+export const uiDeleteDraftRequestSchema = z.object({ commentId: hostIdSchema });
+export type UiDeleteDraftRequest = z.infer<typeof uiDeleteDraftRequestSchema>;
+
+export const uiSetThreadResolvedRequestSchema = z.object({
+    threadId: hostIdSchema,
+    resolved: z.boolean(),
+});
+export type UiSetThreadResolvedRequest = z.infer<typeof uiSetThreadResolvedRequestSchema>;
+
+/** Common response from thread write endpoints: acknowledgement without data. The source of truth arrives via the threads endpoint. */
+export const uiReviewWriteAckSchema = z.object({ acknowledged: z.literal(true) });
+export type UiReviewWriteAck = z.infer<typeof uiReviewWriteAckSchema>;
+
+/**
  * "Threads changed" event. The revision is a monotonic counter since server startup:
  * if it exceeds the last seen value, reread `reviewThreads`. A thread snapshot
  * is not sent in the event. See the comment on review endpoints.
@@ -216,6 +257,14 @@ export const UI_ENDPOINTS = {
     reviewProgress: '/api/ui/review/progress',
     /** POST `uiSetFileViewedRequestSchema` → `uiSetFileViewedResponseSchema`. */
     reviewFileViewed: '/api/ui/review/file-viewed',
+    /** POST `uiSaveDraftRequestSchema` → `uiSaveDraftResponseSchema`. */
+    reviewSaveDraft: '/api/ui/review/draft',
+    /** POST `uiUpdateDraftRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewUpdateDraft: '/api/ui/review/draft/update',
+    /** POST `uiDeleteDraftRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewDeleteDraft: '/api/ui/review/draft/delete',
+    /** POST `uiSetThreadResolvedRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewThreadResolved: '/api/ui/review/thread-resolved',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
 } as const;
