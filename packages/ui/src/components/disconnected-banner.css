@@ -1,0 +1,43 @@
+/* Neutral offline banner. README §11. */
+
+.disconnected-banner {
+    display: grid;
+    grid-template-columns: auto minmax(260px, 1fr) minmax(360px, auto);
+    align-items: center;
+    gap: var(--space-control);
+    padding: 11px var(--space-control);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    background: var(--surface-offline-banner);
+}
+
+.disconnected-banner__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+}
+
+.disconnected-banner__body {
+    min-width: 0;
+}
+
+.disconnected-banner__title {
+    font-size: var(--font-size-ui);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.disconnected-banner__text {
+    margin-top: 2px;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted);
+}
+
+.disconnected-banner .command-box__row {
+    justify-content: flex-end;
+}
+
+.disconnected-banner .command-box__hint {
+    text-align: right;
+}

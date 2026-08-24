@@ -1,0 +1,38 @@
+/* Shared banner slot. SPEC §2.21. */
+
+.banner-slot {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-inner-tight);
+    padding: 14px var(--space-page) 0;
+}
+
+.banner-slot__item {
+    width: 100%;
+    max-width: 1560px;
+}
+
+.banner-slot__item--secondary {
+    padding-top: 2px;
+}
+
+.banner-slot__more {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.banner-slot__more:hover {
+    color: var(--text-muted);
+}
+
+.banner-slot .audit-banner {
+    margin: 0;
+}

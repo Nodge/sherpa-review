@@ -95,6 +95,11 @@
     height: 70vh;
 }
 
+.gallery-agent-popover {
+    align-items: flex-end;
+    padding: 58px 80px;
+}
+
 /* --- Token display --- */
 
 .showcase {

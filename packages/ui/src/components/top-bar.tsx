@@ -1,7 +1,8 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import type { ViewId } from '../session/views.js';
 import type { AgentPillView } from './agent-pill-view.js';
+import { CommandBox } from './command-box.tsx';
 import './top-bar.css';
 import { ViewTabs } from './view-tabs.tsx';
 
@@ -15,12 +16,21 @@ export interface TopBarProps {
     /** Breadcrumb segments from left to right. The last is the PR itself. */
     readonly breadcrumb: readonly string[];
     readonly agent: AgentPillView;
+    readonly reconnectCommand: string;
     readonly view: ViewId;
     readonly onSelectView: (view: ViewId) => void;
     readonly onOpenSearch: () => void;
 }
 
-export function TopBar({ version, breadcrumb, agent, view, onSelectView, onOpenSearch }: TopBarProps) {
+export function TopBar({
+    version,
+    breadcrumb,
+    agent,
+    reconnectCommand: command,
+    view,
+    onSelectView,
+    onOpenSearch,
+}: TopBarProps) {
     return (
         <header className="top-bar">
             <div className="top-bar__brand">
@@ -46,7 +56,7 @@ export function TopBar({ version, breadcrumb, agent, view, onSelectView, onOpenS
             <ViewTabs view={view} onSelect={onSelectView} />
             <div className="top-bar__spacer" />
 
-            <AgentPill view={agent} />
+            <AgentPill view={agent} reconnectCommand={command} />
             <SearchButton onClick={onOpenSearch} />
 
             {/* The UI does not know the actual user until M1-T10, so do not invent initials. */}
@@ -55,27 +65,101 @@ export function TopBar({ version, breadcrumb, agent, view, onSelectView, onOpenS
     );
 }
 
-/**
- * Agent status. Clicking does nothing yet. The reconnection popover comes in M1-T15,
- * chat in M3 (SPEC §2.2).
- */
-export function AgentPill({ view }: { view: AgentPillView }) {
+/** The pill opens reconnect or a temporary status popover. The full chat panel arrives in M3. */
+export function AgentPill({
+    view,
+    reconnectCommand: command,
+    defaultOpen = false,
+}: {
+    view: AgentPillView;
+    reconnectCommand: string;
+    defaultOpen?: boolean;
+}) {
+    const [open, setOpen] = useState(defaultOpen);
+    const [announcement, setAnnouncement] = useState('');
+    const wrapperRef = useRef<HTMLDivElement | null>(null);
+    const previousTone = useRef(view.tone);
+
+    useEffect(() => {
+        const wasDisconnected = previousTone.current === 'disconnected';
+        previousTone.current = view.tone;
+        const next =
+            view.tone === 'disconnected'
+                ? wasDisconnected
+                    ? null
+                    : 'Agent disconnected. The reader remains fully functional.'
+                : '';
+        if (next === null) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            setAnnouncement(next);
+        }, 0);
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [view.tone]);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+        const closeOutside = (event: MouseEvent): void => {
+            if (event.target instanceof Node && !wrapperRef.current?.contains(event.target)) {
+                setOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('mousedown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [open]);
+
     return (
-        <Fragment>
-            <button type="button" className={`ghost-button agent-pill agent-pill--${view.tone}`} title={view.title}>
+        <div ref={wrapperRef} className="agent-pill-wrap">
+            <button
+                type="button"
+                className={`ghost-button agent-pill agent-pill--${view.tone}`}
+                title={view.title}
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                onClick={() => {
+                    setOpen((value) => !value);
+                }}
+            >
                 <span className="agent-pill__dot" aria-hidden="true" />
                 <span className="agent-pill__label">{view.label}</span>
             </button>
-            {/*
-             * SPEC §2.2: announce agent disconnection once through a polite region. The region
-             * is separate from the label, which also changes with the queue length. A screen reader would read
-             * every such change. Here, text only appears on disconnection and clears when the agent
-             * returns, with one announcement per transition.
-             */}
-            <span className="visually-hidden" role="status">
-                {view.tone === 'disconnected' ? view.label : ''}
+            {open ? (
+                <div className="agent-popover" role="dialog" aria-label="Agent status">
+                    <div className="agent-popover__title">
+                        {view.tone === 'disconnected' ? 'Connect agent' : 'Agent status'}
+                    </div>
+                    {view.tone === 'disconnected' ? (
+                        <CommandBox
+                            command={command}
+                            hint="Run in any harness to make this session a worker."
+                            actionLabel="Copy"
+                        />
+                    ) : (
+                        <>
+                            <p className="agent-popover__status">{view.title}</p>
+                            <p className="agent-popover__note">Agent chat will appear here in M3.</p>
+                        </>
+                    )}
+                </div>
+            ) : null}
+            <span className="visually-hidden" role="status" aria-live="polite">
+                {announcement}
             </span>
-        </Fragment>
+        </div>
     );
 }
 

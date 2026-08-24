@@ -28,6 +28,10 @@ const EXPECTED: Record<string, string> = {
     '--surface-raised': '#181a1e',
     '--surface-popover': '#1b1e24',
     '--surface-selected': '#1f2228',
+    // README §11: banner `#151619`, command box `#0e0f11`; README §6: mine chip bg `#132019`.
+    '--surface-offline-banner': '#151619',
+    '--surface-command': '#0e0f11',
+    '--ownership-mine-surface': '#132019',
     // README §14: overlay `rgba(7,8,9,.66)` below the command palette.
     '--overlay-dialog': 'rgba(7,8,9,.66)',
 

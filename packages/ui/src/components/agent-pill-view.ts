@@ -9,6 +9,7 @@ export type AgentTone = 'connected' | 'working' | 'failed' | 'disconnected';
 
 export interface AgentPillView {
     readonly tone: AgentTone;
+    readonly workerKind: WorkerStatus['kind'];
     readonly label: string;
     /** Tooltip: harness, model, session uptime and queue length (SPEC §2.2). */
     readonly title: string;
@@ -38,6 +39,7 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[]): A
     if (worker.kind !== 'connected') {
         return {
             tone: 'disconnected',
+            workerKind: worker.kind,
             label: 'Agent disconnected',
             title:
                 worker.kind === 'never'
@@ -53,14 +55,24 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[]): A
 
     // An interactive task keeps the reviewer waiting for an answer on screen. It makes the agent "working".
     if (pending.some((task) => task.priority === 'interactive')) {
-        return { tone: 'working', label: `Agent working · ${String(pending.length)} queued`, title };
+        return {
+            tone: 'working',
+            workerKind: worker.kind,
+            label: `Agent working · ${String(pending.length)} queued`,
+            title,
+        };
     }
 
     if (lastTaskFailed(tasks)) {
-        return { tone: 'failed', label: 'Agent · task failed', title };
+        return { tone: 'failed', workerKind: worker.kind, label: 'Agent · task failed', title };
     }
 
-    return { tone: 'connected', label: `Agent · ${worker.harness ?? worker.workerId}`, title };
+    return {
+        tone: 'connected',
+        workerKind: worker.kind,
+        label: `Agent · ${worker.harness ?? worker.workerId}`,
+        title,
+    };
 }
 
 /**

@@ -167,6 +167,11 @@
 
 /* --- Agent pill (SPEC §2.2) --- */
 
+.agent-pill-wrap {
+    position: relative;
+    flex: none;
+}
+
 .agent-pill__dot {
     width: 6px;
     height: 6px;
@@ -193,6 +198,42 @@
 
 .agent-pill--disconnected .agent-pill__label {
     color: var(--text-muted-dim);
+}
+
+.agent-popover {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    z-index: 60;
+    width: 390px;
+    padding: var(--space-control);
+    border: 1px solid var(--border-raised-popover);
+    border-radius: var(--radius-popover);
+    background: var(--surface-popover);
+    box-shadow: var(--shadow-popover);
+}
+
+.agent-popover__title {
+    margin-bottom: var(--space-inner);
+    font-size: var(--font-size-ui);
+    font-weight: 600;
+    color: var(--text-primary-soft);
+}
+
+.agent-popover__status,
+.agent-popover__note {
+    margin: 0;
+    font-size: var(--font-size-secondary);
+    line-height: 1.55;
+}
+
+.agent-popover__status {
+    color: var(--text-secondary);
+}
+
+.agent-popover__note {
+    margin-top: 5px;
+    color: var(--text-dim);
 }
 
 /* --- Search --- */

@@ -45,10 +45,7 @@
     color: var(--text-dim) !important;
 }
 
-/*
- * M0 connection banners. The handoff banners (README §11) and priority slot (SPEC §2.21)
- * arrive in M1-T15. This keeps the previous content, with values replaced by tokens.
- */
+/* The M0 transport notice stays separate from the M1-T15 product banner slot. */
 .connection-banner {
     margin: var(--space-control) var(--space-page) 0;
     padding: var(--space-inner) 13px;

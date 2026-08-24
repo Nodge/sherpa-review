@@ -205,6 +205,7 @@ export function OutsideThreads({
     actions,
     now,
     initialThreadId = null,
+    defaultOpen = false,
     onFocusThread,
 }: {
     threads: readonly Thread[];
@@ -212,9 +213,10 @@ export function OutsideThreads({
     actions: ThreadActions;
     now: number;
     initialThreadId?: string | null;
+    defaultOpen?: boolean;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
 }) {
-    const [opened, setOpened] = useState(false);
+    const [opened, setOpened] = useState(defaultOpen);
     const open = opened || threads.some((thread) => thread.id === initialThreadId);
     if (threads.length === 0) {
         return null;

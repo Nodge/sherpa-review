@@ -270,7 +270,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'full-diff-pci',
-        title: 'PCI DSS filter: active chip, audit-scope banner',
+        title: 'PCI DSS filter: chip active',
         render: () => <WorkspaceState fixture="medium" filter="pci" viewed={MEDIUM_VIEWED} />,
     },
     {

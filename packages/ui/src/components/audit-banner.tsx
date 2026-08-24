@@ -1,4 +1,6 @@
+import { PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { FileFilter, FilterStats } from '../filters/lens-filters.js';
+import type { ViewId } from '../session/views.js';
 import { formatCount, plural } from '../text.js';
 import './audit-banner.css';
 
@@ -7,12 +9,22 @@ import './audit-banner.css';
  * know they are not viewing the whole PR. The banner describes the filter, so it can be dismissed,
  * and has exactly one action: clear the filter.
  *
- * A banner slot with priorities and a "+2 notices" fold comes in M1-T15. This is one banner
- * in a reusable form.
+ * The component renders in the shared App-level banner slot. The slot source registry
+ * owns its activation condition and priority.
  */
 
 /** How many scope paths to list by name before the list gets too long. */
 const LISTED_PATHS = 3;
+
+/** Audit scope only affects Full diff, where the filter actually hides files. */
+export function auditScopeBannerVisible(
+    view: ViewId,
+    filterId: string,
+    dismissed: boolean,
+    files: number,
+): boolean {
+    return view === 'diff' && filterId === PCI_FILTER_ID && !dismissed && files > 0;
+}
 
 export interface AuditScopeBannerProps {
     readonly filter: FileFilter;

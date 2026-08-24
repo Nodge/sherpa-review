@@ -1,0 +1,60 @@
+/* Shared monospace command box for the invitation, banner and reconnect popover. */
+
+.command-box {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.command-box__row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-inner-tight);
+}
+
+.command-box__command {
+    min-width: 0;
+    flex: 1;
+    height: 30px;
+    padding: 0 var(--space-inner);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    outline: none;
+    background: var(--surface-command);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    white-space: nowrap;
+}
+
+.command-box__command:focus-visible {
+    box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.command-box__action {
+    height: 30px;
+    flex: none;
+    padding: 0 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-button);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary);
+    cursor: pointer;
+}
+
+.command-box__action:hover {
+    border-color: var(--border-strong-lifted);
+    color: var(--text-primary);
+}
+
+.command-box__action:active {
+    background: var(--surface-control);
+}
+
+.command-box__hint {
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}

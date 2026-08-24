@@ -11,18 +11,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import {
     fetchFileContent,
-    fetchReviewLenses,
     fetchReviewPr,
     deleteReviewDraft,
     fetchReviewProgress,
-    fetchReviewThreads,
     openInEditor,
     saveReviewDraft,
     setFileViewed,
     setReviewThreadResolved,
     updateReviewDraft,
 } from '../api.js';
-import { AuditScopeBanner } from '../components/audit-banner.tsx';
 import { FilterSelect } from '../components/filter-select.tsx';
 import { PrHeader } from '../components/pr-header.tsx';
 import type { DiffClient } from '../diff/client.js';
@@ -40,7 +37,6 @@ import {
     ALL_FILTER_ID,
     buildFileFilters,
     filterFiles,
-    filterStats,
     findFilter,
     PCI_FILTER_ID,
     selectFilter,
@@ -74,9 +70,7 @@ import './full-diff.css';
 
 interface Loaded {
     readonly pr: PrMeta;
-    readonly lenses: UiReviewLensesResponse;
     readonly progress: UiReviewProgressResponse;
-    readonly threads: readonly Thread[];
 }
 
 export interface FullDiffViewProps {
@@ -86,12 +80,15 @@ export interface FullDiffViewProps {
     /** Raw patches load at the App level so the palette works over any view. */
     readonly diff: PrDiff | null;
     readonly diffError: string | null;
+    readonly lenses: UiReviewLensesResponse | null;
+    readonly lensesError: string | null;
     readonly store: DiffViewStore | null;
+    readonly threadStore: ThreadStore | null;
     /** Progress revision from SSE. Reread the endpoint if it grew since last seen (tab convergence). */
     readonly progressRevision: number | null;
-    readonly threadsRevision: number | null;
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
+    readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
 }
 
 export function FullDiffView({
@@ -100,11 +97,14 @@ export function FullDiffView({
     session,
     diff,
     diffError,
+    lenses,
+    lensesError,
     store,
+    threadStore,
     progressRevision,
-    threadsRevision,
     paletteNavigation = null,
     onPaletteActiveFileChange,
+    onFilterChangeHandler,
 }: FullDiffViewProps) {
     const [state, setState] = useState<{ loaded: Loaded | null; error: string | null }>({
         loaded: null,
@@ -113,15 +113,10 @@ export function FullDiffView({
 
     useEffect(() => {
         let alive = true;
-        void Promise.all([
-            fetchReviewPr(token),
-            fetchReviewLenses(token),
-            fetchReviewProgress(token),
-            fetchReviewThreads(token),
-        ]).then(
-            ([pr, lenses, progress, threads]) => {
+        void Promise.all([fetchReviewPr(token), fetchReviewProgress(token)]).then(
+            ([pr, progress]) => {
                 if (alive) {
-                    setState({ loaded: { pr, lenses, progress, threads }, error: null });
+                    setState({ loaded: { pr, progress }, error: null });
                 }
             },
             (error: unknown) => {
@@ -161,7 +156,6 @@ export function FullDiffView({
         [token],
     );
     const reloadProgress = useCallback(() => fetchReviewProgress(token), [token]);
-    const reloadThreads = useCallback(() => fetchReviewThreads(token), [token]);
     const threadTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),
@@ -198,7 +192,16 @@ export function FullDiffView({
         };
     }, []);
 
-    if (state.error !== null || diffError !== null || state.loaded === null || diff === null || store === null) {
+    if (
+        state.error !== null ||
+        diffError !== null ||
+        lensesError !== null ||
+        state.loaded === null ||
+        diff === null ||
+        lenses === null ||
+        store === null ||
+        threadStore === null
+    ) {
         // `__main` defines the column. Without it the toolbar and status would line up horizontally, since `.full-diff`
         // lays out the panel and right side horizontally.
         return (
@@ -207,7 +210,7 @@ export function FullDiffView({
                     <div className="full-diff__toolbar">
                         <h1 className="full-diff__title">Full diff</h1>
                     </div>
-                    <p className="full-diff__status">{state.error ?? diffError ?? 'Loading diff…'}</p>
+                    <p className="full-diff__status">{state.error ?? diffError ?? lensesError ?? 'Loading diff…'}</p>
                 </div>
             </main>
         );
@@ -217,22 +220,21 @@ export function FullDiffView({
         <DiffWorkspace
             pr={state.loaded.pr}
             diff={diff}
-            lenses={state.loaded.lenses}
+            lenses={lenses}
             progress={state.loaded.progress}
-            threads={state.loaded.threads}
             prKey={prKey}
             session={session}
             store={store}
+            threadStore={threadStore}
             paletteNavigation={paletteNavigation}
             {...(onPaletteActiveFileChange === undefined ? {} : { onPaletteActiveFileChange })}
+            {...(onFilterChangeHandler === undefined ? {} : { onFilterChangeHandler })}
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
             onSetViewed={writeViewed}
             reloadProgress={reloadProgress}
             progressRevision={progressRevision}
-            reloadThreads={reloadThreads}
-            threadsRevision={threadsRevision}
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
             initialFileId={fragmentTarget.fileId}
@@ -272,6 +274,7 @@ export interface DiffWorkspaceProps {
     readonly threadStore?: ThreadStore;
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
+    readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
     /** Directory collapse storage. `null` disables persistence (gallery, tests). */
     readonly collapsedStorage?: CollapsedStorage | null;
 }
@@ -295,6 +298,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         initialThreadId = null,
         paletteNavigation = null,
         onPaletteActiveFileChange,
+        onFilterChangeHandler,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
 
@@ -490,7 +494,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const linkedFileId = linkedThread?.anchor?.fileId ?? null;
     const [topFileId, setTopFileId] = useState<string | null>(null);
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
-    const [bannerDismissed, setBannerDismissed] = useState(false);
 
     // "Kept in view" (SPEC §2.7): the file the reviewer is reading stays under the cursor
     // when the filter changes. It remains in the list with a label.
@@ -521,11 +524,19 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             // Nothing under the cursor disappears (SPEC §2.7), and scrolling stays anchored to the top
             // card (SPEC §2.6). After a filter change the list returns to it automatically.
             pendingScroll.current = kept ?? top;
-            setBannerDismissed(false);
             session.setFilter(next.id);
         },
         [filter.id, filters, session],
     );
+    useEffect(() => {
+        if (onFilterChangeHandler === undefined) {
+            return;
+        }
+        onFilterChangeHandler(changeFilter);
+        return () => {
+            onFilterChangeHandler(null);
+        };
+    }, [changeFilter, onFilterChangeHandler]);
 
     const shown = useMemo(() => {
         const ids = filter.fileIds;
@@ -621,7 +632,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             if (!shown.some((file) => file.fileId === fileId)) {
                 pendingScroll.current = fileId;
                 setKeptFileId(null);
-                setBannerDismissed(false);
                 session.setFilter(ALL_FILTER_ID);
                 return;
             }
@@ -716,7 +726,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             // and must not fire later after the palette has already navigated.
             pendingScroll.current = null;
             setKeptFileId(null);
-            setBannerDismissed(false);
             session.setFilter(ALL_FILTER_ID);
             return;
         }
@@ -809,10 +818,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         },
     });
 
-    // The banner explains what is hidden. When the filter matches no files, the empty-result
-    // panel already explains that, so there is no need for two in a row.
-    const pciStats = pci === null ? null : filterStats(diff.files, pci);
-    const auditVisible = filter.id === PCI_FILTER_ID && !bannerDismissed && (pciStats?.files ?? 0) > 0;
     const threadCounts = countThreadSources(threadSnapshot.threads);
     const threadVisible = useCallback(
         (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadsShow),
@@ -864,20 +869,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
                     }}
                 />
-
-                {auditVisible && pci !== null && pciStats !== null ? (
-                    <AuditScopeBanner
-                        filter={pci}
-                        stats={pciStats}
-                        paths={treeFiles.map((file) => file.path)}
-                        onShowAll={() => {
-                            changeFilter(ALL_FILTER_ID);
-                        }}
-                        onDismiss={() => {
-                            setBannerDismissed(true);
-                        }}
-                    />
-                ) : null}
 
                 <Toolbar
                     store={store}
