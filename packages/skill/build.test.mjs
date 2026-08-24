@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
-const binDir = join(packageRoot, 'bin');
+const distDir = join(packageRoot, 'dist');
+const binDir = join(distDir, 'bin');
 const cliPath = join(binDir, 'sherpa.mjs');
 const serverPath = join(binDir, 'sherpa-server.mjs');
 const uiRoot = resolve(packageRoot, '../ui');
@@ -23,10 +24,15 @@ describe('skill package build', () => {
         execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
     }, 120_000);
 
-    it('puts exactly two bundles in bin/: a thin CLI and the server', () => {
+    // The harness links to `dist/`. An extra file there is junk in the installed skill.
+    it('dist/ is a self-contained distribution: SKILL.md and exactly two bundles in bin/', () => {
+        expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-server.mjs', 'sherpa.mjs']);
         expect(statSync(cliPath).isFile()).toBe(true);
         expect(statSync(serverPath).isFile()).toBe(true);
+        expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
+            readFileSync(join(packageRoot, 'SKILL.md'), 'utf8'),
+        );
     });
 
     it('runs the built CLI with plain node', () => {

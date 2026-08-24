@@ -1,15 +1,18 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const binDir = resolve(root, 'bin');
+const distDir = resolve(root, 'dist');
+const binDir = resolve(distDir, 'bin');
 
 /**
- * The package directory is the skill distribution: SKILL.md beside two bundles. There are two because
- * the worker loop invokes the CLI on every call, and a server with an embedded UI would add unnecessary weight.
+ * `dist/` is the skill distribution: SKILL.md beside `bin/` with two bundles. It is `dist`
+ * that gets linked into the harness (`~/.claude/skills/sherpa`), so package source files stay out.
+ * There are two bundles because the worker loop invokes the CLI on every call, and the server with its embedded UI
+ * would add unnecessary weight to it.
  *
  * Builds run directly, without nested pnpm (tests call them too). The packages are listed
  * in the skill's devDependencies for `pnpm -r` topological order. Otherwise these builds and the builds
@@ -20,7 +23,9 @@ const bundles = [
     { pkg: '../cli', script: 'build.mjs', file: 'dist/sherpa.mjs', out: 'sherpa.mjs' },
 ];
 
+rmSync(distDir, { recursive: true, force: true });
 mkdirSync(binDir, { recursive: true });
+copyFileSync(resolve(root, 'SKILL.md'), resolve(distDir, 'SKILL.md'));
 
 for (const bundle of bundles) {
     const packageRoot = resolve(root, bundle.pkg);
