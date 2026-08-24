@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSessionStore } from './session-store.js';
+import { createSessionStore, DEFAULT_THREADS_SHOW } from './session-store.js';
 
 describe('session store', () => {
     it('returns a stable snapshot and changes it on setView', () => {
@@ -10,7 +10,7 @@ describe('session store', () => {
         expect(store.getSnapshot()).toBe(first);
 
         store.setView('diff');
-        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'all' });
+        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW });
     });
 
     it('notifies subscribers of changes and stays silent when the same value repeats', () => {
@@ -42,7 +42,7 @@ describe('session store', () => {
         store.setView('diff');
         store.setView('diff');
 
-        expect(persist.mock.calls).toEqual([[{ view: 'diff', filter: 'all' }]]);
+        expect(persist.mock.calls).toEqual([[{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW }]]);
     });
 
     it('keeps the snapshot unchanged when nothing changes so useSyncExternalStore skips unnecessary renders', () => {
@@ -57,11 +57,21 @@ describe('session store', () => {
 
     it('changes the filter independently of the view and persists it too', () => {
         const persist = vi.fn();
-        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' }, persist });
+        const store = createSessionStore({ initial: { view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW }, persist });
 
         store.setFilter('pci');
 
-        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'pci' });
-        expect(persist.mock.calls).toEqual([[{ view: 'diff', filter: 'pci' }]]);
+        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW });
+        expect(persist.mock.calls).toEqual([
+            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW }],
+        ]);
+    });
+
+    it('thread filters change in a single session write', () => {
+        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+
+        store.setThreadsShow({ people: true, bots: true, resolved: false });
+
+        expect(store.getSnapshot().threadsShow).toEqual({ people: true, bots: true, resolved: false });
     });
 });

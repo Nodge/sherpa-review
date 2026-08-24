@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { ReviewHost, UiOpenInEditorResponse } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
+    uiDeleteDraftRequestSchema,
     uiOpenInEditorRequestSchema,
     uiOpenInEditorResponseSchema,
     uiReviewDiffResponseSchema,
@@ -14,8 +15,13 @@ import {
     uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
     uiReviewThreadsResponseSchema,
+    uiReviewWriteAckSchema,
+    uiSaveDraftRequestSchema,
+    uiSaveDraftResponseSchema,
     uiSetFileViewedRequestSchema,
     uiSetFileViewedResponseSchema,
+    uiSetThreadResolvedRequestSchema,
+    uiUpdateDraftRequestSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -23,6 +29,7 @@ import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
 import type { ProgressStore } from './progress-store.js';
+import type { ReviewFeed } from './review-feed.js';
 
 /**
  * UI review endpoints (M1-T10): PR metadata, active iteration diff, threads, lenses and file content.
@@ -51,6 +58,8 @@ export interface EditorOptions {
 
 export interface ReviewRoutesOptions {
     readonly host: ReviewHost | null;
+    /** Thread revision: a successful local write wakes SSE clients immediately. */
+    readonly reviewFeed: ReviewFeed | null;
     /** Reading progress for this PR: the local source of truth for viewed marks. */
     readonly progress: ProgressStore;
     readonly editor?: EditorOptions;
@@ -58,6 +67,14 @@ export interface ReviewRoutesOptions {
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     const mirrorFileViewed = createViewedMirror(options.host);
+    const updateDraft = createKeyedWriteQueue((commentId: string, body: string) => {
+        const host = hostOf(options);
+        return call(() => host.updateDraft(commentId, body));
+    });
+    const setThreadResolved = createKeyedWriteQueue((threadId: string, resolved: boolean) => {
+        const host = hostOf(options);
+        return call(() => host.setThreadResolved(threadId, resolved));
+    });
     return [
         {
             method: 'GET',
@@ -81,6 +98,48 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             handle: handlingRpcFailures(async () => {
                 const host = hostOf(options);
                 return respond(uiReviewThreadsResponseSchema, { threads: await call(() => host.getThreads()) });
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewSaveDraft,
+            handle: handlingRpcFailures(async (ctx) => {
+                const host = hostOf(options);
+                const request = await readRequest(ctx, uiSaveDraftRequestSchema, 'saving a draft');
+                const comment = await call(() => host.saveDraft(request.draft));
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiSaveDraftResponseSchema, { comment });
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewUpdateDraft,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiUpdateDraftRequestSchema, 'updating a draft');
+                await updateDraft(request.commentId, request.body);
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewDeleteDraft,
+            handle: handlingRpcFailures(async (ctx) => {
+                const host = hostOf(options);
+                const request = await readRequest(ctx, uiDeleteDraftRequestSchema, 'deleting a draft');
+                await deleteDraftConvergently(host, request.commentId);
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewThreadResolved,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiSetThreadResolvedRequestSchema, 'changing thread status');
+                await setThreadResolved(request.threadId, request.resolved);
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),
         },
         {
@@ -165,6 +224,48 @@ async function readRequest<T>(ctx: RequestContext, schema: z.ZodType<T>, what: s
         );
     }
     return parsed.data;
+}
+
+/** An indeterminate delete response counts as success if a fresh snapshot no longer contains the comment. */
+async function deleteDraftConvergently(host: ReviewHost, commentId: string): Promise<void> {
+    try {
+        await call(() => host.deleteDraft(commentId));
+    } catch (deleteError) {
+        let threads: Awaited<ReturnType<ReviewHost['getThreads']>>;
+        try {
+            threads = await call(() => host.getThreads());
+        } catch {
+            throw deleteError;
+        }
+        const contains = threads.some((thread) => {
+            const visit = (comment: typeof thread.root): boolean =>
+                comment.id === commentId || comment.replies.some(visit);
+            return visit(thread.root);
+        });
+        if (contains) {
+            throw deleteError;
+        }
+    }
+}
+
+/** Writes for one key reach the host in the order the server received them, even if the previous write failed. */
+function createKeyedWriteQueue<T>(write: (key: string, value: T) => Promise<void>): (key: string, value: T) => Promise<void> {
+    const queues = new Map<string, Promise<void>>();
+
+    return (key, value) => {
+        const request = (queues.get(key) ?? Promise.resolve()).then(() => write(key, value));
+        const tail = request.then(
+            () => undefined,
+            () => undefined,
+        );
+        queues.set(key, tail);
+        void tail.then(() => {
+            if (queues.get(key) === tail) {
+                queues.delete(key);
+            }
+        });
+        return request;
+    };
 }
 
 /**

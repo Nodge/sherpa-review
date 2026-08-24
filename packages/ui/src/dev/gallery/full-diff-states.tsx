@@ -1,6 +1,6 @@
 import { fileContentOf, fixtureData } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
-import type { FileDiff, Lens, UiFileProgress, UiReviewLensesResponse } from '@sherpa/protocol';
+import type { Comment, FileDiff, Lens, Thread, UiFileProgress, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
@@ -8,7 +8,10 @@ import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { changedLinesOf } from '../../progress/read-state.js';
-import { createSessionStore } from '../../session/session-store.js';
+import type { ThreadsShow } from '../../session/session-store.js';
+import { createSessionStore, DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
+import { createThreadStore } from '../../threads/store.js';
+import type { ThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
 
 /**
@@ -30,6 +33,10 @@ interface WorkspaceStateProps {
     readonly preloadModels?: boolean;
     /** Keep one file in the diff to build any kind of single-file PR. */
     readonly onlyPath?: string;
+    readonly showThreads?: boolean;
+    readonly threadsShow?: ThreadsShow;
+    readonly threads?: readonly Thread[];
+    readonly prepareThreads?: (store: ThreadStore, threads: readonly Thread[]) => void;
 }
 
 function WorkspaceState({
@@ -40,6 +47,10 @@ function WorkspaceState({
     records = [],
     preloadModels = true,
     onlyPath,
+    showThreads = false,
+    threadsShow = DEFAULT_THREADS_SHOW,
+    threads,
+    prepareThreads,
 }: WorkspaceStateProps) {
     const data = useMemo(() => {
         const source = fixtureData(fixture);
@@ -48,7 +59,20 @@ function WorkspaceState({
         }
         return { ...source, diff: { ...source.diff, files: source.diff.files.filter((file) => file.path === onlyPath) } };
     }, [fixture, onlyPath]);
-    const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter } }), [filter]);
+    const session = useMemo(
+        () => createSessionStore({ initial: { view: 'diff', filter, threadsShow } }),
+        [filter, threadsShow],
+    );
+
+    const shownThreads = useMemo(
+        () => (showThreads ? (threads ?? data.threads) : []),
+        [data.threads, showThreads, threads],
+    );
+    const threadStore = useMemo(() => {
+        const created = createThreadStore(shownThreads, new Set(data.diff.files.map((file) => file.fileId)));
+        prepareThreads?.(created, shownThreads);
+        return created;
+    }, [data.diff.files, prepareThreads, shownThreads]);
 
     const store = useMemo(() => {
         const created = createDiffViewStore({ files: data.diff.files, storage: null });
@@ -72,11 +96,14 @@ function WorkspaceState({
             <DiffWorkspace
                 pr={data.pr}
                 diff={data.diff}
+                threads={shownThreads}
+                threadStore={threadStore}
                 lenses={lenses ?? { ownership: data.ownership, extra: data.extraLenses }}
                 prKey={`fixture-${fixture}`}
                 session={session}
                 store={store}
                 collapsedStorage={null}
+                threadNow={GALLERY_NOW}
                 // The parser is synchronous: the gallery needs no worker and the frame does not depend on one.
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={(fileId) => {
@@ -90,6 +117,8 @@ function WorkspaceState({
         </div>
     );
 }
+
+const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 const MEDIUM_VIEWED = [
     'services/orders/src/api/handlers.ts',
@@ -135,6 +164,92 @@ const EMPTY_PCI: Lens = {
     available: true,
     note: 'This PR has no files in the PCI DSS audit scope.',
 };
+
+const ALL_THREADS: ThreadsShow = { people: true, bots: true, resolved: true };
+
+function prepareDraftComposer(store: ThreadStore, threads: readonly Thread[]): void {
+    const thread = threads.find((candidate) => !candidate.resolved && !candidate.root.author.bot);
+    if (thread === undefined) {
+        return;
+    }
+    const draft: Comment = {
+        id: 'gallery-draft',
+        author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+        body: 'I will add a check at the window boundary and update the test.',
+        draft: true,
+        createdAt: '2026-08-24T10:00:00.000Z',
+        editedAt: null,
+        replies: [],
+    };
+    store.addDraft({ body: draft.body, parentId: thread.root.id, anchor: null }, draft);
+    store.openComposer({
+        key: `reply:${thread.id}`,
+        threadId: thread.id,
+        parentId: thread.root.id,
+        anchor: null,
+        text: draft.body,
+        commentId: draft.id,
+        status: 'saved',
+        saveUncertain: false,
+        slow: false,
+        confirmDiscard: false,
+        resolvedAtOpen: false,
+    });
+}
+
+function prepareFailedComposer(store: ThreadStore): void {
+    const file = fileOf('medium', 'services/orders/src/api/handlers.ts');
+    const anchor = { fileId: file.fileId, path: file.path, position: { side: 'new' as const, line: 48, size: 1 } };
+    store.openComposer({
+        key: `new:${file.fileId}:new:48`,
+        threadId: null,
+        parentId: null,
+        anchor,
+        text: 'The remainingMs field misleads the client here.',
+        commentId: null,
+        status: 'error',
+        saveUncertain: true,
+        slow: false,
+        confirmDiscard: false,
+        resolvedAtOpen: false,
+    });
+}
+
+function sourceThreadsOnHandlers(): Thread[] {
+    const data = fixtureData('medium');
+    const file = fileOf('medium', 'services/orders/src/api/handlers.ts');
+    const position = { side: 'new' as const, line: 48, size: 1 };
+    const openPerson = data.threads.find(
+        (thread) => thread.anchor?.path === file.path && !thread.resolved && !thread.root.author.bot,
+    );
+    const bot = data.threads.find((thread) => thread.root.author.bot);
+    const resolved = data.threads.find((thread) => thread.resolved);
+    return [openPerson, bot, resolved]
+        .filter((thread): thread is Thread => thread !== undefined)
+        .map((thread) => ({ ...thread, anchor: { fileId: file.fileId, path: file.path, position } }));
+}
+
+function botThreadWithFortyReplies(): Thread[] {
+    const source = fixtureData('medium').threads.find((thread) => thread.root.author.bot);
+    if (source === undefined) {
+        return [];
+    }
+    let replies: Comment[] = [];
+    for (let index = 40; index >= 1; index -= 1) {
+        replies = [
+            {
+                id: `bot-reply-${String(index)}`,
+                author: source.root.author,
+                body: `Automatic reply ${String(index)}: the check still sees this path.`,
+                draft: false,
+                createdAt: `2026-08-19T08:${String(index).padStart(2, '0')}:00.000Z`,
+                editedAt: null,
+                replies,
+            },
+        ];
+    }
+    return [{ ...source, root: { ...source.root, replies } }];
+}
 
 export interface FullDiffGalleryState {
     readonly id: string;
@@ -205,5 +320,79 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
         id: 'full-diff-outline-binary',
         title: 'single-image PR: nothing for an outline',
         render: () => <WorkspaceState fixture="edge" onlyPath="services/orders/assets/edit-window-flow.png" />,
+    },
+    {
+        id: 'threads-sources',
+        title: 'human, bot and resolved threads with filters',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/api/handlers.ts"
+                threads={sourceThreadsOnHandlers()}
+                threadsShow={ALL_THREADS}
+            />
+        ),
+    },
+    {
+        id: 'threads-deep',
+        title: 'deep nesting with capped indentation',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/domain/edit-window.ts"
+                threadsShow={ALL_THREADS}
+            />
+        ),
+    },
+    {
+        id: 'threads-composer-draft',
+        title: 'composer and saved draft',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/domain/edit-window.ts"
+                prepareThreads={prepareDraftComposer}
+            />
+        ),
+    },
+    {
+        id: 'threads-composer-error',
+        title: 'draft not saved, text preserved',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/api/handlers.ts"
+                prepareThreads={prepareFailedComposer}
+            />
+        ),
+    },
+    {
+        id: 'threads-bot-collapsed',
+        title: 'bot thread: first, last two and "37 more"',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/payments/card-token.ts"
+                threads={botThreadWithFortyReplies()}
+                threadsShow={ALL_THREADS}
+            />
+        ),
+    },
+    {
+        id: 'threads-outside',
+        title: 'collapsed group of threads outside the diff',
+        render: () => (
+            <WorkspaceState
+                fixture="edge"
+                showThreads
+                onlyPath="services/orders/assets/edit-window-flow.png"
+                threads={fixtureData('medium').threads.filter((thread) => thread.anchor === null)}
+            />
+        ),
     },
 ];

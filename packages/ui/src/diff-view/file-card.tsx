@@ -1,5 +1,6 @@
 import type { FileContent, FileDiff } from '@sherpa/protocol';
-import { memo, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
@@ -41,10 +42,14 @@ export interface FileCardActions {
     /** Retry patch parsing after a worker failure. */
     readonly onRetryParse: (fileId: string) => void;
     readonly onOpenFile: (fileId: string) => void;
+    readonly onShowWhitespace: (fileId: string) => void;
     readonly onSelectStart: (fileId: string, key: LineKey, extend: boolean) => void;
     readonly onSelectExtend: (fileId: string, key: LineKey) => void;
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     readonly onCopyLink: (fileId: string) => Promise<Feedback>;
+    readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineBlur?: (() => void) | undefined;
 }
 
 export interface FileCardProps {
@@ -63,11 +68,14 @@ export interface FileCardProps {
     readonly read: FileReadState;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
+    readonly showWhitespace: boolean;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
     /** Initial hint lets the gallery show a failed write without a click. */
     readonly initialHint?: Feedback;
     readonly selection: LineSelection | null;
+    readonly threadsUnderHeader?: ReactNode;
+    readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly actions: FileCardActions;
 }
 
@@ -82,13 +90,15 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         expansion,
         read,
         opened,
+        showWhitespace,
         keptInView = false,
         initialHint = null,
         selection,
+        threadsUnderHeader = null,
+        renderAfterLine,
         actions,
     } = props;
     const [hint, setHint] = useState<Feedback>(initialHint);
-    const [showWhitespace, setShowWhitespace] = useState(false);
 
     // Model with context already expanded. Expansion is a pure function of the original model.
     const shown = useMemo(
@@ -104,6 +114,33 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             setHint(error instanceof Error ? error.message : String(error));
         });
     };
+    const onShowWhitespace = useCallback(() => {
+        actions.onShowWhitespace(file.fileId);
+    }, [actions, file.fileId]);
+    const onSelectStart = useCallback(
+        (key: LineKey, extend: boolean) => {
+            actions.onSelectStart(file.fileId, key, extend);
+        },
+        [actions, file.fileId],
+    );
+    const onSelectExtend = useCallback(
+        (key: LineKey) => {
+            actions.onSelectExtend(file.fileId, key);
+        },
+        [actions, file.fileId],
+    );
+    const onCommentLine = useCallback(
+        (side: 'old' | 'new', line: number) => {
+            actions.onCommentLine?.(file.fileId, side, line);
+        },
+        [actions, file.fileId],
+    );
+    const onLineFocus = useCallback(
+        (side: 'old' | 'new', line: number) => {
+            actions.onLineFocus?.(file.fileId, side, line);
+        },
+        [actions, file.fileId],
+    );
 
     return (
         <article
@@ -178,6 +215,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 </button>
             </header>
 
+            {threadsUnderHeader}
+
             {keptInView ? (
                 <p className="file-card__kept">kept on screen, outside current filter</p>
             ) : null}
@@ -246,15 +285,13 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     selection={selection}
                     expansion={expansion}
                     showWhitespace={showWhitespace}
-                    onShowWhitespace={() => {
-                        setShowWhitespace(true);
-                    }}
-                    onSelectStart={(key, extend) => {
-                        actions.onSelectStart(file.fileId, key, extend);
-                    }}
-                    onSelectExtend={(key) => {
-                        actions.onSelectExtend(file.fileId, key);
-                    }}
+                    onShowWhitespace={onShowWhitespace}
+                    onSelectStart={onSelectStart}
+                    onSelectExtend={onSelectExtend}
+                    renderAfterLine={renderAfterLine}
+                    onCommentLine={onCommentLine}
+                    onLineFocus={onLineFocus}
+                    onLineBlur={actions.onLineBlur}
                 />
             )}
         </article>
@@ -388,6 +425,10 @@ interface BodyProps {
     readonly onShowWhitespace: () => void;
     readonly onSelectStart: (key: LineKey, extend: boolean) => void;
     readonly onSelectExtend: (key: LineKey) => void;
+    readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
+    readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineBlur?: (() => void) | undefined;
 }
 
 function Body(props: BodyProps) {
@@ -413,6 +454,9 @@ function Body(props: BodyProps) {
             onMouseDown={(event) => {
                 // Drag selection starts in the gutter. Mouse gestures in code keep native text selection.
                 const target = event.target as HTMLElement;
+                if (target.closest('.diff-row__comment') !== null) {
+                    return;
+                }
                 const key = parseLineKey(target.closest('[data-key]')?.getAttribute('data-key'));
                 if (key === null) {
                     return;
@@ -433,7 +477,16 @@ function Body(props: BodyProps) {
                 }
             }}
         >
-            <DiffRows model={model} mode={mode} content={content} selection={selection} />
+            <DiffRows
+                model={model}
+                mode={mode}
+                content={content}
+                selection={selection}
+                renderAfterLine={props.renderAfterLine}
+                onCommentLine={props.onCommentLine}
+                onLineFocus={props.onLineFocus}
+                onLineBlur={props.onLineBlur}
+            />
         </div>
     );
 }

@@ -110,6 +110,7 @@ function CardState({
             expansion={snapshot.expansion.get(file.fileId) ?? 0}
             read={snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null })}
             opened={snapshot.opened.has(file.fileId)}
+            showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
             keptInView={keptInView}
             initialHint={hint ?? null}
             selection={snapshot.selection}
@@ -190,6 +191,7 @@ function galleryActions(store: DiffViewStore): FileCardActions {
             // Gallery parsing is synchronous and does not fail, so there is nothing to retry.
         },
         onOpenFile: store.openFile,
+        onShowWhitespace: store.showWhitespace,
         onSelectStart: (fileId, key, extend) => {
             if (extend) {
                 store.extendSelection(fileId, key);

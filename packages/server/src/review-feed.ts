@@ -26,6 +26,18 @@ export class ReviewFeed {
         return this.revisionValue;
     }
 
+    /** A local write endpoint changed threads. Wake the UI without waiting for host polling. */
+    bumpLocalWrite(): number {
+        if (this.closed) {
+            return this.revisionValue;
+        }
+        this.revisionValue += 1;
+        for (const listener of [...this.listeners]) {
+            listener(this.revisionValue);
+        }
+        return this.revisionValue;
+    }
+
     subscribe(listener: (revision: number) => void): () => void {
         if (this.closed) {
             return () => undefined;

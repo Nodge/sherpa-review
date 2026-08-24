@@ -1,8 +1,11 @@
 import type {
+    Comment,
+    CommentDraft,
     FileContent,
     PrDiff,
     PriorityClass,
     PrMeta,
+    Thread,
     UiCancelResponse,
     UiEnqueueResponse,
     UiOpenInEditorResponse,
@@ -22,6 +25,9 @@ import {
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
+    uiReviewThreadsResponseSchema,
+    uiReviewWriteAckSchema,
+    uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
@@ -60,6 +66,27 @@ export async function fetchReviewDiff(token: string): Promise<PrDiff> {
 /** File filter lenses: ownership is separate from extra lenses (README §Filters). */
 export async function fetchReviewLenses(token: string): Promise<UiReviewLensesResponse> {
     return get(UI_ENDPOINTS.reviewLenses, token, uiReviewLensesResponseSchema);
+}
+
+/** Full thread snapshot. Refetched when `threadsRevision` increases. */
+export async function fetchReviewThreads(token: string): Promise<Thread[]> {
+    return (await get(UI_ENDPOINTS.reviewThreads, token, uiReviewThreadsResponseSchema)).threads;
+}
+
+export async function saveReviewDraft(token: string, draft: CommentDraft): Promise<Comment> {
+    return (await post(UI_ENDPOINTS.reviewSaveDraft, token, { draft }, uiSaveDraftResponseSchema)).comment;
+}
+
+export async function updateReviewDraft(token: string, commentId: string, body: string): Promise<void> {
+    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body }, uiReviewWriteAckSchema);
+}
+
+export async function deleteReviewDraft(token: string, commentId: string): Promise<void> {
+    await post(UI_ENDPOINTS.reviewDeleteDraft, token, { commentId }, uiReviewWriteAckSchema);
+}
+
+export async function setReviewThreadResolved(token: string, threadId: string, resolved: boolean): Promise<void> {
+    await post(UI_ENDPOINTS.reviewThreadResolved, token, { threadId, resolved }, uiReviewWriteAckSchema);
 }
 
 /**

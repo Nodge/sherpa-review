@@ -3,6 +3,7 @@ import type {
     FileDiff,
     PrDiff,
     PrMeta,
+    Thread,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
 } from '@sherpa/protocol';
@@ -13,9 +14,14 @@ import {
     fetchReviewDiff,
     fetchReviewLenses,
     fetchReviewPr,
+    deleteReviewDraft,
     fetchReviewProgress,
+    fetchReviewThreads,
     openInEditor,
+    saveReviewDraft,
     setFileViewed,
+    setReviewThreadResolved,
+    updateReviewDraft,
 } from '../api.js';
 import { AuditScopeBanner } from '../components/audit-banner.tsx';
 import { FilterSelect } from '../components/filter-select.tsx';
@@ -43,8 +49,16 @@ import {
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
-import type { SessionStore } from '../session/session-store.js';
+import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
+import type { ComposerTransport } from '../threads/composer.js';
+import type { ThreadSourceCounts } from '../threads/model.js';
+import { countThreadSources, threadIsVisible } from '../threads/model.js';
+import { persistentThreadStore } from '../threads/persistent-store.js';
+import { threadResolvedWriterFor } from '../threads/resolved-writer.js';
+import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
+import type { ThreadActions } from '../threads/thread-list.tsx';
+import type { ThreadStore } from '../threads/store.js';
 import { formatCount, plural } from '../text.js';
 import type { CollapsedStorage } from '../tree/collapsed-storage.js';
 import { globalCollapsedStorage } from '../tree/collapsed-storage.js';
@@ -63,6 +77,7 @@ interface Loaded {
     readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
     readonly progress: UiReviewProgressResponse;
+    readonly threads: readonly Thread[];
 }
 
 export interface FullDiffViewProps {
@@ -71,9 +86,10 @@ export interface FullDiffViewProps {
     readonly session: SessionStore;
     /** Progress revision from SSE. Reread the endpoint if it grew since last seen (tab convergence). */
     readonly progressRevision: number | null;
+    readonly threadsRevision: number | null;
 }
 
-export function FullDiffView({ token, prKey, session, progressRevision }: FullDiffViewProps) {
+export function FullDiffView({ token, prKey, session, progressRevision, threadsRevision }: FullDiffViewProps) {
     const [state, setState] = useState<{ loaded: Loaded | null; error: string | null }>({
         loaded: null,
         error: null,
@@ -86,10 +102,11 @@ export function FullDiffView({ token, prKey, session, progressRevision }: FullDi
             fetchReviewDiff(token),
             fetchReviewLenses(token),
             fetchReviewProgress(token),
+            fetchReviewThreads(token),
         ]).then(
-            ([pr, diff, lenses, progress]) => {
+            ([pr, diff, lenses, progress, threads]) => {
                 if (alive) {
-                    setState({ loaded: { pr, diff, lenses, progress }, error: null });
+                    setState({ loaded: { pr, diff, lenses, progress, threads }, error: null });
                 }
             },
             (error: unknown) => {
@@ -129,6 +146,19 @@ export function FullDiffView({ token, prKey, session, progressRevision }: FullDi
         [token],
     );
     const reloadProgress = useCallback(() => fetchReviewProgress(token), [token]);
+    const reloadThreads = useCallback(() => fetchReviewThreads(token), [token]);
+    const threadTransport = useMemo<ComposerTransport>(
+        () => ({
+            save: (draft) => saveReviewDraft(token, draft),
+            update: (commentId, body) => updateReviewDraft(token, commentId, body),
+            delete: (commentId) => deleteReviewDraft(token, commentId),
+        }),
+        [token],
+    );
+    const resolveThread = useCallback(
+        (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
+        [token],
+    );
     const openFileInEditor = useCallback(
         async (path: string): Promise<Feedback> => {
             const result = await openInEditor(token, path);
@@ -136,6 +166,22 @@ export function FullDiffView({ token, prKey, session, progressRevision }: FullDi
         },
         [token],
     );
+    const [fragmentTarget, setFragmentTarget] = useState(() => ({
+        fileId: readFragmentParam(window.location.hash, 'file'),
+        threadId: readFragmentParam(window.location.hash, 'thread'),
+    }));
+    useEffect(() => {
+        const read = (): void => {
+            setFragmentTarget({
+                fileId: readFragmentParam(window.location.hash, 'file'),
+                threadId: readFragmentParam(window.location.hash, 'thread'),
+            });
+        };
+        window.addEventListener('hashchange', read);
+        return () => {
+            window.removeEventListener('hashchange', read);
+        };
+    }, []);
 
     if (state.error !== null || state.loaded === null) {
         // `__main` defines the column. Without it the toolbar and status would line up horizontally, since `.full-diff`
@@ -158,6 +204,7 @@ export function FullDiffView({ token, prKey, session, progressRevision }: FullDi
             diff={state.loaded.diff}
             lenses={state.loaded.lenses}
             progress={state.loaded.progress}
+            threads={state.loaded.threads}
             prKey={prKey}
             session={session}
             parse={parse}
@@ -166,7 +213,12 @@ export function FullDiffView({ token, prKey, session, progressRevision }: FullDi
             onSetViewed={writeViewed}
             reloadProgress={reloadProgress}
             progressRevision={progressRevision}
-            initialFileId={readFragmentParam(window.location.hash, 'file')}
+            reloadThreads={reloadThreads}
+            threadsRevision={threadsRevision}
+            threadTransport={threadTransport}
+            onResolveThread={resolveThread}
+            initialFileId={fragmentTarget.fileId}
+            initialThreadId={fragmentTarget.threadId}
         />
     );
 }
@@ -177,6 +229,7 @@ export interface DiffWorkspaceProps {
     readonly lenses: UiReviewLensesResponse;
     /** Initial reading progress. Without it, the store uses defaults (the gallery supplies a store). */
     readonly progress?: UiReviewProgressResponse;
+    readonly threads?: readonly Thread[];
     readonly prKey: string;
     readonly session: SessionStore;
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
@@ -188,9 +241,17 @@ export interface DiffWorkspaceProps {
     /** Refetch progress on an SSE event. Without it tabs do not converge (gallery, tests). */
     readonly reloadProgress?: () => Promise<UiReviewProgressResponse>;
     readonly progressRevision?: number | null;
+    readonly reloadThreads?: () => Promise<readonly Thread[]>;
+    readonly threadsRevision?: number | null;
+    readonly threadTransport?: ComposerTransport;
+    readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     readonly initialFileId?: string | null;
+    readonly initialThreadId?: string | null;
+    /** Fixed clock for the gallery. The application captures the time when the view mounts. */
+    readonly threadNow?: number;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
     readonly store?: DiffViewStore;
+    readonly threadStore?: ThreadStore;
     /** Directory collapse storage. `null` disables persistence (gallery, tests). */
     readonly collapsedStorage?: CollapsedStorage | null;
 }
@@ -208,8 +269,12 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onSetViewed,
         reloadProgress,
         progressRevision = null,
+        reloadThreads,
+        threadsRevision = null,
         initialFileId = null,
+        initialThreadId = null,
     } = props;
+    const [threadNow] = useState(() => props.threadNow ?? Date.now());
 
     const initialProgress = props.progress;
     const createdStore = useMemo(
@@ -222,9 +287,41 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    const fileIds = useMemo(() => new Set(diff.files.map((file) => file.fileId)), [diff.files]);
+    const initialThreads = props.threads ?? EMPTY_THREADS;
+    const threadStore = useMemo(
+        () => props.threadStore ?? persistentThreadStore(prKey, diff.diffId, initialThreads, fileIds),
+        [diff.diffId, fileIds, initialThreads, prKey, props.threadStore],
+    );
+    useEffect(() => {
+        if (props.threads !== undefined) {
+            threadStore.setServerThreads(props.threads);
+        }
+    }, [props.threads, threadStore]);
+    const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
+    const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
+    const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
+    const resolvedWriter = useMemo(
+        () =>
+            threadResolvedWriterFor(threadStore, {
+                read: (threadId) => threadStore.getSnapshot().threads.find((thread) => thread.id === threadId)?.resolved ?? false,
+                readConfirmed: threadStore.getServerResolved,
+                apply: (threadId, resolved) => {
+                    threadStore.setResolved(threadId, resolved);
+                },
+                rollback: threadStore.restoreResolved,
+                shouldRollback: (threadId) => threadStore.hasResolvedOverride(threadId),
+                send: resolveThread,
+            }),
+        [resolveThread, threadStore],
+    );
+    const threadActions = useMemo<ThreadActions>(
+        () => ({ transport: threadTransport, resolve: resolvedWriter.write }),
+        [resolvedWriter, threadTransport],
+    );
     const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
 
-    const { filter: filterId } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
         () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
         [diff.files, lenses],
@@ -321,7 +418,49 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         };
     }, [progressRevision, writesSettled, reloadProgress, store, writer]);
 
+    const seenThreadsRevision = useRef<number | null>(null);
+    const [threadsReloadAttempt, setThreadsReloadAttempt] = useState(0);
+    useEffect(() => {
+        if (
+            reloadThreads === undefined ||
+            threadsRevision === null ||
+            threadsRevision === seenThreadsRevision.current
+        ) {
+            return;
+        }
+        let alive = true;
+        let retry: ReturnType<typeof setTimeout> | null = null;
+        void reloadThreads().then(
+            (threads) => {
+                if (alive) {
+                    threadStore.setServerThreads(threads);
+                    seenThreadsRevision.current = threadsRevision;
+                    setThreadsReloadAttempt(0);
+                }
+            },
+            () => {
+                if (alive) {
+                    // The revision was not marked as seen: retry the same snapshot without a new host write.
+                    retry = setTimeout(() => {
+                        setThreadsReloadAttempt((attempt) => attempt + 1);
+                    }, Math.min(1000 * 2 ** threadsReloadAttempt, 15_000));
+                }
+            },
+        );
+        return () => {
+            alive = false;
+            if (retry !== null) {
+                clearTimeout(retry);
+            }
+        };
+    }, [reloadThreads, threadStore, threadsReloadAttempt, threadsRevision]);
+
     const listRef = useRef<DiffListHandle | null>(null);
+    const linkedThread = useMemo(
+        () => threadSnapshot.threads.find((thread) => thread.id === initialThreadId) ?? null,
+        [initialThreadId, threadSnapshot.threads],
+    );
+    const linkedFileId = linkedThread?.anchor?.fileId ?? null;
     const [topFileId, setTopFileId] = useState<string | null>(null);
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
     const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -366,9 +505,53 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         if (ids === null) {
             return diff.files;
         }
-        return diff.files.filter((file) => ids.has(file.fileId) || file.fileId === keptFileId);
-    }, [diff.files, filter, keptFileId]);
+        return diff.files.filter(
+            (file) =>
+                ids.has(file.fileId) ||
+                file.fileId === keptFileId ||
+                file.fileId === linkedFileId ||
+                file.fileId === initialFileId,
+        );
+    }, [diff.files, filter, initialFileId, keptFileId, linkedFileId]);
     const treeFiles = useMemo(() => filterFiles(diff.files, filter), [diff.files, filter]);
+
+    useEffect(() => {
+        if (initialThreadId === null) {
+            return;
+        }
+        if (linkedFileId !== null) {
+            listRef.current?.scrollToFile(linkedFileId);
+        }
+        const selector = `#thread-${CSS.escape(initialThreadId)}`;
+        const scroll = (): boolean => {
+            const element = document.querySelector<HTMLElement>(selector);
+            if (element === null) {
+                return false;
+            }
+            element.scrollIntoView({ block: 'center' });
+            element.focus({ preventScroll: true });
+            return true;
+        };
+        if (scroll()) {
+            return;
+        }
+        const observer = new MutationObserver(() => {
+            if (scroll()) {
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        return () => {
+            observer.disconnect();
+        };
+    }, [
+        initialThreadId,
+        linkedFileId,
+        shown,
+        snapshot.expansion,
+        snapshot.models,
+        snapshot.whitespaceShown,
+    ]);
 
     // Use an effect instead of a handler call: by this point the list has rerendered with the new set
     // of files, and its imperative API knows the right index.
@@ -423,6 +606,55 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [only],
     );
 
+    const [focusedLine, setFocusedLine] = useState<{
+        fileId: string;
+        side: 'old' | 'new';
+        line: number;
+    } | null>(null);
+    const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
+    const focusLine = useCallback((fileId: string, side: 'old' | 'new', line: number) => {
+        setFocusedLine({ fileId, side, line });
+    }, []);
+    const blurLine = useCallback(() => {
+        setFocusedLine(null);
+    }, []);
+    const commentLine = useCallback(
+        (fileId: string, side: 'old' | 'new', line: number) => {
+            const file = diff.files.find((candidate) => candidate.fileId === fileId);
+            if (file === undefined) {
+                return;
+            }
+            const position = commentPosition(snapshot.selection, fileId, side, line);
+            const key = `new:${fileId}:${position.side}:${String(position.line)}`;
+            openNewComposer(threadStore, key, { fileId, path: file.path, position });
+        },
+        [diff.files, snapshot.selection, threadStore],
+    );
+
+    useShortcut({
+        id: 'thread.commentLine',
+        keys: ['c'],
+        label: 'Comment on the line under the cursor',
+        when: () => focusedLine !== null,
+        action: () => {
+            if (focusedLine !== null) {
+                commentLine(focusedLine.fileId, focusedLine.side, focusedLine.line);
+            }
+        },
+    });
+    useShortcut({
+        id: 'thread.reply',
+        keys: ['r'],
+        label: 'Reply to the thread under the cursor',
+        when: () => focusedThreadId !== null,
+        action: () => {
+            const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
+            if (thread !== undefined) {
+                openReply(threadStore, thread);
+            }
+        },
+    });
+
     const searchRef = useRef<HTMLInputElement | null>(null);
     useShortcut({
         id: 'diff.filterFiles',
@@ -437,6 +669,14 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     // panel already explains that, so there is no need for two in a row.
     const pciStats = pci === null ? null : filterStats(diff.files, pci);
     const auditVisible = filter.id === PCI_FILTER_ID && !bannerDismissed && (pciStats?.files ?? 0) > 0;
+    const threadCounts = countThreadSources(threadSnapshot.threads);
+    const threadVisible = useCallback(
+        (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadsShow),
+        [initialThreadId, threadsShow],
+    );
+    const outsideThreads = threadSnapshot.outside.filter(
+        (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
+    );
 
     return (
         <main className="full-diff">
@@ -501,6 +741,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     filter={filter}
                     onFilter={changeFilter}
                     shown={treeFiles.length}
+                    threadsShow={threadsShow}
+                    threadCounts={threadCounts}
+                    onThreadsShow={session.setThreadsShow}
                 />
 
                 {/* An empty result describes the filter, not the list. Its explanation sits next to
@@ -531,7 +774,25 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     loadContent={loadContent}
                     onOpenInEditor={onOpenInEditor}
                     onViewed={markViewed}
-                    initialFileId={initialFileId}
+                    threadStore={threadStore}
+                    threadActions={threadActions}
+                    threadVisible={threadVisible}
+                    onCommentLine={commentLine}
+                    onLineFocus={focusLine}
+                    onLineBlur={blurLine}
+                    onFocusThread={setFocusedThreadId}
+                    threadNow={threadNow}
+                    outsideThreads={
+                        <OutsideThreads
+                            threads={outsideThreads}
+                            store={threadStore}
+                            actions={threadActions}
+                            now={threadNow}
+                            initialThreadId={initialThreadId}
+                            onFocusThread={setFocusedThreadId}
+                        />
+                    }
+                    initialFileId={linkedFileId ?? initialFileId}
                     keptFileId={keptFileId}
                     onTopFileChange={setTopFileId}
                     onScroll={onScroll}
@@ -548,14 +809,21 @@ function Toolbar({
     filter,
     onFilter,
     shown,
+    threadsShow,
+    threadCounts,
+    onThreadsShow,
 }: {
     store: DiffViewStore;
     filters: readonly FileFilter[];
     filter: FileFilter;
     onFilter: (id: string) => void;
     shown: number;
+    threadsShow: ThreadsShow;
+    threadCounts: ThreadSourceCounts;
+    onThreadsShow: (show: ThreadsShow) => void;
 }) {
     const { diffMode, splitAvailable, effectiveMode } = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    const [hiddenBackup, setHiddenBackup] = useState<ThreadsShow | null>(null);
 
     return (
         <div className="full-diff__toolbar">
@@ -577,12 +845,123 @@ function Toolbar({
             >
                 ⇄ {effectiveMode === 'unified' ? 'unified' : 'side by side'}
             </button>
+            <span className="full-diff__comments-label">Comments:</span>
+            {!threadsShow.people && !threadsShow.bots && !threadsShow.resolved ? (
+                <span className="thread-chips-hidden">
+                    Comments hidden ·{' '}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onThreadsShow(hiddenBackup ?? { people: true, bots: false, resolved: false });
+                            setHiddenBackup(null);
+                        }}
+                    >
+                        undo
+                    </button>
+                </span>
+            ) : (
+                <CommentSourceChips
+                    show={threadsShow}
+                    counts={threadCounts}
+                    onChange={(next) => {
+                        if (!next.people && !next.bots && !next.resolved) {
+                            setHiddenBackup(threadsShow);
+                        }
+                        onThreadsShow(next);
+                    }}
+                />
+            )}
             <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
             <span className="full-diff__count">
                 {formatCount(shown)} {plural(shown, 'file', 'files', 'files')}
             </span>
         </div>
     );
+}
+
+function CommentSourceChips({
+    show,
+    counts,
+    onChange,
+}: {
+    show: ThreadsShow;
+    counts: ThreadSourceCounts;
+    onChange: (show: ThreadsShow) => void;
+}) {
+    const chips = [
+        { id: 'people' as const, label: 'People' },
+        { id: 'bots' as const, label: 'Bots' },
+        { id: 'resolved' as const, label: 'Resolved' },
+    ];
+    return (
+        <span className="thread-chips" aria-label="Comment sources">
+            {chips.map((chip) => {
+                const count = counts[chip.id];
+                return (
+                    <button
+                        key={chip.id}
+                        type="button"
+                        className={`thread-chip${show[chip.id] ? ' is-on' : ''}`}
+                        aria-pressed={show[chip.id]}
+                        disabled={count === 0}
+                        title={count === 0 ? `This PR has no threads in the "${chip.label}" category` : undefined}
+                        onClick={() => {
+                            onChange({ ...show, [chip.id]: !show[chip.id] });
+                        }}
+                    >
+                        {chip.label} {count}
+                    </button>
+                );
+            })}
+        </span>
+    );
+}
+
+const EMPTY_THREADS: readonly Thread[] = [];
+
+const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
+    save: () => Promise.reject(new Error('draft writing is unavailable in this state')),
+    update: () => Promise.reject(new Error('draft writing is unavailable in this state')),
+    delete: () => Promise.reject(new Error('draft writing is unavailable in this state')),
+};
+const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
+
+export function commentPosition(
+    selection: { fileId: string; anchor: string; focus: string } | null,
+    fileId: string,
+    side: 'old' | 'new',
+    line: number,
+): { side: 'old' | 'new'; line: number; size: number } {
+    if (selection?.fileId !== fileId) {
+        return { side, line, size: 1 };
+    }
+    const first = lineOfKey(selection.anchor, side);
+    const last = lineOfKey(selection.focus, side);
+    if (first === null || last === null) {
+        return { side, line, size: 1 };
+    }
+    const start = Math.min(first, last);
+    const end = Math.max(first, last);
+    if (line < start || line > end) {
+        return { side, line, size: 1 };
+    }
+    return { side, line: start, size: end - start + 1 };
+}
+
+function lineOfKey(key: string, side: 'old' | 'new'): number | null {
+    const add = /^a(\d+)$/.exec(key);
+    if (add !== null) {
+        return side === 'new' ? Number(add[1]) : null;
+    }
+    const del = /^d(\d+)$/.exec(key);
+    if (del !== null) {
+        return side === 'old' ? Number(del[1]) : null;
+    }
+    const context = /^c(\d+):(\d+)$/.exec(key);
+    if (context === null) {
+        return null;
+    }
+    return Number(context[side === 'old' ? 1 : 2]);
 }
 
 function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {

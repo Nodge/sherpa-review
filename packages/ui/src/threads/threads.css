@@ -1,0 +1,271 @@
+/* Review threads inside diff cards. README §3 and SPEC §2.17. */
+
+.thread-list {
+    border-top: 1px solid var(--border-hairline-strong);
+}
+
+.thread {
+    position: relative;
+    background: var(--surface-card-header);
+    color: var(--text-body);
+    outline: none;
+    transition: background var(--motion-hover) var(--motion-hover-ease);
+}
+
+.thread + .thread {
+    border-top: 1px solid var(--border-hairline-strong);
+}
+
+.thread:hover,
+.thread:focus-within {
+    background: var(--surface-raised);
+}
+
+.thread--bot {
+    background: var(--surface-panel-deep);
+    opacity: 0.72;
+}
+
+.thread--resolved {
+    background: var(--surface-panel);
+    opacity: 0.72;
+}
+
+.thread__row {
+    padding: 10px 12px 11px;
+}
+
+.thread__row--reply {
+    border-left: 1px solid var(--border-standard);
+}
+
+.thread__reply-hint {
+    margin-bottom: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-scope);
+    color: var(--text-dim-strong);
+}
+
+.thread__author-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.thread__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--surface-segment-active);
+    font-size: var(--font-size-scope);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.thread__avatar--bot {
+    border-radius: var(--radius-key);
+}
+
+.thread__author {
+    font-size: var(--font-size-secondary);
+    font-weight: 500;
+    color: var(--text-primary-soft);
+}
+
+.thread__meta,
+.thread__reply-count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim);
+}
+
+.thread__reply-toggle {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.thread__chip {
+    padding: 1px 5px;
+    border: 1px solid var(--border-strong-lifted);
+    border-radius: var(--radius-key);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-muted);
+}
+
+.thread__chip--draft {
+    border-color: var(--attention-border);
+    background: var(--attention-surface);
+    color: var(--attention-text);
+}
+
+.thread__spacer {
+    flex: 1;
+}
+
+.thread__body {
+    margin: 6px 0 0 25px;
+    white-space: pre-wrap;
+    font-size: var(--font-size-ui);
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.thread__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-inner);
+    min-height: 24px;
+    padding: 0 12px 8px;
+    opacity: 0;
+    transition: opacity var(--motion-hover) var(--motion-hover-ease);
+}
+
+.thread:hover .thread__actions,
+.thread:focus-within .thread__actions,
+.thread__actions--undo {
+    opacity: 1;
+}
+
+.thread__actions button,
+.thread__more,
+.thread__undo button,
+.thread-composer button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    cursor: pointer;
+}
+
+.thread__actions button:hover,
+.thread__more:hover,
+.thread-composer button:hover {
+    color: var(--text-muted);
+}
+
+.thread__undo {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--diff-add-text-strong);
+}
+
+.thread__more {
+    margin: 0 12px 8px 37px;
+    font-family: var(--font-mono);
+}
+
+.thread-composer {
+    padding: 0 12px 10px 37px;
+}
+
+.thread-composer__input {
+    display: block;
+    width: 100%;
+    min-height: 70px;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+    background: var(--surface-input);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-ui);
+    line-height: 1.5;
+    color: var(--text-primary-soft);
+}
+
+.thread-composer__input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.thread-composer__status,
+.thread-composer__confirm,
+.thread-composer__notice {
+    margin: 4px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim);
+}
+
+.thread-composer__status.is-error {
+    color: var(--error-text);
+}
+
+.thread-composer__notice {
+    margin: 0 0 6px;
+    padding: 5px 7px;
+    border-left: 2px solid var(--attention-border-strong);
+    background: var(--attention-surface-alt);
+    color: var(--attention-text-soft);
+}
+
+.diff-row-extra {
+    border-top: 1px solid var(--border-hairline-strong);
+}
+
+.diff-row__comment {
+    position: absolute;
+    left: 79px;
+    top: 2px;
+    z-index: 1;
+    padding: 0 3px;
+    border: 0;
+    border-radius: var(--radius-mark);
+    background: var(--surface-raised);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--accent-hover);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.diff-row:hover .diff-row__comment,
+.diff-row:focus-within .diff-row__comment {
+    opacity: 1;
+}
+
+.diff-row__comment--old {
+    left: 32px;
+}
+
+.diff-row__comment--new {
+    left: calc(50% + 32px);
+}
+
+.thread-outside {
+    margin: var(--space-card) var(--space-page) var(--space-page);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-panel);
+    overflow: clip;
+}
+
+.thread-outside__toggle {
+    width: 100%;
+    padding: 10px 13px;
+    border: 0;
+    background: var(--surface-card-header);
+    text-align: left;
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.thread-fade {
+    animation: thread-fade 200ms ease-out;
+}
+
+@keyframes thread-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

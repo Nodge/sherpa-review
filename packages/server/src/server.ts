@@ -200,6 +200,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             }),
             ...createReviewRoutes({
                 host: reviewHost?.host ?? null,
+                reviewFeed,
                 progress,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),

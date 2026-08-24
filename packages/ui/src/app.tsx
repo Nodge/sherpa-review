@@ -72,6 +72,7 @@ export function App({ store, session, token }: AppProps) {
                     prKey={state.prKey}
                     session={session}
                     progressRevision={snapshot.progressRevision}
+                    threadsRevision={snapshot.threadsRevision}
                 />
             ) : (
                 <ViewFrame view={view} />

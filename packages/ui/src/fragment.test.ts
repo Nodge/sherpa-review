@@ -40,6 +40,12 @@ describe('updateFragment', () => {
         expect(updateFragment('#token=abc&view=overview', { view: 'diff' })).toBe('#token=abc&view=diff');
     });
 
+    it('a thread link preserves token and view but removes the conflicting file target', () => {
+        expect(updateFragment('#token=abc&view=diff&file=f1', { thread: 'thread-7', file: null })).toBe(
+            '#token=abc&view=diff&thread=thread-7',
+        );
+    });
+
     it('null removes a parameter', () => {
         expect(updateFragment('#token=abc&view=diff', { view: null })).toBe('#token=abc');
     });

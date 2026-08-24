@@ -16,6 +16,8 @@ import {
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
+    uiReviewWriteAckSchema,
+    uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
     uiReviewThreadsResponseSchema,
     uiStateSchema,
@@ -274,6 +276,237 @@ describe('server review endpoints', () => {
         const body = rpcErrorSchema.parse(await response.json());
         expect(body.error.code).toBe('host_unavailable');
         expect(body.error.message).toContain('host is down');
+    });
+
+    describe('thread writes', () => {
+        it('save returns the created Comment and the draft appears in the snapshot', async () => {
+            const server = await start(FIXTURE_PR);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'new draft', parentId: null, anchor: null } },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            const { comment } = uiSaveDraftResponseSchema.parse(await response.json());
+            expect(comment).toMatchObject({ body: 'new draft', draft: true });
+            const threads = uiReviewThreadsResponseSchema.parse(
+                await (await get(server.port, UI_ENDPOINTS.reviewThreads, server.token)).json(),
+            );
+            expect(threads.threads.some((thread) => thread.root.id === comment.id)).toBe(true);
+        });
+
+        it('update and delete forward directly to the host', async () => {
+            const host = makeFixtureHost('medium');
+            const update = vi.spyOn(host, 'updateDraft');
+            const remove = vi.spyOn(host, 'deleteDraft');
+            const server = await start(FIXTURE_PR, host);
+            const created = uiSaveDraftResponseSchema.parse(
+                await (
+                    await postJson(
+                        server.port,
+                        UI_ENDPOINTS.reviewSaveDraft,
+                        { draft: { body: 'draft', parentId: null, anchor: null } },
+                        server.token,
+                    )
+                ).json(),
+            ).comment;
+
+            const updated = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewUpdateDraft,
+                { commentId: created.id, body: 'revised draft' },
+                server.token,
+            );
+            expect(uiReviewWriteAckSchema.parse(await updated.json())).toEqual({ acknowledged: true });
+            expect(update).toHaveBeenCalledWith(created.id, 'revised draft');
+
+            const deleted = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewDeleteDraft,
+                { commentId: created.id },
+                server.token,
+            );
+            expect(uiReviewWriteAckSchema.parse(await deleted.json())).toEqual({ acknowledged: true });
+            expect(remove).toHaveBeenCalledWith(created.id);
+        });
+
+        it('two updates to one draft reach the host in order', async () => {
+            const host = makeFixtureHost('medium');
+            const created = await host.saveDraft({ body: 'original', parentId: null, anchor: null });
+            const original = host.updateDraft.bind(host);
+            const applied: string[] = [];
+            let releaseFirst!: () => void;
+            const firstGate = new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+            });
+            host.updateDraft = async (commentId, body) => {
+                applied.push(body);
+                if (body === 'old text') {
+                    await firstGate;
+                }
+                await original(commentId, body);
+            };
+            const server = await start(FIXTURE_PR, host);
+
+            const first = postJson(
+                server.port,
+                UI_ENDPOINTS.reviewUpdateDraft,
+                { commentId: created.id, body: 'old text' },
+                server.token,
+            );
+            await expect.poll(() => applied).toEqual(['old text']);
+            const second = postJson(
+                server.port,
+                UI_ENDPOINTS.reviewUpdateDraft,
+                { commentId: created.id, body: 'new text' },
+                server.token,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(applied).toEqual(['old text']);
+
+            releaseFirst();
+            expect((await first).status).toBe(200);
+            expect((await second).status).toBe(200);
+            expect(applied).toEqual(['old text', 'new text']);
+        });
+
+        it('an indeterminate delete response counts as success if the draft is already gone', async () => {
+            const host = makeFixtureHost('medium');
+            const created = await host.saveDraft({ body: 'delete', parentId: null, anchor: null });
+            const original = host.deleteDraft.bind(host);
+            host.deleteDraft = async (commentId) => {
+                await original(commentId);
+                throw new Error('response lost');
+            };
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewDeleteDraft,
+                { commentId: created.id },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+        });
+
+        it('resolve calls setThreadResolved', async () => {
+            const host = makeFixtureHost('medium');
+            const resolve = vi.spyOn(host, 'setThreadResolved');
+            const target = (await host.getThreads()).find((thread) => !thread.resolved);
+            if (target === undefined) {
+                throw new Error('the fixture has no open thread');
+            }
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewThreadResolved,
+                { threadId: target.id, resolved: true },
+                server.token,
+            );
+
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+            expect(resolve).toHaveBeenCalledWith(target.id, true);
+        });
+
+        it('resolve and undo on one thread reach the host in order', async () => {
+            const host = makeFixtureHost('medium');
+            const target = (await host.getThreads()).find((thread) => !thread.resolved);
+            if (target === undefined) {
+                throw new Error('the fixture has no open thread');
+            }
+            const original = host.setThreadResolved.bind(host);
+            const applied: boolean[] = [];
+            let releaseFirst!: () => void;
+            const firstGate = new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+            });
+            host.setThreadResolved = async (threadId, resolved) => {
+                applied.push(resolved);
+                if (resolved) {
+                    await firstGate;
+                }
+                await original(threadId, resolved);
+            };
+            const server = await start(FIXTURE_PR, host);
+
+            const first = postJson(
+                server.port,
+                UI_ENDPOINTS.reviewThreadResolved,
+                { threadId: target.id, resolved: true },
+                server.token,
+            );
+            await expect.poll(() => applied).toEqual([true]);
+            const second = postJson(
+                server.port,
+                UI_ENDPOINTS.reviewThreadResolved,
+                { threadId: target.id, resolved: false },
+                server.token,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(applied).toEqual([true]);
+
+            releaseFirst();
+            expect((await first).status).toBe(200);
+            expect((await second).status).toBe(200);
+            expect(applied).toEqual([true, false]);
+            expect((await host.getThreads()).find((thread) => thread.id === target.id)?.resolved).toBe(false);
+        });
+
+        it('a write endpoint returns no_review_host without a host', async () => {
+            const server = await start(UNKNOWN_PR);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'nowhere to save', parentId: null, anchor: null } },
+                server.token,
+            );
+
+            expect(response.status).toBe(404);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
+        });
+
+        it('a host write method error reaches the client as host_unavailable', async () => {
+            const host = makeFixtureHost('medium');
+            host.saveDraft = () => Promise.reject(new Error('drafts temporarily unavailable'));
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'will not be saved', parentId: null, anchor: null } },
+                server.token,
+            );
+
+            expect(response.status).toBe(502);
+            const body = rpcErrorSchema.parse(await response.json());
+            expect(body.error.code).toBe('host_unavailable');
+            expect(body.error.message).toContain('drafts temporarily unavailable');
+        });
+
+        it('a successful write immediately advances the review feed revision', async () => {
+            const host = makeFixtureHost('medium');
+            const server = await start(FIXTURE_PR, host);
+            const stream = await openEvents(server);
+            expect((await stream.next()).event).toBe(UI_STATE_EVENT);
+            await nextReview(stream);
+            const started = await nextReview(stream);
+
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'local revision bump', parentId: null, anchor: null } },
+                server.token,
+            );
+
+            expect((await nextReview(stream)).threadsRevision).toBeGreaterThan(started.threadsRevision);
+        });
     });
 
     describe('reading progress', () => {

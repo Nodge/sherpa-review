@@ -1,14 +1,21 @@
-import type { FileContent, FileDiff } from '@sherpa/protocol';
+import type { FileContent, FileDiff, Thread } from '@sherpa/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { Ref } from 'react';
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { ReactNode, Ref } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
 import { updateFragment } from '../fragment.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { readStateOf as computeReadState } from '../progress/read-state.js';
+import { placeThreadsOnVisibleLines } from '../threads/model.js';
+import type { ThreadActions } from '../threads/thread-list.tsx';
+import { NewCommentComposer, ThreadList } from '../threads/thread-list.tsx';
+import { createThreadStore } from '../threads/store.js';
+import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
 import type { ExpandAmount } from './expand.js';
+import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
+import type { LineSelection } from './selection.js';
 import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
 import type { DiffViewStore } from './store.js';
 
@@ -47,6 +54,15 @@ export interface DiffFileListProps {
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     /** Viewed mark. The view owns the optimistic write, the list only calls it. */
     readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
+    readonly threadStore?: ThreadStore | undefined;
+    readonly threadActions?: ThreadActions | undefined;
+    readonly threadVisible?: ((thread: Thread) => boolean) | undefined;
+    readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineBlur?: (() => void) | undefined;
+    readonly onFocusThread?: ((threadId: string | null) => void) | undefined;
+    readonly threadNow?: number | undefined;
+    readonly outsideThreads?: ReactNode;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
     /**
@@ -72,6 +88,15 @@ export function DiffFileList({
     loadContent,
     onOpenInEditor,
     onViewed,
+    threadStore = EMPTY_THREAD_STORE,
+    threadActions = EMPTY_THREAD_ACTIONS,
+    threadVisible = HIDE_THREAD,
+    onCommentLine = NOOP_LINE,
+    onLineFocus = NOOP_LINE,
+    onLineBlur = NOOP,
+    onFocusThread = NOOP_THREAD,
+    threadNow: providedThreadNow,
+    outsideThreads = null,
     initialFileId = null,
     keptFileId = null,
     onTopFileChange,
@@ -79,6 +104,10 @@ export function DiffFileList({
     ref,
 }: DiffFileListProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
+    const composersSnapshot = useSyncExternalStore(threadStore.subscribeComposers, threadStore.getComposersSnapshot);
+    const threadNowRef = useRef(providedThreadNow ?? Date.now());
+    const threadNow = providedThreadNow ?? threadNowRef.current;
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const requested = useRef(new Set<string>());
     // Files whose parsing failed. Only an explicit reviewer retry will parse them again.
@@ -194,30 +223,54 @@ export function DiffFileList({
         [virtualizer],
     );
 
+    const focusCheck = useRef<number | null>(null);
     const handleScroll = useCallback(() => {
         if (settling.current === 0) {
             onScroll?.();
         }
-    }, [onScroll]);
+        if (focusCheck.current !== null) {
+            cancelAnimationFrame(focusCheck.current);
+        }
+        focusCheck.current = requestAnimationFrame(() => {
+            focusCheck.current = null;
+            const active = document.activeElement;
+            if (!(active instanceof HTMLElement) || active.closest('.diff-row') === null) {
+                onLineBlur();
+            }
+        });
+    }, [onLineBlur, onScroll]);
+    useEffect(
+        () => () => {
+            if (focusCheck.current !== null) {
+                cancelAnimationFrame(focusCheck.current);
+            }
+        },
+        [],
+    );
 
     // A file link (`#file=`) opens the diff scrolled to that file.
-    const scrolled = useRef(false);
+    const scrolled = useRef<string | null>(null);
     useEffect(() => {
-        if (scrolled.current || initialFileId === null) {
+        if (initialFileId === null) {
+            scrolled.current = null;
             return;
         }
-        const index = files.findIndex((file) => file.fileId === initialFileId);
-        scrolled.current = true;
+        if (scrolled.current === initialFileId) {
+            return;
+        }
+        const target = initialFileId;
+        const index = files.findIndex((file) => file.fileId === target);
         if (index < 0) {
             return;
         }
+        scrolled.current = target;
 
         const run = converge(index);
         return () => {
             // Adjustment was interrupted before completion (StrictMode unmounts effects twice), so
             // scrolling did not finish and the next pass must repeat it.
-            if (!run.cancel()) {
-                scrolled.current = false;
+            if (!run.cancel() && scrolled.current === target) {
+                scrolled.current = null;
             }
         };
     }, [files, initialFileId, converge]);
@@ -286,6 +339,7 @@ export function DiffFileList({
             onExpand: expand,
             onRetryParse: retryParse,
             onOpenFile: store.openFile,
+            onShowWhitespace: store.showWhitespace,
             onSelectStart: (fileId, key, extend) => {
                 if (extend) {
                     store.extendSelection(fileId, key);
@@ -296,8 +350,11 @@ export function DiffFileList({
             onSelectExtend: store.extendSelection,
             onOpenInEditor,
             onCopyLink: copyFileLink,
+            onCommentLine,
+            onLineFocus,
+            onLineBlur,
         }),
-        [expand, onOpenInEditor, onViewed, retryParse, store],
+        [expand, onCommentLine, onLineBlur, onLineFocus, onOpenInEditor, onViewed, retryParse, store],
     );
 
     return (
@@ -309,37 +366,234 @@ export function DiffFileList({
                         return null;
                     }
                     return (
-                        <div
+                        <VirtualFileCard
                             key={file.fileId}
-                            className="diff-list__item"
-                            data-index={item.index}
-                            ref={virtualizer.measureElement}
-                            // Position with `top` rather than `transform`: the card's sticky header
-                            // uses its layout position, so a transformed card's header
-                            // sticks at the card's bottom instead of the screen's top edge.
-                            style={{ top: `${String(item.start)}px` }}
-                        >
-                            <FileCard
-                                file={file}
-                                model={snapshot.models.get(file.fileId) ?? null}
-                                parseError={parseErrors.get(file.fileId) ?? null}
-                                mode={snapshot.effectiveMode}
-                                content={snapshot.content.get(file.fileId)}
-                                contentAvailable={contentAvailable}
-                                expansion={snapshot.expansion.get(file.fileId) ?? 0}
-                                read={readStateOf(snapshot, file)}
-                                opened={snapshot.opened.has(file.fileId)}
-                                keptInView={file.fileId === keptFileId}
-                                selection={
-                                    snapshot.selection?.fileId === file.fileId ? snapshot.selection : null
-                                }
-                                actions={actions}
-                            />
-                        </div>
+                            file={file}
+                            index={item.index}
+                            start={item.start}
+                            measure={virtualizer.measureElement}
+                            model={snapshot.models.get(file.fileId) ?? null}
+                            parseError={parseErrors.get(file.fileId) ?? null}
+                            mode={snapshot.effectiveMode}
+                            content={snapshot.content.get(file.fileId)}
+                            contentAvailable={contentAvailable}
+                            expansion={snapshot.expansion.get(file.fileId) ?? 0}
+                            read={readStateOf(snapshot, file)}
+                            opened={snapshot.opened.has(file.fileId)}
+                            showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
+                            keptInView={file.fileId === keptFileId}
+                            selection={snapshot.selection?.fileId === file.fileId ? snapshot.selection : null}
+                            threads={threadSnapshot.byFile.get(file.fileId) ?? EMPTY_THREADS}
+                            keptThreadIds={threadSnapshot.keptByFile.get(file.fileId) ?? EMPTY_THREAD_IDS}
+                            composers={composersSnapshot.byFile.get(file.fileId) ?? EMPTY_COMPOSERS}
+                            threadVisible={threadVisible}
+                            threadStore={threadStore}
+                            threadActions={threadActions}
+                            threadNow={threadNow}
+                            onFocusThread={onFocusThread}
+                            actions={actions}
+                        />
                     );
                 })}
             </div>
+            {outsideThreads}
         </div>
+    );
+}
+
+const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();
+const EMPTY_COMPOSERS: readonly ComposerSnapshot[] = [];
+
+const VirtualFileCard = memo(function VirtualFileCard({
+    file,
+    index,
+    start,
+    measure,
+    model,
+    parseError,
+    mode,
+    content,
+    contentAvailable,
+    expansion,
+    read,
+    opened,
+    showWhitespace,
+    keptInView,
+    selection,
+    threads,
+    keptThreadIds,
+    composers,
+    threadVisible,
+    threadStore,
+    threadActions,
+    threadNow,
+    onFocusThread,
+    actions,
+}: {
+    file: FileDiff;
+    index: number;
+    start: number;
+    measure: (element: HTMLDivElement | null) => void;
+    model: DiffFileModel | null;
+    parseError: string | null;
+    mode: 'unified' | 'split';
+    content: FileContent | null | undefined;
+    contentAvailable: boolean;
+    expansion: ExpandAmount;
+    read: FileReadState;
+    opened: boolean;
+    showWhitespace: boolean;
+    keptInView: boolean;
+    selection: LineSelection | null;
+    threads: readonly Thread[];
+    keptThreadIds: ReadonlySet<string>;
+    composers: readonly ComposerSnapshot[];
+    threadVisible: (thread: Thread) => boolean;
+    threadStore: ThreadStore;
+    threadActions: ThreadActions;
+    threadNow: number;
+    onFocusThread: (threadId: string | null) => void;
+    actions: FileCardActions;
+}) {
+    const shownModel = useMemo(
+        () => (model === null ? null : expandFileContext(model, content ?? null, expansion)),
+        [content, expansion, model],
+    );
+    const visibleThreads = useMemo(
+        () => threads.filter((thread) => keptThreadIds.has(thread.id) || threadVisible(thread)),
+        [keptThreadIds, threadVisible, threads],
+    );
+    const changed = (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions);
+    const canRenderRows =
+        parseError === null &&
+        shownModel?.content.kind === 'text' &&
+        (!shownModel.whitespaceOnly || showWhitespace) &&
+        (opened || changed <= COLLAPSE_THRESHOLD);
+    const layout = useMemo(() => {
+        const underHeader = visibleThreads.filter(
+            (thread) => thread.outdated || thread.anchor?.position === null,
+        );
+        const positional = visibleThreads.filter(
+            (thread) => !thread.outdated && thread.anchor?.position !== null,
+        );
+        const placed = canRenderRows
+            ? placeThreadsOnVisibleLines(shownModel, positional)
+            : { byLine: new Map<string, readonly Thread[]>(), unplaced: positional };
+        return { byLine: placed.byLine, underHeader: [...underHeader, ...placed.unplaced] };
+    }, [canRenderRows, shownModel, visibleThreads]);
+
+    const composerLayout = useMemo(() => {
+        const byLine: ComposerSnapshot[] = [];
+        const underHeader: ComposerSnapshot[] = [];
+        for (const composer of composers) {
+            const position = composer.anchor?.position;
+            if (canRenderRows && position !== null && position !== undefined && modelHasPosition(shownModel, position.side, position.line)) {
+                byLine.push(composer);
+            } else {
+                underHeader.push(composer);
+            }
+        }
+        return { byLine, underHeader };
+    }, [canRenderRows, composers, shownModel]);
+    const threadsUnderHeader = useMemo(
+        () =>
+            layout.underHeader.length === 0 && composerLayout.underHeader.length === 0 ? null : (
+                <>
+                    {layout.underHeader.length === 0 ? null : (
+                        <ThreadList
+                            threads={layout.underHeader}
+                            store={threadStore}
+                            actions={threadActions}
+                            now={threadNow}
+                            onFocusThread={onFocusThread}
+                        />
+                    )}
+                    {composerLayout.underHeader.map((composer) => (
+                        <div key={composer.key} className="diff-row-extra thread-fade">
+                            <NewCommentComposer
+                                composerKey={composer.key}
+                                store={threadStore}
+                                transport={threadActions.transport}
+                            />
+                        </div>
+                    ))}
+                </>
+            ),
+        [composerLayout.underHeader, layout.underHeader, onFocusThread, threadActions, threadNow, threadStore],
+    );
+    const renderAfterLine = useCallback(
+        (side: 'old' | 'new', line: number): ReactNode => {
+            const lineThreads = layout.byLine.get(`${side}:${String(line)}`) ?? EMPTY_THREADS;
+            const composer = composerLayout.byLine.find(
+                (candidate) =>
+                    candidate.anchor?.position?.side === side && candidate.anchor.position.line === line,
+            );
+            if (lineThreads.length === 0 && composer === undefined) {
+                return null;
+            }
+            return (
+                <div className="diff-row-extra thread-fade">
+                    {lineThreads.length === 0 ? null : (
+                        <ThreadList
+                            threads={lineThreads}
+                            store={threadStore}
+                            actions={threadActions}
+                            now={threadNow}
+                            onFocusThread={onFocusThread}
+                        />
+                    )}
+                    {composer === undefined ? null : (
+                        <NewCommentComposer
+                            composerKey={composer.key}
+                            store={threadStore}
+                            transport={threadActions.transport}
+                        />
+                    )}
+                </div>
+            );
+        },
+        [composerLayout.byLine, layout.byLine, onFocusThread, threadActions, threadNow, threadStore],
+    );
+
+    return (
+        <div
+            className="diff-list__item"
+            data-index={index}
+            ref={measure}
+            // Position with `top`, not `transform`. The card's sticky header uses its layout position
+            // and would otherwise stick at its bottom instead of the top edge of the screen.
+            style={{ top: `${String(start)}px` }}
+        >
+            <FileCard
+                file={file}
+                model={model}
+                parseError={parseError}
+                mode={mode}
+                content={content}
+                contentAvailable={contentAvailable}
+                expansion={expansion}
+                read={read}
+                opened={opened}
+                showWhitespace={showWhitespace}
+                keptInView={keptInView}
+                selection={selection}
+                threadsUnderHeader={threadsUnderHeader}
+                renderAfterLine={renderAfterLine}
+                actions={actions}
+            />
+        </div>
+    );
+});
+
+function modelHasPosition(model: DiffFileModel | null, side: 'old' | 'new', line: number): boolean {
+    if (model?.content.kind !== 'text') {
+        return false;
+    }
+    return model.content.blocks.some(
+        (block) =>
+            block.kind === 'hunk' &&
+            block.lines.some((candidate) => (side === 'old' ? candidate.oldLine : candidate.newLine) === line),
     );
 }
 
@@ -410,6 +664,20 @@ function topFile(
     return null;
 }
 
+const EMPTY_THREAD_STORE = createThreadStore([], new Set());
+const EMPTY_THREAD_ACTIONS: ThreadActions = {
+    transport: {
+        save: () => Promise.reject(new Error('drafts are unavailable')),
+        update: () => Promise.reject(new Error('drafts are unavailable')),
+        delete: () => Promise.reject(new Error('drafts are unavailable')),
+    },
+    resolve: () => Promise.reject(new Error('resolve is unavailable')),
+};
+const HIDE_THREAD = (): boolean => false;
+const NOOP = (): void => undefined;
+const NOOP_LINE = (): void => undefined;
+const NOOP_THREAD = (): void => undefined;
+
 function estimateHeight(file: FileDiff | undefined): number {
     if (file === undefined) {
         return CARD_CHROME_HEIGHT;
@@ -424,7 +692,7 @@ function estimateHeight(file: FileDiff | undefined): number {
 /** A file link is the current address plus the `file` fragment parameter. */
 async function copyFileLink(fileId: string): Promise<Feedback> {
     const url = new URL(window.location.href);
-    url.hash = updateFragment(window.location.hash, { file: fileId });
+    url.hash = updateFragment(window.location.hash, { file: fileId, thread: null });
 
     try {
         await navigator.clipboard.writeText(url.toString());

@@ -40,6 +40,8 @@ export interface DiffViewSnapshot {
     readonly readState: ReadonlyMap<string, FileReadState>;
     /** Files the reviewer opened by hand despite the size-based fold (SPEC §2.13). */
     readonly opened: ReadonlySet<string>;
+    /** Whitespace-only lines the reviewer explicitly expanded. */
+    readonly whitespaceShown: ReadonlySet<string>;
     readonly selection: LineSelection | null;
 }
 
@@ -59,6 +61,7 @@ export interface DiffViewStore {
     /** Roll back an optimistic mark: `null` means no record existed before it. */
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
     readonly openFile: (fileId: string) => void;
+    readonly showWhitespace: (fileId: string) => void;
     readonly startSelection: (fileId: string, key: LineKey) => void;
     readonly extendSelection: (fileId: string, key: LineKey) => void;
     readonly clearSelection: () => void;
@@ -144,6 +147,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
         progress: initialProgress,
         readState: recomputeAll(initialProgress, new Map()),
         opened: new Set(),
+        whitespaceShown: new Set(),
         selection: null,
     };
 
@@ -237,6 +241,12 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
                 return;
             }
             update({ opened: new Set(snapshot.opened).add(fileId) });
+        },
+
+        showWhitespace: (fileId) => {
+            if (!snapshot.whitespaceShown.has(fileId)) {
+                update({ whitespaceShown: new Set(snapshot.whitespaceShown).add(fileId) });
+            }
         },
 
         startSelection: (fileId, key) => {

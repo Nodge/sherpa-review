@@ -1,5 +1,6 @@
 import type { FileContent } from '@sherpa/protocol';
-import { memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { Fragment, memo, useMemo } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
 import { formatCount, plural } from '../text.js';
@@ -41,9 +42,22 @@ export interface DiffRowsProps {
     /** Needed only to report the trailing gap length accurately. */
     readonly content: FileContent | null;
     readonly selection: LineSelection | null;
+    readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
+    readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
+    readonly onLineBlur?: (() => void) | undefined;
 }
 
-export function DiffRows({ model, mode, content, selection }: DiffRowsProps) {
+export function DiffRows({
+    model,
+    mode,
+    content,
+    selection,
+    renderAfterLine,
+    onCommentLine,
+    onLineFocus,
+    onLineBlur,
+}: DiffRowsProps) {
     // A one-sided file in split mode would leave half the card empty (README §1).
     const oneSided = model.onlyAdditions || model.onlyDeletions;
     const effective: DiffMode = mode === 'split' && !oneSided ? 'split' : 'unified';
@@ -65,24 +79,48 @@ export function DiffRows({ model, mode, content, selection }: DiffRowsProps) {
                     return <GapRow key={`gap-${String(index)}`} gap={row.gap} content={content} mode={effective} />;
                 }
                 if (row.kind === 'line') {
+                    const positions = positionsOf(row.cell);
                     return (
-                        <UnifiedRow
-                            key={`row-${String(index)}`}
-                            cell={row.cell}
-                            selected={isSelected(selected, row.cell)}
-                            hunk={row.hunk}
-                        />
+                        <Fragment key={`row-${String(index)}`}>
+                            <UnifiedRow
+                                cell={row.cell}
+                                selected={isSelected(selected, row.cell)}
+                                hunk={row.hunk}
+                                onCommentLine={onCommentLine}
+                                onLineFocus={onLineFocus}
+                                onLineBlur={onLineBlur}
+                            />
+                            {positions.map((position) => (
+                                <Fragment key={`${position.side}:${String(position.line)}`}>
+                                    {renderAfterLine?.(position.side, position.line)}
+                                </Fragment>
+                            ))}
+                        </Fragment>
                     );
                 }
+                const oldLine = row.left?.line.oldLine ?? null;
+                const newLine = row.right?.line.newLine ?? null;
+                const oldExtra = oldLine === null ? null : (renderAfterLine?.('old', oldLine) ?? null);
+                const newExtra = newLine === null ? null : (renderAfterLine?.('new', newLine) ?? null);
                 return (
-                    <SplitRow
-                        key={`pair-${String(index)}`}
-                        left={row.left}
-                        right={row.right}
-                        leftSelected={isSelected(selected, row.left)}
-                        rightSelected={isSelected(selected, row.right)}
-                        hunk={row.hunk}
-                    />
+                    <Fragment key={`pair-${String(index)}`}>
+                        <SplitRow
+                            left={row.left}
+                            right={row.right}
+                            leftSelected={isSelected(selected, row.left)}
+                            rightSelected={isSelected(selected, row.right)}
+                            hunk={row.hunk}
+                            onCommentLine={onCommentLine}
+                            onLineFocus={onLineFocus}
+                            onLineBlur={onLineBlur}
+                        />
+                        {oldExtra === null && newExtra === null ? null : (
+                            <div className="diff-row-extras--split">
+                                <div>{oldExtra}</div>
+                                <div>{newExtra}</div>
+                            </div>
+                        )}
+                    </Fragment>
                 );
             })}
         </div>
@@ -183,22 +221,46 @@ const UnifiedRow = memo(function UnifiedRow({
     cell,
     selected,
     hunk,
+    onCommentLine,
+    onLineFocus,
+    onLineBlur,
 }: {
     cell: LineCell;
     selected: boolean;
     hunk: number | undefined;
+    onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineBlur: (() => void) | undefined;
 }) {
     const { line } = cell;
+    const position = positionOf(cell, 'new');
     return (
         <div
             className={`diff-row diff-row--${line.kind}${selected ? ' is-selected' : ''}`}
             data-key={cell.key ?? undefined}
             data-hunk={hunk}
+            tabIndex={position === null ? undefined : 0}
+            onFocus={() => {
+                if (position !== null) {
+                    onLineFocus?.(position.side, position.line);
+                }
+            }}
+            onBlur={onLineBlur}
         >
             <span className="diff-row__gutter">{line.oldLine ?? ''}</span>
             <span className="diff-row__gutter">{line.newLine ?? ''}</span>
             <span className="diff-row__sign">{sign(line)}</span>
             <Code line={line} />
+            {position === null ? null : (
+                <button
+                    type="button"
+                    className="diff-row__comment"
+                    aria-label={`Comment on line ${String(position.line)}`}
+                    onClick={() => onCommentLine?.(position.side, position.line)}
+                >
+                    ✎
+                </button>
+            )}
         </div>
     );
 });
@@ -209,22 +271,56 @@ const SplitRow = memo(function SplitRow({
     leftSelected,
     rightSelected,
     hunk,
+    onCommentLine,
+    onLineFocus,
+    onLineBlur,
 }: {
     left: LineCell | null;
     right: LineCell | null;
     leftSelected: boolean;
     rightSelected: boolean;
     hunk: number | undefined;
+    onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineBlur: (() => void) | undefined;
 }) {
     return (
         <div className="diff-row diff-row--pair" data-hunk={hunk}>
-            <Side cell={left} side="old" selected={leftSelected} />
-            <Side cell={right} side="new" selected={rightSelected} />
+            <Side
+                cell={left}
+                side="old"
+                selected={leftSelected}
+                onCommentLine={onCommentLine}
+                onLineFocus={onLineFocus}
+                onLineBlur={onLineBlur}
+            />
+            <Side
+                cell={right}
+                side="new"
+                selected={rightSelected}
+                onCommentLine={onCommentLine}
+                onLineFocus={onLineFocus}
+                onLineBlur={onLineBlur}
+            />
         </div>
     );
 });
 
-function Side({ cell, side, selected }: { cell: LineCell | null; side: 'old' | 'new'; selected: boolean }) {
+function Side({
+    cell,
+    side,
+    selected,
+    onCommentLine,
+    onLineFocus,
+    onLineBlur,
+}: {
+    cell: LineCell | null;
+    side: 'old' | 'new';
+    selected: boolean;
+    onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
+    onLineBlur: (() => void) | undefined;
+}) {
     if (cell === null) {
         return (
             <>
@@ -238,6 +334,7 @@ function Side({ cell, side, selected }: { cell: LineCell | null; side: 'old' | '
     const { line } = cell;
     const className = `diff-side diff-side--${line.kind}${selected ? ' is-selected' : ''}`;
     const key = cell.key ?? undefined;
+    const position = positionOf(cell, side);
     return (
         <>
             <span className={`diff-row__gutter ${className}`} data-key={key}>
@@ -246,7 +343,32 @@ function Side({ cell, side, selected }: { cell: LineCell | null; side: 'old' | '
             <span className={`diff-row__sign ${className}`} data-key={key}>
                 {sign(line)}
             </span>
-            <Code line={line} className={className} keyString={key} />
+            <Code
+                line={line}
+                className={className}
+                keyString={key}
+                tabIndex={position === null ? undefined : 0}
+                onFocus={
+                    position === null
+                        ? undefined
+                        : () => {
+                              onLineFocus?.(position.side, position.line);
+                          }
+                }
+                onBlur={onLineBlur}
+            />
+            {position === null ? null : (
+                <button
+                    type="button"
+                    className={`diff-row__comment diff-row__comment--${side}`}
+                    aria-label={`Comment on ${side === 'old' ? 'old' : 'new'} line ${String(position.line)}`}
+                    onFocus={() => onLineFocus?.(position.side, position.line)}
+                    onBlur={onLineBlur}
+                    onClick={() => onCommentLine?.(position.side, position.line)}
+                >
+                    ✎
+                </button>
+            )}
         </>
     );
 }
@@ -255,16 +377,25 @@ function Code({
     line,
     className = '',
     keyString,
+    tabIndex,
+    onFocus,
+    onBlur,
 }: {
     line: DiffLine;
     className?: string;
     keyString?: string | undefined;
+    tabIndex?: number | undefined;
+    onFocus?: (() => void) | undefined;
+    onBlur?: (() => void) | undefined;
 }) {
     const segments = lineSegments(line);
     return (
         <code
             className={`diff-row__code ${className}`}
             data-key={keyString}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onBlur={onBlur}
             title={hasTabs(line) ? 'tabs are shown as four spaces' : undefined}
         >
             {segments.length === 0 ? ' ' : segments.map((segment, index) => <Segment key={index} segment={segment} />)}
@@ -284,6 +415,30 @@ function Segment({ segment }: { segment: LineSegment }) {
         return segment.text;
     }
     return <span className={classes.join(' ')}>{segment.text}</span>;
+}
+
+function positionsOf(cell: LineCell): { side: 'old' | 'new'; line: number }[] {
+    const positions: { side: 'old' | 'new'; line: number }[] = [];
+    if (cell.line.oldLine !== null) {
+        positions.push({ side: 'old', line: cell.line.oldLine });
+    }
+    if (cell.line.newLine !== null) {
+        positions.push({ side: 'new', line: cell.line.newLine });
+    }
+    return positions;
+}
+
+function positionOf(cell: LineCell | null, preferred: 'old' | 'new'): { side: 'old' | 'new'; line: number } | null {
+    if (cell === null) {
+        return null;
+    }
+    const preferredLine = preferred === 'old' ? cell.line.oldLine : cell.line.newLine;
+    if (preferredLine !== null) {
+        return { side: preferred, line: preferredLine };
+    }
+    const side = preferred === 'old' ? 'new' : 'old';
+    const line = side === 'old' ? cell.line.oldLine : cell.line.newLine;
+    return line === null ? null : { side, line };
 }
 
 function sign(line: DiffLine): string {

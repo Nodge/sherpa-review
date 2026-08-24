@@ -166,6 +166,15 @@ describe('diff view store', () => {
         expect(store.getSnapshot().selection).toBeNull();
     });
 
+    it('remembers whitespace-only line expansion outside FileCard', () => {
+        const store = createDiffViewStore({ files: [file('a')], storage: null });
+
+        store.showWhitespace('a');
+        store.showWhitespace('a');
+
+        expect(store.getSnapshot().whitespaceShown).toEqual(new Set(['a']));
+    });
+
     it('notifies subscribers on every change and only on a change', () => {
         const store = createDiffViewStore({ files: [file('a')], storage: null });
         let calls = 0;

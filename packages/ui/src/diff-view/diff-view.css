@@ -296,6 +296,7 @@
 }
 
 .diff-row {
+    position: relative;
     display: grid;
     /* README §1: unified has the old gutter, new gutter, sign and code. */
     grid-template-columns: 46px 46px 16px minmax(0, 1fr);
@@ -304,6 +305,15 @@
 .diff-rows--split .diff-row {
     /* README §1: side by side has a gutter, sign and code for each side. */
     grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
+}
+
+.diff-row-extras--split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.diff-row-extras--split > div {
+    min-width: 0;
 }
 
 .diff-row:hover {

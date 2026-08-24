@@ -9,10 +9,20 @@ import type { ViewId } from './views.js';
  * (panels, palette), which is why the mechanism is generic.
  */
 
+export interface ThreadsShow {
+    readonly people: boolean;
+    readonly bots: boolean;
+    readonly resolved: boolean;
+}
+
+export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
+
 export interface SessionState {
     readonly view: ViewId;
     /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
     readonly filter: string;
+    /** Additive thread sources. They live only in the current tab session. */
+    readonly threadsShow: ThreadsShow;
 }
 
 export interface SessionStore {
@@ -20,10 +30,11 @@ export interface SessionStore {
     readonly getSnapshot: () => SessionState;
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
+    readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
 }
 
 export interface SessionStoreOptions {
-    readonly initial: SessionState;
+    readonly initial: Omit<SessionState, 'threadsShow'> & { readonly threadsShow?: ThreadsShow };
     /**
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
      * returns to the same tab. Called only on an actual change.
@@ -33,7 +44,7 @@ export interface SessionStoreOptions {
 
 export function createSessionStore(options: SessionStoreOptions): SessionStore {
     const listeners = new Set<() => void>();
-    let state = options.initial;
+    let state: SessionState = { ...options.initial, threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW };
 
     const update = (next: SessionState): void => {
         state = next;
@@ -59,6 +70,15 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setFilter: (filter) => {
             if (filter !== state.filter) {
                 update({ ...state, filter });
+            }
+        },
+        setThreadsShow: (threadsShow) => {
+            if (
+                threadsShow.people !== state.threadsShow.people ||
+                threadsShow.bots !== state.threadsShow.bots ||
+                threadsShow.resolved !== state.threadsShow.resolved
+            ) {
+                update({ ...state, threadsShow });
             }
         },
     };

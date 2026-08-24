@@ -2,8 +2,10 @@ import type { UiState } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
+    UI_REVIEW_EVENT,
     UI_STATE_EVENT,
     uiProgressEventSchema,
+    uiReviewEventSchema,
     uiStateSchema,
 } from '@sherpa/protocol';
 
@@ -32,6 +34,8 @@ export interface StoreSnapshot {
      * When it exceeds the revision seen by the view, the view rereads the progress endpoint.
      */
     readonly progressRevision: number | null;
+    /** Last thread revision. When it increases, the view rereads the thread snapshot. */
+    readonly threadsRevision: number | null;
 }
 
 export interface Store {
@@ -44,6 +48,8 @@ export interface StreamHandlers {
     readonly onMessage: (data: string) => void;
     /** `progress` event: carries only the revision. The view rereads the data through the endpoint. */
     readonly onProgress: (data: string) => void;
+    /** `review` event: carries only the thread revision. */
+    readonly onReview: (data: string) => void;
     /**
      * `recoverable: true` means the channel reconnects itself (the browser retries after a stream interruption).
      * `false` means the connection is permanently closed, so the store must retry.
@@ -71,7 +77,13 @@ const RECONNECT_DELAY_MS = 2000;
 
 export function createStore(options: StoreOptions): Store {
     const listeners = new Set<() => void>();
-    let snapshot: StoreSnapshot = { connection: 'connecting', state: null, error: null, progressRevision: null };
+    let snapshot: StoreSnapshot = {
+        connection: 'connecting',
+        state: null,
+        error: null,
+        progressRevision: null,
+        threadsRevision: null,
+    };
     let closed = false;
 
     const update = (next: StoreSnapshot): void => {
@@ -112,6 +124,15 @@ export function createStore(options: StoreOptions): Store {
             const revision = parseProgressRevision(data);
             if (revision !== null && revision !== snapshot.progressRevision) {
                 update({ ...snapshot, progressRevision: revision });
+            }
+        },
+        onReview: (data) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+            const revision = parseThreadsRevision(data);
+            if (revision !== null && revision !== snapshot.threadsRevision) {
+                update({ ...snapshot, threadsRevision: revision });
             }
         },
         onError: (recoverable) => {
@@ -187,6 +208,19 @@ function parseProgressRevision(data: string): number | null {
     return parsed.success ? parsed.data.progressRevision : null;
 }
 
+/** `null` means the review event failed the protocol schema. */
+function parseThreadsRevision(data: string): number | null {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(data);
+    } catch {
+        return null;
+    }
+
+    const parsed = uiReviewEventSchema.safeParse(payload);
+    return parsed.success ? parsed.data.threadsRevision : null;
+}
+
 function connectEventSource(url: string, handlers: StreamHandlers): StreamConnection {
     const source = new EventSource(url);
     // The event name is not in `EventSourceEventMap`, so the listener receives a base `Event`.
@@ -195,6 +229,9 @@ function connectEventSource(url: string, handlers: StreamHandlers): StreamConnec
     });
     source.addEventListener(UI_PROGRESS_EVENT, (event) => {
         handlers.onProgress((event as MessageEvent<string>).data);
+    });
+    source.addEventListener(UI_REVIEW_EVENT, (event) => {
+        handlers.onReview((event as MessageEvent<string>).data);
     });
     source.addEventListener('error', () => {
         // The browser retries an interrupted established stream, but not a failed

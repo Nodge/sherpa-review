@@ -31,6 +31,8 @@ interface Harness {
     readonly emit: (data: string) => void;
     /** `progress` event: reading progress revision. */
     readonly progress: (data: string) => void;
+    /** `review` event: thread revision. */
+    readonly review: (data: string) => void;
     /** Channel interruption. `recoverable: false` means the connection is permanently closed. */
     readonly error: (recoverable?: boolean) => void;
     /** URL the store used to connect. */
@@ -69,6 +71,9 @@ function makeStore(): Harness {
         progress: (data) => {
             handlers?.onProgress(data);
         },
+        review: (data) => {
+            handlers?.onReview(data);
+        },
         error: (recoverable = true) => {
             handlers?.onError(recoverable);
         },
@@ -93,6 +98,7 @@ describe('UI store', () => {
             state: null,
             error: null,
             progressRevision: null,
+            threadsRevision: null,
         });
     });
 
@@ -117,6 +123,15 @@ describe('UI store', () => {
         progress(JSON.stringify({ progressRevision: 3 }));
 
         expect(store.getSnapshot()).toMatchObject({ connection: 'online', progressRevision: 3, state: STATE });
+    });
+
+    it('a review event brings the thread revision without changing state', () => {
+        const { store, emit, review } = makeStore();
+        emit(JSON.stringify(STATE));
+
+        review(JSON.stringify({ threadsRevision: 7 }));
+
+        expect(store.getSnapshot()).toMatchObject({ connection: 'online', threadsRevision: 7, state: STATE });
     });
 
     it('ignores a malformed progress event and keeps the channel alive', () => {
