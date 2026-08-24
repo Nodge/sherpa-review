@@ -23,6 +23,8 @@ export interface SessionState {
     readonly filter: string;
     /** Additive thread sources. They live only in the current tab session. */
     readonly threadsShow: ThreadsShow;
+    /** The command palette is open over the current view. */
+    readonly paletteOpen: boolean;
 }
 
 export interface SessionStore {
@@ -31,10 +33,14 @@ export interface SessionStore {
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
+    readonly setPaletteOpen: (open: boolean) => void;
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow'> & { readonly threadsShow?: ThreadsShow };
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen'> & {
+        readonly threadsShow?: ThreadsShow;
+        readonly paletteOpen?: boolean;
+    };
     /**
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
      * returns to the same tab. Called only on an actual change.
@@ -44,7 +50,11 @@ export interface SessionStoreOptions {
 
 export function createSessionStore(options: SessionStoreOptions): SessionStore {
     const listeners = new Set<() => void>();
-    let state: SessionState = { ...options.initial, threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW };
+    let state: SessionState = {
+        ...options.initial,
+        threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
+        paletteOpen: options.initial.paletteOpen ?? false,
+    };
 
     const update = (next: SessionState): void => {
         state = next;
@@ -79,6 +89,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
                 threadsShow.resolved !== state.threadsShow.resolved
             ) {
                 update({ ...state, threadsShow });
+            }
+        },
+        setPaletteOpen: (paletteOpen) => {
+            if (paletteOpen !== state.paletteOpen) {
+                update({ ...state, paletteOpen });
             }
         },
     };

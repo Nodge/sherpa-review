@@ -11,7 +11,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import {
     fetchFileContent,
-    fetchReviewDiff,
     fetchReviewLenses,
     fetchReviewPr,
     deleteReviewDraft,
@@ -48,6 +47,7 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
+import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
@@ -74,7 +74,6 @@ import './full-diff.css';
 
 interface Loaded {
     readonly pr: PrMeta;
-    readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
     readonly progress: UiReviewProgressResponse;
     readonly threads: readonly Thread[];
@@ -84,12 +83,29 @@ export interface FullDiffViewProps {
     readonly token: string;
     readonly prKey: string;
     readonly session: SessionStore;
+    /** Raw patches load at the App level so the palette works over any view. */
+    readonly diff: PrDiff | null;
+    readonly diffError: string | null;
+    readonly store: DiffViewStore | null;
     /** Progress revision from SSE. Reread the endpoint if it grew since last seen (tab convergence). */
     readonly progressRevision: number | null;
     readonly threadsRevision: number | null;
+    readonly paletteNavigation?: PaletteNavigation | null;
+    readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
 }
 
-export function FullDiffView({ token, prKey, session, progressRevision, threadsRevision }: FullDiffViewProps) {
+export function FullDiffView({
+    token,
+    prKey,
+    session,
+    diff,
+    diffError,
+    store,
+    progressRevision,
+    threadsRevision,
+    paletteNavigation = null,
+    onPaletteActiveFileChange,
+}: FullDiffViewProps) {
     const [state, setState] = useState<{ loaded: Loaded | null; error: string | null }>({
         loaded: null,
         error: null,
@@ -99,14 +115,13 @@ export function FullDiffView({ token, prKey, session, progressRevision, threadsR
         let alive = true;
         void Promise.all([
             fetchReviewPr(token),
-            fetchReviewDiff(token),
             fetchReviewLenses(token),
             fetchReviewProgress(token),
             fetchReviewThreads(token),
         ]).then(
-            ([pr, diff, lenses, progress, threads]) => {
+            ([pr, lenses, progress, threads]) => {
                 if (alive) {
-                    setState({ loaded: { pr, diff, lenses, progress, threads }, error: null });
+                    setState({ loaded: { pr, lenses, progress, threads }, error: null });
                 }
             },
             (error: unknown) => {
@@ -131,7 +146,7 @@ export function FullDiffView({ token, prKey, session, progressRevision, threadsR
         [],
     );
 
-    const diffId = state.loaded?.diff.diffId ?? null;
+    const diffId = diff?.diffId ?? null;
     const parse = useCallback(
         (file: FileDiff) => {
             clientRef.current ??= createDiffClient();
@@ -183,7 +198,7 @@ export function FullDiffView({ token, prKey, session, progressRevision, threadsR
         };
     }, []);
 
-    if (state.error !== null || state.loaded === null) {
+    if (state.error !== null || diffError !== null || state.loaded === null || diff === null || store === null) {
         // `__main` defines the column. Without it the toolbar and status would line up horizontally, since `.full-diff`
         // lays out the panel and right side horizontally.
         return (
@@ -192,7 +207,7 @@ export function FullDiffView({ token, prKey, session, progressRevision, threadsR
                     <div className="full-diff__toolbar">
                         <h1 className="full-diff__title">Full diff</h1>
                     </div>
-                    <p className="full-diff__status">{state.error ?? 'Diff is loading…'}</p>
+                    <p className="full-diff__status">{state.error ?? diffError ?? 'Loading diff…'}</p>
                 </div>
             </main>
         );
@@ -201,12 +216,15 @@ export function FullDiffView({ token, prKey, session, progressRevision, threadsR
     return (
         <DiffWorkspace
             pr={state.loaded.pr}
-            diff={state.loaded.diff}
+            diff={diff}
             lenses={state.loaded.lenses}
             progress={state.loaded.progress}
             threads={state.loaded.threads}
             prKey={prKey}
             session={session}
+            store={store}
+            paletteNavigation={paletteNavigation}
+            {...(onPaletteActiveFileChange === undefined ? {} : { onPaletteActiveFileChange })}
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
@@ -252,6 +270,8 @@ export interface DiffWorkspaceProps {
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
     readonly store?: DiffViewStore;
     readonly threadStore?: ThreadStore;
+    readonly paletteNavigation?: PaletteNavigation | null;
+    readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     /** Directory collapse storage. `null` disables persistence (gallery, tests). */
     readonly collapsedStorage?: CollapsedStorage | null;
 }
@@ -273,6 +293,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         threadsRevision = null,
         initialFileId = null,
         initialThreadId = null,
+        paletteNavigation = null,
+        onPaletteActiveFileChange,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
 
@@ -287,6 +309,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    useEffect(() => {
+        if (props.store !== undefined && initialProgress !== undefined) {
+            store.setProgress(initialProgress.files);
+        }
+    }, [initialProgress, props.store, store]);
     const fileIds = useMemo(() => new Set(diff.files.map((file) => file.fileId)), [diff.files]);
     const initialThreads = props.threads ?? EMPTY_THREADS;
     const threadStore = useMemo(
@@ -520,7 +547,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             return;
         }
         if (linkedFileId !== null) {
-            listRef.current?.scrollToFile(linkedFileId);
+            void listRef.current?.scrollToFile(linkedFileId);
         }
         const selector = `#thread-${CSS.escape(initialThreadId)}`;
         const scroll = (): boolean => {
@@ -561,7 +588,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             return;
         }
         pendingScroll.current = null;
-        listRef.current?.scrollToFile(target);
+        void listRef.current?.scrollToFile(target);
     }, [shown]);
 
     const pci = findFilter(filters, PCI_FILTER_ID);
@@ -577,9 +604,130 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         return new Set(diff.files.filter((file) => paths.has(file.path)).map((file) => file.fileId));
     }, [diff.files, lenses]);
 
-    const openFile = useCallback((fileId: string) => {
-        listRef.current?.scrollToFile(fileId);
-    }, []);
+    const [focusedLine, setFocusedLine] = useState<{
+        fileId: string;
+        side: 'old' | 'new';
+        line: number;
+    } | null>(null);
+    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+    const activePaletteFileId = focusedLine?.fileId ?? selectedFileId ?? topFileId;
+    useEffect(() => {
+        onPaletteActiveFileChange?.(activePaletteFileId);
+    }, [activePaletteFileId, onPaletteActiveFileChange]);
+
+    const openFile = useCallback(
+        (fileId: string) => {
+            setSelectedFileId(fileId);
+            if (!shown.some((file) => file.fileId === fileId)) {
+                pendingScroll.current = fileId;
+                setKeptFileId(null);
+                setBannerDismissed(false);
+                session.setFilter(ALL_FILTER_ID);
+                return;
+            }
+            void listRef.current?.scrollToFile(fileId);
+        },
+        [session, shown],
+    );
+
+    const lineNavigationCleanup = useRef<(() => void) | null>(null);
+    const lineNavigationId = useRef(0);
+    useEffect(
+        () => () => {
+            lineNavigationId.current += 1;
+            lineNavigationCleanup.current?.();
+        },
+        [],
+    );
+    const goToLine = useCallback(
+        async (fileId: string, side: 'old' | 'new', line: number): Promise<void> => {
+            lineNavigationId.current += 1;
+            const navigationId = lineNavigationId.current;
+            lineNavigationCleanup.current?.();
+            lineNavigationCleanup.current = null;
+
+            // Large and whitespace-only files must render their lines before looking for the DOM target.
+            store.openFile(fileId);
+            store.showWhitespace(fileId);
+            const converged = await (listRef.current?.scrollToFile(fileId) ?? Promise.resolve(false));
+            if (!converged || navigationId !== lineNavigationId.current) {
+                return;
+            }
+
+            let observer: MutationObserver | null = null;
+            const stop = (): void => {
+                observer?.disconnect();
+                observer = null;
+                if (lineNavigationCleanup.current === stop) {
+                    lineNavigationCleanup.current = null;
+                }
+            };
+            const reveal = (): boolean => {
+                const card = document.querySelector<HTMLElement>(`[data-file="${CSS.escape(fileId)}"]`);
+                if (card === null) {
+                    return false;
+                }
+                const number = String(line);
+                const exact = side === 'new' ? `[data-key="a${number}"]` : `[data-key="d${number}"]`;
+                const context =
+                    side === 'new' ? `[data-key^="c"][data-key$=":${number}"]` : `[data-key^="c${number}:"]`;
+                const target = card.querySelector<HTMLElement>(exact) ?? card.querySelector<HTMLElement>(context);
+                if (target === null) {
+                    return false;
+                }
+                const row = target.closest<HTMLElement>('.diff-row') ?? target;
+                row.scrollIntoView({ block: 'center' });
+                row.classList.remove('diff-row--palette-target');
+                void row.offsetWidth;
+                row.classList.add('diff-row--palette-target');
+                row.addEventListener(
+                    'animationend',
+                    () => {
+                        row.classList.remove('diff-row--palette-target');
+                    },
+                    { once: true },
+                );
+                stop();
+                return true;
+            };
+
+            lineNavigationCleanup.current = stop;
+            if (reveal()) {
+                return;
+            }
+            observer = new MutationObserver(() => {
+                reveal();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        },
+        [store],
+    );
+
+    const handledPaletteNavigation = useRef<number | null>(null);
+    useEffect(() => {
+        const navigation = paletteNavigation;
+        if (navigation === null || handledPaletteNavigation.current === navigation.id) {
+            return;
+        }
+        const { target } = navigation;
+        setSelectedFileId(target.fileId);
+        if (!shown.some((file) => file.fileId === target.fileId)) {
+            // Do not set the usual pendingScroll: it preserves position on filter changes
+            // and must not fire later after the palette has already navigated.
+            pendingScroll.current = null;
+            setKeptFileId(null);
+            setBannerDismissed(false);
+            session.setFilter(ALL_FILTER_ID);
+            return;
+        }
+
+        handledPaletteNavigation.current = navigation.id;
+        if (target.kind === 'file') {
+            void listRef.current?.scrollToFile(target.fileId);
+        } else {
+            void goToLine(target.fileId, target.side, target.line);
+        }
+    }, [goToLine, paletteNavigation, session, shown]);
 
     // Single-file PR outline: hunks from the already parsed model (SPEC §2.20).
     const only = diff.files.length === 1 ? diff.files[0] : undefined;
@@ -606,14 +754,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [only],
     );
 
-    const [focusedLine, setFocusedLine] = useState<{
-        fileId: string;
-        side: 'old' | 'new';
-        line: number;
-    } | null>(null);
     const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
     const focusLine = useCallback((fileId: string, side: 'old' | 'new', line: number) => {
         setFocusedLine({ fileId, side, line });
+        setSelectedFileId(fileId);
     }, []);
     const blurLine = useCallback(() => {
         setFocusedLine(null);
@@ -658,7 +802,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const searchRef = useRef<HTMLInputElement | null>(null);
     useShortcut({
         id: 'diff.filterFiles',
-        keys: ['/'],
+        keys: ['f'],
         label: 'Filter files in the tree',
         action: () => {
             searchRef.current?.focus();

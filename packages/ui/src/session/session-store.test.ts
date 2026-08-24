@@ -10,7 +10,12 @@ describe('session store', () => {
         expect(store.getSnapshot()).toBe(first);
 
         store.setView('diff');
-        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW });
+        expect(store.getSnapshot()).toEqual({
+            view: 'diff',
+            filter: 'all',
+            threadsShow: DEFAULT_THREADS_SHOW,
+            paletteOpen: false,
+        });
     });
 
     it('notifies subscribers of changes and stays silent when the same value repeats', () => {
@@ -42,7 +47,9 @@ describe('session store', () => {
         store.setView('diff');
         store.setView('diff');
 
-        expect(persist.mock.calls).toEqual([[{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW }]]);
+        expect(persist.mock.calls).toEqual([
+            [{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false }],
+        ]);
     });
 
     it('keeps the snapshot unchanged when nothing changes so useSyncExternalStore skips unnecessary renders', () => {
@@ -61,10 +68,23 @@ describe('session store', () => {
 
         store.setFilter('pci');
 
-        expect(store.getSnapshot()).toEqual({ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW });
+        expect(store.getSnapshot()).toEqual({
+            view: 'diff',
+            filter: 'pci',
+            threadsShow: DEFAULT_THREADS_SHOW,
+            paletteOpen: false,
+        });
         expect(persist.mock.calls).toEqual([
-            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW }],
+            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false }],
         ]);
+    });
+
+    it('keeps palette open state in the session without changing other fields', () => {
+        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+
+        store.setPaletteOpen(true);
+
+        expect(store.getSnapshot()).toMatchObject({ view: 'diff', filter: 'all', paletteOpen: true });
     });
 
     it('thread filters change in a single session write', () => {

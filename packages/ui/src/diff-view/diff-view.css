@@ -30,6 +30,21 @@
 
 /* --- File card --- */
 
+@keyframes palette-target-flash {
+    0%,
+    65% {
+        box-shadow: inset 2px 0 var(--accent);
+    }
+
+    100% {
+        box-shadow: inset 0 0 var(--accent);
+    }
+}
+
+.diff-row--palette-target {
+    animation: palette-target-flash var(--motion-flash) ease-out;
+}
+
 .file-card {
     border: 1px solid var(--border-control);
     border-radius: var(--radius-card);

@@ -39,6 +39,7 @@ if (token === null) {
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
             threadsShow: DEFAULT_THREADS_SHOW,
+            paletteOpen: false,
         },
         persist: (state: SessionState) => {
             // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
@@ -64,6 +65,15 @@ if (token === null) {
                 session.setView(view.id);
             },
         });
+    });
+    shortcuts.register({
+        id: 'palette.open',
+        keys: ['mod+k'],
+        label: 'Open command palette',
+        worksInInputs: true,
+        action: () => {
+            session.setPaletteOpen(true);
+        },
     });
     attachShortcuts(window, shortcuts);
 

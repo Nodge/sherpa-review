@@ -28,6 +28,8 @@ const EXPECTED: Record<string, string> = {
     '--surface-raised': '#181a1e',
     '--surface-popover': '#1b1e24',
     '--surface-selected': '#1f2228',
+    // README §14: overlay `rgba(7,8,9,.66)` below the command palette.
+    '--overlay-dialog': 'rgba(7,8,9,.66)',
 
     // Borders — hairline `#1a1d21`, `#1e2126`, `#191c20`; standard `#22252b`, `#24272d`,
     // `#262a30`; strong `#2b2f36`, `#2f333a`; raised `#303540`, `#313640`, `#333842`.

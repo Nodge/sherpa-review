@@ -12,9 +12,14 @@ export type ShortcutKeys = string;
 
 export interface Shortcut {
     readonly id: string;
+    /** An empty array shows the command in the palette but excludes it from keydown matching. */
     readonly keys: readonly ShortcutKeys[];
     /** Human-readable label for the palette and shortcuts sheet, in Russian. */
     readonly label: string;
+    /** A command with a mod shortcut can run from an input. */
+    readonly worksInInputs?: boolean;
+    /** Visible consequence of a command before it runs. */
+    readonly consequence?: string;
     /** The command is active only when this returns true. Without it, the command is always active. */
     readonly when?: () => boolean;
     readonly action: () => void;
@@ -39,6 +44,8 @@ export interface ShortcutRegistry {
     readonly register: (shortcut: Shortcut) => () => void;
     /** All registered commands in registration order, for the palette and shortcuts sheet. */
     readonly list: () => readonly Shortcut[];
+    /** The palette subscribes to view commands that mount and unmount with their views. */
+    readonly subscribe: (listener: () => void) => () => void;
     /** `true` means a command was found and executed (the event was suppressed). */
     readonly handle: (event: ShortcutEvent) => boolean;
 }
@@ -52,6 +59,15 @@ interface Combination {
 
 export function createShortcutRegistry(): ShortcutRegistry {
     const shortcuts = new Map<string, Shortcut>();
+    const listeners = new Set<() => void>();
+    let snapshot: readonly Shortcut[] = [];
+
+    const notify = (): void => {
+        snapshot = [...shortcuts.values()];
+        for (const listener of [...listeners]) {
+            listener();
+        }
+    };
 
     return {
         register: (shortcut) => {
@@ -59,19 +75,30 @@ export function createShortcutRegistry(): ShortcutRegistry {
                 throw new Error(`Command "${shortcut.id}" already registered`);
             }
             shortcuts.set(shortcut.id, shortcut);
+            notify();
             return () => {
-                shortcuts.delete(shortcut.id);
+                if (shortcuts.delete(shortcut.id)) {
+                    notify();
+                }
             };
         },
-        list: () => [...shortcuts.values()],
+        list: () => snapshot,
+        subscribe: (listener) => {
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
+        },
         handle: (event) => {
-            if (isEditable(event.target)) {
-                // Text input takes precedence over commands. "1" in a search field is a character, not a tab.
-                return false;
-            }
+            const editable = isEditable(event.target);
+            const hasMod = event.metaKey || event.ctrlKey;
 
             for (const shortcut of shortcuts.values()) {
                 if (shortcut.when?.() === false) {
+                    continue;
+                }
+                if (editable && !(shortcut.worksInInputs === true && hasMod)) {
+                    // Text input takes priority over regular commands: "1" in a search field is a character, not a tab.
                     continue;
                 }
                 if (!shortcut.keys.some((keys) => matches(parseKeys(keys), event))) {

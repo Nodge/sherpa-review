@@ -40,7 +40,8 @@ const SCROLL_TO_FILE_FRAMES = 12;
 
 /** Imperative list control. The file tree requests scrolling to its row. */
 export interface DiffListHandle {
-    readonly scrollToFile: (fileId: string) => void;
+    /** `true` means the card was found and the virtualizer finished adjusting. `false` means the request was cancelled or the file is missing. */
+    readonly scrollToFile: (fileId: string) => Promise<boolean>;
 }
 
 export interface DiffFileListProps {
@@ -284,10 +285,11 @@ export function DiffFileList({
             scrollToFile: (fileId: string) => {
                 const index = files.findIndex((file) => file.fileId === fileId);
                 if (index < 0) {
-                    return;
+                    return Promise.resolve(false);
                 }
                 pending.current?.cancel();
                 pending.current = converge(index);
+                return pending.current.finished;
             },
         }),
         [files, converge],
@@ -600,6 +602,8 @@ function modelHasPosition(model: DiffFileModel | null, side: 'old' | 'new', line
 interface ConvergingScroll {
     /** `true` once adjustment has finished on its own. */
     readonly cancel: () => boolean;
+    /** Natural completion returns `true`, cancellation by competing navigation returns `false`. */
+    readonly finished: Promise<boolean>;
 }
 
 /**
@@ -607,14 +611,23 @@ interface ConvergingScroll {
  * the target moves and a single call is not enough. Repeat until the position stops changing.
  * `onDone` runs exactly once, on both natural completion and cancellation.
  */
-function convergeScroll(step: () => void, currentTop: () => number, onDone: () => void): ConvergingScroll {
+export function convergeScroll(
+    step: () => void,
+    currentTop: () => number,
+    onDone: (completed: boolean) => void,
+): ConvergingScroll {
     let attempts = 0;
     let previousTop = -1;
     let done = false;
-    const finish = (): void => {
+    let resolveFinished: (completed: boolean) => void = () => undefined;
+    const finished = new Promise<boolean>((resolve) => {
+        resolveFinished = resolve;
+    });
+    const finish = (completed: boolean): void => {
         if (!done) {
             done = true;
-            onDone();
+            onDone(completed);
+            resolveFinished(completed);
         }
     };
 
@@ -629,14 +642,15 @@ function convergeScroll(step: () => void, currentTop: () => number, onDone: () =
             return;
         }
         attempts = SCROLL_TO_FILE_FRAMES;
-        finish();
+        finish(true);
     });
 
     return {
+        finished,
         cancel: () => {
             cancelAnimationFrame(frame);
             const completed = attempts >= SCROLL_TO_FILE_FRAMES;
-            finish();
+            finish(completed);
             return completed;
         },
     };

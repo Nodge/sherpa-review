@@ -17,9 +17,10 @@ export interface TopBarProps {
     readonly agent: AgentPillView;
     readonly view: ViewId;
     readonly onSelectView: (view: ViewId) => void;
+    readonly onOpenSearch: () => void;
 }
 
-export function TopBar({ version, breadcrumb, agent, view, onSelectView }: TopBarProps) {
+export function TopBar({ version, breadcrumb, agent, view, onSelectView, onOpenSearch }: TopBarProps) {
     return (
         <header className="top-bar">
             <div className="top-bar__brand">
@@ -46,7 +47,7 @@ export function TopBar({ version, breadcrumb, agent, view, onSelectView }: TopBa
             <div className="top-bar__spacer" />
 
             <AgentPill view={agent} />
-            <SearchButton />
+            <SearchButton onClick={onOpenSearch} />
 
             {/* The UI does not know the actual user until M1-T10, so do not invent initials. */}
             <div className="top-bar__avatar" aria-hidden="true" />
@@ -78,10 +79,10 @@ export function AgentPill({ view }: { view: AgentPillView }) {
     );
 }
 
-/** Search button styled to match the design. The command palette comes in M1-T9. */
-function SearchButton() {
+/** Search button opens the same palette as the global ⌘K/Ctrl-K shortcut. */
+function SearchButton({ onClick }: { onClick: () => void }) {
     return (
-        <button type="button" className="ghost-button search-button">
+        <button type="button" className="ghost-button search-button" onClick={onClick}>
             Search
             <span className="search-button__hint">⌘K</span>
         </button>

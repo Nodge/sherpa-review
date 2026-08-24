@@ -1,5 +1,6 @@
 import type { FileDiff } from '@sherpa/protocol';
 
+import { fuzzyMatch } from '../palette/fuzzy.js';
 import type { FileReadState, ReadState } from '../progress/read-state.js';
 import { readStateOf } from '../progress/read-state.js';
 
@@ -290,21 +291,7 @@ export function matchesQuery(path: string, query: string): boolean {
     if (haystack.includes(needle)) {
         return true;
     }
-    return fuzzy(haystack.slice(haystack.lastIndexOf('/') + 1), needle);
-}
-
-/** Subsequence: query letters appear in the name in the same order. */
-function fuzzy(name: string, needle: string): boolean {
-    let index = 0;
-    for (const char of name) {
-        if (char === needle[index]) {
-            index += 1;
-            if (index === needle.length) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return fuzzyMatch(haystack.slice(haystack.lastIndexOf('/') + 1), needle);
 }
 
 export function filterByQuery(files: readonly FileDiff[], query: string): readonly FileDiff[] {

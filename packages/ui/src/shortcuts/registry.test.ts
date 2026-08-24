@@ -81,6 +81,36 @@ describe('shortcut registry', () => {
         expect(action).not.toHaveBeenCalled();
     });
 
+    it('worksInInputs allows a mod command from an input, but not a single key', () => {
+        const registry = createShortcutRegistry();
+        const palette = vi.fn();
+        const plain = vi.fn();
+        registry.register(
+            shortcut({ id: 'palette.open', keys: ['mod+k'], worksInInputs: true, action: palette }),
+        );
+        registry.register(shortcut({ id: 'view.route', keys: ['1'], worksInInputs: true, action: plain }));
+
+        const mod = keydown('k', { metaKey: true, target: { tagName: 'INPUT' } });
+        expect(registry.handle(mod)).toBe(true);
+        expect(palette).toHaveBeenCalledTimes(1);
+        expect(mod.preventDefault).toHaveBeenCalledTimes(1);
+
+        const single = keydown('1', { target: { tagName: 'INPUT' } });
+        expect(registry.handle(single)).toBe(false);
+        expect(plain).not.toHaveBeenCalled();
+        expect(single.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('empty keys keeps the command in the list but never matches', () => {
+        const registry = createShortcutRegistry();
+        const action = vi.fn();
+        registry.register(shortcut({ id: 'palette.searchDiff', keys: [], action }));
+
+        expect(registry.list()).toHaveLength(1);
+        expect(registry.handle(keydown(''))).toBe(false);
+        expect(action).not.toHaveBeenCalled();
+    });
+
     it('when disables a command without unregistering it', () => {
         const registry = createShortcutRegistry();
         const action = vi.fn();

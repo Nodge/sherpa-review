@@ -9,6 +9,7 @@ import { UI_VERSION } from '../../version.js';
 import { ViewFrame } from '../../views/view-frames.tsx';
 import { DIFF_STATES } from './diff-states.tsx';
 import { FULL_DIFF_STATES } from './full-diff-states.tsx';
+import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
 /**
@@ -113,6 +114,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
+    ...PALETTE_STATES.map((state) => ({
+        id: state.id,
+        group: 'Command palette',
+        title: state.title,
+        render: state.render,
+    })),
     {
         id: 'tokens-swatches',
         group: 'Tokens',
@@ -138,6 +145,7 @@ function TopBarState() {
             agent={agentPillView(CONNECTED, [])}
             view={view}
             onSelectView={setView}
+            onOpenSearch={() => undefined}
         />
     );
 }

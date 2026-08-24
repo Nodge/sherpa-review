@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import type { Shortcut, ShortcutRegistry } from './registry.js';
 
@@ -15,6 +15,23 @@ export function ShortcutsProvider({ registry, children }: { registry: ShortcutRe
     return <ShortcutsContext value={registry}>{children}</ShortcutsContext>;
 }
 
+export function useShortcutRegistry(): ShortcutRegistry | null {
+    return useContext(ShortcutsContext);
+}
+
+/** Reactive registry snapshot for the palette, in registration order. */
+export function useShortcutList(): readonly Shortcut[] {
+    const registry = useShortcutRegistry();
+    const empty = useRef<readonly Shortcut[]>([]);
+    return useSyncExternalStore(
+        registry?.subscribe ?? NO_SUBSCRIBE,
+        registry?.list ?? (() => empty.current),
+        registry?.list ?? (() => empty.current),
+    );
+}
+
+const NO_SUBSCRIBE = (): (() => void) => () => undefined;
+
 /**
  * A command lives while its component is mounted. `action` and `when` are read through refs, so
  * fresh closures do not require re-registration. `id`/`keys`/`label` cannot change because
@@ -27,20 +44,22 @@ export function useShortcut(shortcut: Shortcut): void {
         latest.current = shortcut;
     });
 
-    const { id, label } = shortcut;
-    const keys = shortcut.keys.join(' ');
+    const { id, label, worksInInputs, consequence } = shortcut;
+    const keys = shortcut.keys.join('\n');
     useEffect(() => {
         if (registry === null) {
             return;
         }
         return registry.register({
             id,
-            keys: keys.split(' '),
+            keys: keys === '' ? [] : keys.split('\n'),
             label,
+            ...(worksInInputs === undefined ? {} : { worksInInputs }),
+            ...(consequence === undefined ? {} : { consequence }),
             when: () => latest.current.when?.() ?? true,
             action: () => {
                 latest.current.action();
             },
         });
-    }, [registry, id, keys, label]);
+    }, [registry, id, keys, label, worksInInputs, consequence]);
 }
