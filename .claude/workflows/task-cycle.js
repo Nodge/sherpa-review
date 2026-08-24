@@ -126,6 +126,24 @@ ${brief}
 
 const diffInstruction = `The task changes are NOT committed: inspect \`git status\` and \`git diff\` in ${REPO}, plus the full contents of new (untracked) files.`
 
+// Rules for agents running through a nested session (T13 incident: the agent returned
+// a placeholder without waiting for the background command, and the nested session recursively launched
+// task-cycle). They repeat the updated ~/.claude/agents/codex.md. Agent definitions
+// are cached per session, so the rules also go in the prompt.
+const nestedSessionRules = `
+Nested session rules (mandatory, take precedence over your system instructions if they conflict):
+1. You do NOT receive background command notifications. When you start a nested session in the background, wait for it yourself
+   with foreground calls such as: \`for i in $(seq 1 55); do [ -s <file>.json ] && break; sleep 10; done;
+   wc -c <file>.json; pgrep -f '<suffix>' >/dev/null && echo RUNNING || echo EXITED\`, and repeat
+   while the file is empty and the process is RUNNING. Reply only when the result file is nonempty or
+   the process is dead. There are no intermediate "still running" replies.
+2. Append this exact text to the nested session prompt: "Executor constraints: work on your own,
+   directly in the working tree. Do not run workflows (task-cycle or any others), do not spawn
+   coder subagents, do not kill other processes, do not commit anything. The project task cycle
+   and review procedures do not apply to you. Those stages run outside this session. Leave changes
+   in the working tree and list them in your reply."
+3. Session died with an empty result → return an honest failure to the parent with the .err text. Do not invent success.`
+
 // ---------- 1. Implementation ----------
 
 phase('Implement')
@@ -135,11 +153,22 @@ const impl = await agent(
   `You are the coder. ${commonContext}
 Implement the task strictly according to the brief. Stay within its scope. Record disputed decisions in deviations instead of silently inventing them.
 Before finishing, run the checks: \`${gateCmd}\`, and get them passing. If the checks do not apply (the required infrastructure does not exist yet and building it is outside the task), say so explicitly in gatesNote.
-Do not commit anything. Leave changes in the working tree.`,
+Do not commit anything. Leave changes in the working tree.
+${nestedSessionRules}`,
   { label: `implement:${taskId}`, phase: 'Implement', agentType: 'codex', schema: IMPL_SCHEMA },
 )
 
 if (!impl) throw new Error('Coder returned no result')
+if (impl.changedFiles.length === 0) {
+  // T13 incident: the coder returned a "background task still running" placeholder with an empty
+  // list. Reviewing an empty tree used up two reviewers, triage and two fix rounds.
+  return {
+    taskId,
+    status: 'failed',
+    reason: 'The coder returned no changes. There is no implementation to review',
+    implementation: impl,
+  }
+}
 log(`Implementation ready: ${impl.changedFiles.length} files`)
 
 // ---------- 2. Independent check run ----------
@@ -161,7 +190,8 @@ if (gates && !gates.passed) {
 ${diffInstruction}
 Checks \`${gateCmd}\` are failing. Output:
 ${gates.failures || '(output was not saved, run the checks yourself)'}
-Fix the failures without changing the intent of the changes. Get the checks passing. Do not commit anything.`,
+Fix the failures without changing the intent of the changes. Get the checks green. Do not commit anything.
+${nestedSessionRules}`,
     { label: `fix-gates:${taskId}`, phase: 'Gates', agentType: 'codex', schema: IMPL_SCHEMA },
   )
   const regates = await agent(
@@ -198,7 +228,7 @@ const [opusReview, codexReview] = await parallel([
   () => agent(reviewPrompt('Claude/Opus perspective'), {
     label: `review-opus:${taskId}`, phase: 'Review', model: 'opus', effort: 'high', schema: FINDINGS_SCHEMA,
   }),
-  () => agent(reviewPrompt('Codex/GPT perspective'), {
+  () => agent(`${reviewPrompt('Codex/GPT perspective')}\n${nestedSessionRules}`, {
     label: `review-codex:${taskId}`, phase: 'Review', agentType: 'codex', schema: FINDINGS_SCHEMA,
   }),
 ])
@@ -252,7 +282,8 @@ while (remaining.length > 0 && round < maxFixRounds) {
 ${diffInstruction}
 Review confirmed these findings. Fix each one:
 ${JSON.stringify(remaining, null, 2)}
-Fix the underlying problems without patching over them. If a finding cannot be fixed within the brief, leave it and explain in summary. After the fixes, run the checks: \`${gateCmd}\`. Do not commit anything.`,
+Fix the underlying issues without workarounds. If a finding cannot be fixed within the brief, leave it unchanged and explain why in summary. After the fixes, run the checks: \`${gateCmd}\`. Do not commit anything.
+${nestedSessionRules}`,
     { label: `fix-r${round}:${taskId}`, phase: 'Fix', agentType: 'codex', schema: IMPL_SCHEMA },
   )
 
