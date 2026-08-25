@@ -7,8 +7,10 @@ import { makeSmallFixture } from './small.js';
 import type { FixtureData } from './types.js';
 
 export type { FixtureData } from './types.js';
-export { MEDIUM_TOTALS } from './medium.js';
+export { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, MEDIUM_TOTALS } from './medium.js';
 export { LARGE_FILE_COUNT } from './large.js';
+export { buildRouteFixtures, routeFixtures } from './route.js';
+export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './route.js';
 
 export type FixtureName = 'medium' | 'small' | 'large' | 'edge';
 

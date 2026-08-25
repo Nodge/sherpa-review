@@ -40,8 +40,12 @@ export interface FileSpec {
 
 const DEFAULT_MODE = '100644';
 
-/** FNV-1a: stable "blob hashes" and ids derived from paths, so fixtures do not depend on build order. */
-function hashHex(input: string, length: number): string {
+/**
+ * FNV-1a: stable "blob hashes" and path-based ids keep fixtures independent of build order.
+ * A deterministic fingerprint, not a cryptographic hash. Also used for the route snapshot
+ * `contentHash`: Node's `crypto` is unavailable here, since the package also loads in the browser.
+ */
+export function hashHex(input: string, length: number): string {
     let hash = 0x811c9dc5;
     for (let i = 0; i < input.length; i += 1) {
         hash ^= input.charCodeAt(i);

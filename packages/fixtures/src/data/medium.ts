@@ -20,6 +20,9 @@ const HEAD_COMMIT = '9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316';
 /** Declared PR size: numbers from the handoff README. */
 export const MEDIUM_TOTALS = { files: 18, additions: 806, deletions: 56 } as const;
 
+/** Iteration for the route in `route-medium.ts`: anchors and the snapshot must reference it. */
+export { DIFF_ID as MEDIUM_DIFF_ID, HEAD_COMMIT as MEDIUM_HEAD_COMMIT };
+
 const REVIEWER = human('alice', 'Alice Ingram');
 const AUTHOR = human('avery', 'Avery Vance');
 const KAI = human('kai', 'Kai Kennedy');
