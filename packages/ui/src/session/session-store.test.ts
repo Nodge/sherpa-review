@@ -29,6 +29,18 @@ describe('session store', () => {
         expect(listener).toHaveBeenCalledTimes(1);
     });
 
+    it('reports each view selection separately, even when selecting the current view', () => {
+        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+        const listener = vi.fn();
+        store.subscribeViewSelection(listener);
+
+        store.setView('diff');
+        store.setView('route');
+
+        expect(store.getViewSelectionSnapshot()).toBe(2);
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
     it('stops notifications after unsubscribing', () => {
         const store = createSessionStore({ initial: { view: 'overview', filter: 'all' } });
         const listener = vi.fn();

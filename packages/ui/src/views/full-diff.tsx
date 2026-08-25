@@ -11,12 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import {
     fetchFileContent,
-    fetchReviewPr,
     deleteReviewDraft,
-    fetchReviewProgress,
     openInEditor,
     saveReviewDraft,
-    setFileViewed,
     setReviewThreadResolved,
     updateReviewDraft,
 } from '../api.js';
@@ -45,6 +42,7 @@ import {
 import { readFragmentParam } from '../fragment.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { createProgressWriter } from '../progress/progress-writer.js';
+import type { ProgressWriter } from '../progress/progress-writer.js';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
@@ -68,24 +66,23 @@ import './full-diff.css';
  * store and survives reloads through the URL fragment.
  */
 
-interface Loaded {
-    readonly pr: PrMeta;
-    readonly progress: UiReviewProgressResponse;
-}
-
 export interface FullDiffViewProps {
     readonly token: string;
     readonly prKey: string;
     readonly session: SessionStore;
+    readonly pr: PrMeta | null;
+    readonly prError: string | null;
     /** Raw patches load at the App level so the palette works over any view. */
     readonly diff: PrDiff | null;
     readonly diffError: string | null;
     readonly lenses: UiReviewLensesResponse | null;
     readonly lensesError: string | null;
+    readonly progress: UiReviewProgressResponse | null;
+    readonly progressError: string | null;
+    /** Shared writer from App: one instance for the panel and Full diff. */
+    readonly progressWriter: ProgressWriter | null;
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
-    /** Progress revision from SSE. Reread the endpoint if it grew since last seen (tab convergence). */
-    readonly progressRevision: number | null;
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
@@ -95,41 +92,21 @@ export function FullDiffView({
     token,
     prKey,
     session,
+    pr,
+    prError,
     diff,
     diffError,
     lenses,
     lensesError,
+    progress,
+    progressError,
+    progressWriter,
     store,
     threadStore,
-    progressRevision,
     paletteNavigation = null,
     onPaletteActiveFileChange,
     onFilterChangeHandler,
 }: FullDiffViewProps) {
-    const [state, setState] = useState<{ loaded: Loaded | null; error: string | null }>({
-        loaded: null,
-        error: null,
-    });
-
-    useEffect(() => {
-        let alive = true;
-        void Promise.all([fetchReviewPr(token), fetchReviewProgress(token)]).then(
-            ([pr, progress]) => {
-                if (alive) {
-                    setState({ loaded: { pr, progress }, error: null });
-                }
-            },
-            (error: unknown) => {
-                if (alive) {
-                    setState({ loaded: null, error: error instanceof Error ? error.message : String(error) });
-                }
-            },
-        );
-        return () => {
-            alive = false;
-        };
-    }, [token]);
-
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
     // `useMemo`: a closed client cannot restart, and StrictMode mounts the view twice.
@@ -150,12 +127,6 @@ export function FullDiffView({
         [diffId],
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
-    const writeViewed = useCallback(
-        async (fileId: string, viewed: boolean): Promise<number> =>
-            (await setFileViewed(token, fileId, viewed)).progressRevision,
-        [token],
-    );
-    const reloadProgress = useCallback(() => fetchReviewProgress(token), [token]);
     const threadTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),
@@ -193,12 +164,15 @@ export function FullDiffView({
     }, []);
 
     if (
-        state.error !== null ||
+        prError !== null ||
         diffError !== null ||
         lensesError !== null ||
-        state.loaded === null ||
+        (progress === null && progressError !== null) ||
+        pr === null ||
         diff === null ||
         lenses === null ||
+        progress === null ||
+        progressWriter === null ||
         store === null ||
         threadStore === null
     ) {
@@ -210,7 +184,9 @@ export function FullDiffView({
                     <div className="full-diff__toolbar">
                         <h1 className="full-diff__title">Full diff</h1>
                     </div>
-                    <p className="full-diff__status">{state.error ?? diffError ?? lensesError ?? 'Loading diff…'}</p>
+                    <p className="full-diff__status">
+                        {prError ?? diffError ?? lensesError ?? progressError ?? 'Loading the diff…'}
+                    </p>
                 </div>
             </main>
         );
@@ -218,10 +194,10 @@ export function FullDiffView({
 
     return (
         <DiffWorkspace
-            pr={state.loaded.pr}
+            pr={pr}
             diff={diff}
             lenses={lenses}
-            progress={state.loaded.progress}
+            progress={progress}
             prKey={prKey}
             session={session}
             store={store}
@@ -232,9 +208,7 @@ export function FullDiffView({
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
-            onSetViewed={writeViewed}
-            reloadProgress={reloadProgress}
-            progressRevision={progressRevision}
+            progressWriter={progressWriter}
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
             initialFileId={fragmentTarget.fileId}
@@ -256,9 +230,11 @@ export interface DiffWorkspaceProps {
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
-    /** Write a viewed mark. Returns the progress revision after the write. */
-    readonly onSetViewed: (fileId: string, viewed: boolean) => Promise<number>;
-    /** Refetch progress on an SSE event. Without it tabs do not converge (gallery, tests). */
+    /** Write a mark for a standalone workspace (gallery and tests). */
+    readonly onSetViewed?: (fileId: string, viewed: boolean) => Promise<number>;
+    /** In the application, one writer is created one level up and survives Full diff remounts. */
+    readonly progressWriter?: ProgressWriter;
+    /** Reread progress on an SSE event for a standalone workspace. */
     readonly reloadProgress?: () => Promise<UiReviewProgressResponse>;
     readonly progressRevision?: number | null;
     readonly reloadThreads?: () => Promise<readonly Thread[]>;
@@ -289,7 +265,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         parse,
         loadContent,
         onOpenInEditor,
-        onSetViewed,
+        onSetViewed = EMPTY_SET_VIEWED,
         reloadProgress,
         progressRevision = null,
         reloadThreads,
@@ -314,10 +290,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     useEffect(() => {
-        if (props.store !== undefined && initialProgress !== undefined) {
+        if (props.store !== undefined && props.progressWriter === undefined && initialProgress !== undefined) {
             store.setProgress(initialProgress.files);
         }
-    }, [initialProgress, props.store, store]);
+    }, [initialProgress, props.progressWriter, props.store, store]);
     const fileIds = useMemo(() => new Set(diff.files.map((file) => file.fileId)), [diff.files]);
     const initialThreads = props.threads ?? EMPTY_THREADS;
     const threadStore = useMemo(
@@ -371,25 +347,22 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     // `ProgressWriter` handles write order, rollback and revisions. The view only renders.
     const [writesSettled, setWritesSettled] = useState(0);
     const [writeError, setWriteError] = useState<{ fileId: string; viewed: boolean } | null>(null);
-    const writer = useMemo(
+    const createdWriter = useMemo(
         () =>
             createProgressWriter({
                 initialRevision: initialProgress?.progressRevision ?? 0,
                 read: (fileId) => store.getSnapshot().progress.get(fileId) ?? null,
-                apply: (fileId, viewed) => {
-                    store.markViewed(fileId, viewed);
-                },
-                restore: (fileId, record) => {
-                    store.restoreProgress(fileId, record);
-                },
+                apply: store.markViewed,
+                restore: store.restoreProgress,
                 send: onSetViewed,
                 // In-flight writes defer the reread. The decision is reconsidered after the response.
                 onSettled: () => {
                     setWritesSettled((settled) => settled + 1);
                 },
             }),
-        [initialProgress, onSetViewed, store],
+        [initialProgress?.progressRevision, onSetViewed, store],
     );
+    const writer = props.progressWriter ?? createdWriter;
 
     const markViewed = useCallback(
         async function mark(fileId: string, viewed: boolean): Promise<Feedback> {
@@ -1060,6 +1033,7 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
     delete: () => Promise.reject(new Error('draft writing is unavailable in this state')),
 };
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
+const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
 
 export function commentPosition(
     selection: { fileId: string; anchor: string; focus: string } | null,

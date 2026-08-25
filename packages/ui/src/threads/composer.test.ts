@@ -1,7 +1,7 @@
 import type { Comment } from '@sherpa/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { composerControllerFor, createComposerController } from './composer.js';
+import { closePublishedComposers, composerControllerFor, createComposerController } from './composer.js';
 import { createThreadStore } from './store.js';
 
 const CREATED: Comment = {
@@ -203,6 +203,71 @@ describe('composer state machine', () => {
         const reopened = composerControllerFor({ store, key: 'new:f1:new:10', transport });
 
         expect(reopened).not.toBe(first);
+    });
+
+    it('closes the saved composer and forgets its controller on publication', async () => {
+        const store = createThreadStore([], new Set(['f1']));
+        const key = 'new:f1:new:10';
+        store.openComposer({
+            key,
+            threadId: null,
+            parentId: null,
+            anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+            text: '',
+            commentId: null,
+            status: 'idle',
+            saveUncertain: false,
+            slow: false,
+            confirmDiscard: false,
+            resolvedAtOpen: false,
+        });
+        const transport = {
+            save: vi.fn(() => Promise.resolve(CREATED)),
+            update: vi.fn(() => Promise.resolve()),
+            delete: vi.fn(() => Promise.resolve()),
+        };
+        const first = composerControllerFor({ store, key, transport });
+        first.input('publish');
+        await first.saveNow();
+
+        closePublishedComposers(store, ['draft-1']);
+        expect(store.getComposer(key)).toBeNull();
+
+        store.openComposer({
+            key,
+            threadId: null,
+            parentId: null,
+            anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+            text: '',
+            commentId: null,
+            status: 'idle',
+            saveUncertain: false,
+            slow: false,
+            confirmDiscard: false,
+            resolvedAtOpen: false,
+        });
+        const reopened = composerControllerFor({ store, key, transport });
+        reopened.input('new text');
+
+        expect(reopened).not.toBe(first);
+        expect(store.getComposer(key)?.text).toBe('new text');
+    });
+
+    it('blocks publication after confirmed deletion until DELETE responds', async () => {
+        const { store, controller, remove } = setup();
+        const pendingDelete = deferred<undefined>();
+        controller.input('delete');
+        await controller.saveNow();
+        remove.mockImplementationOnce(() => pendingDelete.promise);
+
+        controller.escape();
+        const discarding = controller.confirmDiscard();
+
+        expect(store.getComposer('new:f1:new:10')?.status).toBe('discarding');
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+        pendingDelete.resolve(undefined);
+        await expect(discarding).resolves.toBe(true);
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
     });
 
     it('a failed deletion leaves a deletion retry instead of a save retry', async () => {

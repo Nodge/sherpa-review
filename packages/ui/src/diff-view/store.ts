@@ -43,6 +43,8 @@ export interface DiffViewSnapshot {
     /** Whitespace-only lines the reviewer explicitly expanded. */
     readonly whitespaceShown: ReadonlySet<string>;
     readonly selection: LineSelection | null;
+    /** Between the actual start of a drag and mouse button release. */
+    readonly selectionDragging: boolean;
 }
 
 export interface DiffViewStore {
@@ -62,8 +64,10 @@ export interface DiffViewStore {
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
     readonly openFile: (fileId: string) => void;
     readonly showWhitespace: (fileId: string) => void;
+    readonly beginSelection: () => void;
     readonly startSelection: (fileId: string, key: LineKey) => void;
     readonly extendSelection: (fileId: string, key: LineKey) => void;
+    readonly finishSelection: () => void;
     readonly clearSelection: () => void;
 }
 
@@ -149,6 +153,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
         opened: new Set(),
         whitespaceShown: new Set(),
         selection: null,
+        selectionDragging: false,
     };
 
     const update = (patch: Partial<DiffViewSnapshot>): void => {
@@ -249,6 +254,12 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
         },
 
+        beginSelection: () => {
+            if (!snapshot.selectionDragging) {
+                update({ selectionDragging: true });
+            }
+        },
+
         startSelection: (fileId, key) => {
             update({ selection: { fileId, anchor: key, focus: key } });
         },
@@ -262,9 +273,15 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             update({ selection: { fileId, anchor, focus: key } });
         },
 
+        finishSelection: () => {
+            if (snapshot.selectionDragging) {
+                update({ selectionDragging: false });
+            }
+        },
+
         clearSelection: () => {
-            if (snapshot.selection !== null) {
-                update({ selection: null });
+            if (snapshot.selection !== null || snapshot.selectionDragging) {
+                update({ selection: null, selectionDragging: false });
             }
         },
     };

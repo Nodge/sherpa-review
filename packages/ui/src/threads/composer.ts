@@ -41,6 +41,15 @@ export function composerControllerFor(options: ComposerControllerOptions): Compo
     return created;
 }
 
+/** A published draft can no longer be edited through the old composer. */
+export function closePublishedComposers(store: ThreadStore, commentIds: readonly string[]): void {
+    const keys = store.closePublishedComposers(new Set(commentIds));
+    const byKey = controllers.get(store);
+    for (const key of keys) {
+        byKey?.get(key)?.close();
+    }
+}
+
 /** Draft autosave: debounce ≤1s, the first save returns an id, then updates follow. */
 export function createComposerController(options: ComposerControllerOptions): ComposerController {
     const debounceMs = options.debounceMs ?? 1000;
@@ -124,11 +133,13 @@ export function createComposerController(options: ComposerControllerOptions): Co
                 }
                 return true;
             } catch {
-                options.store.updateComposer(options.key, {
-                    status: 'error',
-                    slow: false,
-                    ...(current.commentId === null ? { saveUncertain: true } : {}),
-                });
+                if (!discardRequested) {
+                    options.store.updateComposer(options.key, {
+                        status: 'error',
+                        slow: false,
+                        ...(current.commentId === null ? { saveUncertain: true } : {}),
+                    });
+                }
                 return false;
             } finally {
                 // Input during a request starts a new debounce. Completing the old save does not cancel it.
@@ -167,6 +178,11 @@ export function createComposerController(options: ComposerControllerOptions): Co
         clearTimers();
         closed = true;
         discardRequested = true;
+        options.store.updateComposer(options.key, {
+            status: 'discarding',
+            slow: false,
+            confirmDiscard: false,
+        });
         const active = inFlight;
 
         discardPromise = (async () => {
@@ -268,6 +284,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         close: () => {
             clearTimers();
             closed = true;
+            forget();
         },
     };
     return controller;

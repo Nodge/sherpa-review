@@ -90,6 +90,40 @@ describe('thread store', () => {
         expect(layout).not.toHaveBeenCalled();
     });
 
+    it('changes the publication guard only between saved and unsaved states', () => {
+        const store = createThreadStore([], new Set());
+        const listener = vi.fn();
+        store.subscribeComposerGuard(listener);
+        store.openComposer({
+            key: 'new:pr',
+            threadId: null,
+            parentId: null,
+            anchor: null,
+            text: '',
+            commentId: null,
+            status: 'idle',
+            saveUncertain: false,
+            slow: false,
+            confirmDiscard: false,
+            resolvedAtOpen: false,
+        });
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
+
+        store.updateComposer('new:pr', { text: 'comment' });
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        store.updateComposer('new:pr', { status: 'saving' });
+        expect(listener).toHaveBeenCalledTimes(1);
+        store.updateComposer('new:pr', { commentId: 'draft-1', status: 'saved' });
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
+        expect(listener).toHaveBeenCalledTimes(2);
+
+        store.updateComposer('new:pr', { text: '', status: 'idle' });
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+        expect(listener).toHaveBeenCalledTimes(3);
+    });
+
     it('clears a temporary resolve rollback on a server snapshot even if the value differs', () => {
         const data = fixtureData('medium');
         const thread = data.threads.find((candidate) => !candidate.resolved);

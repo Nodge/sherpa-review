@@ -1,0 +1,269 @@
+/* Floating bar for final actions. README §5, SPEC §2.19. */
+
+.review-action-bar {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    max-width: calc(100vw - 44px);
+    padding: 8px 9px;
+    transform: translateX(-50%);
+    border: 1px solid var(--border-raised-bar);
+    border-radius: var(--radius-floating);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-floating);
+    color: var(--text-secondary);
+    font-size: var(--font-size-ui);
+    white-space: nowrap;
+}
+
+.review-action-bar button {
+    font: inherit;
+}
+
+.review-action-bar__progress,
+.review-action-bar__drafts,
+.review-action-bar__no-drafts {
+    font-size: var(--font-size-secondary);
+}
+
+.review-action-bar__progress {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.review-action-bar__divider {
+    width: 1px;
+    height: 18px;
+    flex: none;
+    background: var(--border-strong);
+}
+
+.review-action-bar__drafts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--attention-text);
+}
+
+.review-action-bar__draft-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--attention);
+}
+
+.review-action-bar__no-drafts {
+    color: var(--text-dim);
+}
+
+.review-action-bar__button {
+    height: 29px;
+    padding: 0 11px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.review-action-bar__button:hover:not(:disabled) {
+    border-color: var(--border-strong-lifted);
+    background: var(--surface-popover);
+}
+
+.review-action-bar__request {
+    border-color: var(--border-strong-lifted);
+    color: var(--error-text);
+}
+
+.review-action-bar button:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
+}
+
+.review-action-bar__ship {
+    position: relative;
+    display: flex;
+}
+
+.review-action-bar__ship-primary,
+.review-action-bar__ship-caret {
+    height: 29px;
+    border: 0;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+}
+
+.review-action-bar__ship-primary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 11px;
+    border-radius: var(--radius-input) 0 0 var(--radius-input);
+    font-weight: 600;
+}
+
+.review-action-bar__thumb {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.review-action-bar__ship-caret {
+    width: 28px;
+    padding: 0;
+    border-left: 1px solid var(--accent-hover);
+    border-radius: 0 var(--radius-input) var(--radius-input) 0;
+}
+
+.review-action-bar__ship-primary:hover:not(:disabled),
+.review-action-bar__ship-caret:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.review-action-menu {
+    position: absolute;
+    right: 0;
+    bottom: 38px;
+    width: 330px;
+    overflow: hidden;
+    border: 1px solid var(--border-raised-bar);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-menu);
+    white-space: normal;
+}
+
+.review-action-menu__guard {
+    padding: 9px 11px;
+    border-bottom: 1px solid var(--border-standard);
+    font-size: var(--font-size-secondary);
+    color: var(--attention-text);
+}
+
+.review-action-menu__option {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: var(--space-inner-tight);
+    padding: 9px 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.review-action-menu__option.is-cursor {
+    background: var(--surface-selected);
+}
+
+.review-action-menu__option[aria-disabled='true'] {
+    cursor: default;
+    opacity: var(--disabled-opacity);
+}
+
+.review-action-menu__tick {
+    color: var(--accent-hover);
+}
+
+.review-action-menu__option strong,
+.review-action-menu__option span,
+.review-action-menu__option small {
+    display: block;
+}
+
+.review-action-menu__option strong {
+    margin-bottom: 3px;
+    color: var(--text-primary-soft);
+    font-size: var(--font-size-ui);
+    font-weight: 500;
+}
+
+.review-action-menu__option span {
+    color: var(--text-muted);
+    font-size: var(--font-size-control);
+    line-height: 1.45;
+}
+
+.review-action-menu__option small {
+    margin-top: 4px;
+    color: var(--attention-text);
+    font-size: var(--font-size-gutter);
+}
+
+.review-pr-composer {
+    position: absolute;
+    right: 176px;
+    bottom: 47px;
+    width: 360px;
+    padding: 11px;
+    border: 1px solid var(--border-raised-popover);
+    border-radius: var(--radius-popover);
+    background: var(--surface-popover);
+    box-shadow: var(--shadow-popover);
+    white-space: normal;
+}
+
+.review-pr-composer__title {
+    margin-bottom: var(--space-inner-tight);
+    color: var(--text-primary-soft);
+    font-size: var(--font-size-ui);
+    font-weight: 500;
+}
+
+.review-action-bar--error {
+    align-items: stretch;
+    width: min(540px, calc(100vw - 44px));
+    flex-direction: column;
+    gap: 6px;
+    border-color: var(--error-border);
+    background: var(--error-surface);
+    white-space: normal;
+}
+
+.review-action-error__summary {
+    color: var(--error-text);
+    font-size: var(--font-size-ui);
+    font-weight: 500;
+}
+
+.review-action-error__summary button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.review-action-error__message {
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary);
+}
+
+.review-action-error__comments {
+    display: grid;
+    gap: 5px;
+    max-height: 168px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.review-action-error__comments li {
+    display: grid;
+    gap: 2px;
+    padding-top: 5px;
+    border-top: 1px solid var(--error-border);
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary);
+}
+
+.review-action-error__comments small {
+    color: var(--text-muted-dim);
+    font-size: var(--font-size-gutter);
+}

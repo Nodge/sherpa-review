@@ -304,6 +304,7 @@ function Composer({
                 className="thread-composer__input"
                 value={composer.text}
                 autoFocus
+                disabled={composer.status === 'discarding'}
                 aria-label={thread === null ? 'New comment' : 'Thread reply'}
                 onChange={(event) => {
                     controller.input(event.target.value);
@@ -330,7 +331,9 @@ function Composer({
                 </p>
             ) : (
                 <p className={`thread-composer__status${composer.status === 'error' ? ' is-error' : ''}`}>
-                    {ambiguousFirstSave ? (
+                    {composer.status === 'discarding' ? (
+                        'deleting…'
+                    ) : ambiguousFirstSave ? (
                         <>
                             could not confirm the save · retrying may create a duplicate ·{' '}
                             <button type="button" onClick={() => void controller.retry()}>
@@ -355,6 +358,26 @@ function Composer({
             )}
         </div>
     );
+}
+
+export function openPrComposer(store: ThreadStore): void {
+    const key = 'new:pr';
+    if (store.getComposer(key) !== null) {
+        return;
+    }
+    store.openComposer({
+        key,
+        threadId: null,
+        parentId: null,
+        anchor: null,
+        text: '',
+        commentId: null,
+        status: 'idle',
+        saveUncertain: false,
+        slow: false,
+        confirmDiscard: false,
+        resolvedAtOpen: false,
+    });
 }
 
 export function openNewComposer(

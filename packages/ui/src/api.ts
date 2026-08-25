@@ -5,6 +5,7 @@ import type {
     PrDiff,
     PriorityClass,
     PrMeta,
+    PublishResult,
     Thread,
     UiCancelResponse,
     UiEnqueueResponse,
@@ -13,6 +14,7 @@ import type {
     UiReviewProgressResponse,
     UiSetFileViewedResponse,
     UiTask,
+    Verdict,
 } from '@sherpa/protocol';
 import {
     rpcErrorSchema,
@@ -20,6 +22,7 @@ import {
     uiCancelResponseSchema,
     uiEnqueueResponseSchema,
     uiOpenInEditorResponseSchema,
+    uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
@@ -87,6 +90,11 @@ export async function deleteReviewDraft(token: string, commentId: string): Promi
 
 export async function setReviewThreadResolved(token: string, threadId: string, resolved: boolean): Promise<void> {
     await post(UI_ENDPOINTS.reviewThreadResolved, token, { threadId, resolved }, uiReviewWriteAckSchema);
+}
+
+/** Publishes accumulated drafts and applies the verdict only if the entire batch succeeds. */
+export async function publishReview(token: string, verdict: Verdict): Promise<PublishResult> {
+    return (await post(UI_ENDPOINTS.reviewPublish, token, { verdict }, uiPublishResponseSchema)).result;
 }
 
 /**

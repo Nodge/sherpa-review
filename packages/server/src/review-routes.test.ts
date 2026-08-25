@@ -10,6 +10,7 @@ import {
     UI_STATE_EVENT,
     uiOpenInEditorResponseSchema,
     uiProgressEventSchema,
+    uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
     uiReviewEventSchema,
@@ -506,6 +507,93 @@ describe('server review endpoints', () => {
             );
 
             expect((await nextReview(stream)).threadsRevision).toBeGreaterThan(started.threadsRevision);
+        });
+    });
+
+    describe('review publication', () => {
+        it('publishes the batch, applies the verdict and returns the host outcome', async () => {
+            const host = makeFixtureHost('medium');
+            const draft = await host.saveDraft({ body: 'ready to publish', parentId: null, anchor: null });
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewPublish,
+                { verdict: 'ship' },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(uiPublishResponseSchema.parse(await response.json()).result).toEqual({
+                publishedCommentIds: [draft.id],
+                failed: [],
+                verdictApplied: true,
+            });
+            expect(host.appliedVerdict()).toBe('ship');
+        });
+
+        it('a partial failure returns unpublished comments and does not apply the verdict', async () => {
+            const host = makeFixtureHost('medium', { failPublishFor: ['-70001'] });
+            const failedDraft = await host.saveDraft({ body: 'this draft will fail', parentId: null, anchor: null });
+            const publishedDraft = await host.saveDraft({ body: 'this draft will publish', parentId: null, anchor: null });
+            const server = await start(FIXTURE_PR, host);
+            const stream = await openEvents(server);
+            expect((await stream.next()).event).toBe(UI_STATE_EVENT);
+            await nextReview(stream);
+            const started = await nextReview(stream);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewPublish,
+                { verdict: 'request_changes' },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(uiPublishResponseSchema.parse(await response.json()).result).toEqual({
+                publishedCommentIds: [publishedDraft.id],
+                failed: [
+                    {
+                        commentId: failedDraft.id,
+                        message: 'fixture: publishing this comment is configured to fail',
+                    },
+                ],
+                verdictApplied: false,
+            });
+            expect(host.appliedVerdict()).toBeNull();
+            expect((await nextReview(stream)).threadsRevision).toBeGreaterThan(started.threadsRevision);
+        });
+
+        it('returns no_review_host without a host', async () => {
+            const server = await start(UNKNOWN_PR);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewPublish,
+                { verdict: 'ship' },
+                server.token,
+            );
+
+            expect(response.status).toBe(404);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
+        });
+
+        it('a publishBatch failure reaches the client as host_unavailable', async () => {
+            const host = makeFixtureHost('medium');
+            host.publishBatch = () => Promise.reject(new Error('publishing temporarily unavailable'));
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewPublish,
+                { verdict: 'sticky_ship' },
+                server.token,
+            );
+
+            expect(response.status).toBe(502);
+            const body = rpcErrorSchema.parse(await response.json());
+            expect(body.error.code).toBe('host_unavailable');
+            expect(body.error.message).toContain('publishing temporarily unavailable');
         });
     });
 

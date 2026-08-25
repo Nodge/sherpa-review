@@ -106,6 +106,8 @@ const EXPECTED: Record<string, string> = {
     '--diff-del-text-strong': '#e8a29c',
     '--diff-del-gutter': '#7f5a56',
     '--read-fill': '#2b7a55',
+    // README §13: circle with a checkmark on the Review complete screen.
+    '--success-surface': '#1f3d2c',
     // SPEC §2.10 (Mark viewed): "box fills to 25% accent-green", the same `#2b7a55` = rgb(43,122,85).
     '--read-fill-hover': 'rgba(43,122,85,.25)',
     '--read-border': '#3f7a5a',
@@ -197,6 +199,8 @@ const EXPECTED: Record<string, string> = {
     '--radius-input': '7px',
     '--radius-popover': '8px',
     '--radius-card': '9px',
+    // README §5: the floating bar has its own 11px radius.
+    '--radius-floating': '11px',
     '--radius-panel': '12px',
 
     // Spacing — 30px page gutter · 40px column gap · 22px card gap · 14px control gap ·

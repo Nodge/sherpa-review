@@ -50,7 +50,10 @@ export function Gallery({ initialId }: { initialId: string | null }) {
                             {selected.group} · {selected.title}
                             <code className="gallery__stage-id">{selected.id}</code>
                         </div>
-                        <div className="gallery__canvas">{selected.render()}</div>
+                        {/* key: changing the state remounts the render, so initial props (defaultMenuOpen, etc.) apply again. */}
+                        <div className="gallery__canvas" key={selected.id}>
+                            {selected.render()}
+                        </div>
                     </>
                 )}
             </div>

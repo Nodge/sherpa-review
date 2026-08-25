@@ -193,11 +193,17 @@ export function DiffFileList({
                 store.clearSelection();
             }
         };
+        const onPointerUp = (): void => {
+            store.finishSelection();
+        };
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mouseup', onPointerUp);
         return () => {
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('mousedown', onPointerDown);
+            window.removeEventListener('mouseup', onPointerUp);
+            store.finishSelection();
         };
     }, [store]);
 
@@ -343,6 +349,7 @@ export function DiffFileList({
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
             onSelectStart: (fileId, key, extend) => {
+                store.beginSelection();
                 if (extend) {
                     store.extendSelection(fileId, key);
                 } else {

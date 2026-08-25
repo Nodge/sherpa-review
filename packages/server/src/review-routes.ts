@@ -16,6 +16,8 @@ import {
     uiReviewProgressResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
+    uiPublishRequestSchema,
+    uiPublishResponseSchema,
     uiSaveDraftRequestSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedRequestSchema,
@@ -140,6 +142,18 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 await setThreadResolved(request.threadId, request.resolved);
                 options.reviewFeed?.bumpLocalWrite();
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewPublish,
+            handle: handlingRpcFailures(async (ctx) => {
+                const host = hostOf(options);
+                const request = await readRequest(ctx, uiPublishRequestSchema, 'publishing a review');
+                const result = await call(() => host.publishBatch(request.verdict));
+                // Even a partial failure changes threads: the published part is no longer drafts.
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiPublishResponseSchema, { result });
             }),
         },
         {

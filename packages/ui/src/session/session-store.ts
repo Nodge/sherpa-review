@@ -30,6 +30,9 @@ export interface SessionState {
 export interface SessionStore {
     readonly subscribe: (listener: () => void) => () => void;
     readonly getSnapshot: () => SessionState;
+    /** Every attempt to select a view, including selecting the current one again. */
+    readonly subscribeViewSelection: (listener: () => void) => () => void;
+    readonly getViewSelectionSnapshot: () => number;
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
@@ -50,6 +53,8 @@ export interface SessionStoreOptions {
 
 export function createSessionStore(options: SessionStoreOptions): SessionStore {
     const listeners = new Set<() => void>();
+    const viewSelectionListeners = new Set<() => void>();
+    let viewSelection = 0;
     let state: SessionState = {
         ...options.initial,
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
@@ -72,7 +77,18 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
             };
         },
         getSnapshot: () => state,
+        subscribeViewSelection: (listener) => {
+            viewSelectionListeners.add(listener);
+            return () => {
+                viewSelectionListeners.delete(listener);
+            };
+        },
+        getViewSelectionSnapshot: () => viewSelection,
         setView: (view) => {
+            viewSelection += 1;
+            for (const listener of [...viewSelectionListeners]) {
+                listener();
+            }
             if (view !== state.view) {
                 update({ ...state, view });
             }

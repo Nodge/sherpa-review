@@ -2,7 +2,7 @@ import type { Comment, CommentDraft, FileAnchor, Thread } from '@sherpa/protocol
 
 import { groupThreads } from './model.js';
 
-export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'error';
+export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'discarding' | 'error';
 
 export interface ComposerSnapshot {
     readonly key: string;
@@ -45,6 +45,11 @@ export interface ComposerLayoutSnapshot {
     readonly byFile: ReadonlyMap<string, readonly ComposerSnapshot[]>;
 }
 
+export interface ComposerGuardSnapshot {
+    /** There is unsaved text, a save, or a confirmed deletion in flight. */
+    readonly pending: boolean;
+}
+
 export interface ThreadStore {
     /** Thread changes: server snapshot, draft, resolve and kept-in-view. */
     readonly subscribe: (listener: () => void) => () => void;
@@ -52,6 +57,9 @@ export interface ThreadStore {
     /** A line-anchored composer appearing or disappearing, excluding text input. */
     readonly subscribeComposers: (listener: () => void) => () => void;
     readonly getComposersSnapshot: () => ComposerLayoutSnapshot;
+    /** The publication guard tracks only transitions between "all saved" ↔ "unsaved work exists". */
+    readonly subscribeComposerGuard: (listener: () => void) => () => void;
+    readonly getComposerGuardSnapshot: () => ComposerGuardSnapshot;
     /** Local subscription to one composer: typing does not notify the card list. */
     readonly subscribeComposer: (key: string, listener: () => void) => () => void;
     readonly getComposer: (key: string) => ComposerSnapshot | null;
@@ -73,11 +81,14 @@ export interface ThreadStore {
     readonly openComposer: (composer: ComposerSnapshot) => void;
     readonly updateComposer: (key: string, patch: Partial<Omit<ComposerSnapshot, 'key'>>) => void;
     readonly closeComposer: (key: string) => void;
+    /** Closes the composers of published drafts and returns their keys to the controllers. */
+    readonly closePublishedComposers: (commentIds: ReadonlySet<string>) => readonly string[];
 }
 
 export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlySet<string>): ThreadStore {
     const listeners = new Set<() => void>();
     const composerListeners = new Set<() => void>();
+    const composerGuardListeners = new Set<() => void>();
     const listenersByComposer = new Map<string, Set<() => void>>();
     let serverThreads = [...initial];
     const drafts = new Map<string, OptimisticDraft>();
@@ -90,6 +101,7 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
     const composers = new Map<string, ComposerSnapshot>();
     let snapshot = buildSnapshot(null);
     let composersSnapshot: ComposerLayoutSnapshot = { byFile: new Map() };
+    let composerGuardSnapshot: ComposerGuardSnapshot = { pending: false };
 
     function buildSnapshot(previous: ThreadStoreSnapshot | null): ThreadStoreSnapshot {
         const threads = mergeThreads(serverThreads, drafts, resolved);
@@ -118,6 +130,21 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
         }
     };
 
+    const publishComposerGuard = (): void => {
+        const pending = [...composers.values()].some(
+            (composer) =>
+                composer.status === 'discarding' ||
+                (composer.commentId === null ? composer.text.trim() !== '' : composer.status !== 'saved'),
+        );
+        if (pending === composerGuardSnapshot.pending) {
+            return;
+        }
+        composerGuardSnapshot = { pending };
+        for (const listener of [...composerGuardListeners]) {
+            listener();
+        }
+    };
+
     const publishComposerLayout = (fileId: string | null): void => {
         if (fileId === null) {
             return;
@@ -137,6 +164,17 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
         }
     };
 
+    const closeComposer = (key: string): boolean => {
+        const current = composers.get(key);
+        if (current === undefined || !composers.delete(key)) {
+            return false;
+        }
+        publishComposerLayout(current.anchor?.fileId ?? null);
+        publishComposerGuard();
+        notifyComposer(key);
+        return true;
+    };
+
     return {
         subscribe: (listener) => {
             listeners.add(listener);
@@ -152,6 +190,13 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
             };
         },
         getComposersSnapshot: () => composersSnapshot,
+        subscribeComposerGuard: (listener) => {
+            composerGuardListeners.add(listener);
+            return () => {
+                composerGuardListeners.delete(listener);
+            };
+        },
+        getComposerGuardSnapshot: () => composerGuardSnapshot,
         subscribeComposer: (key, listener) => {
             const bucket = listenersByComposer.get(key) ?? new Set<() => void>();
             bucket.add(listener);
@@ -273,21 +318,28 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
                 publishComposerLayout(previousFileId);
             }
             publishComposerLayout(nextFileId);
+            publishComposerGuard();
             notifyComposer(composer.key);
         },
         updateComposer: (key, patch) => {
             const current = composers.get(key);
             if (current !== undefined) {
                 composers.set(key, { ...current, ...patch });
+                publishComposerGuard();
                 notifyComposer(key);
             }
         },
         closeComposer: (key) => {
-            const current = composers.get(key);
-            if (current !== undefined && composers.delete(key)) {
-                publishComposerLayout(current.anchor?.fileId ?? null);
-                notifyComposer(key);
+            closeComposer(key);
+        },
+        closePublishedComposers: (commentIds) => {
+            const keys = [...composers.values()]
+                .filter((composer) => composer.commentId !== null && commentIds.has(composer.commentId))
+                .map((composer) => composer.key);
+            for (const key of keys) {
+                closeComposer(key);
             }
+            return keys;
         },
     };
 }

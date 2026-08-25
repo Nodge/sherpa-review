@@ -154,9 +154,15 @@ describe('diff view store', () => {
     it('extends selection in both directions and clears it', () => {
         const store = createDiffViewStore({ files: [file('a')], storage: null });
 
+        store.beginSelection();
         store.startSelection('a', 'c40:42');
         store.extendSelection('a', 'a37');
-        expect(store.getSnapshot().selection).toEqual({ fileId: 'a', anchor: 'c40:42', focus: 'a37' });
+        expect(store.getSnapshot()).toMatchObject({
+            selection: { fileId: 'a', anchor: 'c40:42', focus: 'a37' },
+            selectionDragging: true,
+        });
+        store.finishSelection();
+        expect(store.getSnapshot().selectionDragging).toBe(false);
 
         // Selection in another file starts fresh, without spanning files.
         store.extendSelection('b', 'd12');

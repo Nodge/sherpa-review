@@ -92,6 +92,8 @@
     --diff-del-text-strong: #e8a29c;
     --diff-del-gutter: #7f5a56;
     --read-fill: #2b7a55;
+    /* README §13: circle for a successfully completed review. */
+    --success-surface: #1f3d2c;
     /* SPEC §2.10, hovering over "viewed": the box fills a quarter with green. */
     --read-fill-hover: rgba(43, 122, 85, 0.25);
     --read-border: #3f7a5a;
@@ -174,6 +176,7 @@
     --radius-input: 7px;
     --radius-popover: 8px;
     --radius-card: 9px;
+    --radius-floating: 11px;
     --radius-panel: 12px;
 
     /* --- Spacing --- */

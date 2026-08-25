@@ -100,6 +100,19 @@
     padding: 58px 80px;
 }
 
+.gallery-review-actions {
+    position: relative;
+    min-height: 260px;
+}
+
+.gallery-review-actions .review-action-bar {
+    position: absolute;
+}
+
+.gallery-review-complete .review-complete {
+    min-height: 100%;
+}
+
 /* --- Token display --- */
 
 .showcase {

@@ -1,15 +1,29 @@
-import type { PrDiff, Thread, UiReviewLensesResponse } from '@sherpa/protocol';
+import type { PrDiff, PrMeta, Thread, UiReviewLensesResponse, UiReviewProgressResponse, Verdict } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import './app.css';
-import { fetchReviewDiff, fetchReviewLenses, fetchReviewThreads } from './api.js';
+import {
+    fetchReviewDiff,
+    fetchReviewLenses,
+    fetchReviewPr,
+    fetchReviewProgress,
+    fetchReviewThreads,
+    deleteReviewDraft,
+    publishReview,
+    saveReviewDraft,
+    setFileViewed,
+    updateReviewDraft,
+} from './api.js';
 import { agentPillView } from './components/agent-pill-view.js';
 import { auditScopeBannerVisible, AuditScopeBanner } from './components/audit-banner.tsx';
 import type { BannerSource } from './components/banner-slot.tsx';
 import { BannerSlot } from './components/banner-slot.tsx';
 import { DisconnectedBanner } from './components/disconnected-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
+import type { ReviewCompletion } from './components/review-action-bar.tsx';
+import { ReviewActionBar } from './components/review-action-bar.tsx';
+import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
@@ -20,11 +34,16 @@ import {
     findFilter,
     PCI_FILTER_ID,
 } from './filters/lens-filters.js';
+import { updateFragment } from './fragment.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFromPrKey } from './pr-key.js';
+import { createProgressWriter } from './progress/progress-writer.js';
+import type { ProgressWriter } from './progress/progress-writer.js';
 import type { SessionStore } from './session/session-store.js';
+import type { ViewId } from './session/views.js';
 import type { Store } from './store.js';
+import type { ComposerTransport } from './threads/composer.js';
 import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
@@ -40,20 +59,31 @@ export interface AppProps {
 
 interface ReviewState {
     readonly key: string;
+    readonly pr: PrMeta | null;
     readonly diff: PrDiff | null;
     readonly lenses: UiReviewLensesResponse | null;
+    readonly progress: UiReviewProgressResponse | null;
     readonly threads: readonly Thread[] | null;
+    readonly prError: string | null;
     readonly diffError: string | null;
     readonly lensesError: string | null;
+    readonly progressError: string | null;
     readonly threadsError: string | null;
+    readonly prLoading: boolean;
     readonly diffLoading: boolean;
     readonly lensesLoading: boolean;
+    readonly progressLoading: boolean;
     readonly threadsLoading: boolean;
 }
 
 export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const { view, filter: filterId, paletteOpen } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const viewSelection = useSyncExternalStore(
+        session.subscribeViewSelection,
+        session.getViewSelectionSnapshot,
+        session.getViewSelectionSnapshot,
+    );
     const state = snapshot.state;
     const reviewReady = state !== null;
     const reviewHost = state?.reviewHost ?? null;
@@ -61,9 +91,73 @@ export function App({ store, session, token }: AppProps) {
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
     const currentDiff = currentReview.diff;
+    const diffStore = useMemo(
+        () => (currentDiff === null ? null : createDiffViewStore({ files: currentDiff.files })),
+        [currentDiff],
+    );
+    const [progressWritesSettled, setProgressWritesSettled] = useState(0);
+    const progressWriter = useMemo<ProgressWriter | null>(
+        () =>
+            diffStore === null
+                ? null
+                : createProgressWriter({
+                      initialRevision: 0,
+                      read: (fileId) => diffStore.getSnapshot().progress.get(fileId) ?? null,
+                      apply: diffStore.markViewed,
+                      restore: diffStore.restoreProgress,
+                      send: async (fileId, viewed) => (await setFileViewed(token, fileId, viewed)).progressRevision,
+                      onSettled: () => {
+                          setProgressWritesSettled((settled) => settled + 1);
+                      },
+                  }),
+        [diffStore, token],
+    );
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [paletteNavigation, setPaletteNavigation] = useState<PaletteNavigation | null>(null);
     const navigationId = useRef(0);
+    // Every session.setView call, including reselecting the current tab, clears Review complete.
+    const [completionState, setCompletionState] = useState<{
+        key: string;
+        viewSelection: number;
+        value: ReviewCompletion;
+    } | null>(null);
+    const completion =
+        completionState?.key === reviewKey && completionState.viewSelection === viewSelection
+            ? completionState.value
+            : null;
+
+    // The header and final actions need PR metadata. It loads independently of the other data.
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null) {
+            return;
+        }
+        let alive = true;
+        void fetchReviewPr(token).then(
+            (pr) => {
+                if (alive) {
+                    setReviewState((current) => ({
+                        ...reviewStateForKey(current, reviewKey),
+                        pr,
+                        prError: null,
+                        prLoading: false,
+                    }));
+                }
+            },
+            (error: unknown) => {
+                if (alive) {
+                    setReviewState((current) => ({
+                        ...reviewStateForKey(current, reviewKey),
+                        pr: null,
+                        prError: errorMessage(error),
+                        prLoading: false,
+                    }));
+                }
+            },
+        );
+        return () => {
+            alive = false;
+        };
+    }, [reviewHost, reviewKey, reviewReady, token]);
 
     // Publish the diff as soon as it is ready. Lens and thread requests do not block the reader.
     useEffect(() => {
@@ -134,6 +228,82 @@ export function App({ store, session, token }: AppProps) {
         };
     }, [reviewHost, reviewKey, reviewReady, token]);
 
+    // App owns one ProgressWriter. Server snapshots go through its merge,
+    // and its own write event does not trigger an extra refresh unless there is a revision gap.
+    const [progressRetry, setProgressRetry] = useState<{ key: string; attempt: number }>({
+        key: reviewKey,
+        attempt: 0,
+    });
+    const progressRetryAttempt = progressRetry.key === reviewKey ? progressRetry.attempt : 0;
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null || diffStore === null || progressWriter === null) {
+            return;
+        }
+        const initial = currentReview.progress === null;
+        const revision = snapshot.progressRevision;
+        if (!initial && (revision === null || !progressWriter.shouldReload(revision))) {
+            return;
+        }
+
+        let alive = true;
+        let retry: ReturnType<typeof setTimeout> | null = null;
+        const mark = progressWriter.beginReload();
+        void fetchReviewProgress(token).then(
+            (response) => {
+                if (!alive) {
+                    return;
+                }
+                const files = progressWriter.finishReload(response, mark);
+                if (files !== null) {
+                    diffStore.setProgress(files);
+                }
+                setReviewState((current) => ({
+                    ...reviewStateForKey(current, reviewKey),
+                    ...(files === null ? {} : { progress: { ...response, files } }),
+                    progressError: null,
+                    progressLoading: false,
+                }));
+                if (progressRetryAttempt !== 0) {
+                    setProgressRetry({ key: reviewKey, attempt: 0 });
+                }
+            },
+            (error: unknown) => {
+                if (!alive) {
+                    return;
+                }
+                setReviewState((current) => {
+                    const next = reviewStateForKey(current, reviewKey);
+                    return {
+                        ...next,
+                        // A background failure does not replace progress already on screen with a full-screen error.
+                        progressError: next.progress === null ? errorMessage(error) : null,
+                        progressLoading: false,
+                    };
+                });
+                retry = setTimeout(() => {
+                    setProgressRetry({ key: reviewKey, attempt: progressRetryAttempt + 1 });
+                }, Math.min(1000 * 2 ** progressRetryAttempt, 15_000));
+            },
+        );
+        return () => {
+            alive = false;
+            if (retry !== null) {
+                clearTimeout(retry);
+            }
+        };
+    }, [
+        currentReview.progress,
+        diffStore,
+        progressRetryAttempt,
+        progressWriter,
+        progressWritesSettled,
+        reviewHost,
+        reviewKey,
+        reviewReady,
+        snapshot.progressRevision,
+        token,
+    ]);
+
     // App is the sole owner of thread reads. A revision is marked seen only after a successful read.
     const seenThreads = useRef<{ key: string; revision: number | null; loaded: boolean }>({
         key: reviewKey,
@@ -202,10 +372,6 @@ export function App({ store, session, token }: AppProps) {
         };
     }, [reviewHost, reviewKey, reviewReady, snapshot.threadsRevision, threadRetryAttempt, token]);
 
-    const diffStore = useMemo(
-        () => (currentDiff === null ? null : createDiffViewStore({ files: currentDiff.files })),
-        [currentDiff],
-    );
     const threadFileIds = useMemo(
         () => new Set(currentDiff?.files.map((file) => file.fileId) ?? []),
         [currentDiff],
@@ -223,6 +389,14 @@ export function App({ store, session, token }: AppProps) {
             threadStore.setServerThreads(currentReview.threads);
         }
     }, [currentReview.threads, threadStore]);
+    const composerTransport = useMemo<ComposerTransport>(
+        () => ({
+            save: (draft) => saveReviewDraft(token, draft),
+            update: (commentId, body) => updateReviewDraft(token, commentId, body),
+            delete: (commentId) => deleteReviewDraft(token, commentId),
+        }),
+        [token],
+    );
 
     const diffFilterHandler = useRef<((id: string) => void) | null>(null);
     const setDiffFilterHandler = useCallback((handler: ((id: string) => void) | null) => {
@@ -322,6 +496,38 @@ export function App({ store, session, token }: AppProps) {
                 ),
         },
     ];
+    const selectView = useCallback(
+        (next: ViewId) => {
+            session.setView(next);
+        },
+        [session],
+    );
+    const completeReview = useCallback(
+        (value: ReviewCompletion) => {
+            setCompletionState({ key: reviewKey, viewSelection: session.getViewSelectionSnapshot(), value });
+            void fetchReviewPr(token).then(
+                (pr) => {
+                    setReviewState((current) => ({
+                        ...reviewStateForKey(current, reviewKey),
+                        pr,
+                        prError: null,
+                        prLoading: false,
+                    }));
+                },
+                () => {
+                    // The publish endpoint has already confirmed the result. The header status reloads with the page.
+                },
+            );
+        },
+        [reviewKey, session, token],
+    );
+    const openCompletedThread = useCallback(
+        (threadId: string) => {
+            window.location.hash = updateFragment(window.location.hash, { thread: threadId, file: null });
+            session.setView('diff');
+        },
+        [session],
+    );
 
     if (snapshot.connection === 'fatal') {
         return (
@@ -351,7 +557,7 @@ export function App({ store, session, token }: AppProps) {
                 agent={agentPillView(state.worker, state.tasks)}
                 reconnectCommand={reconnectCommand(state.prKey)}
                 view={view}
-                onSelectView={session.setView}
+                onSelectView={selectView}
                 onOpenSearch={() => {
                     session.setPaletteOpen(true);
                 }}
@@ -366,18 +572,30 @@ export function App({ store, session, token }: AppProps) {
 
             <BannerSlot sources={bannerSources} />
 
-            {view === 'diff' ? (
+            {completion !== null ? (
+                <ReviewComplete
+                    completion={completion}
+                    onOpenThread={openCompletedThread}
+                    onOpenFullDiff={() => {
+                        session.setView('diff');
+                    }}
+                />
+            ) : view === 'diff' ? (
                 <FullDiffView
                     token={token}
                     prKey={state.prKey}
                     session={session}
+                    pr={currentReview.pr}
+                    prError={currentReview.prError}
                     diff={currentDiff}
                     diffError={currentReview.diffError}
                     lenses={currentReview.lenses}
                     lensesError={currentReview.lensesError}
+                    progress={currentReview.progress}
+                    progressError={currentReview.progressError}
+                    progressWriter={progressWriter}
                     store={diffStore}
                     threadStore={threadStore}
-                    progressRevision={snapshot.progressRevision}
                     paletteNavigation={paletteNavigation}
                     onFilterChangeHandler={setDiffFilterHandler}
                     onPaletteActiveFileChange={(fileId) => {
@@ -418,6 +636,28 @@ export function App({ store, session, token }: AppProps) {
                     session.setPaletteOpen(false);
                 }}
             />
+
+            {completion === null &&
+            (view === 'route' || view === 'diff') &&
+            reviewHost !== null &&
+            currentReview.pr !== null &&
+            currentReview.progress !== null &&
+            currentReview.threads !== null &&
+            currentDiff !== null &&
+            diffStore !== null &&
+            threadStore !== null ? (
+                <ReviewActionBar
+                    pr={currentReview.pr}
+                    diff={currentDiff}
+                    diffStore={diffStore}
+                    threadStore={threadStore}
+                    connection={snapshot.connection}
+                    hostName={hostDisplayName(reviewHost)}
+                    composerTransport={composerTransport}
+                    onPublish={(verdict: Verdict) => publishReview(token, verdict)}
+                    onComplete={completeReview}
+                />
+            ) : null}
         </>
     );
 }
@@ -434,14 +674,20 @@ export function MessageScreen({ title, children }: { title: string; children: Re
 function emptyReviewState(key: string, loading: boolean): ReviewState {
     return {
         key,
+        pr: null,
         diff: null,
         lenses: null,
+        progress: null,
         threads: null,
+        prError: null,
         diffError: null,
         lensesError: null,
+        progressError: null,
         threadsError: null,
+        prLoading: loading,
         diffLoading: loading,
         lensesLoading: loading,
+        progressLoading: loading,
         threadsLoading: loading,
     };
 }
@@ -452,6 +698,13 @@ function reviewStateForKey(current: ReviewState, key: string): ReviewState {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function hostDisplayName(host: string): string {
+    if (host === 'github') {
+        return 'GitHub';
+    }
+    return host === 'fixture' ? 'FixtureHost' : host;
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];

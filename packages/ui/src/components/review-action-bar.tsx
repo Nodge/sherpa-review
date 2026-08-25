@@ -1,0 +1,515 @@
+import type { PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+
+import type { DiffViewStore } from '../diff-view/store.js';
+import type { ReviewProgressSummary } from '../progress/summary.js';
+import {
+    commentBodies,
+    countDraftComments,
+    countPublishedReplies,
+    reviewProgressSummary,
+} from '../progress/summary.js';
+import { useShortcut } from '../shortcuts/context.tsx';
+import type { ConnectionState } from '../store.js';
+import { formatCount, plural } from '../text.js';
+import { closePublishedComposers } from '../threads/composer.js';
+import type { ComposerTransport } from '../threads/composer.js';
+import { NewCommentComposer, openPrComposer } from '../threads/thread-list.tsx';
+import type { ThreadStore } from '../threads/store.js';
+import { discussionStats } from '../views/overview-model.js';
+import {
+    availableShipMode,
+    loadShipMode,
+    partialPublicationFailure,
+    type PublicationFailure,
+    publishConsequence,
+    publishDisabledReason,
+    requestPublicationFailure,
+    saveShipMode,
+    type ShipMode,
+} from './review-action-model.js';
+import './review-action-bar.css';
+
+const SHIP_DESCRIPTION = 'Approves this snapshot only. A new push drops the approval and asks again.';
+const STICKY_DESCRIPTION =
+    'The approval carries over to later pushes until a file in your ownership zone changes.';
+const PR_COMPOSER_KEY = 'new:pr';
+
+export interface ReviewCompletion {
+    readonly verdict: Verdict;
+    readonly prId: string;
+    readonly headCommit: string;
+    readonly hostName: string;
+    readonly publishedComments: number;
+    readonly publishedReplies: number;
+    readonly progress: ReviewProgressSummary;
+    readonly openThreads: number;
+    readonly firstOpenThreadId: string | null;
+}
+
+export interface ReviewActionBarProps {
+    readonly pr: PrMeta;
+    readonly diff: PrDiff;
+    readonly diffStore: DiffViewStore;
+    readonly threadStore: ThreadStore;
+    readonly connection: ConnectionState;
+    readonly hostName: string;
+    readonly composerTransport: ComposerTransport;
+    readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
+    readonly onComplete: (completion: ReviewCompletion) => void;
+    readonly defaultMenuOpen?: boolean;
+    readonly initialFailure?: PublicationFailure | null;
+    readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+}
+
+/** Final review actions with live counters, a save check and one publishing batch. */
+export function ReviewActionBar({
+    pr,
+    diff,
+    diffStore,
+    threadStore,
+    connection,
+    hostName,
+    composerTransport,
+    onPublish,
+    onComplete,
+    defaultMenuOpen = false,
+    initialFailure = null,
+    storage,
+}: ReviewActionBarProps) {
+    const diffSnapshot = useSyncExternalStore(diffStore.subscribe, diffStore.getSnapshot, diffStore.getSnapshot);
+    const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot, threadStore.getSnapshot);
+    const composerGuard = useSyncExternalStore(
+        threadStore.subscribeComposerGuard,
+        threadStore.getComposerGuardSnapshot,
+        threadStore.getComposerGuardSnapshot,
+    );
+    const subscribePrComposer = useCallback(
+        (listener: () => void) => threadStore.subscribeComposer(PR_COMPOSER_KEY, listener),
+        [threadStore],
+    );
+    const getPrComposer = useCallback(() => threadStore.getComposer(PR_COMPOSER_KEY), [threadStore]);
+    const prComposer = useSyncExternalStore(subscribePrComposer, getPrComposer, getPrComposer);
+    const stickyAvailable = pr.capabilities.stickyShip;
+    const [shipMode, setShipMode] = useState<ShipMode>(() => loadShipMode(stickyAvailable, storage));
+    const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
+    const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
+    const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+    const [composerOpen, setComposerOpen] = useState(false);
+    const [publishing, setPublishing] = useState<Verdict | null>(null);
+    const [failure, setFailure] = useState<PublicationFailure | null>(initialFailure);
+    const rootRef = useRef<HTMLDivElement | null>(null);
+    const shipButtonRef = useRef<HTMLButtonElement | null>(null);
+    const commentButtonRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    const publicationRef = useRef<{
+        verdict: Verdict;
+        publishedIds: Set<string>;
+    } | null>(null);
+
+    const drafts = countDraftComments(threadSnapshot.threads);
+    const progress = reviewProgressSummary(diff.files, diffSnapshot.readState);
+    const unviewed = progress.filesTotal - progress.filesSeen;
+    const draggingSelection = diffSnapshot.selectionDragging;
+    const retryDisabledReason = publishDisabledReason({
+        connection,
+        pendingComposer: composerGuard.pending,
+        publishing: publishing !== null,
+    });
+    const disabledReason = publishDisabledReason({
+        connection,
+        pendingComposer: composerGuard.pending,
+        publishing: publishing !== null,
+        failure: failure !== null,
+    });
+    const disabled = disabledReason !== null;
+
+    const closeMenu = useCallback((returnFocus: boolean): void => {
+        setMenuOpen(false);
+        if (returnFocus) {
+            shipButtonRef.current?.focus();
+        }
+    }, [setMenuOpen]);
+
+    useEffect(() => {
+        if (!menuOpen) {
+            return;
+        }
+        menuRef.current?.focus();
+        const closeOutside = (event: MouseEvent): void => {
+            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+                closeMenu(true);
+            }
+        };
+        document.addEventListener('mousedown', closeOutside);
+        return () => {
+            document.removeEventListener('mousedown', closeOutside);
+        };
+    }, [closeMenu, menuOpen]);
+
+    useEffect(() => {
+        if (!composerOpen) {
+            return;
+        }
+        const closeOutside = (event: MouseEvent): void => {
+            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+                setComposerOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+                setComposerOpen(false);
+                commentButtonRef.current?.focus();
+            }
+        };
+        document.addEventListener('mousedown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('mousedown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [composerOpen]);
+
+    const publish = useCallback(
+        async (verdict: Verdict, retryFailure = false): Promise<void> => {
+            if ((retryFailure ? retryDisabledReason : disabledReason) !== null) {
+                return;
+            }
+            const threadsBefore = threadStore.getSnapshot().threads;
+            const draftCount = countDraftComments(threadsBefore);
+            const publication =
+                publicationRef.current?.verdict === verdict
+                    ? publicationRef.current
+                    : { verdict, publishedIds: new Set<string>() };
+            publicationRef.current = publication;
+            setMenuOpen(false);
+            setFailure(null);
+            setPublishing(verdict);
+            try {
+                const result = await onPublish(verdict);
+                closePublishedComposers(threadStore, result.publishedCommentIds);
+                for (const commentId of result.publishedCommentIds) {
+                    publication.publishedIds.add(commentId);
+                }
+                const currentThreads = threadStore.getSnapshot().threads;
+                const partial = partialPublicationFailure(verdict, result, commentBodies(currentThreads));
+                if (partial !== null) {
+                    setFailure(partial);
+                    return;
+                }
+                if (verdict === 'ship' || verdict === 'sticky_ship') {
+                    setShipMode(verdict);
+                    saveShipMode(verdict, storage);
+                }
+                const discussion = discussionStats(currentThreads);
+                const publishedIds = [...publication.publishedIds];
+                publicationRef.current = null;
+                onComplete({
+                    verdict,
+                    prId: pr.id,
+                    headCommit: diff.headCommit,
+                    hostName,
+                    publishedComments: publishedIds.length,
+                    publishedReplies: countPublishedReplies(currentThreads, publishedIds),
+                    progress: reviewProgressSummary(diff.files, diffStore.getSnapshot().readState),
+                    openThreads: discussion.open,
+                    firstOpenThreadId: currentThreads.find((thread) => !thread.resolved)?.id ?? null,
+                });
+            } catch (error) {
+                setFailure(requestPublicationFailure(verdict, draftCount, error));
+            } finally {
+                setPublishing(null);
+            }
+        },
+        [
+            diff.files,
+            diff.headCommit,
+            diffStore,
+            disabledReason,
+            hostName,
+            onComplete,
+            onPublish,
+            pr.id,
+            retryDisabledReason,
+            setFailure,
+            setMenuOpen,
+            setPublishing,
+            setShipMode,
+            storage,
+            threadStore,
+        ],
+    );
+
+    useShortcut({
+        id: 'review.shipMenu',
+        keys: ['mod+enter'],
+        label: 'Open the ship menu',
+        consequence: publishConsequence(effectiveShipMode, drafts),
+        when: () => !draggingSelection && !disabled,
+        action: () => {
+            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+            setMenuOpen(true);
+            setComposerOpen(false);
+        },
+    });
+    useShortcut({
+        id: 'review.requestChanges',
+        keys: ['mod+shift+enter'],
+        label: 'Request changes',
+        consequence: publishConsequence('request_changes', drafts),
+        when: () => !draggingSelection && !disabled,
+        action: () => {
+            void publish('request_changes');
+        },
+    });
+
+    if (draggingSelection) {
+        return null;
+    }
+
+    if (failure !== null) {
+        return (
+            <div className="review-action-bar review-action-bar--error" ref={rootRef} role="alert">
+                <div className="review-action-error__summary">
+                    {failure.failedCount === 0 ? (
+                        'Could not finish the review'
+                    ) : (
+                        <>
+                            {formatCount(failure.failedCount)}{' '}
+                            {plural(failure.failedCount, 'comment failed to publish', 'comments failed to publish', 'comments failed to publish')}
+                        </>
+                    )}
+                    {' · '}
+                    <button
+                        type="button"
+                        onClick={() => void publish(failure.verdict, true)}
+                        disabled={retryDisabledReason !== null}
+                        title={retryDisabledReason ?? undefined}
+                    >
+                        retry
+                    </button>
+                </div>
+                {failure.message === null ? null : <div className="review-action-error__message">{failure.message}</div>}
+                {failure.comments.length === 0 ? null : (
+                    <ul className="review-action-error__comments">
+                        {failure.comments.map((comment) => (
+                            <li key={comment.commentId}>
+                                <span>{comment.body ?? `Comment ${comment.commentId}`}</span>
+                                <small>{comment.message}</small>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        );
+    }
+
+    const draftBatch = `${formatCount(drafts)} ${plural(drafts, 'draft', 'drafts', 'drafts')}`;
+    return (
+        <div className="review-action-bar" ref={rootRef}>
+            <span className="review-action-bar__progress">
+                {formatCount(progress.filesSeen)} / {formatCount(progress.filesTotal)} files
+            </span>
+            <span className="review-action-bar__divider" aria-hidden="true" />
+            {drafts === 0 ? (
+                <span className="review-action-bar__no-drafts">no unpublished comments</span>
+            ) : (
+                <span className="review-action-bar__drafts">
+                    <span className="review-action-bar__draft-dot" aria-hidden="true" />
+                    {draftBatch} {plural(drafts, 'goes out', 'go out', 'go out')} on ship
+                </span>
+            )}
+            <span className="review-action-bar__divider" aria-hidden="true" />
+            <button
+                ref={commentButtonRef}
+                type="button"
+                className="review-action-bar__button"
+                onClick={() => {
+                    openPrComposer(threadStore);
+                    setComposerOpen(true);
+                    setMenuOpen(false);
+                }}
+            >
+                Comment on the PR
+            </button>
+            <button
+                type="button"
+                className="review-action-bar__button review-action-bar__request"
+                disabled={disabled}
+                title={disabledReason ?? publishConsequence('request_changes', drafts)}
+                onClick={() => void publish('request_changes')}
+            >
+                Request changes{drafts === 0 ? '' : ` · ${formatCount(drafts)}`}
+            </button>
+            <div className="review-action-bar__ship">
+                <button
+                    ref={shipButtonRef}
+                    type="button"
+                    className="review-action-bar__ship-primary"
+                    disabled={disabled}
+                    title={disabledReason ?? publishConsequence(effectiveShipMode, drafts)}
+                    onClick={() => void publish(effectiveShipMode)}
+                >
+                    <span className="review-action-bar__thumb" aria-hidden="true">👍</span>
+                    {publishing === null
+                        ? `${shipModeLabel(effectiveShipMode)}${drafts === 0 ? '' : ` · ${formatCount(drafts)}`}`
+                        : 'Publishing…'}
+                </button>
+                <button
+                    type="button"
+                    className="review-action-bar__ship-caret"
+                    aria-haspopup="listbox"
+                    aria-expanded={menuOpen}
+                    disabled={disabled}
+                    title={disabledReason ?? 'Choose the ship mode'}
+                    onClick={() => {
+                        if (menuOpen) {
+                            closeMenu(false);
+                        } else {
+                            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+                            setMenuOpen(true);
+                            setComposerOpen(false);
+                        }
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'ArrowDown' && !menuOpen) {
+                            event.preventDefault();
+                            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+                            setMenuOpen(true);
+                        }
+                    }}
+                >
+                    ⌄
+                </button>
+                {menuOpen ? (
+                    <div
+                        ref={menuRef}
+                        className="review-action-menu"
+                        role="listbox"
+                        aria-label="Ship mode"
+                        tabIndex={-1}
+                        aria-activedescendant={`review-ship-option-${String(cursor)}`}
+                        onKeyDown={(event) => {
+                            if (event.key === 'ArrowDown') {
+                                event.preventDefault();
+                                setCursor((value) => Math.min(value + 1, 1));
+                            } else if (event.key === 'ArrowUp') {
+                                event.preventDefault();
+                                setCursor((value) => Math.max(value - 1, 0));
+                            } else if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                const mode: ShipMode = cursor === 0 ? 'ship' : 'sticky_ship';
+                                if (mode === 'ship' || stickyAvailable) {
+                                    void publish(mode);
+                                }
+                            } else if (event.key === 'Escape') {
+                                event.preventDefault();
+                                closeMenu(true);
+                            } else if (event.key === 'Tab') {
+                                closeMenu(false);
+                            }
+                        }}
+                    >
+                        {unviewed === 0 ? null : (
+                            <div className="review-action-menu__guard">
+                                {formatCount(unviewed)} {plural(unviewed, 'file not viewed', 'files not viewed', 'files not viewed')} — ship anyway?
+                            </div>
+                        )}
+                        <ShipOption
+                            index={0}
+                            cursor={cursor}
+                            mode="ship"
+                            active={effectiveShipMode === 'ship'}
+                            label="Ship"
+                            description={SHIP_DESCRIPTION}
+                            drafts={drafts}
+                            onHover={setCursor}
+                            onChoose={(mode) => void publish(mode)}
+                        />
+                        <ShipOption
+                            index={1}
+                            cursor={cursor}
+                            mode="sticky_ship"
+                            active={effectiveShipMode === 'sticky_ship'}
+                            label="Sticky ship"
+                            description={STICKY_DESCRIPTION}
+                            drafts={drafts}
+                            disabled={!stickyAvailable}
+                            disabledReason="This host does not support Sticky ship."
+                            onHover={setCursor}
+                            onChoose={(mode) => void publish(mode)}
+                        />
+                    </div>
+                ) : null}
+            </div>
+
+            {composerOpen && prComposer !== null ? (
+                <div className="review-pr-composer" role="dialog" aria-label="Comment on the PR">
+                    <div className="review-pr-composer__title">Comment on the PR</div>
+                    <NewCommentComposer composerKey={PR_COMPOSER_KEY} store={threadStore} transport={composerTransport} />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function ShipOption({
+    index,
+    cursor,
+    mode,
+    active,
+    label,
+    description,
+    drafts,
+    disabled = false,
+    disabledReason,
+    onHover,
+    onChoose,
+}: {
+    index: number;
+    cursor: number;
+    mode: ShipMode;
+    active: boolean;
+    label: string;
+    description: string;
+    drafts: number;
+    disabled?: boolean;
+    disabledReason?: string;
+    onHover: (index: number) => void;
+    onChoose: (mode: ShipMode) => void;
+}) {
+    return (
+        <div
+            id={`review-ship-option-${String(index)}`}
+            role="option"
+            aria-selected={active}
+            aria-disabled={disabled}
+            title={disabled ? disabledReason : undefined}
+            className={`review-action-menu__option${index === cursor ? ' is-cursor' : ''}`}
+            onMouseEnter={() => {
+                onHover(index);
+            }}
+            onClick={() => {
+                if (!disabled) {
+                    onChoose(mode);
+                }
+            }}
+        >
+            <span className="review-action-menu__tick" aria-hidden="true">{active ? '✓' : ''}</span>
+            <span>
+                <strong>{label}</strong>
+                <span>{description}</span>
+                {drafts === 0 ? null : (
+                    <small>
+                        Publishes {formatCount(drafts)} {plural(drafts, 'draft', 'drafts', 'drafts')}.
+                    </small>
+                )}
+                {disabled ? <small>{disabledReason}</small> : null}
+            </span>
+        </div>
+    );
+}
+
+function shipModeLabel(mode: ShipMode): string {
+    return mode === 'sticky_ship' ? 'Sticky ship' : 'Ship';
+}
