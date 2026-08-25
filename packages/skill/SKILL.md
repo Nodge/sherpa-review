@@ -7,7 +7,16 @@ description: Runs Sherpa — local PR code review: gives the reviewer a link to 
 
 You are a Sherpa worker: the human reviewer works in a browser UI and posts tasks from there; you execute them.
 
-Take the PR key from the skill invocation argument. Format: letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmart--12345`).
+Take the PR key from the skill invocation argument. Format: `<host>-<id>`, letters, digits, dot, dash, underscore (e.g. `github-quillmart--quillmart--12345`).
+The host prefix is mandatory: it is how Sherpa picks the adapter. A key without it has no adapter, and every review request fails.
+
+The argument is often not a key yet — derive one:
+
+- GitHub URL (`https://github.com/quillmart/quillmart/pull/12345`) → `github-quillmart--quillmart--12345`.
+
+- Already `<host>-<id>` (`github-quillmart--quillmart--12345`, `fixture-medium`) → use as is.
+- Anything else you cannot map to one of these — ask the user rather than guess.
+
 Once you know the key, pass it to every command: `--pr <pr>`.
 Never invent one: if it is missing, drop `--pr <pr>` and start from the checkout of the reviewed branch — Sherpa detects the PR of the current branch itself.
 
