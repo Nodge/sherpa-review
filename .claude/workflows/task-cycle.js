@@ -1,13 +1,13 @@
 export const meta = {
   name: 'task-cycle',
-  description: 'One Sherpa task cycle: Codex coder → checks → dual review (Opus + Codex) → triage → fixes',
+  description: 'One Sherpa task cycle: Opus coder → checks → two reviews (Opus + Codex) → triage → fixes',
   whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds? }. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
   phases: [
-    { title: 'Implement', detail: 'Codex coder implements the brief' },
+    { title: 'Implement', detail: 'Opus coder implements the brief', model: 'opus' },
     { title: 'Gates', detail: 'typecheck / lint / tests' },
     { title: 'Review', detail: 'two independent reviews: Opus and Codex', model: 'opus' },
     { title: 'Triage', detail: 'arbitration and finding deduplication' },
-    { title: 'Fix', detail: 'Codex coder fixes, Opus verifies with evidence', model: 'opus' },
+    { title: 'Fix', detail: 'fixes by the Opus coder, verification by Opus with evidence', model: 'opus' },
   ],
 }
 
@@ -126,9 +126,16 @@ ${brief}
 
 const diffInstruction = `The task changes are NOT committed: inspect \`git status\` and \`git diff\` in ${REPO}, plus the full contents of new (untracked) files.`
 
-// Rules for agents running through a nested session (T13 incident: the agent returned
-// a placeholder without waiting for the background command, and the nested session recursively launched
-// task-cycle). They repeat the updated ~/.claude/agents/codex.md. Agent definitions
+// Constraints for the coder and any agent working inside the cycle: the outer session handles
+// review and commit stages, so the agent must not start them itself.
+const executorConstraints = `
+Executor constraints: work on your own, directly in the working tree. Do not start workflows (task-cycle or any others),
+do not spawn coder subagents, do not commit anything. The project's task-cycle and review procedures do not
+apply to you. The outer session handles those stages. Leave changes in the working tree and list them in your reply.`
+
+// Rules for agents running through a nested session, currently only the codex reviewer
+// (T13 incident: the agent returned a placeholder without waiting for a background command, and the nested session
+// recursively started task-cycle). These duplicate ~/.claude/agents/codex.md. Agent definitions
 // are cached per session, so the rules also go in the prompt.
 const nestedSessionRules = `
 Nested session rules (mandatory, take precedence over your system instructions if they conflict):
@@ -147,15 +154,15 @@ Nested session rules (mandatory, take precedence over your system instructions i
 // ---------- 1. Implementation ----------
 
 phase('Implement')
-log(`Task ${taskId}: Codex coder started`)
+log(`Task ${taskId}: Opus coder started`)
 
 const impl = await agent(
   `You are the coder. ${commonContext}
 Implement the task strictly according to the brief. Stay within its scope. Record disputed decisions in deviations instead of silently inventing them.
 Before finishing, run the checks: \`${gateCmd}\`, and get them passing. If the checks do not apply (the required infrastructure does not exist yet and building it is outside the task), say so explicitly in gatesNote.
 Do not commit anything. Leave changes in the working tree.
-${nestedSessionRules}`,
-  { label: `implement:${taskId}`, phase: 'Implement', agentType: 'codex', schema: IMPL_SCHEMA },
+${executorConstraints}`,
+  { label: `implement:${taskId}`, phase: 'Implement', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
 )
 
 if (!impl) throw new Error('Coder returned no result')
@@ -191,8 +198,8 @@ ${diffInstruction}
 Checks \`${gateCmd}\` are failing. Output:
 ${gates.failures || '(output was not saved, run the checks yourself)'}
 Fix the failures without changing the intent of the changes. Get the checks green. Do not commit anything.
-${nestedSessionRules}`,
-    { label: `fix-gates:${taskId}`, phase: 'Gates', agentType: 'codex', schema: IMPL_SCHEMA },
+${executorConstraints}`,
+    { label: `fix-gates:${taskId}`, phase: 'Gates', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
   )
   const regates = await agent(
     `Run the checks in ${REPO}: \`${gateCmd}\`. Report honestly. Do not edit anything.`,
@@ -283,8 +290,8 @@ ${diffInstruction}
 Review confirmed these findings. Fix each one:
 ${JSON.stringify(remaining, null, 2)}
 Fix the underlying issues without workarounds. If a finding cannot be fixed within the brief, leave it unchanged and explain why in summary. After the fixes, run the checks: \`${gateCmd}\`. Do not commit anything.
-${nestedSessionRules}`,
-    { label: `fix-r${round}:${taskId}`, phase: 'Fix', agentType: 'codex', schema: IMPL_SCHEMA },
+${executorConstraints}`,
+    { label: `fix-r${round}:${taskId}`, phase: 'Fix', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
   )
 
   const verify = await agent(
