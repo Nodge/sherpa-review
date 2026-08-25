@@ -10,7 +10,9 @@ import {
     lensSchema,
     prDiffSchema,
     prMetaSchema,
+    publishResultSchema,
     threadSchema,
+    verdictSchema,
 } from './review.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
@@ -206,6 +208,21 @@ export const uiSetThreadResolvedRequestSchema = z.object({
 });
 export type UiSetThreadResolvedRequest = z.infer<typeof uiSetThreadResolvedRequestSchema>;
 
+/**
+ * Publishes the accumulated batch with a verdict (M1-T14) in one `publishBatch`
+ * host call. The response is the result as returned: `verdictApplied: false` on any failure
+ * (SPEC §4.5, the review is NOT complete, and the UI shows failed items
+ * from `failed`). Retry calls the same endpoint again. The adapter preserves
+ * already published items (`publishedSilently` T12). Success bumps `threadsRevision`
+ * (drafts became published comments). The source of truth arrives via the threads endpoint.
+ * The UI rereads PR state after the verdict through the `reviewPr` endpoint.
+ */
+export const uiPublishRequestSchema = z.object({ verdict: verdictSchema });
+export type UiPublishRequest = z.infer<typeof uiPublishRequestSchema>;
+
+export const uiPublishResponseSchema = z.object({ result: publishResultSchema });
+export type UiPublishResponse = z.infer<typeof uiPublishResponseSchema>;
+
 /** Common response from thread write endpoints: acknowledgement without data. The source of truth arrives via the threads endpoint. */
 export const uiReviewWriteAckSchema = z.object({ acknowledged: z.literal(true) });
 export type UiReviewWriteAck = z.infer<typeof uiReviewWriteAckSchema>;
@@ -265,6 +282,8 @@ export const UI_ENDPOINTS = {
     reviewDeleteDraft: '/api/ui/review/draft/delete',
     /** POST `uiSetThreadResolvedRequestSchema` → `uiReviewWriteAckSchema`. */
     reviewThreadResolved: '/api/ui/review/thread-resolved',
+    /** POST `uiPublishRequestSchema` → `uiPublishResponseSchema`. */
+    reviewPublish: '/api/ui/review/publish',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
 } as const;
