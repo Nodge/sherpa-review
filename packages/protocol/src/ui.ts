@@ -14,6 +14,7 @@ import {
     threadSchema,
     verdictSchema,
 } from './review.js';
+import { routeSnapshotSchema } from './route.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
 /**
@@ -61,9 +62,13 @@ export const uiStateSchema = z.object({
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
-/** Enqueues a task from the UI. M0 has only `echo`: the worker returns the text as the result. */
+/**
+ * Enqueue a task from the UI. Only `echo` (dev demo of the loop). The server itself enqueues generative tasks
+ * (`route.*`), since they need materialized context and a result
+ * schema, neither of which an endpoint accepting plain text has.
+ */
 export const uiEnqueueRequestSchema = z.object({
-    type: taskTypeSchema,
+    type: z.literal('echo'),
     text: z.string().min(1).max(4000),
     /** Defaults to `interactive`, since the reviewer is waiting at the screen. */
     priority: priorityClassSchema.optional(),
@@ -129,6 +134,54 @@ export const uiReviewLensesResponseSchema = z.object({
     extra: z.array(lensSchema),
 });
 export type UiReviewLensesResponse = z.infer<typeof uiReviewLensesResponseSchema>;
+
+/**
+ * UI route state (M2). Phases: `none` means generation has not started and is not needed
+ * (no snapshot, combined with `smallPr` to distinguish "invitation to start the skill" from "small PR,
+ * no route needed"). `reading` means the skeleton is in progress (README §6, phase A). `filling` means
+ * the plan is accepted and sections are being filled (§7–8). `ready`. `failed` means the skeleton failed
+ * validation or attempts ran out (§12). A section failure is not a phase, it is
+ * `status: 'failed'` on its stop. "Agent died mid-generation" is not a separate phase:
+ * the UI combines `filling` with the worker status (SPEC §4.4).
+ */
+export const uiRoutePhaseSchema = z.enum(['none', 'reading', 'filling', 'ready', 'failed']);
+export type UiRoutePhase = z.infer<typeof uiRoutePhaseSchema>;
+
+export const uiRouteFailureSchema = z.object({
+    /** One-sentence reason (reviewer-facing, Russian). */
+    message: z.string(),
+    /** Last raw model output for "Open raw output". null if the model returned nothing. */
+    rawOutput: z.string().nullable(),
+});
+export type UiRouteFailure = z.infer<typeof uiRouteFailureSchema>;
+
+export const uiRouteStateSchema = z.object({
+    phase: uiRoutePhaseSchema,
+    /** PR below the route threshold (requirements §3.6): no generation task, UI opens on Full diff with a note. */
+    smallPr: z.boolean(),
+    /** Present once the skeleton is accepted. Partial during `filling` (see `stops[].status`). */
+    snapshot: routeSnapshotSchema.nullable(),
+    /** Only in the `failed` phase. */
+    failure: uiRouteFailureSchema.nullable(),
+});
+export type UiRouteState = z.infer<typeof uiRouteStateSchema>;
+
+export const uiReviewRouteResponseSchema = z.object({
+    route: uiRouteStateSchema,
+    routeRevision: z.number().int().min(0),
+});
+export type UiReviewRouteResponse = z.infer<typeof uiReviewRouteResponseSchema>;
+
+/**
+ * Start/restart route generation (Retry from Generation failed, "regenerate"
+ * from the palette). Enqueues `route.skeleton` even without a live worker. The task waits
+ * in the queue, and the agent pill shows the reduced functionality. `small_pr` rejects the request: this endpoint
+ * cannot bypass the threshold (requirements §3.6).
+ */
+export const uiRouteGenerateResponseSchema = z.object({
+    outcome: z.enum(['started', 'already_running', 'small_pr']),
+});
+export type UiRouteGenerateResponse = z.infer<typeof uiRouteGenerateResponseSchema>;
 
 /**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
@@ -247,6 +300,15 @@ export const uiProgressEventSchema = z.object({
 export type UiProgressEvent = z.infer<typeof uiProgressEventSchema>;
 
 /**
+ * "Route changed" event (phase, stop readiness, failure). The UI rereads
+ * the `reviewRoute` endpoint. Revision semantics match `uiReviewEventSchema`.
+ */
+export const uiRouteEventSchema = z.object({
+    routeRevision: z.number().int().min(0),
+});
+export type UiRouteEvent = z.infer<typeof uiRouteEventSchema>;
+
+/**
  * UI channel endpoints. All require a bearer token except `events`: EventSource does not support
  * headers, so the SSE endpoint accepts the token in the `?token=` query parameter (localhost, own logs).
  * Review endpoints return the `no_review_host` error when `reviewHost: null`.
@@ -258,7 +320,7 @@ export const UI_ENDPOINTS = {
     enqueue: '/api/ui/tasks',
     /** POST `uiCancelRequestSchema` → `uiCancelResponseSchema`. */
     cancel: '/api/ui/tasks/cancel',
-    /** GET, SSE: `state` (`uiStateSchema`) and `review` (`uiReviewEventSchema`) events. */
+    /** GET, SSE: `state` (`uiStateSchema`), `review`, `progress`, `route` events (revisions). */
     events: '/api/ui/events',
     /** GET → `uiReviewPrResponseSchema`. */
     reviewPr: '/api/ui/review/pr',
@@ -284,6 +346,10 @@ export const UI_ENDPOINTS = {
     reviewThreadResolved: '/api/ui/review/thread-resolved',
     /** POST `uiPublishRequestSchema` → `uiPublishResponseSchema`. */
     reviewPublish: '/api/ui/review/publish',
+    /** GET → `uiReviewRouteResponseSchema`. */
+    reviewRoute: '/api/ui/review/route',
+    /** POST without a body → `uiRouteGenerateResponseSchema`. */
+    reviewRouteGenerate: '/api/ui/review/route/generate',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
 } as const;
@@ -296,3 +362,6 @@ export const UI_REVIEW_EVENT = 'review';
 
 /** SSE event name for reading progress changes (`uiProgressEventSchema`). */
 export const UI_PROGRESS_EVENT = 'progress';
+
+/** SSE event name for route changes (`uiRouteEventSchema`). */
+export const UI_ROUTE_EVENT = 'route';

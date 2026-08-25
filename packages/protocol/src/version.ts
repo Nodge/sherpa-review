@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Session↔server protocol version (rpc-design §9).
  * Compatibility rule: in the 0.x line, a minor change is breaking. From 1.0 onward, matching majors suffice.
  */
-export const PROTOCOL_VERSION = '0.1.1';
+export const PROTOCOL_VERSION = '0.2.0';
 
 /** Semver string without prereleases or metadata, for protocol, CLI and server versions. */
 export const semverSchema = z.string().regex(/^\d+\.\d+\.\d+$/, 'expected a version in X.Y.Z format');

@@ -14,6 +14,7 @@ import {
     workerRegisterResponseSchema,
     workerStatusSchema,
 } from './messages.js';
+import { routeSectionResultSchema, routeSkeletonResultSchema, routeSnapshotSchema } from './route.js';
 import { leaseSchema, taskSchema } from './task.js';
 import {
     uiCancelRequestSchema,
@@ -50,6 +51,10 @@ export function generateJsonSchemas(): Record<string, unknown> {
         uiEnqueueResponse: uiEnqueueResponseSchema,
         uiCancelRequest: uiCancelRequestSchema,
         uiCancelResponse: uiCancelResponseSchema,
+        routeSnapshot: routeSnapshotSchema,
+        // Generation task result schemas are included as files in the payload (rpc-design §4).
+        routeSkeletonResult: routeSkeletonResultSchema,
+        routeSectionResult: routeSectionResultSchema,
     };
 
     // io: 'input' describes what the sender must supply.

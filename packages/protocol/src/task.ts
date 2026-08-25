@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Task types. M0 only has `echo` (a dummy task for exercising the loop).
- * v1 types (`route.skeleton`, `route.section`, `chat`, `regenerate.*`) arrive in M2–M4
- * with a protocol minor version bump. Validation rejects unknown types, fail-closed.
+ * Task types. `echo` is an M0 dummy task for exercising the loop. `route.skeleton`
+ * (summary + stop plan + tour order) and `route.section` (filling planned stops) belong to M2.
+ * The remaining v1 types (`chat`, `regenerate.*`) arrive in M3–M4 with a protocol minor
+ * version bump. Validation rejects unknown types, failing closed.
  */
-export const taskTypeSchema = z.enum(['echo']);
+export const taskTypeSchema = z.enum(['echo', 'route.skeleton', 'route.section']);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 
 /** Two priority classes (rpc-design §5): interactive tasks always precede background tasks, FIFO within each class. */

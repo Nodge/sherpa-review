@@ -7,6 +7,9 @@ import {
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
     RESULT_MAX_BYTES,
+    routeSectionResultSchema,
+    routeSkeletonResultSchema,
+    routeSnapshotSchema,
     serverManifestSchema,
     taskCompleteRequestSchema,
     taskCompleteResponseSchema,
@@ -48,9 +51,14 @@ describe('task and lease', () => {
     });
 
     it('fails closed: rejects unknown types, zero attempts and empty instructions', () => {
-        expect(taskSchema.safeParse({ ...validTask, type: 'route.skeleton' }).success).toBe(false);
+        expect(taskSchema.safeParse({ ...validTask, type: 'chat' }).success).toBe(false);
         expect(taskSchema.safeParse({ ...validTask, attempt: 0 }).success).toBe(false);
         expect(taskSchema.safeParse({ ...validTask, instructions: '' }).success).toBe(false);
+    });
+
+    it('M2 generation types are valid', () => {
+        expect(taskSchema.safeParse({ ...validTask, type: 'route.skeleton' }).success).toBe(true);
+        expect(taskSchema.safeParse({ ...validTask, type: 'route.section' }).success).toBe(true);
     });
 
     it('distinguishes task/idle/done in the next response by kind', () => {
@@ -154,10 +162,105 @@ describe('review domain', () => {
     });
 });
 
+describe('route (M2)', () => {
+    const skeleton = {
+        summary: 'The PR switches the session cache to write-through.',
+        stops: [
+            { title: 'Heart of the change: write policy', tier: 'high', intent: 'cache.py, write lines' },
+            { title: 'Configuration wiring', tier: 'low', intent: 'config.yaml' },
+        ],
+        tourOrder: [2, 1],
+    };
+
+    it('accepts a valid skeleton and rejects an invalid tier or empty plan', () => {
+        expect(routeSkeletonResultSchema.parse(skeleton)).toEqual(skeleton);
+        expect(
+            routeSkeletonResultSchema.safeParse({
+                ...skeleton,
+                stops: [{ ...skeleton.stops[0], tier: 'other' }],
+            }).success,
+        ).toBe(false);
+        expect(routeSkeletonResultSchema.safeParse({ ...skeleton, stops: [] }).success).toBe(false);
+    });
+
+    it('requires anchors in section results and accepts batches of multiple stops', () => {
+        const fill = (planIndex: number) => ({
+            planIndex,
+            paragraph: 'What changed and its consequences.',
+            anchors: [{ path: 'src/cache.py', side: 'new', start: 10, end: 24 }],
+        });
+        expect(routeSectionResultSchema.safeParse({ stops: [fill(1), fill(2)] }).success).toBe(true);
+        expect(
+            routeSectionResultSchema.safeParse({ stops: [{ ...fill(1), anchors: [] }] }).success,
+        ).toBe(false);
+    });
+
+    it('accepts filled and unfilled snapshot stops and synthetic "Other"', () => {
+        const snapshot = {
+            snapshotId: 'snap-1',
+            commit: '9f3c1ab',
+            diffId: 'iter-3',
+            createdAt: '2026-08-25T12:00:00.000Z',
+            provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+            summary: 'Summary.',
+            stops: [
+                {
+                    id: 'stop-1',
+                    planIndex: 1,
+                    tier: 'high',
+                    title: 'Heart of the change',
+                    status: 'ready',
+                    paragraph: 'Paragraph.',
+                    bridge: 'Next comes the wiring.',
+                    anchors: [
+                        { fileId: 'f1', path: 'src/cache.py', side: 'new', start: 10, end: 24, collapsed: false },
+                    ],
+                    tests: [
+                        {
+                            kind: 'weakened',
+                            text: 'Weakened timeout assertion',
+                            anchor: { fileId: 'f2', path: 'tests/test_cache.py', line: 41 },
+                        },
+                    ],
+                    droppedClaims: 1,
+                    validationNotes: [],
+                    provenance: null,
+                },
+                {
+                    id: 'other',
+                    planIndex: 2,
+                    tier: 'other',
+                    title: 'Other',
+                    status: 'ready',
+                    paragraph: null,
+                    bridge: null,
+                    anchors: [],
+                    tests: [],
+                    droppedClaims: 0,
+                    validationNotes: [],
+                    provenance: null,
+                },
+            ],
+            tourOrder: ['stop-1', 'other'],
+            contentHash: null,
+        };
+        expect(routeSnapshotSchema.parse(snapshot)).toEqual(snapshot);
+    });
+});
+
 describe('JSON schemas', () => {
     it('generates schemas from zod for every contract entity', () => {
         const schemas = generateJsonSchemas();
-        for (const name of ['task', 'lease', 'workerNextResponse', 'taskCompleteRequest', 'serverManifest']) {
+        for (const name of [
+            'task',
+            'lease',
+            'workerNextResponse',
+            'taskCompleteRequest',
+            'serverManifest',
+            'routeSkeletonResult',
+            'routeSectionResult',
+            'routeSnapshot',
+        ]) {
             const schema = schemas[name] as Record<string, unknown> | undefined;
             expect(schema, name).toBeDefined();
             expect(schema?.$schema, name).toContain('json-schema.org');
