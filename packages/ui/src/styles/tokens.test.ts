@@ -34,6 +34,8 @@ const EXPECTED: Record<string, string> = {
     '--ownership-mine-surface': '#132019',
     // README §14: overlay `rgba(7,8,9,.66)` below the command palette.
     '--overlay-dialog': 'rgba(7,8,9,.66)',
+    // README §1 (Sticky toolbar): «background `rgba(13,14,16,.92)`, `backdrop-filter:blur(8px)`».
+    '--surface-toolbar': 'rgba(13,14,16,.92)',
 
     // Borders — hairline `#1a1d21`, `#1e2126`, `#191c20`; standard `#22252b`, `#24272d`,
     // `#262a30`; strong `#2b2f36`, `#2f333a`; raised `#303540`, `#313640`, `#333842`.
@@ -106,6 +108,10 @@ const EXPECTED: Record<string, string> = {
     '--diff-del-text-strong': '#e8a29c',
     '--diff-del-gutter': '#7f5a56',
     '--read-fill': '#2b7a55',
+    // README §1 (Mark viewed on a stop): "viewed: bg `#16211a`, border `#25422f`,
+    // color `#86d9a8`". Text color already exists as `--diff-add-text-strong`.
+    '--viewed-surface': '#16211a',
+    '--viewed-border': '#25422f',
     // README §13: circle with a checkmark on the Review complete screen.
     '--success-surface': '#1f3d2c',
     // SPEC §2.10 (Mark viewed): "box fills to 25% accent-green", the same `#2b7a55` = rgb(43,122,85).

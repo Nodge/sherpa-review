@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSessionStore, DEFAULT_THREADS_SHOW } from './session-store.js';
+import { createSessionStore, DEFAULT_THREADS_SHOW, EMPTY_STOPS } from './session-store.js';
 
 describe('session store', () => {
     it('returns a stable snapshot and changes it on setView', () => {
@@ -15,6 +15,7 @@ describe('session store', () => {
             filter: 'all',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
+            stops: EMPTY_STOPS,
         });
     });
 
@@ -60,7 +61,7 @@ describe('session store', () => {
         store.setView('diff');
 
         expect(persist.mock.calls).toEqual([
-            [{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false }],
+            [{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false, stops: EMPTY_STOPS }],
         ]);
     });
 
@@ -85,9 +86,10 @@ describe('session store', () => {
             filter: 'pci',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
+            stops: EMPTY_STOPS,
         });
         expect(persist.mock.calls).toEqual([
-            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false }],
+            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false, stops: EMPTY_STOPS }],
         ]);
     });
 
@@ -97,6 +99,28 @@ describe('session store', () => {
         store.setPaletteOpen(true);
 
         expect(store.getSnapshot()).toMatchObject({ view: 'diff', filter: 'all', paletteOpen: true });
+    });
+
+    it('marking a stop preserves its previous expansion and temporary expansion lasts only while marked', () => {
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+
+        store.setStopExpanded('s05', true);
+        store.setStopViewed('s05', true);
+        store.setViewedStopExpanded('s05', true);
+
+        expect(store.getSnapshot().stops).toEqual({
+            viewed: new Set(['s05']),
+            expanded: new Set(['s05']),
+            expandedViewed: new Set(['s05']),
+        });
+
+        store.setStopViewed('s05', false);
+
+        expect(store.getSnapshot().stops).toEqual({
+            viewed: new Set(),
+            expanded: new Set(['s05']),
+            expandedViewed: new Set(),
+        });
     });
 
     it('thread filters change in a single session write', () => {

@@ -67,7 +67,9 @@ function ThreadBlock({
           ? [all[0], all[1], ...all.slice(-2)].filter((row) => row !== undefined)
           : all;
     const hidden = Math.max(all.length - shown.length, 0);
-    const undoEntry = useSyncExternalStore(store.subscribe, store.getSnapshot).undo.get(thread.id) ?? null;
+    // The third argument is the same snapshot. The store is isomorphic, and tests render the cards statically.
+    const undoEntry =
+        useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).undo.get(thread.id) ?? null;
     const undo = undoEntry?.resolved ?? null;
 
     const setResolved = (resolved: boolean): void => {
@@ -273,7 +275,7 @@ function ComposerForThread({
 function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot | null {
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
-    return useSyncExternalStore(subscribe, getSnapshot);
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 function Composer({

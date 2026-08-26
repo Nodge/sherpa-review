@@ -17,6 +17,27 @@ export interface ThreadsShow {
 
 export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
 
+/**
+ * Route stop state in the current session (M2-T6). Three sets instead of one flag: the
+ * "viewed" mark collapses hunks but preserves previous expansion. Clearing the mark must
+ * restore the card to exactly the state it was left in (SPEC §2.9).
+ *
+ * `viewed` is the stop mark (visual only in M2, writing seen ranges comes in T7).
+ * `expanded` means the stop is expanded despite tier-based collapse (low is collapsed by default).
+ * `expandedViewed` means a viewed stop is temporarily expanded from its summary row.
+ */
+export interface StopsState {
+    readonly viewed: ReadonlySet<string>;
+    readonly expanded: ReadonlySet<string>;
+    readonly expandedViewed: ReadonlySet<string>;
+}
+
+export const EMPTY_STOPS: StopsState = {
+    viewed: new Set(),
+    expanded: new Set(),
+    expandedViewed: new Set(),
+};
+
 export interface SessionState {
     readonly view: ViewId;
     /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
@@ -25,6 +46,7 @@ export interface SessionState {
     readonly threadsShow: ThreadsShow;
     /** The command palette is open over the current view. */
     readonly paletteOpen: boolean;
+    readonly stops: StopsState;
 }
 
 export interface SessionStore {
@@ -37,12 +59,19 @@ export interface SessionStore {
     readonly setFilter: (filter: string) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
+    /** Stop mark. Clearing it preserves `expanded`, restoring the previous expansion. */
+    readonly setStopViewed: (stopId: string, viewed: boolean) => void;
+    /** Normal stop expansion (low-tier stops are collapsed by default). */
+    readonly setStopExpanded: (stopId: string, expanded: boolean) => void;
+    /** Expansion of a viewed stop from its summary row. */
+    readonly setViewedStopExpanded: (stopId: string, expanded: boolean) => void;
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'stops'> & {
         readonly threadsShow?: ThreadsShow;
         readonly paletteOpen?: boolean;
+        readonly stops?: StopsState;
     };
     /**
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
@@ -59,6 +88,21 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         ...options.initial,
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
         paletteOpen: options.initial.paletteOpen ?? false,
+        stops: options.initial.stops ?? EMPTY_STOPS,
+    };
+
+    const toggleStop = (key: keyof StopsState, stopId: string, on: boolean): void => {
+        const current = state.stops[key];
+        if (current.has(stopId) === on) {
+            return;
+        }
+        const next = new Set(current);
+        if (on) {
+            next.add(stopId);
+        } else {
+            next.delete(stopId);
+        }
+        update({ ...state, stops: { ...state.stops, [key]: next } });
     };
 
     const update = (next: SessionState): void => {
@@ -111,6 +155,20 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
             if (paletteOpen !== state.paletteOpen) {
                 update({ ...state, paletteOpen });
             }
+        },
+
+        setStopViewed: (stopId, viewed) => {
+            if (!viewed && state.stops.expandedViewed.has(stopId)) {
+                // Temporary expansion lasts only while the mark is set.
+                toggleStop('expandedViewed', stopId, false);
+            }
+            toggleStop('viewed', stopId, viewed);
+        },
+        setStopExpanded: (stopId, expanded) => {
+            toggleStop('expanded', stopId, expanded);
+        },
+        setViewedStopExpanded: (stopId, expanded) => {
+            toggleStop('expandedViewed', stopId, expanded);
         },
     };
 }

@@ -68,6 +68,17 @@
     color: var(--text-primary);
 }
 
+/* Header bottom row: author on the left, `aside` slot (snapshot selector) on the right. */
+.pr-header__bottom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+}
+
+.pr-header__aside {
+    margin-left: auto;
+}
+
 .pr-header__author {
     display: flex;
     align-items: center;

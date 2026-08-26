@@ -1,0 +1,147 @@
+import type { FileContent, Thread } from '@sherpa/protocol';
+import { useCallback, useMemo } from 'react';
+
+import type { DiffFileModel } from '../../diff/model.js';
+import type { FileCardActions } from '../../diff-view/file-card.tsx';
+import { FileCard } from '../../diff-view/file-card.tsx';
+import type { LineSelection } from '../../diff-view/selection.js';
+import type { DiffMode } from '../../diff-view/store.js';
+import type { ExpandAmount } from '../../diff-view/expand.js';
+import { expandFileContext } from '../../diff-view/expand.js';
+import type { FileReadState } from '../../progress/read-state.js';
+import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
+import type { RouteFileGroup } from '../../route/route-model.js';
+import { useCardThreads } from '../../threads/card-threads.tsx';
+import type { ComposerSnapshot, ThreadStore } from '../../threads/store.js';
+import type { ThreadActions } from '../../threads/thread-list.tsx';
+import { formatCount, plural } from '../../text.js';
+
+/**
+ * File card inside a stop. Same `FileCard` as in the full diff, with its model clipped to
+ * the stop's anchors. Clipping follows context expansion, so "Expand context" works
+ * as usual, widening the window of unchanged lines around the stop's ranges.
+ *
+ * Collapsed anchors (`collapsed` directive) render as a summary row with a count. Nothing is
+ * hidden silently. Everything appears as a fold (brief principle 3).
+ */
+
+export interface StopFileCardProps {
+    readonly group: RouteFileGroup;
+    readonly model: DiffFileModel | null;
+    readonly parseError: string | null;
+    readonly mode: DiffMode;
+    readonly content: FileContent | null | undefined;
+    readonly contentAvailable: boolean;
+    readonly expansion: ExpandAmount;
+    readonly read: FileReadState;
+    readonly showWhitespace: boolean;
+    readonly threads: readonly Thread[];
+    readonly composers: readonly ComposerSnapshot[];
+    readonly threadStore: ThreadStore;
+    readonly threadActions: ThreadActions;
+    readonly threadNow: number;
+    readonly onFocusThread: (threadId: string | null) => void;
+    readonly actions: FileCardActions;
+    /** Collapsed anchors expanded by hand. */
+    readonly collapsedOpen: boolean;
+    readonly onToggleCollapsed: () => void;
+    readonly selection: LineSelection | null;
+}
+
+export function StopFileCard({
+    group,
+    model,
+    parseError,
+    mode,
+    content,
+    contentAvailable,
+    expansion,
+    read,
+    showWhitespace,
+    threads,
+    composers,
+    threadStore,
+    threadActions,
+    threadNow,
+    onFocusThread,
+    actions,
+    collapsedOpen,
+    onToggleCollapsed,
+    selection,
+}: StopFileCardProps) {
+    const anchors = useMemo(
+        () => anchorSpans(collapsedOpen ? [...group.anchors, ...group.collapsedAnchors] : group.anchors),
+        [collapsedOpen, group.anchors, group.collapsedAnchors],
+    );
+    // Context expansion widens the window around anchors by +20 unchanged lines per click.
+    const context = expansion === 'all' ? Number.MAX_SAFE_INTEGER : ANCHOR_CONTEXT + expansion;
+    const clip = useCallback(
+        (source: DiffFileModel) => clipModelToAnchors(source, anchors, context).model,
+        [anchors, context],
+    );
+    // Exactly the model the card will render (`FileCard`: context expansion, then slice):
+    // thread placement uses it, and the two models must never diverge.
+    const shown = useMemo(
+        () => (model === null ? null : clip(expandFileContext(model, content ?? null, expansion))),
+        [clip, content, expansion, model],
+    );
+    // Same condition as the full diff card: notices (binary, "whitespace only")
+    // replace lines, so placing threads on them would make the threads disappear.
+    const rowsShown =
+        parseError === null && shown?.content.kind === 'text' && (!shown.whitespaceOnly || showWhitespace);
+    const { threadsUnderHeader, renderAfterLine } = useCardThreads({
+        model: shown,
+        rowsShown,
+        placement: 'exact',
+        threads,
+        composers,
+        store: threadStore,
+        actions: threadActions,
+        now: threadNow,
+        onFocusThread,
+    });
+
+    const collapsedHidden = !collapsedOpen && group.collapsedLines > 0;
+    return (
+        <div className="route-stop__card">
+            <FileCard
+                file={group.file}
+                model={model}
+                parseError={parseError}
+                mode={mode}
+                content={content}
+                contentAvailable={contentAvailable}
+                expansion={expansion}
+                transform={clip}
+                counts={{ additions: group.additions, deletions: group.deletions }}
+                read={read}
+                opened
+                showWhitespace={showWhitespace}
+                selection={selection}
+                threadsUnderHeader={threadsUnderHeader}
+                renderAfterLine={renderAfterLine}
+                actions={actions}
+            />
+            {collapsedHidden ? (
+                <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
+                    <span className="route-stop__collapsed-mark" aria-hidden="true">
+                        ↕
+                    </span>
+                    {formatCount(group.collapsedLines)}{' '}
+                    {plural(group.collapsedLines, 'changed line', 'changed lines', 'changed lines')} collapsed
+                    by the model
+                    <span className="route-stop__spacer" />
+                    <span className="route-stop__collapsed-hint">nothing is hidden — click to expand</span>
+                </button>
+            ) : null}
+            {collapsedOpen && group.collapsedLines > 0 ? (
+                <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
+                    <span className="route-stop__collapsed-mark" aria-hidden="true">
+                        ⌃
+                    </span>
+                    collapse again
+                </button>
+            ) : null}
+        </div>
+    );
+}

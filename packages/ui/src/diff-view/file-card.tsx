@@ -73,6 +73,14 @@ export interface FileCardProps {
     readonly keptInView?: boolean;
     /** Initial hint lets the gallery show a failed write without a click. */
     readonly initialHint?: Feedback;
+    /**
+     * Post-process the model before rendering, after context expansion. Route uses this
+     * to clip the model to stop anchors, so "Expand context" keeps working. Expansion
+     * runs on the full model, and the slice is computed from it.
+     */
+    readonly transform?: (model: DiffFileModel) => DiffFileModel;
+    /** Header counters override file totals. On the route, the card shows counts for its stop. */
+    readonly counts?: { readonly additions: number; readonly deletions: number };
     readonly selection: LineSelection | null;
     readonly threadsUnderHeader?: ReactNode;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
@@ -93,6 +101,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         showWhitespace,
         keptInView = false,
         initialHint = null,
+        transform,
+        counts,
         selection,
         threadsUnderHeader = null,
         renderAfterLine,
@@ -101,12 +111,18 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     const [hint, setHint] = useState<Feedback>(initialHint);
 
     // Model with context already expanded. Expansion is a pure function of the original model.
-    const shown = useMemo(
-        () => (model === null ? null : expandFileContext(model, content ?? null, expansion)),
-        [model, content, expansion],
-    );
+    const shown = useMemo(() => {
+        if (model === null) {
+            return null;
+        }
+        const expanded = expandFileContext(model, content ?? null, expansion);
+        return transform === undefined ? expanded : transform(expanded);
+    }, [model, content, expansion, transform]);
 
-    const changed = (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions);
+    const changed =
+        counts === undefined
+            ? (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions)
+            : counts.additions + counts.deletions;
     const collapsed = !opened && changed > COLLAPSE_THRESHOLD;
 
     const run = (action: Promise<Feedback>): void => {
@@ -151,8 +167,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             <header className="file-card__header">
                 <FileName file={file} />
                 <span className="file-card__counts">
-                    <span className="file-card__add">+{formatCount(model?.additions ?? file.additions)}</span>
-                    <span className="file-card__del">−{formatCount(model?.deletions ?? file.deletions)}</span>
+                    <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions)}</span>
+                    <span className="file-card__del">−{formatCount(counts?.deletions ?? model?.deletions ?? file.deletions)}</span>
                 </span>
                 <span className="file-card__entity">{entityText(shown)}</span>
 

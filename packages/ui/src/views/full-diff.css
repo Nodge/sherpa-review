@@ -1,4 +1,7 @@
 /*
+ * The diff mode toggle and comment source chips moved into the shared
+ * `components/toolbar-controls.css`. The route toolbar uses the same controls.
+ *
  * Full diff view, README §10: a 290px panel with its own scroll on the left, PR header,
  * toolbar and cards on the right. The right side is measured separately from the window. Below 1100px wide,
  * side-by-side is unavailable (SPEC §2.6).
@@ -44,72 +47,6 @@
 
 .full-diff__spacer {
     flex: 1;
-}
-
-.full-diff__mode {
-    padding: 0;
-    border: 0;
-    background: none;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    white-space: nowrap;
-    cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.full-diff__mode:hover {
-    color: var(--text-muted);
-}
-
-.full-diff__comments-label {
-    font-size: var(--font-size-secondary);
-    color: var(--text-dim);
-    white-space: nowrap;
-}
-
-.thread-chips {
-    display: inline-flex;
-    gap: 5px;
-}
-
-.thread-chip {
-    height: 24px;
-    padding: 0 8px;
-    border: 1px solid var(--border-standard);
-    border-radius: var(--radius-button);
-    background: transparent;
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    cursor: pointer;
-}
-
-.thread-chip.is-on {
-    border-color: var(--border-strong-lifted);
-    background: var(--border-standard);
-    color: var(--text-on-selected);
-    font-weight: 500;
-}
-
-.thread-chip:disabled {
-    opacity: var(--disabled-opacity);
-    cursor: default;
-}
-
-.thread-chips-hidden {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
-}
-
-.thread-chips-hidden button {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 .full-diff__count {

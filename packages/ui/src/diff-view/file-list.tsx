@@ -4,20 +4,20 @@ import type { ReactNode, Ref } from 'react';
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
-import { updateFragment } from '../fragment.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { readStateOf as computeReadState } from '../progress/read-state.js';
-import { placeThreadsOnVisibleLines } from '../threads/model.js';
+import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
-import { NewCommentComposer, ThreadList } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
+import { copyFileLink } from './copy-link.js';
 import type { ExpandAmount } from './expand.js';
 import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
 import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
 import type { DiffViewStore } from './store.js';
+import { useSelectionLifecycle } from './use-selection.js';
 
 /**
  * Virtualized list of diff cards (SPEC §8 item 8: 60+ files at 60fps). The DOM contains
@@ -180,32 +180,7 @@ export function DiffFileList({
         };
     }, [store]);
 
-    // Esc and clicks outside the rows clear the selection (SPEC §2.14).
-    useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                store.clearSelection();
-            }
-        };
-        const onPointerDown = (event: MouseEvent): void => {
-            const target = event.target as HTMLElement | null;
-            if (target?.closest('.diff-rows') === null) {
-                store.clearSelection();
-            }
-        };
-        const onPointerUp = (): void => {
-            store.finishSelection();
-        };
-        window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('mousedown', onPointerDown);
-        window.addEventListener('mouseup', onPointerUp);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('mousedown', onPointerDown);
-            window.removeEventListener('mouseup', onPointerUp);
-            store.finishSelection();
-        };
-    }, [store]);
+    useSelectionLifecycle(store);
 
     // While the list adjusts scrolling itself (a `#file=` link, tree navigation, repositioning after
     // a filter change), no scroll event is reported upward. These are not reviewer gestures and
@@ -479,91 +454,16 @@ const VirtualFileCard = memo(function VirtualFileCard({
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
         (opened || changed <= COLLAPSE_THRESHOLD);
-    const layout = useMemo(() => {
-        const underHeader = visibleThreads.filter(
-            (thread) => thread.outdated || thread.anchor?.position === null,
-        );
-        const positional = visibleThreads.filter(
-            (thread) => !thread.outdated && thread.anchor?.position !== null,
-        );
-        const placed = canRenderRows
-            ? placeThreadsOnVisibleLines(shownModel, positional)
-            : { byLine: new Map<string, readonly Thread[]>(), unplaced: positional };
-        return { byLine: placed.byLine, underHeader: [...underHeader, ...placed.unplaced] };
-    }, [canRenderRows, shownModel, visibleThreads]);
-
-    const composerLayout = useMemo(() => {
-        const byLine: ComposerSnapshot[] = [];
-        const underHeader: ComposerSnapshot[] = [];
-        for (const composer of composers) {
-            const position = composer.anchor?.position;
-            if (canRenderRows && position !== null && position !== undefined && modelHasPosition(shownModel, position.side, position.line)) {
-                byLine.push(composer);
-            } else {
-                underHeader.push(composer);
-            }
-        }
-        return { byLine, underHeader };
-    }, [canRenderRows, composers, shownModel]);
-    const threadsUnderHeader = useMemo(
-        () =>
-            layout.underHeader.length === 0 && composerLayout.underHeader.length === 0 ? null : (
-                <>
-                    {layout.underHeader.length === 0 ? null : (
-                        <ThreadList
-                            threads={layout.underHeader}
-                            store={threadStore}
-                            actions={threadActions}
-                            now={threadNow}
-                            onFocusThread={onFocusThread}
-                        />
-                    )}
-                    {composerLayout.underHeader.map((composer) => (
-                        <div key={composer.key} className="diff-row-extra thread-fade">
-                            <NewCommentComposer
-                                composerKey={composer.key}
-                                store={threadStore}
-                                transport={threadActions.transport}
-                            />
-                        </div>
-                    ))}
-                </>
-            ),
-        [composerLayout.underHeader, layout.underHeader, onFocusThread, threadActions, threadNow, threadStore],
-    );
-    const renderAfterLine = useCallback(
-        (side: 'old' | 'new', line: number): ReactNode => {
-            const lineThreads = layout.byLine.get(`${side}:${String(line)}`) ?? EMPTY_THREADS;
-            const composer = composerLayout.byLine.find(
-                (candidate) =>
-                    candidate.anchor?.position?.side === side && candidate.anchor.position.line === line,
-            );
-            if (lineThreads.length === 0 && composer === undefined) {
-                return null;
-            }
-            return (
-                <div className="diff-row-extra thread-fade">
-                    {lineThreads.length === 0 ? null : (
-                        <ThreadList
-                            threads={lineThreads}
-                            store={threadStore}
-                            actions={threadActions}
-                            now={threadNow}
-                            onFocusThread={onFocusThread}
-                        />
-                    )}
-                    {composer === undefined ? null : (
-                        <NewCommentComposer
-                            composerKey={composer.key}
-                            store={threadStore}
-                            transport={threadActions.transport}
-                        />
-                    )}
-                </div>
-            );
-        },
-        [composerLayout.byLine, layout.byLine, onFocusThread, threadActions, threadNow, threadStore],
-    );
+    const { threadsUnderHeader, renderAfterLine } = useCardThreads({
+        model: shownModel,
+        rowsShown: canRenderRows,
+        threads: visibleThreads,
+        composers,
+        store: threadStore,
+        actions: threadActions,
+        now: threadNow,
+        onFocusThread,
+    });
 
     return (
         <div
@@ -594,17 +494,6 @@ const VirtualFileCard = memo(function VirtualFileCard({
         </div>
     );
 });
-
-function modelHasPosition(model: DiffFileModel | null, side: 'old' | 'new', line: number): boolean {
-    if (model?.content.kind !== 'text') {
-        return false;
-    }
-    return model.content.blocks.some(
-        (block) =>
-            block.kind === 'hunk' &&
-            block.lines.some((candidate) => (side === 'old' ? candidate.oldLine : candidate.newLine) === line),
-    );
-}
 
 interface ConvergingScroll {
     /** `true` once adjustment has finished on its own. */
@@ -708,17 +597,4 @@ function estimateHeight(file: FileDiff | undefined): number {
     const changed = file.additions + file.deletions;
     const lines = changed > COLLAPSE_THRESHOLD ? 1 : changed;
     return CARD_CHROME_HEIGHT + lines * CODE_LINE_HEIGHT;
-}
-
-/** A file link is the current address plus the `file` fragment parameter. */
-async function copyFileLink(fileId: string): Promise<Feedback> {
-    const url = new URL(window.location.href);
-    url.hash = updateFragment(window.location.hash, { file: fileId, thread: null });
-
-    try {
-        await navigator.clipboard.writeText(url.toString());
-    } catch {
-        return 'The browser could not copy the link. Copy the page address manually.';
-    }
-    return 'File link copied.';
 }

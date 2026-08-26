@@ -1,4 +1,12 @@
-import type { PrDiff, PrMeta, Thread, UiReviewLensesResponse, UiReviewProgressResponse, Verdict } from '@sherpa/protocol';
+import type {
+    PrDiff,
+    PrMeta,
+    Thread,
+    UiReviewLensesResponse,
+    UiReviewProgressResponse,
+    UiRouteState,
+    Verdict,
+} from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
@@ -8,6 +16,7 @@ import {
     fetchReviewLenses,
     fetchReviewPr,
     fetchReviewProgress,
+    fetchReviewRoute,
     fetchReviewThreads,
     deleteReviewDraft,
     publishReview,
@@ -48,6 +57,9 @@ import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
 import { FullDiffView } from './views/full-diff.tsx';
+import { RegenerateBanner } from './views/route/other-card.tsx';
+import { RouteCommands } from './views/route/route-commands.tsx';
+import { RouteView } from './views/route/route-view.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
 
 /** The main page reads server and session stores through `useSyncExternalStore`. */
@@ -64,16 +76,19 @@ interface ReviewState {
     readonly lenses: UiReviewLensesResponse | null;
     readonly progress: UiReviewProgressResponse | null;
     readonly threads: readonly Thread[] | null;
+    readonly route: UiRouteState | null;
     readonly prError: string | null;
     readonly diffError: string | null;
     readonly lensesError: string | null;
     readonly progressError: string | null;
     readonly threadsError: string | null;
+    readonly routeError: string | null;
     readonly prLoading: boolean;
     readonly diffLoading: boolean;
     readonly lensesLoading: boolean;
     readonly progressLoading: boolean;
     readonly threadsLoading: boolean;
+    readonly routeLoading: boolean;
 }
 
 export function App({ store, session, token }: AppProps) {
@@ -115,6 +130,11 @@ export function App({ store, session, token }: AppProps) {
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [paletteNavigation, setPaletteNavigation] = useState<PaletteNavigation | null>(null);
     const navigationId = useRef(0);
+    /** Jump to a stop from the palette. The route view completes scrolling using the increasing `id`. */
+    const [routeNavigation, setRouteNavigation] = useState<{ id: number; stopId: string } | null>(null);
+    const routeNavigationId = useRef(0);
+    /** The route explains less than half the diff. The notification slot shows the banner (SPEC §4.3). */
+    const [routeUnderExplained, setRouteUnderExplained] = useState(false);
     // Every session.setView call, including reselecting the current tab, clears Review complete.
     const [completionState, setCompletionState] = useState<{
         key: string;
@@ -372,6 +392,74 @@ export function App({ store, session, token }: AppProps) {
         };
     }, [reviewHost, reviewKey, reviewReady, snapshot.threadsRevision, threadRetryAttempt, token]);
 
+    // Read the route in the same loop as threads. The event carries only the revision. Fetch data
+    // from the endpoint and mark the revision as seen only after success.
+    const seenRoute = useRef<{ key: string; revision: number | null; loaded: boolean }>({
+        key: reviewKey,
+        revision: null,
+        loaded: false,
+    });
+    const [routeRetry, setRouteRetry] = useState<{ key: string; attempt: number }>({ key: reviewKey, attempt: 0 });
+    const routeRetryAttempt = routeRetry.key === reviewKey ? routeRetry.attempt : 0;
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null) {
+            return;
+        }
+        if (seenRoute.current.key !== reviewKey) {
+            seenRoute.current = { key: reviewKey, revision: null, loaded: false };
+        }
+        const revision = snapshot.routeRevision;
+        if (seenRoute.current.loaded && seenRoute.current.revision === revision) {
+            return;
+        }
+
+        let alive = true;
+        let retry: ReturnType<typeof setTimeout> | null = null;
+        void fetchReviewRoute(token).then(
+            (response) => {
+                if (!alive) {
+                    return;
+                }
+                seenRoute.current = { key: reviewKey, revision, loaded: true };
+                setReviewState((current) => ({
+                    ...reviewStateForKey(current, reviewKey),
+                    route: response.route,
+                    routeError: null,
+                    routeLoading: false,
+                }));
+                if (routeRetryAttempt !== 0) {
+                    setRouteRetry({ key: reviewKey, attempt: 0 });
+                }
+            },
+            (error: unknown) => {
+                if (!alive) {
+                    return;
+                }
+                setReviewState((current) => {
+                    const next = reviewStateForKey(current, reviewKey);
+                    return {
+                        ...next,
+                        // A background failure does not clear the route already on screen.
+                        routeError: next.route === null ? errorMessage(error) : null,
+                        routeLoading: false,
+                    };
+                });
+                retry = setTimeout(
+                    () => {
+                        setRouteRetry({ key: reviewKey, attempt: routeRetryAttempt + 1 });
+                    },
+                    Math.min(1000 * 2 ** routeRetryAttempt, 15_000),
+                );
+            },
+        );
+        return () => {
+            alive = false;
+            if (retry !== null) {
+                clearTimeout(retry);
+            }
+        };
+    }, [reviewHost, reviewKey, reviewReady, routeRetryAttempt, snapshot.routeRevision, token]);
+
     const threadFileIds = useMemo(
         () => new Set(currentDiff?.files.map((file) => file.fileId) ?? []),
         [currentDiff],
@@ -479,6 +567,12 @@ export function App({ store, session, token }: AppProps) {
             render: () => <DisconnectedBanner prKey={state?.prKey ?? ''} />,
         },
         {
+            id: 'route-under-explained',
+            priority: 200,
+            active: () => view === 'route' && routeUnderExplained,
+            render: () => <RegenerateBanner />,
+        },
+        {
             id: 'audit-scope',
             priority: 100,
             active: () => auditVisible && pci !== null && pciStats !== null,
@@ -496,6 +590,19 @@ export function App({ store, session, token }: AppProps) {
                 ),
         },
     ];
+    // The view gets the route only in the `ready` phase. Other phases are generation
+    // states from M2-T10. Until then, Route stays the M1 invitation.
+    const routeSnapshot =
+        currentReview.route?.phase === 'ready' ? currentReview.route.snapshot : null;
+    const jumpToStop = useCallback(
+        (stopId: string) => {
+            routeNavigationId.current += 1;
+            setRouteNavigation({ id: routeNavigationId.current, stopId });
+            session.setView('route');
+        },
+        [session],
+    );
+
     const selectView = useCallback(
         (next: ViewId) => {
             session.setView(next);
@@ -604,6 +711,25 @@ export function App({ store, session, token }: AppProps) {
                         }
                     }}
                 />
+            ) : view === 'route' && routeSnapshot !== null ? (
+                <RouteView
+                    token={token}
+                    session={session}
+                    pr={currentReview.pr}
+                    prError={currentReview.prError}
+                    diff={currentDiff}
+                    diffError={currentReview.diffError}
+                    lenses={currentReview.lenses}
+                    lensesError={currentReview.lensesError}
+                    progress={currentReview.progress}
+                    progressError={currentReview.progressError}
+                    progressWriter={progressWriter}
+                    store={diffStore}
+                    threadStore={threadStore}
+                    snapshot={routeSnapshot}
+                    navigation={routeNavigation}
+                    onUnderExplained={setRouteUnderExplained}
+                />
             ) : (
                 <ViewFrame
                     view={view}
@@ -623,6 +749,8 @@ export function App({ store, session, token }: AppProps) {
                     {...(threadStore === null ? {} : { threadStore })}
                 />
             )}
+
+            {routeSnapshot === null ? null : <RouteCommands snapshot={routeSnapshot} onJump={jumpToStop} />}
 
             <CommandPalette
                 open={paletteOpen}
@@ -679,16 +807,19 @@ function emptyReviewState(key: string, loading: boolean): ReviewState {
         lenses: null,
         progress: null,
         threads: null,
+        route: null,
         prError: null,
         diffError: null,
         lensesError: null,
         progressError: null,
         threadsError: null,
+        routeError: null,
         prLoading: loading,
         diffLoading: loading,
         lensesLoading: loading,
         progressLoading: loading,
         threadsLoading: loading,
+        routeLoading: loading,
     };
 }
 

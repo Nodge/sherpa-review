@@ -1,0 +1,522 @@
+import type { FileDiff, RouteAnchor, RouteSnapshot, RouteStop, RouteTier, Thread } from '@sherpa/protocol';
+
+import type { DiffFileModel } from '../diff/model.js';
+import { changedLinesOf } from '../progress/read-state.js';
+import type { ComposerSnapshot } from '../threads/store.js';
+import type { AnchorSpan } from './anchor-clip.js';
+import {
+    ANCHOR_CONTEXT,
+    anchorSpans,
+    clipModelToAnchors,
+    coveredChangedLines,
+    spanLines,
+    uncoveredRanges,
+} from './anchor-clip.js';
+
+/**
+ * Route view model (README §1–2): what to render, in which order, how many lines are explained
+ * and what remains in Other. A pure module with no React or network. It takes a route snapshot,
+ * diff files and parsed models, and returns the order ready for rendering.
+ *
+ * Contract invariant (`protocol/route.ts`): the snapshot contains only model output. File chips,
+ * counters, coverage ratios and the contents of Other are computed here from anchors and the
+ * diff model, using `changedLinesOf` (add→new, del→old).
+ */
+
+/** Uncovered fraction above which Other is promoted above low-tier stops (SPEC §4.3). */
+export const PROMOTE_THRESHOLD = 0.4;
+
+/** Unchanged line numbers by diff side. */
+export interface ContextLines {
+    readonly old: ReadonlySet<number>;
+    readonly new: ReadonlySet<number>;
+}
+
+export interface RouteFileGroup {
+    readonly file: FileDiff;
+    readonly fileId: string;
+    readonly path: string;
+    readonly name: string;
+    readonly dir: string;
+    /** This stop's anchors for the file that render immediately. */
+    readonly anchors: readonly RouteAnchor[];
+    /** Anchors with the `collapsed` directive render as a summary row (principle 3, with a counter). */
+    readonly collapsedAnchors: readonly RouteAnchor[];
+    /**
+     * Unchanged context lines that the card renders around its ranges.
+     * A comment on such a line belongs to this route entry, otherwise it would appear
+     * nowhere. Each line belongs to exactly one entry, assigned in plan order.
+     */
+    readonly contextLines: ContextLines;
+    /** Hunks in the card slice, used for lazy rendering (SPEC §2.9). */
+    readonly hunks: number;
+    /** Changed file lines covered by the stop: additions and deletions. */
+    readonly additions: number;
+    readonly deletions: number;
+    /** Changed lines under collapsed anchors. */
+    readonly collapsedLines: number;
+    /** The stop covers all changed lines in the file. */
+    readonly whole: boolean;
+}
+
+export interface RouteStopView {
+    readonly stop: RouteStop;
+    /** Plan-fixed number: `01`. Render order does not affect it (SPEC §8 item 4). */
+    readonly planLabel: string;
+    readonly files: readonly RouteFileGroup[];
+    readonly changedLines: number;
+    /** Paths of anchors with no matching file or changed lines in the current diff. */
+    readonly unresolvedPaths: readonly string[];
+    /** Anchors exist but none resolve in the diff: anchor drift (SPEC §2.9). */
+    readonly drift: boolean;
+    /** No anchors at all: the stop was not filled, or filling placed no anchors. */
+    readonly empty: boolean;
+    /** Some stop files have not been parsed, so the counts are not final yet. */
+    readonly pending: boolean;
+}
+
+export interface RouteUncoveredFile {
+    readonly file: FileDiff;
+    readonly fileId: string;
+    readonly path: string;
+    readonly name: string;
+    readonly dir: string;
+    /** Synthetic anchors: uncovered ranges of changed lines. */
+    readonly anchors: readonly AnchorSpan[];
+    /** Context around uncovered ranges not assigned to stops. */
+    readonly contextLines: ContextLines;
+    readonly lines: number;
+}
+
+export interface RouteOtherView {
+    readonly stop: RouteStop;
+    readonly planLabel: string;
+    readonly files: readonly RouteUncoveredFile[];
+    readonly lines: number;
+}
+
+export interface RouteTotals {
+    readonly changed: number;
+    readonly covered: number;
+    readonly uncovered: number;
+    readonly byTier: Readonly<Record<RouteTier, number>>;
+    /** Diff files without a parsed model. While any remain, the uncovered count is unknown. */
+    readonly pendingFiles: number;
+    /**
+     * Files that failed to parse. Their lines are absent from the uncovered count. They will not
+     * finish counting without a retry, so the reviewer sees this count too.
+     */
+    readonly failedFiles: number;
+}
+
+export type RouteEntry =
+    | { readonly kind: 'stop'; readonly view: RouteStopView }
+    | { readonly kind: 'other'; readonly view: RouteOtherView };
+
+export interface RouteModel {
+    /** Render order: high → medium → [Other when promoted] → low → Other. */
+    readonly entries: readonly RouteEntry[];
+    readonly totals: RouteTotals;
+    /** Other promoted above low-tier stops: uncovered fraction exceeds the threshold (SPEC §4.3). */
+    readonly promoted: boolean;
+    /** Total plan slots, the denominator in "01 / 7". */
+    readonly stopCount: number;
+}
+
+export interface RouteModelInput {
+    readonly snapshot: RouteSnapshot;
+    readonly files: readonly FileDiff[];
+    readonly models: ReadonlyMap<string, DiffFileModel>;
+    /** Files whose parsing failed have no model until the reviewer requests a retry. */
+    readonly failed?: ReadonlySet<string>;
+}
+
+export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED }: RouteModelInput): RouteModel {
+    const byId = new Map(files.map((file) => [file.fileId, file]));
+    const planned = snapshot.stops.filter((stop) => stop.tier !== 'other');
+    const otherStop = snapshot.stops.find((stop) => stop.tier === 'other') ?? null;
+    const stopCount = snapshot.stops.length;
+
+    // All stops' anchors together define uncovered ranges as those none of them touches. Each
+    // stop uses the same map to find which file ranges belong to its neighbours.
+    const claimed = new Map<string, AnchorSpan[]>();
+    for (const stop of snapshot.stops) {
+        for (const anchor of stop.anchors) {
+            const spans = claimed.get(anchor.fileId) ?? [];
+            spans.push({ side: anchor.side, start: anchor.start, end: anchor.end });
+            claimed.set(anchor.fileId, spans);
+        }
+    }
+
+    // Context already assigned to a stop. The first stop in plan order gets the line so that one
+    // comment never appears in two route entries at once.
+    const takenContext = new Map<string, ContextLines>();
+    const views = planned.map((stop) => stopView(stop, byId, models, claimed, takenContext));
+    const byTier: Record<RouteTier, number> = { high: 0, medium: 0, low: 0, other: 0 };
+    for (const view of views) {
+        byTier[view.stop.tier] += view.changedLines;
+    }
+
+    let changed = 0;
+    let covered = 0;
+    let pendingFiles = 0;
+    let failedFiles = 0;
+    const uncoveredFiles: RouteUncoveredFile[] = [];
+    for (const file of files) {
+        const model = models.get(file.fileId) ?? null;
+        if (model === null) {
+            changed += file.additions + file.deletions;
+            if (failed.has(file.fileId)) {
+                failedFiles += 1;
+            } else {
+                pendingFiles += 1;
+            }
+            continue;
+        }
+        const spans = claimed.get(file.fileId) ?? [];
+        const total = changedLineCount(model, file);
+        const fileCovered = coveredChangedLines(model, spans);
+        changed += total;
+        covered += fileCovered.additions + fileCovered.deletions;
+
+        const ranges = uncoveredRanges(model, spans);
+        const lines = spanLines(ranges);
+        if (lines > 0) {
+            uncoveredFiles.push({
+                ...names(file),
+                file,
+                anchors: ranges,
+                contextLines: claimContext(takenContext, file.fileId, ranges, spans),
+                lines,
+            });
+        }
+    }
+
+    const uncovered = uncoveredFiles.reduce((total, file) => total + file.lines, 0);
+    byTier.other = uncovered;
+    const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles };
+
+    const other: RouteOtherView | null =
+        otherStop === null || uncovered === 0
+            ? null
+            : {
+                  stop: otherStop,
+                  planLabel: planLabel(otherStop.planIndex),
+                  files: uncoveredFiles,
+                  lines: uncovered,
+              };
+    const promoted = other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
+
+    return { entries: order(views, other, promoted), totals, promoted, stopCount };
+}
+
+/**
+ * Render order. Triage follows the snapshot's `stops` array. "Other" goes last, or
+ * when promoted, before the first low-tier stop. Stop numbers stay fixed.
+ */
+function order(
+    views: readonly RouteStopView[],
+    other: RouteOtherView | null,
+    promoted: boolean,
+): readonly RouteEntry[] {
+    const entries: RouteEntry[] = views.map((view) => ({ kind: 'stop', view }));
+    if (other === null) {
+        return entries;
+    }
+    const otherEntry: RouteEntry = { kind: 'other', view: other };
+    if (!promoted) {
+        return [...entries, otherEntry];
+    }
+    const firstLow = entries.findIndex((entry) => entry.kind === 'stop' && entry.view.stop.tier === 'low');
+    if (firstLow < 0) {
+        return [...entries, otherEntry];
+    }
+    return [...entries.slice(0, firstLow), otherEntry, ...entries.slice(firstLow)];
+}
+
+function stopView(
+    stop: RouteStop,
+    byId: ReadonlyMap<string, FileDiff>,
+    models: ReadonlyMap<string, DiffFileModel>,
+    claimed: ReadonlyMap<string, readonly AnchorSpan[]>,
+    takenContext: Map<string, ContextLines>,
+): RouteStopView {
+    const groups = new Map<string, { shown: RouteAnchor[]; collapsed: RouteAnchor[] }>();
+    const unresolved: string[] = [];
+    const markUnresolved = (path: string): void => {
+        if (!unresolved.includes(path)) {
+            unresolved.push(path);
+        }
+    };
+    for (const anchor of stop.anchors) {
+        if (!byId.has(anchor.fileId)) {
+            markUnresolved(anchor.path);
+            continue;
+        }
+        const group = groups.get(anchor.fileId) ?? { shown: [], collapsed: [] };
+        (anchor.collapsed ? group.collapsed : group.shown).push(anchor);
+        groups.set(anchor.fileId, group);
+    }
+
+    let changedLines = 0;
+    let pending = false;
+    const files: RouteFileGroup[] = [];
+    for (const [fileId, group] of groups) {
+        const file = byId.get(fileId);
+        if (file === undefined) {
+            continue;
+        }
+        const model = models.get(fileId) ?? null;
+        pending ||= model === null;
+        const own = anchorSpans([...group.shown, ...group.collapsed]);
+        const shown = coveredChangedLines(model, anchorSpans(group.shown));
+        const collapsed = coveredChangedLines(model, anchorSpans(group.collapsed));
+        const additions = shown.additions + collapsed.additions;
+        const deletions = shown.deletions + collapsed.deletions;
+        // The file exists in the diff, but no changed lines remain under the anchors. The diff has shifted beneath
+        // the snapshot. An empty card would not explain that, so the file goes into the notice (SPEC §2.9).
+        if (model !== null && model.content.kind === 'text' && additions + deletions === 0) {
+            markUnresolved(file.path);
+            continue;
+        }
+        changedLines += additions + deletions;
+        files.push({
+            ...names(file),
+            file,
+            anchors: group.shown,
+            collapsedAnchors: group.collapsed,
+            contextLines: claimContext(takenContext, fileId, own, claimed.get(fileId) ?? []),
+            hunks: model === null ? 0 : clipModelToAnchors(model, anchorSpans(group.shown)).hunks,
+            additions,
+            deletions,
+            collapsedLines: collapsed.additions + collapsed.deletions,
+            whole: model !== null && additions + deletions >= changedLineCount(model, file),
+        });
+    }
+
+    return {
+        stop,
+        planLabel: planLabel(stop.planIndex),
+        files,
+        changedLines,
+        unresolvedPaths: unresolved,
+        drift: stop.anchors.length > 0 && files.length === 0,
+        empty: stop.anchors.length === 0,
+        pending,
+    };
+}
+
+/**
+ * Route entry context includes up to `ANCHOR_CONTEXT` unchanged lines at the edges of its ranges.
+ * Everything claimed by anchors (another stop's line means its comment) and everything
+ * taken by a previous entry is subtracted. `taken` is updated in place, in plan order.
+ */
+function claimContext(
+    taken: Map<string, ContextLines>,
+    fileId: string,
+    own: readonly AnchorSpan[],
+    allClaimed: readonly AnchorSpan[],
+): ContextLines {
+    const mine: { old: Set<number>; new: Set<number> } = { old: new Set(), new: new Set() };
+    const already = taken.get(fileId) ?? EMPTY_CONTEXT;
+    for (const span of own) {
+        for (let offset = 1; offset <= ANCHOR_CONTEXT; offset += 1) {
+            for (const line of [span.start - offset, span.end + offset]) {
+                if (line < 1 || already[span.side].has(line) || covered(allClaimed, span.side, line)) {
+                    continue;
+                }
+                mine[span.side].add(line);
+            }
+        }
+    }
+
+    taken.set(fileId, {
+        old: new Set([...already.old, ...mine.old]),
+        new: new Set([...already.new, ...mine.new]),
+    });
+    return mine;
+}
+
+function covered(spans: readonly AnchorSpan[], side: 'old' | 'new', line: number): boolean {
+    return spans.some((span) => span.side === side && line >= span.start && line <= span.end);
+}
+
+/** The comment position touches at least one line of the entry's context. */
+function touchesContext(lines: ContextLines, side: 'old' | 'new', start: number, end: number): boolean {
+    for (const line of lines[side]) {
+        if (line >= start && line <= end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function intersects(spans: readonly AnchorSpan[], side: 'old' | 'new', start: number, end: number): boolean {
+    return spans.some((span) => span.side === side && start <= span.end && end >= span.start);
+}
+
+const EMPTY_CONTEXT: ContextLines = { old: new Set(), new: new Set() };
+
+/**
+ * Changed file lines follow the canonical `changedLinesOf` rule (add→new, del→old), so
+ * coverage and read-state use the same count. Without a model, use patch counters.
+ */
+function changedLineCount(model: DiffFileModel | null, file: FileDiff): number {
+    const changed = changedLinesOf(model);
+    return changed === undefined ? file.additions + file.deletions : changed.old.size + changed.new.size;
+}
+
+function names(file: FileDiff): { fileId: string; path: string; name: string; dir: string } {
+    const cut = file.path.lastIndexOf('/');
+    return {
+        fileId: file.fileId,
+        path: file.path,
+        name: cut === -1 ? file.path : file.path.slice(cut + 1),
+        dir: cut === -1 ? '' : file.path.slice(0, cut),
+    };
+}
+
+/** Plan number as in the handoff: `01`, `07`. */
+export function planLabel(planIndex: number): string {
+    return String(planIndex).padStart(2, '0');
+}
+
+/**
+ * Whether the comment position belongs to the stop's ranges. First check its anchors, then
+ * their context. The card renders several unchanged lines at the edges of each range, and a comment
+ * on such a line would otherwise appear in no route entry. Context claimed by
+ * a neighbouring stop stays with it so that a thread never appears twice.
+ */
+function groupOwnsPosition(group: RouteFileGroup, position: { side: 'old' | 'new'; line: number; size: number }): boolean {
+    const last = position.line + Math.max(position.size, 1) - 1;
+    return (
+        intersects(anchorSpans([...group.anchors, ...group.collapsedAnchors]), position.side, position.line, last) ||
+        touchesContext(group.contextLines, position.side, position.line, last)
+    );
+}
+
+/**
+ * Threads belonging to the stop's ranges. With a position, the line must fall within the anchors or their
+ * context. Without a position (or if outdated), only when the stop explains the whole file. Otherwise,
+ * the same thread would appear in every stop touching that file.
+ */
+export function threadsForGroup(
+    group: RouteFileGroup,
+    byFile: ReadonlyMap<string, readonly Thread[]>,
+): readonly Thread[] {
+    const threads = byFile.get(group.fileId) ?? [];
+    if (threads.length === 0) {
+        return threads;
+    }
+    return threads.filter((thread) => {
+        const position = thread.anchor?.position ?? null;
+        if (position === null || thread.outdated) {
+            return group.whole;
+        }
+        return groupOwnsPosition(group, position);
+    });
+}
+
+/**
+ * Composers follow the same rule as threads. A draft appearing in two route
+ * entries would create two textareas for one store record.
+ */
+export function composersForGroup(
+    group: RouteFileGroup,
+    byFile: ReadonlyMap<string, readonly ComposerSnapshot[]>,
+): readonly ComposerSnapshot[] {
+    const composers = byFile.get(group.fileId) ?? [];
+    if (composers.length === 0) {
+        return composers;
+    }
+    return composers.filter((composer) => {
+        const position = composer.anchor?.position ?? null;
+        return position === null ? group.whole : groupOwnsPosition(group, position);
+    });
+}
+
+/** Stop comments (README §1: left column counter). */
+export function countStopComments(view: RouteStopView, byFile: ReadonlyMap<string, readonly Thread[]>): number {
+    return view.files.reduce((total, group) => total + threadsForGroup(group, byFile).length, 0);
+}
+
+/** An "Other" file as a regular stop file group, with the same cards and threads. */
+export function uncoveredAsGroup(file: RouteUncoveredFile): RouteFileGroup {
+    const anchors: RouteAnchor[] = file.anchors.map((span) => ({
+        fileId: file.fileId,
+        path: file.path,
+        side: span.side,
+        start: span.start,
+        end: span.end,
+        collapsed: false,
+    }));
+    const additions = file.anchors
+        .filter((span) => span.side === 'new')
+        .reduce((total, span) => total + (span.end - span.start + 1), 0);
+    return {
+        file: file.file,
+        fileId: file.fileId,
+        path: file.path,
+        name: file.name,
+        dir: file.dir,
+        anchors,
+        collapsedAnchors: [],
+        contextLines: file.contextLines,
+        // Uncovered ranges already join adjacent lines. Each is rendered as its own chunk.
+        hunks: anchors.length,
+        additions,
+        deletions: file.lines - additions,
+        collapsedLines: 0,
+        whole: file.lines >= file.file.additions + file.file.deletions,
+    };
+}
+
+/**
+ * Lazy stop rendering counts hunks, not files (SPEC §2.9): "stop with more
+ * than 20 hunks lazy-renders beyond the first 5". Below the threshold, the whole stop renders
+ * even offscreen, so scrolling does not have to wait for rendering unnecessarily.
+ */
+export const LAZY_HUNK_THRESHOLD = 20;
+const LAZY_HUNKS = 5;
+
+/** Cards rendered before the stop has appeared on screen. */
+export function lazyCards(files: readonly RouteFileGroup[]): readonly RouteFileGroup[] {
+    const total = files.reduce((sum, group) => sum + group.hunks, 0);
+    if (total <= LAZY_HUNK_THRESHOLD) {
+        return files;
+    }
+    const head: RouteFileGroup[] = [];
+    let hunks = 0;
+    for (const group of files) {
+        // Always render the first card. A single card with 30 hunks still needs to be visible.
+        if (head.length > 0 && hunks >= LAZY_HUNKS) {
+            break;
+        }
+        head.push(group);
+        hunks += group.hunks;
+    }
+    return head;
+}
+
+/** Stops with no files left under the current filter leave the view (SPEC §2.7). */
+export function stopMatchesFilter(view: RouteStopView, fileIds: ReadonlySet<string> | null): boolean {
+    return fileIds === null || view.files.some((group) => fileIds.has(group.fileId));
+}
+
+export function otherMatchesFilter(view: RouteOtherView, fileIds: ReadonlySet<string> | null): boolean {
+    return fileIds === null || view.files.some((group) => fileIds.has(group.fileId));
+}
+
+/**
+ * "Other" under a filter. Both the heading and the button must count exactly what will expand.
+ * `null` in `fileIds` means no filter (or the card is held on screen), so the view stays unchanged.
+ */
+export function filterOtherView(view: RouteOtherView, fileIds: ReadonlySet<string> | null): RouteOtherView {
+    if (fileIds === null) {
+        return view;
+    }
+    const files = view.files.filter((file) => fileIds.has(file.fileId));
+    return { ...view, files, lines: files.reduce((total, file) => total + file.lines, 0) };
+}
+
+const EMPTY_FAILED: ReadonlySet<string> = new Set();

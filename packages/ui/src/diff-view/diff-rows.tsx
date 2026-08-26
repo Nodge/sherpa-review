@@ -202,11 +202,18 @@ function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
 }
 
 function gapLabel(gap: DiffGap, content: FileContent | null): string {
+    const changed = gap.hiddenChanged ?? 0;
     const hidden = hiddenLinesOf(gap, content);
     if (hidden === null) {
         return '↕ unchanged to the end of the file';
     }
-    return `↕ ${formatCount(hidden)} ${plural(hidden, 'unchanged line', 'unchanged lines', 'unchanged lines')}`;
+    const unchanged = `↕ ${formatCount(hidden)} ${plural(hidden, 'unchanged line', 'unchanged lines', 'unchanged lines')}`;
+    if (changed === 0) {
+        return unchanged;
+    }
+    // Clip to the stop anchors. Changed lines outside the slice are explained in other stops.
+    const elsewhere = `${formatCount(changed)} ${plural(changed, 'changed line', 'changed lines', 'changed lines')} — in other stops`;
+    return hidden === 0 ? `↕ ${elsewhere}` : `${unchanged} and ${elsewhere}`;
 }
 
 function GapRow({ gap, content, mode }: { gap: DiffGap; content: FileContent | null; mode: DiffMode }) {

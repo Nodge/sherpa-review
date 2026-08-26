@@ -1,0 +1,693 @@
+/*
+ * Route view, triage preset, README §1–2. All values come from there: the
+ * `minmax(300px,368px) minmax(0,1fr)` grid with a 40px gap, sticky left column, tier ruler
+ * at 3×15px, and tier-specific heading typography.
+ *
+ * One deliberate difference from the handoff: the prototype scrolls the whole page, and sticky
+ * elements use its top as their origin (toolbar 46px, left column 132px). In the app,
+ * the view itself scrolls below the top panel, so the same 46 and 132
+ * become 0 and 132−46=86.
+ */
+
+.route {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    /* In the app, `#root > main` scrolls the view. In the gallery, the view scrolls itself. */
+    overflow-y: auto;
+}
+
+.route--status {
+    padding: var(--space-page);
+}
+
+.route__status {
+    margin: 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+/* --- Snapshot pill (README §1: `snapshot 9f3c1ab · current`) --- */
+
+.route-snapshot {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 var(--space-inner);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+    background: var(--surface-control);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* --- Sticky toolbar --- */
+
+.route-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex: none;
+    margin-top: 20px;
+    padding: var(--space-inner) var(--space-page) 11px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-toolbar);
+    backdrop-filter: blur(8px);
+}
+
+.route-toolbar__row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 1560px;
+}
+
+/* Space for the coverage strip (M2-T7): toolbar geometry stays fixed when the strip appears. */
+.route-toolbar__strip {
+    height: 7px;
+    margin-top: 11px;
+}
+
+.route-toolbar__hint {
+    flex: none;
+    max-width: 240px;
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+    text-wrap: pretty;
+}
+
+.route-toolbar__spacer {
+    flex: 1;
+    min-width: 120px;
+}
+
+.route-preset {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-popover);
+    background: var(--surface-control);
+}
+
+.route-preset__option {
+    height: 24px;
+    padding: 0 var(--space-inner);
+    border: 0;
+    border-radius: var(--radius-button);
+    background: transparent;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted-dim);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.route-preset__option.is-active {
+    background: var(--surface-segment-active);
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* --- Stop grid --- */
+
+.route__stops {
+    padding: 0 var(--space-page) 180px;
+    max-width: 1560px;
+}
+
+.route-stop {
+    display: grid;
+    grid-template-columns: minmax(300px, 368px) minmax(0, 1fr);
+    gap: var(--space-column);
+    padding: var(--space-page) 0 34px;
+    border-bottom: 1px solid var(--border-hairline);
+}
+
+.route-stop__side {
+    position: sticky;
+    top: 86px;
+    align-self: start;
+}
+
+.route-stop.is-viewed .route-stop__side {
+    opacity: 0.72;
+}
+
+.route-stop__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner);
+    margin-bottom: 9px;
+}
+
+.route-stop__spacer {
+    flex: 1;
+}
+
+.route-stop__rule {
+    flex: none;
+    width: 3px;
+    height: 15px;
+    border-radius: var(--radius-rule);
+    background: var(--tier-low);
+}
+
+.route-stop__rule--high {
+    background: var(--attention);
+}
+
+.route-stop__rule--medium {
+    background: var(--tier-medium);
+}
+
+.route-stop__rule--other {
+    background: var(--hatch);
+}
+
+.route-stop__number {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.route-stop__badge {
+    padding: 1px 5px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-key);
+    background: var(--attention-surface);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--attention-text);
+    white-space: nowrap;
+}
+
+.route-stop__badge--queued {
+    border: 1px dashed var(--border-strong-lifted);
+    background: transparent;
+    color: var(--text-dim);
+}
+
+/* Header actions: hidden at rest, shown on hover and focus within (SPEC §2.9). */
+.route-stop__action {
+    flex: none;
+    padding: 0;
+    white-space: nowrap;
+    border: 0;
+    background: none;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--motion-hover) var(--motion-hover-ease);
+}
+
+.route-stop:hover .route-stop__action,
+.route-stop:focus-within .route-stop__action {
+    opacity: 1;
+}
+
+.route-stop__comments {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-muted);
+}
+
+.route-stop__comments-box {
+    display: inline-block;
+    flex: none;
+    width: 9px;
+    height: 8px;
+    border: 1px solid var(--text-separator);
+    border-radius: var(--radius-rule);
+}
+
+.route-stop__viewed {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 6px;
+    height: 23px;
+    padding: 0 var(--space-inner-tight);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-badge);
+    background: transparent;
+    font-size: var(--font-size-control);
+    color: var(--text-muted-dim);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.route-stop__viewed:hover {
+    background: var(--surface-popover);
+}
+
+.route-stop__viewed.is-viewed {
+    border-color: var(--viewed-border);
+    background: var(--viewed-surface);
+    color: var(--diff-add-text-strong);
+}
+
+.route-stop__title {
+    margin: 0;
+    font-size: var(--font-size-stop-title);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.3;
+    color: var(--text-primary);
+    text-wrap: pretty;
+}
+
+.route-stop--high .route-stop__title {
+    font-size: var(--font-size-stop-title-high);
+}
+
+.route-stop--low .route-stop__title,
+.route-stop--other .route-stop__title {
+    color: var(--text-secondary-dim);
+}
+
+.route-stop__paragraph {
+    margin: 9px 0 0;
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    color: var(--text-body);
+    text-wrap: pretty;
+}
+
+.route-stop__more {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent-hover);
+    cursor: pointer;
+}
+
+.route-stop__note {
+    margin: 9px 0 0;
+    font-size: var(--font-size-ui);
+    line-height: 1.6;
+    color: var(--text-dim-strong);
+}
+
+.route-stop__bridge {
+    margin: 11px 0 0;
+    font-size: var(--font-size-ui);
+    font-style: italic;
+    line-height: 1.55;
+    color: var(--text-dim);
+    text-wrap: pretty;
+}
+
+.route-stop__validation {
+    margin: 11px 0 0;
+    padding-left: 16px;
+    font-size: var(--font-size-secondary);
+    line-height: 1.5;
+    color: var(--text-dim);
+}
+
+.route-stop__kept,
+.route-stop__hint {
+    margin: 11px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+}
+
+/* --- File chips --- */
+
+.route-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: var(--space-control);
+}
+
+.route-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    width: 100%;
+    padding: 6px 9px;
+    border: 1px solid var(--border-chip);
+    border-radius: var(--radius-input);
+    background: var(--surface-chip);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.route-chip:hover {
+    border-color: var(--border-strong-lifted);
+    background: var(--surface-raised);
+}
+
+.route-chip.is-read {
+    border-color: var(--border-standard);
+    opacity: 0.62;
+}
+
+.route-chip__name {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.route-chip__path {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim-strong);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.route-chip__spacer {
+    flex: 1;
+}
+
+.route-chip__add {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--diff-add-text);
+}
+
+.route-chip__del {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--diff-del-text);
+}
+
+/* Read-state box uses the same three states as the tree and card (SPEC §2.12). */
+.route-chip__read {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border: 1px solid var(--read-box-border);
+    border-radius: var(--radius-mark);
+    font-size: var(--font-size-tag);
+    line-height: 1;
+    color: var(--surface-app);
+}
+
+.route-chip__read--partial {
+    border-color: var(--read-border);
+    background: linear-gradient(90deg, var(--read-fill) 0 50%, transparent 50%);
+}
+
+.route-chip__read--read {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+}
+
+.route-chips__more {
+    padding: 4px 0 0;
+    border: 0;
+    background: none;
+    font-size: var(--font-size-secondary);
+    color: var(--accent-hover);
+    text-align: left;
+    cursor: pointer;
+}
+
+/* --- Right column --- */
+
+.route-stop__diff {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-inner);
+    min-width: 0;
+}
+
+.route-stop__card {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Flash after jumping to a file: 2px accent line for ~900ms (README Interactions).
+   Out of flow so the line does not shift the column under the cursor. */
+.route-stop__flash {
+    position: absolute;
+    top: -6px;
+    right: 0;
+    left: 0;
+    height: 2px;
+    border-radius: var(--radius-rule);
+    background: var(--accent);
+    animation: route-flash var(--motion-flash) ease-out forwards;
+}
+
+@keyframes route-flash {
+    0% {
+        opacity: 1;
+    }
+
+    70% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+.route-stop__lazy {
+    margin: 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+.route-stop__collapsed-lines {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner);
+    width: 100%;
+    padding: 9px 13px;
+    border: 1px dashed var(--border-strong);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    background: var(--surface-diff-gap);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    text-align: left;
+    cursor: pointer;
+}
+
+.route-stop__collapsed-lines:hover {
+    color: var(--text-secondary);
+}
+
+.route-stop__collapsed-mark {
+    font-family: var(--font-mono);
+}
+
+.route-stop__collapsed-hint {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}
+
+/* Collapsed stop (README §2): dashed card, nothing hidden. */
+.route-collapsed {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 15px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-card);
+    background: var(--surface-panel-deep);
+    font-family: inherit;
+    font-size: var(--font-size-ui);
+    color: var(--text-muted-dim);
+    text-align: left;
+    cursor: pointer;
+}
+
+.route-collapsed:hover {
+    border-color: var(--checkbox-border);
+    background: var(--surface-input);
+    color: var(--text-secondary);
+}
+
+.route-collapsed--empty {
+    cursor: default;
+}
+
+.route-collapsed--empty:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-panel-deep);
+    color: var(--text-muted-dim);
+}
+
+.route-collapsed__mark {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}
+
+.route-collapsed__hint {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}
+
+/* Anchor drift (SPEC §2.9): amber notice instead of empty space. */
+.route-drift {
+    padding: 12px 14px;
+    border: 1px solid var(--attention-border-alt);
+    border-radius: var(--radius-card);
+    background: var(--attention-surface-alt);
+}
+
+.route-drift__text {
+    margin: 0;
+    font-size: var(--font-size-ui);
+    line-height: 1.55;
+    color: var(--attention-text-soft);
+}
+
+.route-drift__paths {
+    margin: 9px 0 0;
+    padding-left: 16px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--attention-text-dim);
+}
+
+/* --- Other --- */
+
+.route-other {
+    padding: 15px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-card);
+    background:
+        linear-gradient(var(--surface-panel-deep), var(--surface-panel-deep)) padding-box,
+        var(--hatch) border-box;
+}
+
+.route-other__text {
+    margin: 0;
+    font-size: var(--font-size-ui);
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.route-other__text strong {
+    font-weight: inherit;
+    color: var(--text-primary-soft);
+}
+
+.route-other__actions {
+    display: flex;
+    gap: var(--space-inner-tight);
+    margin-top: 12px;
+}
+
+.route-other__action {
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--border-strong-lifted);
+    border-radius: var(--radius-button);
+    background: var(--border-standard);
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.route-other__action:hover {
+    background: var(--hover-selected);
+}
+
+/* Failed parsing: lines from these files are excluded from the uncovered count, with retry beside them. */
+.route-other__failed {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    margin: 10px 0 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted);
+}
+
+.route-other__retry {
+    border: 0;
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* SPEC §4.3 banner: the plan explains less than half the diff. */
+.route-regenerate {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px var(--space-control);
+    border: 1px solid var(--attention-border-alt);
+    border-radius: var(--radius-card);
+    background: var(--attention-surface-alt);
+    font-size: var(--font-size-ui);
+    color: var(--attention-text-soft);
+}
+
+.route-regenerate__dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--attention);
+}
+
+/* Empty filter result, as in the full diff: explanation and a way out (SPEC §2.7). */
+.route__zero {
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+    margin: var(--space-page) 0 var(--space-card);
+    padding: var(--space-control) 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-card);
+}
+
+.route__zero-text {
+    margin: 0;
+    font-size: var(--font-size-body);
+    color: var(--text-body);
+}
+
+.route__zero-action {
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--border-strong-lifted);
+    border-radius: var(--radius-button);
+    background: var(--border-standard);
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}

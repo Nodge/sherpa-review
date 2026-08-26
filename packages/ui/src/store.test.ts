@@ -99,6 +99,7 @@ describe('UI store', () => {
             error: null,
             progressRevision: null,
             threadsRevision: null,
+            routeRevision: null,
         });
     });
 

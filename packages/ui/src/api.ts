@@ -12,6 +12,7 @@ import type {
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiReviewRouteResponse,
     UiSetFileViewedResponse,
     UiTask,
     Verdict,
@@ -28,6 +29,7 @@ import {
     uiReviewLensesResponseSchema,
     uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
+    uiReviewRouteResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
     uiSaveDraftResponseSchema,
@@ -121,6 +123,14 @@ export async function setFileViewed(
     viewed: boolean,
 ): Promise<UiSetFileViewedResponse> {
     return post(UI_ENDPOINTS.reviewFileViewed, token, { fileId, viewed }, uiSetFileViewedResponseSchema);
+}
+
+/**
+ * Route state (M2): phase, snapshot and revision. The endpoint is local and works without a review host,
+ * Refetched when `routeRevision` from SSE increases.
+ */
+export async function fetchReviewRoute(token: string): Promise<UiReviewRouteResponse> {
+    return get(UI_ENDPOINTS.reviewRoute, token, uiReviewRouteResponseSchema);
 }
 
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {

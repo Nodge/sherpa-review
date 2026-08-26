@@ -29,6 +29,8 @@
     --ownership-mine-surface: #132019;
     /* README §14: backdrop below the command palette. */
     --overlay-dialog: rgba(7, 8, 9, 0.66);
+    /* README §1: sticky route toolbar, app background with transparency for blur(8px). */
+    --surface-toolbar: rgba(13, 14, 16, 0.92);
 
     /* --- Borders --- */
     --border-hairline: #1a1d21;
@@ -92,6 +94,9 @@
     --diff-del-text-strong: #e8a29c;
     --diff-del-gutter: #7f5a56;
     --read-fill: #2b7a55;
+    /* README §1: viewed stop mark has its own background and border. */
+    --viewed-surface: #16211a;
+    --viewed-border: #25422f;
     /* README §13: circle for a successfully completed review. */
     --success-surface: #1f3d2c;
     /* SPEC §2.10, hovering over "viewed": the box fills a quarter with green. */

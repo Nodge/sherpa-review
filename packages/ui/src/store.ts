@@ -3,9 +3,11 @@ import {
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
+    UI_ROUTE_EVENT,
     UI_STATE_EVENT,
     uiProgressEventSchema,
     uiReviewEventSchema,
+    uiRouteEventSchema,
     uiStateSchema,
 } from '@sherpa/protocol';
 
@@ -36,6 +38,8 @@ export interface StoreSnapshot {
     readonly progressRevision: number | null;
     /** Last thread revision. When it increases, the view rereads the thread snapshot. */
     readonly threadsRevision: number | null;
+    /** Last route revision (M2). When it increases, the view rereads `review/route`. */
+    readonly routeRevision: number | null;
 }
 
 export interface Store {
@@ -50,6 +54,8 @@ export interface StreamHandlers {
     readonly onProgress: (data: string) => void;
     /** `review` event: carries only the thread revision. */
     readonly onReview: (data: string) => void;
+    /** `route` event: carries only the route revision. */
+    readonly onRoute: (data: string) => void;
     /**
      * `recoverable: true` means the channel reconnects itself (the browser retries after a stream interruption).
      * `false` means the connection is permanently closed, so the store must retry.
@@ -83,6 +89,7 @@ export function createStore(options: StoreOptions): Store {
         error: null,
         progressRevision: null,
         threadsRevision: null,
+        routeRevision: null,
     };
     let closed = false;
 
@@ -133,6 +140,15 @@ export function createStore(options: StoreOptions): Store {
             const revision = parseThreadsRevision(data);
             if (revision !== null && revision !== snapshot.threadsRevision) {
                 update({ ...snapshot, threadsRevision: revision });
+            }
+        },
+        onRoute: (data) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+            const revision = parseRouteRevision(data);
+            if (revision !== null && revision !== snapshot.routeRevision) {
+                update({ ...snapshot, routeRevision: revision });
             }
         },
         onError: (recoverable) => {
@@ -221,6 +237,19 @@ function parseThreadsRevision(data: string): number | null {
     return parsed.success ? parsed.data.threadsRevision : null;
 }
 
+/** `null` means the route event failed the protocol schema. */
+function parseRouteRevision(data: string): number | null {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(data);
+    } catch {
+        return null;
+    }
+
+    const parsed = uiRouteEventSchema.safeParse(payload);
+    return parsed.success ? parsed.data.routeRevision : null;
+}
+
 function connectEventSource(url: string, handlers: StreamHandlers): StreamConnection {
     const source = new EventSource(url);
     // The event name is not in `EventSourceEventMap`, so the listener receives a base `Event`.
@@ -232,6 +261,9 @@ function connectEventSource(url: string, handlers: StreamHandlers): StreamConnec
     });
     source.addEventListener(UI_REVIEW_EVENT, (event) => {
         handlers.onReview((event as MessageEvent<string>).data);
+    });
+    source.addEventListener(UI_ROUTE_EVENT, (event) => {
+        handlers.onRoute((event as MessageEvent<string>).data);
     });
     source.addEventListener('error', () => {
         // The browser retries an interrupted established stream, but not a failed

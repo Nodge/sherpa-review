@@ -81,6 +81,12 @@ export interface DiffGap {
      * and inventing a count is not allowed.
      */
     hiddenLines: number | null;
+    /**
+     * Number of changed lines hidden along with unchanged ones. The parser does not set this field.
+     * populated by clipping to stop anchors (M2), where a gap may include changes from other stops,
+     * so calling them "unchanged" would be false.
+     */
+    hiddenChanged?: number;
     /** First hidden line in each version, an anchor for loading more context (T6). */
     oldStart: number;
     newStart: number;

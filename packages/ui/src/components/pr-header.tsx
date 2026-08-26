@@ -1,4 +1,5 @@
 import type { PrMeta } from '@sherpa/protocol';
+import type { ReactNode } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { formatCount, plural } from '../text.js';
@@ -9,7 +10,8 @@ import './pr-header.css';
  * The component is shared with the route view in M2, so it knows nothing about
  * data loading or the chip destination. Both come through props.
  *
- * The snapshot selector on the right side of the header comes in M4.
+ * The header's right side is the `aside` slot: the route uses it for the snapshot selector (README §1),
+ * the full diff leaves it empty. M2 has no working snapshot selection. It arrives in M4.
  */
 
 export interface PrHeaderProps {
@@ -24,9 +26,11 @@ export interface PrHeaderProps {
     readonly pci: FileFilter | null;
     readonly pciActive: boolean;
     readonly onTogglePci: () => void;
+    /** Right edge of the header's bottom row, used for the snapshot pill in the route. */
+    readonly aside?: ReactNode;
 }
 
-export function PrHeader({ pr, additions, deletions, files, pci, pciActive, onTogglePci }: PrHeaderProps) {
+export function PrHeader({ pr, additions, deletions, files, pci, pciActive, onTogglePci, aside = null }: PrHeaderProps) {
     return (
         <header className="pr-header">
             <div className="pr-header__meta">
@@ -65,13 +69,16 @@ export function PrHeader({ pr, additions, deletions, files, pci, pciActive, onTo
 
             <h1 className="pr-header__title">{pr.title}</h1>
 
-            <div className="pr-header__author">
-                <span className="pr-header__avatar" aria-hidden="true">
-                    {initials(pr.author.displayName ?? pr.author.login)}
-                </span>
-                <span>{pr.author.login}</span>
-                <Separator />
-                <span>{pr.statusLabel}</span>
+            <div className="pr-header__bottom">
+                <div className="pr-header__author">
+                    <span className="pr-header__avatar" aria-hidden="true">
+                        {initials(pr.author.displayName ?? pr.author.login)}
+                    </span>
+                    <span>{pr.author.login}</span>
+                    <Separator />
+                    <span>{pr.statusLabel}</span>
+                </div>
+                {aside === null ? null : <div className="pr-header__aside">{aside}</div>}
             </div>
         </header>
     );

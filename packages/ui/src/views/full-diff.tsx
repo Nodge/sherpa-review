@@ -19,6 +19,7 @@ import {
 } from '../api.js';
 import { FilterSelect } from '../components/filter-select.tsx';
 import { PrHeader } from '../components/pr-header.tsx';
+import { CommentSources, DiffModeToggle } from '../components/toolbar-controls.tsx';
 import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
@@ -49,7 +50,7 @@ import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
 import { countThreadSources, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
-import { threadResolvedWriterFor } from '../threads/resolved-writer.js';
+import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
@@ -308,23 +309,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
     const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
     const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
-    const resolvedWriter = useMemo(
-        () =>
-            threadResolvedWriterFor(threadStore, {
-                read: (threadId) => threadStore.getSnapshot().threads.find((thread) => thread.id === threadId)?.resolved ?? false,
-                readConfirmed: threadStore.getServerResolved,
-                apply: (threadId, resolved) => {
-                    threadStore.setResolved(threadId, resolved);
-                },
-                rollback: threadStore.restoreResolved,
-                shouldRollback: (threadId) => threadStore.hasResolvedOverride(threadId),
-                send: resolveThread,
-            }),
-        [resolveThread, threadStore],
-    );
     const threadActions = useMemo<ThreadActions>(
-        () => ({ transport: threadTransport, resolve: resolvedWriter.write }),
-        [resolvedWriter, threadTransport],
+        () => createThreadActions(threadStore, threadTransport, resolveThread),
+        [resolveThread, threadStore, threadTransport],
     );
     const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
 
@@ -910,7 +897,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
 }
 
-/** The diff mode toggle is "deliberately quiet" (README §1), global across all views (SPEC §2.6). */
+/** Full diff toolbar: view title plus shared controls (README §10). */
 function Toolbar({
     store,
     filters,
@@ -930,9 +917,6 @@ function Toolbar({
     threadCounts: ThreadSourceCounts;
     onThreadsShow: (show: ThreadsShow) => void;
 }) {
-    const { diffMode, splitAvailable, effectiveMode } = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const [hiddenBackup, setHiddenBackup] = useState<ThreadsShow | null>(null);
-
     return (
         <div className="full-diff__toolbar">
             <h1 className="full-diff__title">Full diff</h1>
@@ -940,88 +924,14 @@ function Toolbar({
                 A classic reader. The route stays in the margin and no longer sets the order.
             </span>
             <span className="full-diff__spacer" />
-            {/* Below 1100px there is no choice (SPEC §2.6). The label always names the mode
-                currently rendering the diff, rather than the user's deferred choice. */}
-            <button
-                type="button"
-                className="full-diff__mode"
-                disabled={!splitAvailable}
-                title={splitAvailable ? undefined : 'not enough width for side by side'}
-                onClick={() => {
-                    store.setDiffMode(diffMode === 'unified' ? 'split' : 'unified');
-                }}
-            >
-                ⇄ {effectiveMode === 'unified' ? 'unified' : 'side by side'}
-            </button>
-            <span className="full-diff__comments-label">Comments:</span>
-            {!threadsShow.people && !threadsShow.bots && !threadsShow.resolved ? (
-                <span className="thread-chips-hidden">
-                    Comments hidden ·{' '}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onThreadsShow(hiddenBackup ?? { people: true, bots: false, resolved: false });
-                            setHiddenBackup(null);
-                        }}
-                    >
-                        undo
-                    </button>
-                </span>
-            ) : (
-                <CommentSourceChips
-                    show={threadsShow}
-                    counts={threadCounts}
-                    onChange={(next) => {
-                        if (!next.people && !next.bots && !next.resolved) {
-                            setHiddenBackup(threadsShow);
-                        }
-                        onThreadsShow(next);
-                    }}
-                />
-            )}
+            <DiffModeToggle store={store} />
+            <span className="toolbar-label">Comments:</span>
+            <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
             <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
             <span className="full-diff__count">
                 {formatCount(shown)} {plural(shown, 'file', 'files', 'files')}
             </span>
         </div>
-    );
-}
-
-function CommentSourceChips({
-    show,
-    counts,
-    onChange,
-}: {
-    show: ThreadsShow;
-    counts: ThreadSourceCounts;
-    onChange: (show: ThreadsShow) => void;
-}) {
-    const chips = [
-        { id: 'people' as const, label: 'People' },
-        { id: 'bots' as const, label: 'Bots' },
-        { id: 'resolved' as const, label: 'Resolved' },
-    ];
-    return (
-        <span className="thread-chips" aria-label="Comment sources">
-            {chips.map((chip) => {
-                const count = counts[chip.id];
-                return (
-                    <button
-                        key={chip.id}
-                        type="button"
-                        className={`thread-chip${show[chip.id] ? ' is-on' : ''}`}
-                        aria-pressed={show[chip.id]}
-                        disabled={count === 0}
-                        title={count === 0 ? `This PR has no threads in the "${chip.label}" category` : undefined}
-                        onClick={() => {
-                            onChange({ ...show, [chip.id]: !show[chip.id] });
-                        }}
-                    >
-                        {chip.label} {count}
-                    </button>
-                );
-            })}
-        </span>
     );
 }
 
