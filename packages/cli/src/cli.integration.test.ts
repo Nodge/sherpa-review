@@ -38,7 +38,9 @@ describe('CLI against server', () => {
     });
 
     async function start(longPollSeconds = 0.2): Promise<SherpaServer> {
-        server = await startServer({ prKey: PR_KEY, sherpaDir, longPollSeconds });
+        // Live review hosts are forbidden in tests (requirements §7): without a host, route warmup does not use the network,
+        // and this suite only needs the CLI↔server protocol.
+        server = await startServer({ prKey: PR_KEY, sherpaDir, longPollSeconds, reviewHostFactory: () => null });
         return server;
     }
 

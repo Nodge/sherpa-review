@@ -30,7 +30,9 @@ describe('startServer', () => {
     });
 
     async function start(prKey = PR_KEY): Promise<SherpaServer> {
-        const server = await startServer({ prKey, sherpaDir });
+        // Tests must not access the live review host (requirements §7). Without a host, the route does not warm up,
+        // and this suite's review key stays just a key.
+        const server = await startServer({ prKey, sherpaDir, reviewHostFactory: () => null });
         servers.push(server);
         return server;
     }
@@ -138,16 +140,18 @@ describe('startServer', () => {
 
             await expect(start()).rejects.toThrow(ServerAlreadyRunningError);
 
-            const error = await startServer({ prKey: PR_KEY, sherpaDir }).catch((caught: unknown) => caught);
+            const error = await startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }).catch(
+                (caught: unknown) => caught,
+            );
             expect(error).toBeInstanceOf(ServerAlreadyRunningError);
             expect(error).toMatchObject({ prKey: PR_KEY, port: first.port, pid: process.pid });
         });
 
         it('leaves exactly one server after concurrent starts', async () => {
             const results = await Promise.allSettled([
-                startServer({ prKey: PR_KEY, sherpaDir }),
-                startServer({ prKey: PR_KEY, sherpaDir }),
-                startServer({ prKey: PR_KEY, sherpaDir }),
+                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
+                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
+                startServer({ prKey: PR_KEY, sherpaDir, reviewHostFactory: () => null }),
             ]);
 
             const started = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));

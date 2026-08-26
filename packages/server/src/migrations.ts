@@ -88,6 +88,38 @@ export const MIGRATIONS: readonly Migration[] = [
             CREATE INDEX file_seen_ranges_file ON file_seen_ranges (file_id);
         `,
     },
+    {
+        // PR route (M2-T4). Exactly one row: one database per PR, one snapshot in M2
+        // (snapshot versioning belongs to M4). The snapshot and stop intents are JSON blobs.
+        // Protocol schemas describe their shape, so there is no need to duplicate it in columns. On input and
+        // output, they pass through `routeSnapshotSchema` (a fail-closed boundary).
+        // `route_tasks` links a queued task to the stops it fills. The orchestrator uses this
+        // link to restore stop statuses after a restart and avoid scheduling duplicates.
+        // `rejections` counts result rejections within one lease. A rejection does not release the lease,
+        // but the model cannot keep fixing the result forever (rpc-design §3).
+        name: '006-route',
+        sql: `
+            CREATE TABLE route_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                phase TEXT NOT NULL CHECK (phase IN ('none', 'reading', 'filling', 'ready', 'failed')),
+                small_pr INTEGER CHECK (small_pr IN (0, 1)),
+                snapshot TEXT,
+                failure_message TEXT,
+                failure_raw_output TEXT,
+                intents TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE route_tasks (
+                task_id INTEGER PRIMARY KEY REFERENCES tasks (id) ON DELETE CASCADE,
+                kind TEXT NOT NULL CHECK (kind IN ('skeleton', 'section')),
+                plan_indexes TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            ALTER TABLE tasks ADD COLUMN rejections INTEGER NOT NULL DEFAULT 0;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

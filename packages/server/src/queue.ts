@@ -52,6 +52,36 @@ export interface TaskQueueOptions {
 export type CancelOutcome = 'cancelled' | 'noop';
 
 /**
+ * Result of fail-closed acceptance (rpc-design §3). The queue calls `onCommitted` after
+ * committing its transaction. Applying an accepted result writes to its own tables,
+ * and `node:sqlite` has no nested transactions.
+ *
+ * `deferred` means validation is unavailable (the server has not loaded the task context yet). The model gets
+ * the same rejection, but it is not at fault, so the rejection budget stays intact.
+ */
+export type TaskResultAcceptance =
+    | { readonly kind: 'accepted'; readonly onCommitted?: () => void }
+    | { readonly kind: 'rejected'; readonly errors: readonly string[] }
+    | { readonly kind: 'deferred'; readonly errors: readonly string[] };
+
+/**
+ * Result acceptor for a typed task. Called synchronously inside the `complete` transaction,
+ * so it must only validate. It can read storage but cannot write to it.
+ * `null` means the task has another type. The queue closes it by its existing rules.
+ */
+export type TaskResultAcceptor = (task: TaskRecord, result: string) => TaskResultAcceptance | null;
+
+/**
+ * How many consecutive results the acceptor can reject on one lease. A rejection
+ * keeps the lease and attempt ("fix it and call complete again"), but the loop must
+ * stop. Once rejections run out, the task fails with the last raw output.
+ */
+export const MAX_RESULT_REJECTIONS = 3;
+
+/** The only result requirement for tasks without an acceptor (`echo`). */
+const EMPTY_RESULT_ERROR = 'The result is empty. Return a non-empty text and call `complete` again.';
+
+/**
  * Transactions roll back everything an operation has done, so domain errors return as
  * values and become exceptions outside the transaction. Otherwise `result_too_large`
  * would lose the transition to `failed`.
@@ -72,6 +102,7 @@ interface TaskRow extends SqlRow {
     progress_text: string | null;
     result: string | null;
     fail_reason: string | null;
+    rejections: number;
     created_at: string;
     updated_at: string;
 }
@@ -93,6 +124,12 @@ export class TaskQueue {
      */
     private mutations = 0;
     private announcedMutations = 0;
+
+    /** Result acceptor. Without one, the only requirement is a nonempty result. */
+    private acceptor: TaskResultAcceptor | null = null;
+
+    /** What to do with an accepted result after the `complete` transaction commits. */
+    private commitEffects: (() => void)[] = [];
 
     private readonly txNext: (workerId: string) => Outcome<LeasedTask | null>;
     private readonly txComplete: (workerId: string, taskId: TaskId, result: string) => Outcome<TaskCompleteResponse>;
@@ -187,8 +224,22 @@ export class TaskQueue {
         return this.settle(this.txNext(workerId));
     }
 
+    /**
+     * Attaches fail-closed result acceptance (M2), installed by the route orchestrator.
+     * One per queue. The acceptor decides how to handle each task type.
+     */
+    setResultAcceptor(acceptor: TaskResultAcceptor | null): void {
+        this.acceptor = acceptor;
+    }
+
     complete(workerId: string, taskId: TaskId, result: string): TaskCompleteResponse {
-        return this.settle(this.txComplete(workerId, taskId, result));
+        try {
+            return this.settle(this.txComplete(workerId, taskId, result));
+        } catch (error) {
+            // The entire transaction rolled back, so there is no accepted result to apply.
+            this.commitEffects = [];
+            throw error;
+        }
     }
 
     fail(workerId: string, taskId: TaskId, reason: string): TaskAckResponse {
@@ -277,10 +328,11 @@ export class TaskQueue {
         const ttlSeconds = LEASE_TTL_SECONDS[candidate.priority as PriorityClass];
         const nowIso = this.nowIso();
         const expiresAt = new Date(this.now().getTime() + ttlSeconds * 1000).toISOString();
+        // The acceptance rejection count belongs to the lease. A new lease gives the model all attempts again.
         this.db
             .prepare(
-                `UPDATE tasks SET status = 'leased', worker_id = ?, lease_expires_at = ?, updated_at = ?
-                 WHERE id = ?`,
+                `UPDATE tasks SET status = 'leased', worker_id = ?, lease_expires_at = ?, rejections = 0,
+                 updated_at = ? WHERE id = ?`,
             )
             .run(workerId, expiresAt, nowIso, candidate.id);
         this.markChanged();
@@ -315,17 +367,66 @@ export class TaskQueue {
             );
         }
 
-        // Fail-closed acceptance against a result schema arrives with typed tasks (M2).
-        // For `echo`, the only requirement is a nonempty result.
-        if (result.trim() === '') {
-            return ok({
-                kind: 'rejected',
-                errors: ['The result is empty. Return a non-empty text and call `complete` again.'],
-            });
+        // Fail-closed acceptance against the result schema. The route orchestrator validates typed tasks
+        // (`route.*`). `echo` has no acceptor, so its single existing requirement still applies.
+        const acceptance = this.acceptor?.(toRecord(owned.value), result) ?? null;
+        if (acceptance === null && result.trim() === '') {
+            // This rejection is not from the acceptor. It leaves the rejection budget and lease intact.
+            return ok({ kind: 'rejected', errors: [EMPTY_RESULT_ERROR] });
+        }
+        if (acceptance?.kind === 'deferred') {
+            return ok(deferResult(taskId, acceptance.errors));
+        }
+        if (acceptance?.kind === 'rejected') {
+            return ok(this.rejectResult(owned.value, result, acceptance.errors));
         }
 
         this.closeTask(taskId, 'done', { result });
-        return ok({ kind: 'accepted', message: `The result of task sherpa/${String(taskId)} is accepted.` });
+        if (acceptance?.onCommitted !== undefined) {
+            this.commitEffects.push(acceptance.onCommitted);
+        }
+        return ok({ kind: 'accepted', message: acceptedMessage(taskId) });
+    }
+
+    /**
+     * The result was not accepted. The model keeps the lease and attempt, fixes the output
+     * and calls `complete` again (rpc-design §3). The loop stops after `MAX_RESULT_REJECTIONS` rejections
+     * per lease. The task then fails, and the last raw output remains in `result`
+     * (shown by "Open raw output", README §12).
+     */
+    private rejectResult(row: TaskRow, result: string, errors: readonly string[]): TaskCompleteResponse {
+        const rejections = row.rejections + 1;
+        this.db
+            .prepare('UPDATE tasks SET rejections = ?, updated_at = ? WHERE id = ?')
+            .run(rejections, this.nowIso(), row.id);
+        this.markChanged();
+
+        const id = `sherpa/${String(row.id)}`;
+        if (rejections >= MAX_RESULT_REJECTIONS) {
+            this.closeTask(row.id, 'failed', {
+                result,
+                failReason:
+                    `The agent submitted a result that failed validation ${String(MAX_RESULT_REJECTIONS)} times ` +
+                    'in a row. The task has failed.',
+            });
+            return {
+                kind: 'rejected',
+                errors: [
+                    ...errors,
+                    `This was rejection ${String(rejections)} of ${String(MAX_RESULT_REJECTIONS)}: task ${id} is ` +
+                        'now closed with an error. Do not call `complete` for it again — call `worker next`.',
+                ],
+            };
+        }
+
+        return {
+            kind: 'rejected',
+            errors: [
+                ...errors,
+                `Rejection ${String(rejections)} of ${String(MAX_RESULT_REJECTIONS)} for task ${id}: fix the ` +
+                    'result and call `complete` again — the task is still leased to you.',
+            ],
+        };
     }
 
     private failInTransaction(workerId: string, taskId: TaskId, reason: string): Outcome<TaskAckResponse> {
@@ -513,13 +614,33 @@ export class TaskQueue {
     }
 
     /**
-     * Finishes a transactional operation: first notifies listeners (the transaction is already committed),
-     * then throws a domain error. Otherwise subscribers would miss changes already written
-     * (for example, moving a task to `failed` on `result_too_large`).
+     * Finishes a transactional operation. First applies the accepted result and broadcasts
+     * changes (the transaction has committed), then throws the domain error. Otherwise subscribers
+     * would miss what was written (for example, the transition to `failed`
+     * on `result_too_large`).
      */
     private settle<T>(outcome: Outcome<T>): T {
+        this.runCommitEffects();
         this.flushChanges();
         return unwrap(outcome);
+    }
+
+    /**
+     * Accepted results apply outside the queue transaction. The acceptor writes to its own tables
+     * in its own transactions, and `node:sqlite` cannot nest `BEGIN`. A failed application
+     * must not fail `complete`. The result is already accepted and stored.
+     */
+    private runCommitEffects(): void {
+        const effects = this.commitEffects;
+        this.commitEffects = [];
+        for (const effect of effects) {
+            try {
+                effect();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                process.stderr.write(`sherpa-server: failed to apply accepted result: ${message}\n`);
+            }
+        }
     }
 
     /** Records a storage write inside transactions. `flushChanges` broadcasts it. */
@@ -556,6 +677,26 @@ function unwrap<T>(outcome: Outcome<T>): T {
         throw outcome.failure;
     }
     return outcome.value;
+}
+
+function acceptedMessage(taskId: TaskId): string {
+    return `The result of task sherpa/${String(taskId)} is accepted.`;
+}
+
+/**
+ * The acceptor declined validation because the server cannot validate right now. Storage
+ * stays unchanged, including the attempt, rejection count and lease. The model simply retries
+ * the call later. Otherwise a transient server failure would consume the rejection budget and fail the task.
+ */
+function deferResult(taskId: TaskId, errors: readonly string[]): TaskCompleteResponse {
+    return {
+        kind: 'rejected',
+        errors: [
+            ...errors,
+            `This is not a rejection of your work: task sherpa/${String(taskId)} is still leased to you and ` +
+                'nothing has been spent on this attempt.',
+        ],
+    };
 }
 
 function unknownTask(taskId: TaskId): RpcFailure {

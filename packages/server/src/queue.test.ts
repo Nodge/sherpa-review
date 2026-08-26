@@ -5,7 +5,7 @@ import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { RpcFailure } from './errors.js';
 import type { EnqueueInput, LeasedTask, TaskRecord } from './queue.js';
-import { TaskQueue } from './queue.js';
+import { MAX_RESULT_REJECTIONS, TaskQueue } from './queue.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 const START = new Date('2026-08-19T12:00:00.000Z');
@@ -253,6 +253,18 @@ describe('queue with leases', () => {
             expect(queue.getTask(task.id)?.status).toBe('leased');
         });
 
+        it('empty results never exhaust a lease on a task without a result acceptor', () => {
+            const task = enqueue();
+            takeNext('w-1');
+
+            for (let attempt = 0; attempt <= MAX_RESULT_REJECTIONS; attempt += 1) {
+                expect(queue.complete('w-1', task.id, '').kind).toBe('rejected');
+            }
+
+            // The loop limit applies to acceptor rejections. `echo` has no schema acceptance or limit.
+            expect(queue.getTask(task.id)).toMatchObject({ status: 'leased', attempt: 1 });
+        });
+
         it('another worker gets lease_not_held', () => {
             const task = enqueue();
             takeNext('w-1');
@@ -285,6 +297,97 @@ describe('queue with leases', () => {
 
             expect(queue.fail('w-1', task.id, 'no access to file')).toEqual({ kind: 'accepted' });
             expect(queue.getTask(task.id)).toMatchObject({ status: 'failed', failReason: 'no access to file' });
+        });
+    });
+
+    describe('result acceptance', () => {
+        it('the acceptor sees the task and result, and applies the accepted result after commit', () => {
+            const seen: { type: string; result: string; statusAtApply: string | undefined }[] = [];
+            const task = enqueue();
+            queue.setResultAcceptor((record, result) => ({
+                kind: 'accepted',
+                onCommitted: () => {
+                    // The task is still leased inside the transaction. Apply the accepted result after it ends.
+                    seen.push({
+                        type: record.type,
+                        result,
+                        statusAtApply: queue.getTask(record.id)?.status,
+                    });
+                },
+            }));
+            takeNext('w-1');
+
+            expect(queue.complete('w-1', task.id, 'done').kind).toBe('accepted');
+            expect(seen).toEqual([{ type: 'echo', result: 'done', statusAtApply: 'done' }]);
+        });
+
+        it('an acceptor rejection keeps the attempt and lease, with a limit of 3 rejections', () => {
+            const task = enqueue();
+            queue.setResultAcceptor(() => ({ kind: 'rejected', errors: ['anchors do not resolve'] }));
+            takeNext('w-1');
+
+            for (let attempt = 1; attempt < MAX_RESULT_REJECTIONS; attempt += 1) {
+                const response = queue.complete('w-1', task.id, 'invalid output');
+                expect(response.kind).toBe('rejected');
+                expect(response.kind === 'rejected' && response.errors[0]).toBe('anchors do not resolve');
+                expect(queue.getTask(task.id)).toMatchObject({ status: 'leased', attempt: 1 });
+            }
+
+            expect(queue.complete('w-1', task.id, 'last invalid output').kind).toBe('rejected');
+            // The task retains raw output for "Open raw output".
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'failed',
+                attempt: 1,
+                result: 'last invalid output',
+            });
+            expect(queue.getTask(task.id)?.failReason).toContain('validation');
+        });
+
+        it('an acceptor unable to validate leaves the rejection budget intact', () => {
+            const task = enqueue();
+            queue.setResultAcceptor(() => ({ kind: 'deferred', errors: ['the server is not ready'] }));
+            takeNext('w-1');
+
+            for (let attempt = 0; attempt <= MAX_RESULT_REJECTIONS; attempt += 1) {
+                const response = queue.complete('w-1', task.id, 'valid output');
+                expect(response.kind).toBe('rejected');
+                expect(response.kind === 'rejected' && response.errors[0]).toBe('the server is not ready');
+            }
+            expect(queue.getTask(task.id)).toMatchObject({ status: 'leased', attempt: 1 });
+
+            // The transient failure is over, so the rejection count starts from zero.
+            queue.setResultAcceptor(() => ({ kind: 'rejected', errors: ['nope'] }));
+            for (let attempt = 1; attempt < MAX_RESULT_REJECTIONS; attempt += 1) {
+                queue.complete('w-1', task.id, 'invalid output');
+                expect(queue.getTask(task.id)?.status).toBe('leased');
+            }
+            queue.complete('w-1', task.id, 'invalid output');
+            expect(queue.getTask(task.id)?.status).toBe('failed');
+        });
+
+        it('a task of another type bypasses the acceptor through the existing path', () => {
+            const task = enqueue();
+            queue.setResultAcceptor(() => null);
+            takeNext('w-1');
+
+            expect(queue.complete('w-1', task.id, '').kind).toBe('rejected');
+            expect(queue.getTask(task.id)?.status).toBe('leased');
+            expect(queue.complete('w-1', task.id, 'done').kind).toBe('accepted');
+            expect(queue.getTask(task.id)).toMatchObject({ status: 'done', result: 'done' });
+        });
+
+        it('a new lease restores the full rejection budget', () => {
+            const task = enqueue();
+            queue.setResultAcceptor(() => ({ kind: 'rejected', errors: ['nope'] }));
+            takeNext('w-1');
+            queue.complete('w-1', task.id, 'one');
+            queue.complete('w-1', task.id, 'two');
+
+            advanceSeconds(LEASE_TTL_SECONDS.background + 1);
+            takeNext('w-2');
+
+            expect(queue.complete('w-2', task.id, 'three').kind).toBe('rejected');
+            expect(queue.getTask(task.id)?.status).toBe('leased');
         });
     });
 

@@ -50,6 +50,8 @@ describe('worker endpoints', () => {
             sherpaDir,
             longPollSeconds,
             now: () => new Date(Date.now() + clockOffsetMs),
+            // Tests must not access the live review host (requirements §7). Without a host, route warmup makes no network calls.
+            reviewHostFactory: () => null,
         });
         servers.push(server);
         return server;
@@ -375,6 +377,7 @@ describe('worker endpoints', () => {
                 longPollSeconds,
                 workerGapGraceSeconds: GAP_GRACE_SECONDS,
                 now: () => new Date(Date.now() + clockOffsetMs),
+                reviewHostFactory: () => null,
             });
             servers.push(server);
             return server;

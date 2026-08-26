@@ -417,7 +417,7 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
  * The contract schema validates the response body. Invalid data never leaves the server (requirements §7).
  * `local` means the server built the response itself (reading progress), so any mismatch is its own fault.
  */
-function respond<T>(schema: z.ZodType<T>, body: unknown, source: 'host' | 'local' = 'host'): JsonResponse {
+export function respond<T>(schema: z.ZodType<T>, body: unknown, source: 'host' | 'local' = 'host'): JsonResponse {
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
         throw new RpcFailure(

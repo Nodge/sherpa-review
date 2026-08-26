@@ -42,6 +42,9 @@ describe('worker session scenarios', () => {
             sherpaDir,
             longPollSeconds: LONG_POLL_SECONDS,
             now: () => new Date(nowMs),
+            // Live review hosts are forbidden in tests (requirements §7), and scenarios do not need route tasks:
+            // without a host, automatic scheduling stays off and the queue contains only what the test enqueues.
+            reviewHostFactory: () => null,
         });
         worker = new FakeWorker({ bundlePath, sherpaDir, prKey: PR_KEY, workDir });
     });

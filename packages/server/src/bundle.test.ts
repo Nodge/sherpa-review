@@ -13,7 +13,11 @@ import { manifestPathFor } from './paths.js';
 import { get, makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 import { SERVER_VERSION } from './version.js';
 
-const PR_KEY = 'github-quillmart--quillmart--31337';
+/**
+ * Fixture host key: this suite tests the process, not the adapter. Live review hosts
+ * are forbidden in tests (requirements §7), since a live host key would make route warmup fetch the diff over the network.
+ */
+const PR_KEY = 'fixture-medium';
 const TEST_TIMEOUT_MS = 40_000;
 const STARTUP_TIMEOUT_MS = 15_000;
 

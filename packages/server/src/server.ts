@@ -35,6 +35,10 @@ import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
 import type { EditorOptions } from './review-routes.js';
 import { createReviewRoutes } from './review-routes.js';
+import type { RouteConfig } from './route-orchestrator.js';
+import { RouteOrchestrator } from './route-orchestrator.js';
+import { createRouteRoutes } from './route-routes.js';
+import { RouteStore } from './route-store.js';
 import type { StaticAssets } from './static.js';
 import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
@@ -78,6 +82,11 @@ export interface StartServerOptions {
     reviewHostFactory?: ReviewHostFactory;
     /** "Open in external editor" settings. Defaults to the server's cwd and `SHERPA_EDITOR`. */
     editor?: EditorOptions;
+    /**
+     * Route thresholds and section batching (`DEFAULT_ROUTE_CONFIG`). Internal server policy:
+     * neither the UI nor the CLI knows about it. The M2-T12 latency measurement adjusts section batches here.
+     */
+    route?: Partial<RouteConfig>;
 }
 
 export interface SherpaServer {
@@ -88,6 +97,8 @@ export interface SherpaServer {
     readonly queue: TaskQueue;
     /** This PR's worker lifecycle: status and connected/disconnected events for the UI. */
     readonly workerRegistry: WorkerRegistry;
+    /** This PR's route state machine, used by the `generate` endpoint, warmup and tests. */
+    readonly route: RouteOrchestrator;
     /** Removes the manifest and closes the port and storage. A repeated call is a no-op. */
     close: () => Promise<void>;
 }
@@ -178,6 +189,16 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
         const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
+        // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
+        const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
+        const routeOrchestrator = new RouteOrchestrator({
+            store: routeStore,
+            queue,
+            registry: workerRegistry,
+            host: reviewHost?.host ?? null,
+            ...(options.route === undefined ? {} : { config: options.route }),
+        });
+        queue.setResultAcceptor((task, result) => routeOrchestrator.acceptResult(task, result));
 
         routes.push(
             ...createWorkerRoutes({
@@ -196,6 +217,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 reviewHost: reviewHost?.name ?? null,
                 reviewFeed,
                 progress,
+                route: routeStore,
                 shutdownSignal: shutdownController.signal,
             }),
             ...createReviewRoutes({
@@ -204,6 +226,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 progress,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
+            ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
         );
 
         const handle = createHandle({
@@ -218,7 +241,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             idleWatch,
             reviewFeed,
             progress,
+            routeStore,
+            routeOrchestrator,
         });
+        // Warm up the route after building the handle, on its own timer. Server startup doesn't wait for `getDiff()`,
+        // otherwise the "diff on screen in under two seconds" requirement (§7) would wait on the host's network call.
+        routeOrchestrator.start();
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
         idleWatch.arm(() => {
             options.onIdleStop?.(idleSeconds);
@@ -299,6 +327,8 @@ function createHandle(parts: {
     idleWatch: IdleWatch;
     reviewFeed: ReviewFeed | null;
     progress: ProgressStore;
+    routeStore: RouteStore;
+    routeOrchestrator: RouteOrchestrator;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -308,6 +338,7 @@ function createHandle(parts: {
         prKey: parts.manifest.prKey,
         queue: parts.queue,
         workerRegistry: parts.workerRegistry,
+        route: parts.routeOrchestrator,
         close: () => {
             closing ??= (async () => {
                 // Stop the idle timer first. Shutdown is already in progress, so there's no need to call it again.
@@ -321,6 +352,10 @@ function createHandle(parts: {
                 // Stop host polling here too, or the subscription would outlive server shutdown.
                 parts.reviewFeed?.close();
                 parts.progress.close();
+                // Stop the route state machine before closing storage. Its delayed warmup must not
+                // wake up with the database already closed.
+                parts.routeOrchestrator.close();
+                parts.routeStore.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

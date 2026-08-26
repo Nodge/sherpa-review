@@ -5,6 +5,7 @@ import type {
     UiEnqueueResponse,
     UiProgressEvent,
     UiReviewEvent,
+    UiRouteEvent,
     UiState,
     UiTask,
 } from '@sherpa/protocol';
@@ -12,6 +13,7 @@ import {
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
+    UI_ROUTE_EVENT,
     UI_STATE_EVENT,
     uiCancelRequestSchema,
     uiEnqueueRequestSchema,
@@ -25,6 +27,7 @@ import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js'
 import type { ProgressStore } from './progress-store.js';
 import type { TaskQueue, TaskRecord } from './queue.js';
 import type { ReviewFeed } from './review-feed.js';
+import type { RouteStore } from './route-store.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 export interface UiRoutesOptions {
@@ -37,6 +40,8 @@ export interface UiRoutesOptions {
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress: its revision is sent over the channel to synchronize the second tab. */
     readonly progress: ProgressStore;
+    /** Route state: its revision is sent over the channel in the same way as progress. */
+    readonly route: RouteStore;
     /** Server shutdown: closes pending SSE connections so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
 }
@@ -156,6 +161,14 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         sendEvent(res, UI_PROGRESS_EVENT, JSON.stringify(event));
     };
 
+    const pushRoute = (revision: number): void => {
+        if (abort.signal.aborted || res.writableEnded || res.destroyed) {
+            return;
+        }
+        const event: UiRouteEvent = { routeRevision: revision };
+        sendEvent(res, UI_ROUTE_EVENT, JSON.stringify(event));
+    };
+
     const keepalive = setInterval(push, KEEPALIVE_INTERVAL_MS);
     keepalive.unref();
 
@@ -165,6 +178,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     // It starts after the first state snapshot so that the channel begins with `state`.
     let unsubscribeReview: (() => void) | null = null;
     let unsubscribeProgress: (() => void) | null = null;
+    let unsubscribeRoute: (() => void) | null = null;
 
     const stop = (): void => {
         clearInterval(keepalive);
@@ -172,6 +186,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         unsubscribeWorker();
         unsubscribeReview?.();
         unsubscribeProgress?.();
+        unsubscribeRoute?.();
         abort.dispose();
         if (!res.writableEnded && !res.destroyed) {
             res.end();
@@ -195,6 +210,11 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     if (!res.writableEnded && !res.destroyed) {
         pushProgress(options.progress.revision);
         unsubscribeProgress = options.progress.subscribe(pushProgress);
+    }
+    // The route is local state too: without a host, it simply never leaves the `none` phase.
+    if (!res.writableEnded && !res.destroyed) {
+        pushRoute(options.route.revision);
+        unsubscribeRoute = options.route.subscribe(pushRoute);
     }
 }
 

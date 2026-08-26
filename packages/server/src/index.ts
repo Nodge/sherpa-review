@@ -54,11 +54,25 @@ export {
     prStateDirOf,
     serversDirOf,
 } from './paths.js';
-export type { CancelOutcome, EnqueueInput, LeasedTask, TaskQueueOptions, TaskRecord } from './queue.js';
-export { TaskQueue } from './queue.js';
+export type {
+    CancelOutcome,
+    EnqueueInput,
+    LeasedTask,
+    TaskQueueOptions,
+    TaskRecord,
+    TaskResultAcceptance,
+    TaskResultAcceptor,
+} from './queue.js';
+export { MAX_RESULT_REJECTIONS, TaskQueue } from './queue.js';
 export { ReviewFeed } from './review-feed.js';
 export type { ReviewRoutesOptions } from './review-routes.js';
 export { createReviewRoutes } from './review-routes.js';
+export type { RouteConfig, RouteOrchestratorOptions } from './route-orchestrator.js';
+export { DEFAULT_ROUTE_CONFIG, isSmallPr, RouteOrchestrator } from './route-orchestrator.js';
+export type { RouteRoutesOptions } from './route-routes.js';
+export { createRouteRoutes } from './route-routes.js';
+export type { AcceptedSkeletonInput, RouteListener, RouteStoreOptions } from './route-store.js';
+export { contentHashOf, RouteStore } from './route-store.js';
 export type { HealthResponse, SherpaServer, StartServerOptions } from './server.js';
 export { startServer } from './server.js';
 export type { StaticAsset, StaticAssets } from './static.js';

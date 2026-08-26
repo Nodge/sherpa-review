@@ -263,7 +263,7 @@ describe('server idle shutdown', () => {
     });
 
     it('does not shut down with a zero threshold', async () => {
-        const server = await startServer({ prKey: PR_KEY, sherpaDir, idleSeconds: 0 });
+        const server = await startServer({ prKey: PR_KEY, sherpaDir, idleSeconds: 0, reviewHostFactory: () => null });
         servers.push(server);
 
         await delay(OVER_IDLE_MS);
