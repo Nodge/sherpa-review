@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import type { FileReadState } from '../progress/read-state.js';
+import type { RouteMarginModel } from '../route/margin-model.js';
+import { marginFooterNote } from '../route/margin-model.js';
+import { RouteBadge } from '../route/route-margin.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import { formatCount } from '../text.js';
 import type { CollapsedStorage } from './collapsed-storage.js';
@@ -56,6 +59,10 @@ export interface FilePanelProps {
     /** null means no ownership lens. Roots outside your ownership zone are not dimmed. */
     readonly mineFileIds: ReadonlySet<string> | null;
     readonly readState: ReadonlyMap<string, FileReadState>;
+    /** Route in the margins (README §10): row badges and footer note. null means no route. */
+    readonly route: RouteMarginModel | null;
+    /** Navigate to a stop on the route tab. Without this, badges remain labels. */
+    readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** The active file is the top card in the viewport (right-panel scroll-spy). */
     readonly activeFileId: string | null;
     readonly onOpenFile: (fileId: string) => void;
@@ -74,8 +81,10 @@ export interface FilePanelProps {
 }
 
 export function FilePanel(props: FilePanelProps) {
-    const { files, filters, activeFilter, onFilter, outline, inputRef, writeError } = props;
+    const { files, filters, activeFilter, onFilter, outline, inputRef, writeError, route } = props;
     const [query, setQuery] = useState('');
+    // The note describes the whole route, regardless of the current filter. Badges ignore the filter too.
+    const footer = route === null ? null : marginFooterNote(route);
 
     return (
         <aside className="file-panel" aria-label="Diff files">
@@ -139,6 +148,9 @@ export function FilePanel(props: FilePanelProps) {
             ) : (
                 <FileOutline outline={outline} onOpenHunk={props.onOpenHunk} name={files[0]?.path ?? ''} />
             )}
+
+            {/* Footer note, README §10: computed counts, below the tree and outside its scroll area. */}
+            {footer === null ? null : <p className="file-panel__footer">{footer}</p>}
         </aside>
     );
 }
@@ -160,6 +172,8 @@ function FileTreeView({
     onToggleViewed,
     prKey,
     storage,
+    route,
+    onJumpToStop,
 }: FileTreeViewProps) {
     const [collapsed, setCollapsed] = useState<ReadonlyMap<string, boolean>>(() => readCollapsed(storage, prKey));
     // The panel is not expected to switch PRs during its lifetime, but state must follow the key:
@@ -175,9 +189,10 @@ function FileTreeView({
                 pciFileIds,
                 mineFileIds,
                 readState,
+                routeFiles: route?.files ?? null,
                 collapsed,
             }),
-        [files, query, pciFileIds, mineFileIds, readState, collapsed],
+        [files, query, pciFileIds, mineFileIds, readState, route, collapsed],
     );
 
     const persist = useCallback(
@@ -301,7 +316,15 @@ function FileTreeView({
                                 }
                             }}
                         >
-                            {row.kind === 'dir' ? <DirRow row={row} /> : <FileRow row={row} />}
+                            {row.kind === 'dir' ? (
+                                <DirRow row={row} />
+                            ) : (
+                                <FileRow
+                                    row={row}
+                                    otherStopId={route?.otherStopId ?? null}
+                                    onJumpToStop={onJumpToStop}
+                                />
+                            )}
                         </div>
                     );
                 })}
@@ -351,7 +374,15 @@ function DirRow({ row }: { row: TreeDirRow }) {
     );
 }
 
-function FileRow({ row }: { row: TreeFileRow }) {
+function FileRow({
+    row,
+    otherStopId,
+    onJumpToStop,
+}: {
+    row: TreeFileRow;
+    otherStopId: string | null;
+    onJumpToStop?: ((stopId: string) => void) | undefined;
+}) {
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
@@ -362,6 +393,9 @@ function FileRow({ row }: { row: TreeFileRow }) {
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}
+            {row.route === null ? null : (
+                <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
+            )}
             <Counts additions={row.additions} deletions={row.deletions} />
         </>
     );

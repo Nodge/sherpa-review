@@ -6,6 +6,9 @@ import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, use
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { readStateOf as computeReadState } from '../progress/read-state.js';
+import type { AnchorSpan } from '../route/anchor-clip.js';
+import type { RouteMarginFile, RouteMarginModel } from '../route/margin-model.js';
+import { RouteBadge, useMarginStrips } from '../route/route-margin.tsx';
 import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
@@ -64,6 +67,9 @@ export interface DiffFileListProps {
     readonly onFocusThread?: ((threadId: string | null) => void) | undefined;
     readonly threadNow?: number | undefined;
     readonly outsideThreads?: ReactNode;
+    /** Route in card margins (README §10). null means no route and no margins. */
+    readonly routeMargin?: RouteMarginModel | null;
+    readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
     /**
@@ -98,6 +104,8 @@ export function DiffFileList({
     onFocusThread = NOOP_THREAD,
     threadNow: providedThreadNow,
     outsideThreads = null,
+    routeMargin = null,
+    onJumpToStop,
     initialFileId = null,
     keptFileId = null,
     onTopFileChange,
@@ -375,6 +383,9 @@ export function DiffFileList({
                             threadActions={threadActions}
                             threadNow={threadNow}
                             onFocusThread={onFocusThread}
+                            margin={routeMargin?.files.get(file.fileId) ?? null}
+                            otherStopId={routeMargin?.otherStopId ?? null}
+                            onJumpToStop={onJumpToStop}
                             actions={actions}
                         />
                     );
@@ -388,6 +399,7 @@ export function DiffFileList({
 const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();
 const EMPTY_COMPOSERS: readonly ComposerSnapshot[] = [];
+const EMPTY_SPANS: readonly AnchorSpan[] = [];
 
 const VirtualFileCard = memo(function VirtualFileCard({
     file,
@@ -413,6 +425,9 @@ const VirtualFileCard = memo(function VirtualFileCard({
     threadActions,
     threadNow,
     onFocusThread,
+    margin,
+    otherStopId,
+    onJumpToStop,
     actions,
 }: {
     file: FileDiff;
@@ -438,6 +453,9 @@ const VirtualFileCard = memo(function VirtualFileCard({
     threadActions: ThreadActions;
     threadNow: number;
     onFocusThread: (threadId: string | null) => void;
+    margin: RouteMarginFile | null;
+    otherStopId: string | null;
+    onJumpToStop: ((stopId: string) => void) | undefined;
     actions: FileCardActions;
 }) {
     const shownModel = useMemo(
@@ -454,7 +472,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
         (opened || changed <= COLLAPSE_THRESHOLD);
-    const { threadsUnderHeader, renderAfterLine } = useCardThreads({
+    const { threadsUnderHeader, renderAfterLine: renderThreads } = useCardThreads({
         model: shownModel,
         rowsShown: canRenderRows,
         threads: visibleThreads,
@@ -464,6 +482,28 @@ const VirtualFileCard = memo(function VirtualFileCard({
         now: threadNow,
         onFocusThread,
     });
+    const { underHeader: stripsUnderHeader, renderAfterLine: renderStrip } = useMarginStrips({
+        model: shownModel,
+        rowsShown: canRenderRows,
+        ranges: margin?.uncovered ?? EMPTY_SPANS,
+    });
+    // Threads and hatching share the space below a line: a thread concerns the line, a strip covers a range.
+    const renderAfterLine = useCallback(
+        (side: 'old' | 'new', line: number): ReactNode => {
+            const threads = renderThreads(side, line);
+            const strip = renderStrip(side, line);
+            if (threads === null && strip === null) {
+                return null;
+            }
+            return (
+                <>
+                    {threads}
+                    {strip}
+                </>
+            );
+        },
+        [renderStrip, renderThreads],
+    );
 
     return (
         <div
@@ -487,6 +527,17 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 showWhitespace={showWhitespace}
                 keptInView={keptInView}
                 selection={selection}
+                routeBadge={
+                    margin === null ? null : (
+                        <RouteBadge
+                            file={margin}
+                            otherStopId={otherStopId}
+                            variant="card"
+                            onJump={onJumpToStop}
+                        />
+                    )
+                }
+                routeStrips={stripsUnderHeader}
                 threadsUnderHeader={threadsUnderHeader}
                 renderAfterLine={renderAfterLine}
                 actions={actions}

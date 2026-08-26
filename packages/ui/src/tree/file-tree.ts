@@ -3,6 +3,7 @@ import type { FileDiff } from '@sherpa/protocol';
 import { fuzzyMatch } from '../palette/fuzzy.js';
 import type { FileReadState, ReadState } from '../progress/read-state.js';
 import { readStateOf } from '../progress/read-state.js';
+import type { RouteMarginFile } from '../route/margin-model.js';
 
 /**
  * File tree in the left panel of the full diff (SPEC §2.20, README §10). Pure module:
@@ -32,6 +33,8 @@ export interface TreeFileRow {
     readonly pci: boolean;
     /** File reading progress (SPEC §2.12): three states and tooltip counts. */
     readonly read: FileReadState;
+    /** Route in the margins (README §10): a stop badge or hatch. null means no route. */
+    readonly route: RouteMarginFile | null;
 }
 
 export interface TreeDirRow {
@@ -73,6 +76,8 @@ export interface FileTreeInput {
     readonly mineFileIds: ReadonlySet<string> | null;
     /** File read-state. Files missing from the map use their own defaults. */
     readonly readState: ReadonlyMap<string, FileReadState>;
+    /** Route in the margins (README §10). null means no route and no row badges. */
+    readonly routeFiles: ReadonlyMap<string, RouteMarginFile> | null;
     /** Reviewer's explicit choice: path → collapsed. Missing keys use the default. */
     readonly collapsed: ReadonlyMap<string, boolean>;
 }
@@ -149,6 +154,7 @@ export function buildFileTree(input: FileTreeInput): FileTree {
             generated: file.generated,
             pci: input.pciFileIds.has(file.fileId),
             read,
+            route: input.routeFiles?.get(file.fileId) ?? null,
         });
 
         for (const ancestor of chain) {

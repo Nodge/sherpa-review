@@ -82,6 +82,10 @@ export interface FileCardProps {
     /** Header counters override file totals. On the route, the card shows counts for its stop. */
     readonly counts?: { readonly additions: number; readonly deletions: number };
     readonly selection: LineSelection | null;
+    /** Route badge in the header (README §10): "explained in 02 · …" or a hatch. */
+    readonly routeBadge?: ReactNode;
+    /** Strips for uncovered ranges with no row, grouped below the header. */
+    readonly routeStrips?: ReactNode;
     readonly threadsUnderHeader?: ReactNode;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly actions: FileCardActions;
@@ -104,6 +108,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         transform,
         counts,
         selection,
+        routeBadge = null,
+        routeStrips = null,
         threadsUnderHeader = null,
         renderAfterLine,
         actions,
@@ -172,6 +178,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 </span>
                 <span className="file-card__entity">{entityText(shown)}</span>
 
+                {routeBadge}
+
                 <span className="file-card__actions">
                     <button
                         type="button"
@@ -230,6 +238,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     {read.state === 'read' ? 'Viewed' : 'Mark viewed'}
                 </button>
             </header>
+
+            {routeStrips}
 
             {threadsUnderHeader}
 

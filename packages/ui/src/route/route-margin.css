@@ -1,0 +1,61 @@
+/*
+ * Route in the full diff margins, README §10: a stop badge (`01`) or hatched "outside
+ * the route" in a tree row, "explained in 02 · title" in a card header and a hatched strip
+ * below an uncovered range. Sidebar and footer hatching use their own token variants (README, tokens).
+ */
+
+.route-badge {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-key);
+    background: transparent;
+    font-family: var(--font-mono);
+    color: var(--text-muted-dim);
+}
+
+button.route-badge {
+    cursor: pointer;
+    transition: color var(--motion-hover) var(--motion-hover-ease);
+}
+
+button.route-badge:hover {
+    color: var(--text-primary-soft);
+}
+
+.route-badge--tree {
+    padding: 1px 5px;
+    font-size: var(--font-size-scope);
+}
+
+.route-badge--card {
+    /* A stop title can be long. The badge yields space to the header instead of squeezing it. */
+    max-width: 320px;
+    padding: 1px 6px;
+    font-size: var(--font-size-gutter);
+}
+
+/* A transparent border keeps both badge variants the same size. */
+.route-badge--hatched {
+    border-color: transparent;
+    background: var(--hatch-sidebar);
+    color: var(--text-muted);
+}
+
+.route-strip {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 13px;
+    border-top: 1px solid var(--border-control);
+    background: var(--hatch-footer);
+}
+
+.route-strip__text {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-muted);
+}

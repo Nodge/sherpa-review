@@ -1,0 +1,259 @@
+// @vitest-environment jsdom
+import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { toParseRequest } from '../diff/model.js';
+import { parseFileDiff } from '../diff/parse.js';
+import { createDiffViewStore } from '../diff-view/store.js';
+import { createSessionStore } from '../session/session-store.js';
+import { createThreadStore } from '../threads/store.js';
+import { DiffWorkspace } from './full-diff.tsx';
+
+/**
+ * Route in the full diff margins in action (M2-T11): tree and card header badges, a footer note
+ * with computed counts, hatched strips under uncovered ranges and clicks that navigate
+ * to a stop. Without a route, the reader must stay the same as it was in M1.
+ */
+
+const DATA = fixtureData('medium');
+const SNAPSHOT: RouteSnapshot = (() => {
+    const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
+    if (snapshot === null) {
+        throw new Error('the medium fixture needs a ready route snapshot');
+    }
+    return snapshot;
+})();
+const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const VIEWPORT_WIDTH = 900;
+const VIEWPORT_HEIGHT = 700;
+
+// jsdom has neither ResizeObserver nor layout. The list measures its width, so without a stub
+// mounting fails before the first badge. This test observes markup, not geometry.
+class NoopResizeObserver {
+    observe(): void {
+        // Width never changes in jsdom.
+    }
+    unobserve(): void {
+        // See `observe`.
+    }
+    disconnect(): void {
+        // See `observe`.
+    }
+}
+(globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= NoopResizeObserver;
+
+// The virtualizer renders what fits in the viewport, but all rectangles are zero-sized in jsdom.
+// Without dimensions, no tree rows or cards would reach the DOM.
+Element.prototype.getBoundingClientRect = function fakeRect(): DOMRect {
+    return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: VIEWPORT_WIDTH,
+        bottom: VIEWPORT_HEIGHT,
+        width: VIEWPORT_WIDTH,
+        height: VIEWPORT_HEIGHT,
+        toJSON: () => ({}),
+    };
+};
+
+// The virtualizer gets the scroll container size from `offsetWidth`/`offsetHeight`.
+for (const [name, value] of [
+    ['offsetWidth', VIEWPORT_WIDTH],
+    ['offsetHeight', VIEWPORT_HEIGHT],
+] as const) {
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: () => value });
+}
+
+interface Mounted {
+    readonly host: HTMLElement;
+    /** Stops the view requested navigation to. */
+    readonly jumps: string[];
+    /** Files the view requested parsing for (in request order, with repeats). */
+    readonly parsed: string[];
+    /** Render again with a different diff, as on a PR update. */
+    readonly rerender: (files: readonly FileDiff[]) => void;
+}
+
+const mounted: (() => void)[] = [];
+
+afterEach(() => {
+    for (const unmount of mounted.splice(0)) {
+        unmount();
+    }
+});
+
+function mount(options: { route?: boolean; paths?: readonly string[]; ownStore?: boolean } = {}): Mounted {
+    const host = document.createElement('div');
+    document.body.append(host);
+    // Virtualization shows only what fits in the viewport. To reach a specific file's
+    // card, narrow the diff to that file. Stop anchors stay the same.
+    const initialFiles =
+        options.paths === undefined
+            ? DATA.diff.files
+            : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true);
+    // `ownStore`: the view creates its own store from the diff. This checks background parsing instead of
+    // models placed in the store in advance.
+    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles, storage: null });
+    for (const file of store === null ? [] : initialFiles) {
+        store?.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
+    }
+    const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+    const jumps: string[] = [];
+    const parsed: string[] = [];
+    const threadStore = createThreadStore(DATA.threads, FILE_IDS);
+    const root = createRoot(host);
+
+    const render = (files: readonly FileDiff[]): void => {
+        act(() => {
+            root.render(
+                <DiffWorkspace
+                    pr={DATA.pr}
+                    diff={{ ...DATA.diff, files: [...files] }}
+                    lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                    prKey="fixture-medium"
+                    session={session}
+                    {...(store === null ? {} : { store })}
+                    threadStore={threadStore}
+                    collapsedStorage={null}
+                    threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
+                    parse={(file) => {
+                        parsed.push(file.fileId);
+                        return Promise.resolve(parseFileDiff(toParseRequest(file)));
+                    }}
+                    loadContent={() => Promise.resolve(null)}
+                    onOpenInEditor={() => Promise.resolve(null)}
+                    onSetViewed={() => Promise.resolve(0)}
+                    {...(options.route === false ? {} : { routeSnapshot: SNAPSHOT })}
+                    onJumpToStop={(stopId) => {
+                        jumps.push(stopId);
+                    }}
+                />,
+            );
+        });
+    };
+    render(initialFiles);
+    mounted.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    return { host, jumps, parsed, rerender: render };
+}
+
+/** Wait for background parsing: deferred start and resolution of `parse` promises. */
+async function settleBackgroundParse(): Promise<void> {
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, BACKGROUND_PARSE_DELAY + 50));
+    });
+}
+
+const BACKGROUND_PARSE_DELAY = 300;
+
+function badges(host: HTMLElement, scope: 'tree' | 'card'): HTMLElement[] {
+    return [...host.querySelectorAll<HTMLElement>(`.route-badge--${scope}`)];
+}
+
+function planLabelOf(path: string): string {
+    const file = DATA.diff.files.find((candidate) => candidate.path === path);
+    const stop = SNAPSHOT.stops.find(
+        (candidate) =>
+            candidate.tier !== 'other' && candidate.anchors.some((anchor) => anchor.fileId === file?.fileId),
+    );
+    if (stop === undefined) {
+        throw new Error(`file ${path} has no stop in the fixture snapshot`);
+    }
+    return String(stop.planIndex).padStart(2, '0');
+}
+
+describe('route in full diff margins', () => {
+    it('shows stop badges and outside-route hatching in the tree', () => {
+        const { host } = mount();
+        const labels = badges(host, 'tree').map((badge) => badge.textContent);
+
+        expect(labels.length).toBeGreaterThan(0);
+        expect(labels).toContain(planLabelOf('services/orders/src/api/handlers.ts'));
+        expect(labels).toContain('outside the route');
+        expect(badges(host, 'tree').some((badge) => badge.classList.contains('route-badge--hatched'))).toBe(true);
+    });
+
+    it('counts fixture lines and files in the panel footer note', () => {
+        const { host } = mount();
+        const footer = host.querySelector('.file-panel__footer');
+
+        expect(footer?.textContent).toBe(
+            'The hatch means the range has no route stop. 34 lines in 3 files.',
+        );
+    });
+
+    it('gives the card an "explained in NN · title" badge and navigates on click', () => {
+        const { host, jumps } = mount();
+        const badge = badges(host, 'card')[0];
+
+        expect(badge?.textContent).toMatch(/^explained in \d\d( \+\d)? · /);
+        act(() => {
+            badge?.click();
+        });
+        expect(jumps).toEqual([expect.stringMatching(/^s\d\d$/)]);
+    });
+
+    it('navigates to Other on a tree hatch click', () => {
+        const { host, jumps } = mount();
+        const hatched = badges(host, 'tree').find((badge) => badge.classList.contains('route-badge--hatched'));
+
+        act(() => {
+            hatched?.click();
+        });
+        const other = SNAPSHOT.stops.find((stop) => stop.tier === 'other');
+        expect(jumps).toEqual([other?.id]);
+    });
+
+    it('covers an uncovered range with a hatched strip showing line numbers', () => {
+        // The file is partially covered. The end of `psp-schema.ts` is those 17 lines without a stop.
+        const { host } = mount({ paths: ['services/orders/src/payments/generated/psp-schema.ts'] });
+        const strips = [...host.querySelectorAll<HTMLElement>('.route-strip__text')].map(
+            (strip) => strip.textContent,
+        );
+
+        expect(strips.length).toBeGreaterThan(0);
+        for (const text of strips) {
+            expect(text).toMatch(/^(removed )?lines? \d+(–\d+)? (has|have) no route stop$/);
+        }
+        expect(host.querySelector('.route-badge--card')?.textContent).toMatch(/^explained in /);
+    });
+
+    it('parses files again after a diff change so the note does not get stuck on "Counting the lines…"', async () => {
+        // PR update: a new diff object with the same fileId values (unchanged files keep their ids).
+        // The view recreates the store, so "already parsed" must reset along with it, otherwise
+        // files outside the viewport (which cards do not parse) remain without models forever.
+        const fileIds = new Set(DATA.diff.files.map((file) => file.fileId));
+        const { host, parsed, rerender } = mount({ ownStore: true });
+        await settleBackgroundParse();
+        const note = host.querySelector('.file-panel__footer')?.textContent;
+        expect(note).toBe('The hatch means the range has no route stop. 34 lines in 3 files.');
+
+        parsed.length = 0;
+        rerender(DATA.diff.files);
+        await settleBackgroundParse();
+
+        expect(new Set(parsed)).toEqual(fileIds);
+        expect(host.querySelector('.file-panel__footer')?.textContent).toBe(note);
+    });
+
+    it('has no route margins at all without a route: no badges, strips or note', () => {
+        const { host } = mount({ route: false });
+
+        expect(host.querySelector('.route-badge')).toBeNull();
+        expect(host.querySelector('.route-strip')).toBeNull();
+        expect(host.querySelector('.file-panel__footer')).toBeNull();
+    });
+});

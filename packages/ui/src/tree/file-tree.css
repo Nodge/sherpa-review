@@ -113,6 +113,18 @@
     color: var(--attention-text);
 }
 
+/* Route footer note (README §10): below the tree, outside its scroll area. */
+.file-panel__footer {
+    flex: none;
+    margin: var(--space-control);
+    padding: 11px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-popover);
+    font-size: var(--font-size-control);
+    line-height: 1.55;
+    color: var(--text-muted-dim);
+}
+
 .file-panel__link {
     margin-left: 6px;
     padding: 0;

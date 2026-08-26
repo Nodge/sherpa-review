@@ -32,6 +32,7 @@ function file(path: string, depth: number): TreeRow {
         generated: false,
         pci: false,
         read: readStateOf({ file: { generated: false, viewed: null, additions: 1, deletions: 0 }, record: null }),
+        route: null,
     };
 }
 

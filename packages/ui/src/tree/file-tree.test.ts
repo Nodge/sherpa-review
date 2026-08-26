@@ -43,6 +43,7 @@ function input(files: readonly FileDiff[], patch: Partial<FileTreeInput> = {}): 
         pciFileIds: new Set(),
         mineFileIds: null,
         readState: new Map(),
+        routeFiles: null,
         collapsed: new Map(),
         ...patch,
     };

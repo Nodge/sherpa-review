@@ -3,6 +3,7 @@ import type {
     FileDiff,
     PrDiff,
     PrMeta,
+    RouteSnapshot,
     Thread,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
@@ -45,6 +46,7 @@ import { readFragmentParam } from '../fragment.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
+import { buildRouteMargin } from '../route/margin-model.js';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
@@ -88,6 +90,12 @@ export interface FullDiffViewProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
+    /**
+     * Ready route for reader margins (README §10). Only `ready`: in `filling`, coverage
+     * is incomplete, and "not placed" would misrepresent an empty plan slot. No snapshot means no layer.
+     */
+    readonly routeSnapshot?: RouteSnapshot | null;
+    readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
 }
@@ -110,6 +118,8 @@ export function FullDiffView({
     paletteNavigation = null,
     onPaletteActiveFileChange,
     onFilterChangeHandler,
+    routeSnapshot = null,
+    onJumpToStop,
     smallPr = false,
 }: FullDiffViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
@@ -218,6 +228,8 @@ export function FullDiffView({
             onResolveThread={resolveThread}
             initialFileId={fragmentTarget.fileId}
             initialThreadId={fragmentTarget.threadId}
+            routeSnapshot={routeSnapshot}
+            onJumpToStop={onJumpToStop}
             smallPr={smallPr}
         />
     );
@@ -249,6 +261,9 @@ export interface DiffWorkspaceProps {
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     readonly initialFileId?: string | null;
     readonly initialThreadId?: string | null;
+    /** Ready route in reader margins (README §10). null leaves Full diff as it is without a route. */
+    readonly routeSnapshot?: RouteSnapshot | null;
+    readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
@@ -280,6 +295,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         threadsRevision = null,
         initialFileId = null,
         initialThreadId = null,
+        routeSnapshot = null,
+        onJumpToStop,
         paletteNavigation = null,
         onPaletteActiveFileChange,
         onFilterChangeHandler,
@@ -584,6 +601,59 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         return new Set(diff.files.filter((file) => paths.has(file.path)).map((file) => file.fileId));
     }, [diff.files, lenses]);
 
+    /**
+     * Route in the margins (README §10). The file→stops map is computed from anchors and available immediately.
+     * Uncovered ranges come from parsed patches, so files the reviewer has not
+     * scrolled to are parsed in the background. Otherwise the footer note counts would never add up.
+     */
+    const [failedParse, setFailedParse] = useState<ReadonlySet<string>>(EMPTY_FILE_IDS);
+    // "Already parsed" is a property of a specific store: models live there, and when the diff changes
+    // (recreating the store), the same fileId values need parsing again. Otherwise, they would remain
+    // undercounted in the note forever.
+    const backgroundParsed = useRef<{ store: DiffViewStore; ids: Set<string> }>({ store, ids: new Set() });
+    useEffect(() => {
+        if (backgroundParsed.current.store !== store) {
+            backgroundParsed.current = { store, ids: new Set() };
+            setFailedParse((previous) => (previous.size === 0 ? previous : EMPTY_FILE_IDS));
+        }
+        if (routeSnapshot === null) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            const parsed = backgroundParsed.current.ids;
+            for (const file of diff.files) {
+                if (parsed.has(file.fileId) || store.getSnapshot().models.has(file.fileId)) {
+                    continue;
+                }
+                parsed.add(file.fileId);
+                void parse(file).then(
+                    (model) => {
+                        store.setModel(file.fileId, model);
+                    },
+                    () => {
+                        // Patch parsing failed: its lines will not count, and the note will say so.
+                        setFailedParse((previous) => new Set(previous).add(file.fileId));
+                    },
+                );
+            }
+        }, BACKGROUND_PARSE_DELAY);
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [diff.files, parse, routeSnapshot, store]);
+    const routeMargin = useMemo(
+        () =>
+            routeSnapshot === null
+                ? null
+                : buildRouteMargin({
+                      snapshot: routeSnapshot,
+                      files: diff.files,
+                      models: snapshot.models,
+                      failed: failedParse,
+                  }),
+        [diff.files, failedParse, routeSnapshot, snapshot.models],
+    );
+
     const [focusedLine, setFocusedLine] = useState<{
         fileId: string;
         side: 'old' | 'new';
@@ -792,6 +862,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 pciFileIds={pciFileIds}
                 mineFileIds={mineFileIds}
                 readState={snapshot.readState}
+                route={routeMargin}
+                onJumpToStop={onJumpToStop}
                 activeFileId={topFileId}
                 onOpenFile={openFile}
                 onToggleViewed={toggleViewed}
@@ -887,6 +959,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     keptFileId={keptFileId}
                     onTopFileChange={setTopFileId}
                     onScroll={onScroll}
+                    routeMargin={routeMargin}
+                    onJumpToStop={onJumpToStop}
                 />
             </div>
         </main>
@@ -935,6 +1009,10 @@ function Toolbar({
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_FILE_IDS: ReadonlySet<string> = new Set();
+
+/** Delay before parsing the remaining files in the background, leaving the first frame to visible cards. */
+const BACKGROUND_PARSE_DELAY = 300;
 
 const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('draft writing is unavailable in this state')),

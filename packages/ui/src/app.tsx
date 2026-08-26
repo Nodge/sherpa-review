@@ -959,6 +959,8 @@ export function App({ store, session, token }: AppProps) {
                             setActiveFileId(fileId);
                         }
                     }}
+                    routeSnapshot={routeSnapshot}
+                    onJumpToStop={jumpToStop}
                     smallPr={route?.smallPr === true}
                 />
             ) : view === 'route' && routeKind === 'workspace' && routeViewSnapshot !== null ? (
