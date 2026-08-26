@@ -33,9 +33,12 @@ if (token === null) {
 } else {
     const store = createStore({ token });
 
+    const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
     const session = createSessionStore({
+        // A view from the URL is the reviewer's choice: a small PR will not override it (SPEC §4.1).
+        viewPinned: viewFromUrl !== null,
         initial: {
-            view: parseViewId(readFragmentParam(window.location.hash, 'view')) ?? DEFAULT_VIEW,
+            view: viewFromUrl ?? DEFAULT_VIEW,
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
             preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,

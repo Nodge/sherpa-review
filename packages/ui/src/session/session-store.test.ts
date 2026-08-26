@@ -183,4 +183,16 @@ describe('session store', () => {
 
         expect(store.getSnapshot().threadsShow).toEqual({ people: true, bots: true, resolved: false });
     });
+
+    it('pins the URL view immediately and the default view only after the reviewer chooses', () => {
+        const fromUrl = createSessionStore({ initial: { view: 'route', filter: 'all' }, viewPinned: true });
+        const byDefault = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+
+        expect(fromUrl.viewPinned()).toBe(true);
+        expect(byDefault.viewPinned()).toBe(false);
+
+        // Selecting the same view again still counts as a choice. The application no longer replaces it.
+        byDefault.setView('route');
+        expect(byDefault.viewPinned()).toBe(true);
+    });
 });

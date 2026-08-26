@@ -4,6 +4,24 @@ import { useMemo, useState } from 'react';
 import { plural } from '../text.js';
 import './banner-slot.css';
 
+/**
+ * Slot priority order (SPEC §2.21): generation failure → failed route action →
+ * disconnected agent → under-explained route → route filling → audit scope. The numbers live
+ * here instead of being scattered across source declarations: the order is a product decision, and it
+ * needs a single place to check it.
+ *
+ * Failure of the button just clicked sits immediately below generation failure. The reviewer is waiting
+ * for the result of their action, but a failed generation is more significant.
+ */
+export const BANNER_PRIORITY = {
+    generationFailed: 400,
+    routeActionError: 350,
+    agentDisconnected: 300,
+    routeUnderExplained: 200,
+    routeFilling: 150,
+    auditScope: 100,
+} as const;
+
 export interface BannerSource {
     readonly id: string;
     readonly priority: number;

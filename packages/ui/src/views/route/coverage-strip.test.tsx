@@ -55,7 +55,18 @@ describe('coverage strip', () => {
 
         expect(html).toContain('coverage known after the plan');
         expect(html).toContain('coverage__shimmer');
+        expect(html).toContain('coverage__rest');
         expect(html).not.toContain('coverage__segment');
+    });
+
+    it('has no denominator before the plan arrives, so the shimmer fills the track', () => {
+        const html = renderToStaticMarkup(
+            <CoverageStrip model={null} loading={{ kind: 'plan', ready: 0, total: 0 }} />,
+        );
+
+        expect(html).toContain('coverage__shimmer');
+        expect(html).not.toContain('coverage__rest');
+        expect(html).not.toContain('viewed');
     });
 });
 

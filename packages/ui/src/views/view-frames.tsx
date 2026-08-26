@@ -1,4 +1,4 @@
-import type { PrDiff, Thread, UiReviewLensesResponse } from '@sherpa/protocol';
+import type { PrDiff, Thread, UiReviewLensesResponse, UiRouteState } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
@@ -18,11 +18,29 @@ import type { ThreadActions } from '../threads/thread-list.tsx';
 import { OutsideThreads } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
+import { provenanceLine, summaryParagraphs } from '../route/generation.js';
 import { formatCount, plural } from '../text.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
 import { discussionStats, ownershipSummary } from './overview-model.js';
+import { GenerationCard } from './route/generation-card.tsx';
 import './view-frames.css';
+
+/**
+ * What Overview knows about route generation (README §6–7, SPEC §3). Endpoints come from App:
+ * the view does not call endpoints itself, so it can render in the gallery without a server.
+ */
+export interface RouteGenerationProps {
+    readonly route: UiRouteState | null;
+    /** Task running for over a minute: "still working" line with cancellation (SPEC §3). */
+    readonly longRunning?: boolean;
+    readonly cancelling?: boolean;
+    readonly retrying?: boolean;
+    /** Failure of the endpoint itself (network, server), not generation. */
+    readonly actionError?: string | null;
+    readonly onRetry?: () => void;
+    readonly onCancel?: () => void;
+}
 
 export interface ViewFrameProps {
     readonly view: ViewId;
@@ -41,18 +59,22 @@ export interface ViewFrameProps {
     readonly threadsError?: string | null;
     readonly threadNow?: number;
     readonly threadStore?: ThreadStore;
+    readonly generation?: RouteGenerationProps;
 }
 
-/** M1 views without generated content: Route invitation and Overview built only from host data. */
+/**
+ * Views without a ready route: a prompt (or an explanation for a small PR) on the Route tab
+ * and Overview with generation states for Summary and the generation card.
+ */
 export function ViewFrame(props: ViewFrameProps) {
     if (props.view === 'route') {
-        return (
-            <RouteInvitation
-                prKey={props.prKey}
-                onReadDiff={() => {
-                    props.session.setView('diff');
-                }}
-            />
+        const openDiff = (): void => {
+            props.session.setView('diff');
+        };
+        return props.generation?.route?.smallPr === true ? (
+            <SmallPrRoute onReadDiff={openDiff} />
+        ) : (
+            <RouteInvitation prKey={props.prKey} onReadDiff={openDiff} />
         );
     }
     if (props.view === 'overview') {
@@ -86,6 +108,28 @@ export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDi
     );
 }
 
+/**
+ * PR below the route threshold (SPEC §4.1): the tab stays clickable and explains why there is
+ * no route. Describe the threshold in words, since its value lives in server config and the UI does not know it.
+ */
+export function SmallPrRoute({ onReadDiff }: { onReadDiff: () => void }) {
+    return (
+        <main className="route-empty" id="view-route">
+            <section className="invitation-card">
+                <div className="invitation-card__eyebrow">Route</div>
+                <h1 className="invitation-card__title">Small PR, no route needed</h1>
+                <p className="invitation-card__text">
+                    The change is below the threshold where a route pays off: reading a couple of files takes less time than
+                    building a plan. The server did not schedule generation, so there is no queue or wait.
+                </p>
+                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                    Read the full diff
+                </button>
+            </section>
+        </main>
+    );
+}
+
 export function OverviewView({
     token,
     prKey,
@@ -102,6 +146,7 @@ export function OverviewView({
     threadsError = null,
     threadNow,
     threadStore: suppliedThreadStore,
+    generation,
 }: ViewFrameProps) {
     const [segment, setSegment] = useState<OwnershipSegment>('all');
     const sourceThreads = threads ?? EMPTY_THREADS;
@@ -117,7 +162,12 @@ export function OverviewView({
     // In the application, App passes the shared persistent store. Overview only subscribes to it.
     const threadStore = suppliedThreadStore ?? persistentStore;
 
-    const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
+    // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.
+    const threadSnapshot = useSyncExternalStore(
+        threadStore.subscribe,
+        threadStore.getSnapshot,
+        threadStore.getSnapshot,
+    );
     const transport = useMemo<ComposerTransport>(
         () =>
             token === undefined
@@ -155,10 +205,18 @@ export function OverviewView({
     );
     const [now] = useState(() => threadNow ?? Date.now());
 
+    const openDiff = (): void => {
+        session.setView('diff');
+    };
+    const openRoute = (): void => {
+        session.setView('route');
+    };
+    const route = generation?.route ?? null;
+
     return (
         <main className="overview" id="view-overview">
             <div className="overview__main">
-                <SummaryPlaceholder prKey={prKey} />
+                <SummaryCard prKey={prKey} route={route} onReadDiff={openDiff} />
                 <OwnershipCard
                     diff={diff}
                     ownership={lenses?.ownership ?? null}
@@ -169,12 +227,24 @@ export function OverviewView({
                     lensesError={lensesError}
                     segment={segment}
                     onSegment={setSegment}
-                    onOpenDiff={() => {
-                        session.setView('diff');
-                    }}
+                    onOpenDiff={openDiff}
                 />
             </div>
             <aside className="overview__rail">
+                {route === null ? null : (
+                    <GenerationCard
+                        route={route}
+                        diffFiles={diff?.files.length ?? null}
+                        longRunning={generation?.longRunning ?? false}
+                        cancelling={generation?.cancelling ?? false}
+                        retrying={generation?.retrying ?? false}
+                        actionError={generation?.actionError ?? null}
+                        onOpenRoute={openRoute}
+                        onOpenDiff={openDiff}
+                        onRetry={generation?.onRetry ?? NOOP}
+                        onCancel={generation?.onCancel ?? NOOP}
+                    />
+                )}
                 <DiscussionCard
                     threads={reviewHostAvailable && threads !== null ? threadSnapshot.threads : null}
                     outside={reviewHostAvailable && threads !== null ? threadSnapshot.outside : EMPTY_THREADS}
@@ -192,7 +262,73 @@ export function OverviewView({
     );
 }
 
-function SummaryPlaceholder({ prKey }: { prKey: string }) {
+/**
+ * "Summary" card (README §6–7). Summary arrives whole with the skeleton. The loop has no token
+ * streaming (M2-T1 decision), so the reading phase shows no caret, only skeleton bars
+ * of fixed height: arriving text does not shift the layout (SPEC §3).
+ */
+function SummaryCard({
+    prKey,
+    route,
+    onReadDiff,
+}: {
+    prKey: string;
+    route: UiRouteState | null;
+    onReadDiff: () => void;
+}) {
+    const snapshot = route?.snapshot ?? null;
+    if (snapshot !== null) {
+        return (
+            <OverviewCard title="Summary">
+                {summaryParagraphs(snapshot.summary).map((paragraph) => (
+                    <p key={paragraph} className="overview-card__text">
+                        {paragraph}
+                    </p>
+                ))}
+                <p className="summary-card__provenance">{provenanceLine(snapshot)}</p>
+            </OverviewCard>
+        );
+    }
+
+    if (route?.phase === 'reading') {
+        return (
+            <OverviewCard title="Summary">
+                <div className="summary-skeleton" role="status" aria-label="Preparing the PR summary">
+                    {SUMMARY_SKELETON.map((row, index) => (
+                        <div key={`${row}-${String(index)}`} className={`summary-skeleton__line is-${row}`} />
+                    ))}
+                </div>
+            </OverviewCard>
+        );
+    }
+
+    if (route?.phase === 'failed') {
+        return (
+            <OverviewCard title="Summary">
+                <p className="overview-card__lead">No summary available.</p>
+                <p className="overview-card__text">
+                    It arrives with the route skeleton, and generation did not get that far. The full diff is
+                    unaffected.
+                </p>
+            </OverviewCard>
+        );
+    }
+
+    if (route?.smallPr === true) {
+        return (
+            <OverviewCard title="Summary">
+                <p className="overview-card__lead">Small PR, no route needed.</p>
+                <p className="overview-card__text">
+                    The change is below the threshold where a route pays off: the agent did not run, so there is no
+                    summary.
+                </p>
+                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                    Read the full diff
+                </button>
+            </OverviewCard>
+        );
+    }
+
     return (
         <OverviewCard title="Summary">
             <p className="overview-card__lead">There is no route yet.</p>
@@ -204,6 +340,9 @@ function SummaryPlaceholder({ prKey }: { prKey: string }) {
         </OverviewCard>
     );
 }
+
+/** Skeleton bar widths: the last line of a paragraph is shorter, or the block reads like a table. */
+const SUMMARY_SKELETON = ['wide', 'wide', 'wide', 'short', 'wide', 'wide', 'mid'] as const;
 
 function OwnershipCard({
     diff,
@@ -379,6 +518,7 @@ function OverviewCard({
     );
 }
 
+const NOOP = (): void => undefined;
 const EMPTY_FILES: PrDiff['files'] = [];
 const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_THREAD_TRANSPORT: ComposerTransport = {

@@ -78,6 +78,12 @@ export interface SessionStore {
     /** Every attempt to select a view, including selecting the current one again. */
     readonly subscribeViewSelection: (listener: () => void) => () => void;
     readonly getViewSelectionSnapshot: () => number;
+    /**
+     * The reviewer chose the view through a link with the `view` parameter or manually in this session. The default view
+     * can change to suit the data (a small PR opens in the full diff, SPEC §4.1).
+     * A chosen view must never change automatically.
+     */
+    readonly viewPinned: () => boolean;
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
     readonly setPreset: (preset: RoutePreset) => void;
@@ -105,6 +111,8 @@ export interface SessionStoreOptions {
         readonly stops?: StopsState;
         readonly preset?: RoutePreset;
     };
+    /** The view came from the URL instead of the default and can no longer change to suit the data. */
+    readonly viewPinned?: boolean;
     /**
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
      * returns to the same tab. Called only on an actual change.
@@ -116,6 +124,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     const listeners = new Set<() => void>();
     const viewSelectionListeners = new Set<() => void>();
     let viewSelection = 0;
+    let viewPinned = options.viewPinned ?? false;
     let state: SessionState = {
         ...options.initial,
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
@@ -161,7 +170,9 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
             };
         },
         getViewSelectionSnapshot: () => viewSelection,
+        viewPinned: () => viewPinned,
         setView: (view) => {
+            viewPinned = true;
             viewSelection += 1;
             for (const listener of [...viewSelectionListeners]) {
                 listener();

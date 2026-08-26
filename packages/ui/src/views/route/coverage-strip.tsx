@@ -49,14 +49,24 @@ export function CoverageStrip({
     onHoverTier,
 }: CoverageStripProps) {
     if (model === null) {
-        const ready = loading === null || loading.total === 0 ? 0 : loading.ready / loading.total;
+        // No denominator means no plan yet. The strip cannot be divided, so the shimmer fills the track.
+        const unknown = loading === null || loading.total === 0;
+        const ready = unknown ? 0 : loading.ready / loading.total;
         return (
             <div className="coverage">
                 <div className="coverage__track" aria-hidden="true">
-                    {ready > 0 ? (
-                        <span className="coverage__shimmer" style={{ flexGrow: ready, flexBasis: 0 }} />
+                    {unknown || ready > 0 ? (
+                        <span
+                            className="coverage__shimmer"
+                            style={{ flexGrow: unknown ? 1 : ready, flexBasis: 0 }}
+                        />
                     ) : null}
-                    <span className="coverage__rest" style={{ flexGrow: Math.max(1 - ready, 0.001), flexBasis: 0 }} />
+                    {unknown ? null : (
+                        <span
+                            className="coverage__rest"
+                            style={{ flexGrow: Math.max(1 - ready, 0.001), flexBasis: 0 }}
+                        />
+                    )}
                 </div>
                 <div className="coverage__legend">
                     <span className="coverage__legend-text">{LOADING_TEXT[loading?.kind ?? 'plan']}</span>

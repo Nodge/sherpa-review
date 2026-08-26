@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSessionStore } from '../../session/session-store.js';
 import { createShortcutRegistry } from '../../shortcuts/registry.js';
-import { PRESET_COMMAND_LABEL, presetCommand } from './route-commands.tsx';
+import { generateCommand, PRESET_COMMAND_LABEL, presetCommand } from './route-commands.tsx';
 
 /**
  * The "toggle preset" command shares one declaration between the `t` shortcut and the palette (SPEC §5).
@@ -91,5 +91,65 @@ describe('preset toggle command', () => {
         expect(registry.handle(keyEvent('t'))).toBe(true);
         expect(session.getSnapshot().preset).toBe('tour');
         expect(registry.list().map((shortcut) => shortcut.label)).toContain(PRESET_COMMAND_LABEL);
+    });
+});
+
+describe('route generation command', () => {
+    const run = (
+        phase: 'none' | 'reading' | 'filling' | 'ready' | 'failed',
+        smallPr = false,
+        generating = false,
+    ) => {
+        const calls: number[] = [];
+        const command = generateCommand({
+            phase,
+            smallPr,
+            generating,
+            onGenerate: () => {
+                calls.push(calls.length + 1);
+            },
+        });
+        return { command, calls };
+    };
+
+    it('calls it regeneration in the failed phase and states the consequence', () => {
+        const { command } = run('failed');
+
+        expect(command.label).toBe('Regenerate the route');
+        expect(command.consequence).toBe('resets stop marks');
+        expect(command.when?.()).toBe(true);
+    });
+
+    it('offers to build a route when there has never been one', () => {
+        const { command } = run('none');
+
+        expect(command.label).toBe('Build the route');
+        expect(command.when?.()).toBe(true);
+    });
+
+    it('hides the command during generation or when the route is ready because the server would reject it', () => {
+        expect(run('reading').command.when?.()).toBe(false);
+        expect(run('filling').command.when?.()).toBe(false);
+        expect(run('ready').command.when?.()).toBe(false);
+    });
+
+    it('hides the command while the request is in flight, before the phase changes', () => {
+        expect(run('failed', false, true).command.when?.()).toBe(false);
+        expect(run('none', false, true).command.when?.()).toBe(false);
+    });
+
+    it('never shows the command for a small PR because it does not bypass the threshold', () => {
+        expect(run('none', true).command.when?.()).toBe(false);
+        expect(run('failed', true).command.when?.()).toBe(false);
+    });
+
+    it('appears in the palette and calls generation', () => {
+        const registry = createShortcutRegistry();
+        const { command, calls } = run('failed');
+        registry.register(command);
+
+        registry.list().find((shortcut) => shortcut.id === 'route.generate')?.action();
+
+        expect(calls).toHaveLength(1);
     });
 });

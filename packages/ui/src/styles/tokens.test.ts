@@ -80,6 +80,10 @@ const EXPECTED: Record<string, string> = {
     '--accent-surface': '#131424',
     '--accent-surface-alt': '#141520',
     '--accent-border': '#262a45',
+    // README §7 (Overview, phase B): the plan list's 'queued `#5c6288` + "queued"' is the text colour
+    // of a queued item, absent from the token table. The unlit strip segment (`#2a2e4a`)
+    // is different: it is a background, while this is text on `#131424`.
+    '--accent-text-queued': '#5c6288',
     '--accent-selection': 'rgba(127,140,255,.13)',
     '--accent-text-selection': 'rgba(127,140,255,.28)',
 

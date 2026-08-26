@@ -12,6 +12,7 @@ import type {
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiRouteGenerateResponse,
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
     UiSetStopViewedResponse,
@@ -34,6 +35,7 @@ import {
     uiReviewRouteResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
+    uiRouteGenerateResponseSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
@@ -147,6 +149,20 @@ export async function setStopViewed(
  */
 export async function fetchReviewRoute(token: string): Promise<UiReviewRouteResponse> {
     return get(UI_ENDPOINTS.reviewRoute, token, uiReviewRouteResponseSchema);
+}
+
+/**
+ * Start or restart route generation: "Retry" on the failure card (README §12)
+ * and the palette command. The request has no body because the server knows what to generate.
+ */
+export async function generateReviewRoute(token: string): Promise<UiRouteGenerateResponse['outcome']> {
+    const body: UiRouteGenerateResponse = await post(
+        UI_ENDPOINTS.reviewRouteGenerate,
+        token,
+        {},
+        uiRouteGenerateResponseSchema,
+    );
+    return body.outcome;
 }
 
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {

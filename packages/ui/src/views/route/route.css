@@ -687,6 +687,116 @@
     color: var(--text-muted-dim);
 }
 
+/* --- Unfilled stops and generation-phase skeletons (README §8, SPEC §3) --- */
+
+.route-stop--unfilled .route-stop__title {
+    color: var(--text-dim);
+}
+
+.route-stop__filled-before {
+    margin: 6px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}
+
+/*
+ * Diff card skeleton has a fixed height close to a real card, so arriving
+ * content does not move its neighbours (SPEC §3).
+ */
+.route-skeleton-card {
+    height: 214px;
+    overflow: hidden;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-diff-card);
+}
+
+.route-skeleton-card__head {
+    height: 34px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-card-header);
+}
+
+.route-skeleton-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--line-height-code);
+    padding: 14px 13px;
+}
+
+.route-skeleton-card__row,
+.route-skeleton__title,
+.route-skeleton__line {
+    height: 9px;
+    border-radius: var(--radius-mark);
+    background: var(--tier-low);
+    animation: route-skeleton-pulse var(--motion-shimmer) ease-in-out infinite;
+}
+
+.route-skeleton-card__row--wide {
+    width: 82%;
+}
+
+.route-skeleton-card__row--mid {
+    width: 61%;
+}
+
+.route-skeleton-card__row--short {
+    width: 38%;
+}
+
+.route-skeleton__title {
+    width: 74%;
+    height: 14px;
+    margin: 9px 0 14px;
+}
+
+.route-skeleton__line {
+    width: 100%;
+    margin-bottom: var(--space-inner-tight);
+}
+
+.route-skeleton__line--short {
+    width: 56%;
+}
+
+@keyframes route-skeleton-pulse {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+}
+
+/* Reading phase: coverage bar on its own, since the filter toolbar has nothing to show. */
+.route-skeleton__bar {
+    flex: none;
+    max-width: 1560px;
+    padding: 20px var(--space-page) 0;
+}
+
+.route-skeleton__note {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: var(--space-card) 0 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+.route-skeleton__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: var(--font-size-secondary);
+    color: var(--accent-text);
+    cursor: pointer;
+}
+
 .route-collapsed__mark {
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);

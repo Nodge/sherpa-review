@@ -50,11 +50,13 @@ import { createStopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
 import { buildDigest, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
+import { generationProgress, snapshotFilling } from '../../route/generation.js';
 import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
     entryPending,
+    entryUnfilled,
     filterOtherView,
     lazyCards,
     otherMatchesFilter,
@@ -87,7 +89,7 @@ import {
     pickTopStop,
     targetScrollTop,
 } from './scroll.js';
-import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, ViewedSummary } from './stop-card.tsx';
+import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, StopSkeleton, ViewedSummary } from './stop-card.tsx';
 import { StopFileCard } from './stop-file-card.tsx';
 import { TestDigest } from './test-digest.tsx';
 import { useOnScreen } from './use-on-screen.js';
@@ -120,6 +122,8 @@ export interface RouteViewProps {
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
+    /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
+    readonly agentStopped?: boolean;
     /** Palette navigation increments `id`, and the view finishes scrolling to the stop. */
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     /** Uncovered fraction exceeds the threshold: App shows "consider regenerating" (SPEC §4.3). */
@@ -152,6 +156,7 @@ export function RouteView({
     store,
     threadStore,
     snapshot,
+    agentStopped = false,
     navigation = null,
     onUnderExplained,
     onRouteSummary,
@@ -254,6 +259,7 @@ export function RouteView({
             diff={diff}
             lenses={lenses}
             snapshot={snapshot}
+            agentStopped={agentStopped}
             session={session}
             store={store}
             threadStore={threadStore}
@@ -276,6 +282,8 @@ export interface RouteWorkspaceProps {
     readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
     readonly snapshot: RouteSnapshot;
+    /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
+    readonly agentStopped?: boolean;
     readonly session: SessionStore;
     readonly store: DiffViewStore;
     readonly threadStore: ThreadStore;
@@ -310,6 +318,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         diff,
         lenses,
         snapshot,
+        agentStopped = false,
         session,
         store,
         threadStore,
@@ -408,9 +417,13 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 models: diffSnapshot.models,
                 failed: failedFiles,
                 preset,
+                filling: snapshotFilling(snapshot),
             }),
         [diff.files, diffSnapshot.models, failedFiles, preset, snapshot],
     );
+    // The route is still being built. The snapshot's slot statuses carry the phase.
+    const filling = useMemo(() => snapshotFilling(snapshot), [snapshot]);
+    const progress = useMemo(() => generationProgress(snapshot), [snapshot]);
     const entryId = (entry: RouteEntry): string => entry.view.stop.id;
     const stopIdsKey = useMemo(() => model.entries.map(entryId).join(' '), [model.entries]);
     const otherStopId = useMemo(
@@ -872,6 +885,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
     // --- A stop's "viewed" mark (SPEC §2.10, requirements §3.1) ---
 
+    /**
+     * Nothing to mark: the stop is unfilled, and "Other" on an unfinished route counts
+     * everything the agent has not reached yet, rather than what remains in the model.
+     */
+    const unfilledEntry = useCallback(
+        (entry: RouteEntry): boolean => entryUnfilled(entry) || (filling && entry.kind === 'other'),
+        [filling],
+    );
     const [stopFailures, setStopFailures] = useState<ReadonlyMap<string, boolean>>(EMPTY_FAILURES);
     const [announcement, setAnnouncement] = useState('');
     const viewedStops = useMemo(
@@ -887,8 +908,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
             // A mark writes seen ranges, which can only be counted from parsed models:
             // before parsing, the mark would reach the server with an empty set and would not be rewritten later.
-            // Clearing a mark needs no ranges, so always allow it.
-            if (viewed && entryPending(entry, model.totals)) {
+            // An unfilled stop has no ranges at all. Clearing its mark requires none.
+            if (viewed && (entryPending(entry, model.totals) || unfilledEntry(entry))) {
                 return;
             }
             if (!viewed) {
@@ -916,7 +937,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 setStopFailures((previous) => new Map(previous).set(stopId, viewed));
             }
         },
-        [model.entries, model.stopCount, model.totals, session, stopProgress, writer],
+        [model.entries, model.stopCount, model.totals, session, stopProgress, unfilledEntry, writer],
     );
 
     /** Whether the stop is collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
@@ -965,8 +986,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     /** A stop can be marked only once its ranges are counted. Clearing a mark is always allowed. */
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>
-            stopProgress.isViewed(entryId(entry)) || !entryPending(entry, model.totals),
-        [model.totals, stopProgress],
+            stopProgress.isViewed(entryId(entry)) ||
+            (!entryPending(entry, model.totals) && !unfilledEntry(entry)),
+        [model.totals, stopProgress, unfilledEntry],
     );
     useShortcut({
         id: 'route.toggleStopViewed',
@@ -1189,12 +1211,16 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 onThreadsShow={session.setThreadsShow}
                 strip={
                     <CoverageStrip
-                        model={settled ? coverage : null}
-                        loading={{
-                            kind: 'diff',
-                            ready: diff.files.length - model.totals.pendingFiles,
-                            total: diff.files.length,
-                        }}
+                        model={settled && !filling ? coverage : null}
+                        loading={
+                            filling
+                                ? { kind: 'plan', ready: progress.ready, total: progress.total }
+                                : {
+                                      kind: 'diff',
+                                      ready: diff.files.length - model.totals.pendingFiles,
+                                      total: diff.files.length,
+                                  }
+                        }
                         viewedStops={viewedStops}
                         totalStops={model.stopCount}
                         onJump={jumpToStop}
@@ -1230,6 +1256,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             keptInView={entryId(entry) === keptStopId}
                             viewed={stopViewed.get(entry.view.stop.id) === true}
                             pending={entry.view.pending}
+                            filledBeforeStop={agentStopped}
                             collapsed={collapsedOf(entry.view)}
                             collapsedManually={stopState.collapsed.has(entry.view.stop.id)}
                             marked={markedStops.has(entry.view.stop.id)}
@@ -1277,6 +1304,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             view={entry.view}
                             stopCount={model.stopCount}
                             pending={model.totals.pendingFiles > 0}
+                            filling={filling}
                             failedFiles={model.totals.failedFiles}
                             onRetryFailed={retryFailed}
                             opened={otherOpen}
@@ -1317,6 +1345,8 @@ interface StopSectionProps {
     readonly viewed: boolean;
     /** Stop files are still being parsed, so mark ranges cannot be computed yet. */
     readonly pending: boolean;
+    /** Agent disconnected during generation: filled stops get a quiet note (SPEC §4.4). */
+    readonly filledBeforeStop: boolean;
     /** Collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
     readonly collapsed: boolean;
     readonly collapsedManually: boolean;
@@ -1349,6 +1379,7 @@ function StopSection({
     keptInView,
     viewed,
     pending,
+    filledBeforeStop,
     collapsed,
     collapsedManually,
     marked,
@@ -1400,14 +1431,20 @@ function StopSection({
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
     const cards = onScreen ? shownFiles : lazyCards(shownFiles);
 
-    const diff = view.drift ? (
+    const status = view.stop.status;
+    const diff = status === 'queued' || status === 'filling' ? (
+        // Planned slot awaiting filling. Show a skeleton because there is nothing to explain yet, not "no hunks".
+        <StopSkeleton />
+    ) : view.drift ? (
         <AnchorDrift paths={view.unresolvedPaths} />
     ) : files.length === 0 && digest === null ? (
         <EmptyStop
             text={
-                view.empty
-                    ? 'No hunks: filling marked up no ranges at all.'
-                    : 'The files of this stop are hidden by the current filter.'
+                status === 'failed'
+                    ? 'No hunks: the agent has not filled this stop.'
+                    : view.empty
+                      ? 'No hunks: filling did not mark any ranges.'
+                      : 'The current filter hides this stop\'s files.'
             }
         />
     ) : collapsed ? (
@@ -1461,6 +1498,7 @@ function StopSection({
                 comments={comments}
                 viewed={viewed}
                 pending={pending}
+                filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
                 failedViewed={failedViewed}
                 marked={marked}
@@ -1487,6 +1525,7 @@ function OtherSection({
     view,
     stopCount,
     pending,
+    filling,
     failedFiles,
     onRetryFailed,
     opened,
@@ -1502,6 +1541,8 @@ function OtherSection({
     view: RouteOtherView;
     stopCount: number;
     pending: boolean;
+    /** The route is still filling: Other counts vacant plan slots, not what the model left over. */
+    filling: boolean;
     failedFiles: number;
     onRetryFailed: () => void;
     opened: boolean;
@@ -1526,6 +1567,7 @@ function OtherSection({
                 view={filtered}
                 stopCount={stopCount}
                 pending={pending}
+                filling={filling}
                 failedFiles={failedFiles}
                 onRetryFailed={onRetryFailed}
                 keptInView={keptInView}

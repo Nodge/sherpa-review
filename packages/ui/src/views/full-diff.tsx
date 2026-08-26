@@ -88,6 +88,8 @@ export interface FullDiffViewProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
+    /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
+    readonly smallPr?: boolean;
 }
 
 export function FullDiffView({
@@ -108,6 +110,7 @@ export function FullDiffView({
     paletteNavigation = null,
     onPaletteActiveFileChange,
     onFilterChangeHandler,
+    smallPr = false,
 }: FullDiffViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
@@ -215,6 +218,7 @@ export function FullDiffView({
             onResolveThread={resolveThread}
             initialFileId={fragmentTarget.fileId}
             initialThreadId={fragmentTarget.threadId}
+            smallPr={smallPr}
         />
     );
 }
@@ -245,6 +249,8 @@ export interface DiffWorkspaceProps {
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     readonly initialFileId?: string | null;
     readonly initialThreadId?: string | null;
+    /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
+    readonly smallPr?: boolean;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
     readonly threadNow?: number;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
@@ -828,6 +834,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     threadsShow={threadsShow}
                     threadCounts={threadCounts}
                     onThreadsShow={session.setThreadsShow}
+                    smallPr={props.smallPr ?? false}
                 />
 
                 {/* An empty result describes the filter, not the list. Its explanation sits next to
@@ -896,6 +903,7 @@ function Toolbar({
     threadsShow,
     threadCounts,
     onThreadsShow,
+    smallPr,
 }: {
     store: DiffViewStore;
     filters: readonly FileFilter[];
@@ -905,6 +913,7 @@ function Toolbar({
     threadsShow: ThreadsShow;
     threadCounts: ThreadSourceCounts;
     onThreadsShow: (show: ThreadsShow) => void;
+    smallPr: boolean;
 }) {
     return (
         <div className="full-diff__toolbar">
@@ -912,6 +921,7 @@ function Toolbar({
             <span className="full-diff__subtitle">
                 A classic reader. The route stays in the margin and no longer sets the order.
             </span>
+            {smallPr ? <span className="full-diff__small-pr">small PR, no route needed</span> : null}
             <span className="full-diff__spacer" />
             <DiffModeToggle store={store} />
             <span className="toolbar-label">Comments:</span>

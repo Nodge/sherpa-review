@@ -22,6 +22,11 @@ export interface OtherCardProps {
     readonly diff: ReactNode;
     /** Uncovered ranges are still being counted because some diff files have not been parsed. */
     readonly pending: boolean;
+    /**
+     * The route is still filling (README §8): uncovered ranges are currently unoccupied plan slots,
+     * rather than the model's decision. Counts become accurate once the stops arrive.
+     */
+    readonly filling?: boolean;
     /** Files that failed to parse. Their uncovered lines are absent from the count. */
     readonly failedFiles?: number;
     readonly onRetryFailed?: () => void;
@@ -45,6 +50,7 @@ export function OtherCard({
     onOpen,
     diff,
     pending,
+    filling = false,
     failedFiles = 0,
     onRetryFailed,
     keptInView = false,
@@ -74,13 +80,19 @@ export function OtherCard({
                         <StopViewedToggle
                             viewed={viewed}
                             pending={pending}
+                            unfilled={filling}
                             failedViewed={failedViewed}
                             onViewed={onViewed}
                         />
                     )}
                 </div>
                 <h2 className="route-stop__title">{view.stop.title}</h2>
-                {pending ? (
+                {filling ? (
+                    <p className="route-stop__paragraph">
+                        The route is still filling. For now, everything the agent has not reached goes here.
+                        What actually remains without a stop will become clear when the plan is filled.
+                    </p>
+                ) : pending ? (
                     <p className="route-stop__paragraph">
                         The diff is still being parsed. The number of lines left without a stop is unknown yet. Coverage is
                         structurally guaranteed: whatever misses the stops collects here.
@@ -101,16 +113,29 @@ export function OtherCard({
             <div className="route-stop__diff">
                 <div className="route-other">
                     <p className="route-other__text">
-                        The model did not place these ranges. They are <strong>not explained</strong>, not{' '}
-                        <strong>unimportant</strong> — read them as a raw diff.
+                        {filling ? (
+                            'This slot counts the remainder. While stops are arriving, it is too early to call it "not explained".'
+                        ) : (
+                            <>
+                                The model did not place these ranges. They are <strong>not explained</strong>, not{' '}
+                                <strong>unimportant</strong>. Read them as a raw diff.
+                            </>
+                        )}
                     </p>
                     <div className="route-other__actions">
-                        <button type="button" className="route-other__action" disabled={pending} onClick={onOpen}>
-                            {pending
-                                ? 'Counting the uncovered lines…'
-                                : opened
-                                  ? 'Collapse the uncovered ranges'
-                                  : `Open ${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`}
+                        <button
+                            type="button"
+                            className="route-other__action"
+                            disabled={pending || filling}
+                            onClick={onOpen}
+                        >
+                            {filling
+                                ? 'Waiting for the route to fill'
+                                : pending
+                                  ? 'Counting uncovered lines…'
+                                  : opened
+                                    ? 'Collapse uncovered ranges'
+                                    : `Open ${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`}
                         </button>
                     </div>
                     {failedFiles === 0 ? null : (

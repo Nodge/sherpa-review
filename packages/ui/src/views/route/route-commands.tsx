@@ -1,4 +1,4 @@
-import type { RouteSnapshot } from '@sherpa/protocol';
+import type { RouteSnapshot, UiRoutePhase } from '@sherpa/protocol';
 
 import { planLabel } from '../../route/route-model.js';
 import type { RoutePreset } from '../../session/session-store.js';
@@ -70,6 +70,40 @@ export function presetCommand({ preset, setPreset, setView }: PresetCommandInput
  */
 export function RoutePresetCommand(input: PresetCommandInput) {
     useShortcut(presetCommand(input));
+    return null;
+}
+
+export interface GenerateCommandInput {
+    readonly phase: UiRoutePhase | null;
+    readonly smallPr: boolean;
+    /** A request is already in flight. The phase has not changed yet, but a second request has no work to do here. */
+    readonly generating: boolean;
+    readonly onGenerate: () => void;
+}
+
+/**
+ * "Regenerate the route" (README §14). Lives outside the ready-snapshot condition: the command is needed
+ * precisely when no snapshot exists, in the failed phase.
+ *
+ * The command is hidden during generation: the server would return `already_running`, and the palette
+ * would offer an action that does nothing. It is also hidden between the request and the phase change,
+ * using `generating`, which also disables the retry button. A small PR does not bypass the threshold
+ * (requirements §3.6), so the command is absent there too.
+ */
+export function generateCommand({ phase, smallPr, generating, onGenerate }: GenerateCommandInput): Shortcut {
+    return {
+        id: 'route.generate',
+        keys: [],
+        label: phase === 'failed' ? 'Regenerate the route' : 'Build the route',
+        // The server clears stop progress on a new generation (M2-T7).
+        consequence: 'resets stop marks',
+        when: () => !smallPr && !generating && (phase === 'failed' || phase === 'none'),
+        action: onGenerate,
+    };
+}
+
+export function RouteGenerateCommand(input: GenerateCommandInput) {
+    useShortcut(generateCommand(input));
     return null;
 }
 

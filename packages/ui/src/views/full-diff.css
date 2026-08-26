@@ -45,6 +45,19 @@
     color: var(--text-dim);
 }
 
+/* Quiet small-PR note (SPEC §4.1): explains the empty route tab without asking for anything. */
+.full-diff__small-pr {
+    flex: none;
+    padding: 2px 7px;
+    border: 1px solid var(--border-chip);
+    border-radius: var(--radius-key);
+    background: var(--surface-chip);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
 .full-diff__spacer {
     flex: 1;
 }

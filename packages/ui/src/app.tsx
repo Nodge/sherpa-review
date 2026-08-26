@@ -4,7 +4,9 @@ import type {
     Thread,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiRoutePhase,
     UiRouteState,
+    UiTask,
     Verdict,
 } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -12,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import './app.css';
 import {
+    cancelTask,
     fetchReviewDiff,
     fetchReviewLenses,
     fetchReviewPr,
@@ -19,6 +22,7 @@ import {
     fetchReviewRoute,
     fetchReviewThreads,
     deleteReviewDraft,
+    generateReviewRoute,
     publishReview,
     saveReviewDraft,
     setFileViewed,
@@ -28,7 +32,7 @@ import {
 import { agentPillView } from './components/agent-pill-view.js';
 import { auditScopeBannerVisible, AuditScopeBanner } from './components/audit-banner.tsx';
 import type { BannerSource } from './components/banner-slot.tsx';
-import { BannerSlot } from './components/banner-slot.tsx';
+import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
 import { DisconnectedBanner } from './components/disconnected-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
@@ -51,6 +55,12 @@ import { breadcrumbFromPrKey } from './pr-key.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
 import { createStopProgressStore } from './progress/stop-progress-store.js';
+import {
+    generationIsLong,
+    openRouteTasks,
+    routeActionErrorInPlace,
+    routeViewKind,
+} from './route/generation.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import type { Store } from './store.js';
@@ -59,8 +69,14 @@ import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
 import { FullDiffView } from './views/full-diff.tsx';
+import {
+    GenerationFailedBanner,
+    RouteActionErrorBanner,
+    RouteFillingBanner,
+} from './views/route/generation-card.tsx';
 import { RegenerateBanner } from './views/route/other-card.tsx';
-import { RouteCommands, RoutePresetCommand } from './views/route/route-commands.tsx';
+import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views/route/route-commands.tsx';
+import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
 import type { RouteSummary } from './views/route/route-view.tsx';
 import { RouteView } from './views/route/route-view.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
@@ -80,6 +96,12 @@ interface RouteFacts {
     readonly stopIds: readonly string[];
     readonly otherStopId: string | null;
     readonly uncoveredLines: number | null;
+}
+
+/** A generation or cancellation endpoint failed. The phase is the one when the reviewer clicked. */
+interface RouteActionFailure {
+    readonly phase: UiRoutePhase | null;
+    readonly message: string;
 }
 
 interface ReviewState {
@@ -598,22 +620,168 @@ export function App({ store, session, token }: AppProps) {
         dismissedAuditKey === auditKey,
         pciStats?.files ?? 0,
     );
+
+    // --- Route generation: endpoints, long-running task, default view for a small PR (M2-T10) ---
+
+    const route = currentReview.route;
+    const routePhase = route?.phase ?? null;
+    const routeKind = routeViewKind(route);
+    const routeTasks = useMemo(() => openRouteTasks(state?.tasks ?? EMPTY_TASKS), [state?.tasks]);
+    const [generating, setGenerating] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+    /**
+     * Store the reason with the phase that produced it. When the server reports something new,
+     * the old endpoint complaint is stale and disappears without a separate reset.
+     */
+    const [routeActionFailure, setRouteActionFailure] = useState<RouteActionFailure | null>(null);
+    const routeActionError = routeActionFailure?.phase === routePhase ? routeActionFailure.message : null;
+    /** Phase where generation was requested. The button keeps loading until the phase changes. */
+    const generationFrom = useRef<string | null>(null);
+    /**
+     * Mirror `generating` for the repeated-start guard. React state updates by the next
+     * render, but two consecutive calls (palette, button) can happen in the same render.
+     */
+    const generationInFlight = useRef(false);
+    const stopGenerating = useCallback(() => {
+        generationInFlight.current = false;
+        setGenerating(false);
+    }, []);
+    useEffect(() => {
+        if (generating && generationFrom.current !== routePhase) {
+            stopGenerating();
+        }
+    }, [generating, routePhase, stopGenerating]);
+    const startGeneration = useCallback(() => {
+        // The server would reject a second request with `already_running`, and its response would clear
+        // the loading indicator for the generation already in progress.
+        if (generationInFlight.current) {
+            return;
+        }
+        generationInFlight.current = true;
+        generationFrom.current = routePhase;
+        setGenerating(true);
+        setRouteActionFailure(null);
+        void generateReviewRoute(token).then(
+            (outcome) => {
+                // Generation has started. The SSE phase change releases the button, not the endpoint response.
+                if (outcome !== 'started') {
+                    stopGenerating();
+                }
+                if (outcome === 'small_pr') {
+                    setRouteActionFailure({
+                        phase: routePhase,
+                        message: 'The PR is below the route threshold, generation will not start.',
+                    });
+                }
+            },
+            (error: unknown) => {
+                stopGenerating();
+                setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
+            },
+        );
+    }, [routePhase, stopGenerating, token]);
+    const cancelGeneration = useCallback(() => {
+        const ids = routeTasks.map((task) => task.id);
+        if (ids.length === 0) {
+            return;
+        }
+        setCancelling(true);
+        setRouteActionFailure(null);
+        void Promise.all(ids.map((id) => cancelTask(token, id))).then(
+            () => {
+                setCancelling(false);
+            },
+            (error: unknown) => {
+                setCancelling(false);
+                setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
+            },
+        );
+    }, [routePhase, routeTasks, token]);
+
+    // The clock ticks only while the agent has work to do. "Still working" depends on elapsed time.
+    const [now, setNow] = useState(() => Date.now());
+    const hasRouteTasks = routeTasks.length > 0;
+    useEffect(() => {
+        if (!hasRouteTasks) {
+            return;
+        }
+        const timer = setInterval(() => {
+            setNow(Date.now());
+        }, LONG_GENERATION_TICK);
+        return () => {
+            clearInterval(timer);
+        };
+    }, [hasRouteTasks]);
+    const longRunning = generationIsLong(routeTasks, now);
+
+    /**
+     * A small PR opens in the full diff (SPEC §4.1). Respect the reviewer's choice,
+     * whether from the URL or by hand, so decide once and only for the default.
+     */
+    const smallPrRedirected = useRef(false);
+    useEffect(() => {
+        if (smallPrRedirected.current || routePhase !== 'none' || route?.smallPr !== true) {
+            return;
+        }
+        smallPrRedirected.current = true;
+        if (!session.viewPinned()) {
+            session.setView('diff');
+        }
+    }, [route?.smallPr, routePhase, session]);
+
+    const actionErrorInPlace = routeActionErrorInPlace(view, route);
+
     const bannerSources: readonly BannerSource[] = [
         {
+            id: 'generation-failed',
+            priority: BANNER_PRIORITY.generationFailed,
+            // Do not duplicate this on the route tab: the red card there shows the same reason.
+            active: () => routePhase === 'failed' && view !== 'route',
+            render: () =>
+                route?.failure == null ? null : (
+                    <GenerationFailedBanner
+                        message={route.failure.message}
+                        retrying={generating}
+                        onRetry={startGeneration}
+                    />
+                ),
+        },
+        {
+            id: 'route-action-error',
+            priority: BANNER_PRIORITY.routeActionError,
+            active: () => routeActionError !== null && !actionErrorInPlace,
+            render: () =>
+                routeActionError === null ? null : <RouteActionErrorBanner message={routeActionError} />,
+        },
+        {
             id: 'agent-disconnected',
-            priority: 300,
+            priority: BANNER_PRIORITY.agentDisconnected,
             active: () => state?.worker.kind === 'disconnected',
             render: () => <DisconnectedBanner prKey={state?.prKey ?? ''} />,
         },
         {
             id: 'route-under-explained',
-            priority: 200,
+            priority: BANNER_PRIORITY.routeUnderExplained,
             active: () => view === 'route' && routeUnderExplained,
             render: () => <RegenerateBanner />,
         },
         {
+            id: 'route-filling',
+            priority: BANNER_PRIORITY.routeFilling,
+            active: () => view === 'route' && routePhase === 'filling' && route?.snapshot != null,
+            render: () =>
+                route?.snapshot == null ? null : (
+                    <RouteFillingBanner
+                        snapshot={route.snapshot}
+                        onReadDiff={() => {
+                            session.setView('diff');
+                        }}
+                    />
+                ),
+        },
+        {
             id: 'audit-scope',
-            priority: 100,
+            priority: BANNER_PRIORITY.auditScope,
             active: () => auditVisible && pci !== null && pciStats !== null,
             render: () =>
                 pci === null || pciStats === null ? null : (
@@ -629,10 +797,14 @@ export function App({ store, session, token }: AppProps) {
                 ),
         },
     ];
-    // The view gets the route only in the `ready` phase. Other phases are generation
-    // states from M2-T10. Until then, Route stays the M1 invitation.
-    const routeSnapshot =
-        currentReview.route?.phase === 'ready' ? currentReview.route.snapshot : null;
+    /**
+     * The snapshot behind review counts: only a ready route. A partial one lives in the route
+     * view (README §8), but cannot supply counts for the action panel or review outcome because half
+     * its slots are still unfilled.
+     */
+    const routeSnapshot = routePhase === 'ready' ? (route?.snapshot ?? null) : null;
+    /** What the "Route" tab renders: a ready or partially filled route. */
+    const routeViewSnapshot = routePhase === 'ready' || routePhase === 'filling' ? (route?.snapshot ?? null) : null;
     const stopViewed = useSyncExternalStore(
         stopProgress.subscribe,
         stopProgress.getSnapshot,
@@ -663,9 +835,13 @@ export function App({ store, session, token }: AppProps) {
     }, [reviewKey, routeSnapshot, routeSummaryState, stopViewed]);
     const reportRouteSummary = useCallback(
         (value: RouteSummary) => {
-            setRouteSummaryState({ key: reviewKey, value });
+            // Counts are intermediate while the route is being filled. The guardrail and review result
+            // pick them up at `ready` (the phase dependency restarts the report).
+            if (routePhase === 'ready') {
+                setRouteSummaryState({ key: reviewKey, value });
+            }
         },
-        [reviewKey],
+        [reviewKey, routePhase],
     );
     const jumpToStop = useCallback(
         (stopId: string) => {
@@ -783,8 +959,9 @@ export function App({ store, session, token }: AppProps) {
                             setActiveFileId(fileId);
                         }
                     }}
+                    smallPr={route?.smallPr === true}
                 />
-            ) : view === 'route' && routeSnapshot !== null ? (
+            ) : view === 'route' && routeKind === 'workspace' && routeViewSnapshot !== null ? (
                 <RouteView
                     token={token}
                     session={session}
@@ -800,10 +977,27 @@ export function App({ store, session, token }: AppProps) {
                     stopProgress={stopProgress}
                     store={diffStore}
                     threadStore={threadStore}
-                    snapshot={routeSnapshot}
+                    snapshot={routeViewSnapshot}
+                    agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}
                     onRouteSummary={reportRouteSummary}
+                />
+            ) : view === 'route' && routeKind === 'reading' ? (
+                <RouteReadingView
+                    onOpenDiff={() => {
+                        session.setView('diff');
+                    }}
+                />
+            ) : view === 'route' && routeKind === 'failed' && route?.failure != null ? (
+                <RouteFailedView
+                    failure={route.failure}
+                    retrying={generating}
+                    actionError={routeActionError}
+                    onRetry={startGeneration}
+                    onOpenDiff={() => {
+                        session.setView('diff');
+                    }}
                 />
             ) : (
                 <ViewFrame
@@ -822,12 +1016,21 @@ export function App({ store, session, token }: AppProps) {
                     lensesError={currentReview.lensesError}
                     threadsError={currentReview.threadsError}
                     {...(threadStore === null ? {} : { threadStore })}
+                    generation={{
+                        route,
+                        longRunning,
+                        cancelling,
+                        retrying: generating,
+                        actionError: routeActionError,
+                        onRetry: startGeneration,
+                        onCancel: cancelGeneration,
+                    }}
                 />
             )}
 
-            {routeSnapshot === null ? null : (
+            {routeViewSnapshot === null ? null : (
                 <>
-                    <RouteCommands snapshot={routeSnapshot} onJump={jumpToStop} />
+                    <RouteCommands snapshot={routeViewSnapshot} onJump={jumpToStop} />
                     <RoutePresetCommand
                         preset={preset}
                         setPreset={session.setPreset}
@@ -835,6 +1038,12 @@ export function App({ store, session, token }: AppProps) {
                     />
                 </>
             )}
+            <RouteGenerateCommand
+                phase={routePhase}
+                smallPr={route?.smallPr === true}
+                generating={generating}
+                onGenerate={startGeneration}
+            />
 
             <CommandPalette
                 open={paletteOpen}
@@ -924,3 +1133,6 @@ function hostDisplayName(host: string): string {
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_TASKS: readonly UiTask[] = [];
+/** How often to recalculate "Still working". The threshold is coarse, so second-level precision is unnecessary. */
+const LONG_GENERATION_TICK = 5000;

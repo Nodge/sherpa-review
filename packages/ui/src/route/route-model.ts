@@ -162,6 +162,11 @@ export interface RouteModelInput {
     readonly failed?: ReadonlySet<string>;
     /** Session preset (SPEC §2.5). Affects only entry order. */
     readonly preset?: RoutePreset;
+    /**
+     * The route is still filling (README §8): uncovered ranges are unoccupied plan slots, not a verdict
+     * from the model. "Other" promotion and its banner stay silent until ready, and the plan still fixes the order.
+     */
+    readonly filling?: boolean;
 }
 
 export function buildRouteModel({
@@ -170,6 +175,7 @@ export function buildRouteModel({
     models,
     failed = EMPTY_FAILED,
     preset = 'triage',
+    filling = false,
 }: RouteModelInput): RouteModel {
     const byId = new Map(files.map((file) => [file.fileId, file]));
     const planned = snapshot.stops.filter((stop) => stop.tier !== 'other');
@@ -246,7 +252,7 @@ export function buildRouteModel({
                   files: uncoveredFiles,
                   lines: uncovered,
               };
-    const promoted = other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
+    const promoted = !filling && other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
     const entries =
         preset === 'tour'
             ? inTourOrder(order(views, other, false), snapshot.tourOrder)
@@ -258,6 +264,14 @@ export function buildRouteModel({
 /** The route entry's counts are not final yet because some of its files have not been parsed. */
 export function entryPending(entry: RouteEntry, totals: RouteTotals): boolean {
     return entry.kind === 'stop' ? entry.view.pending : totals.pendingFiles > 0;
+}
+
+/**
+ * The agent has not filled the stop yet (or filling failed). It has no ranges,
+ * so there is nothing to mark. The synthetic "Other" is always ready.
+ */
+export function entryUnfilled(entry: RouteEntry): boolean {
+    return entry.kind === 'stop' && entry.view.stop.status !== 'ready';
 }
 
 /**

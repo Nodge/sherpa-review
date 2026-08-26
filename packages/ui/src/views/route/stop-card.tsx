@@ -22,6 +22,8 @@ export interface StopCardProps {
     readonly onViewed: (viewed: boolean) => void;
     /** Stop files are still being parsed, so no ranges are available for a viewed mark. */
     readonly pending?: boolean;
+    /** Agent died during generation: filled content remains readable with a quiet note (SPEC §4.4). */
+    readonly filledBeforeStop?: boolean;
     /** Value of the failed mark write. Shows "not saved · retry" beside the control. */
     readonly failedViewed?: boolean | null;
     /** The stop is highlighted by hovering over a coverage strip segment (SPEC §2.4). */
@@ -43,6 +45,7 @@ export function StopCard({
     viewed,
     onViewed,
     pending = false,
+    filledBeforeStop = false,
     failedViewed = null,
     marked = false,
     keptInView = false,
@@ -54,10 +57,11 @@ export function StopCard({
 }: StopCardProps) {
     const { stop } = view;
     const tier = stop.tier;
+    const unfilled = stop.status !== 'ready';
 
     return (
         <section
-            className={`route-stop route-stop--${tier}${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
+            className={`route-stop route-stop--${tier}${unfilled ? ' route-stop--unfilled' : ''}${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${stop.id}`}
             role="region"
             aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stop.title}`}
@@ -88,10 +92,20 @@ export function StopCard({
                             {formatCount(comments)}
                         </span>
                     )}
-                    <StopViewedToggle viewed={viewed} pending={pending} failedViewed={failedViewed} onViewed={onViewed} />
+                    <StopViewedToggle
+                        viewed={viewed}
+                        pending={pending}
+                        unfilled={unfilled}
+                        failedViewed={failedViewed}
+                        onViewed={onViewed}
+                    />
                 </div>
 
                 <h2 className="route-stop__title">{stop.title}</h2>
+
+                {filledBeforeStop && !unfilled ? (
+                    <p className="route-stop__filled-before">filled before the agent stopped</p>
+                ) : null}
 
                 {stop.paragraph === null ? (
                     <p className="route-stop__note">{unfilledNote(stop.status)}</p>
@@ -134,21 +148,24 @@ export function StopCard({
  * with an error on failed writes beside it and a retry of the exact same action.
  *
  * A stop cannot be marked until its ranges are computed. An empty set would go
- * to the server, leaving files unread. A mark can always be cleared because ranges
- * are not needed for that.
+ * to the server, leaving files unread. The same applies to an unfilled stop, which has no ranges
+ * at all. The mark can always be cleared because that requires no ranges.
  */
 export function StopViewedToggle({
     viewed,
     pending = false,
+    unfilled = false,
     failedViewed,
     onViewed,
 }: {
     viewed: boolean;
     pending?: boolean;
+    unfilled?: boolean;
     failedViewed: boolean | null;
     onViewed: (viewed: boolean) => void;
 }) {
-    const disabled = pending && !viewed;
+    const disabled = (pending || unfilled) && !viewed;
+    const reason = unfilled ? 'The stop is not filled yet' : 'Stop ranges are still being computed';
     return (
         <>
             {failedViewed === null ? null : (
@@ -169,7 +186,7 @@ export function StopViewedToggle({
                 className={`route-stop__viewed${viewed ? ' is-viewed' : ''}`}
                 aria-pressed={viewed}
                 disabled={disabled}
-                {...(disabled ? { title: 'Stop ranges are still being counted' } : {})}
+                {...(disabled ? { title: reason } : {})}
                 onClick={() => {
                     onViewed(!viewed);
                 }}
@@ -263,6 +280,26 @@ export function ViewedSummary({
 export function EmptyStop({ text }: { text: string }) {
     return <div className="route-collapsed route-collapsed--empty">{text}</div>;
 }
+
+/**
+ * Shimmer skeleton in the diff column: the stop is waiting to be filled (README §8, SPEC §3).
+ * Its fixed height is close to a real card, so arriving content does not shift
+ * neighbouring elements.
+ */
+export function StopSkeleton() {
+    return (
+        <div className="route-skeleton-card" aria-hidden="true">
+            <div className="route-skeleton-card__head" />
+            <div className="route-skeleton-card__body">
+                {SKELETON_ROWS.map((row) => (
+                    <div key={row} className={`route-skeleton-card__row route-skeleton-card__row--${row}`} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+const SKELETON_ROWS = ['wide', 'mid', 'wide', 'short', 'mid', 'wide'] as const;
 
 /**
  * Anchor drift: a stop points at lines no longer present in the diff (SPEC §2.9).

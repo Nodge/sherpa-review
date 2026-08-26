@@ -67,6 +67,8 @@
     --accent-text: #aeb6ff;
     --accent-text-soft: #c9cdf0;
     --accent-text-bright: #dfe2ff;
+    /* README §7: queued plan item text on the generation card's accent background. */
+    --accent-text-queued: #5c6288;
     --accent-surface: #131424;
     --accent-surface-alt: #141520;
     --accent-border: #262a45;

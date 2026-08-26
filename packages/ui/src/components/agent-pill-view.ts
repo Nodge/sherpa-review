@@ -53,8 +53,9 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[]): A
     const uptime = formatUptime(Date.parse(worker.lastSeenAt) - Date.parse(worker.registeredAt));
     const title = `${identity(worker)} · session uptime ${uptime} · queued: ${String(pending.length)}`;
 
-    // An interactive task keeps the reviewer waiting for an answer on screen. It makes the agent "working".
-    if (pending.some((task) => task.priority === 'interactive')) {
+    // "Working" means there is work left, regardless of priority class. Route generation runs
+    // in the background, but the reviewer waits for it at the screen just the same (M2-T10 decision).
+    if (pending.length > 0) {
         return {
             tone: 'working',
             workerKind: worker.kind,

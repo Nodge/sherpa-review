@@ -55,10 +55,13 @@ describe('agent pill', () => {
         expect(view.label).toBe('Agent working · 2 in queue');
     });
 
-    it('only background tasks in the queue do not make the agent busy', () => {
-        const view = agentPillView(CONNECTED, [task({ id: 1, status: 'queued', priority: 'background' })]);
+    it('also shows the agent as working for a background route generation task', () => {
+        const view = agentPillView(CONNECTED, [
+            task({ id: 1, status: 'leased', type: 'route.skeleton', priority: 'background' }),
+        ]);
 
-        expect(view.tone).toBe('connected');
+        expect(view.tone).toBe('working');
+        expect(view.label).toBe('Agent working · 1 in queue');
     });
 
     it('shows the red state when the last task failed', () => {
