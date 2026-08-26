@@ -1,3 +1,4 @@
+import fsSync from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { makeFixtureHost } from '@sherpa/fixtures';
@@ -13,7 +14,8 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { databasePathFor } from './paths.js';
+import { databasePathFor, payloadDirOf } from './paths.js';
+import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { MAX_SKELETON_TASKS } from './route-orchestrator.js';
 import { contentHashOf } from './route-store.js';
@@ -160,6 +162,36 @@ describe('route orchestration', () => {
         expect(ready.snapshot?.contentHash).toMatch(/^[0-9a-f]{12}$/);
         expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5' });
         expect(ready.snapshot?.commit).toBe(mediumReadySnapshot().commit);
+    });
+
+    it('task payloads are on disk with context and schema present when issued', async () => {
+        const server = await startWithWorker();
+        const payloadDir = payloadDirOf(sherpaDir, MEDIUM_PR);
+
+        const skeleton = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
+        expectPayloadOnDisk(skeleton, payloadDir);
+
+        completeTask(server, skeleton?.id ?? 0, mediumRawResults().skeleton);
+        const section = server.queue.getTask(routeTasks(server, 'route.section')[0] ?? 0);
+        expectPayloadOnDisk(section, payloadDir);
+        // Both tasks belong to one generation and live in the same subdirectory.
+        expect(fsSync.readdirSync(payloadDir)).toHaveLength(1);
+    });
+
+    it('restarting generation removes the previous payload', async () => {
+        const server = await startWithWorker();
+        const payloadDir = payloadDirOf(sherpaDir, MEDIUM_PR);
+        const before = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
+
+        // Failure and a new generation: nobody needs the old files anymore.
+        server.queue.next(WORKER);
+        server.queue.fail(WORKER, before?.id ?? 0, 'could not complete');
+        expect((await readRoute(server)).route.phase).toBe('failed');
+        expect(await server.route.generate()).toBe('started');
+
+        expect(fsSync.existsSync(before?.contextFiles[0] ?? '')).toBe(false);
+        expect(fsSync.readdirSync(payloadDir)).toHaveLength(1);
+        expectPayloadOnDisk(server.queue.getTask(routeTasks(server, 'route.skeleton').at(-1) ?? 0), payloadDir);
     });
 
     it('invalid skeleton: three rejections preserve the lease, and phase failed prevents a fourth', async () => {
@@ -420,6 +452,27 @@ describe('route orchestration', () => {
             expect(route.snapshot?.stops[0]?.status).toBe('queued');
         });
 
+        it('enqueuing a missing section preserves payloads of tasks that survived a restart', async () => {
+            const first = await startWithWorker();
+            completeTask(first, routeTasks(first, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
+            const before = routeTasks(first, 'route.section');
+            const survivor = first.queue.getTask(before[0] ?? 0);
+            await first.close();
+            // The server died halfway through enqueuing the batch: some sections were left without a task.
+            dropTask(sherpaDir, MEDIUM_PR, before.at(-1) ?? 0);
+
+            const second = await startWithWorker();
+
+            expect(routeTasks(second, 'route.section')).toHaveLength(before.length);
+            for (const file of survivor?.contextFiles ?? []) {
+                expect(fsSync.existsSync(file)).toBe(true);
+            }
+            expectPayloadOnDisk(
+                second.queue.getTask(routeTasks(second, 'route.section').at(-1) ?? 0),
+                payloadDirOf(sherpaDir, MEDIUM_PR),
+            );
+        });
+
         it('re-enqueues a phase that has lost its tasks', async () => {
             const first = await startWithWorker();
             expect(routeTasks(first, 'route.skeleton')).toHaveLength(1);
@@ -479,6 +532,17 @@ function dropTasks(sherpaDir: string, prKey: string): void {
     const db = new DatabaseSync(databasePathFor(sherpaDir, prKey));
     try {
         db.exec('DELETE FROM route_tasks; DELETE FROM tasks;');
+    } finally {
+        db.close();
+    }
+}
+
+/** Deletes one task without the server to simulate death halfway through enqueuing a batch. */
+function dropTask(sherpaDir: string, prKey: string, taskId: number): void {
+    const db = new DatabaseSync(databasePathFor(sherpaDir, prKey));
+    try {
+        db.exec(`DELETE FROM route_tasks WHERE task_id = ${String(taskId)};`);
+        db.exec(`DELETE FROM tasks WHERE id = ${String(taskId)};`);
     } finally {
         db.close();
     }
@@ -581,4 +645,15 @@ function parseSseEvent(raw: string): SseEvent {
         }
     }
     return { event, data: data.join('\n') };
+}
+
+/** Task payload is on disk: context and schema are in this PR's generation directory. */
+function expectPayloadOnDisk(task: TaskRecord | null, payloadDir: string): void {
+    expect(task?.contextFiles.length).toBeGreaterThan(0);
+    for (const file of task?.contextFiles ?? []) {
+        expect(file.startsWith(payloadDir)).toBe(true);
+        expect(fsSync.readFileSync(file, 'utf8').length).toBeGreaterThan(0);
+    }
+    expect(task?.resultSchemaFile).toBeDefined();
+    expect(JSON.parse(fsSync.readFileSync(task?.resultSchemaFile ?? '', 'utf8'))).toMatchObject({ type: 'object' });
 }

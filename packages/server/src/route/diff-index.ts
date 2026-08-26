@@ -27,6 +27,76 @@ export type DiffIndex = ReadonlyMap<string, ChangedFile>;
 /** `@@ -a,b +c,d @@` and its short form `@@ -a +c @@` (one line), as in the UI. */
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
 
+/**
+ * A patch line with numbers for both sides. `null` means no line on that side: additions have no
+ * old number, deletions have no new number, and headers and metadata markers have neither.
+ */
+export interface PatchLine {
+    readonly raw: string;
+    readonly old: number | null;
+    readonly new: number | null;
+    /** An added or removed line used by the validator to accept an anchor. */
+    readonly changed: boolean;
+}
+
+/**
+ * Parsing a patch into numbered lines keeps hunk structure rules in one place.
+ * The payload also prints model-facing numbers from here, so displayed and accepted numbers agree.
+ */
+export function* walkPatch(patch: string): Generator<PatchLine> {
+    const lines = patch.split('\n');
+    let index = 0;
+    while (index < lines.length) {
+        const raw = lines[index] ?? '';
+        const header = HUNK_HEADER.exec(raw);
+        index += 1;
+        // Anything outside a hunk (`diff --git`, `--- a/…`, `+++ b/…`) has no numbers and does not advance them.
+        yield { raw, old: null, new: null, changed: false };
+        if (header === null) {
+            continue;
+        }
+
+        let oldLine = Number(header[1]);
+        let newLine = Number(header[3]);
+        // Header line counts limit the hunk body. Anything after them no longer advances line numbers.
+        let restOld = header[2] === undefined ? 1 : Number(header[2]);
+        let restNew = header[4] === undefined ? 1 : Number(header[4]);
+
+        while (index < lines.length && (restOld > 0 || restNew > 0)) {
+            const body = lines[index] ?? '';
+            // The hunk is truncated: the next header arrived before the declared lines ran out.
+            if (HUNK_HEADER.test(body) || body.startsWith('diff --git ')) {
+                break;
+            }
+            index += 1;
+
+            // `\ No newline at end of file` is a metadata marker and does not count as a line.
+            if (body.startsWith('\\ ')) {
+                yield { raw: body, old: null, new: null, changed: false };
+                continue;
+            }
+            const prefix = body.slice(0, 1);
+            if (prefix === '+') {
+                yield { raw: body, old: null, new: newLine, changed: true };
+                newLine += 1;
+                restNew -= 1;
+            } else if (prefix === '-') {
+                yield { raw: body, old: oldLine, new: null, changed: true };
+                oldLine += 1;
+                restOld -= 1;
+            } else {
+                // Context includes a space, an empty line (hosts trim trailing whitespace) and an unknown
+                // prefix. Anything other than `+`/`-` advances both sides, just as in the UI.
+                yield { raw: body, old: oldLine, new: newLine, changed: false };
+                oldLine += 1;
+                newLine += 1;
+                restOld -= 1;
+                restNew -= 1;
+            }
+        }
+    }
+}
+
 export function indexDiff(diff: PrDiff): DiffIndex {
     const files = new Map<string, ChangedFile>();
     for (const file of diff.files) {
@@ -51,50 +121,15 @@ function changedLines(patch: string | null): { old: Set<number>; new: Set<number
         return { old: oldLines, new: newLines };
     }
 
-    const lines = patch.split('\n');
-    let index = 0;
-    while (index < lines.length) {
-        const header = HUNK_HEADER.exec(lines[index] ?? '');
-        index += 1;
-        if (header === null) {
+    for (const line of walkPatch(patch)) {
+        if (!line.changed) {
             continue;
         }
-
-        let oldLine = Number(header[1]);
-        let newLine = Number(header[3]);
-        // Header line counts limit the hunk body. Anything after them no longer advances line numbers.
-        let restOld = header[2] === undefined ? 1 : Number(header[2]);
-        let restNew = header[4] === undefined ? 1 : Number(header[4]);
-
-        while (index < lines.length && (restOld > 0 || restNew > 0)) {
-            const raw = lines[index] ?? '';
-            // The hunk is truncated: the next header arrived before the declared lines ran out.
-            if (HUNK_HEADER.test(raw) || raw.startsWith('diff --git ')) {
-                break;
-            }
-            index += 1;
-
-            // `\ No newline at end of file` is a metadata marker and does not count as a line.
-            if (raw.startsWith('\\ ')) {
-                continue;
-            }
-            const prefix = raw.slice(0, 1);
-            if (prefix === '+') {
-                newLines.add(newLine);
-                newLine += 1;
-                restNew -= 1;
-            } else if (prefix === '-') {
-                oldLines.add(oldLine);
-                oldLine += 1;
-                restOld -= 1;
-            } else {
-                // Context includes a space, an empty line (hosts trim trailing whitespace) and an unknown
-                // prefix. Anything other than `+`/`-` advances both sides, just as in the UI.
-                oldLine += 1;
-                newLine += 1;
-                restOld -= 1;
-                restNew -= 1;
-            }
+        if (line.old !== null) {
+            oldLines.add(line.old);
+        }
+        if (line.new !== null) {
+            newLines.add(line.new);
         }
     }
 

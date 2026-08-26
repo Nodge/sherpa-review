@@ -39,6 +39,14 @@ export function databasePathFor(sherpaDir: string, prKey: string): string {
 }
 
 /**
+ * Generation task payload directory: context Markdown files and result schemas
+ * (rpc-design §4). Contains a subdirectory per route generation, with old ones cleaned up.
+ */
+export function payloadDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'payload');
+}
+
+/**
  * PR worker identity file: the server writes it at registration, and the CLI reads it because env does not
  * survive separate harness calls. The path must match `workerIdPathFor` in the CLI.
  */

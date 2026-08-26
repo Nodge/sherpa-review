@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import type { PrDiff, ReviewHost, RouteProvenance, UiRouteGenerateResponse, WorkerStatus } from '@sherpa/protocol';
+import type { PrDiff, PrMeta, ReviewHost, RouteProvenance, UiRouteGenerateResponse, WorkerStatus } from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
-import { sectionTaskInput, skeletonTaskInput } from './route-payload.js';
+import { RoutePayloadWriter } from './route-payload.js';
 import type { RouteStopStatusUpdate, RouteStore, RouteTaskBinding } from './route-store.js';
 import { validateSection, validateSkeleton } from './route/index.js';
 import type { WorkerRegistry } from './worker-registry.js';
@@ -61,6 +61,8 @@ export interface RouteOrchestratorOptions {
     readonly registry: WorkerRegistry;
     /** The PR's review host. With `null`, this server has nowhere to get a route from. */
     readonly host: ReviewHost | null;
+    /** Generation task payload directory (`payloadDirOf`). */
+    readonly payloadDir: string;
     readonly config?: Partial<RouteConfig>;
     /** Warmup delay after startup. Tests call warmup explicitly (`warmup`). */
     readonly warmupDelayMs?: number;
@@ -71,6 +73,7 @@ export class RouteOrchestrator {
     private readonly queue: TaskQueue;
     private readonly registry: WorkerRegistry;
     private readonly host: ReviewHost | null;
+    private readonly payload: RoutePayloadWriter;
     private readonly config: RouteConfig;
     private readonly warmupDelayMs: number;
 
@@ -80,6 +83,8 @@ export class RouteOrchestrator {
      */
     private diff: PrDiff | null = null;
     private diffLoad: Promise<PrDiff> | null = null;
+    /** PR metadata for the payload. `null` means the host did not provide it, so the route uses only the diff. */
+    private meta: PrMeta | null = null;
 
     private unsubscribeQueue: (() => void) | null = null;
     private unsubscribeWorker: (() => void) | null = null;
@@ -94,6 +99,7 @@ export class RouteOrchestrator {
         this.queue = options.queue;
         this.registry = options.registry;
         this.host = options.host;
+        this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir });
         this.config = resolveConfig(options.config);
         this.warmupDelayMs = options.warmupDelayMs ?? WARMUP_DELAY_MS;
     }
@@ -429,11 +435,20 @@ export class RouteOrchestrator {
         this.cancelOpenRouteTasks();
         this.store.clearBindings();
         this.store.beginSkeleton();
+        // The previous generation payload is no longer needed. Its tasks were just cancelled.
+        this.payload.beginGeneration();
         this.startSkeletonTask();
     }
 
     private startSkeletonTask(): void {
-        this.enqueueRouteTask('skeleton', [], skeletonTaskInput());
+        const diff = this.diff;
+        if (diff === null) {
+            // The server restarted during generation. There is no diff to build the payload from, so scheduling
+            // waits for it. Warmup finishes the work and calls reconciliation again at the end.
+            this.warmupInBackground();
+            return;
+        }
+        this.enqueueRouteTask('skeleton', [], this.payload.skeletonTask({ diff, meta: this.meta }));
     }
 
     /**
@@ -443,15 +458,23 @@ export class RouteOrchestrator {
      */
     private enqueueSections(planIndexes: readonly number[]): void {
         const snapshot = this.store.read().snapshot;
+        const diff = this.diff;
         if (snapshot === null) {
+            return;
+        }
+        if (diff === null) {
+            // As with the skeleton: no diff means no payload, so stops remain `queued` until warmup.
+            this.warmupInBackground();
             return;
         }
 
         const intents = this.store.stopIntents();
+        const context = { diff, meta: this.meta };
         const ordered = [...planIndexes].sort((left, right) => left - right);
         for (let from = 0; from < ordered.length; from += this.config.sectionBatchSize) {
             const batch = ordered.slice(from, from + this.config.sectionBatchSize);
-            this.enqueueRouteTask('section', batch, sectionTaskInput(batch, snapshot.stops, intents));
+            const input = this.payload.sectionTask(context, batch, snapshot.stops, intents);
+            this.enqueueRouteTask('section', batch, input);
         }
     }
 
@@ -542,7 +565,17 @@ export class RouteOrchestrator {
 
         this.diffLoad ??= (async () => {
             try {
-                return await host.getDiff();
+                // PR metadata enriches the payload (title, author, branches). Its failure must not break the route,
+                // so it is fetched alongside the diff and silently left `null` on failure.
+                const [diff, meta] = await Promise.all([
+                    host.getDiff(),
+                    host.getPr().then(
+                        (value) => value,
+                        () => null,
+                    ),
+                ]);
+                this.meta = meta;
+                return diff;
             } catch (error) {
                 // A failure must not persist for the whole process: the next call tries again.
                 this.diffLoad = null;
