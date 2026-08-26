@@ -19,6 +19,7 @@ const COMPLETION: ReviewCompletion = {
     hostName: 'FixtureHost',
     publishedComments: 2,
     publishedReplies: 1,
+    route: null,
     progress: {
         filesSeen: 16,
         filesTotal: 18,

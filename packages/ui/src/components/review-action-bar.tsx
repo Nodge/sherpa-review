@@ -35,6 +35,28 @@ const STICKY_DESCRIPTION =
     'The approval carries over to later pushes until a file in your ownership zone changes.';
 const PR_COMPOSER_KEY = 'new:pr';
 
+/**
+ * The route layer in the action bar (SPEC §2.19, README §13): the guardrail counts unviewed
+ * stops instead of files, and the review summary has route rows. `null` means no route, as in M1.
+ */
+export interface RouteProgress {
+    /** Route slots in render order, including Other. */
+    readonly stopIds: readonly string[];
+    readonly otherStopId: string | null;
+    /** Lines the model has not placed. `null` means the route view has not been opened yet. */
+    readonly uncoveredLines: number | null;
+    readonly viewed: ReadonlyMap<string, boolean>;
+}
+
+/** Route counts in the review summary, captured at publication time. */
+export interface ReviewCompletionRoute {
+    readonly stopsTotal: number;
+    readonly stopsViewed: number;
+    /** "Other" was read as a raw diff (README §13). */
+    readonly otherViewed: boolean;
+    readonly uncoveredLines: number | null;
+}
+
 export interface ReviewCompletion {
     readonly verdict: Verdict;
     readonly prId: string;
@@ -43,6 +65,7 @@ export interface ReviewCompletion {
     readonly publishedComments: number;
     readonly publishedReplies: number;
     readonly progress: ReviewProgressSummary;
+    readonly route: ReviewCompletionRoute | null;
     readonly openThreads: number;
     readonly firstOpenThreadId: string | null;
 }
@@ -54,6 +77,7 @@ export interface ReviewActionBarProps {
     readonly threadStore: ThreadStore;
     readonly connection: ConnectionState;
     readonly hostName: string;
+    readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
@@ -70,6 +94,7 @@ export function ReviewActionBar({
     threadStore,
     connection,
     hostName,
+    route = null,
     composerTransport,
     onPublish,
     onComplete,
@@ -110,6 +135,9 @@ export function ReviewActionBar({
     const drafts = countDraftComments(threadSnapshot.threads);
     const progress = reviewProgressSummary(diff.files, diffSnapshot.readState);
     const unviewed = progress.filesTotal - progress.filesSeen;
+    const routeCompletion = routeCompletionOf(route);
+    // A route exists, so the guardrail counts stops instead of files (SPEC §2.19).
+    const unviewedStops = routeCompletion === null ? 0 : routeCompletion.stopsTotal - routeCompletion.stopsViewed;
     const draggingSelection = diffSnapshot.selectionDragging;
     const retryDisabledReason = publishDisabledReason({
         connection,
@@ -212,6 +240,7 @@ export function ReviewActionBar({
                     publishedComments: publishedIds.length,
                     publishedReplies: countPublishedReplies(currentThreads, publishedIds),
                     progress: reviewProgressSummary(diff.files, diffStore.getSnapshot().readState),
+                    route: routeCompletion,
                     openThreads: discussion.open,
                     firstOpenThreadId: currentThreads.find((thread) => !thread.resolved)?.id ?? null,
                 });
@@ -231,6 +260,7 @@ export function ReviewActionBar({
             onPublish,
             pr.id,
             retryDisabledReason,
+            routeCompletion,
             setFailure,
             setMenuOpen,
             setPublishing,
@@ -410,11 +440,7 @@ export function ReviewActionBar({
                             }
                         }}
                     >
-                        {unviewed === 0 ? null : (
-                            <div className="review-action-menu__guard">
-                                {formatCount(unviewed)} {plural(unviewed, 'file not viewed', 'files not viewed', 'files not viewed')} — ship anyway?
-                            </div>
-                        )}
+                        <ShipGuard files={unviewed} stops={routeCompletion === null ? null : unviewedStops} />
                         <ShipOption
                             index={0}
                             cursor={cursor}
@@ -451,6 +477,41 @@ export function ReviewActionBar({
             ) : null}
         </div>
     );
+}
+
+/**
+ * The ship menu's informational guardrail reports without blocking (SPEC §2.19). With a ready
+ * route it counts stops. A file counter next to it would only confuse the reader.
+ */
+function ShipGuard({ files, stops }: { files: number; stops: number | null }) {
+    if (stops !== null) {
+        return stops === 0 ? null : (
+            <div className="review-action-menu__guard">
+                {formatCount(stops)}{' '}
+                {plural(stops, 'stop not viewed', 'stops not viewed', 'stops not viewed')} — ship
+                anyway?
+            </div>
+        );
+    }
+    return files === 0 ? null : (
+        <div className="review-action-menu__guard">
+            {formatCount(files)}{' '}
+            {plural(files, 'file not viewed', 'files not viewed', 'files not viewed')} — ship anyway?
+        </div>
+    );
+}
+
+/** Route state for the warning and summary, computed from actual marks, not the snapshot. */
+function routeCompletionOf(route: RouteProgress | null): ReviewCompletionRoute | null {
+    if (route === null || route.stopIds.length === 0) {
+        return null;
+    }
+    return {
+        stopsTotal: route.stopIds.length,
+        stopsViewed: route.stopIds.filter((stopId) => route.viewed.get(stopId) === true).length,
+        otherViewed: route.otherStopId !== null && route.viewed.get(route.otherStopId) === true,
+        uncoveredLines: route.uncoveredLines,
+    };
 }
 
 function ShipOption({

@@ -20,6 +20,12 @@ export interface StopCardProps {
     readonly comments: number;
     readonly viewed: boolean;
     readonly onViewed: (viewed: boolean) => void;
+    /** Stop files are still being parsed, so no ranges are available for a viewed mark. */
+    readonly pending?: boolean;
+    /** Value of the failed mark write. Shows "not saved · retry" beside the control. */
+    readonly failedViewed?: boolean | null;
+    /** The stop is highlighted by hovering over a coverage strip segment (SPEC §2.4). */
+    readonly marked?: boolean;
     /** "Kept in view — outside the current filter" label (SPEC §2.7). */
     readonly keptInView?: boolean;
     readonly onCopyLink: () => void;
@@ -36,6 +42,9 @@ export function StopCard({
     comments,
     viewed,
     onViewed,
+    pending = false,
+    failedViewed = null,
+    marked = false,
     keptInView = false,
     onCopyLink,
     copyHint = null,
@@ -48,7 +57,7 @@ export function StopCard({
 
     return (
         <section
-            className={`route-stop route-stop--${tier}${viewed ? ' is-viewed' : ''}`}
+            className={`route-stop route-stop--${tier}${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${stop.id}`}
             role="region"
             aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stop.title}`}
@@ -79,16 +88,7 @@ export function StopCard({
                             {formatCount(comments)}
                         </span>
                     )}
-                    <button
-                        type="button"
-                        className={`route-stop__viewed${viewed ? ' is-viewed' : ''}`}
-                        aria-pressed={viewed}
-                        onClick={() => {
-                            onViewed(!viewed);
-                        }}
-                    >
-                        {viewed ? '✓ Viewed' : 'Mark viewed'}
-                    </button>
+                    <StopViewedToggle viewed={viewed} pending={pending} failedViewed={failedViewed} onViewed={onViewed} />
                 </div>
 
                 <h2 className="route-stop__title">{stop.title}</h2>
@@ -126,6 +126,57 @@ export function StopCard({
                 {diff}
             </div>
         </section>
+    );
+}
+
+/**
+ * A stop's "viewed" mark (SPEC §2.10): a two-state control with `aria-pressed`,
+ * with an error on failed writes beside it and a retry of the exact same action.
+ *
+ * A stop cannot be marked until its ranges are computed. An empty set would go
+ * to the server, leaving files unread. A mark can always be cleared because ranges
+ * are not needed for that.
+ */
+export function StopViewedToggle({
+    viewed,
+    pending = false,
+    failedViewed,
+    onViewed,
+}: {
+    viewed: boolean;
+    pending?: boolean;
+    failedViewed: boolean | null;
+    onViewed: (viewed: boolean) => void;
+}) {
+    const disabled = pending && !viewed;
+    return (
+        <>
+            {failedViewed === null ? null : (
+                <span className="route-stop__viewed-error" role="status">
+                    not saved
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onViewed(failedViewed);
+                        }}
+                    >
+                        retry
+                    </button>
+                </span>
+            )}
+            <button
+                type="button"
+                className={`route-stop__viewed${viewed ? ' is-viewed' : ''}`}
+                aria-pressed={viewed}
+                disabled={disabled}
+                {...(disabled ? { title: 'Stop ranges are still being counted' } : {})}
+                onClick={() => {
+                    onViewed(!viewed);
+                }}
+            >
+                {viewed ? '✓ Viewed' : 'Mark viewed'}
+            </button>
+        </>
     );
 }
 

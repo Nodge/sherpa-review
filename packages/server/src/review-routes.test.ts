@@ -20,6 +20,7 @@ import {
     uiReviewWriteAckSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopViewedResponseSchema,
     uiReviewThreadsResponseSchema,
     uiStateSchema,
 } from '@sherpa/protocol';
@@ -600,6 +601,7 @@ describe('server review endpoints', () => {
     describe('reading progress', () => {
         async function readProgress(server: SherpaServer): Promise<{
             files: { fileId: string; viewed: boolean; seenRanges: unknown[] }[];
+            stops: { stopId: string; viewed: boolean }[];
             progressRevision: number;
         }> {
             const response = await get(server.port, UI_ENDPOINTS.reviewProgress, server.token);
@@ -611,10 +613,89 @@ describe('server review endpoints', () => {
             return postJson(server.port, UI_ENDPOINTS.reviewFileViewed, { fileId, viewed }, server.token);
         }
 
+        async function setStopViewed(
+            server: SherpaServer,
+            stopId: string,
+            viewed: boolean,
+            ranges: { fileId: string; side: 'old' | 'new'; start: number; end: number }[] = [],
+        ): Promise<Response> {
+            return postJson(server.port, UI_ENDPOINTS.reviewStopViewed, { stopId, viewed, ranges }, server.token);
+        }
+
         it('an empty PR has no records and revision zero', async () => {
             const server = await start(FIXTURE_PR);
 
-            expect(await readProgress(server)).toEqual({ files: [], progressRevision: 0 });
+            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
+        });
+
+        it('marking a stop writes its ranges and works without a review host', async () => {
+            const server = await start(UNKNOWN_PR);
+
+            const written = await setStopViewed(server, 's01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+                { fileId: 'file-2', side: 'old', start: 3, end: 3 },
+            ]);
+
+            expect(written.status).toBe(200);
+            expect(uiSetStopViewedResponseSchema.parse(await written.json()).progressRevision).toBe(1);
+            const progress = await readProgress(server);
+            expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
+            expect(progress.files).toEqual(
+                expect.arrayContaining([
+                    { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+                    { fileId: 'file-2', viewed: false, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
+                ]),
+            );
+        });
+
+        it('clearing a mark removes its stop ranges and leaves other stops unchanged', async () => {
+            const server = await start(UNKNOWN_PR);
+            await setStopViewed(server, 's01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
+            await setStopViewed(server, 's02', true, [{ fileId: 'file-1', side: 'new', start: 40, end: 41 }]);
+
+            // Ignore ranges in the clear request. Remove the stored ones.
+            expect((await setStopViewed(server, 's01', false, [{ fileId: 'file-1', side: 'new', start: 1, end: 2 }])).status).toBe(200);
+
+            const progress = await readProgress(server);
+            expect(progress.stops).toEqual([
+                { stopId: 's01', viewed: false },
+                { stopId: 's02', viewed: true },
+            ]);
+            expect(progress.files).toEqual([
+                { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+            ]);
+        });
+
+        it('a stop mark survives a server restart', async () => {
+            const first = await start(FIXTURE_PR);
+            await setStopViewed(first, 's01', true, [{ fileId: 'file-1', side: 'new', start: 5, end: 9 }]);
+            await first.close();
+            servers.splice(servers.indexOf(first), 1);
+
+            const restarted = await start(FIXTURE_PR);
+            const progress = await readProgress(restarted);
+
+            expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
+            expect(progress.files).toEqual([
+                { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 5, end: 9 }] },
+            ]);
+        });
+
+        it('marking a stop again with the same set does not advance the SSE revision', async () => {
+            const server = await start(UNKNOWN_PR);
+            const stream = await openEvents(server);
+            const ranges = [
+                { fileId: 'file-1', side: 'new' as const, start: 10, end: 14 },
+                { fileId: 'file-2', side: 'old' as const, start: 1, end: 2 },
+            ];
+
+            expect((await nextProgress(stream)).progressRevision).toBe(0);
+
+            await setStopViewed(server, 's01', true, ranges);
+            expect((await nextProgress(stream)).progressRevision).toBe(1);
+
+            await setStopViewed(server, 's01', true, [...ranges].reverse());
+            await expect(nextProgress(stream, 300)).rejects.toThrow(/timed out waiting for an SSE event/);
         });
 
         it('progress works without a review host', async () => {

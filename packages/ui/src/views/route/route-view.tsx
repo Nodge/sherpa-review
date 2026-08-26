@@ -4,9 +4,11 @@ import type {
     PrDiff,
     PrMeta,
     RouteSnapshot,
+    RouteTier,
     Thread,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiStopSeenRange,
 } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -42,19 +44,25 @@ import {
 import { createProgressWriter } from '../../progress/progress-writer.js';
 import type { ProgressWriter } from '../../progress/progress-writer.js';
 import { readStateOf } from '../../progress/read-state.js';
+import type { StopProgressStore } from '../../progress/stop-progress-store.js';
+import { createStopProgressStore } from '../../progress/stop-progress-store.js';
+import { buildCoverageStrip } from '../../route/coverage-model.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
 import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
+    entryPending,
     filterOtherView,
     lazyCards,
     otherMatchesFilter,
     stopMatchesFilter,
+    stopSeenRanges,
     threadsForGroup,
     uncoveredAsGroup,
 } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
+import { useShortcut } from '../../shortcuts/context.tsx';
 import { createThreadActions } from '../../threads/actions.js';
 import type { ComposerTransport } from '../../threads/composer.js';
 import { countThreadSources, threadIsVisible } from '../../threads/model.js';
@@ -63,6 +71,7 @@ import { openNewComposer, OutsideThreads } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
 import { formatCount, plural } from '../../text.js';
 import { commentPosition } from '../full-diff.tsx';
+import { CoverageStrip } from './coverage-strip.tsx';
 import { FileChips } from './file-chips.tsx';
 import { OtherCard } from './other-card.tsx';
 import { RouteToolbar } from './route-toolbar.tsx';
@@ -95,6 +104,7 @@ export interface RouteViewProps {
     readonly progress: UiReviewProgressResponse | null;
     readonly progressError: string | null;
     readonly progressWriter: ProgressWriter | null;
+    readonly stopProgress: StopProgressStore | null;
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
@@ -102,6 +112,16 @@ export interface RouteViewProps {
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     /** Uncovered fraction exceeds the threshold: App shows "consider regenerating" (SPEC §4.3). */
     readonly onUnderExplained?: (value: boolean) => void;
+    /** Expose route counts. Only the view computes them, and the action panel and review summary need them. */
+    readonly onRouteSummary?: (summary: RouteSummary) => void;
+}
+
+/** What the route view reports to the application: route slots and uncovered lines (README §13, SPEC §2.19). */
+export interface RouteSummary {
+    /** Stops in render order, including "Other" if present. */
+    readonly stopIds: readonly string[];
+    readonly otherStopId: string | null;
+    readonly uncoveredLines: number;
 }
 
 export function RouteView({
@@ -116,11 +136,13 @@ export function RouteView({
     progress,
     progressError,
     progressWriter,
+    stopProgress,
     store,
     threadStore,
     snapshot,
     navigation = null,
     onUnderExplained,
+    onRouteSummary,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
@@ -203,6 +225,7 @@ export function RouteView({
         diff === null ||
         lenses === null ||
         progressWriter === null ||
+        stopProgress === null ||
         store === null ||
         threadStore === null
     ) {
@@ -223,6 +246,7 @@ export function RouteView({
             store={store}
             threadStore={threadStore}
             progressWriter={progressWriter}
+            stopProgress={stopProgress}
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
@@ -230,6 +254,7 @@ export function RouteView({
             onResolveThread={resolveThread}
             navigation={target}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
+            {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
         />
     );
 }
@@ -242,9 +267,17 @@ export interface RouteWorkspaceProps {
     readonly session: SessionStore;
     readonly store: DiffViewStore;
     readonly threadStore: ThreadStore;
-    /** The app creates the writer one level up. In the gallery, the workspace builds it itself. */
+    /** The app creates the writer and viewed store one level up. The gallery's workspace creates its own. */
     readonly progressWriter?: ProgressWriter;
+    readonly stopProgress?: StopProgressStore;
+    /** Initial stop marks for the gallery and tests (the server supplies them in the app). */
+    readonly initialStopViewed?: readonly string[];
     readonly onSetViewed?: (fileId: string, viewed: boolean) => Promise<number>;
+    readonly onSetStopViewed?: (
+        stopId: string,
+        viewed: boolean,
+        ranges: readonly UiStopSeenRange[],
+    ) => Promise<number>;
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly onOpenInEditor: (path: string) => Promise<Feedback>;
@@ -254,13 +287,9 @@ export interface RouteWorkspaceProps {
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     readonly onUnderExplained?: (value: boolean) => void;
+    readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
-    /**
-     * The stop mark is already applied to the session. This is the hook for writing seen ranges
-     * to progress (M2-T7). In M2-T6 the mark stays visual only.
-     */
-    readonly onStopViewed?: (stopId: string, viewed: boolean) => void;
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
@@ -276,9 +305,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         loadContent,
         onOpenInEditor,
         onSetViewed = EMPTY_SET_VIEWED,
+        onSetStopViewed = EMPTY_SET_STOP_VIEWED,
         navigation = null,
         onUnderExplained,
-        onStopViewed,
+        onRouteSummary,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.
@@ -302,6 +332,21 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [resolveThread, threadStore, threadTransport],
     );
 
+    const initialStopViewed = props.initialStopViewed;
+    const createdStopProgress = useMemo(
+        () =>
+            createStopProgressStore(
+                (initialStopViewed ?? []).map((stopId) => ({ stopId, viewed: true })),
+            ),
+        [initialStopViewed],
+    );
+    const stopProgress = props.stopProgress ?? createdStopProgress;
+    const stopViewed = useSyncExternalStore(
+        stopProgress.subscribe,
+        stopProgress.getSnapshot,
+        stopProgress.getSnapshot,
+    );
+
     const createdWriter = useMemo(
         () =>
             createProgressWriter({
@@ -310,10 +355,16 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 apply: store.markViewed,
                 restore: store.restoreProgress,
                 send: onSetViewed,
+                stops: {
+                    read: (stopId) => stopProgress.getSnapshot().get(stopId) ?? null,
+                    apply: stopProgress.setViewed,
+                    restore: stopProgress.restore,
+                    send: onSetStopViewed,
+                },
                 // App handles progress refreshes over SSE. A standalone workspace (gallery) does not.
                 onSettled: () => undefined,
             }),
-        [onSetViewed, store],
+        [onSetStopViewed, onSetViewed, stopProgress, store],
     );
     const writer = props.progressWriter ?? createdWriter;
     const markViewed = useCallback(
@@ -340,6 +391,29 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         () => buildRouteModel({ snapshot, files: diff.files, models: diffSnapshot.models, failed: failedFiles }),
         [diff.files, diffSnapshot.models, failedFiles, snapshot],
     );
+    const entryId = (entry: RouteEntry): string => entry.view.stop.id;
+    const stopIdsKey = useMemo(() => model.entries.map(entryId).join(' '), [model.entries]);
+    const otherStopId = useMemo(
+        () => model.entries.find((entry) => entry.kind === 'other')?.view.stop.id ?? null,
+        [model.entries],
+    );
+    const uncoveredLines = model.totals.uncovered;
+    // While any file remains unparsed, uncovered ranges are unknown. The bar and exposed counts
+    // wait for parsing, or the guardrail and review summary would record a temporary "100% explained".
+    const settled = model.totals.pendingFiles === 0;
+    // The action bar and review summary need route counts, which can only be calculated here:
+    // uncovered lines are known only from parsed diff models.
+    useEffect(() => {
+        if (!settled) {
+            return;
+        }
+        onRouteSummary?.({
+            stopIds: stopIdsKey === '' ? [] : stopIdsKey.split(' '),
+            otherStopId,
+            uncoveredLines,
+        });
+    }, [onRouteSummary, otherStopId, settled, stopIdsKey, uncoveredLines]);
+
     const underExplained = model.promoted;
     useEffect(() => {
         onUnderExplained?.(underExplained);
@@ -416,7 +490,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const [otherOpen, setOtherOpen] = useState(false);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-    const entryId = (entry: RouteEntry): string => entry.view.stop.id;
     const matches = useCallback(
         (entry: RouteEntry, ids: ReadonlySet<string> | null): boolean =>
             entry.kind === 'stop' ? stopMatchesFilter(entry.view, ids) : otherMatchesFilter(entry.view, ids),
@@ -471,17 +544,25 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         jump.current = { id: jumpCounter.current, stopId, fileId };
         setJumpTick(jumpCounter.current);
     }, []);
-    const openFile = useCallback(
-        (stopId: string, fileId: string) => {
-            // Expand a collapsed stop before scrolling to it (SPEC §2.11).
-            if (stopState.viewed.has(stopId)) {
+    /** Expand a stop regardless of why it collapsed: by hand, by tier or by a viewed mark. */
+    const expandStop = useCallback(
+        (stopId: string) => {
+            session.setStopCollapsed(stopId, false);
+            if (stopProgress.isViewed(stopId)) {
                 session.setViewedStopExpanded(stopId, true);
             } else {
                 session.setStopExpanded(stopId, true);
             }
+        },
+        [session, stopProgress],
+    );
+    const openFile = useCallback(
+        (stopId: string, fileId: string) => {
+            // Expand a collapsed stop before scrolling to it (SPEC §2.11).
+            expandStop(stopId);
             requestJump(stopId, fileId);
         },
-        [requestJump, session, stopState.viewed],
+        [expandStop, requestJump],
     );
 
     // Correction and flashing survive rerenders. Only the next jump or leaving the view cancels them.
@@ -536,7 +617,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 }, JUMP_DURATION + SETTLE_TAIL),
             ],
         };
-    }, [jumpTick, shown, diffSnapshot.models, stopJump, stopState]);
+        // `stopViewed` is a dependency because expanding a marked stop changes
+        // the markup, and the jump target appears only after expansion.
+    }, [jumpTick, shown, diffSnapshot.models, stopJump, stopState, stopViewed]);
 
     // Filter changes need the top stop even before the first scroll (SPEC §2.7).
     useEffect(() => {
@@ -556,6 +639,161 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         }
         requestJump(navigation.stopId, null);
     }, [filter.fileIds, matches, model.entries, navigation, requestJump, session]);
+
+    /** Jump to a stop from the coverage bar. Restore it on screen first if a filter hides it. */
+    const jumpToStop = useCallback(
+        (stopId: string) => {
+            const entry = model.entries.find((candidate) => entryId(candidate) === stopId) ?? null;
+            if (entry !== null && !matches(entry, filter.fileIds)) {
+                session.setFilter(ALL_FILTER_ID);
+            }
+            requestJump(stopId, null);
+        },
+        [filter.fileIds, matches, model.entries, requestJump, session],
+    );
+
+    // --- A stop's "viewed" mark (SPEC §2.10, requirements §3.1) ---
+
+    const [stopFailures, setStopFailures] = useState<ReadonlyMap<string, boolean>>(EMPTY_FAILURES);
+    const [announcement, setAnnouncement] = useState('');
+    const viewedStops = useMemo(
+        () => model.entries.filter((entry) => stopViewed.get(entryId(entry)) === true).length,
+        [model.entries, stopViewed],
+    );
+
+    const markStop = useCallback(
+        async (stopId: string, viewed: boolean): Promise<void> => {
+            const entry = model.entries.find((candidate) => entryId(candidate) === stopId) ?? null;
+            if (entry === null) {
+                return;
+            }
+            // A mark writes seen ranges, which can only be counted from parsed models:
+            // before parsing, the mark would reach the server with an empty set and would not be rewritten later.
+            // Clearing a mark needs no ranges, so always allow it.
+            if (viewed && entryPending(entry, model.totals)) {
+                return;
+            }
+            if (!viewed) {
+                // A viewed card's temporary expansion lasts only while the mark is set.
+                session.forgetViewedExpansion(stopId);
+            }
+            setStopFailures((previous) => {
+                if (!previous.has(stopId)) {
+                    return previous;
+                }
+                const next = new Map(previous);
+                next.delete(stopId);
+                return next;
+            });
+
+            // The UI calculates ranges: the server has no diff model (decision log, 2026-08-26).
+            const written = writer.writeStop(stopId, viewed, viewed ? stopSeenRanges(entry) : []);
+            // The mark is already applied optimistically, so announce what the reviewer sees on screen.
+            const snapshot = stopProgress.getSnapshot();
+            const count = model.entries.filter((candidate) => snapshot.get(entryId(candidate)) === true).length;
+            setAnnouncement(
+                `Stop ${entry.view.planLabel} ${viewed ? 'marked' : 'unmarked'}, ${String(count)} of ${String(model.stopCount)}`,
+            );
+            if (!(await written)) {
+                setStopFailures((previous) => new Map(previous).set(stopId, viewed));
+            }
+        },
+        [model.entries, model.stopCount, model.totals, session, stopProgress, writer],
+    );
+
+    /** Whether the stop is collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
+    const collapsedOf = useCallback(
+        (view: RouteStopView): boolean => {
+            const id = view.stop.id;
+            if (stopViewed.get(id) === true) {
+                return !stopState.expandedViewed.has(id);
+            }
+            return stopState.collapsed.has(id) || (view.stop.tier === 'low' && !stopState.expanded.has(id));
+        },
+        [stopState, stopViewed],
+    );
+    const toggleCollapse = useCallback(
+        (entry: RouteEntry) => {
+            const stopId = entryId(entry);
+            if (entry.kind === 'other') {
+                setOtherOpen((open) => !open);
+                return;
+            }
+            if (!collapsedOf(entry.view)) {
+                if (stopViewed.get(stopId) === true) {
+                    session.setViewedStopExpanded(stopId, false);
+                } else if (entry.view.stop.tier === 'low') {
+                    session.setStopExpanded(stopId, false);
+                } else {
+                    session.setStopCollapsed(stopId, true);
+                }
+                return;
+            }
+            expandStop(stopId);
+        },
+        [collapsedOf, expandStop, session, stopViewed],
+    );
+
+    /** The focused stop contains the focused element: its section has `data-stop` (SPEC §5). */
+    const focusedEntry = useCallback((): RouteEntry | null => {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        const active = document.activeElement;
+        const stopId = active instanceof Element ? (active.closest<HTMLElement>('[data-stop]')?.dataset.stop ?? null) : null;
+        return stopId === null ? null : (shown.find((entry) => entryId(entry) === stopId) ?? null);
+    }, [shown]);
+
+    /** A stop can be marked only once its ranges are counted. Clearing a mark is always allowed. */
+    const canToggleViewed = useCallback(
+        (entry: RouteEntry): boolean =>
+            stopProgress.isViewed(entryId(entry)) || !entryPending(entry, model.totals),
+        [model.totals, stopProgress],
+    );
+    useShortcut({
+        id: 'route.toggleStopViewed',
+        keys: ['v'],
+        label: 'Mark the stop viewed',
+        when: () => {
+            const entry = focusedEntry();
+            return entry !== null && canToggleViewed(entry);
+        },
+        action: () => {
+            const entry = focusedEntry();
+            if (entry !== null) {
+                void markStop(entryId(entry), !stopProgress.isViewed(entryId(entry)));
+            }
+        },
+    });
+    useShortcut({
+        id: 'route.toggleStopCollapse',
+        keys: ['x'],
+        label: 'Collapse or expand the stop',
+        when: () => focusedEntry() !== null,
+        action: () => {
+            const entry = focusedEntry();
+            if (entry !== null) {
+                toggleCollapse(entry);
+            }
+        },
+    });
+
+    // --- Coverage strip (SPEC §2.4) ---
+
+    const coverage = useMemo(
+        () => buildCoverageStrip({ totals: model.totals, entries: model.entries }),
+        [model.entries, model.totals],
+    );
+    const [hoverTier, setHoverTier] = useState<RouteTier | null>(null);
+    const markedStops = useMemo<ReadonlySet<string>>(
+        () =>
+            new Set(
+                hoverTier === null
+                    ? []
+                    : (coverage.segments.find((segment) => segment.tier === hoverTier)?.stopIds ?? []),
+            ),
+        [coverage.segments, hoverTier],
+    );
 
     const threadVisible = useCallback((thread: Thread) => threadIsVisible(thread, threadsShow), [threadsShow]);
     const visibleThreads = useCallback(
@@ -729,6 +967,20 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 threadsShow={threadsShow}
                 threadCounts={countThreadSources(threadSnapshot.threads)}
                 onThreadsShow={session.setThreadsShow}
+                strip={
+                    <CoverageStrip
+                        model={settled ? coverage : null}
+                        loading={{
+                            kind: 'diff',
+                            ready: diff.files.length - model.totals.pendingFiles,
+                            total: diff.files.length,
+                        }}
+                        viewedStops={viewedStops}
+                        totalStops={model.stopCount}
+                        onJump={jumpToStop}
+                        onHoverTier={setHoverTier}
+                    />
+                }
             />
 
             <div className="route__stops">
@@ -756,9 +1008,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             comments={countStopComments(entry.view, visibleByFile)}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
-                            viewed={stopState.viewed.has(entry.view.stop.id)}
-                            expanded={stopState.expanded.has(entry.view.stop.id)}
-                            expandedViewed={stopState.expandedViewed.has(entry.view.stop.id)}
+                            viewed={stopViewed.get(entry.view.stop.id) === true}
+                            pending={entry.view.pending}
+                            collapsed={collapsedOf(entry.view)}
+                            collapsedManually={stopState.collapsed.has(entry.view.stop.id)}
+                            marked={markedStops.has(entry.view.stop.id)}
+                            failedViewed={stopFailures.get(entry.view.stop.id) ?? null}
                             flash={flashStopId === entry.view.stop.id}
                             copyHint={copyHint?.stopId === entry.view.stop.id ? copyHint.text : null}
                             readStateOf={(fileId) =>
@@ -769,14 +1024,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                                 })
                             }
                             onViewed={(value) => {
-                                session.setStopViewed(entry.view.stop.id, value);
-                                onStopViewed?.(entry.view.stop.id, value);
+                                void markStop(entry.view.stop.id, value);
                             }}
                             onExpand={() => {
-                                session.setStopExpanded(entry.view.stop.id, true);
-                            }}
-                            onExpandViewed={() => {
-                                session.setViewedStopExpanded(entry.view.stop.id, true);
+                                expandStop(entry.view.stop.id);
                             }}
                             onOpenFile={openFile}
                             onCopyLink={() => {
@@ -798,6 +1049,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             opened={otherOpen}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
+                            viewed={stopViewed.get(entry.view.stop.id) === true}
+                            marked={markedStops.has(entry.view.stop.id)}
+                            failedViewed={stopFailures.get(entry.view.stop.id) ?? null}
+                            onViewed={(value) => {
+                                void markStop(entry.view.stop.id, value);
+                            }}
                             onOpen={() => {
                                 setOtherOpen((open) => !open);
                             }}
@@ -809,6 +1066,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 {/* Threads outside the diff are the same as in the full diff. They share one list per PR. */}
                 <OutsideThreads threads={outsideThreads} store={threadStore} actions={threadActions} now={threadNow} />
             </div>
+
+            <span className="visually-hidden" role="status" aria-live="polite">
+                {announcement}
+            </span>
         </main>
     );
 }
@@ -821,14 +1082,20 @@ interface StopSectionProps {
     readonly fileIds: ReadonlySet<string> | null;
     readonly keptInView: boolean;
     readonly viewed: boolean;
-    readonly expanded: boolean;
-    readonly expandedViewed: boolean;
+    /** Stop files are still being parsed, so mark ranges cannot be computed yet. */
+    readonly pending: boolean;
+    /** Collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
+    readonly collapsed: boolean;
+    readonly collapsedManually: boolean;
+    /** The stop is highlighted by hovering over a coverage strip segment (SPEC §2.4). */
+    readonly marked: boolean;
+    /** Value of the failed mark write. `null` means no write has failed. */
+    readonly failedViewed: boolean | null;
     readonly flash: boolean;
     readonly copyHint: string | null;
     readonly readStateOf: (fileId: string) => ReturnType<typeof readStateOf>;
     readonly onViewed: (viewed: boolean) => void;
     readonly onExpand: () => void;
-    readonly onExpandViewed: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
     readonly onCopyLink: () => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
@@ -842,14 +1109,16 @@ function StopSection({
     fileIds,
     keptInView,
     viewed,
-    expanded,
-    expandedViewed,
+    pending,
+    collapsed,
+    collapsedManually,
+    marked,
+    failedViewed,
     flash,
     copyHint,
     readStateOf: readState,
     onViewed,
     onExpand,
-    onExpandViewed,
     onOpenFile,
     onCopyLink,
     onVisible,
@@ -869,7 +1138,6 @@ function StopSection({
     }, [ids, onScreen, onVisible]);
 
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
-    const collapsed = viewed ? !expandedViewed : view.stop.tier === 'low' && !expanded;
     const cards = onScreen ? files : lazyCards(files);
 
     const diff = view.drift ? (
@@ -884,9 +1152,14 @@ function StopSection({
         />
     ) : collapsed ? (
         viewed ? (
-            <ViewedSummary lines={lines} files={files.length} onExpand={onExpandViewed} />
+            <ViewedSummary lines={lines} files={files.length} onExpand={onExpand} />
         ) : (
-            <CollapsedStop lines={lines} files={files.length} reason="low tier" onExpand={onExpand} />
+            <CollapsedStop
+                lines={lines}
+                files={files.length}
+                reason={collapsedManually ? 'collapsed by hand' : 'low tier'}
+                onExpand={onExpand}
+            />
         )
     ) : (
         <>
@@ -909,7 +1182,10 @@ function StopSection({
                 stopCount={stopCount}
                 comments={comments}
                 viewed={viewed}
+                pending={pending}
                 onViewed={onViewed}
+                failedViewed={failedViewed}
+                marked={marked}
                 keptInView={keptInView}
                 onCopyLink={onCopyLink}
                 copyHint={copyHint}
@@ -938,6 +1214,10 @@ function OtherSection({
     opened,
     fileIds,
     keptInView,
+    viewed,
+    marked,
+    failedViewed,
+    onViewed,
     onOpen,
     renderCard,
 }: {
@@ -950,6 +1230,10 @@ function OtherSection({
     /** null means show all uncovered ranges (no filter or the card is kept in view). */
     fileIds: ReadonlySet<string> | null;
     keptInView: boolean;
+    viewed: boolean;
+    marked: boolean;
+    failedViewed: boolean | null;
+    onViewed: (viewed: boolean) => void;
     onOpen: () => void;
     renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
 }) {
@@ -967,6 +1251,10 @@ function OtherSection({
                 failedFiles={failedFiles}
                 onRetryFailed={onRetryFailed}
                 keptInView={keptInView}
+                viewed={viewed}
+                marked={marked}
+                failedViewed={failedViewed}
+                onViewed={onViewed}
                 opened={opened}
                 onOpen={onOpen}
                 diff={groups.map((group) => renderCard(view.stop.id, group))}
@@ -1013,3 +1301,6 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
 };
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
+const EMPTY_SET_STOP_VIEWED = (): Promise<number> =>
+    Promise.reject(new Error('stop marking is unavailable in this state'));
+const EMPTY_FAILURES: ReadonlyMap<string, boolean> = new Map();

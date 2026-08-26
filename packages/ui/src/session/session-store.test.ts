@@ -101,26 +101,35 @@ describe('session store', () => {
         expect(store.getSnapshot()).toMatchObject({ view: 'diff', filter: 'all', paletteOpen: true });
     });
 
-    it('marking a stop preserves its previous expansion and temporary expansion lasts only while marked', () => {
+    it('preserves previous expansion when clearing a stop mark but removes temporary expansion', () => {
         const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
 
         store.setStopExpanded('s05', true);
-        store.setStopViewed('s05', true);
         store.setViewedStopExpanded('s05', true);
 
         expect(store.getSnapshot().stops).toEqual({
-            viewed: new Set(['s05']),
             expanded: new Set(['s05']),
             expandedViewed: new Set(['s05']),
+            collapsed: new Set(),
         });
 
-        store.setStopViewed('s05', false);
+        store.forgetViewedExpansion('s05');
 
         expect(store.getSnapshot().stops).toEqual({
-            viewed: new Set(),
             expanded: new Set(['s05']),
             expandedViewed: new Set(),
+            collapsed: new Set(),
         });
+    });
+
+    it('keeps manual stop collapse separate from expansions', () => {
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+
+        store.setStopCollapsed('s01', true);
+        expect(store.getSnapshot().stops.collapsed).toEqual(new Set(['s01']));
+
+        store.setStopCollapsed('s01', false);
+        expect(store.getSnapshot().stops.collapsed).toEqual(new Set());
     });
 
     it('thread filters change in a single session write', () => {

@@ -65,10 +65,108 @@
     max-width: 1560px;
 }
 
-/* Space for the coverage strip (M2-T7): toolbar geometry stays fixed when the strip appears. */
+/* --- Coverage strip (SPEC §2.4, README §1) --- */
+
 .route-toolbar__strip {
-    height: 7px;
     margin-top: 11px;
+    max-width: 1560px;
+}
+
+.coverage__track {
+    display: flex;
+    gap: 1px;
+    height: 7px;
+    border-radius: var(--radius-key);
+    background: var(--surface-raised);
+    overflow: hidden;
+}
+
+.coverage__segment {
+    padding: 0;
+    border: 0;
+    background: var(--tier-low);
+    cursor: pointer;
+    transition: filter var(--motion-hover) var(--motion-hover-ease);
+}
+
+.coverage__segment:hover,
+.coverage__segment:focus-visible {
+    /* "One step lighter": each segment keeps its own hue (SPEC §2.4). */
+    filter: brightness(1.28);
+}
+
+.coverage__segment:disabled {
+    cursor: default;
+}
+
+.coverage__segment--high {
+    background: var(--attention);
+}
+
+.coverage__segment--medium {
+    background: var(--tier-medium);
+}
+
+.coverage__segment--low {
+    background: var(--tier-low);
+}
+
+.coverage__segment--other {
+    background: var(--hatch);
+}
+
+.coverage__shimmer {
+    background: var(--tier-medium);
+    animation: coverage-shimmer var(--motion-shimmer) ease-in-out infinite;
+}
+
+.coverage__rest {
+    background: var(--surface-raised);
+}
+
+@keyframes coverage-shimmer {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+}
+
+.coverage__legend {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-inner);
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+}
+
+.coverage__spacer {
+    flex: 1;
+}
+
+.coverage__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong-lifted);
+    cursor: pointer;
+}
+
+.coverage__link:hover {
+    color: var(--text-primary-soft);
+}
+
+.coverage__stops {
+    flex: none;
+    white-space: nowrap;
 }
 
 .route-toolbar__hint {
@@ -130,8 +228,18 @@
 
 .route-stop__side {
     position: sticky;
-    top: 86px;
+    /* Below the sticky toolbar: its height is 2 rows, the second is the coverage strip (99px). */
+    top: 99px;
     align-self: start;
+    /* Reserve space for the accent rule on bar segment hover so it does not shift the layout. */
+    padding-left: var(--space-inner);
+    margin-left: calc(-1 * var(--space-inner));
+    border-left: 2px solid transparent;
+}
+
+/* Hovering over a coverage strip segment highlights stops of its tier (SPEC §2.4). */
+.route-stop.is-marked .route-stop__side {
+    border-left-color: var(--accent);
 }
 
 .route-stop.is-viewed .route-stop__side {
@@ -247,14 +355,40 @@
     cursor: pointer;
 }
 
-.route-stop__viewed:hover {
+.route-stop__viewed:hover:not(:disabled) {
     background: var(--surface-popover);
+}
+
+/* Stop ranges are still being counted, so it cannot be marked yet. */
+.route-stop__viewed:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .route-stop__viewed.is-viewed {
     border-color: var(--viewed-border);
     background: var(--viewed-surface);
     color: var(--diff-add-text-strong);
+}
+
+/* Failed mark write: an error with a retry beside the control (SPEC §2.10). */
+.route-stop__viewed-error {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 6px;
+    font-size: var(--font-size-secondary);
+    color: var(--error-text);
+    white-space: nowrap;
+}
+
+.route-stop__viewed-error button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent-hover);
+    cursor: pointer;
 }
 
 .route-stop__title {

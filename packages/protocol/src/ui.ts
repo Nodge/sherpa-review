@@ -190,10 +190,10 @@ export type UiRouteGenerateResponse = z.infer<typeof uiRouteGenerateResponseSche
  * an explicit removal (unpin the generated default or undo a manual mark). A missing
  * record means the default state, interpreted by the UI (generated → `read`).
  *
- * Seen ranges prepare for M2 stops: line ranges covered by manually
- * marked stops. Always empty in M1 (there is no endpoint for range writes).
- * The UI calculates tri-state (`unread`/`partial`/`read`) and "N of M lines seen" tooltips
- * from these data and its own diff model. The server does not interpret patches.
+ * Seen ranges are line ranges covered by manually marked stops
+ * (written by `reviewStopViewed`). The UI derives tri-state (`unread`/`partial`/`read`) and
+ * "N of M lines seen" tooltips from these data and its own diff model.
+ * The server does not interpret patches.
  */
 export const uiSeenRangeSchema = z.object({
     /** Line numbering side: added lines use `new`, removed lines use `old`. */
@@ -211,8 +211,16 @@ export const uiFileProgressSchema = z.object({
 });
 export type UiFileProgress = z.infer<typeof uiFileProgressSchema>;
 
+/** A route stop's "viewed" mark persists per PR (README State model). */
+export const uiStopProgressSchema = z.object({
+    stopId: z.string().min(1),
+    viewed: z.boolean(),
+});
+export type UiStopProgress = z.infer<typeof uiStopProgressSchema>;
+
 export const uiReviewProgressResponseSchema = z.object({
     files: z.array(uiFileProgressSchema),
+    stops: z.array(uiStopProgressSchema),
     progressRevision: z.number().int().min(0),
 });
 export type UiReviewProgressResponse = z.infer<typeof uiReviewProgressResponseSchema>;
@@ -232,6 +240,32 @@ export const uiSetFileViewedResponseSchema = z.object({
     progressRevision: z.number().int().min(0),
 });
 export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSchema>;
+
+/**
+ * A route stop's "viewed" mark (M2-T7, requirements §3.1). Writes the stop mark
+ * and its files' seen ranges in one transaction. The UI calculates ranges from its diff
+ * model (anchors clipped to the actual diff, uncovered lines for "Other",
+ * which the server cannot calculate without a diff model). The server stores them bound to the stop
+ * without interpreting them. Clearing the mark removes only this stop's ranges and leaves
+ * other stops' ranges and manual file marks untouched (SPEC §2.10).
+ * Stop marks are not mirrored to the host: `fileViewedSync` still handles explicit
+ * file marks.
+ */
+export const uiStopSeenRangeSchema = uiSeenRangeSchema.extend({ fileId: hostIdSchema });
+export type UiStopSeenRange = z.infer<typeof uiStopSeenRangeSchema>;
+
+export const uiSetStopViewedRequestSchema = z.object({
+    stopId: z.string().min(1),
+    viewed: z.boolean(),
+    /** Ignored when `viewed: false`: clearing the mark removes the stop's stored ranges. */
+    ranges: z.array(uiStopSeenRangeSchema),
+});
+export type UiSetStopViewedRequest = z.infer<typeof uiSetStopViewedRequestSchema>;
+
+export const uiSetStopViewedResponseSchema = z.object({
+    progressRevision: z.number().int().min(0),
+});
+export type UiSetStopViewedResponse = z.infer<typeof uiSetStopViewedResponseSchema>;
 
 /**
  * Comment writes (M1-T13, the brief two-stage model): a draft is saved
@@ -336,6 +370,8 @@ export const UI_ENDPOINTS = {
     reviewProgress: '/api/ui/review/progress',
     /** POST `uiSetFileViewedRequestSchema` → `uiSetFileViewedResponseSchema`. */
     reviewFileViewed: '/api/ui/review/file-viewed',
+    /** POST `uiSetStopViewedRequestSchema` → `uiSetStopViewedResponseSchema`. Available without a review host too. */
+    reviewStopViewed: '/api/ui/review/stop-viewed',
     /** POST `uiSaveDraftRequestSchema` → `uiSaveDraftResponseSchema`. */
     reviewSaveDraft: '/api/ui/review/draft',
     /** POST `uiUpdateDraftRequestSchema` → `uiReviewWriteAckSchema`. */

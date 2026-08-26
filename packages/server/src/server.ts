@@ -198,6 +198,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             registry: workerRegistry,
             host: reviewHost?.host ?? null,
             payloadDir: payloadDirOf(sherpaDir, prKey),
+            progress,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
         queue.setResultAcceptor((task, result) => routeOrchestrator.acceptResult(task, result));

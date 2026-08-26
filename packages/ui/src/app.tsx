@@ -22,6 +22,7 @@ import {
     publishReview,
     saveReviewDraft,
     setFileViewed,
+    setStopViewed,
     updateReviewDraft,
 } from './api.js';
 import { agentPillView } from './components/agent-pill-view.js';
@@ -49,6 +50,7 @@ import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } fr
 import { breadcrumbFromPrKey } from './pr-key.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
+import { createStopProgressStore } from './progress/stop-progress-store.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import type { Store } from './store.js';
@@ -59,6 +61,7 @@ import { UI_VERSION } from './version.js';
 import { FullDiffView } from './views/full-diff.tsx';
 import { RegenerateBanner } from './views/route/other-card.tsx';
 import { RouteCommands } from './views/route/route-commands.tsx';
+import type { RouteSummary } from './views/route/route-view.tsx';
 import { RouteView } from './views/route/route-view.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
 
@@ -67,6 +70,16 @@ export interface AppProps {
     readonly store: Store;
     readonly session: SessionStore;
     readonly token: string;
+}
+
+/**
+ * What the application knows about the route beyond its snapshot. `uncoveredLines: null` means the route view
+ * has not been opened in this session, so nothing has calculated uncovered lines yet.
+ */
+interface RouteFacts {
+    readonly stopIds: readonly string[];
+    readonly otherStopId: string | null;
+    readonly uncoveredLines: number | null;
 }
 
 interface ReviewState {
@@ -111,6 +124,16 @@ export function App({ store, session, token }: AppProps) {
         [currentDiff],
     );
     const [progressWritesSettled, setProgressWritesSettled] = useState(0);
+    // Stop marks live alongside file marks. They share a progress revision and one writer.
+    // A different PR or host means a different route. Previous marks do not apply.
+    const [stopProgressState, setStopProgressState] = useState(() => ({
+        key: reviewKey,
+        store: createStopProgressStore(),
+    }));
+    if (stopProgressState.key !== reviewKey) {
+        setStopProgressState({ key: reviewKey, store: createStopProgressStore() });
+    }
+    const stopProgress = stopProgressState.store;
     const progressWriter = useMemo<ProgressWriter | null>(
         () =>
             diffStore === null
@@ -121,11 +144,18 @@ export function App({ store, session, token }: AppProps) {
                       apply: diffStore.markViewed,
                       restore: diffStore.restoreProgress,
                       send: async (fileId, viewed) => (await setFileViewed(token, fileId, viewed)).progressRevision,
+                      stops: {
+                          read: (stopId) => stopProgress.getSnapshot().get(stopId) ?? null,
+                          apply: stopProgress.setViewed,
+                          restore: stopProgress.restore,
+                          send: async (stopId, viewed, ranges) =>
+                              (await setStopViewed(token, stopId, viewed, ranges)).progressRevision,
+                      },
                       onSettled: () => {
                           setProgressWritesSettled((settled) => settled + 1);
                       },
                   }),
-        [diffStore, token],
+        [diffStore, stopProgress, token],
     );
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [paletteNavigation, setPaletteNavigation] = useState<PaletteNavigation | null>(null);
@@ -135,6 +165,11 @@ export function App({ store, session, token }: AppProps) {
     const routeNavigationId = useRef(0);
     /** The route explains less than half the diff. The notification slot shows the banner (SPEC §4.3). */
     const [routeUnderExplained, setRouteUnderExplained] = useState(false);
+    /**
+     * Route counts from the view: only it knows them (uncovered lines are counted from parsed models).
+     * The view keeps them when unmounting because the action bar and review summary also appear in the full diff.
+     */
+    const [routeSummaryState, setRouteSummaryState] = useState<{ key: string; value: RouteSummary } | null>(null);
     // Every session.setView call, including reselecting the current tab, clears Review complete.
     const [completionState, setCompletionState] = useState<{
         key: string;
@@ -273,13 +308,16 @@ export function App({ store, session, token }: AppProps) {
                 if (!alive) {
                     return;
                 }
-                const files = progressWriter.finishReload(response, mark);
-                if (files !== null) {
-                    diffStore.setProgress(files);
+                const merged = progressWriter.finishReload(response, mark);
+                if (merged !== null) {
+                    diffStore.setProgress(merged.files);
+                    stopProgress.setAll(merged.stops);
                 }
                 setReviewState((current) => ({
                     ...reviewStateForKey(current, reviewKey),
-                    ...(files === null ? {} : { progress: { ...response, files } }),
+                    ...(merged === null
+                        ? {}
+                        : { progress: { ...response, files: [...merged.files], stops: [...merged.stops] } }),
                     progressError: null,
                     progressLoading: false,
                 }));
@@ -321,6 +359,7 @@ export function App({ store, session, token }: AppProps) {
         reviewKey,
         reviewReady,
         snapshot.progressRevision,
+        stopProgress,
         token,
     ]);
 
@@ -594,6 +633,40 @@ export function App({ store, session, token }: AppProps) {
     // states from M2-T10. Until then, Route stays the M1 invitation.
     const routeSnapshot =
         currentReview.route?.phase === 'ready' ? currentReview.route.snapshot : null;
+    const stopViewed = useSyncExternalStore(
+        stopProgress.subscribe,
+        stopProgress.getSnapshot,
+        stopProgress.getSnapshot,
+    );
+    /**
+     * Until the route view mounts, slots come from the snapshot. "Other" enters the set
+     * only with its own mark: only a rendered stop can be marked, and with no uncovered
+     * lines it is not rendered. Otherwise the guardrail would keep asking to view a nonexistent
+     * stop. The mounted view refines the set because only it knows whether uncovered lines remain.
+     */
+    const routeSummary = useMemo<RouteFacts | null>(() => {
+        if (routeSnapshot === null) {
+            return null;
+        }
+        const reported = routeSummaryState?.key === reviewKey ? routeSummaryState.value : null;
+        if (reported !== null) {
+            return reported;
+        }
+        const otherStopId = routeSnapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null;
+        return {
+            stopIds: routeSnapshot.stops
+                .filter((stop) => stop.tier !== 'other' || stopViewed.get(stop.id) === true)
+                .map((stop) => stop.id),
+            otherStopId,
+            uncoveredLines: null,
+        };
+    }, [reviewKey, routeSnapshot, routeSummaryState, stopViewed]);
+    const reportRouteSummary = useCallback(
+        (value: RouteSummary) => {
+            setRouteSummaryState({ key: reviewKey, value });
+        },
+        [reviewKey],
+    );
     const jumpToStop = useCallback(
         (stopId: string) => {
             routeNavigationId.current += 1;
@@ -724,11 +797,13 @@ export function App({ store, session, token }: AppProps) {
                     progress={currentReview.progress}
                     progressError={currentReview.progressError}
                     progressWriter={progressWriter}
+                    stopProgress={stopProgress}
                     store={diffStore}
                     threadStore={threadStore}
                     snapshot={routeSnapshot}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}
+                    onRouteSummary={reportRouteSummary}
                 />
             ) : (
                 <ViewFrame
@@ -781,6 +856,7 @@ export function App({ store, session, token }: AppProps) {
                     threadStore={threadStore}
                     connection={snapshot.connection}
                     hostName={hostDisplayName(reviewHost)}
+                    route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                     composerTransport={composerTransport}
                     onPublish={(verdict: Verdict) => publishReview(token, verdict)}
                     onComplete={completeReview}

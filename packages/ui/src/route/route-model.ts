@@ -1,4 +1,12 @@
-import type { FileDiff, RouteAnchor, RouteSnapshot, RouteStop, RouteTier, Thread } from '@sherpa/protocol';
+import type {
+    FileDiff,
+    RouteAnchor,
+    RouteSnapshot,
+    RouteStop,
+    RouteTier,
+    Thread,
+    UiStopSeenRange,
+} from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
 import { changedLinesOf } from '../progress/read-state.js';
@@ -9,6 +17,7 @@ import {
     anchorSpans,
     clipModelToAnchors,
     coveredChangedLines,
+    coveredChangedRanges,
     spanLines,
     uncoveredRanges,
 } from './anchor-clip.js';
@@ -55,6 +64,12 @@ export interface RouteFileGroup {
     readonly deletions: number;
     /** Changed lines under collapsed anchors. */
     readonly collapsedLines: number;
+    /**
+     * Ranges of changed file lines covered by the stop's anchors. Marking the stop
+     * "viewed" writes them to progress (M2-T7). Collapsed anchors count alongside
+     * visible ones because the stop explains them and prints their counts in a summary row.
+     */
+    readonly seenRanges: readonly AnchorSpan[];
     /** The stop covers all changed lines in the file. */
     readonly whole: boolean;
 }
@@ -71,7 +86,10 @@ export interface RouteStopView {
     readonly drift: boolean;
     /** No anchors at all: the stop was not filled, or filling placed no anchors. */
     readonly empty: boolean;
-    /** Some stop files have not been parsed, so the counts are not final yet. */
+    /**
+     * Some stop files are still being parsed, so its counts and seen ranges are not final.
+     * Files that failed to parse are excluded here because they will not finish counting on their own.
+     */
     readonly pending: boolean;
 }
 
@@ -119,7 +137,11 @@ export interface RouteModel {
     readonly totals: RouteTotals;
     /** Other promoted above low-tier stops: uncovered fraction exceeds the threshold (SPEC §4.3). */
     readonly promoted: boolean;
-    /** Total plan slots, the denominator in "01 / 7". */
+    /**
+     * Route slots, used as the denominator in "01 / 7" and the toolbar counter. Counted from `entries`, not
+     * the snapshot: "Other" is not rendered when no uncovered lines remain, so the card number,
+     * counter and guardrail must all refer to the same set.
+     */
     readonly stopCount: number;
 }
 
@@ -135,7 +157,6 @@ export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED
     const byId = new Map(files.map((file) => [file.fileId, file]));
     const planned = snapshot.stops.filter((stop) => stop.tier !== 'other');
     const otherStop = snapshot.stops.find((stop) => stop.tier === 'other') ?? null;
-    const stopCount = snapshot.stops.length;
 
     // All stops' anchors together define uncovered ranges as those none of them touches. Each
     // stop uses the same map to find which file ranges belong to its neighbours.
@@ -151,7 +172,7 @@ export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED
     // Context already assigned to a stop. The first stop in plan order gets the line so that one
     // comment never appears in two route entries at once.
     const takenContext = new Map<string, ContextLines>();
-    const views = planned.map((stop) => stopView(stop, byId, models, claimed, takenContext));
+    const views = planned.map((stop) => stopView(stop, byId, models, failed, claimed, takenContext));
     const byTier: Record<RouteTier, number> = { high: 0, medium: 0, low: 0, other: 0 };
     for (const view of views) {
         byTier[view.stop.tier] += view.changedLines;
@@ -196,8 +217,11 @@ export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED
     byTier.other = uncovered;
     const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles };
 
+    // Hide "Other" only when there really are no uncovered lines (SPEC §4.3). While the diff
+    // is being parsed, uncovered lines have not been counted yet. Keep the slot with "counting…",
+    // otherwise card numbers and the counter would jump from 6 to 7 during parsing.
     const other: RouteOtherView | null =
-        otherStop === null || uncovered === 0
+        otherStop === null || (uncovered === 0 && pendingFiles === 0)
             ? null
             : {
                   stop: otherStop,
@@ -206,8 +230,14 @@ export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED
                   lines: uncovered,
               };
     const promoted = other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
+    const entries = order(views, other, promoted);
 
-    return { entries: order(views, other, promoted), totals, promoted, stopCount };
+    return { entries, totals, promoted, stopCount: entries.length };
+}
+
+/** The route entry's counts are not final yet because some of its files have not been parsed. */
+export function entryPending(entry: RouteEntry, totals: RouteTotals): boolean {
+    return entry.kind === 'stop' ? entry.view.pending : totals.pendingFiles > 0;
 }
 
 /**
@@ -238,6 +268,7 @@ function stopView(
     stop: RouteStop,
     byId: ReadonlyMap<string, FileDiff>,
     models: ReadonlyMap<string, DiffFileModel>,
+    failed: ReadonlySet<string>,
     claimed: ReadonlyMap<string, readonly AnchorSpan[]>,
     takenContext: Map<string, ContextLines>,
 ): RouteStopView {
@@ -267,7 +298,7 @@ function stopView(
             continue;
         }
         const model = models.get(fileId) ?? null;
-        pending ||= model === null;
+        pending ||= model === null && !failed.has(fileId);
         const own = anchorSpans([...group.shown, ...group.collapsed]);
         const shown = coveredChangedLines(model, anchorSpans(group.shown));
         const collapsed = coveredChangedLines(model, anchorSpans(group.collapsed));
@@ -290,6 +321,7 @@ function stopView(
             additions,
             deletions,
             collapsedLines: collapsed.additions + collapsed.deletions,
+            seenRanges: coveredChangedRanges(model, own),
             whole: model !== null && additions + deletions >= changedLineCount(model, file),
         });
     }
@@ -435,6 +467,24 @@ export function composersForGroup(
     });
 }
 
+/**
+ * Seen ranges for a route entry's "viewed" mark (requirements §3.1, log 2026-08-26).
+ * For a regular stop, these are its files' changed lines covered by its anchors. For "Other",
+ * these are uncovered ranges. The UI computes them because the server has no diff model.
+ */
+export function stopSeenRanges(entry: RouteEntry): readonly UiStopSeenRange[] {
+    const groups: readonly RouteFileGroup[] =
+        entry.kind === 'stop' ? entry.view.files : entry.view.files.map((file) => uncoveredAsGroup(file));
+    return groups.flatMap((group) =>
+        group.seenRanges.map((span) => ({
+            fileId: group.fileId,
+            side: span.side,
+            start: span.start,
+            end: span.end,
+        })),
+    );
+}
+
 /** Stop comments (README §1: left column counter). */
 export function countStopComments(view: RouteStopView, byFile: ReadonlyMap<string, readonly Thread[]>): number {
     return view.files.reduce((total, group) => total + threadsForGroup(group, byFile).length, 0);
@@ -467,6 +517,7 @@ export function uncoveredAsGroup(file: RouteUncoveredFile): RouteFileGroup {
         additions,
         deletions: file.lines - additions,
         collapsedLines: 0,
+        seenRanges: file.anchors,
         whole: file.lines >= file.file.additions + file.file.deletions,
     };
 }

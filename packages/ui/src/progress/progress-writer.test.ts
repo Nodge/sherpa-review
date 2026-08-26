@@ -1,4 +1,4 @@
-import type { UiFileProgress } from '@sherpa/protocol';
+import type { UiFileProgress, UiStopSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { createProgressWriter } from './progress-writer.js';
@@ -12,7 +12,9 @@ interface Deferred {
 
 function harness(initialRevision = 0) {
     const progress = new Map<string, UiFileProgress>();
+    const stops = new Map<string, boolean>();
     const sent: { fileId: string; viewed: boolean }[] = [];
+    const stopsSent: { stopId: string; viewed: boolean; ranges: readonly UiStopSeenRange[] }[] = [];
     const pending: Deferred[] = [];
 
     const writer = createProgressWriter({
@@ -30,14 +32,35 @@ function harness(initialRevision = 0) {
         },
         send: (fileId, viewed) => {
             sent.push({ fileId, viewed });
-            return new Promise<number>((resolve, reject) => {
-                pending.push({ resolve, reject: () => { reject(new Error('endpoint did not respond')); } });
-            });
+            return deferred();
+        },
+        stops: {
+            read: (stopId) => stops.get(stopId) ?? null,
+            apply: (stopId, viewed) => {
+                stops.set(stopId, viewed);
+            },
+            restore: (stopId, viewed) => {
+                if (viewed === null) {
+                    stops.delete(stopId);
+                } else {
+                    stops.set(stopId, viewed);
+                }
+            },
+            send: (stopId, viewed, ranges) => {
+                stopsSent.push({ stopId, viewed, ranges });
+                return deferred();
+            },
         },
         onSettled: () => undefined,
     });
 
-    return { writer, progress, sent, pending };
+    function deferred(): Promise<number> {
+        return new Promise<number>((resolve, reject) => {
+            pending.push({ resolve, reject: () => { reject(new Error('endpoint did not respond')); } });
+        });
+    }
+
+    return { writer, progress, stops, sent, stopsSent, pending };
 }
 
 /** Run microtasks: the write queue sends requests through `then`. */
@@ -159,11 +182,11 @@ describe('writing reading progress', () => {
         // The reviewer marked the file while the endpoint was responding.
         const write = writer.write('a', true);
         const merged = writer.finishReload(
-            { files: [{ fileId: 'b', viewed: true, seenRanges: [] }], progressRevision: 3 },
+            { files: [{ fileId: 'b', viewed: true, seenRanges: [] }], stops: [], progressRevision: 3 },
             mark,
         );
 
-        expect(merged).toEqual([
+        expect(merged?.files).toEqual([
             { fileId: 'b', viewed: true, seenRanges: [] },
             { fileId: 'a', viewed: true, seenRanges: [] },
         ]);
@@ -180,13 +203,61 @@ describe('writing reading progress', () => {
         const mark = writer.beginReload();
         const write = writer.write('a', true);
         const merged = writer.finishReload(
-            { files: [{ fileId: 'a', viewed: false, seenRanges: ranges }], progressRevision: 3 },
+            { files: [{ fileId: 'a', viewed: false, seenRanges: ranges }], stops: [], progressRevision: 3 },
             mark,
         );
 
-        expect(merged).toEqual([{ fileId: 'a', viewed: true, seenRanges: ranges }]);
+        expect(merged?.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: ranges }]);
         // The response is older than the applied snapshot and would move the screen back.
-        expect(writer.finishReload({ files: [], progressRevision: 2 }, mark)).toBeNull();
+        expect(writer.finishReload({ files: [], stops: [], progressRevision: 2 }, mark)).toBeNull();
+
+        await settle();
+        pending[0]?.resolve(4);
+        await write;
+    });
+
+    it('sends a stop mark with its ranges and rolls it back on failure', async () => {
+        const { writer, stops, stopsSent, pending } = harness();
+        const ranges = [{ fileId: 'a', side: 'new' as const, start: 3, end: 9 }];
+
+        const write = writer.writeStop('s01', true, ranges);
+        // Optimistic update: the mark is in the store before the endpoint responds.
+        expect(stops.get('s01')).toBe(true);
+        await settle();
+        expect(stopsSent).toEqual([{ stopId: 's01', viewed: true, ranges }]);
+
+        pending[0]?.reject();
+        expect(await write).toBe(false);
+        // There was no record before the mark, so rollback must remove it entirely.
+        expect(stops.has('s01')).toBe(false);
+    });
+
+    it('refetches the snapshot after marking a stop because the server calculates the ranges', async () => {
+        const { writer, pending } = harness();
+
+        const write = writer.writeStop('s01', true, []);
+        await settle();
+        pending[0]?.resolve(1);
+        await write;
+
+        // Our own revision has no gap, but the file seen ranges exist only in the snapshot.
+        expect(writer.shouldReload(1)).toBe(true);
+        const merged = writer.finishReload(
+            { files: [], stops: [{ stopId: 's01', viewed: true }], progressRevision: 1 },
+            writer.beginReload(),
+        );
+        expect(merged?.stops).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(writer.shouldReload(1)).toBe(false);
+    });
+
+    it('does not roll back a stop mark absent from the refetched snapshot', async () => {
+        const { writer, pending } = harness();
+
+        const mark = writer.beginReload();
+        const write = writer.writeStop('s01', true, []);
+        const merged = writer.finishReload({ files: [], stops: [], progressRevision: 3 }, mark);
+
+        expect(merged?.stops).toEqual([{ stopId: 's01', viewed: true }]);
 
         await settle();
         pending[0]?.resolve(4);
@@ -200,10 +271,10 @@ describe('writing reading progress', () => {
         const write = writer.write('a', true);
         // Another tab unmarked it. That is the server state without our write.
         const merged = writer.finishReload(
-            { files: [{ fileId: 'a', viewed: false, seenRanges: [] }], progressRevision: 7 },
+            { files: [{ fileId: 'a', viewed: false, seenRanges: [] }], stops: [], progressRevision: 7 },
             mark,
         );
-        expect(merged).toEqual([{ fileId: 'a', viewed: true, seenRanges: [] }]);
+        expect(merged?.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: [] }]);
 
         await settle();
         pending[0]?.reject();

@@ -55,6 +55,11 @@ const ROUTE_TASK_PREFIX = 'route.';
  */
 const WARMUP_DELAY_MS = 200;
 
+/** The part of `ProgressStore` the orchestrator needs to clear previous stop progress. */
+export interface StopProgressReset {
+    readonly clearStopProgress: () => number;
+}
+
 export interface RouteOrchestratorOptions {
     readonly store: RouteStore;
     readonly queue: TaskQueue;
@@ -63,6 +68,11 @@ export interface RouteOrchestratorOptions {
     readonly host: ReviewHost | null;
     /** Generation task payload directory (`payloadDirOf`). */
     readonly payloadDir: string;
+    /**
+     * Reading progress: a new generation clears previous stop marks and their seen ranges
+     * (decision log, 2026-08-26, progress carryover is M4). `null` means nothing to clear (tests).
+     */
+    readonly progress?: StopProgressReset | null;
     readonly config?: Partial<RouteConfig>;
     /** Warmup delay after startup. Tests call warmup explicitly (`warmup`). */
     readonly warmupDelayMs?: number;
@@ -74,6 +84,7 @@ export class RouteOrchestrator {
     private readonly registry: WorkerRegistry;
     private readonly host: ReviewHost | null;
     private readonly payload: RoutePayloadWriter;
+    private readonly progress: StopProgressReset | null;
     private readonly config: RouteConfig;
     private readonly warmupDelayMs: number;
 
@@ -100,6 +111,7 @@ export class RouteOrchestrator {
         this.registry = options.registry;
         this.host = options.host;
         this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir });
+        this.progress = options.progress ?? null;
         this.config = resolveConfig(options.config);
         this.warmupDelayMs = options.warmupDelayMs ?? WARMUP_DELAY_MS;
     }
@@ -437,6 +449,9 @@ export class RouteOrchestrator {
         this.store.beginSkeleton();
         // The previous generation payload is no longer needed. Its tasks were just cancelled.
         this.payload.beginGeneration();
+        // The old route's stops disappear with the plan, along with their marks and ranges.
+        // Manual file marks stay untouched: they belong to files, not stops.
+        this.progress?.clearStopProgress();
         this.startSkeletonTask();
     }
 

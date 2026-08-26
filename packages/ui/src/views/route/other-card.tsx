@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { RouteOtherView } from '../../route/route-model.js';
 import { formatCount, plural } from '../../text.js';
+import { StopViewedToggle } from './stop-card.tsx';
 
 /**
  * "Other — lines the model did not place" (README §2): a hatched card with honest
@@ -26,6 +27,15 @@ export interface OtherCardProps {
     readonly onRetryFailed?: () => void;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
+    /**
+     * Other is a route stop too: marking it writes uncovered ranges into progress
+     * (README §13 «Other read as raw diff»).
+     */
+    readonly viewed?: boolean;
+    readonly onViewed?: (viewed: boolean) => void;
+    readonly failedViewed?: boolean | null;
+    /** Highlight from hovering over the hatched coverage strip segment (SPEC §2.4). */
+    readonly marked?: boolean;
 }
 
 export function OtherCard({
@@ -38,13 +48,17 @@ export function OtherCard({
     failedFiles = 0,
     onRetryFailed,
     keptInView = false,
+    viewed = false,
+    onViewed,
+    failedViewed = null,
+    marked = false,
 }: OtherCardProps) {
     const { lines } = view;
     const files = view.files.length;
 
     return (
         <section
-            className="route-stop route-stop--other"
+            className={`route-stop route-stop--other${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${view.stop.id}`}
             role="region"
             aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${view.stop.title}`}
@@ -55,13 +69,30 @@ export function OtherCard({
                     <span className="route-stop__number">
                         {view.planLabel} / {String(stopCount)}
                     </span>
+                    <span className="route-stop__spacer" />
+                    {onViewed === undefined ? null : (
+                        <StopViewedToggle
+                            viewed={viewed}
+                            pending={pending}
+                            failedViewed={failedViewed}
+                            onViewed={onViewed}
+                        />
+                    )}
                 </div>
                 <h2 className="route-stop__title">{view.stop.title}</h2>
-                <p className="route-stop__paragraph">
-                    {formatCount(lines)} {plural(lines, 'changed line', 'changed lines', 'changed lines')} in{' '}
-                    {formatCount(files)} {plural(files, 'file', 'files', 'files')} were left without a stop. Coverage is
-                    structurally guaranteed, so they are not lost. They collect here.
-                </p>
+                {pending ? (
+                    <p className="route-stop__paragraph">
+                        The diff is still being parsed. The number of lines left without a stop is unknown yet. Coverage is
+                        structurally guaranteed: whatever misses the stops collects here.
+                    </p>
+                ) : (
+                    <p className="route-stop__paragraph">
+                        {formatCount(lines)}{' '}
+                        {plural(lines, 'changed line', 'changed lines', 'changed lines')} in{' '}
+                        {formatCount(files)} {plural(files, 'file', 'files', 'files')} left without a stop.
+                        Coverage is structurally guaranteed, so they are not lost and collect here.
+                    </p>
+                )}
                 {keptInView ? (
                     <p className="route-stop__kept">kept in view — outside the current filter</p>
                 ) : null}

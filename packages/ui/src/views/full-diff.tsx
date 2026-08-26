@@ -43,7 +43,7 @@ import {
 import { readFragmentParam } from '../fragment.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { createProgressWriter } from '../progress/progress-writer.js';
-import type { ProgressWriter } from '../progress/progress-writer.js';
+import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
@@ -342,6 +342,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 apply: store.markViewed,
                 restore: store.restoreProgress,
                 send: onSetViewed,
+                // The full diff has no stop marks: the route has its own view (M2-T7).
+                stops: NO_STOP_WRITES,
                 // In-flight writes defer the reread. The decision is reconsidered after the response.
                 onSettled: () => {
                     setWritesSettled((settled) => settled + 1);
@@ -395,9 +397,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         const mark = writer.beginReload();
         void reloadProgress().then(
             (response) => {
-                const files = alive ? writer.finishReload(response, mark) : null;
-                if (files !== null) {
-                    store.setProgress(files);
+                const merged = alive ? writer.finishReload(response, mark) : null;
+                if (merged !== null) {
+                    store.setProgress(merged.files);
                 }
             },
             () => {
@@ -944,6 +946,13 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
 };
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
+/** The full diff does not mark stops: it has no controls for that. */
+const NO_STOP_WRITES: StopWriterHooks = {
+    read: () => null,
+    apply: () => undefined,
+    restore: () => undefined,
+    send: () => Promise.reject(new Error('stop marking is unavailable in the full diff')),
+};
 
 export function commentPosition(
     selection: { fileId: string; anchor: string; focus: string } | null,

@@ -14,6 +14,8 @@ import type {
     UiReviewProgressResponse,
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
+    UiSetStopViewedResponse,
+    UiStopSeenRange,
     UiTask,
     Verdict,
 } from '@sherpa/protocol';
@@ -34,6 +36,7 @@ import {
     uiReviewWriteAckSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopViewedResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -123,6 +126,19 @@ export async function setFileViewed(
     viewed: boolean,
 ): Promise<UiSetFileViewedResponse> {
     return post(UI_ENDPOINTS.reviewFileViewed, token, { fileId, viewed }, uiSetFileViewedResponseSchema);
+}
+
+/**
+ * A stop's "viewed" mark (M2-T7) is sent with seen ranges calculated by
+ * the UI. With `viewed: false`, the server removes this stop's stored ranges.
+ */
+export async function setStopViewed(
+    token: string,
+    stopId: string,
+    viewed: boolean,
+    ranges: readonly UiStopSeenRange[],
+): Promise<UiSetStopViewedResponse> {
+    return post(UI_ENDPOINTS.reviewStopViewed, token, { stopId, viewed, ranges }, uiSetStopViewedResponseSchema);
 }
 
 /**

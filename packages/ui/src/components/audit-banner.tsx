@@ -16,14 +16,18 @@ import './audit-banner.css';
 /** How many scope paths to list by name before the list gets too long. */
 const LISTED_PATHS = 3;
 
-/** Audit scope only affects Full diff, where the filter actually hides files. */
+/**
+ * Audit scope matters where the filter actually hides files: Full diff and
+ * on the route (M2-T6 showed a PCI chip in the route header, while its banner remained only
+ * in Full diff. Since M2-T7 they appear together).
+ */
 export function auditScopeBannerVisible(
     view: ViewId,
     filterId: string,
     dismissed: boolean,
     files: number,
 ): boolean {
-    return view === 'diff' && filterId === PCI_FILTER_ID && !dismissed && files > 0;
+    return (view === 'diff' || view === 'route') && filterId === PCI_FILTER_ID && !dismissed && files > 0;
 }
 
 export interface AuditScopeBannerProps {

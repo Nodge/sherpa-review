@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
+import type { RouteProgress } from './review-action-bar.tsx';
 import { countDraftComments } from '../progress/summary.js';
 import { createThreadStore } from '../threads/store.js';
 import { ReviewActionBar } from './review-action-bar.tsx';
@@ -18,7 +19,14 @@ const TRANSPORT = {
     delete: () => Promise.reject(new Error('not called during static rendering')),
 };
 
-function renderBar(options: { menu?: boolean; threads?: typeof DRAFT_THREADS; sticky?: boolean } = {}): string {
+function renderBar(
+    options: {
+        menu?: boolean;
+        threads?: typeof DRAFT_THREADS;
+        sticky?: boolean;
+        route?: RouteProgress | null;
+    } = {},
+): string {
     const threads = options.threads ?? DRAFT_THREADS;
     return renderToStaticMarkup(
         <ReviewActionBar
@@ -37,6 +45,7 @@ function renderBar(options: { menu?: boolean; threads?: typeof DRAFT_THREADS; st
             composerTransport={TRANSPORT}
             onPublish={() => Promise.reject(new Error('not called during static rendering'))}
             onComplete={() => undefined}
+            route={options.route ?? null}
             {...(options.menu === undefined ? {} : { defaultMenuOpen: options.menu })}
             storage={null}
         />,
@@ -92,6 +101,42 @@ describe('floating review bar', () => {
         expect(html).toContain('The approval carries over to later pushes until a file in your ownership zone changes.');
         expect(html).toContain('This host does not support Sticky ship.');
         expect(html).toContain('aria-disabled="true"');
+    });
+
+    it('counts stops in the warning when the route is ready', () => {
+        const route = {
+            stopIds: ['s01', 's02', 's03'],
+            otherStopId: 's03',
+            uncoveredLines: 34,
+            viewed: new Map([['s01', true]]),
+        };
+
+        const html = renderBar({ menu: true, route });
+
+        expect(html).toContain('2 stops not viewed — ship anyway?');
+        expect(html).not.toContain('files not viewed');
+    });
+
+    it('omits the warning when all stops are viewed', () => {
+        const route = {
+            stopIds: ['s01', 's02'],
+            otherStopId: null,
+            uncoveredLines: 0,
+            viewed: new Map([
+                ['s01', true],
+                ['s02', true],
+            ]),
+        };
+
+        const html = renderBar({ menu: true, route });
+
+        expect(html).not.toContain('ship anyway?');
+    });
+
+    it('keeps the M1 file guardrail when there is no route', () => {
+        const html = renderBar({ menu: true });
+
+        expect(html).toContain('files not viewed — ship anyway?');
     });
 
     it('hides only while the diff store has an active drag selection', () => {
@@ -164,6 +209,7 @@ describe('Review complete screen', () => {
                         linesTotal: 862,
                         percentSeen: 92,
                     },
+                    route: null,
                     openThreads: 1,
                     firstOpenThreadId: 'thread-1',
                 }}
@@ -180,5 +226,73 @@ describe('Review complete screen', () => {
         expect(html).toContain('2 (1 of them a reply)');
         expect(html).toContain('1 thread is still open');
         expect(html).toContain('To the full diff');
+        // Without a route, the card has no rows about stops.
+        expect(html).not.toContain('Stops viewed');
+        expect(html).not.toContain('outside the route');
+    });
+
+    it('shows stops, Other and lines read outside the route when a route exists', () => {
+        const html = renderToStaticMarkup(
+            <ReviewComplete
+                completion={{
+                    verdict: 'ship',
+                    prId: '4821',
+                    headCommit: '9f3c1ab012345',
+                    hostName: 'GitHub',
+                    publishedComments: 2,
+                    publishedReplies: 1,
+                    progress: {
+                        filesSeen: 18,
+                        filesTotal: 18,
+                        linesSeen: 862,
+                        linesTotal: 862,
+                        percentSeen: 100,
+                    },
+                    route: { stopsTotal: 7, stopsViewed: 7, otherViewed: true, uncoveredLines: 34 },
+                    openThreads: 0,
+                    firstOpenThreadId: null,
+                }}
+                onOpenThread={() => undefined}
+                onOpenFullDiff={() => undefined}
+            />,
+        );
+
+        expect(html).toContain('7 of 7 · Other read as a raw diff');
+        expect(html).toContain('100% of 862 lines');
+        expect(html).toContain('34 lines the model did not place');
+        // The route counter replaces the file counter.
+        expect(html).not.toContain('Files seen');
+    });
+
+    it('omits the second clause when Other is unread', () => {
+        const html = renderToStaticMarkup(
+            <ReviewComplete
+                completion={{
+                    verdict: 'ship',
+                    prId: '4821',
+                    headCommit: '9f3c1ab012345',
+                    hostName: 'GitHub',
+                    publishedComments: 0,
+                    publishedReplies: 0,
+                    progress: {
+                        filesSeen: 10,
+                        filesTotal: 18,
+                        linesSeen: 500,
+                        linesTotal: 862,
+                        percentSeen: 58,
+                    },
+                    route: { stopsTotal: 7, stopsViewed: 5, otherViewed: false, uncoveredLines: 34 },
+                    openThreads: 0,
+                    firstOpenThreadId: null,
+                }}
+                onOpenThread={() => undefined}
+                onOpenFullDiff={() => undefined}
+            />,
+        );
+
+        expect(html).toContain('5 of 7');
+        expect(html).not.toContain('Other read as a raw diff');
+        // "Of that, read outside the route" counts seen lines: without the Other mark there is no row.
+        expect(html).not.toContain('outside the route');
     });
 });

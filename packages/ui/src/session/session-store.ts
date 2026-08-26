@@ -18,24 +18,27 @@ export interface ThreadsShow {
 export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
 
 /**
- * Route stop state in the current session (M2-T6). Three sets instead of one flag: the
+ * Route stop expansion in the current session (M2-T6). Three sets instead of one flag: the
  * "viewed" mark collapses hunks but preserves previous expansion. Clearing the mark must
  * restore the card to exactly the state it was left in (SPEC §2.9).
  *
- * `viewed` is the stop mark (visual only in M2, writing seen ranges comes in T7).
+ * The "viewed" mark itself does not live here: it persists per PR on the server (M2-T7,
+ * README State model), held by `StopProgressStore`.
+ *
  * `expanded` means the stop is expanded despite tier-based collapse (low is collapsed by default).
  * `expandedViewed` means a viewed stop is temporarily expanded from its summary row.
+ * `collapsed` means the stop was collapsed by hand (`x` shortcut, SPEC §5), regardless of tier.
  */
 export interface StopsState {
-    readonly viewed: ReadonlySet<string>;
     readonly expanded: ReadonlySet<string>;
     readonly expandedViewed: ReadonlySet<string>;
+    readonly collapsed: ReadonlySet<string>;
 }
 
 export const EMPTY_STOPS: StopsState = {
-    viewed: new Set(),
     expanded: new Set(),
     expandedViewed: new Set(),
+    collapsed: new Set(),
 };
 
 export interface SessionState {
@@ -59,12 +62,17 @@ export interface SessionStore {
     readonly setFilter: (filter: string) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
-    /** Stop mark. Clearing it preserves `expanded`, restoring the previous expansion. */
-    readonly setStopViewed: (stopId: string, viewed: boolean) => void;
     /** Normal stop expansion (low-tier stops are collapsed by default). */
     readonly setStopExpanded: (stopId: string, expanded: boolean) => void;
     /** Expansion of a viewed stop from its summary row. */
     readonly setViewedStopExpanded: (stopId: string, expanded: boolean) => void;
+    /** Manual collapse of a stop in any tier. */
+    readonly setStopCollapsed: (stopId: string, collapsed: boolean) => void;
+    /**
+     * The mark was cleared. Temporary expansion of a viewed stop lasts only while it is
+     * marked, and its previous expansion (`expanded`) must return unchanged.
+     */
+    readonly forgetViewedExpansion: (stopId: string) => void;
 }
 
 export interface SessionStoreOptions {
@@ -157,18 +165,17 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
             }
         },
 
-        setStopViewed: (stopId, viewed) => {
-            if (!viewed && state.stops.expandedViewed.has(stopId)) {
-                // Temporary expansion lasts only while the mark is set.
-                toggleStop('expandedViewed', stopId, false);
-            }
-            toggleStop('viewed', stopId, viewed);
-        },
         setStopExpanded: (stopId, expanded) => {
             toggleStop('expanded', stopId, expanded);
         },
         setViewedStopExpanded: (stopId, expanded) => {
             toggleStop('expandedViewed', stopId, expanded);
+        },
+        setStopCollapsed: (stopId, collapsed) => {
+            toggleStop('collapsed', stopId, collapsed);
+        },
+        forgetViewedExpansion: (stopId) => {
+            toggleStop('expandedViewed', stopId, false);
         },
     };
 }

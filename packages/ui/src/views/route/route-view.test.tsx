@@ -27,11 +27,21 @@ const SNAPSHOT: RouteSnapshot = READY.snapshot;
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 
 function render(
-    options: { snapshot?: RouteSnapshot; filter?: string; stops?: StopsState; keptStopId?: string } = {},
+    options: {
+        snapshot?: RouteSnapshot;
+        filter?: string;
+        stops?: StopsState;
+        stopViewed?: readonly string[];
+        keptStopId?: string;
+        /** `false` means diff models are not parsed yet, so view counts are not final. */
+        parsed?: boolean;
+    } = {},
 ): string {
     const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
-    for (const file of DATA.diff.files) {
-        store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
+    if (options.parsed !== false) {
+        for (const file of DATA.diff.files) {
+            store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
+        }
     }
     return renderToStaticMarkup(
         <RouteWorkspace
@@ -46,10 +56,12 @@ function render(
             threadStore={createThreadStore(DATA.threads, FILE_IDS)}
             threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
             {...(options.keptStopId === undefined ? {} : { initialKeptStopId: options.keptStopId })}
+            {...(options.stopViewed === undefined ? {} : { initialStopViewed: options.stopViewed })}
             parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
             loadContent={() => Promise.resolve(null)}
             onOpenInEditor={() => Promise.resolve(null)}
             onSetViewed={() => Promise.resolve(0)}
+            onSetStopViewed={() => Promise.resolve(0)}
         />,
     );
 }
@@ -107,7 +119,7 @@ describe('route view', () => {
     });
 
     it('a viewed stop dims and collapses to a summary row', () => {
-        const html = render({ stops: { ...EMPTY_STOPS, viewed: new Set(['s01']) } });
+        const html = render({ stopViewed: ['s01'] });
 
         expect(html).toContain('route-stop--high is-viewed');
         expect(html).toContain('· viewed');
@@ -193,6 +205,53 @@ describe('route view', () => {
 
         expect(order(html)).toEqual(['s01', 's03', 'other']);
         expect(html).toContain('kept in view — outside the current filter');
+    });
+
+    it('the toolbar shows a coverage bar with fixture counts and a stop counter', () => {
+        const html = render();
+
+        expect(html).toContain('862 changed lines');
+        expect(html).toContain('96% explained');
+        expect(html).toContain('34 lines not explained');
+        expect(html).toContain('high · stops 01–02 · 196 lines');
+        expect(html).toContain('0 of 7 stops viewed');
+        // The fixture has no empty tiers, so there are exactly four segments.
+        expect(count(html, 'coverage__segment coverage__segment--')).toBe(4);
+    });
+
+    it('the bar stays in loading state until the diff is parsed without promising 100% explained', () => {
+        const html = render({ parsed: false });
+
+        expect(html).toContain('counting coverage over the diff');
+        expect(html).not.toContain('explained');
+        expect(html).not.toContain('coverage__segment');
+        // The "Other" slot stays in place: the numbering denominator does not jump during parsing.
+        expect(order(html)).toContain('other');
+        expect(html).toContain('01 / 7');
+    });
+
+    it('cannot mark a stop viewed until its ranges are counted', () => {
+        const pending = render({ parsed: false });
+        const marked = render({ parsed: false, stopViewed: ['s01'] });
+
+        expect(count(pending, 'class="route-stop__viewed" aria-pressed="false" disabled=""')).toBe(7);
+        // Clearing a mark needs no ranges, so an already marked stop stays clickable.
+        expect(section(marked, 's01')).toContain('aria-pressed="true"');
+        expect(section(marked, 's01')).not.toContain('disabled=""');
+        expect(render()).not.toContain('route-stop__viewed" aria-pressed="false" disabled');
+    });
+
+    it('the stop counter counts actual marks', () => {
+        const html = render({ stopViewed: ['s01', 'other'] });
+
+        expect(html).toContain('2 of 7 stops viewed');
+    });
+
+    it('Other is a stop too and has its own viewed mark', () => {
+        const html = section(render({ stopViewed: ['other'] }), 'other');
+
+        expect(html).toContain('✓ Viewed');
+        expect(html).toContain('aria-pressed="true"');
     });
 
     it('file chips show stop counts and a read indicator box', () => {

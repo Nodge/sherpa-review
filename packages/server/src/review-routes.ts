@@ -22,6 +22,8 @@ import {
     uiSaveDraftResponseSchema,
     uiSetFileViewedRequestSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopViewedRequestSchema,
+    uiSetStopViewedResponseSchema,
     uiSetThreadResolvedRequestSchema,
     uiUpdateDraftRequestSchema,
 } from '@sherpa/protocol';
@@ -197,7 +199,11 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             handle: handlingRpcFailures(() =>
                 respond(
                     uiReviewProgressResponseSchema,
-                    { files: options.progress.read(), progressRevision: options.progress.revision },
+                    {
+                        files: options.progress.read(),
+                        stops: options.progress.readStops(),
+                        progressRevision: options.progress.revision,
+                    },
                     'local',
                 ),
             ),
@@ -211,6 +217,25 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const progressRevision = options.progress.setFileViewed(request.fileId, request.viewed);
                 mirrorFileViewed(request.fileId, request.viewed);
                 return respond(uiSetFileViewedResponseSchema, { progressRevision }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewStopViewed,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(
+                    ctx,
+                    uiSetStopViewedRequestSchema,
+                    'setting a viewed mark on a stop',
+                );
+                // Stop marks are not mirrored to the host (decision log, 2026-08-26). Mirroring handles
+                // explicit file marks, and the server cannot calculate how much of a file a stop covers.
+                const progressRevision = options.progress.setStopViewed(
+                    request.stopId,
+                    request.viewed,
+                    request.ranges,
+                );
+                return respond(uiSetStopViewedResponseSchema, { progressRevision }, 'local');
             }),
         },
         {

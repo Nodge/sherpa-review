@@ -82,26 +82,49 @@ export function uncoveredRanges(
     model: DiffFileModel | null,
     anchors: readonly AnchorSpan[],
 ): readonly AnchorSpan[] {
+    return changedRanges(model, (side, line) => !covers(anchors, side, line));
+}
+
+/**
+ * Changed file lines covered by anchors, as ranges. These are the same lines counted by
+ * `coveredChangedLines`, so seen ranges for a stop mark match its counters
+ * and the coverage bar.
+ */
+export function coveredChangedRanges(
+    model: DiffFileModel | null,
+    anchors: readonly AnchorSpan[],
+): readonly AnchorSpan[] {
+    if (anchors.length === 0) {
+        return [];
+    }
+    return changedRanges(model, (side, line) => covers(anchors, side, line));
+}
+
+/** Selected changed lines, merged by adjacent line numbers within each side. */
+function changedRanges(
+    model: DiffFileModel | null,
+    keep: (side: 'old' | 'new', line: number) => boolean,
+): readonly AnchorSpan[] {
     if (model?.content.kind !== 'text') {
         return [];
     }
 
-    const uncovered: { old: number[]; new: number[] } = { old: [], new: [] };
+    const kept: { old: number[]; new: number[] } = { old: [], new: [] };
     for (const block of model.content.blocks) {
         if (block.kind !== 'hunk') {
             continue;
         }
         for (const line of block.lines) {
-            if (line.kind === 'add' && line.newLine !== null && !covers(anchors, 'new', line.newLine)) {
-                uncovered.new.push(line.newLine);
+            if (line.kind === 'add' && line.newLine !== null && keep('new', line.newLine)) {
+                kept.new.push(line.newLine);
             }
-            if (line.kind === 'del' && line.oldLine !== null && !covers(anchors, 'old', line.oldLine)) {
-                uncovered.old.push(line.oldLine);
+            if (line.kind === 'del' && line.oldLine !== null && keep('old', line.oldLine)) {
+                kept.old.push(line.oldLine);
             }
         }
     }
 
-    return [...toSpans('old', uncovered.old), ...toSpans('new', uncovered.new)];
+    return [...toSpans('old', kept.old), ...toSpans('new', kept.new)];
 }
 
 function toSpans(side: 'old' | 'new', lines: readonly number[]): AnchorSpan[] {

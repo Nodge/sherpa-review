@@ -8,6 +8,7 @@ import {
     rpcErrorSchema,
     UI_ENDPOINTS,
     UI_ROUTE_EVENT,
+    uiReviewProgressResponseSchema,
     uiReviewRouteResponseSchema,
     uiRouteEventSchema,
     uiRouteGenerateResponseSchema,
@@ -347,6 +348,30 @@ describe('route orchestration', () => {
             expect(route.phase).toBe('reading');
             expect(route.failure).toBeNull();
             expect(routeTasks(server, 'route.skeleton')).toHaveLength(2);
+        });
+
+        it('a new generation clears stop progress but preserves file marks', async () => {
+            const server = await start();
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewStopViewed,
+                { stopId: 's01', viewed: true, ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }] },
+                server.token,
+            );
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewFileViewed,
+                { fileId: 'file-2', viewed: true },
+                server.token,
+            );
+
+            expect(await generate(server)).toBe('started');
+
+            const progress = uiReviewProgressResponseSchema.parse(
+                await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
+            );
+            expect(progress.stops).toEqual([]);
+            expect(progress.files).toEqual([{ fileId: 'file-2', viewed: true, seenRanges: [] }]);
         });
 
         it('returns no_review_host without a review host while route state stays readable', async () => {

@@ -29,14 +29,24 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                 </div>
 
                 <dl className="review-complete__counters">
-                    <Counter
-                        label="Files seen"
-                        value={`${formatCount(completion.progress.filesSeen)} of ${formatCount(completion.progress.filesTotal)}`}
-                    />
+                    {completion.route === null ? (
+                        <Counter
+                            label="Files seen"
+                            value={`${formatCount(completion.progress.filesSeen)} of ${formatCount(completion.progress.filesTotal)}`}
+                        />
+                    ) : (
+                        <Counter label="Stops viewed" value={stopsValue(completion.route)} />
+                    )}
                     <Counter
                         label="Diff seen"
                         value={`${formatCount(completion.progress.percentSeen)}% of ${formatCount(completion.progress.linesTotal)} lines`}
                     />
+                    {/*
+                      "Of that, read outside the route" (README §13) is part of what was already seen, so
+                      this row depends on the Other mark, which means the uncovered ranges
+                      were read as raw diff. Without it, the number would describe only the route model.
+                    */}
+                    {readOutsideRoute(completion.route)}
                     <Counter
                         label="Comments published"
                         value={`${formatCount(completion.publishedComments)} (${formatCount(replies)} of them ${plural(replies, 'a reply', 'replies', 'replies')})`}
@@ -68,6 +78,26 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                 </div>
             </section>
         </main>
+    );
+}
+
+/** "7 of 7 · Other read as a raw diff" (README §13): the second clause appears only when true. */
+function stopsValue(route: NonNullable<ReviewCompletion['route']>): string {
+    const counted = `${formatCount(route.stopsViewed)} of ${formatCount(route.stopsTotal)}`;
+    return route.otherViewed ? `${counted} · Other read as a raw diff` : counted;
+}
+
+/** The "Of that, read outside the route" row appears only when Other is actually marked. */
+function readOutsideRoute(route: ReviewCompletion['route']) {
+    const lines = route?.otherViewed === true ? (route.uncoveredLines ?? 0) : 0;
+    if (lines === 0) {
+        return null;
+    }
+    return (
+        <Counter
+            label="Of it read outside the route"
+            value={`${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')} the model did not place`}
+        />
     );
 }
 

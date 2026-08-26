@@ -145,6 +145,43 @@ describe('route model', () => {
 
         expect(model.totals.uncovered).toBe(0);
         expect(model.entries.every((entry) => entry.kind === 'stop')).toBe(true);
+        // The "01 / N" denominator, toolbar counter and guardrail count the same set of slots.
+        expect(model.stopCount).toBe(model.entries.length);
+        expect(model.stopCount).toBe(everything.stops.length - 1);
+    });
+
+    it('keeps Other as a slot while parsing the diff: numbers do not jump from 6 to 7', () => {
+        const model = buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models: new Map() });
+        const other = model.entries.find((entry) => entry.kind === 'other');
+
+        expect(model.totals.uncovered).toBe(0);
+        expect(other?.kind).toBe('other');
+        expect(model.stopCount).toBe(7);
+        expect(model.entries).toHaveLength(7);
+    });
+
+    it('does not keep a stop pending when a file fails to parse', () => {
+        const first = DATA.diff.files[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one file');
+        }
+        const withoutFirst = new Map(MODELS);
+        withoutFirst.delete(first.fileId);
+        const stopsOf = (failed: ReadonlySet<string>) =>
+            buildRouteModel({
+                snapshot: SNAPSHOT,
+                files: DATA.diff.files,
+                models: withoutFirst,
+                failed,
+            }).entries.flatMap((entry) =>
+                entry.kind === 'stop' && entry.view.files.some((group) => group.fileId === first.fileId)
+                    ? [entry.view]
+                    : [],
+            );
+
+        expect(stopsOf(new Set()).some((view) => view.pending)).toBe(true);
+        // Parsing failed: the file will not finish counting on its own, so there is nothing left to wait for.
+        expect(stopsOf(new Set([first.fileId])).every((view) => !view.pending)).toBe(true);
     });
 
     it('marks unresolved anchors as drift and a stop without anchors as an empty slot', () => {

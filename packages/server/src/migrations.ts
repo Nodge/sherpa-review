@@ -120,6 +120,25 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE tasks ADD COLUMN rejections INTEGER NOT NULL DEFAULT 0;
         `,
     },
+    {
+        // Route stop progress (M2-T7, requirements §3.1). The stop mark persists per PR, and
+        // the seen ranges it adds carry its `stop_id`. Clearing the mark removes
+        // exactly that stop's ranges, leaving other stops' ranges and manual file marks alone.
+        // `source_stop_id IS NULL` means a range did not come from a stop (nothing writes these now, but
+        // clearing stop progress must still distinguish them).
+        name: '007-stop-progress',
+        sql: `
+            CREATE TABLE stop_progress (
+                stop_id TEXT PRIMARY KEY,
+                viewed INTEGER NOT NULL CHECK (viewed IN (0, 1)),
+                updated_at TEXT NOT NULL
+            );
+
+            ALTER TABLE file_seen_ranges ADD COLUMN source_stop_id TEXT;
+
+            CREATE INDEX file_seen_ranges_stop ON file_seen_ranges (source_stop_id);
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

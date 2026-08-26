@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { CommentSources, DiffModeToggle } from '../../components/toolbar-controls.tsx';
 import { FilterSelect } from '../../components/filter-select.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
@@ -10,8 +12,8 @@ import type { ThreadSourceCounts } from '../../threads/model.js';
  * toggle, comment source chips and file filter selector. Controls are shared with the full
  * diff, so mode and filter must match across views.
  *
- * The second row is empty for now. It will hold the coverage strip (M2-T7). Space is reserved
- * now so the sticky toolbar geometry stays fixed when the strip appears.
+ * The second row is the coverage bar with its own legend and viewed stop counter.
+ * The view assembles it and passes it here ready to render.
  */
 
 export const TRIAGE_HINT = 'The most important first — stop when you have seen enough.';
@@ -25,6 +27,8 @@ export interface RouteToolbarProps {
     readonly threadsShow: ThreadsShow;
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
+    /** Second toolbar row: coverage strip (SPEC §2.4). */
+    readonly strip: ReactNode;
 }
 
 export function RouteToolbar({
@@ -35,6 +39,7 @@ export function RouteToolbar({
     threadsShow,
     threadCounts,
     onThreadsShow,
+    strip,
 }: RouteToolbarProps) {
     return (
         <div className="route-toolbar">
@@ -61,7 +66,7 @@ export function RouteToolbar({
                 <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
                 <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
             </div>
-            <div className="route-toolbar__strip" />
+            <div className="route-toolbar__strip">{strip}</div>
         </div>
     );
 }

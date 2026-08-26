@@ -35,10 +35,18 @@ interface RouteStateProps {
     readonly snapshot?: RouteSnapshot;
     readonly filter?: string;
     readonly stops?: StopsState;
+    /** Stop marks: the server supplies them in the app, a prop supplies them in the gallery. */
+    readonly stopViewed?: readonly string[];
     readonly keptStopId?: string | null;
 }
 
-function RouteState({ snapshot = readySnapshot(), filter = 'all', stops = EMPTY_STOPS, keptStopId = null }: RouteStateProps) {
+function RouteState({
+    snapshot = readySnapshot(),
+    filter = 'all',
+    stops = EMPTY_STOPS,
+    stopViewed = [],
+    keptStopId = null,
+}: RouteStateProps) {
     const session = useMemo(
         () => createSessionStore({ initial: { view: 'route', filter, stops } }),
         [filter, stops],
@@ -80,6 +88,7 @@ function RouteState({ snapshot = readySnapshot(), filter = 'all', stops = EMPTY_
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}
                 initialKeptStopId={keptStopId}
+                initialStopViewed={stopViewed}
                 onUnderExplained={setUnderExplained}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={(fileId) => {
@@ -88,6 +97,7 @@ function RouteState({ snapshot = readySnapshot(), filter = 'all', stops = EMPTY_
                 }}
                 onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 onSetViewed={() => Promise.resolve(0)}
+                onSetStopViewed={() => Promise.resolve(0)}
             />
         </div>
     );
@@ -163,7 +173,7 @@ export const M2_T6_STATES: readonly RouteGalleryState[] = [
     {
         id: 'route-viewed',
         title: 'stop viewed: column dimmed, hunks collapsed',
-        render: () => <RouteState stops={stopsState({ viewed: new Set(['s01']) })} />,
+        render: () => <RouteState stopViewed={['s01']} />,
     },
     {
         id: 'route-low-expanded',

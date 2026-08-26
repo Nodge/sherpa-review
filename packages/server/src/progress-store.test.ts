@@ -117,6 +117,81 @@ describe('reading progress store', () => {
         ]);
     });
 
+    it('stores a stop mark with its ranges and preserves it across database reopen', () => {
+        const store = new ProgressStore({ db: open() });
+
+        expect(
+            store.setStopViewed('s01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+                { fileId: 'file-2', side: 'old', start: 3, end: 3 },
+            ]),
+        ).toBe(1);
+
+        const restarted = new ProgressStore({ db: open() });
+        expect(restarted.readStops()).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(restarted.read()).toEqual([
+            { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+            { fileId: 'file-2', viewed: false, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
+        ]);
+    });
+
+    it('keeps the revision unchanged when marking the same set of ranges again', () => {
+        const store = new ProgressStore({ db: open() });
+        const ranges = [
+            { fileId: 'file-1', side: 'new' as const, start: 10, end: 14 },
+            { fileId: 'file-1', side: 'old' as const, start: 2, end: 4 },
+        ];
+
+        expect(store.setStopViewed('s01', true, ranges)).toBe(1);
+        // Order and duplicates in the request do not change the store.
+        expect(store.setStopViewed('s01', true, [...ranges].reverse())).toBe(1);
+        expect(store.setStopViewed('s01', true, [...ranges, ...ranges])).toBe(1);
+        // A different set does change it.
+        expect(store.setStopViewed('s01', true, ranges.slice(0, 1))).toBe(2);
+    });
+
+    it('clears a mark by deleting only that stop\'s ranges', () => {
+        const store = new ProgressStore({ db: open() });
+        store.setStopViewed('s01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
+        store.setStopViewed('s02', true, [{ fileId: 'file-1', side: 'new', start: 40, end: 41 }]);
+        store.setFileViewed('file-1', true);
+
+        store.setStopViewed('s01', false, []);
+
+        expect(store.readStops()).toEqual([
+            { stopId: 's01', viewed: false },
+            { stopId: 's02', viewed: true },
+        ]);
+        // The manual file mark and neighbouring stop ranges remain.
+        expect(store.read()).toEqual([
+            { fileId: 'file-1', viewed: true, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+        ]);
+    });
+
+    it('clearing stop progress removes its ranges and preserves file marks', () => {
+        const db = open();
+        db.prepare('INSERT INTO file_seen_ranges (file_id, side, start_line, end_line) VALUES (?, ?, ?, ?)').run(
+            'file-9',
+            'new',
+            1,
+            2,
+        );
+        const store = new ProgressStore({ db });
+        store.setStopViewed('s01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
+        store.setFileViewed('file-1', true);
+
+        const revision = store.clearStopProgress();
+
+        expect(store.readStops()).toEqual([]);
+        expect(store.read()).toEqual([
+            { fileId: 'file-1', viewed: true, seenRanges: [] },
+            // A range not belonging to a stop survives cleanup.
+            { fileId: 'file-9', viewed: false, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
+        ]);
+        // Nothing to clear, so the revision stays the same.
+        expect(store.clearStopProgress()).toBe(revision);
+    });
+
     it('does not notify subscribers after close', () => {
         const store = new ProgressStore({ db: open() });
         let calls = 0;
