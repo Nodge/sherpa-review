@@ -6,6 +6,9 @@
   "bin": {
     "sherpa": "./dist/sherpa.mjs"
   },
+  "exports": {
+    "./fake-worker": "./src/fake-worker.ts"
+  },
   "engines": {
     "node": ">=22.13"
   },

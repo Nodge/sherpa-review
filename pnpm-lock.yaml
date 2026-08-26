@@ -51,6 +51,12 @@ importers:
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
+      '@sherpa/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@sherpa/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
 
   packages/fixtures:
     dependencies:

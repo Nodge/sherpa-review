@@ -40,7 +40,7 @@ Worker commands:
 | Command | Semantics |
 |---|---|
 | `sherpa worker next` | Long-poll: blocks until a task arrives, but returns within ≤ ~4 min ("no tasks, call again"). Every return is a heartbeat. Leases a task. |
-| `sherpa task complete <id> --file <path>` | Submit a result. The server validates it on receipt and fails closed. Errors are printed as a list in prompt format: "fix these and call complete again". Repeating complete on a closed task is a no-op. |
+| `sherpa task complete <id> --file <path>` | submit the result. The server validates fail-closed on receipt. On errors it prints a list in prompt format: "fix and call complete again". Validator rejection is a normal outcome with exit code 0: the agent reads stdout, not codes. Nonzero codes are only for RPC/argument errors. Repeating complete on a closed task is a no-op. |
 | `sherpa task progress <id> --text "<msg>"` | A cheap status update. The UI shows "agent working: …". |
 | `sherpa task fail <id> --reason "<msg>"` | Explicit failure (no access, not enough context). The task enters an error state with a reason visible in the UI. |
 

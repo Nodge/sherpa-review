@@ -12,10 +12,19 @@ export interface WorkerRun {
     readonly stderr: string;
 }
 
-/** `worker next` output and the issued task number, if present. */
+/** `worker next` output plus the parsed header of the assigned task, if present. */
 export interface NextRun extends WorkerRun {
     /** null means no task was issued (idle, error or server refusal). */
     readonly taskId: number | null;
+    /** Task type from the header (`route.skeleton`, `route.section`, `echo`, …). null means no task was assigned. */
+    readonly type: string | null;
+    /** Attempt number from the header. null means no task was assigned. */
+    readonly attempt: number | null;
+    /**
+     * Planned stop numbers that `route.section` asks to fill.
+     * Empty for other task types, whose instructions have no targets.
+     */
+    readonly planIndexes: readonly number[];
 }
 
 export interface FakeWorkerOptions {
@@ -64,7 +73,7 @@ export class FakeWorker {
 
     async next(): Promise<NextRun> {
         const run = await this.run('worker', 'next');
-        return { ...run, taskId: parseTaskId(run.stdout) };
+        return { ...run, ...parseTaskHead(run.stdout), planIndexes: parsePlanIndexes(run.stdout) };
     }
 
     /** Submits a result. Writes the file automatically, as the model does before calling the command. */
@@ -110,10 +119,31 @@ export class FakeWorker {
     }
 }
 
-/** `TASK sherpa/<id>` from the prompt format (`format.ts`). Test-only format, no strict contract. */
-function parseTaskId(stdout: string): number | null {
-    const match = /TASK sherpa\/(\d+)/.exec(stdout);
-    return match?.[1] === undefined ? null : Number(match[1]);
+/**
+ * The `TASK sherpa/<id> (<type>), attempt <n>` header from the prompt format (`format.ts`).
+ * This is a test format with no strict contract.
+ */
+function parseTaskHead(stdout: string): Pick<NextRun, 'taskId' | 'type' | 'attempt'> {
+    const match = /TASK sherpa\/(\d+) \(([^)]+)\), attempt (\d+)/.exec(stdout);
+    if (match?.[1] === undefined || match[2] === undefined || match[3] === undefined) {
+        return { taskId: null, type: null, attempt: null };
+    }
+    return { taskId: Number(match[1]), type: match[2], attempt: Number(match[3]) };
+}
+
+/**
+ * Target stops for a fill task from its instructions (`sectionInstructions`). The loop submits exactly
+ * the requested numbers without relying on the order tasks enter the queue.
+ */
+function parsePlanIndexes(stdout: string): readonly number[] {
+    const match = /Fill in (?:this stop|these stops) of the review route: ([\d, ]+)\./.exec(stdout);
+    if (match?.[1] === undefined) {
+        return [];
+    }
+    return match[1]
+        .split(',')
+        .map((part) => Number(part.trim()))
+        .filter((value) => Number.isInteger(value));
 }
 
 interface ExecFileFailure {

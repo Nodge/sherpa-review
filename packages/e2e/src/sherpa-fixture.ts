@@ -6,9 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test as base } from '@playwright/test';
+import { FakeWorker } from '@sherpa/cli/fake-worker';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const UI_DIST = path.join(REPO_ROOT, 'packages/ui/dist');
+/** `global-setup` builds the CLI bundle. The fake worker uses the same artifact as production. */
+const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa.mjs');
 const START_TIMEOUT_MS = 20_000;
 const STOP_TIMEOUT_MS = 10_000;
 
@@ -18,6 +21,8 @@ export interface SherpaServerHandle {
     readonly prKey: FixturePrKey;
     readonly sherpaDir: string;
     readonly url: string;
+    /** This server's agent session, using the same shell commands the model calls in the harness. */
+    readonly worker: FakeWorker;
     readonly stop: () => Promise<void>;
 }
 
@@ -46,6 +51,7 @@ export { expect };
 
 async function startSherpaServer(prKey: FixturePrKey): Promise<SherpaServerHandle> {
     const sherpaDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-'));
+    const workDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-work-'));
     const child = spawn(
         'pnpm',
         [
@@ -72,6 +78,7 @@ async function startSherpaServer(prKey: FixturePrKey): Promise<SherpaServerHandl
             prKey,
             sherpaDir,
             url,
+            worker: new FakeWorker({ bundlePath: CLI_BUNDLE, sherpaDir, prKey, workDir }),
             stop: async () => {
                 if (stopped) {
                     return;
@@ -81,12 +88,14 @@ async function startSherpaServer(prKey: FixturePrKey): Promise<SherpaServerHandl
                     await stopChild(child);
                 } finally {
                     await rm(sherpaDir, { recursive: true, force: true });
+                    await rm(workDir, { recursive: true, force: true });
                 }
             },
         };
     } catch (error) {
         await stopChild(child).catch(() => undefined);
         await rm(sherpaDir, { recursive: true, force: true });
+        await rm(workDir, { recursive: true, force: true });
         throw error;
     }
 }
