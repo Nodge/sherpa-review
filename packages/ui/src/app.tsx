@@ -60,7 +60,7 @@ import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
 import { FullDiffView } from './views/full-diff.tsx';
 import { RegenerateBanner } from './views/route/other-card.tsx';
-import { RouteCommands } from './views/route/route-commands.tsx';
+import { RouteCommands, RoutePresetCommand } from './views/route/route-commands.tsx';
 import type { RouteSummary } from './views/route/route-view.tsx';
 import { RouteView } from './views/route/route-view.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
@@ -106,7 +106,7 @@ interface ReviewState {
 
 export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const { view, filter: filterId, paletteOpen } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const { view, filter: filterId, preset, paletteOpen } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const viewSelection = useSyncExternalStore(
         session.subscribeViewSelection,
         session.getViewSelectionSnapshot,
@@ -825,7 +825,16 @@ export function App({ store, session, token }: AppProps) {
                 />
             )}
 
-            {routeSnapshot === null ? null : <RouteCommands snapshot={routeSnapshot} onJump={jumpToStop} />}
+            {routeSnapshot === null ? null : (
+                <>
+                    <RouteCommands snapshot={routeSnapshot} onJump={jumpToStop} />
+                    <RoutePresetCommand
+                        preset={preset}
+                        setPreset={session.setPreset}
+                        setView={session.setView}
+                    />
+                </>
+            )}
 
             <CommandPalette
                 open={paletteOpen}

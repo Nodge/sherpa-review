@@ -11,7 +11,7 @@ import type {
     UiStopSeenRange,
 } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
     deleteReviewDraft,
@@ -75,7 +75,8 @@ import { CoverageStrip } from './coverage-strip.tsx';
 import { FileChips } from './file-chips.tsx';
 import { OtherCard } from './other-card.tsx';
 import { RouteToolbar } from './route-toolbar.tsx';
-import { animateScrollTo, JUMP_DURATION, targetScrollTop } from './scroll.js';
+import type { StopBox } from './scroll.js';
+import { animateScrollTo, JUMP_DURATION, pickTopStop, targetScrollTop } from './scroll.js';
 import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, ViewedSummary } from './stop-card.tsx';
 import { StopFileCard } from './stop-file-card.tsx';
 import { useOnScreen } from './use-on-screen.js';
@@ -321,6 +322,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
     const {
         filter: filterId,
+        preset,
         threadsShow,
         stops: stopState,
     } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
@@ -388,8 +390,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const [parseErrors, setParseErrors] = useState<ReadonlyMap<string, string>>(new Map());
     const failedFiles = useMemo(() => new Set(parseErrors.keys()), [parseErrors]);
     const model = useMemo(
-        () => buildRouteModel({ snapshot, files: diff.files, models: diffSnapshot.models, failed: failedFiles }),
-        [diff.files, diffSnapshot.models, failedFiles, snapshot],
+        () =>
+            buildRouteModel({
+                snapshot,
+                files: diff.files,
+                models: diffSnapshot.models,
+                failed: failedFiles,
+                preset,
+            }),
+        [diff.files, diffSnapshot.models, failedFiles, preset, snapshot],
     );
     const entryId = (entry: RouteEntry): string => entry.view.stop.id;
     const stopIdsKey = useMemo(() => model.entries.map(entryId).join(' '), [model.entries]);
@@ -482,7 +491,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     useSelectionLifecycle(store);
 
     const containerRef = useRef<HTMLElement | null>(null);
-    const topStopRef = useRef<string | null>(null);
+    /** The top stop in the viewport and its offset from the container edge anchor a preset change. */
+    const topStopRef = useRef<{ stopId: string; offset: number } | null>(null);
     const settling = useRef(0);
     const [keptStopId, setKeptStopId] = useState<string | null>(props.initialKeptStopId ?? null);
     const [flashStopId, setFlashStopId] = useState<string | null>(null);
@@ -506,11 +516,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             return;
         }
         const top = container.getBoundingClientRect().top;
-        for (const section of container.querySelectorAll<HTMLElement>('[data-stop]')) {
-            if (section.getBoundingClientRect().bottom > top) {
-                topStopRef.current = section.dataset.stop ?? null;
-                return;
-            }
+        // The sticky toolbar covers the container's top strip, so readable content starts below it.
+        const toolbar = container.querySelector<HTMLElement>('.route-toolbar');
+        const line = toolbar === null ? top : Math.max(top, toolbar.getBoundingClientRect().bottom);
+        const anchor = pickTopStop(top, line, stopBoxes(container));
+        if (anchor !== null) {
+            topStopRef.current = anchor;
         }
     }, []);
     const handleScroll = useCallback(() => {
@@ -527,7 +538,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             if (next.id === filter.id) {
                 return;
             }
-            const top = topStopRef.current;
+            const top = topStopRef.current?.stopId ?? null;
             const entry = model.entries.find((candidate) => entryId(candidate) === top) ?? null;
             setKeptStopId(entry !== null && !matches(entry, next.fileIds) ? entryId(entry) : null);
             session.setFilter(next.id);
@@ -580,9 +591,80 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         }
         settling.current = Math.max(0, settling.current - 1);
     }, []);
-    useEffect(() => () => {
+    // Our scroll adjustment does not count as a reviewer gesture while anchor correction is running: the browser
+    // dispatches scroll events in the next task, so a timer closes the window.
+    const anchoring = useRef<{ frames: number[]; timers: ReturnType<typeof setTimeout>[] } | null>(null);
+    const endAnchoring = useCallback(() => {
+        const run = anchoring.current;
+        if (run === null) {
+            return;
+        }
+        anchoring.current = null;
+        for (const frame of run.frames) {
+            cancelAnimationFrame(frame);
+        }
+        for (const timer of run.timers) {
+            clearTimeout(timer);
+        }
+        settling.current = Math.max(0, settling.current - 1);
+    }, []);
+    useEffect(
+        () => () => {
+            stopJump();
+            endAnchoring();
+        },
+        [endAnchoring, stopJump],
+    );
+
+    /**
+     * Changing the preset anchors the viewport to the top stop (SPEC §2.5): the same stop id stays
+     * on screen without resetting scrolling to the start. A layout effect restores it before
+     * the new order is painted, without animation: the reading position stays the same.
+     */
+    const presetRef = useRef(preset);
+    useAnchorEffect(() => {
+        if (presetRef.current === preset) {
+            return;
+        }
+        presetRef.current = preset;
+        const anchor = topStopRef.current;
+        if (anchor === null || containerRef.current === null) {
+            return;
+        }
+        const apply = (): void => {
+            const container = containerRef.current;
+            const section = container?.querySelector<HTMLElement>(`[data-stop="${cssEscape(anchor.stopId)}"]`) ?? null;
+            if (container === null || section === null) {
+                return;
+            }
+            const delta = section.getBoundingClientRect().top - container.getBoundingClientRect().top;
+            container.scrollTop += delta - anchor.offset;
+        };
+
+        // An unfinished correction from the previous jump would pull the container towards the old target.
         stopJump();
-    }, [stopJump]);
+        endAnchoring();
+        apply();
+        settling.current += 1;
+        const run: { frames: number[]; timers: ReturnType<typeof setTimeout>[] } = { frames: [], timers: [] };
+        anchoring.current = run;
+        // Neighbouring stops render their cards after entering the viewport and grow above
+        // the anchor after reordering. So the position is confirmed a few more times.
+        run.frames.push(
+            requestAnimationFrame(() => {
+                apply();
+                run.frames.push(requestAnimationFrame(apply));
+            }),
+        );
+        run.timers.push(
+            setTimeout(() => {
+                apply();
+                // The last scroll adjustment is ours too: its event arrives in the next task,
+                // so the correction window must stay open until then, or kept-in-view would be cleared.
+                run.timers.push(setTimeout(endAnchoring, SETTLE_TAIL));
+            }, ANCHOR_SETTLE),
+        );
+    }, [endAnchoring, preset, stopJump]);
 
     useEffect(() => {
         const target = jump.current;
@@ -625,6 +707,20 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     useEffect(() => {
         updateTopStop();
     }, [shown, updateTopStop]);
+
+    // Capture the preset-change anchor at the switch, while the DOM still has the old
+    // order. The store subscription runs before rerendering. A scroll event would be too late
+    // because it only arrives when the browser paints a frame (background tabs have none).
+    useEffect(() => {
+        let last = session.getSnapshot().preset;
+        return session.subscribe(() => {
+            const next = session.getSnapshot().preset;
+            if (next !== last) {
+                last = next;
+                updateTopStop();
+            }
+        });
+    }, [session, updateTopStop]);
 
     const handledNavigation = useRef<number | null>(null);
     useEffect(() => {
@@ -961,6 +1057,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
             <RouteToolbar
                 store={store}
+                preset={preset}
+                onPreset={session.setPreset}
                 filters={filters}
                 filter={filter}
                 onFilter={changeFilter}
@@ -1272,6 +1370,17 @@ export function SnapshotPill({ snapshot }: { snapshot: RouteSnapshot }) {
     );
 }
 
+/** Stop sections in markup order. Lazy measurement stops at the first visible section when selecting an anchor. */
+function* stopBoxes(container: HTMLElement): Generator<StopBox> {
+    for (const section of container.querySelectorAll<HTMLElement>('[data-stop]')) {
+        const stopId = section.dataset.stop;
+        if (stopId !== undefined) {
+            const rect = section.getBoundingClientRect();
+            yield { stopId, top: rect.top, bottom: rect.bottom };
+        }
+    }
+}
+
 function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {
     return files.reduce((total, file) => total + file[key], 0);
 }
@@ -1281,6 +1390,13 @@ function cssEscape(value: string): string {
     return typeof CSS === 'undefined' ? value.replace(/["\\]/g, '\\$&') : CSS.escape(value);
 }
 
+/**
+ * Adjust the scroll anchor before painting the frame, or the new order would flash at the wrong position.
+ * Static rendering (tests, SSR) has no layout effects: use a regular effect there so React
+ * does not warn about a layout effect on the server.
+ */
+const useAnchorEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
+
 /** Thread focus is needed only by the full diff reply shortcut, which the route does not have. */
 const NOOP_THREAD = (): void => undefined;
 
@@ -1288,6 +1404,12 @@ const FLASH_MS = 900;
 /** Allow time after the animation: the browser dispatches scroll events after the final step. */
 const SETTLE_TAIL = 50;
 const BACKGROUND_PARSE_DELAY = 300;
+/**
+ * How long to keep the preset-change anchor: allow lazy rendering of neighbouring stops to finish
+ * (the visibility observer and its rerender), but do not keep it long enough to fight
+ * the reviewer's own scrolling.
+ */
+const ANCHOR_SETTLE = 120;
 const EMPTY_FILE = {
     generated: false,
     viewed: false,

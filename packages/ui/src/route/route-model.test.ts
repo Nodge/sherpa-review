@@ -45,6 +45,25 @@ function stopFiles(id: string): readonly RouteFileGroup[] {
     );
 }
 
+/** Order and numbers of model entries, as the reviewer sees them in the stop column. */
+function ids(model: ReturnType<typeof build>): string[] {
+    return model.entries.map((entry) => entry.view.stop.id);
+}
+
+function numbers(model: ReturnType<typeof build>): string[] {
+    return model.entries.map((entry) => entry.view.planLabel);
+}
+
+/** Anchors for low-tier stops and composite 03 are trimmed: uncovered lines exceed the promotion threshold (SPEC §4.3). */
+function strippedAnchors(): RouteSnapshot {
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((stop) =>
+            stop.tier === 'low' || stop.id === 's03' ? { ...stop, anchors: [] } : stop,
+        ),
+    };
+}
+
 function stopOf(id: string): RouteStop {
     const stop = SNAPSHOT.stops.find((candidate) => candidate.id === id);
     if (stop === undefined) {
@@ -105,6 +124,37 @@ describe('route model', () => {
             '06',
             '07',
         ]);
+    });
+
+    it('uses snapshot tourOrder for Full tour and keeps numbers fixed by the plan', () => {
+        const tour = buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models: MODELS, preset: 'tour' });
+
+        expect(ids(tour)).toEqual([...SNAPSHOT.tourOrder]);
+        // Numbers follow their stops. The first tour card is numbered 03, not 01.
+        expect(numbers(tour)).toEqual(['03', '01', '02', '05', '06', '04', '07']);
+        // The set is the same as in Triage. Only the card order changes.
+        expect([...ids(tour)].sort()).toEqual([...ids(build())].sort());
+        expect([...numbers(tour)].sort()).toEqual([...numbers(build())].sort());
+        expect(tour.stopCount).toBe(7);
+    });
+
+    it('tour order strictly follows tourOrder: promoting Other is a triage feature', () => {
+        const stripped = strippedAnchors();
+        const triage = build(stripped);
+        const tour = buildRouteModel({ snapshot: stripped, files: DATA.diff.files, models: MODELS, preset: 'tour' });
+
+        expect(triage.promoted).toBe(true);
+        // The flag is shared and shows the "consider regenerating" banner. The order is not shared.
+        expect(tour.promoted).toBe(true);
+        expect(ids(tour)).toEqual([...SNAPSHOT.tourOrder]);
+    });
+
+    it('handles invalid tourOrder by skipping unknown ids and appending omitted stops', () => {
+        const broken: RouteSnapshot = { ...SNAPSHOT, tourOrder: ['s03', 'made-up-stop', 's03', 's01', 'other'] };
+        const tour = buildRouteModel({ snapshot: broken, files: DATA.diff.files, models: MODELS, preset: 'tour' });
+
+        expect(ids(tour)).toEqual(['s03', 's01', 'other', 's02', 's04', 's05', 's06']);
+        expect(tour.stopCount).toBe(7);
     });
 
     it('places Other before the first low-tier stop above the uncovered threshold without renumbering', () => {

@@ -5,7 +5,7 @@ import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import type { SessionState } from './session/session-store.js';
-import { createSessionStore, DEFAULT_THREADS_SHOW } from './session/session-store.js';
+import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
@@ -38,6 +38,7 @@ if (token === null) {
             view: parseViewId(readFragmentParam(window.location.hash, 'view')) ?? DEFAULT_VIEW,
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
+            preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
         },
@@ -49,6 +50,8 @@ if (token === null) {
                 updateFragment(window.location.hash, {
                     view: state.view,
                     filter: filterFragmentValue(state.filter),
+                    // The default is omitted from the address: the preset appears in the URL only after a change.
+                    preset: state.preset === DEFAULT_PRESET ? null : state.preset,
                 }),
             );
         },

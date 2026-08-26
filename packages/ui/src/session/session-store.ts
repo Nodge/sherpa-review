@@ -41,10 +41,25 @@ export const EMPTY_STOPS: StopsState = {
     collapsed: new Set(),
 };
 
+/**
+ * Route preset (README State model, SPEC §2.5): `triage` is the plan's "most important first" order,
+ * `tour` is the narrative reading order from the snapshot's `tourOrder`. The preset does not affect
+ * stop numbers, which are fixed by the plan (SPEC §8 item 4).
+ */
+export type RoutePreset = 'triage' | 'tour';
+
+export const DEFAULT_PRESET: RoutePreset = 'triage';
+
+/** `null` means the string is not a preset (invalid URL fragment value). */
+export function parsePreset(value: string | null): RoutePreset | null {
+    return value === 'triage' || value === 'tour' ? value : null;
+}
+
 export interface SessionState {
     readonly view: ViewId;
     /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
     readonly filter: string;
+    readonly preset: RoutePreset;
     /** Additive thread sources. They live only in the current tab session. */
     readonly threadsShow: ThreadsShow;
     /** The command palette is open over the current view. */
@@ -60,6 +75,7 @@ export interface SessionStore {
     readonly getViewSelectionSnapshot: () => number;
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
+    readonly setPreset: (preset: RoutePreset) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     /** Normal stop expansion (low-tier stops are collapsed by default). */
@@ -76,10 +92,11 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'stops'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'stops' | 'preset'> & {
         readonly threadsShow?: ThreadsShow;
         readonly paletteOpen?: boolean;
         readonly stops?: StopsState;
+        readonly preset?: RoutePreset;
     };
     /**
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
@@ -97,6 +114,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
         paletteOpen: options.initial.paletteOpen ?? false,
         stops: options.initial.stops ?? EMPTY_STOPS,
+        preset: options.initial.preset ?? DEFAULT_PRESET,
     };
 
     const toggleStop = (key: keyof StopsState, stopId: string, on: boolean): void => {
@@ -148,6 +166,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setFilter: (filter) => {
             if (filter !== state.filter) {
                 update({ ...state, filter });
+            }
+        },
+        setPreset: (preset) => {
+            if (preset !== state.preset) {
+                update({ ...state, preset });
             }
         },
         setThreadsShow: (threadsShow) => {

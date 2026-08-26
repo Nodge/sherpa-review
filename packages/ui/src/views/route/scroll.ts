@@ -22,6 +22,34 @@ export function targetScrollTop(container: HTMLElement, target: HTMLElement): nu
     return Math.max(0, Math.min(top, container.scrollHeight - container.clientHeight));
 }
 
+/** Stop section in viewport coordinates, exactly what anchor selection needs. */
+export interface StopBox {
+    readonly stopId: string;
+    readonly top: number;
+    readonly bottom: number;
+}
+
+/** Scroll anchor: stop and its offset from the container's top edge. */
+export interface StopAnchor {
+    readonly stopId: string;
+    readonly offset: number;
+}
+
+/**
+ * Top visible stop. `line` is the sticky toolbar's bottom edge. A stop whose tail is
+ * entirely behind it is invisible to the reviewer and cannot be an anchor (SPEC §2.5). The offset
+ * is measured from the container edge `containerTop`, so restoration returns the stop exactly
+ * where the reviewer was reading, even if it starts beneath the toolbar.
+ */
+export function pickTopStop(containerTop: number, line: number, boxes: Iterable<StopBox>): StopAnchor | null {
+    for (const box of boxes) {
+        if (box.bottom > line) {
+            return { stopId: box.stopId, offset: box.top - containerTop };
+        }
+    }
+    return null;
+}
+
 /** Returns a cancellation function so competing jumps do not pull the container in 2 directions. */
 export function animateScrollTo(container: HTMLElement, to: number, duration = JUMP_DURATION): () => void {
     const from = container.scrollTop;

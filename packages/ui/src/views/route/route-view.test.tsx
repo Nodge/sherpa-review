@@ -6,11 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
-import type { StopsState } from '../../session/session-store.js';
+import type { RoutePreset, SessionStore, StopsState } from '../../session/session-store.js';
 import { createSessionStore, EMPTY_STOPS } from '../../session/session-store.js';
+import type { ThreadStore } from '../../threads/store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteWorkspace } from './route-view.tsx';
-import { TRIAGE_HINT } from './route-toolbar.tsx';
+import { TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
 
 /**
  * Route view component tests use static markup on a fixture (the same approach as
@@ -30,9 +31,13 @@ function render(
     options: {
         snapshot?: RouteSnapshot;
         filter?: string;
+        preset?: RoutePreset;
         stops?: StopsState;
         stopViewed?: readonly string[];
         keptStopId?: string;
+        /** Shared session and thread store to check what survives a preset change. */
+        session?: SessionStore;
+        threadStore?: ThreadStore;
         /** `false` means diff models are not parsed yet, so view counts are not final. */
         parsed?: boolean;
     } = {},
@@ -49,11 +54,19 @@ function render(
             diff={DATA.diff}
             lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
             snapshot={options.snapshot ?? SNAPSHOT}
-            session={createSessionStore({
-                initial: { view: 'route', filter: options.filter ?? 'all', stops: options.stops ?? EMPTY_STOPS },
-            })}
+            session={
+                options.session ??
+                createSessionStore({
+                    initial: {
+                        view: 'route',
+                        filter: options.filter ?? 'all',
+                        stops: options.stops ?? EMPTY_STOPS,
+                        ...(options.preset === undefined ? {} : { preset: options.preset }),
+                    },
+                })
+            }
             store={store}
-            threadStore={createThreadStore(DATA.threads, FILE_IDS)}
+            threadStore={options.threadStore ?? createThreadStore(DATA.threads, FILE_IDS)}
             threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
             {...(options.keptStopId === undefined ? {} : { initialKeptStopId: options.keptStopId })}
             {...(options.stopViewed === undefined ? {} : { initialStopViewed: options.stopViewed })}
@@ -86,12 +99,93 @@ describe('route view', () => {
         expect(html).toContain('Open 34 lines');
     });
 
-    it('the toolbar holds a static preset with a hint and disables the full tour', () => {
-        const html = render();
+    it('the preset switch shows the active option and its tooltip', () => {
+        const triage = render();
+        const tour = render({ preset: 'tour' });
 
-        expect(html).toContain(TRIAGE_HINT);
-        expect(html).toContain('Full tour');
-        expect(html).toContain('full tour is not available yet');
+        expect(triage).toContain(TRIAGE_HINT);
+        expect(triage).not.toContain(TOUR_HINT);
+        expect(triage).toContain('aria-pressed="true">Triage</button>');
+        expect(triage).toContain('aria-pressed="false">Full tour</button>');
+        expect(tour).toContain(TOUR_HINT);
+        expect(tour).not.toContain(TRIAGE_HINT);
+        expect(tour).toContain('aria-pressed="true">Full tour</button>');
+    });
+
+    it('Full tour orders stops by tourOrder while their numbers stay fixed by the plan', () => {
+        const html = render({ preset: 'tour' });
+
+        expect(order(html)).toEqual([...SNAPSHOT.tourOrder]);
+        expect(order(html)).not.toEqual(order(render()));
+        // Stop 03 comes first with its own number, not "01".
+        expect(section(html, 's03')).toContain('03 / 7');
+        expect(section(html, 's01')).toContain('01 / 7');
+        expect(section(html, 'other')).toContain('07 / 7');
+    });
+
+    it('an invalid tourOrder does not crash the view, unknown ids are skipped and omitted stops go last', () => {
+        const html = render({
+            preset: 'tour',
+            snapshot: { ...SNAPSHOT, tourOrder: ['s04', 'no-such-stop', 's01'] },
+        });
+
+        expect(order(html)).toEqual(['s04', 's01', 's02', 's03', 's05', 's06', 'other']);
+        expect(html).toContain('0 of 7 stops viewed');
+    });
+
+    it('switching presets preserves marks, the filter and expanded state', () => {
+        const session = createSessionStore({
+            initial: {
+                view: 'route',
+                filter: 'pci',
+                stops: { ...EMPTY_STOPS, expanded: new Set(['s05']), collapsed: new Set(['s02']) },
+            },
+        });
+        const triage = render({ session, stopViewed: ['s03'] });
+        session.setPreset('tour');
+        const tour = render({ session, stopViewed: ['s03'] });
+
+        expect(session.getSnapshot().filter).toBe('pci');
+        expect(session.getSnapshot().stops.expanded.has('s05')).toBe(true);
+        expect(session.getSnapshot().stops.collapsed.has('s02')).toBe(true);
+        // The filter applies to the same set of stops in both presets.
+        expect([...order(tour)].sort()).toEqual([...order(triage)].sort());
+        for (const html of [triage, tour]) {
+            expect(section(html, 's03')).toContain('✓ Viewed');
+        }
+    });
+
+    it('a comment draft survives reordering because it lives in the store, not the card', () => {
+        const threadStore = createThreadStore(DATA.threads, FILE_IDS);
+        const anchor = SNAPSHOT.stops[0]?.anchors[0];
+        if (anchor === undefined) {
+            throw new Error('the first fixture stop must have an anchor');
+        }
+        const session = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+        threadStore.openComposer({
+            key: `new:${anchor.fileId}:${anchor.side}:${String(anchor.start)}`,
+            threadId: null,
+            parentId: null,
+            anchor: {
+                fileId: anchor.fileId,
+                path: anchor.path,
+                position: { side: anchor.side, line: anchor.start, size: 1 },
+            },
+            text: 'the draft survives reordering',
+            commentId: null,
+            status: 'idle',
+            saveUncertain: false,
+            slow: false,
+            confirmDiscard: false,
+            resolvedAtOpen: false,
+        });
+        const triage = render({ session, threadStore });
+        session.setPreset('tour');
+        const tour = render({ session, threadStore });
+
+        expect(triage).toContain('the draft survives reordering');
+        expect(tour).toContain('the draft survives reordering');
+        expect(order(tour)).toEqual([...SNAPSHOT.tourOrder]);
     });
 
     it('the header has a snapshot pill with a short commit hash', () => {

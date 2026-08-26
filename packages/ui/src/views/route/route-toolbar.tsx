@@ -4,7 +4,7 @@ import { CommentSources, DiffModeToggle } from '../../components/toolbar-control
 import { FilterSelect } from '../../components/filter-select.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import type { FileFilter } from '../../filters/lens-filters.js';
-import type { ThreadsShow } from '../../session/session-store.js';
+import type { RoutePreset, ThreadsShow } from '../../session/session-store.js';
 import type { ThreadSourceCounts } from '../../threads/model.js';
 
 /**
@@ -19,8 +19,20 @@ import type { ThreadSourceCounts } from '../../threads/model.js';
 export const TRIAGE_HINT = 'The most important first — stop when you have seen enough.';
 export const TOUR_HINT = 'Reading order: entry point → definitions → consequences → verification.';
 
+/** SPEC §2.5: the toggle is disabled until a route exists and explains why (`title`). */
+export const PRESET_DISABLED_TITLE = 'available once the route is built';
+
+const PRESETS: readonly { readonly id: RoutePreset; readonly label: string; readonly hint: string }[] = [
+    { id: 'triage', label: 'Triage', hint: TRIAGE_HINT },
+    { id: 'tour', label: 'Full tour', hint: TOUR_HINT },
+];
+
 export interface RouteToolbarProps {
     readonly store: DiffViewStore;
+    readonly preset: RoutePreset;
+    readonly onPreset: (preset: RoutePreset) => void;
+    /** No route means nothing to toggle (SPEC §2.5). */
+    readonly presetDisabled?: boolean;
     readonly filters: readonly FileFilter[];
     readonly filter: FileFilter;
     readonly onFilter: (id: string) => void;
@@ -33,6 +45,9 @@ export interface RouteToolbarProps {
 
 export function RouteToolbar({
     store,
+    preset,
+    onPreset,
+    presetDisabled = false,
     filters,
     filter,
     onFilter,
@@ -44,22 +59,26 @@ export function RouteToolbar({
     return (
         <div className="route-toolbar">
             <div className="route-toolbar__row">
-                {/* Preset switching arrives with the full tour (M2-T8). Here it is static. */}
                 <div className="route-preset" role="group" aria-label="Route preset">
-                    <button type="button" className="route-preset__option is-active" aria-pressed>
-                        Triage
-                    </button>
-                    <button
-                        type="button"
-                        className="route-preset__option"
-                        disabled
-                        title="full tour is not available yet"
-                        aria-pressed={false}
-                    >
-                        Full tour
-                    </button>
+                    {PRESETS.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            className={`route-preset__option${option.id === preset ? ' is-active' : ''}`}
+                            aria-pressed={option.id === preset}
+                            disabled={presetDisabled}
+                            {...(presetDisabled ? { title: PRESET_DISABLED_TITLE } : {})}
+                            onClick={() => {
+                                onPreset(option.id);
+                            }}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
                 </div>
-                <span className="route-toolbar__hint">{TRIAGE_HINT}</span>
+                <span className="route-toolbar__hint">
+                    {PRESETS.find((option) => option.id === preset)?.hint ?? TRIAGE_HINT}
+                </span>
                 <span className="route-toolbar__spacer" />
                 <DiffModeToggle store={store} />
                 <span className="toolbar-label">Comments:</span>

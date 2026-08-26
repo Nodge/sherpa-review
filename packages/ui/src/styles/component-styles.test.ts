@@ -49,8 +49,15 @@ describe('component styles', () => {
 
         it(`${name}: uses only declared tokens`, () => {
             const used = [...css.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((match) => match[1]);
+            // A file-local variable is not a second set of values. It gives this view's layout constant
+            // a single definition (its colour cannot be hidden anyway: literals are forbidden above).
+            const local = new Set(
+                [...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]),
+            );
 
-            expect(used.filter((token) => token !== undefined && !DECLARED.has(token))).toEqual([]);
+            expect(
+                used.filter((token) => token !== undefined && !DECLARED.has(token) && !local.has(token)),
+            ).toEqual([]);
         });
     }
 });

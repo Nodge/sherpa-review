@@ -10,6 +10,7 @@ import type {
 
 import type { DiffFileModel } from '../diff/model.js';
 import { changedLinesOf } from '../progress/read-state.js';
+import type { RoutePreset } from '../session/session-store.js';
 import type { ComposerSnapshot } from '../threads/store.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import {
@@ -132,10 +133,18 @@ export type RouteEntry =
     | { readonly kind: 'other'; readonly view: RouteOtherView };
 
 export interface RouteModel {
-    /** Render order: high → medium → [Other when promoted] → low → Other. */
+    /**
+     * Render order. Triage: high → medium → ["Other" if promoted] → low → "Other".
+     * Full tour: the snapshot's `tourOrder` as is.
+     */
     readonly entries: readonly RouteEntry[];
     readonly totals: RouteTotals;
-    /** Other promoted above low-tier stops: uncovered fraction exceeds the threshold (SPEC §4.3). */
+    /**
+     * Uncovered lines exceed the threshold (SPEC §4.3): triage moves "Other" above low-tier stops, while tour
+     * order strictly follows `tourOrder`. Promotion is a triage feature. The "worth
+     * regenerating" banner uses this flag in both presets because it concerns route quality,
+     * rather than card order.
+     */
     readonly promoted: boolean;
     /**
      * Route slots, used as the denominator in "01 / 7" and the toolbar counter. Counted from `entries`, not
@@ -151,9 +160,17 @@ export interface RouteModelInput {
     readonly models: ReadonlyMap<string, DiffFileModel>;
     /** Files whose parsing failed have no model until the reviewer requests a retry. */
     readonly failed?: ReadonlySet<string>;
+    /** Session preset (SPEC §2.5). Affects only entry order. */
+    readonly preset?: RoutePreset;
 }
 
-export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED }: RouteModelInput): RouteModel {
+export function buildRouteModel({
+    snapshot,
+    files,
+    models,
+    failed = EMPTY_FAILED,
+    preset = 'triage',
+}: RouteModelInput): RouteModel {
     const byId = new Map(files.map((file) => [file.fileId, file]));
     const planned = snapshot.stops.filter((stop) => stop.tier !== 'other');
     const otherStop = snapshot.stops.find((stop) => stop.tier === 'other') ?? null;
@@ -230,7 +247,10 @@ export function buildRouteModel({ snapshot, files, models, failed = EMPTY_FAILED
                   lines: uncovered,
               };
     const promoted = other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
-    const entries = order(views, other, promoted);
+    const entries =
+        preset === 'tour'
+            ? inTourOrder(order(views, other, false), snapshot.tourOrder)
+            : order(views, other, promoted);
 
     return { entries, totals, promoted, stopCount: entries.length };
 }
@@ -262,6 +282,26 @@ function order(
         return [...entries, otherEntry];
     }
     return [...entries.slice(0, firstLow), otherEntry, ...entries.slice(firstLow)];
+}
+
+/**
+ * Full tour order (SPEC §2.5): entries follow the snapshot's `tourOrder` exactly,
+ * including the position of "Other". The snapshot passed validation (`tourOrder` is a permutation
+ * of all stops), but the view fails closed. Unknown ids are skipped, duplicates are used once,
+ * and stops absent from `tourOrder` go at the end in plan order. A card
+ * must not disappear because of a malformed field.
+ */
+function inTourOrder(entries: readonly RouteEntry[], ids: readonly string[]): readonly RouteEntry[] {
+    const byId = new Map(entries.map((entry) => [entry.view.stop.id, entry]));
+    const ordered: RouteEntry[] = [];
+    for (const id of ids) {
+        const entry = byId.get(id);
+        if (entry !== undefined) {
+            byId.delete(id);
+            ordered.push(entry);
+        }
+    }
+    return [...ordered, ...entries.filter((entry) => byId.has(entry.view.stop.id))];
 }
 
 function stopView(

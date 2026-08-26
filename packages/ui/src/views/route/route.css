@@ -10,6 +10,12 @@
  */
 
 .route {
+    /*
+     * Sticky toolbar height: 2 rows, the second being the coverage strip. It offsets
+     * the sticky stop column. One value per view avoids hunting through files when the toolbar changes.
+     */
+    --route-toolbar-height: 99px;
+
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -211,6 +217,12 @@
     color: var(--text-primary);
 }
 
+/* No route yet, so nothing to toggle (SPEC §2.5). */
+.route-preset__option:disabled {
+    opacity: var(--disabled-opacity);
+    cursor: default;
+}
+
 /* --- Stop grid --- */
 
 .route__stops {
@@ -228,8 +240,7 @@
 
 .route-stop__side {
     position: sticky;
-    /* Below the sticky toolbar: its height is 2 rows, the second is the coverage strip (99px). */
-    top: 99px;
+    top: var(--route-toolbar-height);
     align-self: start;
     /* Reserve space for the accent rule on bar segment hover so it does not shift the layout. */
     padding-left: var(--space-inner);

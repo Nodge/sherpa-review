@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSessionStore, DEFAULT_THREADS_SHOW, EMPTY_STOPS } from './session-store.js';
+import { createSessionStore, DEFAULT_THREADS_SHOW, EMPTY_STOPS, parsePreset } from './session-store.js';
 
 describe('session store', () => {
     it('returns a stable snapshot and changes it on setView', () => {
@@ -13,10 +13,29 @@ describe('session store', () => {
         expect(store.getSnapshot()).toEqual({
             view: 'diff',
             filter: 'all',
+            preset: 'triage',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             stops: EMPTY_STOPS,
         });
+    });
+
+    it('defaults the preset to triage, allows changes and preserves it through fragment parsing', () => {
+        const persist = vi.fn();
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' }, persist });
+
+        expect(store.getSnapshot().preset).toBe('triage');
+
+        store.setPreset('tour');
+        store.setPreset('tour');
+
+        expect(store.getSnapshot().preset).toBe('tour');
+        expect(persist).toHaveBeenCalledTimes(1);
+        expect(parsePreset('tour')).toBe('tour');
+        expect(parsePreset('garbage')).toBeNull();
+        expect(createSessionStore({ initial: { view: 'route', filter: 'all', preset: 'tour' } }).getSnapshot().preset).toBe(
+            'tour',
+        );
     });
 
     it('notifies subscribers of changes and stays silent when the same value repeats', () => {
@@ -61,7 +80,16 @@ describe('session store', () => {
         store.setView('diff');
 
         expect(persist.mock.calls).toEqual([
-            [{ view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false, stops: EMPTY_STOPS }],
+            [
+                {
+                    view: 'diff',
+                    filter: 'all',
+                    preset: 'triage',
+                    threadsShow: DEFAULT_THREADS_SHOW,
+                    paletteOpen: false,
+                    stops: EMPTY_STOPS,
+                },
+            ],
         ]);
     });
 
@@ -81,16 +109,17 @@ describe('session store', () => {
 
         store.setFilter('pci');
 
-        expect(store.getSnapshot()).toEqual({
+        const expected = {
             view: 'diff',
             filter: 'pci',
+            preset: 'triage',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             stops: EMPTY_STOPS,
-        });
-        expect(persist.mock.calls).toEqual([
-            [{ view: 'diff', filter: 'pci', threadsShow: DEFAULT_THREADS_SHOW, paletteOpen: false, stops: EMPTY_STOPS }],
-        ]);
+        };
+
+        expect(store.getSnapshot()).toEqual(expected);
+        expect(persist.mock.calls).toEqual([[expected]]);
     });
 
     it('keeps palette open state in the session without changing other fields', () => {
