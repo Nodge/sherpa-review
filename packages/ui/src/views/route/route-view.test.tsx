@@ -12,6 +12,7 @@ import type { ThreadStore } from '../../threads/store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteWorkspace } from './route-view.tsx';
 import { TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
+import { DIGEST_NOTE, UNCOVERED_NOTE } from './test-digest.tsx';
 
 /**
  * Route view component tests use static markup on a fixture (the same approach as
@@ -40,9 +41,15 @@ function render(
         threadStore?: ThreadStore;
         /** `false` means diff models are not parsed yet, so view counts are not final. */
         parsed?: boolean;
+        /** Global diff mode (SPEC §2.6): applies to route cards too. */
+        mode?: 'unified' | 'split';
+        onSetStopViewed?: (stopId: string, viewed: boolean) => Promise<number>;
     } = {},
 ): string {
     const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
+    if (options.mode !== undefined) {
+        store.setDiffMode(options.mode);
+    }
     if (options.parsed !== false) {
         for (const file of DATA.diff.files) {
             store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
@@ -74,7 +81,7 @@ function render(
             loadContent={() => Promise.resolve(null)}
             onOpenInEditor={() => Promise.resolve(null)}
             onSetViewed={() => Promise.resolve(0)}
-            onSetStopViewed={() => Promise.resolve(0)}
+            onSetStopViewed={options.onSetStopViewed ?? (() => Promise.resolve(0))}
         />,
     );
 }
@@ -354,6 +361,99 @@ describe('route view', () => {
         expect(html).toContain('route-chip__read');
         expect(html).toContain('edit-window.ts');
         expect(html).toContain('Go to this file in the stop’s diff');
+    });
+
+    it('a digest stop renders assertions instead of test code', () => {
+        const stop = section(render(), 's04');
+
+        expect(stop).toContain('Behavioural digest · 12 assertions');
+        expect(stop).toContain(DIGEST_NOTE);
+        expect(stop).toContain('Show the test code');
+        // 10 list rows plus 2 footer rows. Chips for all four categories are present.
+        expect(count(stop, 'class="digest__row')).toBe(12);
+        expect(count(stop, 'digest__chip--new')).toBe(6);
+        expect(count(stop, 'digest__chip--changed')).toBe(2);
+        expect(count(stop, 'digest__chip--weakened')).toBe(2);
+        expect(count(stop, 'digest__chip--uncovered')).toBe(2);
+        expect(stop).toContain('After 30 minutes and one millisecond, the window is closed.');
+        expect(stop).toContain('edit-window.test.ts:17');
+    });
+
+    it('moves uncovered assertions to the footer with their note and counts dropped assertions separately', () => {
+        const stop = section(render(), 's04');
+        const footer = stop.slice(stop.indexOf('digest__footer'));
+
+        expect(stop).toContain(UNCOVERED_NOTE);
+        // Both footer rows are inside the footer, not in the main list.
+        expect(count(footer, 'digest__chip--uncovered')).toBe(2);
+        expect(stop).toContain('2 assertions dropped — the anchor found no test');
+        // The validator note keeps its own row in the left column. The counter does not duplicate it.
+        expect(stop).toContain('2 claims dropped: the anchor pointed at');
+    });
+
+    it('an anchor without a route target explains why it cannot be clicked', () => {
+        const stop = section(render(), 's04');
+
+        // Stop 01 explains `edit-window.ts:92`, so the link is live.
+        expect(stop).toContain('edit-window.ts:92');
+        expect(stop).not.toContain('digest__anchor--off');
+        // The second uncovered assertion has no anchor at all, so its row has no link.
+        expect(stop).toContain('PAN masking in the reauthorize log');
+    });
+
+    it('hides test code by default and expands it with the toggle', () => {
+        const hidden = section(render(), 's04');
+        const shown = section(render({ stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }), 's04');
+
+        expect(hidden).not.toContain('file-card');
+        expect(hidden).not.toContain('diff-rows');
+        expect(shown).toContain('file-card');
+        expect(shown).toContain('diff-rows');
+        expect(shown).toContain('Hide the test code');
+        // The note about hidden test code is absent when the code is expanded.
+        expect(shown).not.toContain(DIGEST_NOTE);
+    });
+
+    it('global diff mode applies to expanded test code too (SPEC §2.6)', () => {
+        const unified = section(render({ stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }), 's04');
+        const split = section(
+            render({ mode: 'split', stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }),
+            's04',
+        );
+
+        expect(unified).not.toContain('diff-rows--split');
+        expect(split).toContain('diff-rows--split');
+    });
+
+    it('the test code toggle leaves progress untouched and lives only in the session', () => {
+        const session = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+        const writes: string[] = [];
+        const onSetStopViewed = (stopId: string): Promise<number> => {
+            writes.push(stopId);
+            return Promise.resolve(0);
+        };
+
+        render({ session, onSetStopViewed });
+        session.setStopTestCode('s04', true);
+        const shown = render({ session, onSetStopViewed });
+
+        expect(writes).toEqual([]);
+        expect(session.getSnapshot().stops.testCode).toEqual(new Set(['s04']));
+        expect(section(shown, 's04')).toContain('Hide the test code');
+    });
+
+    it('the digest stop viewed mark is independent of the toggle', () => {
+        const hidden = section(render({ stopViewed: ['s04'] }), 's04');
+        const shown = section(
+            render({ stopViewed: ['s04'], stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }),
+            's04',
+        );
+
+        // A viewed stop summary includes assertions as well as files and lines.
+        expect(hidden).toContain('12 assertions · 3 files · 172 lines · viewed');
+        expect(shown).toContain('12 assertions · 3 files · 172 lines · viewed');
+        expect(hidden).toContain('✓ Viewed');
+        expect(shown).toContain('✓ Viewed');
     });
 
     it('the stop card renders the diff clipped by its anchors', () => {

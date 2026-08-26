@@ -140,6 +140,7 @@ describe('session store', () => {
             expanded: new Set(['s05']),
             expandedViewed: new Set(['s05']),
             collapsed: new Set(),
+            testCode: new Set(),
         });
 
         store.forgetViewedExpansion('s05');
@@ -148,7 +149,21 @@ describe('session store', () => {
             expanded: new Set(['s05']),
             expandedViewed: new Set(),
             collapsed: new Set(),
+            testCode: new Set(),
         });
+    });
+
+    it('keeps expanded digest test code separate from expansions and collapses', () => {
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+
+        store.setStopTestCode('s04', true);
+
+        expect(store.getSnapshot().stops.testCode).toEqual(new Set(['s04']));
+        expect(store.getSnapshot().stops.expanded).toEqual(new Set());
+        expect(store.getSnapshot().stops.collapsed).toEqual(new Set());
+
+        store.setStopTestCode('s04', false);
+        expect(store.getSnapshot().stops.testCode).toEqual(new Set());
     });
 
     it('keeps manual stop collapse separate from expansions', () => {

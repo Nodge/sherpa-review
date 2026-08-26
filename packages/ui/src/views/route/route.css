@@ -836,3 +836,164 @@
     white-space: nowrap;
     cursor: pointer;
 }
+
+/* --- Behavioural test digest (README §2) --- */
+
+.digest {
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-panel-deep);
+    overflow: clip;
+}
+
+.digest__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner);
+    padding: var(--space-inner) var(--space-control);
+    border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+.digest__title {
+    font-size: var(--font-size-ui);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.digest__note {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}
+
+.digest__spacer {
+    flex: 1;
+}
+
+.digest__toggle {
+    flex: none;
+    height: 24px;
+    padding: 0 var(--space-inner-tight);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-badge);
+    background: none;
+    font-family: inherit;
+    font-size: var(--font-size-control);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.digest__toggle:hover {
+    background: var(--surface-popover);
+}
+
+.digest__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: var(--space-inner) var(--space-control);
+    border-bottom: 1px solid var(--border-hairline-soft);
+}
+
+/*
+ * `weakened` is a first-class signal (brief §6): the same amber as `changed`, but its row has
+ * an extra amber line on the left so weakened assertions stand out among changed ones.
+ */
+.digest__row--weakened {
+    box-shadow: inset 2px 0 0 var(--attention);
+}
+
+.digest__chip {
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-key);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    line-height: 1.6;
+}
+
+.digest__chip--new {
+    border-color: var(--viewed-border);
+    background: var(--ownership-mine-surface);
+    color: var(--diff-add-text-strong);
+}
+
+.digest__chip--changed,
+.digest__chip--weakened {
+    border-color: var(--attention-border);
+    background: var(--attention-surface);
+    color: var(--attention-text);
+}
+
+.digest__chip--weakened {
+    border-color: var(--attention-border-strong);
+}
+
+/* README §2 gives the chip pair the same tone as the error border. Here it is a fill. */
+.digest__chip--uncovered {
+    background: var(--error-border);
+    color: var(--error-text);
+}
+
+.digest__text {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-ui);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+}
+
+.digest__anchor {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.digest__anchor:hover {
+    color: var(--accent-hover);
+}
+
+/* The anchor exists, but has no target: the line is absent from every route card. */
+.digest__anchor--off {
+    color: var(--text-gutter);
+    cursor: default;
+}
+
+.digest__anchor--off:hover {
+    color: var(--text-gutter);
+}
+
+/* Inverse digest: changed behaviour left without an assertion. */
+.digest__footer {
+    background: var(--surface-digest-footer);
+}
+
+.digest__footer-note {
+    margin: 0;
+    padding: var(--space-inner) var(--space-control) 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--error-text);
+}
+
+.digest__footer .digest__row:last-child {
+    border-bottom: 0;
+}
+
+.digest__dropped {
+    margin: 0;
+    padding: 9px var(--space-control);
+    border-top: 1px solid var(--border-hairline-soft);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+}

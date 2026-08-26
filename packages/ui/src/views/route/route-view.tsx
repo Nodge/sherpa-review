@@ -29,6 +29,7 @@ import { toParseRequest } from '../../diff/model.js';
 import { copyFileLink, copyStopLink } from '../../diff-view/copy-link.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import type { ExpandAmount } from '../../diff-view/expand.js';
+import { flashRow } from '../../diff-view/line-target.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
@@ -47,6 +48,7 @@ import { readStateOf } from '../../progress/read-state.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import { createStopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
+import { buildDigest, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
 import {
     buildRouteModel,
@@ -75,10 +77,19 @@ import { CoverageStrip } from './coverage-strip.tsx';
 import { FileChips } from './file-chips.tsx';
 import { OtherCard } from './other-card.tsx';
 import { RouteToolbar } from './route-toolbar.tsx';
-import type { StopBox } from './scroll.js';
-import { animateScrollTo, JUMP_DURATION, pickTopStop, targetScrollTop } from './scroll.js';
+import type { JumpStep, StopBox } from './scroll.js';
+import {
+    animateScrollTo,
+    cssEscape,
+    JUMP_DURATION,
+    JUMP_STEPS,
+    jumpTarget,
+    pickTopStop,
+    targetScrollTop,
+} from './scroll.js';
 import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, ViewedSummary } from './stop-card.tsx';
 import { StopFileCard } from './stop-file-card.tsx';
+import { TestDigest } from './test-digest.tsx';
 import { useOnScreen } from './use-on-screen.js';
 import './route.css';
 
@@ -546,15 +557,120 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [filter.id, filters, matches, model.entries, session],
     );
 
-    // Jump to a file card (README Interactions): custom container scroll, −150px, flash.
-    const jump = useRef<{ id: number; stopId: string; fileId: string | null } | null>(null);
-    const jumpCounter = useRef(0);
-    const [jumpTick, setJumpTick] = useState(0);
-    const requestJump = useCallback((stopId: string, fileId: string | null) => {
-        jumpCounter.current += 1;
-        jump.current = { id: jumpCounter.current, stopId, fileId };
-        setJumpTick(jumpCounter.current);
+    // Correction and flashing survive rerenders. Only the next jump or leaving the view cancels them.
+    // Cancelling them on every dependency change would interrupt scrolling halfway through.
+    const running = useRef<JumpRun | null>(null);
+    const stopJump = useCallback(() => {
+        const current = running.current;
+        if (current === null) {
+            return;
+        }
+        running.current = null;
+        current.cancel();
+        if (current.frame !== null) {
+            cancelAnimationFrame(current.frame);
+        }
+        for (const timer of current.timers) {
+            clearTimeout(timer);
+        }
+        settling.current = Math.max(0, settling.current - 1);
     }, []);
+
+    /**
+     * Jump to a stop, file card or line (README "Interactions"): scroll the dedicated
+     * container directly to −150px from the target top, and flash the target.
+     *
+     * The target is almost never ready in the same frame: a filter may have hidden the stop,
+     * a card may be deferred by lazy rendering until its stop appears onscreen (SPEC §2.9), and a line may
+     * be waiting for file parsing. So the jump proceeds in stages, "section → card → line". Each
+     * stage found immediately pulls scrolling towards it (reaching the section makes the view show it,
+     * so deferred cards render). Later stages are sought frame by frame until the deadline. If it cannot reach the target,
+     * it stays at the last stage reached, a visible fallback instead of doing nothing.
+     *
+     * `side` is required with `line`: without the gutter side, an added line with the same number
+     * would intercept a jump to a deleted line.
+     */
+    const requestJump = useCallback(
+        (
+            stopId: string,
+            fileId: string | null,
+            line: number | null = null,
+            side: 'old' | 'new' | null = null,
+        ) => {
+            stopJump();
+            const container = containerRef.current;
+            if (container === null) {
+                return;
+            }
+
+            settling.current += 1;
+            const run: JumpRun = { cancel: () => undefined, timers: [], frame: null, reached: 'none' };
+            running.current = run;
+            const deadline = Date.now() + JUMP_SEARCH_MS;
+
+            const goTo = (step: JumpStep, element: HTMLElement): void => {
+                if (JUMP_STEPS[step] <= JUMP_STEPS[run.reached]) {
+                    return;
+                }
+                run.reached = step;
+                run.cancel();
+                run.cancel = animateScrollTo(container, targetScrollTop(container, element));
+            };
+            const finish = (): void => {
+                run.frame = null;
+                run.timers.push(
+                    setTimeout(() => {
+                        // Our correction has ended: the next scroll counts as a reviewer gesture again.
+                        if (running.current === run) {
+                            running.current = null;
+                            settling.current = Math.max(0, settling.current - 1);
+                        }
+                    }, JUMP_DURATION + SETTLE_TAIL),
+                );
+            };
+
+            const step = (): void => {
+                if (running.current !== run) {
+                    return;
+                }
+                const target = jumpTarget(container, stopId, fileId, line, side);
+                if (target !== null) {
+                    if (run.reached === 'none') {
+                        setFlashStopId(stopId);
+                        run.timers.push(
+                            setTimeout(() => {
+                                setFlashStopId(null);
+                            }, FLASH_MS),
+                        );
+                    }
+                    goTo(target.step, target.element);
+                    // The final stage depends on the request: only look for a line if one was requested.
+                    const done =
+                        target.step === 'row' ||
+                        (target.step === 'card' && line === null) ||
+                        (target.step === 'section' && fileId === null);
+                    if (target.step === 'row') {
+                        flashRow(target.element);
+                    }
+                    if (done) {
+                        finish();
+                        return;
+                    }
+                }
+                if (Date.now() >= deadline) {
+                    finish();
+                    return;
+                }
+                run.frame = requestAnimationFrame(step);
+            };
+
+            // Start the first attempt on the next frame: the same handler requests stop expansion
+            // and filter clearing, so the target is absent from the markup until the rerender.
+            run.frame = requestAnimationFrame(step);
+        },
+        [stopJump],
+    );
+
     /** Expand a stop regardless of why it collapsed: by hand, by tier or by a viewed mark. */
     const expandStop = useCallback(
         (stopId: string) => {
@@ -567,30 +683,73 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         },
         [session, stopProgress],
     );
-    const openFile = useCallback(
-        (stopId: string, fileId: string) => {
+
+    /**
+     * Prepare a route entry for a jump: lens, collapsed state and hidden test code. Check the filter
+     * against the file itself, not the stop: a lens keeps a stop on screen
+     * even when it hides the very file the jump points to.
+     */
+    const revealTarget = useCallback(
+        (entry: RouteEntry, fileId: string | null) => {
+            const hidden =
+                fileId === null
+                    ? !matches(entry, filter.fileIds)
+                    : filter.fileIds !== null && !filter.fileIds.has(fileId);
+            if (hidden) {
+                session.setFilter(ALL_FILTER_ID);
+            }
+            if (entry.kind === 'other') {
+                setOtherOpen(true);
+                return;
+            }
             // Expand a collapsed stop before scrolling to it (SPEC §2.11).
-            expandStop(stopId);
-            requestJump(stopId, fileId);
+            expandStop(entry.view.stop.id);
+            // A file hidden by the digest behind "Show test code" would otherwise be absent from the markup.
+            if (fileId !== null && buildDigest(entry.view.stop)?.testFileIds.has(fileId) === true) {
+                session.setStopTestCode(entry.view.stop.id, true);
+            }
         },
-        [expandStop, requestJump],
+        [expandStop, filter.fileIds, matches, session],
     );
 
-    // Correction and flashing survive rerenders. Only the next jump or leaving the view cancels them.
-    // Cancelling them on every dependency change would interrupt scrolling halfway through.
-    const running = useRef<{ cancel: () => void; timers: ReturnType<typeof setTimeout>[] } | null>(null);
-    const stopJump = useCallback(() => {
-        const current = running.current;
-        if (current === null) {
-            return;
-        }
-        running.current = null;
-        current.cancel();
-        for (const timer of current.timers) {
-            clearTimeout(timer);
-        }
-        settling.current = Math.max(0, settling.current - 1);
-    }, []);
+    const openFile = useCallback(
+        (stopId: string, fileId: string) => {
+            const entry = model.entries.find((candidate) => entryId(candidate) === stopId) ?? null;
+            if (entry !== null) {
+                revealTarget(entry, fileId);
+            }
+            requestJump(stopId, fileId);
+        },
+        [model.entries, requestJump, revealTarget],
+    );
+
+    const anchorReachable = useCallback(
+        (stopId: string, fileId: string, line: number) =>
+            resolveAnchor(model.entries, stopId, fileId, line) !== null,
+        [model.entries],
+    );
+
+    /**
+     * Follow a digest assertion anchor (README §2). An `uncovered` anchor points to code
+     * that has no coverage, and another stop or "Other" explains that code:
+     * jump to where the line actually renders, not where the click came from.
+     */
+    const openAnchor = useCallback(
+        (stopId: string, fileId: string, line: number) => {
+            const target = resolveAnchor(model.entries, stopId, fileId, line);
+            const entry =
+                target === null
+                    ? null
+                    : (model.entries.find((candidate) => entryId(candidate) === target.stopId) ?? null);
+            if (target === null || entry === null) {
+                return;
+            }
+            revealTarget(entry, fileId);
+            requestJump(target.stopId, fileId, line, target.side);
+        },
+        [model.entries, requestJump, revealTarget],
+    );
+
     // Our scroll adjustment does not count as a reviewer gesture while anchor correction is running: the browser
     // dispatches scroll events in the next task, so a timer closes the window.
     const anchoring = useRef<{ frames: number[]; timers: ReturnType<typeof setTimeout>[] } | null>(null);
@@ -665,43 +824,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }, ANCHOR_SETTLE),
         );
     }, [endAnchoring, preset, stopJump]);
-
-    useEffect(() => {
-        const target = jump.current;
-        const container = containerRef.current;
-        if (target === null || container === null) {
-            return;
-        }
-        const section = container.querySelector<HTMLElement>(`[data-stop="${cssEscape(target.stopId)}"]`);
-        const element =
-            target.fileId === null
-                ? section
-                : (section?.querySelector<HTMLElement>(`[data-file="${cssEscape(target.fileId)}"]`) ?? null);
-        if (element === null) {
-            // The card has not rendered yet. The next effect run will find it.
-            return;
-        }
-
-        jump.current = null;
-        stopJump();
-        settling.current += 1;
-        setFlashStopId(target.stopId);
-        running.current = {
-            cancel: animateScrollTo(container, targetScrollTop(container, element)),
-            timers: [
-                setTimeout(() => {
-                    setFlashStopId(null);
-                }, FLASH_MS),
-                setTimeout(() => {
-                    // The adjustment is done. The next scroll counts as a reviewer gesture again.
-                    running.current = null;
-                    settling.current = Math.max(0, settling.current - 1);
-                }, JUMP_DURATION + SETTLE_TAIL),
-            ],
-        };
-        // `stopViewed` is a dependency because expanding a marked stop changes
-        // the markup, and the jump target appears only after expansion.
-    }, [jumpTick, shown, diffSnapshot.models, stopJump, stopState, stopViewed]);
 
     // Filter changes need the top stop even before the first scroll (SPEC §2.7).
     useEffect(() => {
@@ -1135,6 +1257,19 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             }}
                             onVisible={requestParse}
                             renderCard={cardFor}
+                            testCodeShown={stopState.testCode.has(entry.view.stop.id)}
+                            onToggleTestCode={() => {
+                                session.setStopTestCode(
+                                    entry.view.stop.id,
+                                    !stopState.testCode.has(entry.view.stop.id),
+                                );
+                            }}
+                            anchorReachable={(fileId, line) =>
+                                anchorReachable(entry.view.stop.id, fileId, line)
+                            }
+                            onOpenAnchor={(fileId, line) => {
+                                openAnchor(entry.view.stop.id, fileId, line);
+                            }}
                         />
                     ) : (
                         <OtherSection
@@ -1198,6 +1333,12 @@ interface StopSectionProps {
     readonly onCopyLink: () => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
     readonly renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
+    /** Digest stop: test code expands below the digest card (README §2). */
+    readonly testCodeShown: boolean;
+    readonly onToggleTestCode: () => void;
+    /** Whether a route card renders the file containing the assertion's anchor. */
+    readonly anchorReachable: (fileId: string, line: number) => boolean;
+    readonly onOpenAnchor: (fileId: string, line: number) => void;
 }
 
 function StopSection({
@@ -1221,6 +1362,10 @@ function StopSection({
     onCopyLink,
     onVisible,
     renderCard,
+    testCodeShown,
+    onToggleTestCode,
+    anchorReachable,
+    onOpenAnchor,
 }: StopSectionProps) {
     const ref = useRef<HTMLDivElement | null>(null);
     const onScreen = useOnScreen(ref);
@@ -1228,6 +1373,8 @@ function StopSection({
         () => (fileIds === null ? view.files : view.files.filter((group) => fileIds.has(group.fileId))),
         [fileIds, view.files],
     );
+    // Parsing is requested for all stop files, including hidden test code. The viewed mark's seen ranges
+    // marks are computed from stop anchors and do not depend on the toggle (M2-T7).
     const ids = useMemo(() => files.map((group) => group.fileId), [files]);
     useEffect(() => {
         if (onScreen) {
@@ -1235,12 +1382,27 @@ function StopSection({
         }
     }, [ids, onScreen, onVisible]);
 
+    const digest = useMemo(() => buildDigest(view.stop), [view.stop]);
+    // Hybrid "digest + regular files": hide only test code (files anchored by assertions),
+    // and render the stop's other cards as usual. All files in fixture s04 are tests.
+    const testFiles = useMemo(
+        () => (digest === null ? [] : files.filter((group) => digest.testFileIds.has(group.fileId))),
+        [digest, files],
+    );
+    const shownFiles = useMemo(
+        () =>
+            digest === null || testCodeShown
+                ? files
+                : files.filter((group) => !digest.testFileIds.has(group.fileId)),
+        [digest, files, testCodeShown],
+    );
+
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
-    const cards = onScreen ? files : lazyCards(files);
+    const cards = onScreen ? shownFiles : lazyCards(shownFiles);
 
     const diff = view.drift ? (
         <AnchorDrift paths={view.unresolvedPaths} />
-    ) : files.length === 0 ? (
+    ) : files.length === 0 && digest === null ? (
         <EmptyStop
             text={
                 view.empty
@@ -1250,7 +1412,12 @@ function StopSection({
         />
     ) : collapsed ? (
         viewed ? (
-            <ViewedSummary lines={lines} files={files.length} onExpand={onExpand} />
+            <ViewedSummary
+                lines={lines}
+                files={files.length}
+                assertions={digest?.total ?? 0}
+                onExpand={onExpand}
+            />
         ) : (
             <CollapsedStop
                 lines={lines}
@@ -1263,11 +1430,24 @@ function StopSection({
         <>
             {/* Some anchors fail to resolve, while others survive. Place the notice above the remaining cards. */}
             {view.unresolvedPaths.length === 0 ? null : <AnchorDrift paths={view.unresolvedPaths} partial />}
+            {digest === null ? null : (
+                <TestDigest
+                    model={digest}
+                    shown={testCodeShown}
+                    onToggle={onToggleTestCode}
+                    hiddenFiles={testFiles.length}
+                    anchorReachable={(anchor) => anchorReachable(anchor.fileId, anchor.line)}
+                    onOpenAnchor={(anchor) => {
+                        onOpenAnchor(anchor.fileId, anchor.line);
+                    }}
+                />
+            )}
             {cards.map((group) => renderCard(view.stop.id, group))}
-            {cards.length < files.length ? (
+            {cards.length < shownFiles.length ? (
                 <p className="route-stop__lazy">
-                    {formatCount(files.length - cards.length)} more{' '}
-                    {plural(files.length - cards.length, 'card', 'cards', 'cards')} — they appear as you scroll
+                    another {formatCount(shownFiles.length - cards.length)}{' '}
+                    {plural(shownFiles.length - cards.length, 'card', 'cards', 'cards')} will appear as you
+                    scroll
                 </p>
             ) : null}
         </>
@@ -1385,11 +1565,6 @@ function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number
     return files.reduce((total, file) => total + file[key], 0);
 }
 
-/** `CSS.escape` is not always available (tests without a DOM), but the selector still needs to be built. */
-function cssEscape(value: string): string {
-    return typeof CSS === 'undefined' ? value.replace(/["\\]/g, '\\$&') : CSS.escape(value);
-}
-
 /**
  * Adjust the scroll anchor before painting the frame, or the new order would flash at the wrong position.
  * Static rendering (tests, SSR) has no layout effects: use a regular effect there so React
@@ -1404,6 +1579,22 @@ const FLASH_MS = 900;
 /** Allow time after the animation: the browser dispatches scroll events after the final step. */
 const SETTLE_TAIL = 50;
 const BACKGROUND_PARSE_DELAY = 300;
+
+interface JumpRun {
+    /** Cancel the current scroll: the next stage takes over halfway through. */
+    cancel: () => void;
+    timers: ReturnType<typeof setTimeout>[];
+    /** Frame for the next target search. `null` means the search has ended. */
+    frame: number | null;
+    reached: JumpStep;
+}
+
+/**
+ * How long to wait for the jump target to appear. A filter may have hidden the section, lazy rendering may
+ * defer the card until the stop enters the viewport, and the line may be waiting for file parsing.
+ * Past the deadline, the jump stays at the last stage reached.
+ */
+const JUMP_SEARCH_MS = 1500;
 /**
  * How long to keep the preset-change anchor: allow lazy rendering of neighbouring stops to finish
  * (the visibility observer and its rerender), but do not keep it long enough to fight

@@ -27,6 +27,7 @@ import { toParseRequest } from '../diff/model.js';
 import type { Feedback } from '../diff-view/file-card.tsx';
 import type { DiffListHandle } from '../diff-view/file-list.tsx';
 import { DiffFileList } from '../diff-view/file-list.tsx';
+import { findLineRow, flashRow } from '../diff-view/line-target.js';
 import type { DiffViewStore } from '../diff-view/store.js';
 import { createDiffViewStore } from '../diff-view/store.js';
 import '../diff-view/diff-view.css';
@@ -639,26 +640,12 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 if (card === null) {
                     return false;
                 }
-                const number = String(line);
-                const exact = side === 'new' ? `[data-key="a${number}"]` : `[data-key="d${number}"]`;
-                const context =
-                    side === 'new' ? `[data-key^="c"][data-key$=":${number}"]` : `[data-key^="c${number}:"]`;
-                const target = card.querySelector<HTMLElement>(exact) ?? card.querySelector<HTMLElement>(context);
-                if (target === null) {
+                const row = findLineRow(card, side, line);
+                if (row === null) {
                     return false;
                 }
-                const row = target.closest<HTMLElement>('.diff-row') ?? target;
                 row.scrollIntoView({ block: 'center' });
-                row.classList.remove('diff-row--palette-target');
-                void row.offsetWidth;
-                row.classList.add('diff-row--palette-target');
-                row.addEventListener(
-                    'animationend',
-                    () => {
-                        row.classList.remove('diff-row--palette-target');
-                    },
-                    { once: true },
-                );
+                flashRow(row);
                 stop();
                 return true;
             };

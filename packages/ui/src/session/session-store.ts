@@ -18,7 +18,7 @@ export interface ThreadsShow {
 export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
 
 /**
- * Route stop expansion in the current session (M2-T6). Three sets instead of one flag: the
+ * Route stop expansion in the current session (M2-T6). Sets instead of one flag: the
  * "viewed" mark collapses hunks but preserves previous expansion. Clearing the mark must
  * restore the card to exactly the state it was left in (SPEC §2.9).
  *
@@ -28,17 +28,22 @@ export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, re
  * `expanded` means the stop is expanded despite tier-based collapse (low is collapsed by default).
  * `expandedViewed` means a viewed stop is temporarily expanded from its summary row.
  * `collapsed` means the stop was collapsed by hand (`x` shortcut, SPEC §5), regardless of tier.
+ * `testCode` means a digest stop's test code is expanded (README §2, M2-T9). A set instead of a shared
+ * flag allows multiple digests in a route, so expanding one digest's test code must not
+ * expand another's. This toggle only changes the display and leaves the "viewed" mark alone.
  */
 export interface StopsState {
     readonly expanded: ReadonlySet<string>;
     readonly expandedViewed: ReadonlySet<string>;
     readonly collapsed: ReadonlySet<string>;
+    readonly testCode: ReadonlySet<string>;
 }
 
 export const EMPTY_STOPS: StopsState = {
     expanded: new Set(),
     expandedViewed: new Set(),
     collapsed: new Set(),
+    testCode: new Set(),
 };
 
 /**
@@ -84,6 +89,8 @@ export interface SessionStore {
     readonly setViewedStopExpanded: (stopId: string, expanded: boolean) => void;
     /** Manual collapse of a stop in any tier. */
     readonly setStopCollapsed: (stopId: string, collapsed: boolean) => void;
+    /** Show/Hide test code on a digest stop (README §2). */
+    readonly setStopTestCode: (stopId: string, shown: boolean) => void;
     /**
      * The mark was cleared. Temporary expansion of a viewed stop lasts only while it is
      * marked, and its previous expansion (`expanded`) must return unchanged.
@@ -196,6 +203,9 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         },
         setStopCollapsed: (stopId, collapsed) => {
             toggleStop('collapsed', stopId, collapsed);
+        },
+        setStopTestCode: (stopId, shown) => {
+            toggleStop('testCode', stopId, shown);
         },
         forgetViewedExpansion: (stopId) => {
             toggleStop('expandedViewed', stopId, false);

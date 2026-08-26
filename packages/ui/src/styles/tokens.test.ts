@@ -32,6 +32,9 @@ const EXPECTED: Record<string, string> = {
     '--surface-offline-banner': '#151619',
     '--surface-command': '#0e0f11',
     '--ownership-mine-surface': '#132019',
+    // README §2 (Behavioural test digest): «`uncovered` `#d99a95`/`#3d2a2c` in a footer row
+    // on `#151316`". The footer surface is not listed in the token table.
+    '--surface-digest-footer': '#151316',
     // README §14: overlay `rgba(7,8,9,.66)` below the command palette.
     '--overlay-dialog': 'rgba(7,8,9,.66)',
     // README §1 (Sticky toolbar): «background `rgba(13,14,16,.92)`, `backdrop-filter:blur(8px)`».

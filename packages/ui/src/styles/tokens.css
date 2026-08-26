@@ -27,6 +27,8 @@
     --surface-offline-banner: #151619;
     --surface-command: #0e0f11;
     --ownership-mine-surface: #132019;
+    /* README §2: the `uncovered` footer row in the test digest. */
+    --surface-digest-footer: #151316;
     /* README §14: backdrop below the command palette. */
     --overlay-dialog: rgba(7, 8, 9, 0.66);
     /* README §1: sticky route toolbar, app background with transparency for blur(8px). */

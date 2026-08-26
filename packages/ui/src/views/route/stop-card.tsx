@@ -229,14 +229,20 @@ export function CollapsedStop({
     );
 }
 
-/** Viewed stop fold: a summary row that expands on click (SPEC §2.9). */
+/**
+ * Collapsed viewed stop: a summary row that expands on click (SPEC §2.9).
+ * A digest stop's summary also names assertions. The reviewer did not read test code line by line,
+ * and "N files · M lines" alone would misrepresent what they actually accepted (README §2).
+ */
 export function ViewedSummary({
     lines,
     files,
+    assertions = 0,
     onExpand,
 }: {
     lines: number;
     files: number;
+    assertions?: number;
     onExpand: () => void;
 }) {
     return (
@@ -244,6 +250,9 @@ export function ViewedSummary({
             <span className="route-collapsed__mark" aria-hidden="true">
                 ⌄
             </span>
+            {assertions === 0
+                ? null
+                : `${formatCount(assertions)} ${plural(assertions, 'assertion', 'assertions', 'assertions')} · `}
             {formatCount(files)} {plural(files, 'file', 'files', 'files')} · {formatCount(lines)}{' '}
             {plural(lines, 'line', 'lines', 'lines')} · viewed
         </button>
