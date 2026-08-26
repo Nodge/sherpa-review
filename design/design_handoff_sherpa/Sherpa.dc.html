@@ -337,11 +337,22 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                       {{ h.viewedLabel }}
                     </button>
                   </div>
-                  <sc-if value="{{ h.foldTop }}">
-                    <div style="display:flex;align-items:center;gap:10px;padding:5px 13px;background:#111214;border-bottom:1px solid #191c20;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">
-                      <span>↕</span>{{ h.foldTop }}
+                  <sc-if value="{{ h.foldVisible }}">
+                    <div style="display:flex;align-items:center;height:24px;background:#111214;border-bottom:1px solid #191c20">
+                      <button onClick="{{ expandFold }}" data-k="{{ h.foldKey }}" title="{{ h.foldTitle }}" style="{{ h.foldUpStyle }}" style-hover="background:#181a1e;color:#9ba1ab" style-active="background:#1e2126;color:#c7cad1">{{ h.foldUpGlyph }}</button>
+                      <div style="width:46px;height:24px;flex:none"></div>
+                      <div style="width:16px"></div>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">{{ h.foldLabel }}</span>
                     </div>
                   </sc-if>
+                  <sc-for list="{{ h.foldRows }}" as="r" hint-placeholder-count="0">
+                    <div style="{{ r.rowStyle }}">
+                      <span style="{{ r.numStyle }}">{{ r.on }}</span>
+                      <span style="{{ r.numStyle }}">{{ r.nn }}</span>
+                      <span style="{{ r.markStyle }}">{{ r.mark }}</span>
+                      <span style="{{ r.codeStyle }}">{{ r.tokens }}</span>
+                    </div>
+                  </sc-for>
                   <sc-if value="{{ h.unified }}" hint-placeholder-val="{{ true }}">
                     <sc-for list="{{ h.rows }}" as="r" hint-placeholder-count="8">
                       <div style="{{ r.rowStyle }}">
@@ -855,7 +866,7 @@ class Component extends DCLogic {
     chat: false, palette: false, dock: false, lowOpen: false, genPhase: 'filling', zone: 'mine',
     diffMode: 'unified', showTestCode: false, fileViewed: {}, threadsShow: { people: true, bots: false, resolved: false }, dirClosed: {}, fileFilter: 'all', filterOpen: false,
     scenario: 'f1', viewed: { s1: true, s2: false, s3: false, s4: false, s5: false, s6: true, s7: false },
-    expanded: {}
+    expanded: {}, folds: {}
   };
 
   componentDidMount() {
@@ -1208,6 +1219,31 @@ class Component extends DCLogic {
     out.viewedBoxStyle = 'width:11px;height:11px;border-radius:3px;flex:none;display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1;border:1px solid ' + (fv ? '#3f7a5a' : '#3a3f47') + ';background:' + (fv ? '#2b7a55' : 'transparent') + ';color:#0d0e10',
     out.viewedTick = fv ? '\u2713' : '';
     out.viewedBtnStyle = 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:transparent;border:1px solid ' + (fv ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (fv ? '#86d9a8' : '#9ba1ab') + ';font-family:inherit;font-size:11px;cursor:pointer;white-space:nowrap';
+    const foldN = h.foldTop ? parseInt(h.foldTop, 10) : 0;
+    out.foldRows = [];
+    out.foldVisible = false;
+    if (foldN) {
+      const key = fid + ':top';
+      const shown = (st.folds || {})[key] || 0;
+      const left = Math.max(0, foldN - shown);
+      const firstOld = rows.length ? parseInt(rows[0].on, 10) || 1 : 1;
+      const firstNew = rows.length ? parseInt(rows[0].nn, 10) || 1 : 1;
+      const vis = Math.min(shown, 8);
+      if (vis > 0) {
+        let text = '';
+        for (let i = 0; i < vis; i++) text += ' ' + this.FOLD_CTX[i % this.FOLD_CTX.length] + '\n';
+        out.foldRows = this.diff(Math.max(1, firstOld - vis), Math.max(1, firstNew - vis), text);
+      }
+      out.foldVisible = left > 0;
+      out.foldKey = key;
+      out.foldLeft = left;
+      out.foldLabel = left < 20
+        ? left + ' unchanged lines \u2014 expand'
+        : left + ' unchanged lines';
+      out.foldTitle = left < 20 ? 'Expand the remaining ' + left + ' lines' : 'Load 20 more lines upwards \u00b7 ' + left + ' hidden';
+      out.foldUpGlyph = left < 20 ? '\u2195' : '\u2191';
+      out.foldUpStyle = "width:46px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;background:transparent;border:none;padding:0;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1;color:#4a4f57;cursor:pointer";
+    }
     if (h.threads) {
       const base = [
         { author: 'morgan', initials: 'MP', meta: 'order_service.py:148 \u00b7 2h ago', body: 'If save() raises after the commit we never reach drop(), so the stale entry survives until TTL. Is that acceptable, or should the drop be a compensating action?', action: 'Reply', hint: 'reply is saved as a draft and published on ship', status: '2 replies', kind: 'person', replies: [
@@ -1254,6 +1290,20 @@ class Component extends DCLogic {
     if (!this.TREE.some((n) => n.path === p && n.kind === 'dir')) return;
     this.setState((s) => ({ dirClosed: Object.assign({}, s.dirClosed, { [p]: !(s.dirClosed || {})[p] }) }));
   };
+  expandFold = (e) => {
+    const k = e.currentTarget.dataset.k;
+    this.setState((s) => ({ folds: Object.assign({}, s.folds, { [k]: ((s.folds || {})[k] || 0) + 20 }) }));
+  };
+  FOLD_CTX = [
+    'async def patch_order(order_id: UUID, body: PatchOrder) -> JSONResponse:',
+    '    order = await repo.get(order_id)',
+    '    if order is None:',
+    '        raise HTTPException(404)',
+    '    guard = Guard.for_actor(request.actor)',
+    '    if not guard.allows(order):',
+    '        raise HTTPException(403)',
+    '    await audit.record(order_id, body.dict())'
+  ];
   toggleFileViewed = (e) => { const id = e.currentTarget.dataset.f; this.setState((s) => ({ fileViewed: Object.assign({}, s.fileViewed, { [id]: !s.fileViewed[id] }) })); };
   toggleThread = (e) => { const k = e.currentTarget.dataset.t; this.setState((s) => ({ threadsShow: Object.assign({}, s.threadsShow, { [k]: !s.threadsShow[k] }) })); };
   toggleReplies = () => this.setState((s) => ({ repliesOpen: !s.repliesOpen }));
@@ -1443,7 +1493,7 @@ class Component extends DCLogic {
       tabOverview: this.seg(s.view === 'overview'), tabRoute: this.seg(s.view === 'route'), tabDiff: this.seg(s.view === 'diff'),
       presetTriage: this.seg(s.preset === 'triage'), presetTour: this.seg(s.preset === 'tour'),
       diffModeLabel: s.diffMode === 'unified' ? 'unified' : 'side by side',
-      toggleDiffMode: this.toggleDiffMode, toggleTestCode: this.toggleTestCode, toggleFileViewed: this.toggleFileViewed,
+      toggleDiffMode: this.toggleDiffMode, toggleTestCode: this.toggleTestCode, toggleFileViewed: this.toggleFileViewed, expandFold: this.expandFold,
       toggleThread: this.toggleThread, toggleReplies: this.toggleReplies, jumpTo: this.jumpTo,
       testCodeLabel: s.showTestCode ? 'Hide test code' : 'Show test code',
       thrPeople: this.chipBtn(s.threadsShow.people), thrBots: this.chipBtn(s.threadsShow.bots), thrResolved: this.chipBtn(s.threadsShow.resolved),

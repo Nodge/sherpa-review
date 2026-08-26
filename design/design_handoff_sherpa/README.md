@@ -1,5 +1,11 @@
 # Handoff: Sherpa — AI-assisted code review (route over the diff)
 
+> **Addition dated 2026-08-26 (M1 dogfooding).** Context bridges, icon set, PR comment
+> modal, composer (including line comments) and the "Discussion" card are described
+> in `SPEC-additions-2026-08-26.md`. The live mockup is `Sherpa Additions.dc.html`. It also clarifies
+> §Assets (icon set instead of font glyphs) and §3 (publishing drafts as one batch on Ship).
+> The context bridge is already implemented in `Sherpa.dc.html`.
+
 ## Overview
 
 Sherpa is an internal code-review UI. An AI agent running in the reviewer's own agent harness
