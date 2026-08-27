@@ -34,7 +34,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         await expect(page.getByRole('button', { name: 'Agent disconnected', exact: true })).toBeVisible();
 
         await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
-        await expect(page.locator('.full-diff__count')).toHaveText('18 files');
+        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
         await expect(page.locator('.diff-row').first()).toBeVisible();
     });
 
@@ -151,9 +151,10 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         // Review complete counters (README §13) agree with the actions taken by hand.
         await expect(counter(page, 'Stops viewed')).toHaveText('4 of 7');
         await expect(counter(page, 'Comments published')).toHaveText('2 (0 of them replies)');
-        // 95% versus 39% at the start (generated files and the host mark). These 479 lines were recorded
+        // 88% versus 39% at the start (generated files and the host mark). The difference was recorded by
         // by exactly four stop marks: if recording seen ranges breaks, the count drops to 39%.
-        await expect(counter(page, 'Diff seen')).toHaveText('95% of 862 lines');
+        // 95 → 88: T7 added 63 documentation lines outside stop anchors to the medium fixture.
+        await expect(counter(page, 'Diff seen')).toHaveText('88% of 862 lines');
         // "Other" is unmarked, so the line about reading outside the route must be absent.
         await expect(page.getByText('Of it read outside the route', { exact: true })).toHaveCount(0);
     });

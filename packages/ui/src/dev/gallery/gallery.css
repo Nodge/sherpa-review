@@ -87,12 +87,12 @@
     padding: var(--space-card);
 }
 
-/* Frame for states with their own scrolling (the virtualized diff list):
-   the app's view column gives them height, and this frame does so here. */
+/* Stage for scrolling states: the view column sets the height in the app, this frame does it here. */
 .gallery__viewport {
     display: flex;
     flex-direction: column;
     height: 70vh;
+    overflow-y: auto;
 }
 
 .gallery-agent-popover {

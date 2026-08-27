@@ -1,7 +1,17 @@
 import type { FileContent, FileDiff, Thread } from '@sherpa/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ReactNode, Ref } from 'react';
-import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useImperativeHandle,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
@@ -64,6 +74,12 @@ export interface DiffListHandle {
 }
 
 export interface DiffFileListProps {
+    /** The view's only scroll container. The list itself stays a regular block. */
+    readonly scrollElement: HTMLElement | null;
+    /** Node above the list. Changes to its height shift the virtual list's start. */
+    readonly scrollMarginElement?: HTMLElement | null;
+    /** Sticky bar above the cards. File navigation leaves the target just below it. */
+    readonly scrollPaddingStart: number;
     readonly files: readonly FileDiff[];
     readonly store: DiffViewStore;
     /** The host can supply file contents (`capabilities.fileContent`). */
@@ -104,6 +120,9 @@ export interface DiffFileListProps {
 }
 
 export function DiffFileList({
+    scrollElement,
+    scrollMarginElement = null,
+    scrollPaddingStart,
     files,
     store,
     contentAvailable,
@@ -133,7 +152,8 @@ export function DiffFileList({
     const composersSnapshot = useSyncExternalStore(threadStore.subscribeComposers, threadStore.getComposersSnapshot);
     const threadNowRef = useRef(providedThreadNow ?? Date.now());
     const threadNow = providedThreadNow ?? threadNowRef.current;
-    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const listRef = useRef<HTMLDivElement | null>(null);
+    const [scrollMargin, setScrollMargin] = useState(0);
     const requested = useRef(new Set<string>());
     // Files whose parsing failed. Only an explicit reviewer retry will parse them again.
     const [parseErrors, setParseErrors] = useState<ReadonlyMap<string, string>>(new Map());
@@ -147,12 +167,40 @@ export function DiffFileList({
         estimateMode.current = snapshot.effectiveMode;
     }
 
+    // `scrollMargin` maps virtualizer positions to the outer scroller's coordinates.
+    // Read it before painting and after layout changes. rect is more reliable than an offsetParent chain.
+    useLayoutEffect(() => {
+        const list = listRef.current;
+        if (list === null || scrollElement === null) {
+            return;
+        }
+        const report = (): void => {
+            const margin =
+                list.getBoundingClientRect().top -
+                scrollElement.getBoundingClientRect().top +
+                scrollElement.scrollTop;
+            setScrollMargin((previous) => (previous === margin ? previous : margin));
+        };
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(list);
+        observer.observe(scrollElement);
+        if (scrollMarginElement !== null) {
+            observer.observe(scrollMarginElement);
+        }
+        return () => {
+            observer.disconnect();
+        };
+    }, [files, scrollElement, scrollMarginElement, scrollPaddingStart]);
+
     const virtualizer = useVirtualizer({
         count: files.length,
-        getScrollElement: () => scrollRef.current,
+        getScrollElement: () => scrollElement,
         estimateSize: (index) => CARD_CHROME_HEIGHT + estimateBodyHeight(files[index], estimateMode.current),
         overscan: OVERSCAN,
         getItemKey: (index) => files[index]?.fileId ?? index,
+        scrollMargin,
+        scrollPaddingStart,
     });
 
     /**
@@ -165,7 +213,7 @@ export function DiffFileList({
      * downward. Adjusting the scroll position for them would move visible text.
      */
     virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-        item.end <= (virtualizer.scrollOffset ?? 0) + virtualizer.scrollAdjustments;
+        item.end <= (virtualizer.scrollOffset ?? 0) + scrollPaddingStart + virtualizer.scrollAdjustments;
 
     const items = virtualizer.getVirtualItems();
 
@@ -210,7 +258,7 @@ export function DiffFileList({
     // otherwise the reference 1440px viewport (README "Fidelity") would never meet the threshold.
     // Read the initial value immediately. ResizeObserver does not fire in a background tab.
     useEffect(() => {
-        const element = scrollRef.current;
+        const element = listRef.current;
         if (element === null) {
             return;
         }
@@ -242,7 +290,7 @@ export function DiffFileList({
                 () => {
                     virtualizer.scrollToIndex(index, { align: 'start' });
                 },
-                () => scrollRef.current?.scrollTop ?? 0,
+                () => scrollElement?.scrollTop ?? 0,
                 () => {
                     if (converging.current === run) {
                         converging.current = null;
@@ -256,20 +304,20 @@ export function DiffFileList({
             converging.current = run;
             return run;
         },
-        [virtualizer],
+        [scrollElement, virtualizer],
     );
 
     // Adjustment lasts up to 12 frames and calls `scrollToIndex` throughout. Without cancellation,
     // the reviewer's wheel and touch would have no effect during those frames.
     useEffect(() => {
-        const element = scrollRef.current;
+        const element = scrollElement;
         if (element === null) {
             return;
         }
         return watchUserScroll(element, () => {
             converging.current?.cancel();
         });
-    }, []);
+    }, [scrollElement]);
 
     const focusCheck = useRef<number | null>(null);
     const handleScroll = useCallback(() => {
@@ -287,6 +335,16 @@ export function DiffFileList({
             }
         });
     }, [onLineBlur, onScroll]);
+    useEffect(() => {
+        const element = scrollElement;
+        if (element === null) {
+            return;
+        }
+        element.addEventListener('scroll', handleScroll, { passive: true });
+        return () => {
+            element.removeEventListener('scroll', handleScroll);
+        };
+    }, [handleScroll, scrollElement]);
     useEffect(
         () => () => {
             if (focusCheck.current !== null) {
@@ -340,7 +398,7 @@ export function DiffFileList({
 
     // Tree scroll-spy uses the top card in the viewport. The virtualizer rerenders the list
     // on every scroll frame, so no separate listener is needed.
-    const topFileId = topFile(files, items, virtualizer.scrollOffset ?? 0);
+    const topFileId = topFile(files, items, (virtualizer.scrollOffset ?? 0) + scrollPaddingStart);
     const reportedTop = useRef<string | null>(null);
     useEffect(() => {
         if (onTopFileChange !== undefined && topFileId !== reportedTop.current) {
@@ -404,7 +462,7 @@ export function DiffFileList({
     );
 
     return (
-        <div className="diff-list" ref={scrollRef} onScroll={handleScroll}>
+        <div className="diff-list" ref={listRef}>
             <div className="diff-list__inner" style={{ height: `${String(virtualizer.getTotalSize())}px` }}>
                 {items.map((item) => {
                     const file = files[item.index];
@@ -416,7 +474,7 @@ export function DiffFileList({
                             key={file.fileId}
                             file={file}
                             index={item.index}
-                            start={item.start}
+                            start={item.start - scrollMargin}
                             measure={virtualizer.measureElement}
                             model={snapshot.models.get(file.fileId) ?? null}
                             parseError={parseErrors.get(file.fileId) ?? null}

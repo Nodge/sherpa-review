@@ -48,6 +48,8 @@ const EXPECTED: Record<string, string> = {
     '--border-standard': '#22252b',
     '--border-control': '#24272d',
     '--border-chip': '#262a30',
+    // README §1: "Divider 1×18px #26292f" in the full diff toolbar.
+    '--border-divider': '#26292f',
     '--border-strong': '#2b2f36',
     '--border-strong-lifted': '#2f333a',
     '--ownership-mine-border': '#24422f',
@@ -227,6 +229,8 @@ const EXPECTED: Record<string, string> = {
     '--space-control': '14px',
     '--space-inner': '10px',
     '--space-inner-tight': '8px',
+    // Prototype: Sherpa.dc.html:217 reserves 180px below Route. Shared by all reader views.
+    '--space-bar-reserve': '180px',
 
     // Shadows — popover `0 8px 24px rgba(0,0,0,.5)` · menu `0 16px 40px rgba(0,0,0,.6)` ·
     // floating bar `0 16px 44px rgba(0,0,0,.6)` · dialog `0 24px 64px rgba(0,0,0,.65)`.

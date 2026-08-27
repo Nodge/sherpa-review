@@ -12,13 +12,13 @@ test('fixture-large meets the frame-time budget when scrolling the full diff', a
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
 
     await expect(page.getByRole('button', { name: 'All 64', exact: true })).toBeVisible();
-    await expect(page.locator('.full-diff__count')).toHaveText('64 files');
+    await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '64');
     await expect(page.locator('.diff-list')).toBeVisible();
 
     const parsedFiles = await warmParsedFiles(page);
     expect(parsedFiles).toBe(64);
 
-    const metrics = await page.locator('.diff-list').evaluate(async (scroller, step) => {
+    const metrics = await page.locator('.full-diff').evaluate(async (scroller, step) => {
         const samples: number[] = [];
         scroller.scrollTop = 0;
         await new Promise<void>((resolve) => {
@@ -64,7 +64,7 @@ test('fixture-large meets the frame-time budget when scrolling the full diff', a
 });
 
 async function warmParsedFiles(page: Page): Promise<number> {
-    return page.locator('.diff-list').evaluate(async (scroller) => {
+    return page.locator('.full-diff').evaluate(async (scroller) => {
         const seen = new Set<string>();
         const nextFrame = (): Promise<void> =>
             new Promise<void>((resolve) => {

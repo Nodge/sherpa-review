@@ -1,36 +1,65 @@
 /*
- * The diff mode toggle and comment source chips moved into the shared
- * `components/toolbar-controls.css`. The route toolbar uses the same controls.
- *
- * Full diff view, README §10: a 290px panel with its own scroll on the left, PR header,
- * toolbar and cards on the right. The right side is measured separately from the window. Below 1100px wide,
- * side-by-side is unavailable (SPEC §2.6).
+ * The "Full diff" view, README §10: PR header in normal flow, sticky toolbar, then a row
+ * with a 290px file panel and cards. The view itself is the only scroll container.
  */
 
-/* The page shell (`#root > main`) sets the view height. The panel and list scroll independently. */
 .full-diff {
-    display: flex;
-    align-items: stretch;
-    /* In the app, `#root > main` sets the height. In the gallery, the state stand does. */
-    flex: 1;
-    min-height: 0;
-}
+    /* The view and toolbar measure these values. Fallbacks hold the layout until the first layout effect. */
+    --full-diff-toolbar-height: 50px;
+    --full-diff-viewport-height: 100vh;
 
-.full-diff__main {
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-width: 0;
     min-height: 0;
+    overflow-y: auto;
+}
+
+.full-diff--status {
+    padding-bottom: var(--space-bar-reserve);
+}
+
+.full-diff__body {
+    display: flex;
+    align-items: flex-start;
+    flex: none;
+    min-width: 0;
+    min-height: calc(var(--full-diff-viewport-height) - var(--full-diff-toolbar-height));
+}
+
+.full-diff__body > .file-panel {
+    position: sticky;
+    top: var(--full-diff-toolbar-height);
+    height: calc(var(--full-diff-viewport-height) - var(--full-diff-toolbar-height));
+}
+
+.full-diff__main {
+    flex: 1;
+    min-width: 0;
+    padding-top: 16px;
+}
+
+.full-diff .file-card__header {
+    top: var(--full-diff-toolbar-height);
+}
+
+.full-diff [data-file],
+.full-diff [data-hunk] {
+    scroll-margin-top: var(--full-diff-toolbar-height);
 }
 
 .full-diff__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
     display: flex;
     align-items: center;
     flex: none;
     gap: var(--space-control);
     padding: var(--space-control) var(--space-page) 11px;
     border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-toolbar);
+    backdrop-filter: blur(8px);
 }
 
 .full-diff__title {
@@ -38,6 +67,7 @@
     font-size: var(--font-size-section-title);
     font-weight: 600;
     color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .full-diff__subtitle {
@@ -62,15 +92,16 @@
     flex: 1;
 }
 
-.full-diff__count {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
+.full-diff__divider {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    background: var(--border-divider);
 }
 
 .full-diff__status {
-    padding: 0 var(--space-page);
+    margin: 0;
+    padding: var(--space-page);
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
 }
@@ -84,7 +115,7 @@
     align-items: center;
     flex: none;
     gap: var(--space-control);
-    margin: var(--space-page) var(--space-page) var(--space-card);
+    margin: 0 var(--space-page) var(--space-card);
     padding: var(--space-control) 16px;
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius-card);
