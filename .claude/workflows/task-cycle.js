@@ -11,7 +11,8 @@ export const meta = {
   ],
 }
 
-const REPO = '/Users/alice/Sites/sherpa'
+// Task working tree: defaults to the main checkout. Pass args.repo to use a worktree
+const REPO = (args && args.repo) || '/Users/alice/Sites/sherpa'
 const taskId = args && args.taskId
 const brief = args && args.brief
 const gateCmd = (args && args.gateCmd) || 'pnpm -r typecheck && pnpm -r lint && pnpm -r test'
