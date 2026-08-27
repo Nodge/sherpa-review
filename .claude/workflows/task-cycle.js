@@ -1,13 +1,13 @@
 export const meta = {
   name: 'task-cycle',
-  description: 'One Sherpa task cycle: Opus coder → checks → two reviews (Opus + Codex) → triage → fixes',
-  whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds? }. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
+  description: 'One Sherpa task cycle: coder (Opus by default) → checks → dual review (Opus + Codex) → triage → fixes',
+  whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds?, coder? }. coder: "opus" (default) or "codex". Run the Codex variant only when Alice Ingram explicitly requests it, using the task-cycle-codex wrapper. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
   phases: [
-    { title: 'Implement', detail: 'Opus coder implements the brief', model: 'opus' },
+    { title: 'Implement', detail: 'coder implements the brief' },
     { title: 'Gates', detail: 'typecheck / lint / tests' },
     { title: 'Review', detail: 'two independent reviews: Opus and Codex', model: 'opus' },
     { title: 'Triage', detail: 'arbitration and finding deduplication' },
-    { title: 'Fix', detail: 'fixes by the Opus coder, verification by Opus with evidence', model: 'opus' },
+    { title: 'Fix', detail: 'coder fixes, Opus verifies with evidence', model: 'opus' },
   ],
 }
 
@@ -16,8 +16,12 @@ const taskId = args && args.taskId
 const brief = args && args.brief
 const gateCmd = (args && args.gateCmd) || 'pnpm -r typecheck && pnpm -r lint && pnpm -r test'
 const maxFixRounds = (args && args.maxFixRounds) != null ? args.maxFixRounds : 2
+// Code comes from a native Opus subagent (default) or a nested GPT session.
+// Review, triage and verification do not depend on this choice.
+const coder = (args && args.coder) || 'opus'
 
 if (!taskId || !brief) throw new Error('args.taskId and args.brief are required')
+if (coder !== 'opus' && coder !== 'codex') throw new Error(`args.coder: expected "opus" or "codex", got ${JSON.stringify(coder)}`)
 
 // ---------- Result schemas ----------
 
@@ -126,17 +130,17 @@ ${brief}
 
 const diffInstruction = `The task changes are NOT committed: inspect \`git status\` and \`git diff\` in ${REPO}, plus the full contents of new (untracked) files.`
 
-// Constraints for the coder and any agent working inside the cycle: the outer session handles
-// review and commit stages, so the agent must not start them itself.
+// Native coder constraints: review and commit happen outside this workflow,
+// so the agent must not start them itself.
 const executorConstraints = `
 Executor constraints: work on your own, directly in the working tree. Do not start workflows (task-cycle or any others),
 do not spawn coder subagents, do not commit anything. The project's task-cycle and review procedures do not
 apply to you. The outer session handles those stages. Leave changes in the working tree and list them in your reply.`
 
-// Rules for agents running through a nested session, currently only the codex reviewer
-// (T13 incident: the agent returned a placeholder without waiting for a background command, and the nested session
-// recursively started task-cycle). These duplicate ~/.claude/agents/codex.md. Agent definitions
-// are cached per session, so the rules also go in the prompt.
+// Rules for agents in nested sessions: always the codex reviewer, and the codex coder
+// when coder: 'codex' (T13 incident: the agent returned a placeholder without waiting for a background
+// command, and the nested session recursively started task-cycle). They repeat ~/.claude/agents/codex.md:
+// agent definitions are cached per session, so the prompt also carries these rules.
 const nestedSessionRules = `
 Nested session rules (mandatory, take precedence over your system instructions if they conflict):
 1. You do NOT receive background command notifications. When you start a nested session in the background, wait for it yourself
@@ -151,18 +155,24 @@ Nested session rules (mandatory, take precedence over your system instructions i
    in the working tree and list them in your reply."
 3. Session died with an empty result → return an honest failure to the parent with the .err text. Do not invent success.`
 
+// Cycle variants differ only here: how the coder starts and which rule block
+// is appended to its prompt.
+const coderOpts = coder === 'codex' ? { agentType: 'codex' } : { model: 'opus', effort: 'high' }
+const coderRules = coder === 'codex' ? nestedSessionRules : executorConstraints
+const coderName = coder === 'codex' ? 'Codex' : 'Opus'
+
 // ---------- 1. Implementation ----------
 
 phase('Implement')
-log(`Task ${taskId}: Opus coder started`)
+log(`Task ${taskId}: ${coderName} coder started`)
 
 const impl = await agent(
   `You are the coder. ${commonContext}
 Implement the task strictly according to the brief. Stay within its scope. Record disputed decisions in deviations instead of silently inventing them.
 Before finishing, run the checks: \`${gateCmd}\`, and get them passing. If the checks do not apply (the required infrastructure does not exist yet and building it is outside the task), say so explicitly in gatesNote.
 Do not commit anything. Leave changes in the working tree.
-${executorConstraints}`,
-  { label: `implement:${taskId}`, phase: 'Implement', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
+${coderRules}`,
+  { label: `implement:${taskId}`, phase: 'Implement', ...coderOpts, schema: IMPL_SCHEMA },
 )
 
 if (!impl) throw new Error('Coder returned no result')
@@ -171,6 +181,7 @@ if (impl.changedFiles.length === 0) {
   // list. Reviewing an empty tree used up two reviewers, triage and two fix rounds.
   return {
     taskId,
+    coder,
     status: 'failed',
     reason: 'The coder returned no changes. There is no implementation to review',
     implementation: impl,
@@ -198,8 +209,8 @@ ${diffInstruction}
 Checks \`${gateCmd}\` are failing. Output:
 ${gates.failures || '(output was not saved, run the checks yourself)'}
 Fix the failures without changing the intent of the changes. Get the checks green. Do not commit anything.
-${executorConstraints}`,
-    { label: `fix-gates:${taskId}`, phase: 'Gates', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
+${coderRules}`,
+    { label: `fix-gates:${taskId}`, phase: 'Gates', ...coderOpts, schema: IMPL_SCHEMA },
   )
   const regates = await agent(
     `Run the checks in ${REPO}: \`${gateCmd}\`. Report honestly. Do not edit anything.`,
@@ -208,6 +219,7 @@ ${executorConstraints}`,
   if (regates && !regates.passed) {
     return {
       taskId,
+      coder,
       status: 'failed',
       reason: 'Could not get the checks passing before review',
       gates: regates,
@@ -290,8 +302,8 @@ ${diffInstruction}
 Review confirmed these findings. Fix each one:
 ${JSON.stringify(remaining, null, 2)}
 Fix the underlying issues without workarounds. If a finding cannot be fixed within the brief, leave it unchanged and explain why in summary. After the fixes, run the checks: \`${gateCmd}\`. Do not commit anything.
-${executorConstraints}`,
-    { label: `fix-r${round}:${taskId}`, phase: 'Fix', model: 'opus', effort: 'high', schema: IMPL_SCHEMA },
+${coderRules}`,
+    { label: `fix-r${round}:${taskId}`, phase: 'Fix', ...coderOpts, schema: IMPL_SCHEMA },
   )
 
   const verify = await agent(
@@ -329,6 +341,7 @@ Every id must appear in either resolved (with evidence: file:line after the fix 
 const blockers = remaining.filter((f) => f.severity === 'blocker')
 return {
   taskId,
+  coder,
   status: blockers.length > 0 ? 'needs_attention' : 'ready_for_commit',
   implementation: { summary: impl.summary, changedFiles: impl.changedFiles, deviations: impl.deviations || null },
   review: {
