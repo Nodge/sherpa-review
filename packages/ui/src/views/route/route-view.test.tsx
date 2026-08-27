@@ -103,7 +103,7 @@ describe('route view', () => {
         expect(html).toContain('01 / 7');
         expect(html).toContain('07 / 7');
         expect(html).toContain('Other — lines the model did not place');
-        expect(html).toContain('Open 34 lines');
+        expect(html).toContain('Open 32 lines');
     });
 
     it('the preset switch shows the active option and its tooltip', () => {
@@ -267,15 +267,15 @@ describe('route view', () => {
         const all = render();
         const filtered = render({ filter: 'pci' });
 
-        expect(all).toContain('Open 34 lines');
-        expect(filtered).toContain('Open 17 lines');
-        expect(filtered).not.toContain('Open 34 lines');
+        expect(all).toContain('Open 32 lines');
+        expect(filtered).toContain('Open 15 lines');
+        expect(filtered).not.toContain('Open 32 lines');
     });
 
     it('Other kept visible by the filter shows all its uncovered ranges', () => {
         const html = render({ filter: 'pci', keptStopId: 'other' });
 
-        expect(html).toContain('Open 34 lines');
+        expect(html).toContain('Open 32 lines');
         expect(section(html, 'other')).toContain('kept in view — outside the current filter');
     });
 
@@ -311,9 +311,9 @@ describe('route view', () => {
     it('the toolbar shows a coverage bar with fixture counts and a stop counter', () => {
         const html = render();
 
-        expect(html).toContain('862 changed lines');
+        expect(html).toContain('860 changed lines');
         expect(html).toContain('96% explained');
-        expect(html).toContain('34 lines not explained');
+        expect(html).toContain('32 lines not explained');
         expect(html).toContain('high · stops 01–02 · 196 lines');
         expect(html).toContain('0 of 7 stops viewed');
         // The fixture has no empty tiers, so there are exactly four segments.

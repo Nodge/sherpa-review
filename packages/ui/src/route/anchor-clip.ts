@@ -77,12 +77,44 @@ function covers(anchors: readonly AnchorSpan[], side: 'old' | 'new', line: numbe
 /**
  * Changed file lines untouched by any anchor supply the synthetic
  * "Other" stop. Ranges merge adjacent line numbers, with each side kept separate.
+ *
+ * Empty and whitespace-only lines are excluded (decision log, 2026-08-26): there is nothing
+ * to read. "Other" and the full diff hatch regularly filled with these separators
+ * between blocks assigned to different stops. The rule applies only outside anchors.
+ * A covered whitespace line still counts towards its tier.
  */
 export function uncoveredRanges(
     model: DiffFileModel | null,
     anchors: readonly AnchorSpan[],
 ): readonly AnchorSpan[] {
-    return changedRanges(model, (side, line) => !covers(anchors, side, line));
+    return changedRanges(model, (line, side, number) => !covers(anchors, side, number) && hasText(line));
+}
+
+/**
+ * Changed lines excluded from coverage statistics by the whitespace rule have no text and
+ * no anchor. The percentage denominator subtracts them, or covered plus uncovered would not match
+ * the changed line count.
+ */
+export function droppedWhitespaceLines(model: DiffFileModel | null, anchors: readonly AnchorSpan[]): number {
+    return spanLines(changedRanges(model, (line, side, number) => !covers(anchors, side, number) && !hasText(line)));
+}
+
+/**
+ * The same uncovered ranges, including all whitespace lines, supply the "viewed" mark.
+ * Reading progress counts all changed patch lines, so marking "Other" must
+ * cover them all. The whitespace rule removes lines from coverage statistics, not from
+ * viewed (requirements §3.1).
+ */
+export function uncoveredReadRanges(
+    model: DiffFileModel | null,
+    anchors: readonly AnchorSpan[],
+): readonly AnchorSpan[] {
+    return changedRanges(model, (line, side, number) => !covers(anchors, side, number));
+}
+
+/** Whether a line contains text. Empty and whitespace-only lines do not. */
+function hasText(line: DiffLine): boolean {
+    return line.text.trim() !== '';
 }
 
 /**
@@ -97,13 +129,13 @@ export function coveredChangedRanges(
     if (anchors.length === 0) {
         return [];
     }
-    return changedRanges(model, (side, line) => covers(anchors, side, line));
+    return changedRanges(model, (line, side, number) => covers(anchors, side, number));
 }
 
 /** Selected changed lines, merged by adjacent line numbers within each side. */
 function changedRanges(
     model: DiffFileModel | null,
-    keep: (side: 'old' | 'new', line: number) => boolean,
+    keep: (line: DiffLine, side: 'old' | 'new', number: number) => boolean,
 ): readonly AnchorSpan[] {
     if (model?.content.kind !== 'text') {
         return [];
@@ -115,10 +147,10 @@ function changedRanges(
             continue;
         }
         for (const line of block.lines) {
-            if (line.kind === 'add' && line.newLine !== null && keep('new', line.newLine)) {
+            if (line.kind === 'add' && line.newLine !== null && keep(line, 'new', line.newLine)) {
                 kept.new.push(line.newLine);
             }
-            if (line.kind === 'del' && line.oldLine !== null && keep('old', line.oldLine)) {
+            if (line.kind === 'del' && line.oldLine !== null && keep(line, 'old', line.oldLine)) {
                 kept.old.push(line.oldLine);
             }
         }
@@ -207,6 +239,9 @@ export function clipModelToAnchors(
             }
             flush(run, block);
             run = [];
+            // The gap counts everything the slice hid, including changed whitespace lines.
+            // the whitespace rule (decision log, 2026-08-26) excludes them from coverage counts,
+            // not from what the card must report.
             skipped =
                 line.kind === 'context'
                     ? { ...skipped, context: skipped.context + 1 }

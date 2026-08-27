@@ -81,17 +81,18 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
 
     await test.step('route ready: coverage bar and stop counter agree', async () => {
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '862 changed lines · 96% explained · 34 lines not explained',
+            '860 changed lines · 96% explained · 32 lines not explained',
         );
         await expect(page.locator('.route-skeleton-card')).toHaveCount(0);
         await expect(page.locator('.coverage__stops')).toHaveText('0 of 7 stops viewed');
-        // The same 34 lines as in the legend: "Other" promises exactly what it will expand.
-        await expect(stop(page, 'other')).toContainText('Open 34 lines');
-        // Bar segments follow the fixture tiers and add up to the same 862 lines.
+        // The same 32 lines as in the legend: Other promises exactly what it will expand.
+        await expect(stop(page, 'other')).toContainText('Open 32 lines');
+        // Bar segments use the fixture tiers and add up to the same 860 lines
+        // (the patches contain 862: 2 empty lines outside anchors are excluded from the counts).
         await expect(segment(page, 'high')).toHaveAttribute('aria-label', 'high · stops 01–02 · 196 lines');
         await expect(segment(page, 'medium')).toHaveAttribute('aria-label', 'medium · stops 03–04 · 327 lines');
         await expect(segment(page, 'low')).toHaveAttribute('aria-label', 'low · stops 05–06 · 305 lines');
-        await expect(segment(page, 'other')).toHaveAttribute('aria-label', 'not explained · 34 lines');
+        await expect(segment(page, 'other')).toHaveAttribute('aria-label', 'not explained · 32 lines');
 
         await page.getByRole('tab', { name: 'Overview', exact: true }).click();
         await expectSummary(page);
@@ -211,7 +212,7 @@ test('F1 failure: a broken plan fails generation, Retry finishes the route', asy
         }
 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '862 changed lines · 96% explained · 34 lines not explained',
+            '860 changed lines · 96% explained · 32 lines not explained',
         );
         expect(await stopOrder(page)).toEqual(PLAN_ORDER);
     });

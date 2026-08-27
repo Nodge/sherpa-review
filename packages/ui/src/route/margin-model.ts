@@ -4,7 +4,7 @@ import type { DiffFileModel } from '../diff/model.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
 import type { AnchorSpan } from './anchor-clip.js';
-import { spanLines, uncoveredRanges } from './anchor-clip.js';
+import { droppedWhitespaceLines, spanLines, uncoveredRanges } from './anchor-clip.js';
 import { planLabel } from './route-model.js';
 
 /**
@@ -95,7 +95,8 @@ export function buildRouteMargin({ snapshot, files, models, failed = EMPTY_FAILE
                 pendingFiles += 1;
             }
         }
-        const uncovered = model === null ? EMPTY_SPANS : uncoveredRanges(model, claimed.get(file.fileId) ?? []);
+        const spans = claimed.get(file.fileId) ?? EMPTY_SPANS;
+        const uncovered = model === null ? EMPTY_SPANS : uncoveredRanges(model, spans);
         const lines = spanLines(uncovered);
         uncoveredLines += lines;
         uncoveredFiles += lines > 0 ? 1 : 0;
@@ -105,7 +106,7 @@ export function buildRouteMargin({ snapshot, files, models, failed = EMPTY_FAILE
             uncovered,
             uncoveredLines: lines,
             parsed: model !== null,
-            changed: changedLineCount(model, file) > 0,
+            changed: changedLineCount(model, file, spans) > 0,
         });
     }
 
@@ -214,11 +215,15 @@ const NOT_PLACED_CARD = 'no route stop';
 /**
  * Changed file lines use the same `changedLinesOf` rule as everywhere else. Without a model,
  * use patch counts. Binary files and mode changes give zero and get no badge.
+ *
+ * Empty and whitespace-only lines outside anchors are subtracted, as in the route view denominator (decision
+ * log, 2026-08-26): a file with no other changes has nowhere to go, so the hatched
+ * "outside route" badge would link to Other, which does not contain this file.
  */
-function changedLineCount(model: DiffFileModel | null, file: FileDiff): number {
+function changedLineCount(model: DiffFileModel | null, file: FileDiff, anchors: readonly AnchorSpan[]): number {
     const changed = changedLinesOf(model);
     if (changed !== undefined) {
-        return changed.old.size + changed.new.size;
+        return changed.old.size + changed.new.size - droppedWhitespaceLines(model, anchors);
     }
     return model === null ? file.additions + file.deletions : 0;
 }

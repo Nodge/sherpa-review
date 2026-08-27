@@ -2,15 +2,17 @@ import { fixtureData, routeFixtures } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import type { DiffFileModel, DiffHunk, DiffLine } from '../diff/model.js';
+import type { DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import { changedLinesOf } from '../progress/read-state.js';
-import type { AnchorSpan } from './anchor-clip.js';
+import type { AnchorSpan, ClippedModel } from './anchor-clip.js';
 import {
     ANCHOR_CONTEXT,
     clipModelToAnchors,
     coveredChangedLines,
+    coveredChangedRanges,
+    droppedWhitespaceLines,
     spanLines,
     uncoveredRanges,
 } from './anchor-clip.js';
@@ -40,6 +42,12 @@ function hunks(model: DiffFileModel): DiffHunk[] {
 
 function lines(model: DiffFileModel): DiffLine[] {
     return hunks(model).flatMap((hunk) => hunk.lines);
+}
+
+function gapsOf(clipped: ClippedModel): DiffGap[] {
+    return clipped.model.content.kind === 'text'
+        ? clipped.model.content.blocks.filter((block): block is DiffGap => block.kind === 'gap')
+        : [];
 }
 
 const POLICY = 'services/orders/src/domain/policies/edit-policy.ts';
@@ -136,7 +144,10 @@ describe('clipping the model by anchors', () => {
         const covered = coveredChangedLines(model, anchors);
         const rest = uncoveredRanges(model, anchors);
 
-        expect(spanLines(rest) + covered.additions + covered.deletions).toBe(total);
+        // Whitespace lines outside anchors are excluded from the statistics. They account for the difference from `total`.
+        const dropped = droppedWhitespaceLines(model, anchors);
+        expect(dropped).toBe(2);
+        expect(spanLines(rest) + covered.additions + covered.deletions).toBe(total - dropped);
         // Ranges are sorted and do not touch. Adjacent line numbers have already been merged.
         for (const [index, span] of rest.entries()) {
             const previous = rest[index - 1];
@@ -144,6 +155,89 @@ describe('clipping the model by anchors', () => {
                 expect(span.start).toBeGreaterThan(previous.end + 1);
             }
         }
+    });
+
+    it('excludes whitespace lines outside anchors from uncovered ranges and counts those inside', () => {
+        // alpha=old1/new1. Empty add=new2 and beta=new3 are inside an anchor. Whitespace add=new5 and
+        // deletion of a single tab at old3 are outside anchors. delta=new6 is the only uncovered line.
+        const model = parseFileDiff({
+            fileId: 'f',
+            path: 'src/a.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,4 +1,7 @@', ' alpha', '+', '+beta', ' gamma', '+  ', '+delta', '-\t', ' omega', ''].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [{ side: 'new', start: 2, end: 3 }];
+        const changed = changedLinesOf(model);
+        const total = (changed?.old.size ?? 0) + (changed?.new.size ?? 0);
+        const covered = coveredChangedLines(model, anchors);
+
+        expect(total).toBe(5);
+        expect(uncoveredRanges(model, anchors)).toEqual([{ side: 'new', start: 6, end: 6 }]);
+        expect(droppedWhitespaceLines(model, anchors)).toBe(2);
+        // The anchor explains an empty line just like a text line. The rule applies only outside anchors.
+        expect(covered).toEqual({ additions: 2, deletions: 0 });
+        expect(coveredChangedRanges(model, anchors)).toEqual([{ side: 'new', start: 2, end: 3 }]);
+        expect(spanLines(uncoveredRanges(model, anchors)) + covered.additions + covered.deletions).toBe(
+            total - droppedWhitespaceLines(model, anchors),
+        );
+    });
+
+    it('counts whitespace lines in slice gaps because the whitespace rule applies to statistics, not slices', () => {
+        const model = parseFileDiff({
+            fileId: 'f',
+            path: 'src/a.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,2 +1,6 @@', ' alpha', '+one', '+', '+two', '+three', ' omega', ''].join('\n'),
+        });
+        // The slice contains new lines 2 and 5. Empty new line 3 and text new line 4 remain between them.
+        const gaps = gapsOf(
+            clipModelToAnchors(model, [
+                { side: 'new', start: 2, end: 2 },
+                { side: 'new', start: 5, end: 5 },
+            ]),
+        );
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]?.hiddenChanged).toBe(2);
+        expect(gaps[0]?.hiddenLines).toBe(0);
+    });
+
+    it('creates a gap even for one whitespace line between chunks instead of silently merging them', () => {
+        const model = parseFileDiff({
+            fileId: 'f',
+            path: 'src/a.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,2 +1,5 @@', ' alpha', '+one', '+', '+two', ' omega', ''].join('\n'),
+        });
+        const gaps = gapsOf(
+            clipModelToAnchors(model, [
+                { side: 'new', start: 2, end: 2 },
+                { side: 'new', start: 4, end: 4 },
+            ]),
+        );
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]?.hiddenChanged).toBe(1);
+    });
+
+    it('excludes whitespace lines from uncovered ranges when there are no anchors', () => {
+        const model = parseFileDiff({
+            fileId: 'f',
+            path: 'src/a.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,2 +1,4 @@', ' alpha', '+', '+   ', ' omega', ''].join('\n'),
+        });
+
+        expect(uncoveredRanges(model, [])).toEqual([]);
+        expect(droppedWhitespaceLines(model, [])).toBe(2);
     });
 
     it('returns non-text content unchanged because there is nothing to clip', () => {

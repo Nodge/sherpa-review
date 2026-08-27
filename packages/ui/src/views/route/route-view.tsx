@@ -1569,7 +1569,7 @@ function OtherSection({
     onOpen: () => void;
     renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
 }) {
-    // The card counts the same set that will expand. Otherwise the button would promise 34 lines,
+    // The card counts the same set that expands. Otherwise the button would promise all lines
     // and show only the subset that passes the filter.
     const filtered = useMemo(() => filterOtherView(view, fileIds), [fileIds, view]);
     const groups = useMemo(() => filtered.files.map((file) => uncoveredAsGroup(file)), [filtered.files]);

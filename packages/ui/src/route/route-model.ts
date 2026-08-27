@@ -19,8 +19,10 @@ import {
     clipModelToAnchors,
     coveredChangedLines,
     coveredChangedRanges,
+    droppedWhitespaceLines,
     spanLines,
     uncoveredRanges,
+    uncoveredReadRanges,
 } from './anchor-clip.js';
 
 /**
@@ -69,6 +71,9 @@ export interface RouteFileGroup {
      * Ranges of changed file lines covered by the stop's anchors. Marking the stop
      * "viewed" writes them to progress (M2-T7). Collapsed anchors count alongside
      * visible ones because the stop explains them and prints their counts in a summary row.
+     *
+     * Also includes whitespace lines that Other will not take (`orphanWhitespace`). They are excluded from the stop's
+     * counters, but without them the file's reading progress could not reach completion.
      */
     readonly seenRanges: readonly AnchorSpan[];
     /** The stop covers all changed lines in the file. */
@@ -108,6 +113,12 @@ export interface RouteUncoveredFile {
     readonly dir: string;
     /** Synthetic anchors: uncovered ranges of changed lines. */
     readonly anchors: readonly AnchorSpan[];
+    /**
+     * Viewed-mark ranges: the same uncovered lines plus whitespace lines that
+     * the whitespace rule excluded from statistics. Reading progress counts every changed line
+     * in the patch, and Other must complete the file's progress.
+     */
+    readonly seenRanges: readonly AnchorSpan[];
     /** Context around uncovered ranges not assigned to stops. */
     readonly contextLines: ContextLines;
     readonly lines: number;
@@ -201,7 +212,8 @@ export function buildRouteModel({
     // Context already assigned to a stop. The first stop in plan order gets the line so that one
     // comment never appears in two route entries at once.
     const takenContext = new Map<string, ContextLines>();
-    const views = planned.map((stop) => stopView(stop, byId, models, failed, claimed, takenContext));
+    const orphans = orphanWhitespace(planned, files, models, claimed);
+    const views = planned.map((stop) => stopView(stop, byId, models, failed, claimed, takenContext, orphans));
     const byTier: Record<RouteTier, number> = { high: 0, medium: 0, low: 0, other: 0 };
     for (const view of views) {
         byTier[view.stop.tier] += view.changedLines;
@@ -224,7 +236,7 @@ export function buildRouteModel({
             continue;
         }
         const spans = claimed.get(file.fileId) ?? [];
-        const total = changedLineCount(model, file);
+        const total = changedLineCount(model, file, spans);
         const fileCovered = coveredChangedLines(model, spans);
         changed += total;
         covered += fileCovered.additions + fileCovered.deletions;
@@ -236,6 +248,7 @@ export function buildRouteModel({
                 ...names(file),
                 file,
                 anchors: ranges,
+                seenRanges: uncoveredReadRanges(model, spans),
                 contextLines: claimContext(takenContext, file.fileId, ranges, spans),
                 lines,
             });
@@ -340,6 +353,7 @@ function stopView(
     failed: ReadonlySet<string>,
     claimed: ReadonlyMap<string, readonly AnchorSpan[]>,
     takenContext: Map<string, ContextLines>,
+    orphans: ReadonlyMap<string, readonly AnchorSpan[]>,
 ): RouteStopView {
     const groups = new Map<string, { shown: RouteAnchor[]; collapsed: RouteAnchor[] }>();
     const unresolved: string[] = [];
@@ -392,8 +406,8 @@ function stopView(
             additions,
             deletions,
             collapsedLines: collapsed.additions + collapsed.deletions,
-            seenRanges: coveredChangedRanges(model, own),
-            whole: model !== null && additions + deletions >= changedLineCount(model, file),
+            seenRanges: [...coveredChangedRanges(model, own), ...(orphans.get(fileId) ?? EMPTY_SPANS)],
+            whole: model !== null && additions + deletions >= changedLineCount(model, file, claimed.get(fileId) ?? []),
         });
     }
 
@@ -408,6 +422,43 @@ function stopView(
         pending,
         parseFailed,
     };
+}
+
+/**
+ * Whitespace lines outside anchors that "Other" will not take. The file has no uncovered text
+ * left, so it will not appear in "Other" at all. Reading progress counts changed lines
+ * across the whole patch (`read-state`), so stops explaining this file mark these lines
+ * as read too. Otherwise, a file with a blank line between blocks from different stops would
+ * never be completed through the route.
+ *
+ * A file touched by no stop (all its changed lines are whitespace) never appears
+ * in the route. It can only be completed by marking the file itself.
+ */
+function orphanWhitespace(
+    planned: readonly RouteStop[],
+    files: readonly FileDiff[],
+    models: ReadonlyMap<string, DiffFileModel>,
+    claimed: ReadonlyMap<string, readonly AnchorSpan[]>,
+): ReadonlyMap<string, readonly AnchorSpan[]> {
+    const placed = new Set(planned.flatMap((stop) => stop.anchors.map((anchor) => anchor.fileId)));
+    const orphans = new Map<string, readonly AnchorSpan[]>();
+    for (const file of files) {
+        const model = models.get(file.fileId) ?? null;
+        if (model === null || !placed.has(file.fileId)) {
+            continue;
+        }
+        const spans = claimed.get(file.fileId) ?? EMPTY_SPANS;
+        // There is uncovered text, so the file will appear in "Other", whose seen ranges will cover
+        // the whitespace lines too.
+        if (uncoveredRanges(model, spans).length > 0) {
+            continue;
+        }
+        const rest = uncoveredReadRanges(model, spans);
+        if (rest.length > 0) {
+            orphans.set(file.fileId, rest);
+        }
+    }
+    return orphans;
 }
 
 /**
@@ -460,14 +511,22 @@ function intersects(spans: readonly AnchorSpan[], side: 'old' | 'new', start: nu
 }
 
 const EMPTY_CONTEXT: ContextLines = { old: new Set(), new: new Set() };
+const EMPTY_SPANS: readonly AnchorSpan[] = [];
 
 /**
- * Changed file lines follow the canonical `changedLinesOf` rule (add→new, del→old), so
- * coverage and read-state use the same count. Without a model, use patch counters.
+ * Changed lines in the file, using the canonical `changedLinesOf` rule (add→new, del→old). Without
+ * a model yet, use patch counters.
+ *
+ * Empty and whitespace-only lines outside anchors are subtracted (decision log, 2026-08-26):
+ * `uncoveredRanges` omits them. Without the same adjustment in the denominator, covered plus
+ * uncovered would not equal changed.
  */
-function changedLineCount(model: DiffFileModel | null, file: FileDiff): number {
+function changedLineCount(model: DiffFileModel | null, file: FileDiff, anchors: readonly AnchorSpan[]): number {
     const changed = changedLinesOf(model);
-    return changed === undefined ? file.additions + file.deletions : changed.old.size + changed.new.size;
+    if (changed === undefined) {
+        return file.additions + file.deletions;
+    }
+    return changed.old.size + changed.new.size - droppedWhitespaceLines(model, anchors);
 }
 
 function names(file: FileDiff): { fileId: string; path: string; name: string; dir: string } {
@@ -589,8 +648,8 @@ export function uncoveredAsGroup(file: RouteUncoveredFile): RouteFileGroup {
         additions,
         deletions: file.lines - additions,
         collapsedLines: 0,
-        seenRanges: file.anchors,
-        whole: file.lines >= file.file.additions + file.file.deletions,
+        seenRanges: file.seenRanges,
+        whole: spanLines(file.seenRanges) >= file.file.additions + file.file.deletions,
     };
 }
 

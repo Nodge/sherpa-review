@@ -191,7 +191,7 @@ describe('route in full diff margins', () => {
         const footer = host.querySelector('.file-panel__footer');
 
         expect(footer?.textContent).toBe(
-            'The hatch means the range has no route stop. 34 lines in 3 files.',
+            'The hatch means the range has no route stop. 32 lines in 3 files.',
         );
     });
 
@@ -239,7 +239,7 @@ describe('route in full diff margins', () => {
         const { host, parsed, rerender } = mount({ ownStore: true });
         await settleBackgroundParse();
         const note = host.querySelector('.file-panel__footer')?.textContent;
-        expect(note).toBe('The hatch means the range has no route stop. 34 lines in 3 files.');
+        expect(note).toBe('The hatch means the range has no route stop. 32 lines in 3 files.');
 
         parsed.length = 0;
         rerender(DATA.diff.files);
