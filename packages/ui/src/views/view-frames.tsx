@@ -412,8 +412,47 @@ function OwnershipCard({
         : 'This PR has no review host, so the ownership zone is unavailable.';
     const summary = ownershipSummary(files, ownership, segment, fallbackNote);
 
+    const title = 'Files by ownership zone';
+    const header =
+        diff !== null && (ownership !== null || !lensesLoading) ? (
+            <div className="ownership-card__toolbar">
+                <div className="ownership-card__toolbar-row">
+                    <h2 className="overview-card__title">{title}</h2>
+                    <div className="ownership-card__header">
+                        {summary.available
+                            ? `CODEOWNERS · ${formatCount(summary.mineFiles)} of ${formatCount(summary.totalFiles)} files · ${formatCount(summary.mineLines)} of ${formatCount(summary.totalLines)} lines are yours`
+                            : 'CODEOWNERS · ownership zone unavailable'}
+                    </div>
+                    <div className="ownership-card__toolbar-spacer" />
+                    <div className="ownership-segments" aria-label="Files by ownership zone">
+                        <button
+                            type="button"
+                            aria-pressed={segment === 'mine'}
+                            disabled={!summary.available}
+                            title={summary.available ? undefined : (summary.note ?? undefined)}
+                            onClick={() => {
+                                onSegment('mine');
+                            }}
+                        >
+                            My files {formatCount(summary.mineFiles)}
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={segment === 'all'}
+                            onClick={() => {
+                                onSegment('all');
+                            }}
+                        >
+                            All {formatCount(summary.totalFiles)}
+                        </button>
+                    </div>
+                </div>
+                {summary.note === null ? null : <div className="ownership-card__note">{summary.note}</div>}
+            </div>
+        ) : undefined;
+
     return (
-        <OverviewCard title="Files by ownership" className="ownership-card">
+        <OverviewCard title={title} header={header} className="ownership-card">
             {diff === null && diffLoading ? (
                 <p className="overview-card__empty">Loading diff…</p>
             ) : diff === null ? (
@@ -423,65 +462,31 @@ function OwnershipCard({
             ) : ownership === null && lensesLoading ? (
                 <p className="overview-card__empty">Loading ownership zone…</p>
             ) : (
-                <>
-                    <div className="ownership-card__toolbar">
-                        <div>
-                            <div className="ownership-card__header">
-                                {summary.available
-                                    ? `CODEOWNERS · ${formatCount(summary.mineFiles)} of ${formatCount(summary.totalFiles)} files · ${formatCount(summary.mineLines)} of ${formatCount(summary.totalLines)} lines are yours`
-                                    : 'CODEOWNERS · ownership zone unavailable'}
-                            </div>
-                            {summary.note === null ? null : <div className="ownership-card__note">{summary.note}</div>}
-                        </div>
-                        <div className="ownership-segments" aria-label="Files by ownership zone">
-                            <button
-                                type="button"
-                                aria-pressed={segment === 'mine'}
-                                disabled={!summary.available}
-                                title={summary.available ? undefined : (summary.note ?? undefined)}
-                                onClick={() => {
-                                    onSegment('mine');
-                                }}
-                            >
-                                My zone {formatCount(summary.mineFiles)}
-                            </button>
-                            <button
-                                type="button"
-                                aria-pressed={segment === 'all'}
-                                onClick={() => {
-                                    onSegment('all');
-                                }}
-                            >
-                                All {formatCount(summary.totalFiles)}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="ownership-list">
-                        {summary.groups.map((group) => (
-                            <button
-                                key={`${group.path}:${group.owner ?? ''}:${group.ownership ?? ''}`}
-                                type="button"
-                                className="ownership-row"
-                                onClick={onOpenDiff}
-                            >
-                                <span className="ownership-row__main">
-                                    <span className="ownership-row__path">{group.path}</span>
-                                    {group.ownership === null ? null : (
-                                        <OwnershipChip kind={group.ownership} owner={group.owner} />
-                                    )}
-                                    <span className="ownership-row__spacer" />
-                                    <span className="ownership-row__stats">
-                                        {formatCount(group.files)} {plural(group.files, 'file', 'files', 'files')} ·{' '}
-                                        {formatCount(group.lines)} {plural(group.lines, 'line', 'lines', 'lines')}
-                                    </span>
-                                    <span className="ownership-row__add">+{formatCount(group.additions)}</span>
-                                    <span className="ownership-row__del">−{formatCount(group.deletions)}</span>
+                <div className="ownership-list">
+                    {summary.groups.map((group) => (
+                        <button
+                            key={`${group.path}:${group.owner ?? ''}:${group.ownership ?? ''}`}
+                            type="button"
+                            className="ownership-row"
+                            onClick={onOpenDiff}
+                        >
+                            <span className="ownership-row__main">
+                                <span className="ownership-row__path">{group.path}</span>
+                                {group.ownership === null ? null : (
+                                    <OwnershipChip kind={group.ownership} owner={group.owner} />
+                                )}
+                                <span className="ownership-row__spacer" />
+                                <span className="ownership-row__stats">
+                                    {formatCount(group.files)} {plural(group.files, 'file', 'files', 'files')} ·{' '}
+                                    {formatCount(group.lines)} {plural(group.lines, 'line', 'lines', 'lines')}
                                 </span>
-                                <span className="ownership-row__note">{group.note}</span>
-                            </button>
-                        ))}
-                    </div>
-                </>
+                                <span className="ownership-row__add">+{formatCount(group.additions)}</span>
+                                <span className="ownership-row__del">−{formatCount(group.deletions)}</span>
+                            </span>
+                            <span className="ownership-row__note">{group.note}</span>
+                        </button>
+                    ))}
+                </div>
             )}
         </OverviewCard>
     );
@@ -556,16 +561,18 @@ function DiscussionCount({ value, label }: { value: number; label: string }) {
 
 function OverviewCard({
     title,
+    header,
     className = '',
     children,
 }: {
     title: string;
+    header?: ReactNode;
     className?: string;
     children: ReactNode;
 }) {
     return (
         <section className={`overview-card${className === '' ? '' : ` ${className}`}`}>
-            <h2 className="overview-card__title">{title}</h2>
+            {header ?? <h2 className="overview-card__title">{title}</h2>}
             {children}
         </section>
     );

@@ -62,7 +62,7 @@
     height: 18px;
     border-radius: 50%;
     background: var(--surface-segment-active);
-    font-size: var(--font-size-scope);
+    font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
 }
