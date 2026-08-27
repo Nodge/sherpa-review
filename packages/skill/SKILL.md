@@ -37,8 +37,14 @@ On error — show the text to the user and stop; do not start the loop.
 Run `node <this skill's directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the instructions in its output.
 Repeat until you receive DONE.
 
+`worker next` waits for a task and returns an idle queue if none arrives — how long it waits is your call, with `--wait-seconds <n>` (1..3600):
+
+- **You can run background processes and wake up when they finish** — run `worker next --pr <pr> --wait-seconds 3600` in the background. When it returns, act on its output and start the next one. Waiting then costs you nothing: it happens outside a tool call.
+- **You cannot** — call it in the foreground, and raise your tool timeout before the call: it must exceed the wait by at least 30 seconds, or the harness kills the poll mid-flight and a task already handed to you hangs until its lease expires. The timeout is yours to set and its default is usually short: in Claude Code the Bash timeout defaults to 2 minutes and maxes out at 10, so pass `timeout: 600000` explicitly and use `--wait-seconds 540`.
+
+Idle is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Never stop the loop after repeated "No tasks" — stop only on DONE or an explicit "stop the loop" error.
+
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
-- `worker next` blocks for up to ~4 minutes; this is normal — set your tool timeout to at least 5 minutes.
 - "No tasks" is not an error — call `worker next` again.
 - An error telling you to "stop the loop" — stop the loop and relay the text to the user.
 

@@ -1,7 +1,7 @@
 import http from 'node:http';
 
 import type { ServerManifest } from '@sherpa/protocol';
-import { LONG_POLL_MAX_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
+import { LONG_POLL_DEFAULT_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
 
 import { createToken } from './auth.js';
 import type { SherpaDatabase } from './db.js';
@@ -52,7 +52,10 @@ export interface StartServerOptions {
     prKey: string;
     /** State root, defaults to `~/.sherpa`. */
     sherpaDir?: string;
-    /** `worker next` long-poll window, defaults to the contract limit. Shortened in tests. */
+    /**
+     * Long-poll window for `worker next` when the call provides no `waitSeconds`.
+     * Defaults to `LONG_POLL_DEFAULT_SECONDS`. Shortened in tests.
+     */
     longPollSeconds?: number;
     /** UI static asset source (build directory or a map embedded in the bundle). Served without a token when provided. */
     assets?: StaticAssets;
@@ -138,10 +141,18 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     const idleWatch = new IdleWatch(
         options.now === undefined ? { idleSeconds } : { idleSeconds, now: options.now },
     );
+    // Until all routes are ready, unmatched requests wait for this signal instead of receiving 404:
+    // the manifest is published before worker endpoints are ready, and a call using the fresh manifest can arrive
+    // during that gap. Failed startup also sends the signal, or waiting requests would hang until disconnected.
+    let markRoutesReady!: () => void;
+    const routesReady = new Promise<void>((resolve) => {
+        markRoutesReady = resolve;
+    });
     const listenerOptions: RequestListenerOptions = {
         token,
         routes,
         activity: idleWatch,
+        ready: routesReady,
         ...(options.assets === undefined ? {} : { assets: options.assets }),
     };
     const httpServer = http.createServer(createRequestListener(listenerOptions));
@@ -207,7 +218,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             ...createWorkerRoutes({
                 queue,
                 registry: workerRegistry,
-                longPollSeconds: options.longPollSeconds ?? LONG_POLL_MAX_SECONDS,
+                longPollSeconds: options.longPollSeconds ?? LONG_POLL_DEFAULT_SECONDS,
                 shutdownSignal: shutdownController.signal,
                 publishWorkerId: (workerId) => {
                     writeWorkerIdFile(workerIdPath, workerId);
@@ -231,6 +242,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
         );
+        markRoutesReady();
 
         const handle = createHandle({
             manifest: claimed,
@@ -259,6 +271,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         });
         return handle;
     } catch (error) {
+        markRoutesReady();
         idleWatch.close();
         shutdownController.abort();
         if (claimed !== null) {

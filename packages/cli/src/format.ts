@@ -1,5 +1,10 @@
 import type { RpcError, RpcErrorCode, Task, TaskAckResponse, TaskCompleteResponse } from '@sherpa/protocol';
-import { LONG_POLL_MAX_SECONDS, PROTOCOL_VERSION, RESULT_MAX_BYTES } from '@sherpa/protocol';
+import {
+    LONG_POLL_CEILING_SECONDS,
+    LONG_POLL_DEFAULT_SECONDS,
+    PROTOCOL_VERSION,
+    RESULT_MAX_BYTES,
+} from '@sherpa/protocol';
 
 import { CLI_VERSION } from './version.js';
 
@@ -131,12 +136,13 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 }
 
 export function helpText(): string {
-    const pollMinutes = String(Math.round(LONG_POLL_MAX_SECONDS / 60));
-
     const commands: readonly (readonly [string, string])[] = [
         ['sherpa up [--harness <name>] [--model <name>]', 'start the PR server and become its worker'],
         ['sherpa worker register [--harness <name>] [--model <name>]', 'register this session as the PR worker'],
-        ['sherpa worker next', `take the next task (waits up to ${pollMinutes} minutes)`],
+        [
+            'sherpa worker next [--wait-seconds <n>]',
+            'take the next task; waits out --wait-seconds, then reports an idle queue',
+        ],
         ['sherpa task complete <id> --file <path>', 'submit the result of a task'],
         ['sherpa task progress <id> --text "<text>"', 'interim status for the reviewer'],
         ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
@@ -145,6 +151,11 @@ export function helpText(): string {
         ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
+        [
+            '--wait-seconds <n>',
+            `how long \`worker next\` may block, 1..${String(LONG_POLL_CEILING_SECONDS)}; ` +
+                `default ${String(LONG_POLL_DEFAULT_SECONDS)}`,
+        ],
         ['--version', 'CLI version'],
     ];
 

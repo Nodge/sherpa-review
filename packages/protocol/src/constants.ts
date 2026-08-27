@@ -6,10 +6,23 @@
 /** `complete` result limit. Larger results fail the task with a clear message. */
 export const RESULT_MAX_BYTES = 256 * 1024;
 
-/** Upper bound for `worker next` long-poll, below harness timeouts (Claude Code: 10 min maximum). */
-export const LONG_POLL_MAX_SECONDS = 240;
+/**
+ * Long-poll wait for `worker next` when the harness provides no `waitSeconds`.
+ * The default is conservative, below every known harness tool timeout.
+ */
+export const LONG_POLL_DEFAULT_SECONDS = 240;
 
-/** No CLI calls for longer than this means the worker is dead (must be > LONG_POLL_MAX_SECONDS). */
+/**
+ * Maximum requested wait (`waitSeconds`), a sanity bound in the request schema:
+ * an hour-long background poll is valid. Anything longer looks like a caller error.
+ */
+export const LONG_POLL_CEILING_SECONDS = 3600;
+
+/**
+ * Silence while holding a lease beyond this duration → the worker is considered dead.
+ * Does not affect waiting in `next`: while the call is pending, its open connection proves liveness
+ * (rpc-design §7). An hour-long poll does not make the worker dead.
+ */
 export const WORKER_DEAD_AFTER_SECONDS = 360;
 
 /** Lease TTL by priority class. */

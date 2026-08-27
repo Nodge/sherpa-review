@@ -122,7 +122,7 @@ function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>)
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
     const connection = await connect(command.prKey, io.env, io.runCommand);
-    const response = await requestNext(connection);
+    const response = await requestNext(connection, command.waitSeconds);
 
     switch (response.kind) {
         case 'task':

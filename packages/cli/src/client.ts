@@ -1,3 +1,5 @@
+import http from 'node:http';
+
 import type {
     RpcError,
     TaskAckResponse,
@@ -11,7 +13,7 @@ import type {
     WorkerRegisterResponse,
 } from '@sherpa/protocol';
 import {
-    LONG_POLL_MAX_SECONDS,
+    LONG_POLL_DEFAULT_SECONDS,
     PROTOCOL_VERSION,
     rpcErrorSchema,
     taskAckResponseSchema,
@@ -36,7 +38,14 @@ import { CLI_VERSION } from './version.js';
 
 /** Margin beyond the server long-poll window. Don't abort before the server, as the response is already in flight. */
 const LONG_POLL_SLACK_SECONDS = 30;
-const NEXT_TIMEOUT_MS = (LONG_POLL_MAX_SECONDS + LONG_POLL_SLACK_SECONDS) * 1000;
+
+/**
+ * Client timeout for `next`: based on the requested wait, not a shared constant (decision #35).
+ * Without the flag, the harness relies on the server default, so we wait for that too.
+ */
+export function nextTimeoutMs(waitSeconds: number | undefined): number {
+    return ((waitSeconds ?? LONG_POLL_DEFAULT_SECONDS) + LONG_POLL_SLACK_SECONDS) * 1000;
+}
 
 /** Other endpoints respond immediately, so there is no need for a long wait. */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -65,14 +74,22 @@ export async function requestRegister(
     });
 }
 
-export async function requestNext(connection: ServerConnection): Promise<WorkerNextResponse> {
+/**
+ * Long-poll for the next task. The caller sets the wait (`--wait-seconds`). Without it,
+ * the server decides. Uses `node:http`, not `fetch`: see `sendViaHttp`.
+ */
+export async function requestNext(
+    connection: ServerConnection,
+    waitSeconds?: number,
+): Promise<WorkerNextResponse> {
     return callWorker<WorkerNextRequest, WorkerNextResponse>(connection, {
         endpoint: WORKER_ENDPOINTS.next,
-        payload: {},
+        payload: waitSeconds === undefined ? {} : { waitSeconds },
         requestSchema: workerNextRequestSchema,
         responseSchema: workerNextResponseSchema,
-        timeoutMs: NEXT_TIMEOUT_MS,
+        timeoutMs: nextTimeoutMs(waitSeconds),
         role: 'worker',
+        send: sendViaHttp,
     });
 }
 
@@ -135,7 +152,23 @@ interface WorkerCall<TRequest extends WorkerRequestBase, TResponse> {
     readonly timeoutMs: number;
     /** Call role. Determines the next-step message on a worker conflict. */
     readonly role: CallRole;
+    /** Call transport. Defaults to `fetch`. Response parsing is independent of it. */
+    readonly send?: Transport;
 }
+
+/** Raw server response for parsing: success by status code and body as a string. */
+interface RawResponse {
+    readonly ok: boolean;
+    readonly text: string;
+}
+
+/** Any network failure becomes `CliError(serverUnavailable)`. Response parsing handles the rest. */
+type Transport = (
+    connection: ServerConnection,
+    endpoint: string,
+    body: string,
+    timeoutMs: number,
+) => Promise<RawResponse>;
 
 /**
  * One worker call: version handshake in every request body (rpc-design §9),
@@ -156,41 +189,96 @@ async function callWorker<TRequest extends WorkerRequestBase, TResponse>(
         throw new CliError(invalidRequest(request.error.issues.map((issue) => issue.message)));
     }
 
-    let response: Response;
-    try {
-        response = await fetch(`http://127.0.0.1:${String(connection.port)}${call.endpoint}`, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                authorization: `Bearer ${connection.token}`,
-            },
-            body: JSON.stringify(request.data),
-            signal: AbortSignal.timeout(call.timeoutMs),
-        });
-    } catch {
-        throw new CliError(serverUnavailable(connection.prKey));
-    }
+    const send = call.send ?? sendViaFetch;
+    const response = await send(connection, call.endpoint, JSON.stringify(request.data), call.timeoutMs);
 
-    const text = await readText(response, connection);
     if (!response.ok) {
-        const failure = parseRpcError(text);
+        const failure = parseRpcError(response.text);
         throw new RpcCallError(failure.code, formatRpcError(failure, call.role));
     }
 
-    const parsed = call.responseSchema.safeParse(parseJson(text));
+    const parsed = call.responseSchema.safeParse(parseJson(response.text));
     if (!parsed.success) {
         throw new CliError(contractMismatch());
     }
     return parsed.data;
 }
 
-async function readText(response: Response, connection: ServerConnection): Promise<string> {
+/** Transport for every endpoint except `next`. They respond immediately, so `fetch` works for them. */
+const sendViaFetch: Transport = async (connection, endpoint, body, timeoutMs) => {
+    let response: Response;
     try {
-        return await response.text();
+        response = await fetch(`http://127.0.0.1:${String(connection.port)}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${connection.token}`,
+            },
+            body,
+            signal: AbortSignal.timeout(timeoutMs),
+        });
     } catch {
         throw new CliError(serverUnavailable(connection.prKey));
     }
-}
+
+    try {
+        return { ok: response.ok, text: await response.text() };
+    } catch {
+        throw new CliError(serverUnavailable(connection.prKey));
+    }
+};
+
+/**
+ * `next` transport using `node:http`. Node's `fetch` uses undici with a 5-minute `headersTimeout`:
+ * a response whose headers haven't arrived within that time fails with `UND_ERR_HEADERS_TIMEOUT` regardless
+ * of `AbortSignal.timeout` (verified: a 400 s wait breaks at 301 s), so an hour-long poll
+ * cannot survive it. Our own timer controls the whole wait here, with nothing else interfering with the socket.
+ */
+const sendViaHttp: Transport = (connection, endpoint, body, timeoutMs) =>
+    new Promise<RawResponse>((resolve, reject) => {
+        let request: http.ClientRequest;
+        try {
+            request = http.request({
+                host: '127.0.0.1',
+                port: connection.port,
+                path: endpoint,
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'content-length': Buffer.byteLength(body),
+                    authorization: `Bearer ${connection.token}`,
+                },
+                // No connection pool: the session makes one call per process, and an idle agent socket
+                // would keep the process alive afterward.
+                agent: false,
+            });
+        } catch {
+            // Request construction failed (invalid manifest token, such as a forbidden header character):
+            // to the caller, the server is just as unavailable as with a socket failure.
+            reject(new CliError(serverUnavailable(connection.prKey)));
+            return;
+        }
+
+        const fail = (): void => {
+            clearTimeout(timer);
+            request.destroy();
+            reject(new CliError(serverUnavailable(connection.prKey)));
+        };
+        const timer = setTimeout(fail, timeoutMs);
+
+        request.on('error', fail);
+        request.on('response', (response) => {
+            const chunks: Buffer[] = [];
+            response.on('data', (chunk: Buffer) => chunks.push(chunk));
+            response.on('error', fail);
+            response.on('end', () => {
+                clearTimeout(timer);
+                const status = response.statusCode ?? 0;
+                resolve({ ok: status >= 200 && status < 300, text: Buffer.concat(chunks).toString('utf8') });
+            });
+        });
+        request.end(body);
+    });
 
 /** An error body outside the contract means a version mismatch. The server must return `rpcErrorSchema`. */
 function parseRpcError(text: string): RpcError['error'] {

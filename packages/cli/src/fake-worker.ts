@@ -71,8 +71,13 @@ export class FakeWorker {
             : this.run('worker', 'register', '--harness', harness);
     }
 
-    async next(): Promise<NextRun> {
-        const run = await this.run('worker', 'next');
+    /** `waitSeconds` is the same as the `--wait-seconds` flag. Without it, the server sets the window. */
+    async next(waitSeconds?: number): Promise<NextRun> {
+        const argv =
+            waitSeconds === undefined
+                ? (['worker', 'next'] as const)
+                : (['worker', 'next', '--wait-seconds', String(waitSeconds)] as const);
+        const run = await this.run(...argv);
         return { ...run, ...parseTaskHead(run.stdout), planIndexes: parsePlanIndexes(run.stdout) };
     }
 

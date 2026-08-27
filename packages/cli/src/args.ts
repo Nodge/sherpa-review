@@ -1,3 +1,5 @@
+import { LONG_POLL_CEILING_SECONDS } from '@sherpa/protocol';
+
 import { CliError } from './errors.js';
 
 /** Parsed CLI invocation. All command inputs are known after argument parsing. */
@@ -12,7 +14,12 @@ export type Command =
           /** Worker model name for worker status in the UI. Optional. */
           readonly model: string | undefined;
       }
-    | { readonly kind: 'worker-next'; readonly prKey: string | undefined }
+    | {
+          readonly kind: 'worker-next';
+          readonly prKey: string | undefined;
+          /** How long the harness can wait for a task. undefined lets the server decide. */
+          readonly waitSeconds: number | undefined;
+      }
     | {
           readonly kind: 'worker-register';
           readonly prKey: string | undefined;
@@ -40,7 +47,7 @@ export type Command =
           readonly reason: string;
       };
 
-const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model'] as const;
+const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model', '--wait-seconds'] as const;
 type OptionName = (typeof OPTIONS)[number];
 
 type TaskSubcommand = 'complete' | 'progress' | 'fail';
@@ -139,7 +146,28 @@ function parseWorkerCommand(
             model: sanitizeLabel(options.get('--model')),
         };
     }
-    return { kind: 'worker-next', prKey };
+    return { kind: 'worker-next', prKey, waitSeconds: parseWaitSeconds(options.get('--wait-seconds')) };
+}
+
+/**
+ * Requested wait for `worker next`: how long the harness can keep the call open (decision #35).
+ * The bounds come from the contract (`LONG_POLL_CEILING_SECONDS`). Without the flag, the server decides.
+ */
+function parseWaitSeconds(raw: string | undefined): number | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+
+    const seconds = Number(raw.trim());
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > LONG_POLL_CEILING_SECONDS) {
+        throw new CliError(
+            `sherpa: --wait-seconds must be a whole number of seconds from 1 to ` +
+                `${String(LONG_POLL_CEILING_SECONDS)}, got ${JSON.stringify(raw)}.\n` +
+                'Pass how long you are ready to wait for a task: slightly less than your tool timeout ' +
+                'in the foreground, or up to an hour when you poll in the background.',
+        );
+    }
+    return seconds;
 }
 
 function parseTaskCommand(

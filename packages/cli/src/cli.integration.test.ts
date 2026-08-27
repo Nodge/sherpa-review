@@ -335,6 +335,46 @@ describe('CLI against server', () => {
         expect(result.stdout).not.toContain('TASK');
     });
 
+    it('--wait-seconds reaches the server: the call window overrides the server option', async () => {
+        // The server window is long. Falling back to it would make the test wait half a minute.
+        await start(30);
+
+        const started = Date.now();
+        const result = await sherpa('worker', 'next', '--wait-seconds', '1');
+        const elapsed = Date.now() - started;
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('worker next');
+        expect(result.stdout).not.toContain('TASK');
+        expect(elapsed).toBeGreaterThanOrEqual(900);
+        expect(elapsed).toBeLessThan(20_000);
+    }, 30_000);
+
+    it('loop with --wait-seconds: a task enqueued during the wait reaches the session', async () => {
+        const running = await start(30);
+        // The call sets the flag, not the server. The wait survives a task being enqueued midway through the window.
+        const pending = sherpa('worker', 'next', '--wait-seconds=30');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const taskId = enqueueEcho(running, 'The task arrived midway through the wait.');
+
+        const issued = await pending;
+
+        expect(issued.code).toBe(0);
+        expect(issued.stdout).toContain(`TASK sherpa/${String(taskId)} (echo), attempt 1`);
+    }, 40_000);
+
+    it('rejects invalid --wait-seconds before reaching the server', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+
+        const result = await sherpa('worker', 'next', '--wait-seconds', '99999');
+
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('--wait-seconds');
+        // The server never saw the call. The task is still queued, with no lease.
+        expect(running.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
+    });
+
     it('loop: task → work → submission → next `next`', async () => {
         const running = await start();
         const taskId = enqueueEcho(running, 'Summarize the diff in one paragraph.');

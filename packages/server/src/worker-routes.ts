@@ -30,7 +30,7 @@ import type { WorkerRegistry } from './worker-registry.js';
 export interface WorkerRoutesOptions {
     readonly queue: TaskQueue;
     readonly registry: WorkerRegistry;
-    /** Upper bound for `next` long-poll. Shortened in tests. */
+    /** Long-poll window for `next` calls without `waitSeconds`. Shortened in tests. */
     readonly longPollSeconds: number;
     /** Server shutdown: aborts pending long-polls so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
@@ -117,6 +117,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
                     subscribeSlotChange,
                     ctx.req,
                     request.workerId,
+                    request.waitSeconds ?? options.longPollSeconds,
                 );
                 return { status: 200, body };
             }),
@@ -189,15 +190,18 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
 
 /**
  * Long-poll `next`: returns a task as soon as one is available, or `idle` when the window expires
- * ("call again"), because a call that waits forever will hit the harness timeout (rpc-design §1).
+ * ("call again"). The harness sets the window (`waitSeconds`, decision #35). Only it knows its
+ * tool timeout and whether it can wait in the background. Liveness does not depend on the window. While the call waits,
+ * the open connection keeps the worker alive (rpc-design §7).
  */
 async function pollForTask(
     options: WorkerRoutesOptions,
     subscribeSlotChange: SubscribeSlotChange,
     req: IncomingMessage,
     workerId: string,
+    waitSeconds: number,
 ): Promise<WorkerNextResponse> {
-    const deadline = Date.now() + options.longPollSeconds * 1000;
+    const deadline = Date.now() + waitSeconds * 1000;
     const abort = abortOnDisconnect(req, options.shutdownSignal);
 
     try {

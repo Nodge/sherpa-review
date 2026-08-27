@@ -163,6 +163,13 @@ export interface RequestListenerOptions {
     readonly assets?: StaticAssets;
     /** Tracks activity for shutdown on idle. A single point for the entire HTTP layer. */
     readonly activity?: ActivityTracker;
+    /**
+     * Resolves when `routes` is fully assembled. Until then, the set contains only `/healthz`, so a request
+     * that matches no route waits for this moment and tries again. The manifest is published
+     * before the other endpoints, so an immediate call would otherwise receive 404 for an existing endpoint.
+     * `/healthz` must not wait. It exists from the start and a competing process uses it to check liveness.
+     */
+    readonly ready?: Promise<void>;
 }
 
 /**
@@ -192,7 +199,12 @@ export function createRequestListener(options: RequestListenerOptions): RequestL
 
 async function handle(req: IncomingMessage, res: ServerResponse, options: RequestListenerOptions): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const route = options.routes.find((item) => item.method === req.method && item.path === url.pathname);
+    let route = findRoute(options.routes, req.method, url.pathname);
+
+    if (route === undefined && options.ready !== undefined) {
+        await options.ready;
+        route = findRoute(options.routes, req.method, url.pathname);
+    }
 
     if (route === undefined) {
         if (options.assets !== undefined && req.method === 'GET' && isStaticPath(url.pathname)) {
@@ -235,6 +247,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: Reques
         return;
     }
     sendJson(res, await route.handle({ req, url, onClose }));
+}
+
+function findRoute(routes: readonly Route[], method: string | undefined, pathname: string): Route | undefined {
+    return routes.find((item) => item.method === method && item.path === pathname);
 }
 
 function authorized(token: string, req: IncomingMessage, url: URL, auth: RouteAuth): boolean {

@@ -39,7 +39,7 @@ Worker commands:
 
 | Command | Semantics |
 |---|---|
-| `sherpa worker next` | Long-poll: blocks until a task arrives, but returns within ≤ ~4 min ("no tasks, call again"). Every return is a heartbeat. Leases a task. |
+| `sherpa worker next` | Long-poll: blocks until a task arrives. The harness sets the wait through `waitSeconds` (default 240 s, limit 3600 s, clarified 2026-08-27, #35). A harness with background processes waits for hours in the background. One without them passes a value just below its tool timeout. When the window expires: "no tasks, call again". Each return is a heartbeat. While the call waits, the open connection itself signals liveness (§7). Issues a task under a lease. |
 | `sherpa task complete <id> --file <path>` | submit the result. The server validates fail-closed on receipt. On errors it prints a list in prompt format: "fix and call complete again". Validator rejection is a normal outcome with exit code 0: the agent reads stdout, not codes. Nonzero codes are only for RPC/argument errors. Repeating complete on a closed task is a no-op. |
 | `sherpa task progress <id> --text "<msg>"` | A cheap status update. The UI shows "agent working: …". |
 | `sherpa task fail <id> --reason "<msg>"` | Explicit failure (no access, not enough context). The task enters an error state with a reason visible in the UI. |
@@ -87,7 +87,7 @@ Streaming tokens from another session through shell commands is impractical. Ins
 
 Each CLI call is a heartbeat, but liveness is not based on silence alone: a closed connection is a strong signal, silence is weak (clarified 2026-08-20, M0-T15). A worker is alive while at least one condition holds:
 
-1. **its worker connection is open**: an idle worker hangs in long-poll `next`, and the OS immediately signals a killed session by closing its socket.
+1. **its worker connection is open**. An idle worker waits in a long-poll `next` (even for an hour, the requested `waitSeconds` does not limit liveness). The OS immediately reports a killed session by closing the socket.
 2. **it holds a task lease** and has been silent for less than M minutes (M > long-poll period, e.g. 6). During task execution the model can legitimately be silent for minutes.
 3. Without a connection or lease, it has been silent for less than a short grace period (~1 min): the pause between one `next` returning and the next call.
 
