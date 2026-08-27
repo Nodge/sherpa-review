@@ -66,6 +66,10 @@
     border-bottom: 1px solid var(--border-hairline-strong);
 }
 
+.file-card__header--collapsible {
+    cursor: pointer;
+}
+
 .file-card__title {
     display: flex;
     align-items: baseline;
@@ -238,6 +242,26 @@
 
 .file-card__collapsed:hover,
 .file-card__notice--button:hover {
+    color: var(--text-muted);
+}
+
+.file-card__collapsed--file {
+    gap: 7px;
+}
+
+.file-card__collapsed-mark {
+    color: var(--text-dim-strong);
+}
+
+.file-card__collapsed-spacer {
+    flex: 1;
+}
+
+.file-card__collapsed-hint {
+    color: var(--text-dim-strong);
+}
+
+.file-card__collapsed--file:hover .file-card__collapsed-hint {
     color: var(--text-muted);
 }
 

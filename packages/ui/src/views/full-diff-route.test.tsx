@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
+import type { CollapsedStorage } from '../diff-view/collapsed-storage.js';
+import { COLLAPSE_THRESHOLD } from '../diff-view/file-card.tsx';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { createSessionStore } from '../session/session-store.js';
 import { createThreadStore } from '../threads/store.js';
@@ -90,22 +92,38 @@ afterEach(() => {
     }
 });
 
-function mount(options: { route?: boolean; paths?: readonly string[]; ownStore?: boolean } = {}): Mounted {
+function mount(
+    options: {
+        route?: boolean;
+        paths?: readonly string[];
+        files?: readonly FileDiff[];
+        ownStore?: boolean;
+        storage?: CollapsedStorage;
+        resolvedThreads?: boolean;
+    } = {},
+): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
     // Virtualization shows only what fits in the viewport. To reach a specific file's
     // card, narrow the diff to that file. Stop anchors stay the same.
     const initialFiles =
-        options.paths === undefined
+        options.files ??
+        (options.paths === undefined
             ? DATA.diff.files
-            : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true);
+            : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true));
     // `ownStore`: the view creates its own store from the diff. This checks background parsing instead of
     // models placed in the store in advance.
     const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles, storage: null });
     for (const file of store === null ? [] : initialFiles) {
         store?.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }
-    const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+    const session = createSessionStore({
+        initial: {
+            view: 'diff',
+            filter: 'all',
+            threadsShow: { people: true, bots: true, resolved: options.resolvedThreads ?? false },
+        },
+    });
     const jumps: string[] = [];
     const parsed: string[] = [];
     const threadStore = createThreadStore(DATA.threads, FILE_IDS);
@@ -122,7 +140,7 @@ function mount(options: { route?: boolean; paths?: readonly string[]; ownStore?:
                     session={session}
                     {...(store === null ? {} : { store })}
                     threadStore={threadStore}
-                    collapsedStorage={null}
+                    collapsedStorage={options.storage ?? null}
                     threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                     parse={(file) => {
                         parsed.push(file.fileId);
@@ -158,6 +176,17 @@ async function settleBackgroundParse(): Promise<void> {
 }
 
 const BACKGROUND_PARSE_DELAY = 300;
+
+function memoryStorage(): CollapsedStorage & { readonly data: Map<string, string> } {
+    const data = new Map<string, string>();
+    return {
+        data,
+        getItem: (key) => data.get(key) ?? null,
+        setItem: (key, value) => {
+            data.set(key, value);
+        },
+    };
+}
 
 function badges(host: HTMLElement, scope: 'tree' | 'card'): HTMLElement[] {
     return [...host.querySelectorAll<HTMLElement>(`.route-badge--${scope}`)];
@@ -220,6 +249,9 @@ describe('route in full diff margins', () => {
     it('covers an uncovered range with a hatched strip showing line numbers', () => {
         // The file is partially covered. The end of `psp-schema.ts` is those 17 lines without a stop.
         const { host } = mount({ paths: ['services/orders/src/payments/generated/psp-schema.ts'] });
+        act(() => {
+            host.querySelector<HTMLElement>('.file-card__collapsed--file')?.click();
+        });
         const strips = [...host.querySelectorAll<HTMLElement>('.route-strip__text')].map(
             (strip) => strip.textContent,
         );
@@ -229,6 +261,18 @@ describe('route in full diff margins', () => {
             expect(text).toMatch(/^(removed )?lines? \d+(–\d+)? (has|have) no route stop$/);
         }
         expect(host.querySelector('.route-badge--card')?.textContent).toMatch(/^explained in /);
+    });
+
+    it('a collapsed viewed card keeps the thread below the header', () => {
+        const { host } = mount({
+            paths: ['services/orders/src/infra/logging.ts'],
+            route: false,
+            resolvedThreads: true,
+        });
+
+        expect(host.querySelector('.file-card__collapsed--file')?.textContent).toContain('viewed');
+        expect(host.querySelector('.thread')?.textContent).toContain('process.env.DEBUG');
+        expect(host.querySelector('.file-card__collapsed-hint')?.textContent).toBe('click to expand the lines');
     });
 
     it('parses files again after a diff change so the note does not get stuck on "Counting the lines…"', async () => {
@@ -247,6 +291,74 @@ describe('route in full diff margins', () => {
 
         expect(new Set(parsed)).toEqual(fileIds);
         expect(host.querySelector('.file-panel__footer')?.textContent).toBe(note);
+    });
+
+    it('keeps manual collapse state across remounts of the same PR', async () => {
+        const path = 'services/orders/src/domain/order.ts';
+        const storage = memoryStorage();
+        const first = mount({ paths: [path], ownStore: true, route: false, storage });
+
+        await act(async () => {
+            first.host.querySelector<HTMLElement>('.file-card__name')?.click();
+            await Promise.resolve();
+        });
+        expect(first.host.querySelector('.file-card__collapsed--file')?.textContent).toContain('collapsed by hand');
+        expect(storage.data.get('sherpa.diff.collapsed.fixture-medium')).toContain('true');
+
+        const second = mount({ paths: [path], ownStore: true, route: false, storage });
+        expect(second.host.querySelector('.file-card__collapsed--file')?.textContent).toContain('collapsed by hand');
+    });
+
+    it('does not collapse the card when selecting the path with the pointer', () => {
+        const { host } = mount({ paths: ['services/orders/src/domain/order.ts'], route: false });
+        const name = host.querySelector<HTMLElement>('.file-card__name');
+        const selection = window.getSelection();
+        const range = document.createRange();
+        if (name === null || selection === null) {
+            throw new Error('this test needs a card and the Selection API');
+        }
+        range.selectNodeContents(name);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        act(() => {
+            name.click();
+        });
+
+        expect(host.querySelector('.file-card__collapsed--file')).toBeNull();
+        selection.removeAllRanges();
+    });
+
+    it('skips parsing a collapsed card and requests it on expansion', async () => {
+        const path = 'services/orders/src/payments/generated/psp-schema.ts';
+        const file = DATA.diff.files.find((candidate) => candidate.path === path);
+        const { host, parsed } = mount({ paths: [path], ownStore: true, route: false });
+
+        expect(file).toBeDefined();
+        expect(parsed).toEqual([]);
+        expect(host.querySelector('.file-card__collapsed--file')?.textContent).toContain('generated file');
+
+        await act(async () => {
+            host.querySelector<HTMLElement>('.file-card__collapsed--file')?.click();
+            await Promise.resolve();
+        });
+
+        expect(parsed).toContain(file?.fileId);
+    });
+
+    it('still requests parsing for a file collapsed due to size', async () => {
+        const source = DATA.diff.files.find((file) => file.path === 'services/orders/src/domain/order.ts');
+        if (source === undefined) {
+            throw new Error('the medium fixture needs order.ts');
+        }
+        const big = { ...source, additions: COLLAPSE_THRESHOLD + 1 };
+        const { parsed } = mount({ files: [big], ownStore: true, route: false });
+
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(parsed).toContain(big.fileId);
     });
 
     it('has no route margins at all without a route: no badges, strips or note', () => {

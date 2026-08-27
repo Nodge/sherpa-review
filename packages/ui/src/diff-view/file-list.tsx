@@ -29,7 +29,8 @@ import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
 import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
-import type { DiffMode, DiffViewStore } from './store.js';
+import type { DiffMode, DiffViewStore, FileCollapseReason } from './store.js';
+import { fileCollapseReason } from './store.js';
 import { useSelectionLifecycle } from './use-selection.js';
 
 /**
@@ -166,6 +167,18 @@ export function DiffFileList({
     if (snapshot.models.size === 0) {
         estimateMode.current = snapshot.effectiveMode;
     }
+    const { readState, collapseCollapsed, collapseExpanded, collapseExpandedViewed } = snapshot;
+    const collapseReasons = useMemo(() => {
+        const reasons = new Map<string, FileCollapseReason>();
+        const collapseSnapshot = { readState, collapseCollapsed, collapseExpanded, collapseExpandedViewed };
+        for (const file of files) {
+            const reason = fileCollapseReason(collapseSnapshot, file);
+            if (reason !== null) {
+                reasons.set(file.fileId, reason);
+            }
+        }
+        return reasons;
+    }, [files, readState, collapseCollapsed, collapseExpanded, collapseExpandedViewed]);
 
     // `scrollMargin` maps virtualizer positions to the outer scroller's coordinates.
     // Read it before painting and after layout changes. rect is more reliable than an offsetParent chain.
@@ -196,7 +209,9 @@ export function DiffFileList({
     const virtualizer = useVirtualizer({
         count: files.length,
         getScrollElement: () => scrollElement,
-        estimateSize: (index) => CARD_CHROME_HEIGHT + estimateBodyHeight(files[index], estimateMode.current),
+        estimateSize: (index) =>
+            CARD_CHROME_HEIGHT +
+            estimateBodyHeight(files[index], estimateMode.current, collapseReasons.has(files[index]?.fileId ?? '')),
         overscan: OVERSCAN,
         getItemKey: (index) => files[index]?.fileId ?? index,
         scrollMargin,
@@ -221,7 +236,11 @@ export function DiffFileList({
     useEffect(() => {
         for (const item of items) {
             const file = files[item.index];
-            if (file === undefined || requested.current.has(file.fileId)) {
+            if (
+                file === undefined ||
+                collapseReasons.has(file.fileId) ||
+                requested.current.has(file.fileId)
+            ) {
                 continue;
             }
             requested.current.add(file.fileId);
@@ -241,7 +260,7 @@ export function DiffFileList({
         // `parseErrors` is a dependency for retries. It does not change the set of visible files,
         // but clearing a failure must rerun this effect, or the retry would have to wait for
         // an unrelated scroll.
-    }, [items, files, parse, store, parseErrors]);
+    }, [items, files, parse, store, parseErrors, collapseReasons]);
 
     const retryParse = useCallback((fileId: string) => {
         requested.current.delete(fileId);
@@ -307,6 +326,50 @@ export function DiffFileList({
         [scrollElement, virtualizer],
     );
 
+    // ResizeObserver cannot see a card outside the DOM. When its collapsed state changes, replace its old
+    // estimate with a new one. Keep the current card's sticky header below the toolbar after collapse.
+    const previousCollapseReasons = useRef<ReadonlyMap<string, FileCollapseReason>>(collapseReasons);
+    useEffect(() => {
+        const previous = previousCollapseReasons.current;
+        const frame = requestAnimationFrame(() => {
+            previousCollapseReasons.current = collapseReasons;
+            const viewportTop =
+                (virtualizer.scrollOffset ?? 0) + scrollPaddingStart + virtualizer.scrollAdjustments;
+            let anchorIndex: number | null = null;
+            for (let index = 0; index < files.length; index += 1) {
+                const file = files[index];
+                if (file === undefined) {
+                    continue;
+                }
+                const wasCollapsed = previous.has(file.fileId);
+                const collapsed = collapseReasons.has(file.fileId);
+                if (wasCollapsed === collapsed) {
+                    continue;
+                }
+                const measurement = virtualizer.measurementsCache[index];
+                if (
+                    collapsed &&
+                    measurement !== undefined &&
+                    measurement.start < viewportTop &&
+                    measurement.end > viewportTop
+                ) {
+                    anchorIndex = index;
+                }
+                virtualizer.resizeItem(
+                    index,
+                    CARD_CHROME_HEIGHT + estimateBodyHeight(file, estimateMode.current, collapsed),
+                );
+            }
+            if (anchorIndex !== null) {
+                virtualizer.scrollToIndex(anchorIndex, { align: 'start' });
+                converge(anchorIndex);
+            }
+        });
+        return () => {
+            cancelAnimationFrame(frame);
+        };
+    }, [collapseReasons, converge, files, scrollPaddingStart, virtualizer]);
+
     // Adjustment lasts up to 12 frames and calls `scrollToIndex` throughout. Without cancellation,
     // the reviewer's wheel and touch would have no effect during those frames.
     useEffect(() => {
@@ -370,6 +433,7 @@ export function DiffFileList({
             return;
         }
         scrolled.current = target;
+        store.revealFile(target);
 
         const run = converge(index);
         return () => {
@@ -379,7 +443,7 @@ export function DiffFileList({
                 scrolled.current = null;
             }
         };
-    }, [files, initialFileId, converge]);
+    }, [files, initialFileId, converge, store]);
 
     // Scroll to a file at the tree's request. `converge` cancels the previous adjustment itself.
     useImperativeHandle(
@@ -390,10 +454,11 @@ export function DiffFileList({
                 if (index < 0) {
                     return Promise.resolve(false);
                 }
+                store.revealFile(fileId);
                 return converge(index).finished;
             },
         }),
-        [files, converge],
+        [files, converge, store],
     );
 
     // Tree scroll-spy uses the top card in the viewport. The virtualizer rerenders the list
@@ -441,6 +506,7 @@ export function DiffFileList({
             onViewed,
             onExpand: expand,
             onRetryParse: retryParse,
+            onToggleCollapse: store.toggleFileCollapse,
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
             onSelectStart: (fileId, key, extend) => {
@@ -462,7 +528,12 @@ export function DiffFileList({
     );
 
     return (
-        <div className="diff-list" ref={listRef}>
+        <div
+            className="diff-list"
+            ref={listRef}
+            data-collapsed-files={collapseReasons.size}
+            data-generated-collapsed-files={countGeneratedCollapsed(files, collapseReasons)}
+        >
             <div className="diff-list__inner" style={{ height: `${String(virtualizer.getTotalSize())}px` }}>
                 {items.map((item) => {
                     const file = files[item.index];
@@ -479,7 +550,12 @@ export function DiffFileList({
                             model={snapshot.models.get(file.fileId) ?? null}
                             parseError={parseErrors.get(file.fileId) ?? null}
                             mode={snapshot.effectiveMode}
-                            estimatedBody={estimateBodyHeight(file, estimateMode.current)}
+                            estimatedBody={estimateBodyHeight(
+                                file,
+                                estimateMode.current,
+                                collapseReasons.has(file.fileId),
+                            )}
+                            collapseReason={collapseReasons.get(file.fileId) ?? null}
                             content={snapshot.content.get(file.fileId)}
                             contentAvailable={contentAvailable}
                             expansion={snapshot.expansion.get(file.fileId) ?? 0}
@@ -523,6 +599,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     parseError,
     mode,
     estimatedBody,
+    collapseReason,
     content,
     contentAvailable,
     expansion,
@@ -553,6 +630,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     mode: DiffMode;
     /** Card body estimate from the list, used by the skeleton to fill its virtual slot. */
     estimatedBody: number;
+    collapseReason: FileCollapseReason | null;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
     expansion: ExpandAmount;
@@ -584,6 +662,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     );
     const changed = (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions);
     const canRenderRows =
+        collapseReason === null &&
         parseError === null &&
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
@@ -639,6 +718,12 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 contentAvailable={contentAvailable}
                 expansion={expansion}
                 read={read}
+                collapseReason={collapseReason}
+                onToggleCollapse={() => {
+                    actions.onLineBlur?.();
+                    // State lives in DiffViewStore. FileCard stays pure, and the route does not receive this state.
+                    actions.onToggleCollapse?.(file.fileId);
+                }}
                 opened={opened}
                 showWhitespace={showWhitespace}
                 keptInView={keptInView}
@@ -756,19 +841,25 @@ const NOOP = (): void => undefined;
 const NOOP_LINE = (): void => undefined;
 const NOOP_THREAD = (): void => undefined;
 
+function countGeneratedCollapsed(
+    files: readonly FileDiff[],
+    reasons: ReadonlyMap<string, FileCollapseReason>,
+): number {
+    return files.reduce((count, file) => count + (file.generated && reasons.has(file.fileId) ? 1 : 0), 0);
+}
+
 /**
  * Estimate of everything below the card header. The virtualizer uses it until measurement, and the
  * skeleton uses it to fill its slot, so the model changes height by a small delta instead of several times.
  */
-export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode): number {
+export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, collapsed = false): number {
     if (file === undefined) {
         return 0;
     }
     const changed = file.additions + file.deletions;
-    // Binary files and files without a text diff show a single-line notice (SPEC §2.14). A file above
-    // the threshold starts collapsed (SPEC §2.13), as a single button row instead of thousands of code
-    // lines. Capping them at the threshold would overestimate by hundreds of times and break the scrollbar.
-    if (file.binary || file.patch === null || changed > COLLAPSE_THRESHOLD) {
+    // Binary files, files without a text diff and all collapsed cards show a single-line notice.
+    // The state is known before the first frame, so localStorage/viewed do not inflate the scrollbar.
+    if (collapsed || file.binary || file.patch === null || changed > COLLAPSE_THRESHOLD) {
         return NOTICE_ROW_HEIGHT;
     }
 

@@ -26,6 +26,7 @@ import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
+import { readCollapsed as readFileCollapsed, writeCollapsed as writeFileCollapsed } from '../diff-view/collapsed-storage.js';
 import type { Feedback } from '../diff-view/file-card.tsx';
 import type { DiffListHandle } from '../diff-view/file-list.tsx';
 import { DiffFileList } from '../diff-view/file-list.tsx';
@@ -265,7 +266,7 @@ export interface DiffWorkspaceProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
-    /** Directory collapse storage. `null` disables persistence (gallery, tests). */
+    /** Directory and card collapse storage. `null` disables persistence (gallery, tests). */
     readonly collapsedStorage?: CollapsedStorage | null;
 }
 
@@ -293,6 +294,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onFilterChangeHandler,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
+    const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
+    const initialCollapsed = useMemo(
+        () => readFileCollapsed(collapsedStorage, prKey),
+        [collapsedStorage, prKey],
+    );
 
     const initialProgress = props.progress;
     const createdStore = useMemo(
@@ -300,11 +306,15 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             createDiffViewStore({
                 files: diff.files,
                 ...(initialProgress === undefined ? {} : { progress: initialProgress.files }),
+                collapsed: initialCollapsed,
             }),
-        [diff, initialProgress],
+        [diff, initialCollapsed, initialProgress],
     );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    useEffect(() => {
+        writeFileCollapsed(collapsedStorage, prKey, snapshot.collapsePreferences);
+    }, [collapsedStorage, prKey, snapshot.collapsePreferences]);
     useEffect(() => {
         if (props.store !== undefined && props.progressWriter === undefined && initialProgress !== undefined) {
             store.setProgress(initialProgress.files);
@@ -328,8 +338,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         () => createThreadActions(threadStore, threadTransport, resolveThread),
         [resolveThread, threadStore, threadTransport],
     );
-    const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
-
     const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
         () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
@@ -706,7 +714,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             lineNavigationCleanup.current?.();
             lineNavigationCleanup.current = null;
 
-            // Large and whitespace-only files must render their lines before looking for the DOM target.
+            // Expand any collapsed block before scrolling and looking up the DOM target (SPEC §2.11).
+            store.revealFile(fileId);
             store.openFile(fileId);
             store.showWhitespace(fileId);
             const converged = await (listRef.current?.scrollToFile(fileId) ?? Promise.resolve(false));

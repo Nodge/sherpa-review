@@ -167,6 +167,8 @@ async function openFullDiff(page: Page, url: string): Promise<void> {
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
     await expect(page.locator('.diff-list')).toBeVisible();
     await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '64');
+    await expect(page.locator('.diff-list')).toHaveAttribute('data-collapsed-files', '15');
+    await expect(page.locator('.diff-list')).toHaveAttribute('data-generated-collapsed-files', '8');
     // Wait for IBM Plex. Loading it changes every card's height at once, which would skew this measurement.
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }

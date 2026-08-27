@@ -36,6 +36,7 @@ import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import { ReviewActionBar } from './components/review-action-bar.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
+import { globalCollapsedStorage, readCollapsed as readFileCollapsed } from './diff-view/collapsed-storage.js';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
     ALL_FILTER_ID,
@@ -137,9 +138,16 @@ export function App({ store, session, token }: AppProps) {
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
     const currentDiff = currentReview.diff;
+    const prKey = state?.prKey ?? null;
     const diffStore = useMemo(
-        () => (currentDiff === null ? null : createDiffViewStore({ files: currentDiff.files })),
-        [currentDiff],
+        () =>
+            currentDiff === null || prKey === null
+                ? null
+                : createDiffViewStore({
+                      files: currentDiff.files,
+                      collapsed: readFileCollapsed(globalCollapsedStorage(), prKey),
+                  }),
+        [currentDiff, prKey],
     );
     const [progressWritesSettled, setProgressWritesSettled] = useState(0);
     // Stop marks live alongside file marks. They share a progress revision and one writer.

@@ -64,6 +64,7 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
         const card = pciAuditCard(page);
         await card.getByRole('button', { name: 'Mark viewed', exact: true }).click();
         await expect(bar).toContainText('5 / 18 files');
+        await expect(card.locator('.file-card__collapsed--file').filter({ hasText: 'viewed' })).toBeVisible();
 
         await page.reload();
         await expect(page.locator('.review-action-bar')).toContainText('5 / 18 files');
@@ -71,7 +72,9 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
         await filterInput.fill('pci-audit');
         await expect(page.getByRole('treeitem').filter({ hasText: 'pci-audit.ts' })).toContainText('✓');
         await filterInput.fill('');
+        // Jumping to a line first expands the viewed card temporarily, then finishes scrolling.
         await openPciAuditBySearch(page);
+        await expect(pciAuditCard(page).locator('.file-card__collapsed--file')).toHaveCount(0);
         await expect(pciAuditCard(page).getByRole('button', { name: 'Viewed', exact: true })).toHaveAttribute(
             'aria-pressed',
             'true',
