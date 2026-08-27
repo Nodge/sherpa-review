@@ -7,11 +7,11 @@ import { agentPillView } from '../../components/agent-pill-view.js';
 import { AuditScopeBanner } from '../../components/audit-banner.tsx';
 import type { BannerSource } from '../../components/banner-slot.tsx';
 import { BannerSlot } from '../../components/banner-slot.tsx';
-import { DisconnectedBanner } from '../../components/disconnected-banner.tsx';
 import { reconnectCommand } from '../../components/reconnect-command.js';
 import { AgentPill } from '../../components/top-bar.tsx';
 import { buildFileFilters, filterFiles, filterStats, findFilter, PCI_FILTER_ID } from '../../filters/lens-filters.js';
 import { createSessionStore } from '../../session/session-store.js';
+import { RouteActionErrorBanner } from '../../views/route/generation-card.tsx';
 import { ViewFrame } from '../../views/view-frames.tsx';
 
 const DATA = fixtureData('medium');
@@ -89,16 +89,10 @@ export const M1_T15_STATES: readonly M1T15GalleryState[] = [
         render: () => <ViewState view="overview" pr={null} />,
     },
     {
-        id: 'banner-agent-disconnected',
-        group: 'Banners',
-        title: 'agent disconnected',
-        render: () => <BannerState both={false} />,
-    },
-    {
         id: 'banner-two-notices',
         group: 'Banners',
         title: '2 banners and +1 notification',
-        render: () => <BannerState both />,
+        render: () => <BannerState />,
     },
     {
         id: 'agent-reconnect-popover',
@@ -145,7 +139,8 @@ function ViewState({
     );
 }
 
-function BannerState({ both }: { both: boolean }) {
+/** Slot with 2 active sources: action failure at the top, audit scope under "+1". */
+function BannerState() {
     const filters = buildFileFilters({ files: DATA.diff.files, ownership: DATA.ownership, extra: DATA.extraLenses });
     const pci = findFilter(filters, PCI_FILTER_ID);
     if (pci === null) {
@@ -155,15 +150,17 @@ function BannerState({ both }: { both: boolean }) {
     const paths = filterFiles(DATA.diff.files, pci).map((file) => file.path);
     const sources: readonly BannerSource[] = [
         {
-            id: 'agent-disconnected',
-            priority: 300,
+            id: 'route-action-error',
+            priority: 350,
             active: () => true,
-            render: () => <DisconnectedBanner prKey={PR_KEY} />,
+            render: () => (
+                <RouteActionErrorBanner message="This PR has no host adapter, so there is no data to build a route from." />
+            ),
         },
         {
             id: 'audit-scope',
             priority: 100,
-            active: () => both,
+            active: () => true,
             render: () => (
                 <AuditScopeBanner
                     filter={pci}

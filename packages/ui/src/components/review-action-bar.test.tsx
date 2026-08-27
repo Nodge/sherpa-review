@@ -1,11 +1,15 @@
+// @vitest-environment jsdom
 import { fixtureData } from '@sherpa/fixtures';
 import type { Thread } from '@sherpa/protocol';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
 import type { RouteProgress } from './review-action-bar.tsx';
 import { countDraftComments } from '../progress/summary.js';
+import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import { ReviewActionBar } from './review-action-bar.tsx';
 import { ReviewComplete } from './review-complete.tsx';
@@ -60,6 +64,129 @@ function withDraft(threads: readonly Thread[]): Thread[] {
     return [{ ...first, root: { ...first.root, draft: true } }, ...threads.slice(1)];
 }
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const mounted: (() => void)[] = [];
+
+afterEach(() => {
+    for (const unmount of mounted.splice(0)) {
+        unmount();
+    }
+});
+
+/** Live bar: the PR composer is a toggle, which static markup cannot verify. */
+function mountBar(): {
+    readonly host: HTMLElement;
+    readonly commentButton: HTMLButtonElement;
+    readonly threadStore: ThreadStore;
+} {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const threadStore = createThreadStore(DRAFT_THREADS, FILE_IDS);
+    const root = createRoot(host);
+
+    act(() => {
+        root.render(
+            <ReviewActionBar
+                pr={DATA.pr}
+                diff={DATA.diff}
+                diffStore={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+                threadStore={threadStore}
+                connection="online"
+                hostName="FixtureHost"
+                composerTransport={TRANSPORT}
+                onPublish={() => Promise.reject(new Error('the test does not publish'))}
+                onComplete={() => undefined}
+                route={null}
+                storage={null}
+            />,
+        );
+    });
+    mounted.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    const commentButton = [...host.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Comment on the PR',
+    );
+    if (commentButton === undefined) {
+        throw new Error('the bar has no PR comment button');
+    }
+    return { host, commentButton, threadStore };
+}
+
+describe('PR comment composer', () => {
+    it('the button toggles: pressing it again closes the composer', () => {
+        const { host, commentButton } = mountBar();
+
+        expect(commentButton.getAttribute('aria-expanded')).toBe('false');
+        expect(host.querySelector('.review-pr-composer')).toBeNull();
+
+        act(() => {
+            commentButton.click();
+        });
+        expect(commentButton.getAttribute('aria-expanded')).toBe('true');
+        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
+
+        act(() => {
+            commentButton.click();
+        });
+        expect(commentButton.getAttribute('aria-expanded')).toBe('false');
+        expect(host.querySelector('.review-pr-composer')).toBeNull();
+    });
+
+    it('reopens a composer closed through the store on the first click', () => {
+        const { host, commentButton, threadStore } = mountBar();
+
+        act(() => {
+            commentButton.click();
+        });
+        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
+
+        // Escape with empty text and the "reset" button close the composer this way, bypassing the bar button.
+        act(() => {
+            threadStore.closeComposer('new:pr');
+        });
+        expect(host.querySelector('.review-pr-composer')).toBeNull();
+        expect(commentButton.getAttribute('aria-expanded')).toBe('false');
+
+        act(() => {
+            commentButton.click();
+        });
+        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
+        expect(commentButton.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('preserves the draft on close: the text returns with the composer', () => {
+        const { host, commentButton, threadStore } = mountBar();
+
+        act(() => {
+            commentButton.click();
+        });
+        // Composer text lives in the store, where real input keeps it too.
+        act(() => {
+            threadStore.updateComposer('new:pr', { text: 'an unfinished thought' });
+        });
+        expect(host.querySelector<HTMLTextAreaElement>('.review-pr-composer textarea')?.value).toBe(
+            'an unfinished thought',
+        );
+
+        act(() => {
+            commentButton.click();
+        });
+        act(() => {
+            commentButton.click();
+        });
+
+        expect(host.querySelector<HTMLTextAreaElement>('.review-pr-composer textarea')?.value).toBe(
+            'an unfinished thought',
+        );
+    });
+});
+
 describe('floating review bar', () => {
     it('shows the live draft count and the count on both final action buttons', () => {
         const drafts = countDraftComments(DRAFT_THREADS);
@@ -98,7 +225,9 @@ describe('floating review bar', () => {
 
         expect(html).toContain('ship anyway?');
         expect(html).toContain('Approves this snapshot only. A new push drops the approval and asks again.');
-        expect(html).toContain('The approval carries over to later pushes until a file in your ownership zone changes.');
+        // The copy is honest: there is no ownership-zone revocation, and the host publishes its regular sticky ship (#36).
+        expect(html).toContain('The approval carries over to later pushes — the host’s own sticky ship.');
+        expect(html).not.toContain('CODEOWNERS zone');
         expect(html).toContain('This host does not support Sticky ship.');
         expect(html).toContain('aria-disabled="true"');
     });

@@ -86,7 +86,14 @@ const AGENT_STATES = [
 /** Fixture PR breadcrumb: host from the PR key, last segment linked using metadata. */
 const MEDIUM_BREADCRUMB = breadcrumbFor('fixture-medium', MEDIUM.pr);
 
+/**
+ * The gallery opens with what the reviewer sees when the app starts (`DEFAULT_VIEW` is Overview),
+ * so this state comes first. The rest of the registry order stays the same.
+ */
+const START_STATE_ID = 'overview-ownership';
+
 export const GALLERY_STATES: readonly GalleryState[] = [
+    ...M1_T15_STATES.filter((state) => state.id === START_STATE_ID),
     ...AGENT_STATES.map((state) => ({
         id: `agent-${state.id}`,
         group: 'Agent pill',
@@ -104,7 +111,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: 'complete, fixture PR',
         render: () => <TopBarState />,
     },
-    ...M1_T15_STATES,
+    ...M1_T15_STATES.filter((state) => state.id !== START_STATE_ID),
     ...M1_T14_STATES,
     ...DIFF_STATES.map((state) => ({
         id: state.id,

@@ -31,8 +31,9 @@ import {
 import './review-action-bar.css';
 
 const SHIP_DESCRIPTION = 'Approves this snapshot only. A new push drops the approval and asks again.';
-const STICKY_DESCRIPTION =
-    'The approval carries over to later pushes until a file in your ownership zone changes.';
+// The promise in README §5 to revoke by CODEOWNERS zone is absent here. This publishes the regular sticky ship
+// of the host. We have no zone-based mechanism (decision log, #36).
+const STICKY_DESCRIPTION = 'The approval carries over to later pushes — the host’s own sticky ship.';
 const PR_COMPOSER_KEY = 'new:pr';
 
 /**
@@ -82,6 +83,8 @@ export interface ReviewActionBarProps {
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
+    /** State gallery only: the PR composer is open from the first render. */
+    readonly defaultComposerOpen?: boolean;
     readonly initialFailure?: PublicationFailure | null;
     readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
@@ -99,6 +102,7 @@ export function ReviewActionBar({
     onPublish,
     onComplete,
     defaultMenuOpen = false,
+    defaultComposerOpen = false,
     initialFailure = null,
     storage,
 }: ReviewActionBarProps) {
@@ -120,7 +124,10 @@ export function ReviewActionBar({
     const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
     const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
     const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
-    const [composerOpen, setComposerOpen] = useState(false);
+    const [composerOpen, setComposerOpen] = useState(defaultComposerOpen);
+    // The composer can close itself (Escape or "discard" calls store.closeComposer), so
+    // the toggle and aria-expanded follow the visible composer, not a local flag.
+    const composerVisible = composerOpen && prComposer !== null;
     const [publishing, setPublishing] = useState<Verdict | null>(null);
     const [failure, setFailure] = useState<PublicationFailure | null>(initialFailure);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -176,7 +183,7 @@ export function ReviewActionBar({
     }, [closeMenu, menuOpen]);
 
     useEffect(() => {
-        if (!composerOpen) {
+        if (!composerVisible) {
             return;
         }
         const closeOutside = (event: MouseEvent): void => {
@@ -196,7 +203,7 @@ export function ReviewActionBar({
             document.removeEventListener('mousedown', closeOutside);
             document.removeEventListener('keydown', closeOnEscape);
         };
-    }, [composerOpen]);
+    }, [composerVisible]);
 
     const publish = useCallback(
         async (verdict: Verdict, retryFailure = false): Promise<void> => {
@@ -354,7 +361,13 @@ export function ReviewActionBar({
                 ref={commentButtonRef}
                 type="button"
                 className="review-action-bar__button"
+                aria-expanded={composerVisible}
                 onClick={() => {
+                    if (composerVisible) {
+                        // Only hide the composer: the draft lives in the store and survives closing.
+                        setComposerOpen(false);
+                        return;
+                    }
                     openPrComposer(threadStore);
                     setComposerOpen(true);
                     setMenuOpen(false);
@@ -469,7 +482,7 @@ export function ReviewActionBar({
                 ) : null}
             </div>
 
-            {composerOpen && prComposer !== null ? (
+            {composerVisible ? (
                 <div className="review-pr-composer" role="dialog" aria-label="Comment on the PR">
                     <div className="review-pr-composer__title">Comment on the PR</div>
                     <NewCommentComposer composerKey={PR_COMPOSER_KEY} store={threadStore} transport={composerTransport} />

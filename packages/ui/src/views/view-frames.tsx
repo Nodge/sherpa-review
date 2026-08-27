@@ -525,7 +525,8 @@ function DiscussionCard({
             {outside.length === 0 ? (
                 <p className="overview-card__empty">No PR-level threads or threads outside the diff.</p>
             ) : (
-                <OutsideThreads threads={outside} store={store} actions={actions} now={now} defaultOpen />
+                // Collapsed: the Overview discussion card is a summary, not a feed (dogfooding #5).
+                <OutsideThreads threads={outside} store={store} actions={actions} now={now} />
             )}
         </OverviewCard>
     );

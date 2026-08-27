@@ -166,7 +166,7 @@ const EXPECTED: Record<string, string> = {
     // SPEC §1.1: hover `#22252b` → `#282c33`, focus-visible ring `rgba(127,140,255,.55)`,
     // selected `#22252b` + `#e0e2e7`, disabled opacity .45. README §0: breadcrumb separator.
     '--hover-selected': '#282c33',
-    // README §0: active tab segment `background:#2b2f36` and avatar circle `#2b2f36`.
+    // README §0: the active tab of the segmented control has `background:#2b2f36`.
     '--surface-segment-active': '#2b2f36',
     '--focus-ring-color': 'rgba(127,140,255,.55)',
     '--text-on-selected': '#e0e2e7',

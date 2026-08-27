@@ -12,16 +12,16 @@ describe('banner slot', () => {
         const selection = selectBanners([
             source('audit-scope', 100),
             source('route-stale', 200, false),
-            source('agent-disconnected', 300),
+            source('generation-failed', 400),
         ]);
 
-        expect(selection.primary?.id).toBe('agent-disconnected');
+        expect(selection.primary?.id).toBe('generation-failed');
         expect(selection.hidden.map((item) => item.id)).toEqual(['audit-scope']);
     });
 
     it('excludes sources whose condition no longer holds', () => {
         const selection = selectBanners([
-            source('agent-disconnected', 300, false),
+            source('generation-failed', 400, false),
             source('audit-scope', 100),
         ]);
 
@@ -29,12 +29,11 @@ describe('banner slot', () => {
         expect(selection.hidden).toEqual([]);
     });
 
-    it('full SPEC §2.21 priority order: failure → action failure → disconnected → under-explained → filling → audit', () => {
+    it('follows all SPEC §2.21 priorities: failure → action failure → underexplained → filling → audit', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),
             source('route-filling', BANNER_PRIORITY.routeFilling),
             source('route-under-explained', BANNER_PRIORITY.routeUnderExplained),
-            source('agent-disconnected', BANNER_PRIORITY.agentDisconnected),
             source('route-action-error', BANNER_PRIORITY.routeActionError),
             source('generation-failed', BANNER_PRIORITY.generationFailed),
         ]);
@@ -42,7 +41,6 @@ describe('banner slot', () => {
         expect([selection.primary?.id, ...selection.hidden.map((item) => item.id)]).toEqual([
             'generation-failed',
             'route-action-error',
-            'agent-disconnected',
             'route-under-explained',
             'route-filling',
             'audit-scope',
@@ -59,14 +57,19 @@ describe('banner slot', () => {
         expect(selection.primary?.id).toBe('route-action-error');
     });
 
-    it('agent dies during generation: disconnection goes on top, filling moves to collapsed banners', () => {
+    it('puts underexplained status on top when a route is underexplained during filling and collapses the rest', () => {
         const selection = selectBanners([
+            source('audit-scope', BANNER_PRIORITY.auditScope),
             source('route-filling', BANNER_PRIORITY.routeFilling),
-            source('agent-disconnected', BANNER_PRIORITY.agentDisconnected),
+            source('route-under-explained', BANNER_PRIORITY.routeUnderExplained),
             source('generation-failed', BANNER_PRIORITY.generationFailed, false),
         ]);
 
-        expect(selection.primary?.id).toBe('agent-disconnected');
-        expect(selection.hidden.map((item) => item.id)).toEqual(['route-filling']);
+        expect(selection.primary?.id).toBe('route-under-explained');
+        expect(selection.hidden.map((item) => item.id)).toEqual(['route-filling', 'audit-scope']);
+    });
+
+    it('agent disconnection is not a slot source: status lives in the pill (decision #32)', () => {
+        expect(Object.keys(BANNER_PRIORITY)).not.toContain('agentDisconnected');
     });
 });

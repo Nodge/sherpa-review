@@ -62,4 +62,40 @@ describe('agent pill popover', () => {
         expect(html).toContain('/sherpa fixture-medium');
         expect(html).not.toContain('Agent chat will appear here in M3.');
     });
+
+    it('keeps the removed banner wording: the reader works in full (decision #32)', () => {
+        const html = renderToStaticMarkup(
+            <AgentPill
+                view={agentPillView({ kind: 'never' }, [])}
+                reconnectCommand="/sherpa fixture-medium"
+                defaultOpen
+            />,
+        );
+
+        expect(html).toContain('The reader works in full');
+        expect(html).toContain('The AI areas stay read-only.');
+    });
+
+    it('omits this wording when the agent is connected', () => {
+        const html = renderToStaticMarkup(
+            <AgentPill
+                view={agentPillView(
+                    {
+                        kind: 'connected',
+                        workerId: 'w-1',
+                        harness: 'claude-code',
+                        model: 'opus-5',
+                        registeredAt: '2026-08-24T10:30:00.000Z',
+                        lastSeenAt: '2026-08-24T11:59:00.000Z',
+                    },
+                    [],
+                )}
+                reconnectCommand="/sherpa fixture-medium"
+                defaultOpen
+            />,
+        );
+
+        expect(html).not.toContain('The reader works in full');
+        expect(html).toContain('Agent chat will appear here in M3.');
+    });
 });

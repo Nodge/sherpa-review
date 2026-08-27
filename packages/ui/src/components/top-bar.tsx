@@ -8,7 +8,7 @@ import './top-bar.css';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
- * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search and avatar.
+ * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search.
  * The Feedback button comes in M5 with the feedback channel, so it is absent here.
  */
 export interface TopBarProps {
@@ -66,9 +66,6 @@ export function TopBar({
 
             <AgentPill view={agent} reconnectCommand={command} />
             <SearchButton onClick={onOpenSearch} />
-
-            {/* The UI does not know the actual user until M1-T10, so do not invent initials. */}
-            <div className="top-bar__avatar" aria-hidden="true" />
         </header>
     );
 }
@@ -151,11 +148,18 @@ export function AgentPill({
                         {view.tone === 'disconnected' ? 'Connect agent' : 'Agent status'}
                     </div>
                     {view.tone === 'disconnected' ? (
-                        <CommandBox
-                            command={command}
-                            hint="Run in any harness to make this session a worker."
-                            actionLabel="Copy"
-                        />
+                        <>
+                            {/* Wording from the removed "Agent disconnected" banner (decision #32). */}
+                            <p className="agent-popover__offline">
+                                The reader works in full — diff, search, comments and ship are available. The AI areas
+                                stay read-only.
+                            </p>
+                            <CommandBox
+                                command={command}
+                                hint="Run it in any harness — that session becomes the worker."
+                                actionLabel="Copy"
+                            />
+                        </>
                     ) : (
                         <>
                             <p className="agent-popover__status">{view.title}</p>

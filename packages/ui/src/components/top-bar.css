@@ -245,6 +245,14 @@ a.top-bar__breadcrumb-item:hover {
     color: var(--text-dim);
 }
 
+/* Disconnected-agent explanation above the launch command, from the removed banner (decision #32). */
+.agent-popover__offline {
+    margin: 0 0 var(--space-inner);
+    font-size: var(--font-size-secondary);
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
 /* --- Search --- */
 
 .search-button {
@@ -262,12 +270,3 @@ a.top-bar__breadcrumb-item:hover {
     padding: 1px 4px;
 }
 
-/* --- Avatar --- */
-
-.top-bar__avatar {
-    width: 24px;
-    height: 24px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--surface-segment-active);
-}

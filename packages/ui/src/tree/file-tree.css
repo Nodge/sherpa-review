@@ -46,7 +46,12 @@
     color: var(--text-dim);
 }
 
-.file-panel__input:focus {
+/*
+ * Local exception to the global focus ring (base.css). The container border below
+ * indicates focus through `:focus-within`. An inner ring would make a border inside a border.
+ */
+.file-panel__input:focus,
+.file-panel__input:focus-visible {
     outline: none;
 }
 

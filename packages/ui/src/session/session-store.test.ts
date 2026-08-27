@@ -1,8 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createSessionStore, DEFAULT_THREADS_SHOW, EMPTY_STOPS, parsePreset } from './session-store.js';
+import { DEFAULT_VIEW, parseViewId } from './views.js';
 
 describe('session store', () => {
+    it('starts in Overview: the route is not ready when opened (decision #2)', () => {
+        expect(DEFAULT_VIEW).toBe('overview');
+
+        // This is how main.tsx chooses the view at startup. The URL overrides the default, but invalid URL values do not.
+        const fromUrl = (value: string | null) =>
+            createSessionStore({ initial: { view: parseViewId(value) ?? DEFAULT_VIEW, filter: 'all' } })
+                .getSnapshot().view;
+
+        expect(fromUrl(null)).toBe('overview');
+        expect(fromUrl('garbage')).toBe('overview');
+        expect(fromUrl('route')).toBe('route');
+    });
+
     it('returns a stable snapshot and changes it on setView', () => {
         const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
         const first = store.getSnapshot();

@@ -17,7 +17,8 @@ export const VIEWS: readonly ViewDescriptor[] = [
     { id: 'diff', label: 'Full diff' },
 ];
 
-export const DEFAULT_VIEW: ViewId = 'route';
+/** Always start in Overview (decision log, #2): the route is not ready when opened, so there is nothing to show. */
+export const DEFAULT_VIEW: ViewId = 'overview';
 
 /** `null` means the string is not a view identifier (invalid URL value). */
 export function parseViewId(value: string | null): ViewId | null {

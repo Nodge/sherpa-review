@@ -31,7 +31,6 @@ import { agentPillView } from './components/agent-pill-view.js';
 import { auditScopeBannerVisible, AuditScopeBanner } from './components/audit-banner.tsx';
 import type { BannerSource } from './components/banner-slot.tsx';
 import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
-import { DisconnectedBanner } from './components/disconnected-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import { ReviewActionBar } from './components/review-action-bar.tsx';
@@ -49,7 +48,7 @@ import {
 import { updateFragment } from './fragment.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
-import { breadcrumbFor } from './pr-key.js';
+import { breadcrumbFor, documentTitleFor } from './pr-key.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
 import { createStopProgressStore } from './progress/stop-progress-store.js';
@@ -131,6 +130,8 @@ export function App({ store, session, token }: AppProps) {
     );
     const state = snapshot.state;
     const reviewReady = state !== null;
+    // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
+    const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
@@ -197,6 +198,12 @@ export function App({ store, session, token }: AppProps) {
         completionState?.key === reviewKey && completionState.viewSelection === viewSelection
             ? completionState.value
             : null;
+
+    useEffect(() => {
+        if (documentTitle !== null) {
+            document.title = documentTitle;
+        }
+    }, [documentTitle]);
 
     // Publish the diff as soon as it is ready. Lens and thread requests do not block the reader.
     useEffect(() => {
@@ -714,12 +721,6 @@ export function App({ store, session, token }: AppProps) {
             active: () => routeActionError !== null && !actionErrorInPlace,
             render: () =>
                 routeActionError === null ? null : <RouteActionErrorBanner message={routeActionError} />,
-        },
-        {
-            id: 'agent-disconnected',
-            priority: BANNER_PRIORITY.agentDisconnected,
-            active: () => state?.worker.kind === 'disconnected',
-            render: () => <DisconnectedBanner prKey={state?.prKey ?? ''} />,
         },
         {
             id: 'route-under-explained',

@@ -1,7 +1,7 @@
 import type { PrMeta } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { breadcrumbFor, breadcrumbFromPrKey } from './pr-key.js';
+import { breadcrumbFor, breadcrumbFromPrKey, documentTitleFor } from './pr-key.js';
 
 const PR: PrMeta = {
     id: '4821',
@@ -52,5 +52,21 @@ describe('breadcrumbFor', () => {
             { text: 'local', href: null },
             { text: 'PR 4821', href: 'https://github.com/quillmart/quillmart/pull/4821' },
         ]);
+    });
+});
+
+describe('documentTitleFor', () => {
+    it('uses the PR title when metadata is available', () => {
+        expect(documentTitleFor('github-quillmart--quillmart--4821', PR)).toBe('Order edit window · Sherpa');
+    });
+
+    it('uses the PR number from the key without metadata', () => {
+        expect(documentTitleFor('github-quillmart--quillmart--4821', null)).toBe('PR 4821 · Sherpa');
+    });
+
+    it('never returns an empty title, even with empty metadata and a key without a separator', () => {
+        expect(documentTitleFor('local', null)).toBe('local · Sherpa');
+        expect(documentTitleFor('github-quillmart--quillmart--4821', { ...PR, title: '   ' })).toBe('PR 4821 · Sherpa');
+        expect(documentTitleFor('', null)).toBe('Sherpa');
     });
 });

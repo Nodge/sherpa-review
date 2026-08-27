@@ -18,6 +18,16 @@ export function breadcrumbFromPrKey(prKey: string): readonly string[] {
     return [prKey.slice(0, separator), `PR ${prKey.slice(separator + 1)}`];
 }
 
+/**
+ * Browser tab title: `<PR title> · Sherpa`, or the number from the PR key until metadata arrives.
+ * Never empty: without a key or metadata, the product name remains.
+ */
+export function documentTitleFor(prKey: string, pr: PrMeta | null): string {
+    const title = pr?.title.trim() ?? '';
+    const head = title === '' ? (breadcrumbFromPrKey(prKey).at(-1)?.trim() ?? '') : title;
+    return head === '' ? 'Sherpa' : `${head} · Sherpa`;
+}
+
 /** Top-bar breadcrumb: once metadata arrives, the last segment links to the PR on the host. */
 export function breadcrumbFor(prKey: string, pr: PrMeta | null): readonly BreadcrumbSegment[] {
     const fallback = breadcrumbFromPrKey(prKey).map((text) => ({ text, href: null }));

@@ -298,7 +298,7 @@ export function RouteFillingBanner({
     );
 }
 
-/** Generation failure banner: priority 400, above the disconnected agent (SPEC §2.21). */
+/** Generation failure banner: highest priority in the slot (SPEC §2.21). */
 export function GenerationFailedBanner({
     message,
     retrying = false,

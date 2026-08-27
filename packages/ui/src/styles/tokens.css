@@ -143,7 +143,7 @@
     /* The README token table omits them, but each control must implement the state matrix:
        the highlight step, focus ring and disabled opacity live here too. */
     --hover-selected: #282c33;
-    /* Active tab segment and avatar circle (README §0). */
+    /* Active segment of the tab control (README §0). */
     --surface-segment-active: #2b2f36;
     --focus-ring-color: rgba(127, 140, 255, 0.55);
     --text-on-selected: #e0e2e7;
