@@ -7,6 +7,8 @@ import { createToken } from './auth.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { ServerAlreadyRunningError } from './errors.js';
+import type { FeedbackIntegrationOptions } from './feedback-routes.js';
+import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
 import type { ReviewHostFactory } from './hosts/select.js';
 import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
@@ -85,6 +87,8 @@ export interface StartServerOptions {
      * without a live service (`() => null` runs the server without review endpoints).
      */
     reviewHostFactory?: ReviewHostFactory;
+    /** Feedback channel transport and environment. Tests replace fetch and credentials without a live issue service. */
+    feedback?: FeedbackIntegrationOptions;
     /** "Open in external editor" settings. Defaults to the server's cwd and `SHERPA_EDITOR`. */
     editor?: EditorOptions;
     /**
@@ -234,6 +238,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 reviewHost: reviewHost?.name ?? null,
                 reviewFeed,
                 prMeta,
+                feedback: feedbackAvailability(options.feedback?.env ?? process.env),
                 progress,
                 route: routeStore,
                 shutdownSignal: shutdownController.signal,
@@ -244,6 +249,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 progress,
                 prMeta,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
+            }),
+            ...createFeedbackRoutes({
+                prKey,
+                workerStatus: () => workerRegistry.status(),
+                ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
+                ...options.feedback,
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
         );

@@ -1,15 +1,17 @@
+import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse } from '@sherpa/protocol';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import type { BreadcrumbSegment } from '../pr-key.js';
 import type { ViewId } from '../session/views.js';
 import type { AgentPillView } from './agent-pill-view.js';
 import { CommandBox } from './command-box.tsx';
+import type { FeedbackPreviewContext } from './feedback-button.tsx';
+import { FeedbackButton } from './feedback-button.tsx';
 import './top-bar.css';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
- * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search.
- * The Feedback button comes in M5 with the feedback channel, so it is absent here.
+ * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search and Feedback.
  */
 export interface TopBarProps {
     /** Distribution version from the UI package.json, injected at build time. */
@@ -21,6 +23,9 @@ export interface TopBarProps {
     readonly view: ViewId;
     readonly onSelectView: (view: ViewId) => void;
     readonly onOpenSearch: () => void;
+    readonly feedback: UiFeedbackAvailability;
+    readonly feedbackContext: FeedbackPreviewContext;
+    readonly onSendFeedback: (request: UiFeedbackRequest) => Promise<UiFeedbackResponse>;
 }
 
 export function TopBar({
@@ -31,6 +36,9 @@ export function TopBar({
     view,
     onSelectView,
     onOpenSearch,
+    feedback,
+    feedbackContext,
+    onSendFeedback,
 }: TopBarProps) {
     return (
         <header className="top-bar">
@@ -66,6 +74,7 @@ export function TopBar({
 
             <AgentPill view={agent} reconnectCommand={command} />
             <SearchButton onClick={onOpenSearch} />
+            <FeedbackButton availability={feedback} context={feedbackContext} onSend={onSendFeedback} />
         </header>
     );
 }

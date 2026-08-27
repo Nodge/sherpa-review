@@ -11,6 +11,7 @@ const STATE: UiState = {
     // PR metadata has not arrived yet: the server fills its cache outside snapshot assembly.
     pr: null,
     worker: { kind: 'never' },
+    feedback: { available: true, reason: null },
     tasks: [
         {
             id: 1,

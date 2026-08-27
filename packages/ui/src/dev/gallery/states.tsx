@@ -178,6 +178,22 @@ function TopBarState() {
             view={view}
             onSelectView={setView}
             onOpenSearch={() => undefined}
+            feedback={{ available: true, reason: null }}
+            feedbackContext={{
+                uiVersion: UI_VERSION,
+                prKey: 'fixture-medium',
+                view,
+                routePhase: 'ready',
+                worker: CONNECTED,
+            }}
+            onSendFeedback={() =>
+                Promise.resolve({
+                    outcome: 'created',
+                    issueKey: '#123456',
+                    issueUrl: 'https://github.com/quillmart/quillmart/issues/123456',
+                    message: null,
+                })
+            }
         />
     );
 }

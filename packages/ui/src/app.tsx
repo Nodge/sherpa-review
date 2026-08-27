@@ -23,6 +23,7 @@ import {
     generateReviewRoute,
     publishReview,
     saveReviewDraft,
+    sendFeedback,
     setFileViewed,
     setStopViewed,
     updateReviewDraft,
@@ -881,6 +882,15 @@ export function App({ store, session, token }: AppProps) {
                 onOpenSearch={() => {
                     session.setPaletteOpen(true);
                 }}
+                feedback={state.feedback}
+                feedbackContext={{
+                    uiVersion: UI_VERSION,
+                    prKey: state.prKey,
+                    view,
+                    routePhase: routePhase ?? 'none',
+                    worker: state.worker,
+                }}
+                onSendFeedback={(request) => sendFeedback(token, request)}
             />
 
             {snapshot.connection === 'reconnecting' ? (

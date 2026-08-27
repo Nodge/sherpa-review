@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import type {
     PrMeta,
     UiCancelResponse,
+    UiFeedbackAvailability,
     UiEnqueueResponse,
     UiProgressEvent,
     UiReviewEvent,
@@ -49,6 +50,8 @@ export interface UiRoutesOptions {
     readonly reviewHost: string | null;
     /** PR metadata for the snapshot: updates also wake SSE clients. */
     readonly prMeta: PrMetaSource;
+    /** Feedback channel availability depends only on credentials in the environment. */
+    readonly feedback: UiFeedbackAvailability;
     /** Thread revision for SSE. null means this server never has review events. */
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress: its revision is sent over the channel to synchronize the second tab. */
@@ -246,6 +249,7 @@ function buildState(options: UiRoutesOptions): UiState {
         tasks: options.queue.listTasks().map(toUiTask),
         reviewHost: options.reviewHost,
         pr: options.prMeta.get(),
+        feedback: options.feedback,
     };
 }
 

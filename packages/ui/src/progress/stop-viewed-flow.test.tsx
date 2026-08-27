@@ -226,7 +226,14 @@ function mount(options: MountOptions = {}): Mounted {
 
     let snapshot: StoreSnapshot = {
         connection: 'online',
-        state: { prKey: 'fixture/medium', worker: { kind: 'never' }, tasks: [], reviewHost: 'fixture', pr: DATA.pr },
+        state: {
+            prKey: 'fixture/medium',
+            worker: { kind: 'never' },
+            tasks: [],
+            reviewHost: 'fixture',
+            pr: DATA.pr,
+            feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        },
         error: null,
         progressRevision: null,
         threadsRevision: 1,

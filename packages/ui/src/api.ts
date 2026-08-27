@@ -8,6 +8,8 @@ import type {
     Thread,
     UiCancelResponse,
     UiEnqueueResponse,
+    UiFeedbackRequest,
+    UiFeedbackResponse,
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
@@ -24,6 +26,7 @@ import {
     UI_ENDPOINTS,
     uiCancelResponseSchema,
     uiEnqueueResponseSchema,
+    uiFeedbackResponseSchema,
     uiOpenInEditorResponseSchema,
     uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
@@ -166,6 +169,11 @@ export async function openInEditor(token: string, path: string, line?: number): 
         line === undefined ? { path } : { path, line },
         uiOpenInEditorResponseSchema,
     );
+}
+
+/** Sends feedback. On failure, forms keep their text and retry the same request. */
+export async function sendFeedback(token: string, request: UiFeedbackRequest): Promise<UiFeedbackResponse> {
+    return post(UI_ENDPOINTS.feedback, token, request, uiFeedbackResponseSchema);
 }
 
 async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promise<T> {
