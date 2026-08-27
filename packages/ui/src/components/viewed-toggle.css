@@ -1,0 +1,53 @@
+/*
+ * Viewed checkbox (SPEC §2.10): 11px, an empty border when unviewed,
+ * filled with ✓ when viewed. The call site sets the surrounding geometry
+ * (`.route-stop__viewed`, `.file-card__viewed`). The box itself is shared.
+ */
+
+.viewed-toggle__box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border: 1px solid var(--checkbox-border);
+    border-radius: var(--radius-mark);
+    /* ✓ is always in the markup, but visible only when the box is filled. */
+    font-size: var(--font-size-scope);
+    line-height: 1;
+    color: transparent;
+    transition:
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+/* SPEC §2.10: on hover the border brightens and the box gets quarter-opacity fill. The quarter-opacity
+   fill applies to an empty box. On a filled box it would remove the background and hide ✓. */
+.viewed-toggle:not(.is-viewed):not(:disabled):hover .viewed-toggle__box {
+    border-color: var(--read-border);
+    background: var(--read-fill-hover);
+}
+
+.viewed-toggle.is-viewed .viewed-toggle__box {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+    color: var(--surface-app);
+}
+
+/* SPEC §2.10: pressing fills instantly, without the 90ms hover transition. */
+.viewed-toggle:not(:disabled):active .viewed-toggle__box {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+    transition: none;
+}
+
+/* The box draws the focus ring, since the adjacent label does not need an outline. */
+.viewed-toggle:focus-visible {
+    outline: none;
+}
+
+.viewed-toggle:focus-visible .viewed-toggle__box {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 1px;
+}

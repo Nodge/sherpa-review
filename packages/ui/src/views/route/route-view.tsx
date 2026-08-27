@@ -10,7 +10,7 @@ import type {
     UiReviewProgressResponse,
     UiStopSeenRange,
 } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
@@ -26,7 +26,7 @@ import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
-import { copyFileLink, copyStopLink } from '../../diff-view/copy-link.js';
+import { copyFileLink } from '../../diff-view/copy-link.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import type { ExpandAmount } from '../../diff-view/expand.js';
 import { flashRow } from '../../diff-view/line-target.js';
@@ -521,8 +521,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const settling = useRef(0);
     const [keptStopId, setKeptStopId] = useState<string | null>(props.initialKeptStopId ?? null);
     const [flashStopId, setFlashStopId] = useState<string | null>(null);
-    const [copyHint, setCopyHint] = useState<{ stopId: string; text: string } | null>(null);
     const [otherOpen, setOtherOpen] = useState(false);
+    /** Toolbar measurement: the sticky column offset uses the `route.css` fallback until the first measurement. */
+    const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
 
     const matches = useCallback(
@@ -1194,6 +1195,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             id="view-route"
             ref={containerRef}
             onScroll={handleScroll}
+            style={
+                toolbarHeight === null
+                    ? undefined
+                    : ({ '--route-toolbar-height': `${String(toolbarHeight)}px` } as CSSProperties)
+            }
         >
             <PrHeader
                 pr={pr}
@@ -1211,6 +1217,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             <RouteToolbar
                 store={store}
                 preset={preset}
+                onHeight={setToolbarHeight}
                 onPreset={session.setPreset}
                 filters={filters}
                 filter={filter}
@@ -1272,7 +1279,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             marked={markedStops.has(entry.view.stop.id)}
                             failedViewed={stopFailures.get(entry.view.stop.id) ?? null}
                             flash={flashStopId === entry.view.stop.id}
-                            copyHint={copyHint?.stopId === entry.view.stop.id ? copyHint.text : null}
                             readStateOf={(fileId) =>
                                 diffSnapshot.readState.get(fileId) ??
                                 readStateOf({
@@ -1287,11 +1293,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                                 expandStop(entry.view.stop.id);
                             }}
                             onOpenFile={openFile}
-                            onCopyLink={() => {
-                                void copyStopLink(entry.view.stop.id).then((text) => {
-                                    setCopyHint({ stopId: entry.view.stop.id, text });
-                                });
-                            }}
                             onVisible={requestParse}
                             renderCard={cardFor}
                             testCodeShown={stopState.testCode.has(entry.view.stop.id)}
@@ -1368,12 +1369,10 @@ interface StopSectionProps {
     /** Value of the failed mark write. `null` means no write has failed. */
     readonly failedViewed: boolean | null;
     readonly flash: boolean;
-    readonly copyHint: string | null;
     readonly readStateOf: (fileId: string) => ReturnType<typeof readStateOf>;
     readonly onViewed: (viewed: boolean) => void;
     readonly onExpand: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
-    readonly onCopyLink: () => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
     readonly renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
     /** Digest stop: test code expands below the digest card (README §2). */
@@ -1399,12 +1398,10 @@ function StopSection({
     marked,
     failedViewed,
     flash,
-    copyHint,
     readStateOf: readState,
     onViewed,
     onExpand,
     onOpenFile,
-    onCopyLink,
     onVisible,
     renderCard,
     testCodeShown,
@@ -1518,8 +1515,6 @@ function StopSection({
                 failedViewed={failedViewed}
                 marked={marked}
                 keptInView={keptInView}
-                onCopyLink={onCopyLink}
-                copyHint={copyHint}
                 flash={flash}
                 chips={
                     <FileChips

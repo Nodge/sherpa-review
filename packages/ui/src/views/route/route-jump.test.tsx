@@ -36,6 +36,19 @@ const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 // React 19 requires the environment to be declared explicitly, or every `act` logs a warning.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The toolbar measures its height with an observer absent in jsdom. There is no layout here anyway.
+(globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
+    observe(): void {
+        // jsdom has no layout, so there is nothing to observe.
+    }
+    unobserve(): void {
+        // jsdom has no layout, so there is nothing to observe.
+    }
+    disconnect(): void {
+        // jsdom has no layout, so there is nothing to observe.
+    }
+};
+
 /**
  * A lens that keeps the digest stop visible but hides one of its test files. The fixture has
  * no such lens (all three s04 files are in My files), and this case breaks lens reset by anchor.

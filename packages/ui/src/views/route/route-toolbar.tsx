@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import { CommentSources, DiffModeToggle } from '../../components/toolbar-controls.tsx';
 import { FilterSelect } from '../../components/filter-select.tsx';
@@ -41,6 +42,11 @@ export interface RouteToolbarProps {
     readonly onThreadsShow: (show: ThreadsShow) => void;
     /** Second toolbar row: coverage strip (SPEC §2.4). */
     readonly strip: ReactNode;
+    /**
+     * Measured toolbar height. The view uses it for the sticky offset of the stops column.
+     * The toolbar measures itself so layout changes cannot silently diverge from the offset.
+     */
+    readonly onHeight?: ((height: number) => void) | undefined;
 }
 
 export function RouteToolbar({
@@ -55,9 +61,30 @@ export function RouteToolbar({
     threadCounts,
     onThreadsShow,
     strip,
+    onHeight,
 }: RouteToolbarProps) {
+    const ref = useRef<HTMLDivElement | null>(null);
+
+    // Measure before painting: otherwise the first frame uses the fallback height from route.css.
+    // Take the initial measurement manually because ResizeObserver stays silent in background tabs.
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (element === null || onHeight === undefined) {
+            return;
+        }
+        const report = (): void => {
+            onHeight(element.getBoundingClientRect().height);
+        };
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+        };
+    }, [onHeight]);
+
     return (
-        <div className="route-toolbar">
+        <div className="route-toolbar" ref={ref}>
             <div className="route-toolbar__row">
                 <div className="route-preset" role="group" aria-label="Route preset">
                     {PRESETS.map((option) => (
