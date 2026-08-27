@@ -411,7 +411,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     // `writesSettled` is a dependency for the deferred decision: our write event arrives
     // before the endpoint response, and without reevaluation it would leave an extra request.
     useEffect(() => {
-        if (reloadProgress === undefined || progressRevision === null || !writer.shouldReload(progressRevision)) {
+        if (reloadProgress === undefined || !writer.shouldReload(progressRevision)) {
             return;
         }
         let alive = true;

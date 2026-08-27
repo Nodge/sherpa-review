@@ -2,6 +2,7 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 
+import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
@@ -228,22 +229,16 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     }}
                 />
 
-                {/* A toggle, not a checkbox. `aria-pressed` announces the state (SPEC §2.10),
-                    and the tooltip always carries progress counts (SPEC §2.12). */}
-                <button
-                    type="button"
-                    className={`file-card__viewed${read.state === 'read' ? ' is-viewed' : ''}`}
-                    aria-pressed={read.state === 'read'}
+                {/* The toggle tooltip always carries progress counts (SPEC §2.12): partial progress appears
+                    in those counts and the tree and chip indicators, not in the button itself. */}
+                <ViewedToggle
+                    className="file-card__viewed"
+                    viewed={read.state === 'read'}
                     title={read.tooltip}
-                    onClick={() => {
-                        run(actions.onViewed(file.fileId, read.state !== 'read'));
+                    onToggle={(viewed) => {
+                        run(actions.onViewed(file.fileId, viewed));
                     }}
-                >
-                    <span className={`file-card__viewed-box file-card__viewed-box--${read.state}`} aria-hidden="true">
-                        ✓
-                    </span>
-                    {read.state === 'read' ? 'Viewed' : 'Mark viewed'}
-                </button>
+                />
             </header>
 
             {routeStrips}

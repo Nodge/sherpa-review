@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import { ViewedToggle } from '../../components/viewed-toggle.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
@@ -24,6 +25,8 @@ export interface StopCardProps {
     readonly onViewed: (viewed: boolean) => void;
     /** Stop files are still being parsed, so no ranges are available for a viewed mark. */
     readonly pending?: boolean;
+    /** Parsing failed for some files. Their ranges will be unavailable until retry. */
+    readonly parseFailed?: boolean;
     /** Agent died during generation: filled content remains readable with a quiet note (SPEC §4.4). */
     readonly filledBeforeStop?: boolean;
     /** Value of the failed mark write. Shows "not saved · retry" beside the control. */
@@ -32,8 +35,6 @@ export interface StopCardProps {
     readonly marked?: boolean;
     /** "Kept in view — outside the current filter" label (SPEC §2.7). */
     readonly keptInView?: boolean;
-    readonly onCopyLink: () => void;
-    readonly copyHint?: string | null;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
     /** Accent line flash above the diff column after jumping to a file (README Interactions). */
@@ -47,12 +48,11 @@ export function StopCard({
     viewed,
     onViewed,
     pending = false,
+    parseFailed = false,
     filledBeforeStop = false,
     failedViewed = null,
     marked = false,
     keptInView = false,
-    onCopyLink,
-    copyHint = null,
     chips,
     diff,
     flash = false,
@@ -79,15 +79,6 @@ export function StopCard({
                         <span className="route-stop__badge route-stop__badge--queued">{statusBadge(stop.status)}</span>
                     )}
                     <span className="route-stop__spacer" />
-                    {/* Header actions appear on hover and focus within the card (SPEC §2.9). */}
-                    <button
-                        type="button"
-                        className="route-stop__action"
-                        title="Copy link to stop"
-                        onClick={onCopyLink}
-                    >
-                        Link
-                    </button>
                     {comments === 0 ? null : (
                         <span className="route-stop__comments" title={`Comments in this stop's ranges: ${String(comments)}`}>
                             <span className="route-stop__comments-box" aria-hidden="true" />
@@ -97,6 +88,7 @@ export function StopCard({
                     <StopViewedToggle
                         viewed={viewed}
                         pending={pending}
+                        parseFailed={parseFailed}
                         unfilled={unfilled}
                         failedViewed={failedViewed}
                         onViewed={onViewed}
@@ -136,11 +128,6 @@ export function StopCard({
                 {keptInView ? (
                     <p className="route-stop__kept">kept in view — outside the current filter</p>
                 ) : null}
-                {copyHint === null ? null : (
-                    <p className="route-stop__hint" role="status">
-                        {copyHint}
-                    </p>
-                )}
 
                 {chips}
             </div>
@@ -154,28 +141,35 @@ export function StopCard({
 }
 
 /**
- * A stop's "viewed" mark (SPEC §2.10): a two-state control with `aria-pressed`,
+ * Stop viewed mark: the same control as the file card uses (SPEC §2.10),
  * with an error on failed writes beside it and a retry of the exact same action.
  *
  * A stop cannot be marked until its ranges are computed. An empty set would go
  * to the server, leaving files unread. The same applies to an unfilled stop, which has no ranges
- * at all. The mark can always be cleared because that requires no ranges.
+ * at all, and to a stop with a file whose parsing failed, whose ranges would silently
+ * be omitted. Clearing a mark is always possible because it needs no ranges.
  */
 export function StopViewedToggle({
     viewed,
     pending = false,
+    parseFailed = false,
     unfilled = false,
     failedViewed,
     onViewed,
 }: {
     viewed: boolean;
     pending?: boolean;
+    parseFailed?: boolean;
     unfilled?: boolean;
     failedViewed: boolean | null;
     onViewed: (viewed: boolean) => void;
 }) {
-    const disabled = (pending || unfilled) && !viewed;
-    const reason = unfilled ? 'The stop is not filled yet' : 'Stop ranges are still being computed';
+    const disabled = (pending || parseFailed || unfilled) && !viewed;
+    const reason = unfilled
+        ? 'This stop is not filled yet'
+        : parseFailed
+          ? 'Some files of this stop failed to parse — retry the parse'
+          : 'The ranges of this stop are still being counted';
     return (
         <>
             {failedViewed === null ? null : (
@@ -191,18 +185,13 @@ export function StopViewedToggle({
                     </button>
                 </span>
             )}
-            <button
-                type="button"
-                className={`route-stop__viewed${viewed ? ' is-viewed' : ''}`}
-                aria-pressed={viewed}
+            <ViewedToggle
+                className="route-stop__viewed"
+                viewed={viewed}
                 disabled={disabled}
-                {...(disabled ? { title: reason } : {})}
-                onClick={() => {
-                    onViewed(!viewed);
-                }}
-            >
-                {viewed ? '✓ Viewed' : 'Mark viewed'}
-            </button>
+                title={disabled ? reason : undefined}
+                onToggle={onViewed}
+            />
         </>
     );
 }

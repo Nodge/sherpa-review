@@ -13,7 +13,9 @@ import { buildRouteModel, stopSeenRanges } from './route-model.js';
 
 /**
  * Coverage strip and stop seen ranges (SPEC §2.4, §2.10) on the `medium` fixture:
- * 862 changed lines, tiers 196 / 327 / 305, 34 uncovered. This test fails if the counts drift.
+ * 860 changed lines in coverage counts (862 in the patches: 2 empty lines outside anchors
+ * are excluded, decision log 2026-08-26), tiers 196 / 327 / 305, uncovered 32.
+ * This test fails if the counts diverge.
  */
 
 const DATA = fixtureData('medium');
@@ -52,17 +54,17 @@ describe('coverage bar model', () => {
     it('sizes segments proportionally to changed fixture lines', () => {
         const built = strip();
 
-        expect(built.changed).toBe(862);
-        expect(built.uncovered).toBe(34);
+        expect(built.changed).toBe(860);
+        expect(built.uncovered).toBe(32);
         expect(built.explained).toBe(828);
         expect(built.segments.map((segment) => [segment.tier, segment.lines])).toEqual([
             ['high', 196],
             ['medium', 327],
             ['low', 305],
-            ['other', 34],
+            ['other', 32],
         ]);
         // Shares use changed lines as the denominator, not the sum of segments.
-        expect(built.segments.map((segment) => segment.share)).toEqual([196 / 862, 327 / 862, 305 / 862, 34 / 862]);
+        expect(built.segments.map((segment) => segment.share)).toEqual([196 / 860, 327 / 860, 305 / 860, 32 / 860]);
     });
 
     it('includes the range of stop plan numbers in the segment tooltip', () => {
@@ -70,7 +72,7 @@ describe('coverage bar model', () => {
 
         expect(built.segments[0]?.title).toBe('high · stops 01–02 · 196 lines');
         expect(built.segments[1]?.title).toBe('medium · stops 03–04 · 327 lines');
-        expect(built.segments[3]?.title).toBe('not explained · 34 lines');
+        expect(built.segments[3]?.title).toBe('not explained · 32 lines');
     });
 
     it('clicks go to the first stop in the tier and the hatch goes to Other', () => {
@@ -85,11 +87,11 @@ describe('coverage bar model', () => {
     it('calculates the legend and rounds the percentage down', () => {
         const built = strip();
 
-        // 828 / 862 = 96.05…%, which is "96%", not "97%".
+        // 828 / 860 = 96.27…%, which is "96%", not "97%".
         expect(built.percent).toBe(96);
-        expect(built.legend.changed).toBe('862 changed lines');
+        expect(built.legend.changed).toBe('860 changed lines');
         expect(built.legend.explained).toBe('96% explained');
-        expect(built.legend.unexplained).toBe('34 lines not explained');
+        expect(built.legend.unexplained).toBe('32 lines not explained');
     });
 
     it('rounds the percentage down at the boundary too', () => {

@@ -10,7 +10,7 @@ import type {
     UiReviewProgressResponse,
     UiStopSeenRange,
 } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
@@ -26,7 +26,7 @@ import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
-import { copyFileLink, copyStopLink } from '../../diff-view/copy-link.js';
+import { copyFileLink } from '../../diff-view/copy-link.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import type { ExpandAmount } from '../../diff-view/expand.js';
 import { flashRow } from '../../diff-view/line-target.js';
@@ -55,6 +55,7 @@ import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
+    entryParseFailed,
     entryPending,
     entryUnfilled,
     filterOtherView,
@@ -517,8 +518,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const settling = useRef(0);
     const [keptStopId, setKeptStopId] = useState<string | null>(props.initialKeptStopId ?? null);
     const [flashStopId, setFlashStopId] = useState<string | null>(null);
-    const [copyHint, setCopyHint] = useState<{ stopId: string; text: string } | null>(null);
     const [otherOpen, setOtherOpen] = useState(false);
+    /** Toolbar measurement: the sticky column offset uses the `route.css` fallback until the first measurement. */
+    const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
 
     const matches = useCallback(
@@ -905,8 +907,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
             // A mark writes seen ranges, which can only be counted from parsed models:
             // before parsing, the mark would reach the server with an empty set and would not be rewritten later.
-            // An unfilled stop has no ranges at all. Clearing its mark requires none.
-            if (viewed && (entryPending(entry, model.totals) || unfilledEntry(entry))) {
+            // An unfilled stop has no ranges at all, and a file whose parsing failed
+            // will have none until a retry. Clearing a mark does not require ranges.
+            if (
+                viewed &&
+                (entryPending(entry, model.totals) ||
+                    entryParseFailed(entry, model.totals) ||
+                    unfilledEntry(entry))
+            ) {
                 return;
             }
             if (!viewed) {
@@ -984,7 +992,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>
             stopProgress.isViewed(entryId(entry)) ||
-            (!entryPending(entry, model.totals) && !unfilledEntry(entry)),
+            (!entryPending(entry, model.totals) &&
+                !entryParseFailed(entry, model.totals) &&
+                !unfilledEntry(entry)),
         [model.totals, stopProgress, unfilledEntry],
     );
     useShortcut({
@@ -1182,6 +1192,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             id="view-route"
             ref={containerRef}
             onScroll={handleScroll}
+            style={
+                toolbarHeight === null
+                    ? undefined
+                    : ({ '--route-toolbar-height': `${String(toolbarHeight)}px` } as CSSProperties)
+            }
         >
             <PrHeader
                 pr={pr}
@@ -1199,6 +1214,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             <RouteToolbar
                 store={store}
                 preset={preset}
+                onHeight={setToolbarHeight}
                 onPreset={session.setPreset}
                 filters={filters}
                 filter={filter}
@@ -1253,13 +1269,13 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             keptInView={entryId(entry) === keptStopId}
                             viewed={stopViewed.get(entry.view.stop.id) === true}
                             pending={entry.view.pending}
+                            parseFailed={entry.view.parseFailed}
                             filledBeforeStop={agentStopped}
                             collapsed={collapsedOf(entry.view)}
                             collapsedManually={stopState.collapsed.has(entry.view.stop.id)}
                             marked={markedStops.has(entry.view.stop.id)}
                             failedViewed={stopFailures.get(entry.view.stop.id) ?? null}
                             flash={flashStopId === entry.view.stop.id}
-                            copyHint={copyHint?.stopId === entry.view.stop.id ? copyHint.text : null}
                             readStateOf={(fileId) =>
                                 diffSnapshot.readState.get(fileId) ??
                                 readStateOf({
@@ -1274,11 +1290,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                                 expandStop(entry.view.stop.id);
                             }}
                             onOpenFile={openFile}
-                            onCopyLink={() => {
-                                void copyStopLink(entry.view.stop.id).then((text) => {
-                                    setCopyHint({ stopId: entry.view.stop.id, text });
-                                });
-                            }}
                             onVisible={requestParse}
                             renderCard={cardFor}
                             testCodeShown={stopState.testCode.has(entry.view.stop.id)}
@@ -1301,6 +1312,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             view={entry.view}
                             stopCount={model.stopCount}
                             pending={model.totals.pendingFiles > 0}
+                            parseFailed={model.totals.failedFiles > 0}
                             filling={filling}
                             failedFiles={model.totals.failedFiles}
                             onRetryFailed={retryFailed}
@@ -1342,6 +1354,8 @@ interface StopSectionProps {
     readonly viewed: boolean;
     /** Stop files are still being parsed, so mark ranges cannot be computed yet. */
     readonly pending: boolean;
+    /** Parsing failed for some files. Their ranges are unavailable until retry. */
+    readonly parseFailed: boolean;
     /** Agent disconnected during generation: filled stops get a quiet note (SPEC §4.4). */
     readonly filledBeforeStop: boolean;
     /** Collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
@@ -1352,12 +1366,10 @@ interface StopSectionProps {
     /** Value of the failed mark write. `null` means no write has failed. */
     readonly failedViewed: boolean | null;
     readonly flash: boolean;
-    readonly copyHint: string | null;
     readonly readStateOf: (fileId: string) => ReturnType<typeof readStateOf>;
     readonly onViewed: (viewed: boolean) => void;
     readonly onExpand: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
-    readonly onCopyLink: () => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
     readonly renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
     /** Digest stop: test code expands below the digest card (README §2). */
@@ -1376,18 +1388,17 @@ function StopSection({
     keptInView,
     viewed,
     pending,
+    parseFailed,
     filledBeforeStop,
     collapsed,
     collapsedManually,
     marked,
     failedViewed,
     flash,
-    copyHint,
     readStateOf: readState,
     onViewed,
     onExpand,
     onOpenFile,
-    onCopyLink,
     onVisible,
     renderCard,
     testCodeShown,
@@ -1495,13 +1506,12 @@ function StopSection({
                 comments={comments}
                 viewed={viewed}
                 pending={pending}
+                parseFailed={parseFailed}
                 filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
                 failedViewed={failedViewed}
                 marked={marked}
                 keptInView={keptInView}
-                onCopyLink={onCopyLink}
-                copyHint={copyHint}
                 flash={flash}
                 chips={
                     <FileChips
@@ -1522,6 +1532,7 @@ function OtherSection({
     view,
     stopCount,
     pending,
+    parseFailed,
     filling,
     failedFiles,
     onRetryFailed,
@@ -1538,6 +1549,8 @@ function OtherSection({
     view: RouteOtherView;
     stopCount: number;
     pending: boolean;
+    /** Some diff files failed to parse, so their uncovered ranges have not been counted. */
+    parseFailed: boolean;
     /** The route is still filling: Other counts vacant plan slots, not what the model left over. */
     filling: boolean;
     failedFiles: number;
@@ -1553,7 +1566,7 @@ function OtherSection({
     onOpen: () => void;
     renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
 }) {
-    // The card counts the same set that will expand. Otherwise the button would promise 34 lines,
+    // The card counts the same set that expands. Otherwise the button would promise all lines
     // and show only the subset that passes the filter.
     const filtered = useMemo(() => filterOtherView(view, fileIds), [fileIds, view]);
     const groups = useMemo(() => filtered.files.map((file) => uncoveredAsGroup(file)), [filtered.files]);
@@ -1564,6 +1577,7 @@ function OtherSection({
                 view={filtered}
                 stopCount={stopCount}
                 pending={pending}
+                parseFailed={parseFailed}
                 filling={filling}
                 failedFiles={failedFiles}
                 onRetryFailed={onRetryFailed}

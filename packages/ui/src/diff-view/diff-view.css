@@ -174,7 +174,8 @@
     color: var(--text-dim-strong);
 }
 
-/* Viewed toggle (README §1, SPEC §2.10): 11px box, ✓ when filled. */
+/* Viewed toggle in the file header (README §1): a row without its own border. The box and its
+   states are shared by files and stops, in `components/viewed-toggle.css`. */
 .file-card__viewed {
     display: flex;
     align-items: center;
@@ -187,59 +188,6 @@
     color: var(--text-dim);
     white-space: nowrap;
     cursor: pointer;
-}
-
-.file-card__viewed-box {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 11px;
-    height: 11px;
-    border: 1px solid var(--checkbox-border);
-    border-radius: var(--radius-mark);
-    /* ✓ is always in the markup, but only visible in the filled state (SPEC §2.12). */
-    font-size: var(--font-size-scope);
-    line-height: 1;
-    color: transparent;
-    transition:
-        background var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease);
-}
-
-/* SPEC §2.10: on hover the border brightens and the box gets quarter-opacity fill. The quarter-opacity
-   fill applies to an empty box. On a filled box it would remove the background and hide ✓. */
-.file-card__viewed:hover .file-card__viewed-box--unread {
-    border-color: var(--read-border);
-    background: var(--read-fill-hover);
-}
-
-/* SPEC §2.12: read is filled with ✓, partial is half-filled, unread is empty. */
-.file-card__viewed-box--read {
-    background: var(--read-fill);
-    border-color: var(--read-border);
-    color: var(--surface-app);
-}
-
-.file-card__viewed-box--partial {
-    background: linear-gradient(90deg, var(--read-fill) 0 50%, transparent 50%);
-    border-color: var(--read-border);
-}
-
-/* SPEC §2.10: pressing fills instantly, without the 90ms hover transition. */
-.file-card__viewed:active .file-card__viewed-box {
-    background: var(--read-fill);
-    border-color: var(--read-border);
-    transition: none;
-}
-
-/* The box draws the focus ring, since the adjacent label does not need an outline. */
-.file-card__viewed:focus-visible {
-    outline: none;
-}
-
-.file-card__viewed:focus-visible .file-card__viewed-box {
-    outline: 2px solid var(--focus-ring-color);
-    outline-offset: 1px;
 }
 
 .file-card__viewed.is-viewed {

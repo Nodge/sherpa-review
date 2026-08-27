@@ -17,7 +17,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
 
 /**
  * Coverage strip and stop progress states (M2-T7). Everything is calculated synchronously from the `medium`
- * fixture: the strip counts are the same 862 / 196 / 327 / 305 / 34 as in the model tests.
+ * fixture: the bar uses the same 860 / 196 / 327 / 305 / 32 counts as the model tests.
  */
 
 const DATA = fixtureData('medium');
@@ -48,7 +48,12 @@ function StripState({ full = false, loading = false }: { full?: boolean; loading
                   ...built.totals,
                   covered: built.totals.changed,
                   uncovered: 0,
-                  byTier: { ...built.totals.byTier, low: built.totals.byTier.low + 34, other: 0 },
+                  // Uncovered lines moved to low: the tier sum must match the denominator.
+                  byTier: {
+                      ...built.totals.byTier,
+                      low: built.totals.byTier.low + built.totals.byTier.other,
+                      other: 0,
+                  },
               }
             : built.totals;
         return buildCoverageStrip({ totals, entries: built.entries });
@@ -137,7 +142,8 @@ const ROUTE_COMPLETION: ReviewCompletion = {
     publishedComments: 2,
     publishedReplies: 1,
     progress: { filesSeen: 18, filesTotal: 18, linesSeen: 862, linesTotal: 862, percentSeen: 100 },
-    route: { stopsTotal: 7, stopsViewed: 7, otherViewed: true, uncoveredLines: 34 },
+    // Progress lines use patch counters (862), and lines not covered by the route use coverage stats (32).
+    route: { stopsTotal: 7, stopsViewed: 7, otherViewed: true, uncoveredLines: 32 },
     openThreads: 0,
     firstOpenThreadId: null,
 };
@@ -145,7 +151,7 @@ const ROUTE_COMPLETION: ReviewCompletion = {
 export const M2_T7_STATES: readonly RouteGalleryState[] = [
     {
         id: 'coverage-strip-ready',
-        title: 'coverage strip: 862 lines, tiers 196/327/305, 34 uncovered',
+        title: 'coverage bar: 860 lines, tiers 196/327/305, uncovered 32',
         render: () => <StripState />,
     },
     {

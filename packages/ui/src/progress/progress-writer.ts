@@ -10,7 +10,9 @@ import type { UiFileProgress, UiReviewProgressResponse, UiStopProgress, UiStopSe
  *
  * The progress revision is shared across tabs, so the applied revision comes from the progress
  * endpoint response. Our own write advances it only when it follows the applied revision without a gap.
- * Otherwise another tab wrote a mark between them, and the snapshot must be reread.
+ * Otherwise another tab wrote between them, and the snapshot needs to be refetched. The revision is monotonic only within
+ * one server lifetime: after a restart it begins at zero, and a lower number means a new server,
+ * rather than an outdated response.
  */
 
 /** Stop mark: the server remains the source of truth, and optimistic state is a single flag. */
@@ -52,12 +54,15 @@ export interface ProgressWriter {
         viewed: boolean,
         ranges: readonly UiStopSeenRange[],
     ) => Promise<boolean>;
-    /** Whether an event with this revision requires an endpoint reread. */
-    readonly shouldReload: (revision: number) => boolean;
+    /**
+     * Whether to refetch the endpoint after an event with this revision. `null` means no channel revision
+     * has been seen yet. A refetch is still needed if our own write with seen ranges requests it.
+     */
+    readonly shouldReload: (revision: number | null) => boolean;
     /** Refetch start marker: the endpoint response may miss writes made after it. */
     readonly beginReload: () => number;
-    /** Endpoint response with missed writes overlaid. `null` means the response is stale. */
-    readonly finishReload: (response: UiReviewProgressResponse, mark: number) => MergedProgress | null;
+    /** Endpoint response with writes that it missed added back in. */
+    readonly finishReload: (response: UiReviewProgressResponse, mark: number) => MergedProgress;
 }
 
 /** Last server-confirmed state for a key, restored on rollback. */
@@ -197,14 +202,22 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
 
         // While our write is in flight, its own event tells us nothing: the refetch decision
         // waits for the response, which tells us whether another tab wrote between the seen revision and ours.
-        shouldReload: (revision) => inFlight === 0 && (rangesPending || revision > applied),
+        // Our own write with ranges requests a refetch itself, without waiting for a channel event. Without
+        // a refetch, the read-state boxes would keep their state from before the mark.
+        // Compare revisions for inequality, rather than "greater than": a server restart resets the counter,
+        // so a lower number means a new server, rather than an outdated event. A "greater than"
+        // check would ignore other tabs' marks until the new counter caught up with the old one.
+        shouldReload: (revision) =>
+            inFlight === 0 && (rangesPending || (revision !== null && revision !== applied)),
 
         beginReload: () => seq + 1,
 
         finishReload: (response, mark) => {
-            if (response.progressRevision < applied) {
-                return null;
-            }
+            // Accept the endpoint response with any revision, including one below the last seen: the revision
+            // is monotonic only within one server lifetime and starts over
+            // after a restart. Checking "response newer than last seen" would discard every snapshot from the new server,
+            // freezing the screen until the tab reloads. Writes the response missed
+            // go on top below. They ensure freshness, rather than the revision number.
             applied = response.progressRevision;
             rangesPending = false;
 

@@ -1,27 +1,33 @@
 import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { FileDiff, RouteSnapshot, RouteStop } from '@sherpa/protocol';
+import type { FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import type { RouteFileGroup } from './route-model.js';
+import type { FileReadState } from '../progress/read-state.js';
+import { changedLinesOf, readStateOf } from '../progress/read-state.js';
+import type { RouteFileGroup, RouteModel, RouteTotals } from './route-model.js';
 import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
+    entryParseFailed,
     filterOtherView,
     lazyCards,
     LAZY_HUNK_THRESHOLD,
     PROMOTE_THRESHOLD,
     stopMatchesFilter,
+    stopSeenRanges,
     threadsForGroup,
 } from './route-model.js';
 
 /**
  * Route counts come from anchors and diff models, not the snapshot. The reference is
- * the `medium` fixture, whose coverage matches the handoff strip (862 / 828 / 34, tiers
- * 196 / 327 / 305). This test catches any difference in the counts.
+ * the `medium` fixture, whose coverage matches the handoff bar (860 / 828 / 32, tiers
+ * 196 / 327 / 305). This test catches any mismatch. The patches contain
+ * 862. The 2 empty lines in psp-schema.ts outside anchors are excluded from coverage counts
+ * (decision log, 2026-08-26).
  */
 
 const DATA = fixtureData('medium');
@@ -34,6 +40,15 @@ const SNAPSHOT: RouteSnapshot = READY.snapshot;
 const MODELS = new Map<string, DiffFileModel>(
     DATA.diff.files.map((file) => [file.fileId, parseFileDiff(toParseRequest(file))]),
 );
+
+const EMPTY_TOTALS: RouteTotals = {
+    changed: 0,
+    covered: 0,
+    uncovered: 0,
+    byTier: { high: 0, medium: 0, low: 0, other: 0 },
+    pendingFiles: 0,
+    failedFiles: 0,
+};
 
 function build(snapshot: RouteSnapshot = SNAPSHOT, files: readonly FileDiff[] = DATA.diff.files) {
     return buildRouteModel({ snapshot, files, models: MODELS });
@@ -73,12 +88,12 @@ function stopOf(id: string): RouteStop {
 }
 
 describe('route model', () => {
-    it('coverage matches the handoff strip: 862 changed, 828 explained, 34 unexplained', () => {
+    it('coverage matches the handoff bar: 860 changed, 828 explained, 32 not explained', () => {
         const { totals } = build();
 
-        expect(totals.changed).toBe(862);
+        expect(totals.changed).toBe(860);
         expect(totals.covered).toBe(828);
-        expect(totals.uncovered).toBe(34);
+        expect(totals.uncovered).toBe(32);
         expect(totals.pendingFiles).toBe(0);
         expect(totals.covered + totals.uncovered).toBe(totals.changed);
     });
@@ -86,7 +101,7 @@ describe('route model', () => {
     it('matches fixture line counts by tier', () => {
         const { totals } = build();
 
-        expect(totals.byTier).toEqual({ high: 196, medium: 327, low: 305, other: 34 });
+        expect(totals.byTier).toEqual({ high: 196, medium: 327, low: 305, other: 32 });
         expect(totals.byTier.high + totals.byTier.medium + totals.byTier.low).toBe(totals.covered);
     });
 
@@ -100,11 +115,12 @@ describe('route model', () => {
         }
         // Use diff file order rather than anchor order. Other follows document order.
         expect(other.view.files.map((file) => [file.name, file.lines])).toEqual([
-            ['psp-schema.ts', 17],
+            // 15, not 17: Other excludes two empty lines at the end of psp-schema.ts.
+            ['psp-schema.ts', 15],
             ['CODEOWNERS', 5],
             ['ci.yml', 12],
         ]);
-        expect(other.view.lines).toBe(34);
+        expect(other.view.lines).toBe(32);
     });
 
     it('renders in snapshot Triage order with Other last and numbers fixed by the plan', () => {
@@ -230,8 +246,36 @@ describe('route model', () => {
             );
 
         expect(stopsOf(new Set()).some((view) => view.pending)).toBe(true);
-        // Parsing failed: the file will not finish counting on its own, so there is nothing left to wait for.
+        expect(stopsOf(new Set()).every((view) => !view.parseFailed)).toBe(true);
+        // Parsing failed. The file will not finish counting on its own, so there is nothing left to wait for,
+        // but the stop cannot be marked viewed either. The file will have no ranges until parsing is retried.
         expect(stopsOf(new Set([first.fileId])).every((view) => !view.pending)).toBe(true);
+        expect(stopsOf(new Set([first.fileId])).every((view) => view.parseFailed)).toBe(true);
+    });
+
+    it('does not count a file that failed to parse as fully read through the seen ranges of a stop', () => {
+        const first = DATA.diff.files[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one file');
+        }
+        const withoutFirst = new Map(MODELS);
+        withoutFirst.delete(first.fileId);
+        const entry = buildRouteModel({
+            snapshot: SNAPSHOT,
+            files: DATA.diff.files,
+            models: withoutFirst,
+            failed: new Set([first.fileId]),
+        }).entries.find(
+            (candidate) =>
+                candidate.kind === 'stop' && candidate.view.files.some((group) => group.fileId === first.fileId),
+        );
+        if (entry === undefined) {
+            throw new Error('file must first belong to a stop');
+        }
+
+        // This is the gap the flag exists to catch: the set would silently arrive without this file.
+        expect(stopSeenRanges(entry).some((range) => range.fileId === first.fileId)).toBe(false);
+        expect(entryParseFailed(entry, { ...EMPTY_TOTALS, failedFiles: 1 })).toBe(true);
     });
 
     it('marks unresolved anchors as drift and a stop without anchors as an empty slot', () => {
@@ -275,6 +319,8 @@ describe('route model', () => {
         const model = buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models: new Map() });
 
         expect(model.totals.pendingFiles).toBe(DATA.diff.files.length);
+        // Patch counts still include whitespace lines, which are only identifiable in parsed models,
+        // still 862, including them. Counts are marked unfinished while `pendingFiles` is above zero.
         expect(model.totals.changed).toBe(862);
         expect(model.totals.covered).toBe(0);
         expect(model.totals.uncovered).toBe(0);
@@ -524,3 +570,167 @@ describe('route model', () => {
         expect(countStopComments(stop, byFile)).toBe(1);
     });
 });
+
+/**
+ * Whitespace line rule (decision log, 2026-08-26) on a synthetic diff: empty and
+ * whitespace-only changed lines outside anchors are excluded from coverage statistics entirely, while lines
+ * covered by an anchor are counted as before.
+ *
+ * `WHITESPACE_PATCH` diff: old 2 and new 2–3 (one empty) are under anchors. Outside anchors are
+ * new 6 (`delta`), empty new 5 and a whitespace-only deletion on old 5.
+ */
+const WHITESPACE_PATCH = [
+    '@@ -1,6 +1,8 @@',
+    ' alpha',
+    '-old-one',
+    '+new-one',
+    '+',
+    ' beta',
+    '+  ',
+    '+delta',
+    ' gamma',
+    '-\t',
+    ' omega',
+    '',
+].join('\n');
+
+const WHITESPACE_FILE: FileDiff = {
+    fileId: 'ws',
+    path: 'src/ws.ts',
+    oldPath: null,
+    changeType: 'modify',
+    binary: false,
+    generated: false,
+    additions: 4,
+    deletions: 2,
+    patch: WHITESPACE_PATCH,
+    viewed: null,
+    blameUrl: null,
+};
+
+/** Snapshot with one stop containing the given anchors, plus Other. */
+function whitespaceSnapshot(anchors: readonly { side: 'old' | 'new'; start: number; end: number }[]): RouteSnapshot {
+    return {
+        ...SNAPSHOT,
+        stops: [
+            {
+                ...stopOf('s01'),
+                anchors: anchors.map((span) => ({
+                    fileId: WHITESPACE_FILE.fileId,
+                    path: WHITESPACE_FILE.path,
+                    ...span,
+                    collapsed: false,
+                })),
+            },
+            stopOf('other'),
+        ],
+    };
+}
+
+function whitespaceModel(anchors: readonly { side: 'old' | 'new'; start: number; end: number }[]) {
+    return buildRouteModel({
+        snapshot: whitespaceSnapshot(anchors),
+        files: [WHITESPACE_FILE],
+        models: new Map([[WHITESPACE_FILE.fileId, parseFileDiff(toParseRequest(WHITESPACE_FILE))]]),
+    });
+}
+
+describe('whitespace lines outside anchors', () => {
+    it('excludes them from Other and keeps the denominator equal to covered plus uncovered lines', () => {
+        const model = whitespaceModel([
+            { side: 'old', start: 2, end: 2 },
+            { side: 'new', start: 2, end: 3 },
+        ]);
+        const other = model.entries.find((entry) => entry.kind === 'other');
+
+        // The patch has 6 changed lines. Two whitespace-only lines outside anchors are excluded from the count.
+        expect(model.totals.changed).toBe(4);
+        // Empty new 3 under an anchor counts like a text line. The rule applies only outside anchors.
+        expect(model.totals.covered).toBe(3);
+        expect(model.totals.uncovered).toBe(1);
+        expect(model.totals.covered + model.totals.uncovered).toBe(model.totals.changed);
+        if (other?.kind !== 'other') {
+            throw new Error('model must contain Other');
+        }
+        // Other contains only `delta`, with neither empty new 5 nor the whitespace deletion on old 5.
+        expect(other.view.files[0]?.anchors).toEqual([{ side: 'new', start: 6, end: 6 }]);
+        expect(other.view.lines).toBe(1);
+    });
+
+    it('still includes them in viewed marks because reading progress counts patch lines', () => {
+        const model = whitespaceModel([
+            { side: 'old', start: 2, end: 2 },
+            { side: 'new', start: 2, end: 3 },
+        ]);
+        const seen = model.entries.reduce(
+            (total, entry) =>
+                total + stopSeenRanges(entry).reduce((sum, range) => sum + (range.end - range.start + 1), 0),
+            0,
+        );
+
+        expect(seen).toBe(WHITESPACE_FILE.additions + WHITESPACE_FILE.deletions);
+    });
+
+    it('hides Other entirely when only these lines remain uncovered', () => {
+        const model = whitespaceModel(FULLY_COVERED);
+
+        expect(model.totals.uncovered).toBe(0);
+        expect(model.totals.changed).toBe(4);
+        expect(model.totals.covered).toBe(4);
+        expect(model.entries.every((entry) => entry.kind === 'stop')).toBe(true);
+        expect(model.stopCount).toBe(1);
+    });
+
+    it('includes them in the file stop without Other so the route completes reading progress', () => {
+        // There is no Other stop, and reading progress counts all 6 changed patch lines:
+        // without whitespace ranges in seen, the file would remain `partial` forever.
+        const model = whitespaceModel(FULLY_COVERED);
+        const state = whitespaceReadState(model);
+
+        expect(model.entries.every((entry) => entry.kind === 'stop')).toBe(true);
+        expect(state.seen).toBe(WHITESPACE_FILE.additions + WHITESPACE_FILE.deletions);
+        expect(state.state).toBe('read');
+    });
+
+    it('keeps a partly uncovered file partially read when marking one stop', () => {
+        const model = whitespaceModel([
+            { side: 'old', start: 2, end: 2 },
+            { side: 'new', start: 2, end: 3 },
+        ]);
+        const stop = model.entries.find((entry) => entry.kind === 'stop');
+        if (stop === undefined) {
+            throw new Error('model must contain a stop');
+        }
+
+        // Other takes the whitespace lines. The stop is responsible only for its three lines.
+        expect(readStateOfWhitespace(stopSeenRanges(stop))).toMatchObject({ state: 'partial', seen: 3 });
+    });
+});
+
+/** Anchors covering all changed text lines in the file, leaving only whitespace uncovered. */
+const FULLY_COVERED = [
+    { side: 'old', start: 2, end: 2 },
+    { side: 'new', start: 2, end: 3 },
+    { side: 'new', start: 6, end: 6 },
+] as const;
+
+/** File progress with all route entries marked: their seen ranges are the entire read-state input. */
+function whitespaceReadState(model: RouteModel): FileReadState {
+    return readStateOfWhitespace(model.entries.flatMap((entry) => stopSeenRanges(entry)));
+}
+
+function readStateOfWhitespace(ranges: readonly UiStopSeenRange[]): FileReadState {
+    const changed = changedLinesOf(parseFileDiff(toParseRequest(WHITESPACE_FILE)));
+    if (changed === undefined) {
+        throw new Error('synthetic patch must parse as text');
+    }
+    return readStateOf({
+        file: WHITESPACE_FILE,
+        record: {
+            fileId: WHITESPACE_FILE.fileId,
+            viewed: false,
+            seenRanges: ranges.map(({ side, start, end }) => ({ side, start, end })),
+        },
+        changed,
+    });
+}

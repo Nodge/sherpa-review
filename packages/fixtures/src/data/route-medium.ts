@@ -24,6 +24,8 @@ import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
  * Coverage matches the handoff bar ("862 changed lines · 96% explained · 34 lines not
  * explained"): anchors cover 828 changed lines out of 862, leaving exactly 34 uncovered lines
  * in 3 files: `CODEOWNERS` (5), `ci.yml` (12) and the tail of generated `psp-schema.ts` (17).
+ * UI coverage counts 32 of them (`psp-schema.ts` 15): the whitespace rule excludes 2 empty lines at its tail outside
+ * the anchors from the count (decision log, 2026-08-26).
  * By tier: high 196, medium 327, low 305 lines (the design counts 188/348/292 have the same bar proportions).
  * The `route.test.ts` test recalculates every count from diff patches rather than taking them on trust.
  *

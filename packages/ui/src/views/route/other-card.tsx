@@ -24,6 +24,8 @@ export interface OtherCardProps {
     readonly diff: ReactNode;
     /** Uncovered ranges are still being counted because some diff files have not been parsed. */
     readonly pending: boolean;
+    /** Some files failed to parse, so their uncovered ranges are missing and Other cannot be marked. */
+    readonly parseFailed?: boolean;
     /**
      * The route is still filling (README §8): uncovered ranges are currently unoccupied plan slots,
      * rather than the model's decision. Counts become accurate once the stops arrive.
@@ -52,6 +54,7 @@ export function OtherCard({
     onOpen,
     diff,
     pending,
+    parseFailed = false,
     filling = false,
     failedFiles = 0,
     onRetryFailed,
@@ -82,6 +85,7 @@ export function OtherCard({
                         <StopViewedToggle
                             viewed={viewed}
                             pending={pending}
+                            parseFailed={parseFailed}
                             unfilled={filling}
                             failedViewed={failedViewed}
                             onViewed={onViewed}

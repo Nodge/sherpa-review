@@ -1,5 +1,5 @@
 import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot } from '@sherpa/protocol';
+import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel } from '../diff/model.js';
@@ -19,8 +19,9 @@ import {
 } from './margin-model.js';
 
 /**
- * Route margins count the same totals as the route view: 34 uncovered lines in 3 files
- * of the `medium` fixture (CODEOWNERS 5, ci.yml 12, psp-schema.ts tail 17). If the counts diverge,
+ * Route margins count the same lines as the route view: 32 uncovered lines in 3 files
+ * in the `medium` fixture (.github/CODEOWNERS 5, .github/workflows/ci.yml 12, psp-schema.ts tail 15, with 2 empty tail lines
+ * excluded by the whitespace rule, decision log 2026-08-26). If the counts drift,
  * this test catches it before anyone has to spot it in a screenshot.
  */
 
@@ -54,10 +55,10 @@ function fileOf(path: string): RouteMarginFile {
 }
 
 describe('route in full diff margins', () => {
-    it('uncovered totals match the route: 34 lines in 3 files', () => {
+    it('uncovered counts match the route: 32 lines in 3 files', () => {
         const model = build();
 
-        expect(model.uncoveredLines).toBe(34);
+        expect(model.uncoveredLines).toBe(32);
         expect(model.uncoveredFiles).toBe(3);
         expect(model.pendingFiles).toBe(0);
         expect(model.failedFiles).toBe(0);
@@ -68,7 +69,7 @@ describe('route in full diff margins', () => {
             .map((entry) => [entry.name.slice(entry.name.lastIndexOf('/') + 1), entry.lines]);
 
         expect(uncovered).toEqual([
-            ['psp-schema.ts', 17],
+            ['psp-schema.ts', 15],
             ['CODEOWNERS', 5],
             ['ci.yml', 12],
         ]);
@@ -115,7 +116,7 @@ describe('route in full diff margins', () => {
         const schema = fileOf('services/orders/src/payments/generated/psp-schema.ts');
 
         expect(schema.stops.length).toBeGreaterThan(0);
-        expect(schema.uncoveredLines).toBe(17);
+        expect(schema.uncoveredLines).toBe(15);
         expect(marginBadgeLabel(schema)).toContain(`explained in ${schema.stops[0]?.planLabel ?? ''} · `);
     });
 
@@ -169,7 +170,7 @@ describe('route in full diff margins', () => {
 
     it('counts lines and files in the footer note and says it is counting until parsing finishes', () => {
         expect(marginFooterNote(build())).toBe(
-            'The hatch means the range has no route stop. 34 lines in 3 files.',
+            'The hatch means the range has no route stop. 32 lines in 3 files.',
         );
 
         const pending = build(SNAPSHOT, new Map());
@@ -219,5 +220,81 @@ describe('route in full diff margins', () => {
                 { side: 'old', start: 4, end: 4 },
             ]),
         ).toBe('10 lines have no route stop');
+    });
+
+    it('does not hatch empty or whitespace-only lines outside stops', () => {
+        // The same synthetic diff as in `route-model.test`: old 2 and new 2–3 are under anchors,
+        // outside anchors are `delta` on new 6, empty new 5 and deleted whitespace on old 5.
+        const file: FileDiff = {
+            fileId: 'ws',
+            path: 'src/ws.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            generated: false,
+            additions: 4,
+            deletions: 2,
+            patch: ['@@ -1,6 +1,8 @@', ' alpha', '-old-one', '+new-one', '+', ' beta', '+  ', '+delta', ' gamma', '-\t', ' omega', ''].join('\n'),
+            viewed: null,
+            blameUrl: null,
+        };
+        const first = SNAPSHOT.stops.find((stop) => stop.id === 's01');
+        if (first === undefined) {
+            throw new Error('fixture snapshot has no stop s01');
+        }
+        const snapshot: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: [
+                {
+                    ...first,
+                    anchors: [
+                        { fileId: file.fileId, path: file.path, side: 'old', start: 2, end: 2, collapsed: false },
+                        { fileId: file.fileId, path: file.path, side: 'new', start: 2, end: 3, collapsed: false },
+                    ],
+                },
+            ],
+        };
+        const margin = buildRouteMargin({
+            snapshot,
+            files: [file],
+            models: new Map([[file.fileId, parseFileDiff(toParseRequest(file))]]),
+        });
+
+        expect(margin.files.get(file.fileId)?.uncovered).toEqual([{ side: 'new', start: 6, end: 6 }]);
+        expect(margin.uncoveredLines).toBe(1);
+        expect(marginFooterNote(margin)).toBe('The hatch means the range has no route stop. 1 line in 1 file.');
+    });
+
+    it('gives no outside-route badge to a file with only whitespace changes', () => {
+        // An empty added line and deleted whitespace leave nothing to place in the route,
+        // and a hatched badge would link to Other, which does not contain this file.
+        const file: FileDiff = {
+            fileId: 'blank',
+            path: 'src/blank.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            generated: false,
+            additions: 1,
+            deletions: 1,
+            patch: ['@@ -1,3 +1,3 @@', ' alpha', '+', '-\t', ' omega', ''].join('\n'),
+            viewed: null,
+            blameUrl: null,
+        };
+        const margin = buildRouteMargin({
+            snapshot: { ...SNAPSHOT, stops: SNAPSHOT.stops.filter((stop) => stop.tier === 'other') },
+            files: [file],
+            models: new Map([[file.fileId, parseFileDiff(toParseRequest(file))]]),
+        });
+        const view = margin.files.get(file.fileId);
+        if (view === undefined) {
+            throw new Error('margin model has no synthetic file');
+        }
+
+        expect(view.uncoveredLines).toBe(0);
+        expect(view.changed).toBe(false);
+        expect(marginBadgeShown(view)).toBe(false);
+        expect(margin.uncoveredFiles).toBe(0);
+        expect(marginFooterNote(margin)).toBeNull();
     });
 });

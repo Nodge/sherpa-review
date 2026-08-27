@@ -11,8 +11,9 @@
 
 .route {
     /*
-     * Sticky toolbar height: 2 rows, the second being the coverage strip. It offsets
-     * the sticky stop column. One value per view avoids hunting through files when the toolbar changes.
+     * Sticky toolbar height sets the origin for the sticky stop column. The toolbar
+     * measures itself (`ResizeObserver`) and sets it here as an inline style. This is a 2-line fallback
+     * with the coverage bar so the column stays in place until the first measurement.
      */
     --route-toolbar-height: 99px;
 
@@ -240,7 +241,9 @@
 
 .route-stop__side {
     position: sticky;
-    top: var(--route-toolbar-height);
+    /* Gap below the toolbar, a deliberate change from the mockup (decisions.md, #38): without it the stop header
+       merges with the coverage bar. */
+    top: calc(var(--route-toolbar-height) + var(--space-inner));
     align-self: start;
     /* Reserve space for the accent rule on bar segment hover so it does not shift the layout. */
     padding-left: var(--space-inner);
@@ -313,25 +316,6 @@
     color: var(--text-dim);
 }
 
-/* Header actions: hidden at rest, shown on hover and focus within (SPEC §2.9). */
-.route-stop__action {
-    flex: none;
-    padding: 0;
-    white-space: nowrap;
-    border: 0;
-    background: none;
-    font-size: var(--font-size-secondary);
-    color: var(--text-muted);
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity var(--motion-hover) var(--motion-hover-ease);
-}
-
-.route-stop:hover .route-stop__action,
-.route-stop:focus-within .route-stop__action {
-    opacity: 1;
-}
-
 .route-stop__comments {
     display: flex;
     align-items: center;
@@ -350,6 +334,8 @@
     border-radius: var(--radius-rule);
 }
 
+/* The stop header mark is a bordered pill. Its box and states are shared with the file
+   card, in `components/viewed-toggle.css`. */
 .route-stop__viewed {
     display: flex;
     align-items: center;
@@ -462,8 +448,7 @@
     color: var(--text-dim);
 }
 
-.route-stop__kept,
-.route-stop__hint {
+.route-stop__kept {
     margin: 11px 0 0;
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
