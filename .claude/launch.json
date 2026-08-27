@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@sherpa/ui", "dev", "--port", "5199", "--strictPort"],
       "port": 5199
+    },
+    {
+      "name": "sherpa-ui-wt3",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "/Users/alice/Sites/sherpa-wt-m2f-t7-t9", "--filter", "@sherpa/ui", "dev", "--port", "5399", "--strictPort"],
+      "port": 5399
     }
   ]
 }

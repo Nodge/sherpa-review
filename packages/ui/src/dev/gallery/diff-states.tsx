@@ -13,7 +13,7 @@ import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
 import { DiffFileList } from '../../diff-view/file-list.tsx';
 import type { DiffMode, DiffViewStore } from '../../diff-view/store.js';
-import { createDiffViewStore } from '../../diff-view/store.js';
+import { createDiffViewStore, fileCollapseReason } from '../../diff-view/store.js';
 import type { ExpandAmount } from '../../diff-view/expand.js';
 import '../../diff-view/diff-view.css';
 
@@ -29,6 +29,10 @@ interface CardStateProps {
     readonly mode?: DiffMode;
     readonly expansion?: ExpandAmount;
     readonly viewed?: boolean;
+    /** Explicit manual choice: true collapses, false expands. */
+    readonly collapsed?: boolean;
+    /** Generated file: expand by hand → viewed → un-pin, ending up expanded again. */
+    readonly restoreAfterUnmark?: boolean;
     /** Selected range: hunk number in the file and lines within it. */
     readonly selection?: { hunk: number; from: number; to: number };
     /** File opened despite the size-based collapse. */
@@ -54,6 +58,8 @@ function CardState({
     mode = 'unified',
     expansion = 0,
     viewed,
+    collapsed,
+    restoreAfterUnmark = false,
     selection,
     opened,
     keptInView = false,
@@ -64,7 +70,11 @@ function CardState({
     const contentAvailable = data.pr.capabilities.fileContent;
 
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: [file], storage: null });
+        const created = createDiffViewStore({
+            files: [file],
+            storage: null,
+            ...(collapsed === undefined ? {} : { collapsed: new Map([[file.fileId, collapsed]]) }),
+        });
         created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         if (contentAvailable) {
             created.setContent(file.fileId, fileContentOf(file));
@@ -73,7 +83,12 @@ function CardState({
         if (expansion !== 0) {
             created.expand(file.fileId, expansion);
         }
-        if (viewed === true) {
+        if (restoreAfterUnmark) {
+            created.revealFile(file.fileId);
+            created.markViewed(file.fileId, true);
+            created.revealFile(file.fileId);
+            created.markViewed(file.fileId, false);
+        } else if (viewed === true) {
             created.markViewed(file.fileId, true);
         }
         if (opened === true) {
@@ -95,7 +110,7 @@ function CardState({
             created.extendSelection(file.fileId, toKey);
         }
         return created;
-    }, [contentAvailable, expansion, file, mode, opened, selection, viewed]);
+    }, [collapsed, contentAvailable, expansion, file, mode, opened, restoreAfterUnmark, selection, viewed]);
 
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const actions = useMemo(() => galleryActions(store), [store]);
@@ -109,6 +124,10 @@ function CardState({
             contentAvailable={contentAvailable}
             expansion={snapshot.expansion.get(file.fileId) ?? 0}
             read={snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null })}
+            collapseReason={fileCollapseReason(snapshot, file)}
+            onToggleCollapse={() => {
+                store.toggleFileCollapse(file.fileId);
+            }}
             opened={snapshot.opened.has(file.fileId)}
             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
             keptInView={keptInView}
@@ -258,8 +277,29 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
     },
     {
         id: 'diff-viewed',
-        title: 'marked viewed',
+        title: 'collapsed by the "Viewed" mark',
         render: () => <CardState fixture="medium" path={ORDER} viewed />,
+    },
+    {
+        id: 'diff-collapsed-manual',
+        title: 'collapsed by hand with a click on the header',
+        render: () => <CardState fixture="medium" path={ORDER} collapsed />,
+    },
+    {
+        id: 'diff-collapsed-generated',
+        title: 'generated file collapsed by default',
+        render: () => <CardState fixture="medium" path="services/orders/src/payments/generated/psp-schema.ts" />,
+    },
+    {
+        id: 'diff-unmark-restores-expansion',
+        title: 'clearing the mark restored the previous expanded state of the generated file',
+        render: () => (
+            <CardState
+                fixture="medium"
+                path="services/orders/src/payments/generated/psp-schema.ts"
+                restoreAfterUnmark
+            />
+        ),
     },
     {
         id: 'diff-expand',
@@ -304,13 +344,20 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
     {
         id: 'diff-collapsed',
         title: 'file above the collapse threshold',
-        render: () => <CardState fixture="edge" path="services/orders/src/payments/generated/psp-client.ts" />,
+        render: () => (
+            <CardState fixture="edge" path="services/orders/src/payments/generated/psp-client.ts" collapsed={false} />
+        ),
     },
     {
         id: 'diff-collapsed-open',
         title: 'file above the collapse threshold, opened by hand',
         render: () => (
-            <CardState fixture="edge" path="services/orders/src/payments/generated/psp-client.ts" opened />
+            <CardState
+                fixture="edge"
+                path="services/orders/src/payments/generated/psp-client.ts"
+                collapsed={false}
+                opened
+            />
         ),
     },
     {
@@ -337,7 +384,7 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
     },
     {
         id: 'diff-list-large',
-        title: 'virtualized list, 64 files',
+        title: 'virtualized list, 64 files, generated files collapsed',
         render: () => <ListState fixture="large" />,
     },
 ];

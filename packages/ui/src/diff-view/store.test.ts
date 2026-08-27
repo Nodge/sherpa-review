@@ -1,7 +1,7 @@
 import type { FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { createDiffViewStore, SPLIT_MIN_WIDTH } from './store.js';
+import { createDiffViewStore, fileCollapseReason, SPLIT_MIN_WIDTH } from './store.js';
 
 /** Diff view state: mode, width, marks, context expansion, and selection. */
 
@@ -48,6 +48,107 @@ describe('diff view store', () => {
         expect([readState.get('a'), readState.get('b'), readState.get('c'), readState.get('d')].map(
             (state) => state?.state,
         )).toEqual(['read', 'unread', 'unread', 'read']);
+    });
+
+    it('keeps manual collapse and expansion in a separate persisted layer', () => {
+        const target = file('a');
+        const store = createDiffViewStore({ files: [target], storage: null });
+
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        store.toggleFileCollapse('a');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('manual');
+        expect(store.getSnapshot().collapsePreferences).toEqual(new Map([['a', true]]));
+
+        store.toggleFileCollapse('a');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().collapsePreferences).toEqual(new Map([['a', false]]));
+    });
+
+    it('viewed collapse is temporary: clearing the mark restores the previous manual expansion', () => {
+        const target = file('a');
+        const store = createDiffViewStore({
+            files: [target],
+            storage: null,
+            collapsed: new Map([['a', false]]),
+        });
+
+        store.markViewed('a', true);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
+        store.toggleFileCollapse('a');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().collapseExpandedViewed).toEqual(new Set(['a']));
+
+        store.markViewed('a', false);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().collapseExpanded).toEqual(new Set(['a']));
+        expect(store.getSnapshot().collapseExpandedViewed).toEqual(new Set());
+    });
+
+    it('read from full coverage also collapses, partial does not', () => {
+        const target = file('a');
+        const store = createDiffViewStore({
+            files: [target],
+            progress: [{ fileId: 'a', viewed: false, seenRanges: [{ side: 'new', start: 1, end: 4 }] }],
+            storage: null,
+        });
+
+        expect(store.getSnapshot().readState.get('a')?.state).toBe('read');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
+
+        store.setProgress([{ fileId: 'a', viewed: false, seenRanges: [{ side: 'new', start: 1, end: 2 }] }]);
+        expect(store.getSnapshot().readState.get('a')?.state).toBe('partial');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+    });
+
+    it('handles the generated-file default separately: manual expansion survives un-pin and returns to default', () => {
+        const target = generated('d');
+        const store = createDiffViewStore({ files: [target], storage: null });
+
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('generated');
+        store.toggleFileCollapse('d');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().collapsePreferences).toEqual(new Map([['d', false]]));
+
+        store.markViewed('d', true);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
+        store.markViewed('d', false);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().readState.get('d')?.state).toBe('unread');
+
+        store.toggleFileCollapse('d');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('generated');
+        expect(store.getSnapshot().collapseExpanded).toEqual(new Set());
+        expect(store.getSnapshot().collapsePreferences).toEqual(new Map());
+    });
+
+    it('manual collapse overrides the generated default, viewed overrides manual collapse', () => {
+        const target = generated('d');
+        const store = createDiffViewStore({
+            files: [target],
+            storage: null,
+            collapsed: new Map([['d', true]]),
+        });
+
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('manual');
+        store.markViewed('d', true);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
+        store.markViewed('d', false);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('manual');
+    });
+
+    it('keeps collapse for >2000 lines as a separate layer over the file formula', () => {
+        const target = { ...file('big'), additions: 2001 };
+        const store = createDiffViewStore({ files: [target], storage: null });
+
+        store.markViewed('big', true);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
+        store.toggleFileCollapse('big');
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().opened.has('big')).toBe(false);
+
+        store.openFile('big');
+        expect(store.getSnapshot().opened.has('big')).toBe(true);
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
     });
 
     it('server progress overrides defaults: a cleared generated-file mark survives loading', () => {

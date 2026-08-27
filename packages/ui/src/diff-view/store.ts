@@ -17,6 +17,7 @@ import type { LineKey, LineSelection } from './selection.js';
  */
 
 export type DiffMode = 'unified' | 'split';
+export type FileCollapseReason = 'viewed' | 'manual' | 'generated';
 
 /** Side by side is unavailable below this width (SPEC §2.6). */
 export const SPLIT_MIN_WIDTH = 1100;
@@ -38,6 +39,14 @@ export interface DiffViewSnapshot {
     readonly progress: ReadonlyMap<string, UiFileProgress>;
     /** Effective read-state for every diff file (SPEC §2.12). */
     readonly readState: ReadonlyMap<string, FileReadState>;
+    /** Manual expansion overriding the generated default. */
+    readonly collapseExpanded: ReadonlySet<string>;
+    /** Temporary expansion of a viewed file from its summary row. */
+    readonly collapseExpandedViewed: ReadonlySet<string>;
+    /** Manual collapse of a regular file. */
+    readonly collapseCollapsed: ReadonlySet<string>;
+    /** Reviewer's explicit choice for persistence: true to collapse, false to expand. */
+    readonly collapsePreferences: ReadonlyMap<string, boolean>;
     /** Files the reviewer opened by hand despite the size-based fold (SPEC §2.13). */
     readonly opened: ReadonlySet<string>;
     /** Whitespace-only lines the reviewer explicitly expanded. */
@@ -62,6 +71,10 @@ export interface DiffViewStore {
     readonly markViewed: (fileId: string, viewed: boolean) => void;
     /** Roll back an optimistic mark: `null` means no record existed before it. */
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
+    /** Toggles manual collapse using the same layer formula as route stops (SPEC §2.9). */
+    readonly toggleFileCollapse: (fileId: string) => void;
+    /** Prepare a collapsed file for navigation from the tree, a link, or search. */
+    readonly revealFile: (fileId: string) => void;
     readonly openFile: (fileId: string) => void;
     readonly showWhitespace: (fileId: string) => void;
     readonly beginSelection: () => void;
@@ -78,6 +91,8 @@ export interface DiffViewStoreOptions {
     readonly progress?: readonly UiFileProgress[];
     /** Storage for the mode choice. Tests and the gallery replace it. */
     readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+    /** Explicit manual collapse choices already read from per-PR storage. */
+    readonly collapsed?: ReadonlyMap<string, boolean>;
 }
 
 function readDiffMode(storage: DiffViewStoreOptions['storage']): DiffMode {
@@ -87,6 +102,27 @@ function readDiffMode(storage: DiffViewStoreOptions['storage']): DiffMode {
         // Browser policy may block localStorage. That must not crash the view.
         return 'unified';
     }
+}
+
+type FileCollapseSnapshot = Pick<
+    DiffViewSnapshot,
+    'readState' | 'collapseExpanded' | 'collapseExpandedViewed' | 'collapseCollapsed'
+>;
+
+/** Final collapse reason per the SPEC §2.9 formula. Collapse for >2000 lines is counted separately. */
+export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDiff): FileCollapseReason | null {
+    const read = snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null });
+    // The generated default works like the low tier, not a viewed mark. An explicit expansion must survive un-pin.
+    if (read.state === 'read' && !read.generatedDefault) {
+        return snapshot.collapseExpandedViewed.has(file.fileId) ? null : 'viewed';
+    }
+    if (snapshot.collapseCollapsed.has(file.fileId)) {
+        return 'manual';
+    }
+    if (file.generated && !snapshot.collapseExpanded.has(file.fileId)) {
+        return 'generated';
+    }
+    return null;
 }
 
 export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStore {
@@ -141,6 +177,12 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
     };
 
     const initialProgress = new Map((options.progress ?? []).map((record) => [record.fileId, record]));
+    const collapsePreferences = new Map(options.collapsed ?? []);
+    const collapseExpanded = new Set<string>();
+    const collapseCollapsed = new Set<string>();
+    for (const [fileId, collapsed] of collapsePreferences) {
+        (collapsed ? collapseCollapsed : collapseExpanded).add(fileId);
+    }
     let snapshot: DiffViewSnapshot = {
         diffMode,
         splitAvailable: true,
@@ -150,6 +192,10 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
         expansion: new Map(),
         progress: initialProgress,
         readState: recomputeAll(initialProgress, new Map()),
+        collapseExpanded,
+        collapseExpandedViewed: new Set(),
+        collapseCollapsed,
+        collapsePreferences,
         opened: new Set(),
         whitespaceShown: new Set(),
         selection: null,
@@ -162,6 +208,29 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
         for (const listener of [...listeners]) {
             listener();
         }
+    };
+
+    const revealFile = (fileId: string): void => {
+        const file = filesById.get(fileId);
+        if (file === undefined) {
+            return;
+        }
+        const reason = fileCollapseReason(snapshot, file);
+        if (reason === null) {
+            return;
+        }
+        if (reason === 'viewed') {
+            update({ collapseExpandedViewed: new Set(snapshot.collapseExpandedViewed).add(fileId) });
+            return;
+        }
+
+        const collapsed = new Set(snapshot.collapseCollapsed);
+        collapsed.delete(fileId);
+        update({
+            collapseExpanded: new Set(snapshot.collapseExpanded).add(fileId),
+            collapseCollapsed: collapsed,
+            collapsePreferences: new Map(snapshot.collapsePreferences).set(fileId, false),
+        });
     };
 
     return {
@@ -228,7 +297,18 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             // Marking changes only the flag: ranges are a separate layer, untouched by the endpoint.
             const seenRanges = snapshot.progress.get(fileId)?.seenRanges ?? [];
             const progress = new Map(snapshot.progress).set(fileId, { fileId, viewed, seenRanges });
-            update({ progress, readState: recomputeOne(fileId, progress) });
+            if (viewed) {
+                update({ progress, readState: recomputeOne(fileId, progress) });
+                return;
+            }
+            // Temporary expansion of a viewed file lasts only while the mark is set.
+            const expandedViewed = new Set(snapshot.collapseExpandedViewed);
+            expandedViewed.delete(fileId);
+            update({
+                progress,
+                readState: recomputeOne(fileId, progress),
+                collapseExpandedViewed: expandedViewed,
+            });
         },
 
         restoreProgress: (fileId, record) => {
@@ -240,6 +320,45 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
             update({ progress, readState: recomputeOne(fileId, progress) });
         },
+
+        toggleFileCollapse: (fileId) => {
+            const file = filesById.get(fileId);
+            if (file === undefined) {
+                return;
+            }
+            if (fileCollapseReason(snapshot, file) !== null) {
+                revealFile(fileId);
+                return;
+            }
+
+            const read = snapshot.readState.get(fileId) ?? readStateOf({ file, record: null });
+            if (read.state === 'read' && !read.generatedDefault) {
+                const expandedViewed = new Set(snapshot.collapseExpandedViewed);
+                if (expandedViewed.delete(fileId)) {
+                    update({ collapseExpandedViewed: expandedViewed });
+                }
+                return;
+            }
+
+            if (file.generated && snapshot.collapseExpanded.has(fileId)) {
+                const expanded = new Set(snapshot.collapseExpanded);
+                const preferences = new Map(snapshot.collapsePreferences);
+                expanded.delete(fileId);
+                preferences.delete(fileId);
+                update({ collapseExpanded: expanded, collapsePreferences: preferences });
+                return;
+            }
+
+            const expanded = new Set(snapshot.collapseExpanded);
+            expanded.delete(fileId);
+            update({
+                collapseExpanded: expanded,
+                collapseCollapsed: new Set(snapshot.collapseCollapsed).add(fileId),
+                collapsePreferences: new Map(snapshot.collapsePreferences).set(fileId, true),
+            });
+        },
+
+        revealFile,
 
         openFile: (fileId) => {
             if (snapshot.opened.has(fileId)) {

@@ -315,7 +315,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'full-diff-tree-large',
-        title: 'large tree, 64 files (virtualization)',
+        title: '64 files: 8 generated files collapsed throughout, virtualized list',
         render: () => <WorkspaceState fixture="large" preloadModels={false} />,
     },
     {

@@ -141,6 +141,11 @@ describe('card height estimate', () => {
         expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'split')).toBe(28 * 20);
     });
 
+    it('knows about viewed, manual and generated folds from the first frame', () => {
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified', true)).toBe(32);
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'split', true)).toBe(32);
+    });
+
     it('uses a single-line notice for binary files, files without a patch and files collapsed by size', () => {
         expect(estimateBodyHeight(file({ binary: true, patch: null }), 'unified')).toBe(32);
         expect(estimateBodyHeight(file({ patch: null }), 'unified')).toBe(32);

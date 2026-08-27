@@ -11,7 +11,7 @@ import type { ExpandAmount } from './expand.js';
 import { expandFileContext, remainingHiddenLines } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 import { parseLineKey } from './selection.js';
-import type { DiffMode } from './store.js';
+import type { DiffMode, FileCollapseReason } from './store.js';
 
 /**
  * File card (README §1 "Right column: one card per hunk", §10): sticky header with the name,
@@ -42,6 +42,8 @@ export interface FileCardActions {
     readonly onExpand: (fileId: string, amount?: ExpandAmount) => Promise<Feedback>;
     /** Retry patch parsing after a worker failure. */
     readonly onRetryParse: (fileId: string) => void;
+    /** Full diff only. The route omits this and keeps its stop behaviour. */
+    readonly onToggleCollapse?: ((fileId: string) => void) | undefined;
     readonly onOpenFile: (fileId: string) => void;
     readonly onShowWhitespace: (fileId: string) => void;
     readonly onSelectStart: (fileId: string, key: LineKey, extend: boolean) => void;
@@ -67,6 +69,10 @@ export interface FileCardProps {
     readonly expansion: ExpandAmount;
     /** File reading progress (SPEC §2.12): box state and tooltip counts. */
     readonly read: FileReadState;
+    /** Collapse reason per SPEC §2.9. null means the manual/read/generated layer is expanded. */
+    readonly collapseReason?: FileCollapseReason | null;
+    /** Toggles manual/read/generated collapse. Without it, the header keeps its previous behaviour (Route). */
+    readonly onToggleCollapse?: (() => void) | undefined;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
     readonly showWhitespace: boolean;
@@ -108,6 +114,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         contentAvailable,
         expansion,
         read,
+        collapseReason = null,
+        onToggleCollapse,
         opened,
         showWhitespace,
         keptInView = false,
@@ -137,7 +145,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         counts === undefined
             ? (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions)
             : counts.additions + counts.deletions;
-    const collapsed = !opened && changed > COLLAPSE_THRESHOLD;
+    const sizeCollapsed = !opened && changed > COLLAPSE_THRESHOLD;
 
     const run = (action: Promise<Feedback>): void => {
         void action.then(setHint, (error: unknown) => {
@@ -178,7 +186,21 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             id={`file-${file.fileId}`}
             data-file={file.fileId}
         >
-            <header className="file-card__header">
+            <header
+                className={`file-card__header${onToggleCollapse === undefined ? '' : ' file-card__header--collapsible'}`}
+                onClick={(event) => {
+                    const target = event.target;
+                    if (
+                        onToggleCollapse === undefined ||
+                        !(target instanceof Element) ||
+                        target.closest('button, a, .route-badge') !== null ||
+                        window.getSelection()?.isCollapsed === false
+                    ) {
+                        return;
+                    }
+                    onToggleCollapse();
+                }}
+            >
                 <FileName file={file} />
                 <span className="file-card__counts">
                     <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions)}</span>
@@ -241,7 +263,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 />
             </header>
 
-            {routeStrips}
+            {collapseReason === null ? routeStrips : null}
 
             {threadsUnderHeader}
 
@@ -273,15 +295,25 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 </p>
             )}
 
-            <Notices
-                model={shown}
-                file={file}
-                onOpenInEditor={() => {
-                    run(actions.onOpenInEditor(file.path));
-                }}
-            />
+            {collapseReason === null ? (
+                <Notices
+                    model={shown}
+                    file={file}
+                    onOpenInEditor={() => {
+                        run(actions.onOpenInEditor(file.path));
+                    }}
+                />
+            ) : null}
 
-            {parseError !== null && model === null ? (
+            {collapseReason !== null ? (
+                <CollapsedFileSummary
+                    file={file}
+                    reason={collapseReason}
+                    onExpand={() => {
+                        onToggleCollapse?.();
+                    }}
+                />
+            ) : parseError !== null && model === null ? (
                 <p className="file-card__notice">
                     diff failed to parse: {parseError}
                     <button
@@ -294,7 +326,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         Retry
                     </button>
                 </p>
-            ) : collapsed ? (
+            ) : sizeCollapsed ? (
                 <button
                     type="button"
                     className="file-card__collapsed"
@@ -326,6 +358,31 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         </article>
     );
 });
+
+function CollapsedFileSummary({
+    file,
+    reason,
+    onExpand,
+}: {
+    file: FileDiff;
+    reason: FileCollapseReason;
+    onExpand: () => void;
+}) {
+    const text =
+        reason === 'viewed' ? 'viewed' : reason === 'manual' ? 'collapsed by hand' : 'generated file';
+    return (
+        <button type="button" className="file-card__collapsed file-card__collapsed--file" onClick={onExpand}>
+            <span className="file-card__collapsed-mark" aria-hidden="true">
+                ⌄
+            </span>
+            <span className="file-card__add">+{formatCount(file.additions)}</span>
+            <span className="file-card__del">−{formatCount(file.deletions)}</span>
+            <span>· {text}</span>
+            <span className="file-card__collapsed-spacer" />
+            <span className="file-card__collapsed-hint">click to expand the lines</span>
+        </button>
+    );
+}
 
 function FileName({ file }: { file: FileDiff }) {
     const cut = file.path.lastIndexOf('/');
