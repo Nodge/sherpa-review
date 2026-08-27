@@ -25,10 +25,7 @@ export interface PrHeaderDefaultProps {
     readonly additions: number;
     readonly deletions: number;
     readonly files: number;
-    /**
-     * Audit-scope lens for the shortcut chip. null means no lens or an unpublished scope
-     * (`available: false`). In that case there is no chip, and the select item stays disabled.
-     */
+    /** Audit scope lens for the shortcut chip, visible only when `available && count > 0`. */
     readonly pci: FileFilter | null;
     readonly pciActive: boolean;
     readonly onTogglePci: () => void;
@@ -81,21 +78,15 @@ function DefaultHeader({
                 <span className="pr-header__branches">
                     {pr.toBranch} ← {pr.fromBranch}
                 </span>
-                {pci === null ? null : (
+                {/* Decision #11: an empty or unavailable PCI scope leaves no chip in the header. */}
+                {pci === null || !pci.available || pci.count === 0 ? null : (
                     <>
                         <Separator />
-                        {/* SPEC §4.2: the scope exists but this PR does not touch it. The chip is disabled
-                            with a count of 0. The select item remains selectable. */}
                         <button
                             type="button"
                             className={`pr-header__pci${pciActive ? ' is-active' : ''}`}
-                            disabled={pci.count === 0}
                             aria-pressed={pciActive}
-                            title={
-                                pci.count === 0
-                                    ? 'this PR has no audit-scope files'
-                                    : 'Show only the PCI DSS audit-scope files'
-                            }
+                            title="Show only files in the PCI DSS audit scope"
                             onClick={onTogglePci}
                         >
                             PCI DSS · {pci.count} {plural(pci.count, 'file', 'files', 'files')}

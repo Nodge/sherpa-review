@@ -38,8 +38,10 @@ const SNAPSHOT: RouteSnapshot = (() => {
 
 interface FakeProgress {
     readonly revision: number;
+    readonly stopWrites: readonly { stopId: string; viewed: boolean }[];
     readonly read: () => UiFileProgress[];
     readonly readStops: () => UiStopProgress[];
+    readonly rangesForStop: (stopId: string) => readonly UiStopSeenRange[];
     readonly setStopViewed: (stopId: string, viewed: boolean, ranges: readonly UiStopSeenRange[]) => number;
     readonly setFileViewed: (fileId: string, viewed: boolean) => number;
     /** Server restart: database data survives, but the revision counter starts over. */
@@ -51,11 +53,13 @@ function fakeProgress(): FakeProgress {
     const files = new Map<string, boolean>();
     const stops = new Map<string, boolean>();
     const ranges = new Map<string, readonly UiStopSeenRange[]>();
+    const stopWrites: { stopId: string; viewed: boolean }[] = [];
     let revision = 0;
     return {
         get revision() {
             return revision;
         },
+        stopWrites,
         read: () => {
             const byFile = new Map<string, UiFileProgress>();
             for (const [fileId, viewed] of files) {
@@ -77,7 +81,9 @@ function fakeProgress(): FakeProgress {
             return [...byFile.values()];
         },
         readStops: () => [...stops].map(([stopId, viewed]) => ({ stopId, viewed })),
+        rangesForStop: (stopId) => ranges.get(stopId) ?? [],
         setStopViewed: (stopId, viewed, next) => {
+            stopWrites.push({ stopId, viewed });
             stops.set(stopId, viewed);
             ranges.set(stopId, viewed ? next : []);
             revision += 1;
@@ -85,6 +91,15 @@ function fakeProgress(): FakeProgress {
         },
         setFileViewed: (fileId, viewed) => {
             files.set(fileId, viewed);
+            if (!viewed) {
+                const affected = [...ranges]
+                    .filter(([, list]) => list.some((range) => range.fileId === fileId))
+                    .map(([stopId]) => stopId);
+                for (const stopId of affected) {
+                    stops.set(stopId, false);
+                    ranges.set(stopId, []);
+                }
+            }
             revision += 1;
             return revision;
         },
@@ -100,6 +115,8 @@ interface Mounted {
     readonly restartServer: () => void;
     readonly session: SessionStore;
     readonly progress: FakeProgress;
+    /** The same file endpoint the shared writer calls from Full diff. */
+    readonly setFileViewedDirect: (fileId: string, viewed: boolean) => Promise<void>;
     /** Advance time: loads, diff parsing, and progress refetches complete across frames. */
     readonly settle: () => Promise<void>;
 }
@@ -269,6 +286,12 @@ function mount(options: MountOptions = {}): Mounted {
         session,
         progress,
         settle,
+        setFileViewedDirect: async (fileId, viewed) => {
+            await globalThis.fetch(UI_ENDPOINTS.reviewFileViewed, {
+                method: 'POST',
+                body: JSON.stringify({ fileId, viewed }),
+            });
+        },
         restartServer: () => {
             progress.restart();
             pushProgressEvent(0);
@@ -292,6 +315,10 @@ function viewedToggle(section: HTMLElement): HTMLButtonElement {
     return toggle;
 }
 
+function fileViewedToggles(section: HTMLElement): HTMLButtonElement[] {
+    return [...section.querySelectorAll<HTMLButtonElement>('.file-card__viewed')];
+}
+
 /** How many diff files the reader considers read, the same count shown by the action bar. */
 function filesRead(host: HTMLElement): string {
     return host.querySelector('.review-action-bar__progress')?.textContent ?? '';
@@ -308,8 +335,8 @@ describe('marking a stop updates its file read-state boxes', () => {
         });
         await view.settle();
 
-        // Stop 01 explains 2 complete files, so they must become read.
-        expect(view.progress.read().filter((record) => record.seenRanges.length > 0)).toHaveLength(2);
+        // Stop 01 explains two whole files, so its own record must cover them.
+        expect(new Set(view.progress.rangesForStop('s01').map((range) => range.fileId)).size).toBe(2);
         expect(filesRead(view.host)).toBe('6 / 18 files');
     });
 
@@ -339,7 +366,7 @@ describe('marking a stop updates its file read-state boxes', () => {
         });
         await view.settle();
 
-        expect(view.progress.read().every((record) => record.seenRanges.length === 0)).toBe(true);
+        expect(view.progress.rangesForStop('s01')).toEqual([]);
         expect(filesRead(view.host)).toBe('4 / 18 files');
     });
 
@@ -369,6 +396,110 @@ describe('marking a stop updates its file read-state boxes', () => {
         expect(filesRead(view.host)).toBe('6 / 18 files');
     });
 
+    it('marking the last files automatically marks and collapses the stop without duplicate writes', async () => {
+        const view = mount();
+        await view.settle();
+        const section = stopSection(view.host, 's01');
+        const toggles = fileViewedToggles(section);
+        expect(toggles.length).toBeGreaterThan(0);
+
+        act(() => {
+            for (const toggle of toggles) {
+                toggle.click();
+            }
+        });
+        await view.settle();
+
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: true });
+        expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).not.toBeNull();
+        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+        await view.settle();
+        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+
+        act(() => {
+            stopSection(view.host, 's01')
+                .querySelector<HTMLButtonElement>('.route-collapsed--viewed')
+                ?.click();
+        });
+        const firstFile = fileViewedToggles(stopSection(view.host, 's01'))[0];
+        if (firstFile === undefined) {
+            throw new Error('expanding a viewed stop must restore the file card');
+        }
+        act(() => {
+            firstFile.click();
+        });
+        await view.settle();
+
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
+        expect(view.progress.rangesForStop('s01')).toEqual([]);
+        expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).toBeNull();
+        expect(fileViewedToggles(stopSection(view.host, 's01')).length).toBeGreaterThan(0);
+    });
+
+    it('does not undo manual unmarking until coverage is lost and regained', async () => {
+        const view = mount();
+        await view.settle();
+        const toggles = fileViewedToggles(stopSection(view.host, 's01'));
+        expect(toggles.length).toBeGreaterThan(0);
+
+        act(() => {
+            for (const toggle of toggles) {
+                toggle.click();
+            }
+        });
+        await view.settle();
+        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+
+        act(() => {
+            viewedToggle(stopSection(view.host, 's01')).click();
+        });
+        await view.settle();
+
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
+        expect(view.progress.rangesForStop('s01')).toEqual([]);
+        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+
+        const firstFile = fileViewedToggles(stopSection(view.host, 's01'))[0];
+        if (firstFile === undefined) {
+            throw new Error('the files of a stop must be visible after it is unmarked');
+        }
+        act(() => {
+            firstFile.click();
+        });
+        await view.settle();
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
+
+        act(() => {
+            fileViewedToggles(stopSection(view.host, 's01'))[0]?.click();
+        });
+        await view.settle();
+
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: true });
+        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(2);
+    });
+
+    it('a direct file write, as in Full diff, clears the stop mark', async () => {
+        const view = mount();
+        await view.settle();
+        act(() => {
+            viewedToggle(stopSection(view.host, 's01')).click();
+        });
+        await view.settle();
+        const fileId = view.progress.rangesForStop('s01')[0]?.fileId;
+        if (fileId === undefined) {
+            throw new Error('stop s01 must write at least one file range');
+        }
+
+        await act(async () => {
+            await view.setFileViewedDirect(fileId, false);
+        });
+        await view.settle();
+
+        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
+        expect(view.progress.rangesForStop('s01')).toEqual([]);
+        expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).toBeNull();
+    });
+
     it('does not silently mark a stop when a file failed to parse', async () => {
         const failing = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0]?.fileId ?? '';
         expect(failing).not.toBe('');
@@ -384,8 +515,8 @@ describe('marking a stop updates its file read-state boxes', () => {
         });
         await view.settle();
 
-        // Neither a mark nor a partial set of ranges: either write would misrepresent progress.
-        expect(view.progress.readStops()).toEqual([]);
-        expect(view.progress.read()).toEqual([]);
+        // No mark or partial set of s01 ranges. Writing either would misrepresent the state.
+        expect(view.progress.stopWrites.some((write) => write.stopId === 's01')).toBe(false);
+        expect(view.progress.rangesForStop('s01')).toEqual([]);
     });
 });

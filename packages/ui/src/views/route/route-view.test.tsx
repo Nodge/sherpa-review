@@ -95,6 +95,31 @@ function withStops(patch: (snapshot: RouteSnapshot) => RouteSnapshot['stops']): 
     return { ...SNAPSHOT, stops: patch(SNAPSHOT) };
 }
 
+/** Digest assertion anchors lead to s01, while the files in s04 itself remain unchanged. */
+function digestOutsideStopSnapshot(): RouteSnapshot {
+    const target = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0];
+    if (target === undefined) {
+        throw new Error('stop s01 needs an anchor for the derived snapshot');
+    }
+    return withStops((snapshot) =>
+        snapshot.stops.map((stop) =>
+            stop.id !== 's04'
+                ? stop
+                : {
+                      ...stop,
+                      tests: stop.tests.map((claim) =>
+                          claim.kind === 'uncovered'
+                              ? claim
+                              : {
+                                    ...claim,
+                                    anchor: { fileId: target.fileId, path: target.path, line: target.start },
+                                },
+                      ),
+                  },
+        ),
+    );
+}
+
 describe('route view', () => {
     it('renders stops in triage order with numbers fixed by the plan and Other at the end', () => {
         const html = render();
@@ -425,6 +450,24 @@ describe('route view', () => {
         expect(shown).toContain('Hide the test code');
         // The note about hidden test code is absent when the code is expanded.
         expect(shown).not.toContain(DIGEST_NOTE);
+    });
+
+    it('an empty intersection shows a test code link instead of a toggle and an incorrect note', () => {
+        const stop = section(
+            render({
+                snapshot: digestOutsideStopSnapshot(),
+                stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) },
+            }),
+            's04',
+        );
+
+        expect(stop).not.toContain('Show the test code');
+        expect(stop).not.toContain('Hide the test code');
+        expect(stop).not.toContain(DIGEST_NOTE);
+        expect(stop).toContain('class="digest__anchor digest__location"');
+        expect(stop).toContain('test code — in stop 01</button>');
+        // The s04 files do not match assertion files, so no cards are hidden.
+        expect(stop).toContain('file-card');
     });
 
     it('global diff mode applies to expanded test code too (SPEC §2.6)', () => {

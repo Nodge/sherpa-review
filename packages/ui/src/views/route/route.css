@@ -961,6 +961,10 @@
     color: var(--text-dim-strong);
 }
 
+.digest__anchor.digest__location {
+    color: var(--text-dim-strong);
+}
+
 .digest__spacer {
     flex: 1;
 }

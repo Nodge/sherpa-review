@@ -149,6 +149,14 @@ function countSeen(ranges: readonly UiSeenRange[], changed: ChangedLines | undef
 
 type Span = readonly [start: number, end: number];
 
+/** Whether the union of viewed ranges fully covers every required range. */
+export function rangesCover(covered: readonly UiSeenRange[], required: readonly UiSeenRange[]): boolean {
+    const merged = { old: mergeSide(covered, 'old'), new: mergeSide(covered, 'new') };
+    return required.every((range) =>
+        merged[range.side].some(([start, end]) => start <= range.start && end >= range.end),
+    );
+}
+
 function mergeSide(ranges: readonly UiSeenRange[], side: UiSeenRange['side']): Span[] {
     const spans = ranges
         .filter((range) => range.side === side)

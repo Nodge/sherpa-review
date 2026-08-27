@@ -33,7 +33,42 @@ function readySnapshot(): RouteSnapshot {
     return snapshot;
 }
 
-function DigestState({ stops = EMPTY_STOPS, viewed = false }: { stops?: StopsState; viewed?: boolean }) {
+/** Derived state: s04 assertions lead to s01, while the digest stop files stay the same. */
+function digestOutsideStopSnapshot(): RouteSnapshot {
+    const snapshot = readySnapshot();
+    const target = snapshot.stops.find((stop) => stop.id === 's01')?.anchors[0];
+    if (target === undefined) {
+        throw new Error('stop s01 needs an anchor for the derived snapshot');
+    }
+    return {
+        ...snapshot,
+        stops: snapshot.stops.map((stop) =>
+            stop.id !== DIGEST_STOP
+                ? stop
+                : {
+                      ...stop,
+                      tests: stop.tests.map((claim) =>
+                          claim.kind === 'uncovered'
+                              ? claim
+                              : {
+                                    ...claim,
+                                    anchor: { fileId: target.fileId, path: target.path, line: target.start },
+                                },
+                      ),
+                  },
+        ),
+    };
+}
+
+function DigestState({
+    snapshot = readySnapshot(),
+    stops = EMPTY_STOPS,
+    viewed = false,
+}: {
+    snapshot?: RouteSnapshot;
+    stops?: StopsState;
+    viewed?: boolean;
+}) {
     const session = useMemo(
         () => createSessionStore({ initial: { view: 'route', filter: 'all', stops } }),
         [stops],
@@ -56,7 +91,7 @@ function DigestState({ stops = EMPTY_STOPS, viewed = false }: { stops?: StopsSta
                 pr={DATA.pr}
                 diff={DATA.diff}
                 lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
-                snapshot={readySnapshot()}
+                snapshot={snapshot}
                 session={session}
                 store={store}
                 threadStore={threadStore}
@@ -90,5 +125,10 @@ export const M2_T9_STATES: readonly RouteGalleryState[] = [
         id: 'route-digest-viewed',
         title: 'digest viewed: collapsed into a summary row with assertions',
         render: () => <DigestState viewed />,
+    },
+    {
+        id: 'route-digest-outside-stop',
+        title: 'digest: nothing to hide, link row instead of a button',
+        render: () => <DigestState snapshot={digestOutsideStopSnapshot()} />,
     },
 ];

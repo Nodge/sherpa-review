@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import { anchorLabel, buildDigest, claimLabel, resolveAnchor } from './digest.js';
+import { anchorLabel, buildDigest, buildDigestTestCode, claimLabel, resolveAnchor } from './digest.js';
 import { buildRouteModel, stopSeenRanges } from './route-model.js';
 
 /**
@@ -30,9 +30,77 @@ function stop(id: string): RouteStop {
     return found;
 }
 
-function routeModel() {
+function routeModel(snapshot: RouteSnapshot = SNAPSHOT) {
     const models = new Map(DATA.diff.files.map((file) => [file.fileId, parseFileDiff(toParseRequest(file))]));
-    return buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models });
+    return buildRouteModel({ snapshot, files: DATA.diff.files, models });
+}
+
+/** Moves anchors of regular s04 assertions to other entries without changing the stop anchors. */
+function digestTargets(...targetStopIds: readonly string[]): RouteSnapshot {
+    const targets = targetStopIds.map((stopId) => {
+        const anchor = SNAPSHOT.stops.find((candidate) => candidate.id === stopId)?.anchors[0];
+        if (anchor === undefined) {
+            throw new Error(`stop ${stopId} needs an anchor for the digest test`);
+        }
+        return { fileId: anchor.fileId, path: anchor.path, line: anchor.start };
+    });
+    let targetIndex = 0;
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((candidate) =>
+            candidate.id !== 's04'
+                ? candidate
+                : {
+                      ...candidate,
+                      tests: candidate.tests.map((claim) => {
+                          if (claim.kind === 'uncovered') {
+                              return claim;
+                          }
+                          const anchor = targets[targetIndex % targets.length];
+                          targetIndex += 1;
+                          return { ...claim, anchor: anchor ?? null };
+                      }),
+                  },
+        ),
+    };
+}
+
+function digestWithNonTestFile(): RouteSnapshot {
+    const anchor = SNAPSHOT.stops.find((candidate) => candidate.id === 's01')?.anchors[0];
+    if (anchor === undefined) {
+        throw new Error('stop s01 needs an anchor in a non-test file');
+    }
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((candidate) =>
+            candidate.id === 's04' ? { ...candidate, anchors: [...candidate.anchors, anchor] } : candidate,
+        ),
+    };
+}
+
+function digestTestCode(snapshot: RouteSnapshot) {
+    const model = routeModel(snapshot);
+    const entry = model.entries.find((candidate) => candidate.kind === 'stop' && candidate.view.stop.id === 's04');
+    if (entry?.kind !== 'stop') {
+        throw new Error('route model has no digest stop s04');
+    }
+    const digest = buildDigest(entry.view.stop);
+    if (digest === null) {
+        throw new Error('stop s04 must have a digest');
+    }
+    return buildDigestTestCode(
+        digest,
+        model.entries,
+        entry.view.stop.id,
+        entry.view.files.map((file) => file.fileId),
+    );
+}
+
+function anchorLocation(testCode: ReturnType<typeof buildDigestTestCode>) {
+    if (testCode.location?.kind !== 'anchor') {
+        throw new Error('expected a link to another route entry');
+    }
+    return testCode.location;
 }
 
 describe('behavioural digest', () => {
@@ -83,6 +151,96 @@ describe('behavioural digest', () => {
         const uncovered = digest?.footer.find((claim) => claim.anchor !== null)?.anchor ?? null;
         expect(uncovered?.path).toBe('services/orders/src/domain/edit-window.ts');
         expect(digest?.testFileIds.has(uncovered?.fileId ?? '')).toBe(false);
+    });
+
+    it('hides no files for an empty intersection and links to the first entry with test code', () => {
+        const testCode = digestTestCode(digestTargets('s01'));
+        const location = anchorLocation(testCode);
+
+        expect(testCode.hiddenFileIds.size).toBe(0);
+        expect(location.label).toBe('test code — in stop 01');
+        expect(location.target.stopId).toBe('s01');
+    });
+
+    it('reports when the lens hides test files in the same stop without linking to itself', () => {
+        const snapshot = digestWithNonTestFile();
+        const model = routeModel(snapshot);
+        const entry = model.entries.find(
+            (candidate) => candidate.kind === 'stop' && candidate.view.stop.id === 's04',
+        );
+        if (entry?.kind !== 'stop') {
+            throw new Error('route model has no digest stop s04');
+        }
+        const digest = buildDigest(entry.view.stop);
+        if (digest === null) {
+            throw new Error('stop s04 must have a digest');
+        }
+        const visibleFileIds = entry.view.files
+            .filter((file) => !digest.testFileIds.has(file.fileId))
+            .map((file) => file.fileId);
+        expect(visibleFileIds.length).toBeGreaterThan(0);
+
+        const testCode = buildDigestTestCode(digest, model.entries, entry.view.stop.id, visibleFileIds);
+
+        expect(testCode.hiddenFileIds.size).toBe(0);
+        expect(testCode.location?.kind).toBe('hidden-by-lens');
+        expect(testCode.location?.label).toBe('test code hidden by the lens');
+        expect(testCode.location?.anchor.fileId).not.toBe(visibleFileIds[0]);
+        expect(testCode.location).not.toHaveProperty('target');
+    });
+
+    it('has nothing to hide or link to when all assertions are uncovered', () => {
+        const snapshot: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: SNAPSHOT.stops.map((candidate) =>
+                candidate.id === 's04'
+                    ? {
+                          ...candidate,
+                          tests: candidate.tests.map((claim) => ({ ...claim, kind: 'uncovered' as const })),
+                      }
+                    : candidate,
+            ),
+        };
+        const testCode = digestTestCode(snapshot);
+
+        expect(testCode.hiddenFileIds.size).toBe(0);
+        expect(testCode.location).toBeNull();
+    });
+
+    it('links to the first resolvable target across entries with an accurate shared label', () => {
+        const testCode = digestTestCode(digestTargets('s01', 's02'));
+        const location = anchorLocation(testCode);
+
+        expect(testCode.hiddenFileIds.size).toBe(0);
+        expect(location.label).toBe('test code — in other stops');
+        expect(location.target.stopId).toBe('s01');
+    });
+
+    it('uses the accurate Other label when that is the only target', () => {
+        const file = DATA.diff.files.find((candidate) => candidate.path.endsWith('generated/psp-schema.ts'));
+        if (file === undefined) {
+            throw new Error('medium fixture needs generated/psp-schema.ts');
+        }
+        const snapshot: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: SNAPSHOT.stops.map((candidate) =>
+                candidate.id !== 's04'
+                    ? candidate
+                    : {
+                          ...candidate,
+                          tests: candidate.tests.map((claim) =>
+                              claim.kind === 'uncovered'
+                                  ? claim
+                                  : { ...claim, anchor: { fileId: file.fileId, path: file.path, line: 70 } },
+                          ),
+                      },
+            ),
+        };
+        const testCode = digestTestCode(snapshot);
+        const location = anchorLocation(testCode);
+
+        expect(location.label).toBe('test code — in “Other”');
+        expect(location.target.stopId).toBe('other');
     });
 
     it('shows the link as a filename and line while keeping the path in the model', () => {

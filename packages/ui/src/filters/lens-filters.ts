@@ -4,8 +4,8 @@ import type { FileDiff, Lens } from '@sherpa/protocol';
  * Shared file filter model (README §Filters, SPEC §2.7): the same model feeds
  * the toolbar select, left-panel chips, file tree and card list.
  *
- * The list is extensible: the UI computes `all` and `generated`. Everything else comes from host lenses.
- * An unknown lens from a future host must appear in the filter instead of being hidden.
+ * The list is extensible: the UI counts `all` and `generated` itself, everything else arrives as host lenses.
+ * An unknown lens from a future host appears in the filter when it intersects the current PR.
  */
 
 /** Synthetic "all" filter: not a lens, with unrestricted membership. */
@@ -59,6 +59,8 @@ export interface FileFiltersInput {
  * Filter order from README §Filters: all → mine → host lenses in host order → generated.
  * Duplicate ids are dropped: the UI owns `all`/`generated`, the host cannot override them.
  *
+ * Exclude host lenses other than ownership and the synthetic `generated` lens when they have zero files (decision #11).
+ * Ownership remains: without a zone it uses the host reason, without owned files it uses the UI reason.
  * Nothing is preselected regardless of the list: even when all files are mine and the mine count matches
  * the "all" count (SPEC §4.2), `all` remains selected.
  */
@@ -81,29 +83,48 @@ export function buildFileFilters({ files, ownership, extra }: FileFiltersInput):
     ];
 
     const seen = new Set([ALL_FILTER_ID, GENERATED_FILTER_ID]);
-    for (const item of ownership === null ? extra : [ownership, ...extra]) {
+    if (ownership !== null && !seen.has(ownership.id)) {
+        seen.add(ownership.id);
+        filters.push(fromOwnershipLens(ownership, byPath));
+    }
+
+    for (const item of extra) {
         if (seen.has(item.id)) {
             continue;
         }
         seen.add(item.id);
-        filters.push(fromLens(item, byPath));
+        const filter = fromLens(item, byPath);
+        if (filter.count > 0) {
+            filters.push(filter);
+        }
     }
 
     const generated = new Set(files.filter((file) => file.generated).map((file) => file.fileId));
-    filters.push({
-        id: GENERATED_FILTER_ID,
-        label: label(GENERATED_FILTER_ID, 'Generated files'),
-        shortLabel: shortLabel(GENERATED_FILTER_ID, 'Generated files'),
-        count: generated.size,
-        // A synthetic filter with no files has nothing to show. Disable it with a count of 0,
-        // just as SPEC §4.2 disables the audit chip. Host lenses remain selectable at zero:
-        // "this PR has no such files" is also an answer, and it must be reachable (SPEC §2.7).
-        available: generated.size > 0,
-        note: generated.size > 0 ? null : 'this PR has no generated files',
-        fileIds: generated,
-    });
+    if (generated.size > 0) {
+        filters.push({
+            id: GENERATED_FILTER_ID,
+            label: label(GENERATED_FILTER_ID, 'Generated files'),
+            shortLabel: shortLabel(GENERATED_FILTER_ID, 'Generated files'),
+            count: generated.size,
+            available: true,
+            note: null,
+            fileIds: generated,
+        });
+    }
 
     return filters;
+}
+
+function fromOwnershipLens(source: Lens, byPath: ReadonlyMap<string, string>): FileFilter {
+    const filter = fromLens(source, byPath);
+    if (!source.available || filter.count > 0) {
+        return filter;
+    }
+    return {
+        ...filter,
+        available: false,
+        note: 'no files of yours in this PR',
+    };
 }
 
 function fromLens(source: Lens, byPath: ReadonlyMap<string, string>): FileFilter {
@@ -144,7 +165,7 @@ export function selectFilter(filters: readonly FileFilter[], id: string | null):
     return found?.available === true ? found : all;
 }
 
-/** Lens by id, even when disabled. The PR header chip needs to know whether a scope exists at all. */
+/** Filter by id within the list rendered by the panel and select. */
 export function findFilter(filters: readonly FileFilter[], id: string): FileFilter | null {
     return filters.find((filter) => filter.id === id) ?? null;
 }

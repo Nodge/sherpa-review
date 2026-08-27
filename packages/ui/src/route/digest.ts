@@ -41,7 +41,8 @@ export interface DigestModel {
     /** Number of assertions discarded by the validator (SPEC §4.3). */
     readonly dropped: number;
     /**
-     * Files the digest hides as test code: those referenced by assertion anchors.
+     * Assertion anchor files are candidates for hiding. The digest only hides their
+     * intersection with its own stop files after the current lens (`buildDigestTestCode`).
      * `uncovered` is excluded because its anchor points to uncovered code, not a test.
      */
     readonly testFileIds: ReadonlySet<string>;
@@ -78,6 +79,85 @@ export interface DigestAnchorTarget {
      * is in the route but the line is absent from its slices, so the jump only reaches the card.
      */
     readonly side: 'old' | 'new' | null;
+}
+
+export type DigestTestCodeLocation =
+    | {
+          readonly kind: 'anchor';
+          readonly label: string;
+          /** First resolvable anchor. The view resolves it again against the current route before jumping. */
+          readonly anchor: DigestAnchorView;
+          readonly target: DigestAnchorTarget;
+      }
+    | {
+          readonly kind: 'hidden-by-lens';
+          readonly label: 'test code hidden by the lens';
+          /** First anchor in the same stop. Following it resets the lens and expands test code. */
+          readonly anchor: DigestAnchorView;
+      };
+
+export interface DigestTestCodeModel {
+    /** Files in the current stop that the toggle can actually hide. */
+    readonly hiddenFileIds: ReadonlySet<string>;
+    /** What to show instead of the toggle when its intersection with stop files is empty. */
+    readonly location: DigestTestCodeLocation | null;
+}
+
+/**
+ * Digest test code behaviour after applying the lens: what is actually hidden and where to link when there is
+ * nothing to hide. Only regular assertions supply the link. `uncovered` explains its own footer.
+ */
+export function buildDigestTestCode(
+    digest: DigestModel,
+    entries: readonly RouteEntry[],
+    fromStopId: string,
+    stopFileIds: readonly string[],
+): DigestTestCodeModel {
+    const hiddenFileIds = new Set(stopFileIds.filter((fileId) => digest.testFileIds.has(fileId)));
+    if (hiddenFileIds.size > 0) {
+        return { hiddenFileIds, location: null };
+    }
+
+    const otherEntries = entries.filter((entry) => entry.view.stop.id !== fromStopId);
+    const resolved = digest.rows.flatMap((claim) => {
+        if (claim.anchor === null) {
+            return [];
+        }
+        const target = resolveAnchor(otherEntries, fromStopId, claim.anchor.fileId, claim.anchor.line);
+        return target === null ? [] : [{ anchor: claim.anchor, target }];
+    });
+    const first = resolved[0];
+    if (first === undefined) {
+        const ownEntry = entries.find((entry) => entry.view.stop.id === fromStopId);
+        const ownFileIds = new Set(ownEntry?.view.files.map((file) => file.fileId) ?? []);
+        const anchor = digest.rows.find((claim) =>
+            claim.anchor === null ? false : ownFileIds.has(claim.anchor.fileId),
+        )?.anchor;
+        return {
+            hiddenFileIds,
+            location:
+                anchor === undefined || anchor === null
+                    ? null
+                    : { kind: 'hidden-by-lens', label: 'test code hidden by the lens', anchor },
+        };
+    }
+
+    const targetIds = new Set(resolved.map(({ target }) => target.stopId));
+    const targetEntry = entries.find((entry) => entry.view.stop.id === first.target.stopId);
+    if (targetEntry === undefined) {
+        return { hiddenFileIds, location: null };
+    }
+    const label =
+        targetIds.size > 1
+            ? 'test code — in other stops'
+            : targetEntry.kind === 'other'
+              ? 'test code — in "Other"'
+              : `test code — in stop ${targetEntry.view.planLabel}`;
+
+    return {
+        hiddenFileIds,
+        location: { kind: 'anchor', label, anchor: first.anchor, target: first.target },
+    };
 }
 
 /**

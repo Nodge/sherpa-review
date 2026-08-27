@@ -29,6 +29,10 @@ interface StopRow extends SqlRow {
     viewed: number;
 }
 
+interface SourceStopRow extends SqlRow {
+    source_stop_id: string;
+}
+
 /**
  * PR reading progress (T8, requirements §5, decision log 2026-08-22). This PR SQLite DB is the source of truth,
  * independent of the host and tab memory.
@@ -112,7 +116,10 @@ export class ProgressStore {
         return rows.map((row) => ({ stopId: row.stop_id, viewed: row.viewed === 1 }));
     }
 
-    /** Explicit reviewer mark. Returns the current revision for the endpoint response. */
+    /**
+     * An explicit reviewer mark. Clearing a file also clears all stops whose ranges touched it:
+     * this link is stored here and must work outside the route view.
+     */
     setFileViewed(fileId: string, viewed: boolean): number {
         return this.bumped(this.txSetViewed(fileId, viewed));
     }
@@ -173,20 +180,39 @@ export class ProgressStore {
 
     /** `false` means storage is unchanged: the same value was marked again. */
     private setViewedInTransaction(fileId: string, viewed: boolean): boolean {
+        const sourceStops = viewed
+            ? []
+            : (this.db
+                  .prepare(
+                      `SELECT DISTINCT source_stop_id FROM file_seen_ranges
+                       WHERE file_id = ? AND source_stop_id IS NOT NULL`,
+                  )
+                  .all(fileId) as SourceStopRow[]);
         const existing = this.db.prepare('SELECT viewed FROM file_progress WHERE file_id = ?').get(fileId) as
             | ProgressRow
             | undefined;
-        if (existing !== undefined && (existing.viewed === 1) === viewed) {
-            return false;
+        const fileChanged = existing === undefined || (existing.viewed === 1) !== viewed;
+        const updatedAt = this.now().toISOString();
+
+        if (fileChanged) {
+            this.db
+                .prepare(
+                    `INSERT INTO file_progress (file_id, viewed, updated_at) VALUES (?, ?, ?)
+                     ON CONFLICT(file_id) DO UPDATE SET viewed = excluded.viewed, updated_at = excluded.updated_at`,
+                )
+                .run(fileId, viewed ? 1 : 0, updatedAt);
         }
 
-        this.db
-            .prepare(
-                `INSERT INTO file_progress (file_id, viewed, updated_at) VALUES (?, ?, ?)
-                 ON CONFLICT(file_id) DO UPDATE SET viewed = excluded.viewed, updated_at = excluded.updated_at`,
-            )
-            .run(fileId, viewed ? 1 : 0, this.now().toISOString());
-        return true;
+        for (const row of sourceStops) {
+            this.db.prepare('DELETE FROM file_seen_ranges WHERE source_stop_id = ?').run(row.source_stop_id);
+            this.db
+                .prepare(
+                    `INSERT INTO stop_progress (stop_id, viewed, updated_at) VALUES (?, 0, ?)
+                     ON CONFLICT(stop_id) DO UPDATE SET viewed = 0, updated_at = excluded.updated_at`,
+                )
+                .run(row.source_stop_id, updatedAt);
+        }
+        return fileChanged || sourceStops.length > 0;
     }
 
     /**

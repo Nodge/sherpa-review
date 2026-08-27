@@ -324,7 +324,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'full-diff-zero',
-        title: 'a filter with no files explains why',
+        title: 'hidden lens from URL falls back to "All"',
         render: () => (
             <WorkspaceState
                 fixture="medium"

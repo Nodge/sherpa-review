@@ -95,6 +95,26 @@
     height: 70vh;
 }
 
+.gallery-zero-filters {
+    flex-direction: row;
+    gap: var(--space-card);
+}
+
+.gallery-zero-filters__select {
+    min-width: 290px;
+    align-self: flex-start;
+    padding: var(--space-control);
+    border: 1px solid var(--border-standard);
+    border-radius: var(--radius-card);
+    background: var(--surface-panel);
+}
+
+.gallery-zero-filters__select h2 {
+    margin: 0 0 var(--space-inner);
+    font-size: var(--font-size-section-title);
+    color: var(--text-secondary);
+}
+
 .gallery-agent-popover {
     align-items: flex-end;
     padding: 58px 80px;

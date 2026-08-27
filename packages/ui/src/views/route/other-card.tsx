@@ -43,6 +43,8 @@ export interface OtherCardProps {
     readonly viewed?: boolean;
     readonly onViewed?: (viewed: boolean) => void;
     readonly failedViewed?: boolean | null;
+    /** Accent line flash after navigating to Other. */
+    readonly flash?: boolean;
     /** Highlight from hovering over the hatched coverage strip segment (SPEC §2.4). */
     readonly marked?: boolean;
 }
@@ -62,6 +64,7 @@ export function OtherCard({
     viewed = false,
     onViewed,
     failedViewed = null,
+    flash = false,
     marked = false,
 }: OtherCardProps) {
     const { lines } = view;
@@ -119,6 +122,7 @@ export function OtherCard({
             </div>
 
             <div className="route-stop__diff">
+                {flash ? <div className="route-stop__flash" aria-hidden="true" /> : null}
                 <div className="route-other">
                     <p className="route-other__text">
                         {filling ? (

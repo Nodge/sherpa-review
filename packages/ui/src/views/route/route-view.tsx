@@ -48,9 +48,10 @@ import { readStateOf } from '../../progress/read-state.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import { createStopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
-import { buildDigest, resolveAnchor } from '../../route/digest.js';
+import { buildDigest, buildDigestTestCode, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
 import { generationProgress, snapshotFilling } from '../../route/generation.js';
+import { stopCoveredByProgress } from '../../route/stop-coverage.js';
 import {
     buildRouteModel,
     composersForGroup,
@@ -263,6 +264,7 @@ export function RouteView({
             threadStore={threadStore}
             progressWriter={progressWriter}
             stopProgress={stopProgress}
+            progressLoaded={progress !== null}
             parse={parse}
             loadContent={loadContent}
             onOpenInEditor={openFileInEditor}
@@ -288,6 +290,8 @@ export interface RouteWorkspaceProps {
     /** The app creates the writer and viewed store one level up. The gallery's workspace creates its own. */
     readonly progressWriter?: ProgressWriter;
     readonly stopProgress?: StopProgressStore;
+    /** The first server progress snapshot has been applied. A standalone workspace starts ready. */
+    readonly progressLoaded?: boolean;
     /** Initial stop marks for the gallery and tests (the server supplies them in the app). */
     readonly initialStopViewed?: readonly string[];
     readonly onSetViewed?: (fileId: string, viewed: boolean) => Promise<number>;
@@ -325,6 +329,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onOpenInEditor,
         onSetViewed = EMPTY_SET_VIEWED,
         onSetStopViewed = EMPTY_SET_STOP_VIEWED,
+        progressLoaded = true,
         navigation = null,
         onUnderExplained,
         onRouteSummary,
@@ -894,15 +899,36 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
     const [stopFailures, setStopFailures] = useState<ReadonlyMap<string, boolean>>(EMPTY_FAILURES);
     const [announcement, setAnnouncement] = useState('');
+    const autoMarking = useRef(new Set<string>());
+    /** Last computed coverage: the first ready snapshot sets the baseline, without counting as a reviewer action. */
+    const autoCoverage = useRef(new Map<string, boolean>());
+    /** Clearing a mark by hand blocks automatic marking until coverage actually disappears. */
+    const manuallyUnmarked = useRef(new Set<string>());
+    const stopCoverageSnapshot = useMemo(
+        () => ({ progress: diffSnapshot.progress, readState: diffSnapshot.readState }),
+        [diffSnapshot.progress, diffSnapshot.readState],
+    );
     const viewedStops = useMemo(
         () => model.entries.filter((entry) => stopViewed.get(entryId(entry)) === true).length,
         [model.entries, stopViewed],
     );
+    const nextVisibleEntry = useCallback(
+        (stopId: string): string | null => {
+            const current = model.entries.findIndex((entry) => entryId(entry) === stopId);
+            if (current < 0) {
+                return null;
+            }
+            const next = model.entries.slice(current + 1).find((entry) => matches(entry, filter.fileIds));
+            return next === undefined ? null : entryId(next);
+        },
+        [filter.fileIds, matches, model.entries],
+    );
 
     const markStop = useCallback(
-        async (stopId: string, viewed: boolean): Promise<void> => {
+        async (stopId: string, viewed: boolean, withFeedback = true): Promise<void> => {
             const entry = model.entries.find((candidate) => entryId(candidate) === stopId) ?? null;
-            if (entry === null) {
+            const wasViewed = stopProgress.isViewed(stopId);
+            if (entry === null || wasViewed === viewed) {
                 return;
             }
             // A mark writes seen ranges, which can only be counted from parsed models:
@@ -918,6 +944,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 return;
             }
             if (!viewed) {
+                // Block before the optimistic update: its synchronous render will already see the cleared mark.
+                manuallyUnmarked.current.add(stopId);
                 // A viewed card's temporary expansion lasts only while the mark is set.
                 session.forgetViewedExpansion(stopId);
             }
@@ -932,18 +960,122 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
             // The UI calculates ranges: the server has no diff model (decision log, 2026-08-26).
             const written = writer.writeStop(stopId, viewed, viewed ? stopSeenRanges(entry) : []);
-            // The mark is already applied optimistically, so announce what the reviewer sees on screen.
-            const snapshot = stopProgress.getSnapshot();
-            const count = model.entries.filter((candidate) => snapshot.get(entryId(candidate)) === true).length;
-            setAnnouncement(
-                `Stop ${entry.view.planLabel} ${viewed ? 'marked' : 'unmarked'}, ${String(count)} of ${String(model.stopCount)}`,
-            );
+            if (viewed && withFeedback) {
+                const next = nextVisibleEntry(stopId);
+                if (next !== null) {
+                    // This continues collapsing, not stepping: keep the lens and the state of the next entry.
+                    requestJump(next, null);
+                }
+            }
+            if (withFeedback) {
+                // The mark has already been applied optimistically, so announce what the reviewer sees on screen.
+                const snapshot = stopProgress.getSnapshot();
+                const count = model.entries.filter((candidate) => snapshot.get(entryId(candidate)) === true).length;
+                setAnnouncement(
+                    `Stop ${entry.view.planLabel} ${viewed ? 'marked viewed' : 'unmarked'}, ${String(count)} of ${String(model.stopCount)}`,
+                );
+            }
             if (!(await written)) {
+                if (!viewed) {
+                    manuallyUnmarked.current.delete(stopId);
+                }
                 setStopFailures((previous) => new Map(previous).set(stopId, viewed));
             }
         },
-        [model.entries, model.stopCount, model.totals, session, stopProgress, unfilledEntry, writer],
+        [
+            model.entries,
+            model.stopCount,
+            model.totals,
+            nextVisibleEntry,
+            requestJump,
+            session,
+            stopProgress,
+            unfilledEntry,
+            writer,
+        ],
     );
+
+    useEffect(() => {
+        // Before the endpoint's first response, the store contains only defaults. That snapshot is not a baseline:
+        // otherwise incoming server progress would look like new reading and trigger scrolling.
+        if (!progressLoaded) {
+            return;
+        }
+
+        const candidates: RouteEntry[] = [];
+        const currentIds = new Set<string>();
+        let feedbackStopId: string | null = null;
+
+        for (const entry of model.entries) {
+            const stopId = entryId(entry);
+            currentIds.add(stopId);
+            // While ranges cannot be counted correctly, this is not `false`: the first ready result
+            // must become the baseline without turning data loading into a reviewer action.
+            if (
+                entryPending(entry, model.totals) ||
+                entryParseFailed(entry, model.totals) ||
+                unfilledEntry(entry)
+            ) {
+                continue;
+            }
+
+            const covered = stopCoveredByProgress(entry, stopCoverageSnapshot);
+            const previous = autoCoverage.current.get(stopId);
+            autoCoverage.current.set(stopId, covered);
+            if (!covered) {
+                manuallyUnmarked.current.delete(stopId);
+                continue;
+            }
+            if (
+                previous !== false ||
+                stopViewed.get(stopId) === true ||
+                manuallyUnmarked.current.has(stopId) ||
+                autoMarking.current.has(stopId)
+            ) {
+                continue;
+            }
+
+            candidates.push(entry);
+            if (matches(entry, filter.fileIds)) {
+                // Several marks in one snapshot produce one jump and one final aria announcement.
+                feedbackStopId = stopId;
+            }
+        }
+
+        for (const stopId of autoCoverage.current.keys()) {
+            if (!currentIds.has(stopId)) {
+                autoCoverage.current.delete(stopId);
+                manuallyUnmarked.current.delete(stopId);
+            }
+        }
+
+        const start = (entry: RouteEntry): void => {
+            const stopId = entryId(entry);
+            autoMarking.current.add(stopId);
+            void markStop(stopId, true, stopId === feedbackStopId).finally(() => {
+                autoMarking.current.delete(stopId);
+            });
+        };
+        for (const entry of candidates) {
+            if (entryId(entry) !== feedbackStopId) {
+                start(entry);
+            }
+        }
+        const feedbackEntry = candidates.find((entry) => entryId(entry) === feedbackStopId);
+        if (feedbackEntry !== undefined) {
+            start(feedbackEntry);
+        }
+    }, [
+        filter.fileIds,
+        markStop,
+        matches,
+        model.entries,
+        model.totals,
+        progressLoaded,
+        stopCoverageSnapshot,
+        stopViewed,
+        unfilledEntry,
+    ]);
 
     /** Whether the stop is collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
     const collapsedOf = useCallback(
@@ -1263,6 +1395,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         <StopSection
                             key={entry.view.stop.id}
                             view={entry.view}
+                            entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile)}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
@@ -1322,6 +1455,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             viewed={stopViewed.get(entry.view.stop.id) === true}
                             marked={markedStops.has(entry.view.stop.id)}
                             failedViewed={stopFailures.get(entry.view.stop.id) ?? null}
+                            flash={flashStopId === entry.view.stop.id}
                             onViewed={(value) => {
                                 void markStop(entry.view.stop.id, value);
                             }}
@@ -1346,6 +1480,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
 interface StopSectionProps {
     readonly view: RouteStopView;
+    readonly entries: readonly RouteEntry[];
     readonly stopCount: number;
     readonly comments: number;
     /** null shows all stop files (no filter, or the stop is kept on screen). */
@@ -1382,6 +1517,7 @@ interface StopSectionProps {
 
 function StopSection({
     view,
+    entries,
     stopCount,
     comments,
     fileIds,
@@ -1422,18 +1558,26 @@ function StopSection({
     }, [ids, onScreen, onVisible]);
 
     const digest = useMemo(() => buildDigest(view.stop), [view.stop]);
-    // Hybrid "digest + regular files": hide only test code (files anchored by assertions),
-    // and render the stop's other cards as usual. All files in fixture s04 are tests.
-    const testFiles = useMemo(
-        () => (digest === null ? [] : files.filter((group) => digest.testFileIds.has(group.fileId))),
-        [digest, files],
+    // Hybrid "digest + regular files": hide only assertion anchor files that also belong
+    // to this stop after applying the lens. Render all other cards as usual.
+    const testCode = useMemo(
+        () =>
+            digest === null
+                ? null
+                : buildDigestTestCode(
+                      digest,
+                      entries,
+                      view.stop.id,
+                      files.map((group) => group.fileId),
+                  ),
+        [digest, entries, files, view.stop.id],
     );
     const shownFiles = useMemo(
         () =>
-            digest === null || testCodeShown
+            testCode === null || testCodeShown
                 ? files
-                : files.filter((group) => !digest.testFileIds.has(group.fileId)),
-        [digest, files, testCodeShown],
+                : files.filter((group) => !testCode.hiddenFileIds.has(group.fileId)),
+        [files, testCode, testCodeShown],
     );
 
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
@@ -1480,7 +1624,8 @@ function StopSection({
                     model={digest}
                     shown={testCodeShown}
                     onToggle={onToggleTestCode}
-                    hiddenFiles={testFiles.length}
+                    hiddenFiles={testCode?.hiddenFileIds.size ?? 0}
+                    location={testCode?.location ?? null}
                     anchorReachable={(anchor) => anchorReachable(anchor.fileId, anchor.line)}
                     onOpenAnchor={(anchor) => {
                         onOpenAnchor(anchor.fileId, anchor.line);
@@ -1542,6 +1687,7 @@ function OtherSection({
     viewed,
     marked,
     failedViewed,
+    flash,
     onViewed,
     onOpen,
     renderCard,
@@ -1562,6 +1708,7 @@ function OtherSection({
     viewed: boolean;
     marked: boolean;
     failedViewed: boolean | null;
+    flash: boolean;
     onViewed: (viewed: boolean) => void;
     onOpen: () => void;
     renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
@@ -1585,6 +1732,7 @@ function OtherSection({
                 viewed={viewed}
                 marked={marked}
                 failedViewed={failedViewed}
+                flash={flash}
                 onViewed={onViewed}
                 opened={opened}
                 onOpen={onOpen}
