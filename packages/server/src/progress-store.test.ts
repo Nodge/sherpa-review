@@ -168,6 +168,37 @@ describe('reading progress store', () => {
         ]);
     });
 
+    it('clears affected stops and all their ranges in one revision when clearing a file', () => {
+        const store = new ProgressStore({ db: open() });
+        store.setStopViewed('s01', true, [
+            { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+            { fileId: 'file-2', side: 'old', start: 3, end: 5 },
+        ]);
+        store.setStopViewed('s02', true, [
+            { fileId: 'file-1', side: 'old', start: 20, end: 21 },
+            { fileId: 'file-3', side: 'new', start: 7, end: 9 },
+        ]);
+        const before = store.revision;
+
+        expect(store.setFileViewed('file-1', false)).toBe(before + 1);
+        expect(store.readStops()).toEqual([
+            { stopId: 's01', viewed: false },
+            { stopId: 's02', viewed: false },
+        ]);
+        expect(store.read()).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
+        // Repeating changes nothing: no linking ranges remain and the file flag is unchanged.
+        expect(store.setFileViewed('file-1', false)).toBe(before + 1);
+    });
+
+    it('clears a file with no linked stops using the previous file-write behaviour', () => {
+        const store = new ProgressStore({ db: open() });
+
+        expect(store.setFileViewed('standalone', false)).toBe(1);
+        expect(store.readStops()).toEqual([]);
+        expect(store.read()).toEqual([{ fileId: 'standalone', viewed: false, seenRanges: [] }]);
+        expect(store.setFileViewed('standalone', false)).toBe(1);
+    });
+
     it('clearing stop progress removes its ranges and preserves file marks', () => {
         const db = open();
         db.prepare('INSERT INTO file_seen_ranges (file_id, side, start_line, end_line) VALUES (?, ?, ?, ?)').run(

@@ -77,17 +77,28 @@ function StripState({ full = false, loading = false }: { full?: boolean; loading
  * A route with partially viewed stops: seen ranges of marked stops are already stored
  * in progress, so chips show both `read` and `partial`.
  */
-function ViewedRouteState({ stopIds }: { stopIds: readonly string[] }) {
+function ViewedRouteState({ stopIds, auto = false }: { stopIds: readonly string[]; auto?: boolean }) {
     const session = useMemo(() => createSessionStore({ initial: { view: 'route', filter: 'all' } }), []);
     const parsed = useMemo(() => models(), []);
     const progress = useMemo<UiFileProgress[]>(() => {
         const built = buildRouteModel({ snapshot: readySnapshot(), files: DATA.diff.files, models: parsed });
         const byFile = new Map<string, UiFileProgress>();
+        // Auto-marking runs on the transition from uncovered to covered (the first snapshot baseline does not
+        // trigger it), so the `auto` example leaves the last file of the stop partially read:
+        // mark it "Viewed", and the stop gets marked, collapses, and scrolls to the next one.
+        const skipped = new Set<string>();
         for (const entry of built.entries) {
             if (!stopIds.includes(entry.view.stop.id)) {
                 continue;
             }
+            const lastFile = entry.kind === 'stop' ? entry.view.files.at(-1) : undefined;
+            if (auto && lastFile !== undefined) {
+                skipped.add(lastFile.fileId);
+            }
             for (const range of stopSeenRanges(entry)) {
+                if (skipped.has(range.fileId)) {
+                    continue;
+                }
                 const record = byFile.get(range.fileId) ?? { fileId: range.fileId, viewed: false, seenRanges: [] };
                 byFile.set(range.fileId, {
                     ...record,
@@ -96,7 +107,7 @@ function ViewedRouteState({ stopIds }: { stopIds: readonly string[] }) {
             }
         }
         return [...byFile.values()];
-    }, [parsed, stopIds]);
+    }, [auto, parsed, stopIds]);
     const store = useMemo(() => {
         const created = createDiffViewStore({ files: DATA.diff.files, storage: null, progress });
         for (const [fileId, model] of parsed) {
@@ -120,7 +131,7 @@ function ViewedRouteState({ stopIds }: { stopIds: readonly string[] }) {
                 store={store}
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}
-                initialStopViewed={stopIds}
+                initialStopViewed={auto ? [] : stopIds}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={(fileId) => {
                     const file = DATA.diff.files.find((candidate) => candidate.fileId === fileId);
@@ -168,6 +179,11 @@ export const M2_T7_STATES: readonly RouteGalleryState[] = [
         id: 'route-partially-viewed',
         title: 'route: two stops viewed, partials appear in chips',
         render: () => <ViewedRouteState stopIds={['s01', 's03']} />,
+    },
+    {
+        id: 'route-auto-viewed',
+        title: 'route: last file in a stop partially read, marking the file auto-collapses the stop',
+        render: () => <ViewedRouteState stopIds={['s01']} auto />,
     },
     {
         id: 'review-complete-route',

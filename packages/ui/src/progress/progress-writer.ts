@@ -91,8 +91,8 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
     let inFlight = 0;
     let seq = 0;
     /**
-     * A stop mark sent seen ranges to the server, but the store cannot calculate them locally:
-     * until the snapshot is reread, file read indicators would show the state before the mark.
+     * The server changed seen ranges: marking a stop adds them, clearing a file removes the ranges
+     * of its linked stops. The local store cannot know this and must reread the snapshot.
      */
     let rangesPending = false;
 
@@ -162,8 +162,8 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
     };
 
     return {
-        write: (fileId, viewed) =>
-            enqueue(
+        write: async (fileId, viewed) => {
+            const written = await enqueue(
                 'file',
                 fileId,
                 viewed,
@@ -180,7 +180,12 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
                         seenRanges: previous.scope === 'file' ? (previous.record?.seenRanges ?? []) : [],
                     },
                 }),
-            ),
+            );
+            if (written && !viewed) {
+                rangesPending = true;
+            }
+            return written;
+        },
 
         writeStop: async (stopId, viewed, ranges) => {
             const written = await enqueue(

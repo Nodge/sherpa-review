@@ -163,6 +163,23 @@ describe('writing reading progress', () => {
         expect(shared.writer.shouldReload(2)).toBe(true);
     });
 
+    it('refetches the snapshot after unmarking a file even without a channel event', async () => {
+        const { writer, pending } = harness();
+
+        const write = writer.write('a', false);
+        await settle();
+        pending[0]?.resolve(1);
+        await write;
+
+        // The server may have unmarked related stops and removed their ranges. This cannot be calculated locally.
+        expect(writer.shouldReload(null)).toBe(true);
+        writer.finishReload(
+            { files: [{ fileId: 'a', viewed: false, seenRanges: [] }], stops: [], progressRevision: 1 },
+            writer.beginReload(),
+        );
+        expect(writer.shouldReload(null)).toBe(false);
+    });
+
     it('still requests a refetch for lower-revision events after a server restart', () => {
         const { writer } = harness();
 
