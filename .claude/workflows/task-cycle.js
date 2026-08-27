@@ -1,7 +1,7 @@
 export const meta = {
   name: 'task-cycle',
   description: 'One Sherpa task cycle: coder (Opus by default) → checks → dual review (Opus + Codex) → triage → fixes',
-  whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds?, coder? }. coder: "opus" (default) or "codex". Run the Codex variant only when Alice Ingram explicitly requests it, using the task-cycle-codex wrapper. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
+  whenToUse: 'Run for one task from plan/M*-tasks.md. args: { taskId, brief, gateCmd?, maxFixRounds?, coder? }. coder: "opus" (default) or "codex". Select the Codex variant only when Alice Ingram explicitly requests it, never automatically. Changes stay in the working tree. Commit and visual acceptance happen outside this workflow.',
   phases: [
     { title: 'Implement', detail: 'coder implements the brief' },
     { title: 'Gates', detail: 'typecheck / lint / tests' },
