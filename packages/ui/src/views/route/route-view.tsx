@@ -48,7 +48,7 @@ import { readStateOf } from '../../progress/read-state.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import { createStopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
-import { buildDigest, resolveAnchor } from '../../route/digest.js';
+import { buildDigest, buildDigestTestCode, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
 import { generationProgress, snapshotFilling } from '../../route/generation.js';
 import { stopCoveredByProgress } from '../../route/stop-coverage.js';
@@ -1395,6 +1395,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         <StopSection
                             key={entry.view.stop.id}
                             view={entry.view}
+                            entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile)}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
@@ -1479,6 +1480,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
 interface StopSectionProps {
     readonly view: RouteStopView;
+    readonly entries: readonly RouteEntry[];
     readonly stopCount: number;
     readonly comments: number;
     /** null shows all stop files (no filter, or the stop is kept on screen). */
@@ -1515,6 +1517,7 @@ interface StopSectionProps {
 
 function StopSection({
     view,
+    entries,
     stopCount,
     comments,
     fileIds,
@@ -1555,18 +1558,26 @@ function StopSection({
     }, [ids, onScreen, onVisible]);
 
     const digest = useMemo(() => buildDigest(view.stop), [view.stop]);
-    // Hybrid "digest + regular files": hide only test code (files anchored by assertions),
-    // and render the stop's other cards as usual. All files in fixture s04 are tests.
-    const testFiles = useMemo(
-        () => (digest === null ? [] : files.filter((group) => digest.testFileIds.has(group.fileId))),
-        [digest, files],
+    // Hybrid "digest + regular files": hide only assertion anchor files that also belong
+    // to this stop after applying the lens. Render all other cards as usual.
+    const testCode = useMemo(
+        () =>
+            digest === null
+                ? null
+                : buildDigestTestCode(
+                      digest,
+                      entries,
+                      view.stop.id,
+                      files.map((group) => group.fileId),
+                  ),
+        [digest, entries, files, view.stop.id],
     );
     const shownFiles = useMemo(
         () =>
-            digest === null || testCodeShown
+            testCode === null || testCodeShown
                 ? files
-                : files.filter((group) => !digest.testFileIds.has(group.fileId)),
-        [digest, files, testCodeShown],
+                : files.filter((group) => !testCode.hiddenFileIds.has(group.fileId)),
+        [files, testCode, testCodeShown],
     );
 
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
@@ -1613,7 +1624,8 @@ function StopSection({
                     model={digest}
                     shown={testCodeShown}
                     onToggle={onToggleTestCode}
-                    hiddenFiles={testFiles.length}
+                    hiddenFiles={testCode?.hiddenFileIds.size ?? 0}
+                    location={testCode?.location ?? null}
                     anchorReachable={(anchor) => anchorReachable(anchor.fileId, anchor.line)}
                     onOpenAnchor={(anchor) => {
                         onOpenAnchor(anchor.fileId, anchor.line);

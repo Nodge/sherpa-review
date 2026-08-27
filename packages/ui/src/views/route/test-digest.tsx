@@ -1,11 +1,16 @@
-import type { DigestAnchorView, DigestClaimView, DigestModel } from '../../route/digest.js';
+import type {
+    DigestAnchorView,
+    DigestClaimView,
+    DigestModel,
+    DigestTestCodeLocation,
+} from '../../route/digest.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { anchorLabel, claimLabel } from '../../route/digest.js';
 import { formatCount, plural } from '../../text.js';
 
 /**
- * Behavioural digest card (README §2): a header with an assertion count, a note about
- * hidden test code, Show/Hide test code, rows of "category chip + assertion + anchor"
+ * Behavioural digest card (README §2): a header with an assertion count, controls for
+ * hidden test code or a link to its entry, rows of "category chip + assertion + anchor"
  * and an `uncovered` footer for changed behaviour left without an assertion.
  *
  * The component computes and loads nothing. Its model comes from `route/digest.ts`, and the view handles
@@ -25,6 +30,8 @@ export interface TestDigestProps {
     readonly onToggle: () => void;
     /** Number of the stop's test files hidden by the digest, used for an accurate button label. */
     readonly hiddenFiles: number;
+    /** Test code destination when the current stop has nothing to hide after applying the lens. */
+    readonly location: DigestTestCodeLocation | null;
     /** Whether a card anywhere in the route renders this line. */
     readonly anchorReachable: (anchor: DigestAnchorView) => boolean;
     readonly onOpenAnchor: (anchor: DigestAnchorView) => void;
@@ -35,6 +42,7 @@ export function TestDigest({
     shown,
     onToggle,
     hiddenFiles,
+    location,
     anchorReachable,
     onOpenAnchor,
 }: TestDigestProps) {
@@ -45,21 +53,38 @@ export function TestDigest({
                     Behavioural digest · {formatCount(model.total)}{' '}
                     {plural(model.total, 'assertion', 'assertions', 'assertions')}
                 </span>
-                {shown ? null : <span className="digest__note">{DIGEST_NOTE}</span>}
-                <span className="digest__spacer" />
-                <button
-                    type="button"
-                    className="digest__toggle"
-                    aria-expanded={shown}
-                    title={
-                        shown
-                            ? 'Hides the test-file diff below the digest again'
-                            : `Expands the test-file diff below the digest: ${formatCount(hiddenFiles)} ${plural(hiddenFiles, 'file', 'files', 'files')}`}
-                    }
-                    onClick={onToggle}
-                >
-                    {shown ? 'Hide test code' : 'Show test code'}
-                </button>
+                {hiddenFiles === 0 ? (
+                    location === null ? null : (
+                        <button
+                            type="button"
+                            className="digest__anchor digest__location"
+                            title={`${location.anchor.path}:${String(location.anchor.line)}`}
+                            onClick={() => {
+                                onOpenAnchor(location.anchor);
+                            }}
+                        >
+                            {location.label}
+                        </button>
+                    )
+                ) : (
+                    <>
+                        {shown ? null : <span className="digest__note">{DIGEST_NOTE}</span>}
+                        <span className="digest__spacer" />
+                        <button
+                            type="button"
+                            className="digest__toggle"
+                            aria-expanded={shown}
+                            title={
+                                shown
+                                    ? 'Hides the diff of the test files back under the digest'
+                                    : `Opens the diff of the test files under the digest: ${formatCount(hiddenFiles)} ${plural(hiddenFiles, 'file', 'files', 'files')}`
+                            }
+                            onClick={onToggle}
+                        >
+                            {shown ? 'Hide the test code' : 'Show the test code'}
+                        </button>
+                    </>
+                )}
             </div>
 
             {model.rows.map((claim, index) => (

@@ -73,6 +73,56 @@ const WITHOUT_GENERATED_LENS: Lens = {
     available: true,
     note: null,
 };
+const DIGEST_NON_TEST_ANCHOR = (() => {
+    const anchor = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0];
+    if (anchor === undefined) {
+        throw new Error('stop s01 needs an anchor in a non-test file');
+    }
+    return anchor;
+})();
+const DIGEST_NON_TEST_LENS: Lens = {
+    id: 'digest-non-test',
+    label: 'Only the non-test digest file',
+    paths: [DIGEST_NON_TEST_ANCHOR.path],
+    available: true,
+    note: null,
+};
+
+/** Add a non-test file to s04 so a lens can keep the stop while hiding all its test code. */
+function digestHiddenByLensSnapshot(): RouteSnapshot {
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((stop) =>
+            stop.id === 's04' ? { ...stop, anchors: [...stop.anchors, DIGEST_NON_TEST_ANCHOR] } : stop,
+        ),
+    };
+}
+
+/** Digest assertion anchors lead to s01 without changing the files in s04 itself. */
+function digestOutsideStopSnapshot(): RouteSnapshot {
+    const target = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0];
+    if (target === undefined) {
+        throw new Error('stop s01 needs an anchor for the derived snapshot');
+    }
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((stop) =>
+            stop.id !== 's04'
+                ? stop
+                : {
+                      ...stop,
+                      tests: stop.tests.map((claim) =>
+                          claim.kind === 'uncovered'
+                              ? claim
+                              : {
+                                    ...claim,
+                                    anchor: { fileId: target.fileId, path: target.path, line: target.start },
+                                },
+                      ),
+                  },
+        ),
+    };
+}
 
 interface Mounted {
     readonly host: HTMLElement;
@@ -96,6 +146,7 @@ afterEach(() => {
 
 function mount(
     options: {
+        snapshot?: RouteSnapshot;
         filter?: string;
         extraLenses?: readonly Lens[];
         progress?: readonly UiFileProgress[];
@@ -121,7 +172,7 @@ function mount(
                 pr={DATA.pr}
                 diff={DATA.diff}
                 lenses={{ ownership: DATA.ownership, extra: [...(options.extraLenses ?? DATA.extraLenses)] }}
-                snapshot={SNAPSHOT}
+                snapshot={options.snapshot ?? SNAPSHOT}
                 session={session}
                 store={store}
                 threadStore={threadStore}
@@ -388,6 +439,39 @@ describe('test digest live clicks', () => {
         expect(row).not.toBeNull();
         // Stop 01 explains line 92, so the jump goes there instead of staying in the digest.
         expect(stopSection(view.host, 's01').contains(row)).toBe(true);
+    });
+
+    it('the location row for an empty intersection leads to another stop', async () => {
+        const view = mount({ snapshot: digestOutsideStopSnapshot() });
+        const location = button(stopSection(view.host, 's04'), 'test code — in stop 01');
+
+        click(location);
+        await view.settle();
+
+        const row = flashed(view.host);
+        expect(row).not.toBeNull();
+        expect(stopSection(view.host, 's01').contains(row)).toBe(true);
+    });
+
+    it('the hidden-by-lens row resets the lens and expands test code in its stop', async () => {
+        const view = mount({
+            snapshot: digestHiddenByLensSnapshot(),
+            filter: DIGEST_NON_TEST_LENS.id,
+            extraLenses: [DIGEST_NON_TEST_LENS],
+        });
+        const stop = stopSection(view.host, 's04');
+        expect(view.session.getSnapshot().filter).toBe(DIGEST_NON_TEST_LENS.id);
+        expect(stop.querySelectorAll('.file-card')).toHaveLength(1);
+
+        click(button(stop, 'test code hidden by the lens'));
+        await view.settle();
+
+        expect(view.session.getSnapshot().filter).toBe('all');
+        expect(view.session.getSnapshot().stops.testCode.has('s04')).toBe(true);
+        expect(stopSection(view.host, 's04').querySelectorAll('.file-card')).toHaveLength(4);
+        const row = flashed(view.host);
+        expect(row).not.toBeNull();
+        expect(stopSection(view.host, 's04').contains(row)).toBe(true);
     });
 
     it('resets a lens hiding the anchor file so the jump has a target', async () => {
