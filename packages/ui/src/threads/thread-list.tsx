@@ -2,6 +2,7 @@ import type { FileAnchor, Thread } from '@sherpa/protocol';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
+import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
@@ -137,7 +138,9 @@ function ThreadBlock({
                             )
                         ) : null}
                     </div>
-                    <div className="thread__body">{row.comment.body}</div>
+                    <div className="thread__body">
+                        <Markdown text={row.comment.body} profile="comment" />
+                    </div>
                 </div>
             ))}
 

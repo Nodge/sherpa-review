@@ -12,7 +12,6 @@ import {
     uiReviewFileContentRequestSchema,
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
-    uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
@@ -32,11 +31,13 @@ import type { z } from 'zod';
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
+import type { PrMetaCache } from './pr-meta.js';
 import type { ProgressStore } from './progress-store.js';
 import type { ReviewFeed } from './review-feed.js';
 
 /**
- * UI review endpoints (M1-T10): PR metadata, active iteration diff, threads, lenses and file content.
+ * UI review endpoints (M1-T10): active iteration diff, threads, lenses, file content.
+ * PR metadata has no endpoint of its own. It travels in the `uiState` snapshot (M2F-T4).
  * "Open in external editor" lives here too. It does not involve the host, but belongs alongside
  * the other reader endpoints.
  *
@@ -66,6 +67,8 @@ export interface ReviewRoutesOptions {
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress for this PR: the local source of truth for viewed marks. */
     readonly progress: ProgressStore;
+    /** PR metadata cache: publishing a verdict changes the status, so it must be fetched again. */
+    readonly prMeta: Pick<PrMetaCache, 'refresh'>;
     readonly editor?: EditorOptions;
 }
 
@@ -80,14 +83,6 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
         return call(() => host.setThreadResolved(threadId, resolved));
     });
     return [
-        {
-            method: 'GET',
-            path: UI_ENDPOINTS.reviewPr,
-            handle: handlingRpcFailures(async () => {
-                const host = hostOf(options);
-                return respond(uiReviewPrResponseSchema, { pr: await call(() => host.getPr()) });
-            }),
-        },
         {
             method: 'GET',
             path: UI_ENDPOINTS.reviewDiff,
@@ -155,6 +150,10 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const result = await call(() => host.publishBatch(request.verdict));
                 // Even a partial failure changes threads: the published part is no longer drafts.
                 options.reviewFeed?.bumpLocalWrite();
+                // A verdict changes PR status: refresh metadata, then send the updated snapshot over SSE.
+                // The endpoint response does not wait for this: publication has already completed, and the host's `getPr()` may
+                // spend tens of seconds retrying with timeouts. `refresh` swallows its own errors.
+                void options.prMeta.refresh();
                 return respond(uiPublishResponseSchema, { result });
             }),
         },

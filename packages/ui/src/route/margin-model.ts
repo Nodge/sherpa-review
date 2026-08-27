@@ -1,6 +1,7 @@
 import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { stripInlineCode } from '../markdown/markdown.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
 import type { AnchorSpan } from './anchor-clip.js';
@@ -145,7 +146,8 @@ export function marginBadgeLabel(file: RouteMarginFile): string {
         return NOT_PLACED_CARD;
     }
     const extra = file.stops.length === 1 ? '' : ` +${String(file.stops.length - 1)}`;
-    return `explained in ${first.planLabel}${extra} · ${first.title}`;
+    // The badge is a single-line chip. It cannot take markdown, so the model's backticks are stripped (M2F-T5).
+    return `explained in ${first.planLabel}${extra} · ${stripInlineCode(first.title)}`;
 }
 
 /**
@@ -160,8 +162,8 @@ export function marginBadgeTitle(file: RouteMarginFile, jumps: boolean): string 
     const numbers = file.stops.map((stop) => stop.planLabel).join(', ');
     const where =
         file.stops.length === 1
-            ? `Explained in stop ${first.planLabel} · ${first.title}`
-            : `Explained in stops ${numbers} · ${first.title}`;
+            ? `Explained in stop ${first.planLabel} · ${stripInlineCode(first.title)}`
+            : `Explained in stops ${numbers} · ${stripInlineCode(first.title)}`;
     return jumps ? `${where} — go there` : where;
 }
 

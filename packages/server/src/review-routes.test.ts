@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
+import type { UiState } from '@sherpa/protocol';
 import {
     rpcErrorSchema,
     UI_ENDPOINTS,
@@ -15,7 +16,6 @@ import {
     uiReviewFileContentResponseSchema,
     uiReviewEventSchema,
     uiReviewLensesResponseSchema,
-    uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
     uiReviewWriteAckSchema,
     uiSaveDraftResponseSchema,
@@ -81,13 +81,10 @@ describe('server review endpoints', () => {
         return stream;
     }
 
-    it('returns metadata, diff, threads and lenses for a fixture prKey', async () => {
+    it('a fixture prKey returns the diff, threads and lenses', async () => {
         const server = await start(FIXTURE_PR);
         const expected = makeFixtureHost('medium');
 
-        const pr = uiReviewPrResponseSchema.parse(
-            await (await get(server.port, UI_ENDPOINTS.reviewPr, server.token)).json(),
-        );
         const diff = uiReviewDiffResponseSchema.parse(
             await (await get(server.port, UI_ENDPOINTS.reviewDiff, server.token)).json(),
         );
@@ -98,7 +95,6 @@ describe('server review endpoints', () => {
             await (await get(server.port, UI_ENDPOINTS.reviewLenses, server.token)).json(),
         );
 
-        expect(pr.pr).toEqual(await expected.getPr());
         expect(diff.diff).toEqual(await expected.getDiff());
         expect(threads.threads).toEqual(await expected.getThreads());
         expect(lenses.ownership).toEqual(await expected.ownershipLens());
@@ -113,6 +109,14 @@ describe('server review endpoints', () => {
         expect(state.reviewHost).toBe('fixture');
     });
 
+    it('the state snapshot carries PR metadata', async () => {
+        const server = await start(FIXTURE_PR);
+
+        const state = await stateWithPr(server);
+
+        expect(state.pr).toEqual(await makeFixtureHost('medium').getPr());
+    });
+
     it('an unrecognized prKey has no host and endpoints return no_review_host', async () => {
         const server = await start(UNKNOWN_PR);
 
@@ -120,7 +124,6 @@ describe('server review endpoints', () => {
         expect(state.reviewHost).toBeNull();
 
         for (const endpoint of [
-            UI_ENDPOINTS.reviewPr,
             UI_ENDPOINTS.reviewDiff,
             UI_ENDPOINTS.reviewThreads,
             UI_ENDPOINTS.reviewLenses,
@@ -134,7 +137,7 @@ describe('server review endpoints', () => {
     it('review endpoints require a token', async () => {
         const server = await start(FIXTURE_PR);
 
-        const response = await get(server.port, UI_ENDPOINTS.reviewPr);
+        const response = await get(server.port, UI_ENDPOINTS.reviewDiff);
 
         expect(response.status).toBe(401);
     });
@@ -533,6 +536,30 @@ describe('server review endpoints', () => {
             expect(host.appliedVerdict()).toBe('ship');
         });
 
+        it('an updated PR status arrives in a state snapshot', async () => {
+            const server = await start(FIXTURE_PR);
+            const stream = await openEvents(server);
+            await stateWithPr(server);
+            // The first channel snapshot may precede metadata loading. Wait for one that has it.
+            for (;;) {
+                const state = uiStateSchema.parse(JSON.parse((await nextNamed(stream, UI_STATE_EVENT)).data));
+                if (state.pr !== null) {
+                    expect(state.pr.statusLabel).toBe('review_in_progress');
+                    break;
+                }
+            }
+
+            await postJson(server.port, UI_ENDPOINTS.reviewPublish, { verdict: 'ship' }, server.token);
+
+            // The publication endpoint does not wait for metadata to reload. Updated status arrives in a separate snapshot.
+            for (;;) {
+                const pushed = uiStateSchema.parse(JSON.parse((await nextNamed(stream, UI_STATE_EVENT)).data));
+                if (pushed.pr?.statusLabel === 'shipped') {
+                    break;
+                }
+            }
+        });
+
         it('a partial failure returns unpublished comments and does not apply the verdict', async () => {
             const host = makeFixtureHost('medium', { failPublishFor: ['-70001'] });
             const failedDraft = await host.saveDraft({ body: 'this draft will fail', parentId: null, anchor: null });
@@ -880,6 +907,23 @@ async function fileIds(server: SherpaServer): Promise<string[]> {
 
 async function firstFileId(server: SherpaServer): Promise<string | undefined> {
     return (await fileIds(server))[0];
+}
+
+/** PR metadata loads outside snapshot assembly, so `pr` is empty until it arrives. */
+async function stateWithPr(server: SherpaServer): Promise<UiState> {
+    const deadline = Date.now() + 2000;
+    for (;;) {
+        const state = uiStateSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
+        );
+        if (state.pr !== null) {
+            return state;
+        }
+        if (Date.now() > deadline) {
+            throw new Error('PR metadata did not reach the state snapshot');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 }
 
 async function nextNamed(stream: SseStream, name: string, timeoutMs = 2000): Promise<SseEvent> {

@@ -34,8 +34,13 @@
 }
 
 .command-box__action {
+    display: grid;
     height: 30px;
     flex: none;
+    align-items: center;
+    justify-items: center;
+    /* Both labels share one cell, so the button width stays fixed when "Copied" appears. */
+    grid-template-areas: 'label';
     padding: 0 11px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-button);
@@ -43,6 +48,14 @@
     color: var(--text-secondary);
     font-size: var(--font-size-secondary);
     cursor: pointer;
+}
+
+.command-box__action-label {
+    grid-area: label;
+}
+
+.command-box__action-label--ghost {
+    visibility: hidden;
 }
 
 .command-box__action:hover {
@@ -57,4 +70,10 @@
 .command-box__hint {
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
+}
+
+/* Visible fallback feedback: Clipboard API is absent or failed, so the command stays selected. */
+.command-box__fallback {
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
 }

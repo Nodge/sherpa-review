@@ -36,6 +36,13 @@ export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 export const prStateSchema = z.enum(['open', 'merged', 'closed']);
 export type PrState = z.infer<typeof prStateSchema>;
 
+/**
+ * Aggregate CI check status for the PR. null means the host does not provide it (the review host exposes checks through
+ * a separate, unexplored API. The adapter returns null, and the UI hides it).
+ */
+export const prChecksSchema = z.enum(['passed', 'failed', 'pending']);
+export type PrChecks = z.infer<typeof prChecksSchema>;
+
 /** PR header. `statusLabel` is the review status in the host's words, displayed as is by the UI. */
 export const prMetaSchema = z.object({
     id: hostIdSchema,
@@ -46,6 +53,7 @@ export const prMetaSchema = z.object({
     toBranch: z.string(),
     state: prStateSchema,
     statusLabel: z.string(),
+    checks: prChecksSchema.nullable(),
     updatedAt: z.iso.datetime(),
     capabilities: hostCapabilitiesSchema,
 });

@@ -1,4 +1,5 @@
 import type { DigestAnchorView, DigestClaimView, DigestModel } from '../../route/digest.js';
+import { Markdown } from '../../markdown/markdown.tsx';
 import { anchorLabel, claimLabel } from '../../route/digest.js';
 import { formatCount, plural } from '../../text.js';
 
@@ -108,7 +109,9 @@ function ClaimRow({
     return (
         <div className={`digest__row digest__row--${claim.kind}`}>
             <span className={`digest__chip digest__chip--${claim.kind}`}>{claimLabel(claim.kind)}</span>
-            <span className="digest__text">{claim.text}</span>
+            <span className="digest__text">
+                <Markdown text={claim.text} profile="route" />
+            </span>
             {anchor === null ? null : anchorReachable(anchor) ? (
                 <button
                     type="button"

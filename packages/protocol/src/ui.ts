@@ -59,6 +59,13 @@ export const uiStateSchema = z.object({
      * so review endpoints are unavailable (an M0-style server only has the queue).
      */
     reviewHost: z.string().nullable(),
+    /**
+     * PR metadata from `ReviewHost.getPr()` (M2F-T4). Unlike the diff and threads, it is small,
+     * so it travels in every snapshot. The breadcrumb and view headers use the same source.
+     * null if there is no host or metadata has not loaded yet (the server populates the cache outside snapshot
+     * assembly and refreshes it after publishing a verdict, so the status arrives over SSE).
+     */
+    pr: prMetaSchema.nullable(),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -89,10 +96,8 @@ export type UiCancelResponse = z.infer<typeof uiCancelResponseSchema>;
  * PR review data (M1-T10). Separate endpoints keep diffs and threads out of `uiState`.
  * They weigh megabytes (host comments have no pagination), too much for every SSE snapshot.
  * The `UI_REVIEW_EVENT` event signals changes, and the UI refetches the relevant endpoint.
+ * PR metadata is the exception. It is small and lives in `uiStateSchema.pr`.
  */
-export const uiReviewPrResponseSchema = z.object({ pr: prMetaSchema });
-export type UiReviewPrResponse = z.infer<typeof uiReviewPrResponseSchema>;
-
 export const uiReviewDiffResponseSchema = z.object({ diff: prDiffSchema });
 export type UiReviewDiffResponse = z.infer<typeof uiReviewDiffResponseSchema>;
 
@@ -302,7 +307,7 @@ export type UiSetThreadResolvedRequest = z.infer<typeof uiSetThreadResolvedReque
  * from `failed`). Retry calls the same endpoint again. The adapter preserves
  * already published items (`publishedSilently` T12). Success bumps `threadsRevision`
  * (drafts became published comments). The source of truth arrives via the threads endpoint.
- * The UI rereads PR state after the verdict through the `reviewPr` endpoint.
+ * The server rereads PR metadata after the verdict and broadcasts it in a snapshot.
  */
 export const uiPublishRequestSchema = z.object({ verdict: verdictSchema });
 export type UiPublishRequest = z.infer<typeof uiPublishRequestSchema>;
@@ -356,8 +361,6 @@ export const UI_ENDPOINTS = {
     cancel: '/api/ui/tasks/cancel',
     /** GET, SSE: `state` (`uiStateSchema`), `review`, `progress`, `route` events (revisions). */
     events: '/api/ui/events',
-    /** GET → `uiReviewPrResponseSchema`. */
-    reviewPr: '/api/ui/review/pr',
     /** GET → `uiReviewDiffResponseSchema` (active host iteration). */
     reviewDiff: '/api/ui/review/diff',
     /** GET → `uiReviewThreadsResponseSchema`. */

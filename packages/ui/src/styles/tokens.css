@@ -143,7 +143,7 @@
     /* The README token table omits them, but each control must implement the state matrix:
        the highlight step, focus ring and disabled opacity live here too. */
     --hover-selected: #282c33;
-    /* Active tab segment and avatar circle (README §0). */
+    /* Active segment of the tab control (README §0). */
     --surface-segment-active: #2b2f36;
     --focus-ring-color: rgba(127, 140, 255, 0.55);
     --text-on-selected: #e0e2e7;
@@ -155,6 +155,8 @@
     --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
+    /* Overview screen in the prototype: its PR title is larger than in Route and Full diff. */
+    --font-size-pr-title-overview: 24px;
     --font-size-pr-title: 22px;
     --font-size-screen-title: 19px;
     --font-size-stop-title-high: 17px;

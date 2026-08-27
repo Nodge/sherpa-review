@@ -8,6 +8,8 @@ import { createStore } from './store.js';
 const STATE: UiState = {
     prKey: 'github-quillmart--quillmart--1',
     reviewHost: 'github',
+    // PR metadata has not arrived yet: the server fills its cache outside snapshot assembly.
+    pr: null,
     worker: { kind: 'never' },
     tasks: [
         {
@@ -24,6 +26,20 @@ const STATE: UiState = {
             updatedAt: '2026-08-19T10:00:00.000Z',
         },
     ],
+};
+
+const PR_META: NonNullable<UiState['pr']> = {
+    id: '4821',
+    url: 'https://github.com/quillmart/quillmart/pull/4821',
+    title: 'Order editing window',
+    author: { login: 'alice', displayName: null, bot: false },
+    fromBranch: 'alice/edit-window',
+    toBranch: 'main',
+    state: 'open',
+    statusLabel: 'review_in_progress',
+    checks: 'passed',
+    updatedAt: '2026-08-19T10:00:00.000Z',
+    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
 };
 
 interface Harness {
@@ -115,6 +131,15 @@ describe('UI store', () => {
         expect(notifications).toBe(1);
         expect(store.getSnapshot().connection).toBe('online');
         expect(store.getSnapshot().state).toEqual(STATE);
+    });
+
+    it('PR metadata from the snapshot reaches the store', () => {
+        const { store, emit } = makeStore();
+        emit(JSON.stringify(STATE));
+
+        emit(JSON.stringify({ ...STATE, pr: PR_META }));
+
+        expect(store.getSnapshot().state?.pr).toEqual(PR_META);
     });
 
     it('a progress event brings the revision without changing state', () => {

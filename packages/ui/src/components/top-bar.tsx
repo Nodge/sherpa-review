@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 
+import type { BreadcrumbSegment } from '../pr-key.js';
 import type { ViewId } from '../session/views.js';
 import type { AgentPillView } from './agent-pill-view.js';
 import { CommandBox } from './command-box.tsx';
@@ -7,14 +8,14 @@ import './top-bar.css';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
- * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search and avatar.
+ * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search.
  * The Feedback button comes in M5 with the feedback channel, so it is absent here.
  */
 export interface TopBarProps {
     /** Distribution version from the UI package.json, injected at build time. */
     readonly version: string;
-    /** Breadcrumb segments from left to right. The last is the PR itself. */
-    readonly breadcrumb: readonly string[];
+    /** Brandcrumb segments from left to right. The last is the PR itself, and a link once metadata is known. */
+    readonly breadcrumb: readonly BreadcrumbSegment[];
     readonly agent: AgentPillView;
     readonly reconnectCommand: string;
     readonly view: ViewId;
@@ -41,13 +42,20 @@ export function TopBar({
 
             <nav className="top-bar__breadcrumb" aria-label="Pull request">
                 {breadcrumb.map((segment, index) => (
-                    <Fragment key={`${String(index)}:${segment}`}>
+                    <Fragment key={`${String(index)}:${segment.text}`}>
                         {index === 0 ? null : (
                             <span className="top-bar__breadcrumb-separator" aria-hidden="true">
                                 /
                             </span>
                         )}
-                        <span className="top-bar__breadcrumb-item">{segment}</span>
+                        {segment.href === null ? (
+                            <span className="top-bar__breadcrumb-item">{segment.text}</span>
+                        ) : (
+                            // Normal navigation: open the PR on its host in the reviewer's browser.
+                            <a className="top-bar__breadcrumb-item" href={segment.href}>
+                                {segment.text}
+                            </a>
+                        )}
                     </Fragment>
                 ))}
             </nav>
@@ -58,9 +66,6 @@ export function TopBar({
 
             <AgentPill view={agent} reconnectCommand={command} />
             <SearchButton onClick={onOpenSearch} />
-
-            {/* The UI does not know the actual user until M1-T10, so do not invent initials. */}
-            <div className="top-bar__avatar" aria-hidden="true" />
         </header>
     );
 }
@@ -143,11 +148,18 @@ export function AgentPill({
                         {view.tone === 'disconnected' ? 'Connect agent' : 'Agent status'}
                     </div>
                     {view.tone === 'disconnected' ? (
-                        <CommandBox
-                            command={command}
-                            hint="Run in any harness to make this session a worker."
-                            actionLabel="Copy"
-                        />
+                        <>
+                            {/* Wording from the removed "Agent disconnected" banner (decision #32). */}
+                            <p className="agent-popover__offline">
+                                The reader works in full — diff, search, comments and ship are available. The AI areas
+                                stay read-only.
+                            </p>
+                            <CommandBox
+                                command={command}
+                                hint="Run it in any harness — that session becomes the worker."
+                                actionLabel="Copy"
+                            />
+                        </>
                     ) : (
                         <>
                             <p className="agent-popover__status">{view.title}</p>

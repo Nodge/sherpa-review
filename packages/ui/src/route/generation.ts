@@ -129,8 +129,8 @@ export function generationIsLong(tasks: readonly UiTask[], now: number): boolean
 }
 
 /**
- * Summary arrives as markdown, but the UI has no markdown renderer and a single paragraph
- * does not warrant one: split the text into paragraphs on blank lines and print it as is.
+ * Summary arrives as markdown. Here it splits into paragraphs at blank lines, and the
+ * `route` profile renderer handles markup within each paragraph (inline code only).
  */
 export function summaryParagraphs(summary: string): readonly string[] {
     return summary

@@ -166,7 +166,7 @@ const EXPECTED: Record<string, string> = {
     // SPEC §1.1: hover `#22252b` → `#282c33`, focus-visible ring `rgba(127,140,255,.55)`,
     // selected `#22252b` + `#e0e2e7`, disabled opacity .45. README §0: breadcrumb separator.
     '--hover-selected': '#282c33',
-    // README §0: active tab segment `background:#2b2f36` and avatar circle `#2b2f36`.
+    // README §0: the active tab of the segmented control has `background:#2b2f36`.
     '--surface-segment-active': '#2b2f36',
     '--focus-ring-color': 'rgba(127,140,255,.55)',
     '--text-on-selected': '#e0e2e7',
@@ -174,13 +174,15 @@ const EXPECTED: Record<string, string> = {
     '--text-separator': '#4a4f57',
 
     // Type — IBM Plex Sans 400/450/500/600 for UI, IBM Plex Mono 400/500 for code, paths, numbers,
-    // commits, keys and all machine data. Scale: 22px/600 PR title · 19px/600 screen title ·
-    // 17px/600 high-tier stop title · 15.5px/600 stop title · 15px/600 section title · 13.5px input ·
-    // 13px/1.62 body · 12.5px UI text · 12px secondary · 11.5px controls and mono file names ·
-    // 11px mono meta · 10.5px mono gutters and paths · 10px badges · 9.5px prototype/scope labels.
-    // Code: 12px mono, line-height 20px.
+    // commits, keys and all machine data. Scale: 24px/600 PR title on Overview · 22px/600 PR title ·
+    // 19px/600 screen title · 17px/600 high-tier stop title · 15.5px/600 stop title ·
+    // 15px/600 section title · 13.5px input · 13px/1.62 body · 12.5px UI text · 12px secondary ·
+    // 11.5px controls and mono file names · 11px mono meta · 10.5px mono gutters and paths ·
+    // 10px badges · 9.5px prototype/scope labels. Code: 12px mono, line-height 20px.
     '--font-sans': "'IBM Plex Sans',system-ui,sans-serif",
     '--font-mono': "'IBM Plex Mono',ui-monospace,monospace",
+    // The README scale has no such size. It comes from the prototype's Overview screen (M2F-T4).
+    '--font-size-pr-title-overview': '24px',
     '--font-size-pr-title': '22px',
     '--font-size-screen-title': '19px',
     '--font-size-stop-title-high': '17px',

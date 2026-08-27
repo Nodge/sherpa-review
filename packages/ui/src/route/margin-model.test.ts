@@ -140,6 +140,20 @@ describe('route in full diff margins', () => {
         expect(marginTargetStopId(many, 'other')).toBe('s02');
     });
 
+    it('strips title backticks from the badge and tooltip because they are plain strings', () => {
+        const backticked: RouteMarginFile = {
+            fileId: 'f3',
+            stops: [{ stopId: 's02', planLabel: '02', title: 'the policy decides by `EditWindow`' }],
+            uncovered: [],
+            uncoveredLines: 0,
+            parsed: true,
+            changed: true,
+        };
+
+        expect(marginBadgeLabel(backticked)).toBe('explained in 02 · policy decides by EditWindow');
+        expect(marginBadgeTitle(backticked, false)).toBe('Explained in stop 02 · policy decides by EditWindow');
+    });
+
     it('gives no badge to a file without changed lines', () => {
         const empty: RouteMarginFile = {
             fileId: 'f2',

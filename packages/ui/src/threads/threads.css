@@ -110,9 +110,9 @@
     flex: 1;
 }
 
+/* Comment bodies render as markdown. Paragraphs and line breaks use elements, not `pre-wrap`. */
 .thread__body {
     margin: 6px 0 0 25px;
-    white-space: pre-wrap;
     font-size: var(--font-size-ui);
     line-height: 1.55;
     color: var(--text-secondary);

@@ -110,7 +110,6 @@ export interface RouteViewProps {
     readonly token: string;
     readonly session: SessionStore;
     readonly pr: PrMeta | null;
-    readonly prError: string | null;
     readonly diff: PrDiff | null;
     readonly diffError: string | null;
     readonly lenses: UiReviewLensesResponse | null;
@@ -144,7 +143,6 @@ export function RouteView({
     token,
     session,
     pr,
-    prError,
     diff,
     diffError,
     lenses,
@@ -234,7 +232,6 @@ export function RouteView({
     }, [jumpTo, navigation]);
 
     if (
-        prError !== null ||
         diffError !== null ||
         lensesError !== null ||
         (progress === null && progressError !== null) ||
@@ -248,7 +245,7 @@ export function RouteView({
     ) {
         return (
             <main className="route route--status" id="view-route">
-                <p className="route__status">{prError ?? diffError ?? lensesError ?? progressError ?? 'Loading the route…'}</p>
+                <p className="route__status">{diffError ?? lensesError ?? progressError ?? 'Loading route…'}</p>
             </main>
         );
     }

@@ -1,0 +1,77 @@
+/*
+ * Markdown renderer styles. Font size and colour come from the insertion point: comment body,
+ * stop title and route paragraph have different typography but share the same markup.
+ */
+
+.md-p,
+.md-heading,
+.md-list,
+.md-pre {
+    margin: 0 0 var(--space-inner-tight);
+}
+
+.md-p:last-child,
+.md-heading:last-child,
+.md-list:last-child,
+.md-pre:last-child {
+    margin-bottom: 0;
+}
+
+/* A markdown heading is a bold line at the same font size (SPEC-additions §1e). */
+.md-heading {
+    margin-top: var(--space-inner);
+    font-weight: 600;
+    color: var(--text-primary-soft);
+}
+
+.md-heading:first-child {
+    margin-top: 0;
+}
+
+.md-list {
+    padding-left: 18px;
+}
+
+.md-item {
+    margin: 2px 0;
+}
+
+/* Keep a nested list close to its parent item rather than the neighbouring paragraph. */
+.md-item .md-list {
+    margin: 2px 0 0;
+}
+
+/*
+ * Inline code: only font family, size and colour, following `EditPolicy` in the prototype
+ * (README §Type "mono for machine data"). No background, border or padding, since they
+ * break the line's rhythm.
+ */
+.md-code {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-code);
+    color: var(--text-secondary);
+}
+
+.md-pre {
+    padding: var(--space-inner-tight) var(--space-inner);
+    border: 1px solid var(--border-hairline-strong);
+    border-radius: var(--radius-badge);
+    background: var(--surface-command);
+    /* No horizontal scrolling in the card: long lines wrap. */
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-code);
+    line-height: var(--line-height-code);
+    color: var(--code-text);
+}
+
+.md-pre code {
+    font: inherit;
+    color: inherit;
+}
+
+/* A long URL breaks anywhere instead of widening the column. */
+.md-link {
+    overflow-wrap: anywhere;
+}

@@ -77,6 +77,8 @@ describe('server bundle', () => {
             for (const [asset, contentType] of [
                 [assetHref(html, '.js'), 'text/javascript'],
                 [assetHref(html, '.css'), 'text/css'],
+                // The favicon is the product mark: the bundle treats it as an asset just like scripts and styles.
+                [assetHref(html, '.svg'), 'image/svg+xml'],
             ] as const) {
                 const response = await get(manifest.port, asset);
                 expect(response.status, asset).toBe(200);

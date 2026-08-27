@@ -45,6 +45,15 @@
     font: 400 var(--font-size-input) / 1.4 var(--font-sans);
 }
 
+/*
+ * A narrow exception to the global focus ring (base.css): the palette opens with
+ * focus already in this sole input, and a border inside the pop-up panel reads as noise.
+ * The panel itself indicates focus.
+ */
+.command-palette__query:focus-visible {
+    outline: none;
+}
+
 .command-palette__query::placeholder {
     color: var(--text-dim);
 }

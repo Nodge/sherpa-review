@@ -4,7 +4,6 @@ import type {
     FileContent,
     PrDiff,
     PriorityClass,
-    PrMeta,
     PublishResult,
     Thread,
     UiCancelResponse,
@@ -30,7 +29,6 @@ import {
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
-    uiReviewPrResponseSchema,
     uiReviewProgressResponseSchema,
     uiReviewRouteResponseSchema,
     uiReviewThreadsResponseSchema,
@@ -63,10 +61,6 @@ export async function enqueueEchoTask(token: string, text: string, priority?: Pr
 export async function cancelTask(token: string, taskId: number): Promise<UiCancelResponse['outcome']> {
     const body: UiCancelResponse = await post(UI_ENDPOINTS.cancel, token, { taskId }, uiCancelResponseSchema);
     return body.outcome;
-}
-
-export async function fetchReviewPr(token: string): Promise<PrMeta> {
-    return (await get(UI_ENDPOINTS.reviewPr, token, uiReviewPrResponseSchema)).pr;
 }
 
 export async function fetchReviewDiff(token: string): Promise<PrDiff> {

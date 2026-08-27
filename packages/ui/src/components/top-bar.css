@@ -77,6 +77,15 @@
     color: var(--text-secondary);
 }
 
+/* Last segment links to the PR on the host. The prototype gives it the same `--text-secondary`
+   uses the same style as a text segment. The global link's accent colour and underline are unnecessary here. */
+a.top-bar__breadcrumb-item,
+a.top-bar__breadcrumb-item:visited,
+a.top-bar__breadcrumb-item:hover {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
 .top-bar__breadcrumb-separator {
     color: var(--text-separator);
 }
@@ -236,6 +245,14 @@
     color: var(--text-dim);
 }
 
+/* Disconnected-agent explanation above the launch command, from the removed banner (decision #32). */
+.agent-popover__offline {
+    margin: 0 0 var(--space-inner);
+    font-size: var(--font-size-secondary);
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
 /* --- Search --- */
 
 .search-button {
@@ -253,12 +270,3 @@
     padding: 1px 4px;
 }
 
-/* --- Avatar --- */
-
-.top-bar__avatar {
-    width: 24px;
-    height: 24px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--surface-segment-active);
-}

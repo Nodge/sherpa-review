@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import { stripInlineCode } from '../../markdown/markdown.js';
+import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
 import type { RouteStopView } from '../../route/route-model.js';
 import { formatCount, plural } from '../../text.js';
@@ -64,7 +66,7 @@ export function StopCard({
             className={`route-stop route-stop--${tier}${unfilled ? ' route-stop--unfilled' : ''}${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${stop.id}`}
             role="region"
-            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stop.title}`}
+            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stripInlineCode(stop.title)}`}
         >
             <div className="route-stop__side">
                 <div className="route-stop__head">
@@ -101,7 +103,9 @@ export function StopCard({
                     />
                 </div>
 
-                <h2 className="route-stop__title">{stop.title}</h2>
+                <h2 className="route-stop__title">
+                    <Markdown text={stop.title} profile="route" />
+                </h2>
 
                 {filledBeforeStop && !unfilled ? (
                     <p className="route-stop__filled-before">filled before the agent stopped</p>
@@ -113,12 +117,18 @@ export function StopCard({
                     <Paragraph text={stop.paragraph} />
                 )}
 
-                {stop.bridge === null ? null : <p className="route-stop__bridge">{stop.bridge}</p>}
+                {stop.bridge === null ? null : (
+                    <p className="route-stop__bridge">
+                        <Markdown text={stop.bridge} profile="route" />
+                    </p>
+                )}
 
                 {stop.validationNotes.length === 0 ? null : (
                     <ul className="route-stop__validation">
                         {stop.validationNotes.map((note) => (
-                            <li key={note}>{note}</li>
+                            <li key={note}>
+                                <Markdown text={note} profile="route" />
+                            </li>
                         ))}
                     </ul>
                 )}
@@ -197,17 +207,25 @@ export function StopViewedToggle({
     );
 }
 
-/** Paragraph clamped to four sentences (SPEC §2.9). */
+/**
+ * A paragraph clamped to four sentences (SPEC §2.9). The clamp truncates plain text before rendering,
+ * so the truncated start can split a pair of backticks. That backtick
+ * stays visible as a literal until the paragraph is expanded.
+ */
 function Paragraph({ text }: { text: string }) {
     const [full, setFull] = useState(false);
     const { head, rest } = clampParagraph(text);
 
     if (rest === '' || full) {
-        return <p className="route-stop__paragraph">{text}</p>;
+        return (
+            <p className="route-stop__paragraph">
+                <Markdown text={text} profile="route" />
+            </p>
+        );
     }
     return (
         <p className="route-stop__paragraph">
-            {head}{' '}
+            <Markdown text={head} profile="route" />{' '}
             <button
                 type="button"
                 className="route-stop__more"

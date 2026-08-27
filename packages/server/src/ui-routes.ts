@@ -1,6 +1,7 @@
 import type { ServerResponse } from 'node:http';
 
 import type {
+    PrMeta,
     UiCancelResponse,
     UiEnqueueResponse,
     UiProgressEvent,
@@ -30,12 +31,24 @@ import type { ReviewFeed } from './review-feed.js';
 import type { RouteStore } from './route-store.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
+/**
+ * Synchronous PR metadata source: snapshots are assembled in a timer and a microtask, where
+ * waiting for a network `getPr()` is not an option. Implemented by `PrMetaCache`.
+ */
+export interface PrMetaSource {
+    /** null means there is no host or metadata has not loaded yet. */
+    get: () => PrMeta | null;
+    subscribe: (listener: () => void) => () => void;
+}
+
 export interface UiRoutesOptions {
     readonly prKey: string;
     readonly queue: TaskQueue;
     readonly registry: WorkerRegistry;
     /** This PR's host adapter name. null means no host and no review endpoints. */
     readonly reviewHost: string | null;
+    /** PR metadata for the snapshot: updates also wake SSE clients. */
+    readonly prMeta: PrMetaSource;
     /** Thread revision for SSE. null means this server never has review events. */
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress: its revision is sent over the channel to synchronize the second tab. */
@@ -174,6 +187,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
 
     const unsubscribeQueue = options.queue.subscribeChanges(schedule);
     const unsubscribeWorker = options.registry.subscribe(schedule);
+    const unsubscribePrMeta = options.prMeta.subscribe(schedule);
     // Thread subscription starts with the first SSE client and stops with the last (see ReviewFeed).
     // It starts after the first state snapshot so that the channel begins with `state`.
     let unsubscribeReview: (() => void) | null = null;
@@ -184,6 +198,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         clearInterval(keepalive);
         unsubscribeQueue();
         unsubscribeWorker();
+        unsubscribePrMeta();
         unsubscribeReview?.();
         unsubscribeProgress?.();
         unsubscribeRoute?.();
@@ -230,6 +245,7 @@ function buildState(options: UiRoutesOptions): UiState {
         worker: options.registry.status(),
         tasks: options.queue.listTasks().map(toUiTask),
         reviewHost: options.reviewHost,
+        pr: options.prMeta.get(),
     };
 }
 

@@ -68,11 +68,13 @@
     background: var(--accent-hover);
 }
 
-.overview {
+/* The PR header spans the view above the grid, as in the prototype's Overview screen. */
+.overview__grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 356px;
     gap: var(--space-card);
     align-items: start;
+    margin-top: 24px;
 }
 
 .overview__main,
@@ -348,7 +350,7 @@
 }
 
 @media (max-width: 1099px) {
-    .overview {
+    .overview__grid {
         grid-template-columns: minmax(0, 1fr);
     }
 
