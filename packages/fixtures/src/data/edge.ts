@@ -205,6 +205,29 @@ export function makeEdgeFixture(): FixtureData {
             label: 'My files',
             available: false,
             note: 'You do not own any CODEOWNERS zone touched by this PR.',
+            zones: [
+                {
+                    path: 'services/orders/src/infra/time',
+                    mine: false,
+                    owner: 'checkout-infra',
+                    paths: [
+                        'services/orders/src/infra/time/clock.ts',
+                        'services/orders/src/infra/time/index.ts',
+                    ],
+                },
+                {
+                    path: 'services/orders/src/domain',
+                    mine: false,
+                    owner: 'checkout-domain',
+                    paths: ['services/orders/src/domain/order.ts'],
+                },
+                {
+                    path: 'services/orders/src/api',
+                    mine: false,
+                    owner: null,
+                    paths: ['services/orders/src/api/schemas.ts'],
+                },
+            ],
         }),
         extraLenses: [],
         currentUser: reviewer,

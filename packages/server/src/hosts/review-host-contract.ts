@@ -212,14 +212,27 @@ export function describeReviewHostContract(
             feed.stop();
         });
 
-        it('lenses pass schema validation', async () => {
+        it('lenses pass schema validation and zones reference only diff files without duplicates', async () => {
             const host = makeHost();
-            const ownership = await host.ownershipLens();
-            if (ownership !== null) {
-                expect(() => lensSchema.parse(ownership)).not.toThrow();
-            }
-            for (const lens of await host.extraLenses()) {
+            const [diff, ownership, extra] = await Promise.all([
+                host.getDiff(),
+                host.ownershipLens(),
+                host.extraLenses(),
+            ]);
+            const lenses = ownership === null ? extra : [ownership, ...extra];
+            const diffPaths = new Set(diff.files.map((file) => file.path));
+
+            for (const lens of lenses) {
                 expect(() => lensSchema.parse(lens)).not.toThrow();
+                const zonedPaths = new Set<string>();
+                for (const zone of lens.zones ?? []) {
+                    expect(zone.paths.length).toBeGreaterThan(0);
+                    for (const path of zone.paths) {
+                        expect(diffPaths.has(path), `${lens.id}: unknown zone path ${path}`).toBe(true);
+                        expect(zonedPaths.has(path), `${lens.id}: path ${path} belongs to two zones`).toBe(false);
+                        zonedPaths.add(path);
+                    }
+                }
             }
         });
 

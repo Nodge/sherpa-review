@@ -26,7 +26,7 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
         await expect(page.locator('.full-diff')).toBeVisible();
         await expect(page.getByRole('tree', { name: 'File tree' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'All 18', exact: true })).toBeVisible();
-        await expect(page.locator('.full-diff__count')).toHaveText('18 files');
+        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
         await expect(page.locator('.file-card').first()).toBeVisible();
         await expect(page.locator('.diff-row').first()).toBeVisible();
     });
@@ -34,10 +34,10 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
     await test.step('lens and filename filter', async () => {
         await page.getByRole('button', { name: 'Mine 12', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Mine 12', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.locator('.full-diff__count')).toHaveText('12 files');
+        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '12');
 
         await page.getByRole('button', { name: 'All 18', exact: true }).click();
-        await expect(page.locator('.full-diff__count')).toHaveText('18 files');
+        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
 
         const filterInput = page.getByRole('searchbox', { name: 'Filter files by name' });
         const pciAuditFile = page.locator(
@@ -129,13 +129,15 @@ async function openPciAuditBySearch(page: Page): Promise<void> {
 
 async function expectInScrollViewport(page: Page, locator: Locator): Promise<void> {
     const inViewport = await locator.evaluate((element) => {
-        const scroller = element.closest('.diff-list');
+        const scroller = element.closest('.full-diff');
         if (!(scroller instanceof HTMLElement)) {
             return false;
         }
         const elementBox = element.getBoundingClientRect();
         const scrollerBox = scroller.getBoundingClientRect();
-        return elementBox.bottom > scrollerBox.top && elementBox.top < scrollerBox.bottom;
+        const toolbarBottom = scroller.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom;
+        const viewportTop = Math.max(scrollerBox.top, toolbarBottom ?? 0);
+        return elementBox.bottom > viewportTop && elementBox.top < scrollerBox.bottom;
     });
     expect(inViewport).toBe(true);
 }

@@ -227,7 +227,7 @@
 /* --- Stop grid --- */
 
 .route__stops {
-    padding: 0 var(--space-page) 180px;
+    padding: 0 var(--space-page) var(--space-bar-reserve);
     max-width: 1560px;
 }
 

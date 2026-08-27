@@ -18,6 +18,7 @@ const EMPTY_PCI: Lens = {
     paths: [],
     available: false,
     note: 'No files of this PR are in the PCI DSS scope.',
+    zones: null,
 };
 const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI] });
 const ACTIVE = selectFilter(FILTERS, 'all');

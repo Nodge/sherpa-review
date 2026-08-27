@@ -77,7 +77,7 @@ for (const gesture of ['up', 'down'] as const) {
         const server = await launchSherpa('fixture-large');
         await openFullDiff(page, server.url);
 
-        const report = await page.locator('.diff-list').evaluate(
+        const report = await page.locator('.full-diff').evaluate(
             async (scroller, options) => {
                 const nextFrame = (): Promise<void> =>
                     new Promise<void>((resolve) => {
@@ -85,7 +85,12 @@ for (const gesture of ['up', 'down'] as const) {
                             resolve();
                         });
                     });
-                const listTop = (): number => scroller.getBoundingClientRect().top;
+                const listTop = (): number => {
+                    const toolbarBottom = document
+                        .querySelector<HTMLElement>('.full-diff__toolbar')
+                        ?.getBoundingClientRect().bottom;
+                    return Math.max(scroller.getBoundingClientRect().top, toolbarBottom ?? 0);
+                };
                 const anchor = (): { index: number; offset: number } | null => {
                     const top = listTop();
                     for (const item of document.querySelectorAll<HTMLElement>('.diff-list__item')) {
@@ -161,13 +166,13 @@ async function openFullDiff(page: Page, url: string): Promise<void> {
     await page.goto(url);
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
     await expect(page.locator('.diff-list')).toBeVisible();
-    await expect(page.locator('.full-diff__count')).toHaveText('64 files');
+    await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '64');
     // Wait for IBM Plex. Loading it changes every card's height at once, which would skew this measurement.
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
 function walk(page: Page, direction: 'down' | 'up'): Promise<WalkReport> {
-    return page.locator('.diff-list').evaluate(
+    return page.locator('.full-diff').evaluate(
         async (scroller, options): Promise<WalkReport> => {
             const nextFrame = (): Promise<void> =>
                 new Promise<void>((resolve) => {
@@ -175,9 +180,14 @@ function walk(page: Page, direction: 'down' | 'up'): Promise<WalkReport> {
                         resolve();
                     });
                 });
-            const listTop = (): number => scroller.getBoundingClientRect().top;
+            const listTop = (): number => {
+                const toolbarBottom = document
+                    .querySelector<HTMLElement>('.full-diff__toolbar')
+                    ?.getBoundingClientRect().bottom;
+                return Math.max(scroller.getBoundingClientRect().top, toolbarBottom ?? 0);
+            };
 
-            /** Top visible card and its offset from the top edge of the list. */
+            /** The top visible card and its offset from the bottom edge of the sticky toolbar. */
             const anchor = (): { index: number; offset: number } | null => {
                 const top = listTop();
                 for (const item of document.querySelectorAll<HTMLElement>('.diff-list__item')) {

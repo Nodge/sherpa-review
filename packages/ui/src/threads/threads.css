@@ -250,6 +250,12 @@
     overflow: clip;
 }
 
+/* Parents already provide horizontal page-padding. Overview overrides the layout separately. */
+.diff-list > .thread-outside,
+.route__stops > .thread-outside {
+    margin-inline: 0;
+}
+
 .thread-outside__toggle {
     width: 100%;
     padding: 10px 13px;

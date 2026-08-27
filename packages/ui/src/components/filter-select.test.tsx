@@ -18,6 +18,7 @@ const EMPTY_PCI: Lens = {
     paths: [],
     available: true,
     note: null,
+    zones: null,
 };
 const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI] });
 const ACTIVE = selectFilter(FILTERS, 'all');

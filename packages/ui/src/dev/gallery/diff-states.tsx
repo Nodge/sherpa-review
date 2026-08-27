@@ -2,7 +2,7 @@ import { fileContentOf, fixtureData } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
-import { useMemo, useRef, useSyncExternalStore } from 'react';
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { parseFileDiff } from '../../diff/parse.js';
 import type { DiffHunk } from '../../diff/model.js';
@@ -123,11 +123,14 @@ function CardState({
 function ListState({ fixture }: { fixture: FixtureName }) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
     const store = useMemo(() => createDiffViewStore({ files: data.diff.files, storage: null }), [data]);
+    const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
-    // The list gets its height from the view, so the gallery needs a frame with its own height.
+    // The list takes its height from the outer scroller, so the state stage acts as that scroller in the gallery.
     return (
-        <div className="gallery__viewport">
+        <div className="gallery__viewport" ref={setScrollElement}>
             <DiffFileList
+                scrollElement={scrollElement}
+                scrollPaddingStart={0}
                 files={data.diff.files}
                 store={store}
                 contentAvailable={data.pr.capabilities.fileContent}
@@ -152,10 +155,13 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
     const store = useMemo(() => createDiffViewStore({ files: [file], storage: null }), [file]);
     const failed = useRef(new Set<string>());
+    const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
     return (
-        <div className="gallery__viewport">
+        <div className="gallery__viewport" ref={setScrollElement}>
             <DiffFileList
+                scrollElement={scrollElement}
+                scrollPaddingStart={0}
                 files={[file]}
                 store={store}
                 contentAvailable={false}

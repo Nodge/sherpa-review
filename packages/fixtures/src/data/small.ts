@@ -85,7 +85,12 @@ export function makeSmallFixture(): FixtureData {
                 }),
             }),
         ],
-        ownership: lens({ id: 'mine', label: 'My files', paths: [path] }),
+        ownership: lens({
+            id: 'mine',
+            label: 'My files',
+            paths: [path],
+            zones: [{ path: 'services/orders/src/infra', mine: true, owner: 'checkout-infra', paths: [path] }],
+        }),
         extraLenses: [
             lens({
                 id: 'pci',

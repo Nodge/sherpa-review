@@ -32,7 +32,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
 }
 
 function lens(id: string, label: string, paths: readonly string[], patch: Partial<Lens> = {}): Lens {
-    return { id, label, paths: [...paths], available: true, note: null, ...patch };
+    return { id, label, paths: [...paths], available: true, note: null, zones: null, ...patch };
 }
 
 const FILES = [

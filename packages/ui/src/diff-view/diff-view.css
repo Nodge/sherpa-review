@@ -3,17 +3,11 @@
  * ("Right column: one card per hunk…") and SPEC §2.13–2.14. Values use tokens only.
  */
 
-/* --- Card list: its own scroll area for virtualization --- */
+/* --- Card list: a regular block inside the outer view scroller --- */
 
 .diff-list {
     position: relative;
-    overflow: auto;
-    /* Height fills the rest of the view column (set by the page shell). A fixed calculation from 100vh
-       would miss the view toolbar and connection banner, giving the page a second scrollbar. */
-    flex: 1;
-    min-height: 0;
-    padding: 0 var(--space-page) var(--space-page);
-    contain: strict;
+    padding: 0 var(--space-page) var(--space-bar-reserve);
 }
 
 .diff-list__inner {

@@ -1,4 +1,4 @@
-import type { Comment, FileAnchor, HostId, Lens, ReviewUser, Thread } from '@sherpa/protocol';
+import type { Comment, FileAnchor, HostId, Lens, LensZone, ReviewUser, Thread } from '@sherpa/protocol';
 
 import { makeFileId } from './patch.js';
 
@@ -81,6 +81,7 @@ export interface LensSpec {
     paths?: readonly string[];
     available?: boolean;
     note?: string;
+    zones?: readonly LensZone[] | null;
 }
 
 export function lens(spec: LensSpec): Lens {
@@ -90,5 +91,6 @@ export function lens(spec: LensSpec): Lens {
         paths: [...(spec.paths ?? [])],
         available: spec.available ?? true,
         note: spec.note ?? null,
+        zones: spec.zones?.map((zone) => ({ ...zone, paths: [...zone.paths] })) ?? null,
     };
 }

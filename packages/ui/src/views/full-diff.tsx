@@ -8,7 +8,8 @@ import type {
     UiReviewLensesResponse,
     UiReviewProgressResponse,
 } from '@sherpa/protocol';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
     fetchFileContent,
@@ -57,7 +58,6 @@ import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
-import { formatCount, plural } from '../text.js';
 import type { CollapsedStorage } from '../tree/collapsed-storage.js';
 import { globalCollapsedStorage } from '../tree/collapsed-storage.js';
 import type { FileOutlineModel, OutlineEntry } from '../tree/file-panel.tsx';
@@ -65,8 +65,8 @@ import { FilePanel } from '../tree/file-panel.tsx';
 import './full-diff.css';
 
 /**
- * Full diff view (README §10): filters and file tree on the left, PR header on the right,
- * with the toolbar and diff cards. The tree and cards share one filter model, kept in the session
+ * The "Full diff" view (README §10): PR header and sticky toolbar span the full width, with
+ * the file tree panel and diff cards below. A single filter model serves the tree and the cards. It lives in the session
  * store and survives reloads through the URL fragment.
  */
 
@@ -188,18 +188,12 @@ export function FullDiffView({
         store === null ||
         threadStore === null
     ) {
-        // `__main` defines the column. Without it the toolbar and status would line up horizontally, since `.full-diff`
-        // lays out the panel and right side horizontally.
         return (
-            <main className="full-diff">
-                <div className="full-diff__main">
-                    <div className="full-diff__toolbar">
-                        <h1 className="full-diff__title">Full diff</h1>
-                    </div>
-                    <p className="full-diff__status">
-                        {diffError ?? lensesError ?? progressError ?? 'Loading diff…'}
-                    </p>
+            <main className="full-diff full-diff--status">
+                <div className="full-diff__toolbar">
+                    <h1 className="full-diff__title">Full diff</h1>
                 </div>
+                <p className="full-diff__status">{diffError ?? lensesError ?? progressError ?? 'Loading the diff…'}</p>
             </main>
         );
     }
@@ -469,7 +463,27 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         };
     }, [reloadThreads, threadStore, threadsReloadAttempt, threadsRevision]);
 
+    const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+    const [scrollMarginElement, setScrollMarginElement] = useState<HTMLElement | null>(null);
     const listRef = useRef<DiffListHandle | null>(null);
+    const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
+    const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+    // The tree panel uses the scrollport height, not the window height: a top bar and banner may sit above the view.
+    useLayoutEffect(() => {
+        if (scrollElement === null) {
+            return;
+        }
+        const report = (): void => {
+            setViewportHeight(scrollElement.clientHeight);
+        };
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(scrollElement);
+        return () => {
+            observer.disconnect();
+        };
+    }, [scrollElement]);
     const linkedThread = useMemo(
         () => threadSnapshot.threads.find((thread) => thread.id === initialThreadId) ?? null,
         [initialThreadId, threadSnapshot.threads],
@@ -849,145 +863,188 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
     );
 
+    const layoutStyle =
+        toolbarHeight === null && viewportHeight === null
+            ? undefined
+            : ({
+                  ...(toolbarHeight === null
+                      ? {}
+                      : { '--full-diff-toolbar-height': `${String(toolbarHeight)}px` }),
+                  ...(viewportHeight === null
+                      ? {}
+                      : { '--full-diff-viewport-height': `${String(viewportHeight)}px` }),
+              } as CSSProperties);
+
     return (
-        <main className="full-diff">
-            <FilePanel
-                files={treeFiles}
-                filters={filters}
-                activeFilter={filter}
-                onFilter={changeFilter}
-                pciFileIds={pciFileIds}
-                mineFileIds={mineFileIds}
-                readState={snapshot.readState}
-                route={routeMargin}
-                onJumpToStop={onJumpToStop}
-                activeFileId={topFileId}
-                onOpenFile={openFile}
-                onToggleViewed={toggleViewed}
-                writeError={
-                    writeError === null
-                        ? null
-                        : {
-                              text: 'not saved',
-                              onRetry: () => {
-                                  writeFromTree(writeError.fileId, writeError.viewed);
-                              },
-                          }
-                }
-                outline={outline}
-                onOpenHunk={openHunk}
-                prKey={prKey}
-                storage={collapsedStorage}
-                inputRef={searchRef}
+        <main
+            className="full-diff"
+            ref={setScrollElement}
+            data-shown-files={treeFiles.length}
+            style={layoutStyle}
+        >
+            <PrHeader
+                ref={setScrollMarginElement}
+                pr={pr}
+                additions={sum(diff.files, 'additions')}
+                deletions={sum(diff.files, 'deletions')}
+                files={diff.files.length}
+                pci={pci?.available === true ? pci : null}
+                pciActive={filter.id === PCI_FILTER_ID}
+                onTogglePci={() => {
+                    changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
+                }}
             />
 
-            <div className="full-diff__main">
-                <PrHeader
-                    pr={pr}
-                    additions={sum(diff.files, 'additions')}
-                    deletions={sum(diff.files, 'deletions')}
-                    files={diff.files.length}
-                    pci={pci?.available === true ? pci : null}
-                    pciActive={filter.id === PCI_FILTER_ID}
-                    onTogglePci={() => {
-                        changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
-                    }}
-                />
+            <FullDiffToolbar
+                store={store}
+                filters={filters}
+                filter={filter}
+                onFilter={changeFilter}
+                threadsShow={threadsShow}
+                threadCounts={threadCounts}
+                onThreadsShow={session.setThreadsShow}
+                smallPr={props.smallPr ?? false}
+                onHeight={setToolbarHeight}
+            />
 
-                <Toolbar
-                    store={store}
+            <div className="full-diff__body">
+                <FilePanel
+                    files={treeFiles}
                     filters={filters}
-                    filter={filter}
+                    activeFilter={filter}
                     onFilter={changeFilter}
-                    shown={treeFiles.length}
-                    threadsShow={threadsShow}
-                    threadCounts={threadCounts}
-                    onThreadsShow={session.setThreadsShow}
-                    smallPr={props.smallPr ?? false}
-                />
-
-                {/* An empty result describes the filter, not the list. Its explanation sits next to
-                    the card kept on screen, instead of replacing it (SPEC §2.7). */}
-                {treeFiles.length === 0 ? (
-                    <div className="full-diff__zero">
-                        <p className="full-diff__zero-text">{zeroResultText(filter)}</p>
-                        <button
-                            type="button"
-                            className="full-diff__zero-action"
-                            onClick={() => {
-                                changeFilter(ALL_FILTER_ID);
-                            }}
-                        >
-                            Show all files
-                        </button>
-                    </div>
-                ) : null}
-
-                {/* The list never unmounts, since that would discard the marks for requested
-                    parses and for scrolling to a linked file that has already happened. */}
-                <DiffFileList
-                    ref={listRef}
-                    files={shown}
-                    store={store}
-                    contentAvailable={pr.capabilities.fileContent}
-                    parse={parse}
-                    loadContent={loadContent}
-                    onOpenInEditor={onOpenInEditor}
-                    onViewed={markViewed}
-                    threadStore={threadStore}
-                    threadActions={threadActions}
-                    threadVisible={threadVisible}
-                    onCommentLine={commentLine}
-                    onLineFocus={focusLine}
-                    onLineBlur={blurLine}
-                    onFocusThread={setFocusedThreadId}
-                    threadNow={threadNow}
-                    outsideThreads={
-                        <OutsideThreads
-                            threads={outsideThreads}
-                            store={threadStore}
-                            actions={threadActions}
-                            now={threadNow}
-                            initialThreadId={initialThreadId}
-                            onFocusThread={setFocusedThreadId}
-                        />
-                    }
-                    initialFileId={linkedFileId ?? initialFileId}
-                    keptFileId={keptFileId}
-                    onTopFileChange={setTopFileId}
-                    onScroll={onScroll}
-                    routeMargin={routeMargin}
+                    pciFileIds={pciFileIds}
+                    mineFileIds={mineFileIds}
+                    readState={snapshot.readState}
+                    route={routeMargin}
                     onJumpToStop={onJumpToStop}
+                    activeFileId={topFileId}
+                    onOpenFile={openFile}
+                    onToggleViewed={toggleViewed}
+                    writeError={
+                        writeError === null
+                            ? null
+                            : {
+                                  text: 'not saved',
+                                  onRetry: () => {
+                                      writeFromTree(writeError.fileId, writeError.viewed);
+                                  },
+                              }
+                    }
+                    outline={outline}
+                    onOpenHunk={openHunk}
+                    prKey={prKey}
+                    storage={collapsedStorage}
+                    inputRef={searchRef}
                 />
+
+                <div className="full-diff__main">
+                    {/* An empty result describes the filter, not the list: the explanation sits next to
+                        the card, which stays on screen, instead of replacing it (SPEC §2.7). */}
+                    {treeFiles.length === 0 ? (
+                        <div className="full-diff__zero">
+                            <p className="full-diff__zero-text">{zeroResultText(filter)}</p>
+                            <button
+                                type="button"
+                                className="full-diff__zero-action"
+                                onClick={() => {
+                                    changeFilter(ALL_FILTER_ID);
+                                }}
+                            >
+                                Show all files
+                            </button>
+                        </div>
+                    ) : null}
+
+                    {/* The list never unmounts: that would lose the records of requested
+                        parsing and of scrolling to a linked file already being complete. */}
+                    <DiffFileList
+                        ref={listRef}
+                        scrollElement={scrollElement}
+                        scrollMarginElement={scrollMarginElement}
+                        scrollPaddingStart={toolbarHeight ?? 0}
+                        files={shown}
+                        store={store}
+                        contentAvailable={pr.capabilities.fileContent}
+                        parse={parse}
+                        loadContent={loadContent}
+                        onOpenInEditor={onOpenInEditor}
+                        onViewed={markViewed}
+                        threadStore={threadStore}
+                        threadActions={threadActions}
+                        threadVisible={threadVisible}
+                        onCommentLine={commentLine}
+                        onLineFocus={focusLine}
+                        onLineBlur={blurLine}
+                        onFocusThread={setFocusedThreadId}
+                        threadNow={threadNow}
+                        outsideThreads={
+                            <OutsideThreads
+                                threads={outsideThreads}
+                                store={threadStore}
+                                actions={threadActions}
+                                now={threadNow}
+                                initialThreadId={initialThreadId}
+                                onFocusThread={setFocusedThreadId}
+                            />
+                        }
+                        initialFileId={linkedFileId ?? initialFileId}
+                        keptFileId={keptFileId}
+                        onTopFileChange={setTopFileId}
+                        onScroll={onScroll}
+                        routeMargin={routeMargin}
+                        onJumpToStop={onJumpToStop}
+                    />
+                </div>
             </div>
         </main>
     );
 }
 
-/** Full diff toolbar: view title plus shared controls (README §10). */
-function Toolbar({
+/** Sticky full diff toolbar that measures its own height (README §1, §10). */
+export function FullDiffToolbar({
     store,
     filters,
     filter,
     onFilter,
-    shown,
     threadsShow,
     threadCounts,
     onThreadsShow,
     smallPr,
+    onHeight,
 }: {
     store: DiffViewStore;
     filters: readonly FileFilter[];
     filter: FileFilter;
     onFilter: (id: string) => void;
-    shown: number;
     threadsShow: ThreadsShow;
     threadCounts: ThreadSourceCounts;
     onThreadsShow: (show: ThreadsShow) => void;
     smallPr: boolean;
+    onHeight?: ((height: number) => void) | undefined;
 }) {
+    const ref = useRef<HTMLDivElement | null>(null);
+
+    // Measure before paint, or the first frame will use the height fallback from full-diff.css.
+    // Take the initial measurement manually because ResizeObserver stays silent in background tabs.
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (element === null || onHeight === undefined) {
+            return;
+        }
+        const report = (): void => {
+            onHeight(element.getBoundingClientRect().height);
+        };
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+        };
+    }, [onHeight]);
+
     return (
-        <div className="full-diff__toolbar">
+        <div className="full-diff__toolbar" ref={ref}>
             <h1 className="full-diff__title">Full diff</h1>
             <span className="full-diff__subtitle">
                 A classic reader. The route stays in the margin and no longer sets the order.
@@ -995,12 +1052,10 @@ function Toolbar({
             {smallPr ? <span className="full-diff__small-pr">small PR, no route needed</span> : null}
             <span className="full-diff__spacer" />
             <DiffModeToggle store={store} />
+            <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
+            <span className="full-diff__divider" aria-hidden="true" />
             <span className="toolbar-label">Comments:</span>
             <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
-            <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
-            <span className="full-diff__count">
-                {formatCount(shown)} {plural(shown, 'file', 'files', 'files')}
-            </span>
         </div>
     );
 }

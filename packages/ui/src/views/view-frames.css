@@ -233,12 +233,11 @@
 }
 
 .ownership-row {
-    display: grid;
-    grid-template-columns: minmax(150px, 1fr) auto minmax(140px, auto) 88px;
+    display: flex;
+    flex-direction: column;
     gap: var(--space-inner);
-    align-items: center;
-    min-height: 42px;
-    padding: 7px 18px;
+    align-items: stretch;
+    padding: 12px 16px;
     border: 0;
     border-bottom: 1px solid var(--border-hairline);
     background: transparent;
@@ -255,6 +254,13 @@
     background: var(--surface-raised);
 }
 
+.ownership-row__main {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-inner);
+}
+
 .ownership-row__path {
     min-width: 0;
     overflow: hidden;
@@ -266,22 +272,24 @@
 }
 
 .ownership-chip {
-    padding: 2px 6px;
+    flex: none;
+    padding: 1px 5px;
     border: 1px solid var(--border-chip);
     border-radius: var(--radius-key);
-    background: var(--surface-chip);
+    background: transparent;
     font-family: var(--font-mono);
-    font-size: var(--font-size-scope);
+    font-size: 10px;
     white-space: nowrap;
 }
 
 .ownership-chip--mine {
-    border-color: var(--read-border);
+    border-color: var(--ownership-mine-border);
     background: var(--ownership-mine-surface);
     color: var(--diff-add-text-strong);
 }
 
 .ownership-chip--other {
+    border-color: var(--border-strong-lifted);
     color: var(--text-muted);
 }
 
@@ -292,19 +300,26 @@
 }
 
 .ownership-chip--generated {
+    border-color: var(--border-hairline-strong);
     color: var(--text-dim);
 }
 
+.ownership-row__spacer {
+    min-width: var(--space-inner);
+    flex: 1;
+}
+
 .ownership-row__stats,
-.ownership-row__delta {
-    color: var(--text-dim);
+.ownership-row__add,
+.ownership-row__del {
+    flex: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     white-space: nowrap;
 }
 
-.ownership-row__delta {
-    text-align: right;
+.ownership-row__stats {
+    color: var(--text-dim);
 }
 
 .ownership-row__add {
@@ -313,6 +328,14 @@
 
 .ownership-row__del {
     color: var(--diff-del-text);
+}
+
+.ownership-row__note {
+    overflow: hidden;
+    color: var(--text-muted-dim);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .discussion-counts {

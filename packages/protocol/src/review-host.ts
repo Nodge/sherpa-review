@@ -57,7 +57,11 @@ export interface ReviewHost {
      */
     getFileContent?(fileId: HostId): Promise<FileContent | null>;
 
-    /** "My files" lens (CODEOWNERS or host equivalent). null if the host has no ownership concept. */
+    /**
+     * The "My files" lens (CODEOWNERS). null means the host has no ownership concept.
+     * The lens's `zones` includes all PR zones with boundaries and owners (not just the
+     * reviewer's). null means the implementation only distinguishes "mine/not mine" membership.
+     */
     ownershipLens(): Promise<Lens | null>;
 
     /** Additional host lenses (PCI DSS is host-specific). */

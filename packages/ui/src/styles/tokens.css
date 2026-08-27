@@ -41,8 +41,11 @@
     --border-standard: #22252b;
     --border-control: #24272d;
     --border-chip: #262a30;
+    /* README §1: toolbar control divider, 1×18px. */
+    --border-divider: #26292f;
     --border-strong: #2b2f36;
     --border-strong-lifted: #2f333a;
+    --ownership-mine-border: #24422f;
     --border-raised-bar: #303540;
     --border-raised-dialog: #313640;
     --border-raised-popover: #333842;
@@ -197,6 +200,8 @@
     --space-control: 14px;
     --space-inner: 10px;
     --space-inner-tight: 8px;
+    /* Prototype: space for the floating bottom bar in long reader views. */
+    --space-bar-reserve: 180px;
 
     /* --- Shadows --- */
     --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);

@@ -1,5 +1,5 @@
 import type { PrChecks, PrMeta } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { formatCount, plural } from '../text.js';
@@ -21,6 +21,7 @@ import './pr-header.css';
 
 export interface PrHeaderDefaultProps {
     readonly variant?: 'default';
+    readonly ref?: Ref<HTMLElement>;
     readonly pr: PrMeta;
     readonly additions: number;
     readonly deletions: number;
@@ -35,6 +36,7 @@ export interface PrHeaderDefaultProps {
 
 export interface PrHeaderOverviewProps {
     readonly variant: 'overview';
+    readonly ref?: Ref<HTMLElement>;
     readonly pr: PrMeta;
     /** Diff counters. null means the diff has not arrived yet and the metadata row only has the PR number. */
     readonly counts: { readonly additions: number; readonly deletions: number; readonly files: number } | null;
@@ -56,6 +58,7 @@ export function PrHeader(props: PrHeaderProps) {
 }
 
 function DefaultHeader({
+    ref,
     pr,
     additions,
     deletions,
@@ -66,7 +69,7 @@ function DefaultHeader({
     aside = null,
 }: PrHeaderDefaultProps) {
     return (
-        <header className="pr-header">
+        <header className="pr-header" ref={ref}>
             <div className="pr-header__meta">
                 <span className="pr-header__add">+{formatCount(additions)}</span>
                 <span className="pr-header__del">−{formatCount(deletions)}</span>
@@ -112,9 +115,9 @@ function DefaultHeader({
     );
 }
 
-function OverviewHeader({ pr, counts, pci, now }: PrHeaderOverviewProps) {
+function OverviewHeader({ ref, pr, counts, pci, now }: PrHeaderOverviewProps) {
     return (
-        <header className="pr-header pr-header--overview">
+        <header className="pr-header pr-header--overview" ref={ref}>
             <div className="pr-header__meta">
                 <span>PR {pr.id}</span>
                 {counts === null ? null : (

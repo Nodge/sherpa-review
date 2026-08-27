@@ -50,8 +50,15 @@ describe('FixtureHost', () => {
             throw new Error('medium fixture has no files');
         }
         file.additions = -1;
+        const ownership = await host.ownershipLens();
+        const zonePath = ownership?.zones?.at(0)?.paths.at(0);
+        if (zonePath === undefined || ownership?.zones?.[0] === undefined) {
+            throw new Error('medium fixture has no ownership zone');
+        }
+        ownership.zones[0].paths[0] = 'mutated/outside.ts';
 
         expect((await host.getDiff()).files.at(0)?.additions).toBeGreaterThan(0);
+        expect((await host.ownershipLens())?.zones?.at(0)?.paths.at(0)).toBe(zonePath);
     });
 
     it('draft timestamps and ids come from the fixture instead of the clock', async () => {
