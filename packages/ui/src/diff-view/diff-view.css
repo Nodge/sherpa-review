@@ -279,6 +279,12 @@
     border-bottom: 1px solid var(--attention-border-alt);
 }
 
+/* The skeleton takes the space estimated by the list (M2F-T3). Text stays at the top edge,
+   in a card several screens tall, no one would find it in the middle. */
+.file-card__loading {
+    align-items: flex-start;
+}
+
 .file-card__collapsed,
 .file-card__notice--button {
     width: 100%;

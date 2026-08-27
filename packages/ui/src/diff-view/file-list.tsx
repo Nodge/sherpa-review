@@ -19,7 +19,7 @@ import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
 import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
-import type { DiffViewStore } from './store.js';
+import type { DiffMode, DiffViewStore } from './store.js';
 import { useSelectionLifecycle } from './use-selection.js';
 
 /**
@@ -27,13 +27,29 @@ import { useSelectionLifecycle } from './use-selection.js';
  * only visible cards plus overscan, so worker parsing is lazy too: a file
  * is parsed exactly when it scrolls into view.
  *
- * Card heights are measured (`measureElement`). Line counts can only estimate them,
- * and folds, notices and expanded context invalidate that estimate.
+ * `measureElement` measures actual card heights. The estimate lasts only until the first measurement.
+ * To keep measurement from shifting the scroll position, the "parsing diff..." skeleton gets
+ * min-height from the same estimate, since it is several times shorter than the finished card.
+ * The cold card then measures close to its slot, and the model changes its height by a small delta.
+ *
+ * Cold cards must be measured too. They contain threads, route bars and a filter notice alongside
+ * the skeleton. File metadata cannot give their heights, so an unmeasured slot has no room for them
+ * and the card would overlap the next one.
  */
 
-/** Code row and card header heights from README §1 estimate height before measurement. */
+/** Code line height, `--line-height-code`. Used to estimate the card body before measurement. */
 const CODE_LINE_HEIGHT = 20;
-const CARD_CHROME_HEIGHT = 74;
+/** Everything in a card except lines: header 36.8 + borders 2 + gap to the next card 22 (measured in M2F-T3). */
+const CARD_CHROME_HEIGHT = 61;
+/** Single-line notice or collapsed card: 7+7 padding, 11px/1.5 line and a border. */
+const NOTICE_ROW_HEIGHT = 32;
+/**
+ * Rough allowance for unchanged context lines and separators between hunks. File metadata has no
+ * count for these, and `additions`/`deletions` alone cannot give it. The value was measured on
+ * `fixture-large`: three context lines and two separators. The estimate still falls short for
+ * files with several hunks. Accuracy is secondary here, measurement with compensation covers the gap.
+ */
+const HUNK_CONTEXT_HEIGHT = 104;
 
 /** Cards to keep beyond the viewport. Fewer expose loading, more cost more. */
 const OVERSCAN = 3;
@@ -122,13 +138,34 @@ export function DiffFileList({
     // Files whose parsing failed. Only an explicit reviewer retry will parse them again.
     const [parseErrors, setParseErrors] = useState<ReadonlyMap<string, string>>(new Map());
 
+    // Mode used for estimates. It follows the toggle only until the first file is parsed.
+    // Recalculating estimates while the list is active would shift everything below the fold.
+    // The virtualizer compensates only for measured heights, not changes to estimates. This lets
+    // the initial value wait for the width measurement.
+    const estimateMode = useRef(snapshot.effectiveMode);
+    if (snapshot.models.size === 0) {
+        estimateMode.current = snapshot.effectiveMode;
+    }
+
     const virtualizer = useVirtualizer({
         count: files.length,
         getScrollElement: () => scrollRef.current,
-        estimateSize: (index) => estimateHeight(files[index]),
+        estimateSize: (index) => CARD_CHROME_HEIGHT + estimateBodyHeight(files[index], estimateMode.current),
         overscan: OVERSCAN,
         getItemKey: (index) => files[index]?.fileId ?? index,
     });
+
+    /**
+     * In virtual-core 3.17.8, `shouldAdjustScrollPositionOnItemSizeChange` is an instance property,
+     * not a hook option. Passing it to `useVirtualizer` silently does nothing.
+     *
+     * Always compensate for cards entirely above the viewport, regardless of scroll direction.
+     * The library disables compensation when scrolling up by default, so a file parsed above
+     * would pull the list away from the cursor. Cards touching the viewport or below it grow
+     * downward. Adjusting the scroll position for them would move visible text.
+     */
+    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+        item.end <= (virtualizer.scrollOffset ?? 0) + virtualizer.scrollAdjustments;
 
     const items = virtualizer.getVirtualItems();
 
@@ -194,24 +231,45 @@ export function DiffFileList({
     // a filter change), no scroll event is reported upward. These are not reviewer gestures and
     // must not clear the "kept on screen" notice (SPEC §2.7).
     const settling = useRef(0);
+    // Active adjustment sequence, cancelled by either new navigation or the reviewer's wheel.
+    const converging = useRef<ConvergingScroll | null>(null);
     const converge = useCallback(
         (index: number) => {
+            // Two overlapping adjustments would pull the list in different directions.
+            converging.current?.cancel();
             settling.current += 1;
-            return convergeScroll(
+            const run = convergeScroll(
                 () => {
                     virtualizer.scrollToIndex(index, { align: 'start' });
                 },
                 () => scrollRef.current?.scrollTop ?? 0,
                 () => {
+                    if (converging.current === run) {
+                        converging.current = null;
+                    }
                     // One frame later. The browser dispatches scroll events after the final step.
                     requestAnimationFrame(() => {
                         settling.current -= 1;
                     });
                 },
             );
+            converging.current = run;
+            return run;
         },
         [virtualizer],
     );
+
+    // Adjustment lasts up to 12 frames and calls `scrollToIndex` throughout. Without cancellation,
+    // the reviewer's wheel and touch would have no effect during those frames.
+    useEffect(() => {
+        const element = scrollRef.current;
+        if (element === null) {
+            return;
+        }
+        return watchUserScroll(element, () => {
+            converging.current?.cancel();
+        });
+    }, []);
 
     const focusCheck = useRef<number | null>(null);
     const handleScroll = useCallback(() => {
@@ -265,9 +323,7 @@ export function DiffFileList({
         };
     }, [files, initialFileId, converge]);
 
-    // Scroll to the file requested by the tree. Cancel the previous adjustment, because two overlapping
-    // loops would pull the list in different directions.
-    const pending = useRef<ConvergingScroll | null>(null);
+    // Scroll to a file at the tree's request. `converge` cancels the previous adjustment itself.
     useImperativeHandle(
         ref,
         () => ({
@@ -276,9 +332,7 @@ export function DiffFileList({
                 if (index < 0) {
                     return Promise.resolve(false);
                 }
-                pending.current?.cancel();
-                pending.current = converge(index);
-                return pending.current.finished;
+                return converge(index).finished;
             },
         }),
         [files, converge],
@@ -367,6 +421,7 @@ export function DiffFileList({
                             model={snapshot.models.get(file.fileId) ?? null}
                             parseError={parseErrors.get(file.fileId) ?? null}
                             mode={snapshot.effectiveMode}
+                            estimatedBody={estimateBodyHeight(file, estimateMode.current)}
                             content={snapshot.content.get(file.fileId)}
                             contentAvailable={contentAvailable}
                             expansion={snapshot.expansion.get(file.fileId) ?? 0}
@@ -409,6 +464,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     model,
     parseError,
     mode,
+    estimatedBody,
     content,
     contentAvailable,
     expansion,
@@ -436,7 +492,9 @@ const VirtualFileCard = memo(function VirtualFileCard({
     measure: (element: HTMLDivElement | null) => void;
     model: DiffFileModel | null;
     parseError: string | null;
-    mode: 'unified' | 'split';
+    mode: DiffMode;
+    /** Card body estimate from the list, used by the skeleton to fill its virtual slot. */
+    estimatedBody: number;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
     expansion: ExpandAmount;
@@ -526,6 +584,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 opened={opened}
                 showWhitespace={showWhitespace}
                 keptInView={keptInView}
+                loadingMinHeight={estimatedBody}
                 selection={selection}
                 routeBadge={
                     margin === null ? null : (
@@ -639,13 +698,45 @@ const NOOP = (): void => undefined;
 const NOOP_LINE = (): void => undefined;
 const NOOP_THREAD = (): void => undefined;
 
-function estimateHeight(file: FileDiff | undefined): number {
+/**
+ * Estimate of everything below the card header. The virtualizer uses it until measurement, and the
+ * skeleton uses it to fill its slot, so the model changes height by a small delta instead of several times.
+ */
+export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode): number {
     if (file === undefined) {
-        return CARD_CHROME_HEIGHT;
+        return 0;
     }
-    // A file above the threshold starts collapsed (SPEC §2.13), with one button row instead of thousands
-    // of code lines. Capping the line count at the threshold would overestimate height hundreds of times and break the scrollbar.
     const changed = file.additions + file.deletions;
-    const lines = changed > COLLAPSE_THRESHOLD ? 1 : changed;
-    return CARD_CHROME_HEIGHT + lines * CODE_LINE_HEIGHT;
+    // Binary files and files without a text diff show a single-line notice (SPEC §2.14). A file above
+    // the threshold starts collapsed (SPEC §2.13), as a single button row instead of thousands of code
+    // lines. Capping them at the threshold would overestimate by hundreds of times and break the scrollbar.
+    if (file.binary || file.patch === null || changed > COLLAPSE_THRESHOLD) {
+        return NOTICE_ROW_HEIGHT;
+    }
+
+    // In split mode, a deletion and an addition share one row. One-sided files do not collapse
+    // collapses and renders unified at full width (README §1).
+    const lines =
+        mode === 'split' && file.additions > 0 && file.deletions > 0
+            ? Math.max(file.additions, file.deletions)
+            : changed;
+    // add/delete files form one hunk for the whole file, with no unchanged context.
+    const context = file.changeType === 'add' || file.changeType === 'delete' ? 0 : HUNK_CONTEXT_HEIGHT;
+    return lines * CODE_LINE_HEIGHT + context;
+}
+
+/**
+ * Manual reviewer scrolling uses wheel and touch. The `scroll` event does not work here, since
+ * adjustment also emits it. Cancelling adjustment on its own scrolling would prevent it from starting.
+ */
+export function watchUserScroll(element: HTMLElement, onInput: () => void): () => void {
+    const handle = (): void => {
+        onInput();
+    };
+    element.addEventListener('wheel', handle, { passive: true });
+    element.addEventListener('touchmove', handle, { passive: true });
+    return () => {
+        element.removeEventListener('wheel', handle);
+        element.removeEventListener('touchmove', handle);
+    };
 }

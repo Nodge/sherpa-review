@@ -71,6 +71,12 @@ export interface FileCardProps {
     readonly showWhitespace: boolean;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
+    /**
+     * Space reserved for the "parsing diff…" skeleton, using the list estimate of card body height.
+     * Without it, the virtualizer would measure the unparsed file as one line of text, and the model arriving
+     * would multiply the card height along with the entire list below it.
+     */
+    readonly loadingMinHeight?: number | undefined;
     /** Initial hint lets the gallery show a failed write without a click. */
     readonly initialHint?: Feedback;
     /**
@@ -104,6 +110,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         opened,
         showWhitespace,
         keptInView = false,
+        loadingMinHeight,
         initialHint = null,
         transform,
         counts,
@@ -308,6 +315,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     model={shown}
                     mode={mode}
                     content={content ?? null}
+                    loadingMinHeight={loadingMinHeight}
                     selection={selection}
                     expansion={expansion}
                     showWhitespace={showWhitespace}
@@ -445,6 +453,7 @@ interface BodyProps {
     readonly model: DiffFileModel | null;
     readonly mode: DiffMode;
     readonly content: FileContent | null;
+    readonly loadingMinHeight?: number | undefined;
     readonly selection: LineSelection | null;
     readonly expansion: ExpandAmount;
     readonly showWhitespace: boolean;
@@ -461,7 +470,14 @@ function Body(props: BodyProps) {
     const { model, mode, content, selection, showWhitespace, onShowWhitespace } = props;
 
     if (model === null) {
-        return <div className="file-card__loading">parsing the diff…</div>;
+        return (
+            <div
+                className="file-card__loading"
+                style={props.loadingMinHeight === undefined ? undefined : { minHeight: props.loadingMinHeight }}
+            >
+                parsing the diff…
+            </div>
+        );
     }
     if (model.content.kind !== 'text') {
         return null;

@@ -6,3 +6,5 @@ coverage/
 .vite/
 .DS_Store
 *.log
+# Working trees for parallel tasks: full repository checkouts inside the repository itself.
+.claude/worktrees/
