@@ -317,8 +317,7 @@ export function App({ store, session, token }: AppProps) {
             return;
         }
         const initial = currentReview.progress === null;
-        const revision = snapshot.progressRevision;
-        if (!initial && (revision === null || !progressWriter.shouldReload(revision))) {
+        if (!initial && !progressWriter.shouldReload(snapshot.progressRevision)) {
             return;
         }
 
@@ -331,15 +330,11 @@ export function App({ store, session, token }: AppProps) {
                     return;
                 }
                 const merged = progressWriter.finishReload(response, mark);
-                if (merged !== null) {
-                    diffStore.setProgress(merged.files);
-                    stopProgress.setAll(merged.stops);
-                }
+                diffStore.setProgress(merged.files);
+                stopProgress.setAll(merged.stops);
                 setReviewState((current) => ({
                     ...reviewStateForKey(current, reviewKey),
-                    ...(merged === null
-                        ? {}
-                        : { progress: { ...response, files: [...merged.files], stops: [...merged.stops] } }),
+                    progress: { ...response, files: [...merged.files], stops: [...merged.stops] },
                     progressError: null,
                     progressLoading: false,
                 }));

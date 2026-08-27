@@ -5,16 +5,18 @@ import { describe, expect, it } from 'vitest';
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import type { RouteFileGroup } from './route-model.js';
+import type { RouteFileGroup, RouteTotals } from './route-model.js';
 import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
+    entryParseFailed,
     filterOtherView,
     lazyCards,
     LAZY_HUNK_THRESHOLD,
     PROMOTE_THRESHOLD,
     stopMatchesFilter,
+    stopSeenRanges,
     threadsForGroup,
 } from './route-model.js';
 
@@ -34,6 +36,15 @@ const SNAPSHOT: RouteSnapshot = READY.snapshot;
 const MODELS = new Map<string, DiffFileModel>(
     DATA.diff.files.map((file) => [file.fileId, parseFileDiff(toParseRequest(file))]),
 );
+
+const EMPTY_TOTALS: RouteTotals = {
+    changed: 0,
+    covered: 0,
+    uncovered: 0,
+    byTier: { high: 0, medium: 0, low: 0, other: 0 },
+    pendingFiles: 0,
+    failedFiles: 0,
+};
 
 function build(snapshot: RouteSnapshot = SNAPSHOT, files: readonly FileDiff[] = DATA.diff.files) {
     return buildRouteModel({ snapshot, files, models: MODELS });
@@ -230,8 +241,36 @@ describe('route model', () => {
             );
 
         expect(stopsOf(new Set()).some((view) => view.pending)).toBe(true);
-        // Parsing failed: the file will not finish counting on its own, so there is nothing left to wait for.
+        expect(stopsOf(new Set()).every((view) => !view.parseFailed)).toBe(true);
+        // Parsing failed. The file will not finish counting on its own, so there is nothing left to wait for,
+        // but the stop cannot be marked viewed either. The file will have no ranges until parsing is retried.
         expect(stopsOf(new Set([first.fileId])).every((view) => !view.pending)).toBe(true);
+        expect(stopsOf(new Set([first.fileId])).every((view) => view.parseFailed)).toBe(true);
+    });
+
+    it('does not count a file that failed to parse as fully read through the seen ranges of a stop', () => {
+        const first = DATA.diff.files[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one file');
+        }
+        const withoutFirst = new Map(MODELS);
+        withoutFirst.delete(first.fileId);
+        const entry = buildRouteModel({
+            snapshot: SNAPSHOT,
+            files: DATA.diff.files,
+            models: withoutFirst,
+            failed: new Set([first.fileId]),
+        }).entries.find(
+            (candidate) =>
+                candidate.kind === 'stop' && candidate.view.files.some((group) => group.fileId === first.fileId),
+        );
+        if (entry === undefined) {
+            throw new Error('file must first belong to a stop');
+        }
+
+        // This is the gap the flag exists to catch: the set would silently arrive without this file.
+        expect(stopSeenRanges(entry).some((range) => range.fileId === first.fileId)).toBe(false);
+        expect(entryParseFailed(entry, { ...EMPTY_TOTALS, failedFiles: 1 })).toBe(true);
     });
 
     it('marks unresolved anchors as drift and a stop without anchors as an empty slot', () => {

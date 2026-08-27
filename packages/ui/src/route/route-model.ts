@@ -92,6 +92,12 @@ export interface RouteStopView {
      * Files that failed to parse are excluded here because they will not finish counting on their own.
      */
     readonly pending: boolean;
+    /**
+     * Some stop files failed to parse. Their changed lines will not enter the seen ranges
+     * until the reviewer retries parsing. Marking this stop viewed would write
+     * an incomplete set and silently leave these files unread.
+     */
+    readonly parseFailed: boolean;
 }
 
 export interface RouteUncoveredFile {
@@ -267,6 +273,15 @@ export function entryPending(entry: RouteEntry, totals: RouteTotals): boolean {
 }
 
 /**
+ * The route entry has files whose parsing failed, so their ranges cannot be counted.
+ * A "viewed" mark would reach the server without them and silently leave the files unread,
+ * so the entry cannot be marked until parsing is retried.
+ */
+export function entryParseFailed(entry: RouteEntry, totals: RouteTotals): boolean {
+    return entry.kind === 'stop' ? entry.view.parseFailed : totals.failedFiles > 0;
+}
+
+/**
  * The agent has not filled the stop yet (or filling failed). It has no ranges,
  * so there is nothing to mark. The synthetic "Other" is always ready.
  */
@@ -345,6 +360,7 @@ function stopView(
 
     let changedLines = 0;
     let pending = false;
+    let parseFailed = false;
     const files: RouteFileGroup[] = [];
     for (const [fileId, group] of groups) {
         const file = byId.get(fileId);
@@ -353,6 +369,7 @@ function stopView(
         }
         const model = models.get(fileId) ?? null;
         pending ||= model === null && !failed.has(fileId);
+        parseFailed ||= model === null && failed.has(fileId);
         const own = anchorSpans([...group.shown, ...group.collapsed]);
         const shown = coveredChangedLines(model, anchorSpans(group.shown));
         const collapsed = coveredChangedLines(model, anchorSpans(group.collapsed));
@@ -389,6 +406,7 @@ function stopView(
         drift: stop.anchors.length > 0 && files.length === 0,
         empty: stop.anchors.length === 0,
         pending,
+        parseFailed,
     };
 }
 

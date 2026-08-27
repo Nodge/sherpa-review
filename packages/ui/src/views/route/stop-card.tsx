@@ -22,6 +22,8 @@ export interface StopCardProps {
     readonly onViewed: (viewed: boolean) => void;
     /** Stop files are still being parsed, so no ranges are available for a viewed mark. */
     readonly pending?: boolean;
+    /** Parsing failed for some files. Their ranges will be unavailable until retry. */
+    readonly parseFailed?: boolean;
     /** Agent died during generation: filled content remains readable with a quiet note (SPEC §4.4). */
     readonly filledBeforeStop?: boolean;
     /** Value of the failed mark write. Shows "not saved · retry" beside the control. */
@@ -45,6 +47,7 @@ export function StopCard({
     viewed,
     onViewed,
     pending = false,
+    parseFailed = false,
     filledBeforeStop = false,
     failedViewed = null,
     marked = false,
@@ -95,6 +98,7 @@ export function StopCard({
                     <StopViewedToggle
                         viewed={viewed}
                         pending={pending}
+                        parseFailed={parseFailed}
                         unfilled={unfilled}
                         failedViewed={failedViewed}
                         onViewed={onViewed}
@@ -149,23 +153,30 @@ export function StopCard({
  *
  * A stop cannot be marked until its ranges are computed. An empty set would go
  * to the server, leaving files unread. The same applies to an unfilled stop, which has no ranges
- * at all. The mark can always be cleared because that requires no ranges.
+ * at all, and to a stop with a file whose parsing failed, whose ranges would silently
+ * be omitted. Clearing a mark is always possible because it needs no ranges.
  */
 export function StopViewedToggle({
     viewed,
     pending = false,
+    parseFailed = false,
     unfilled = false,
     failedViewed,
     onViewed,
 }: {
     viewed: boolean;
     pending?: boolean;
+    parseFailed?: boolean;
     unfilled?: boolean;
     failedViewed: boolean | null;
     onViewed: (viewed: boolean) => void;
 }) {
-    const disabled = (pending || unfilled) && !viewed;
-    const reason = unfilled ? 'The stop is not filled yet' : 'Stop ranges are still being computed';
+    const disabled = (pending || parseFailed || unfilled) && !viewed;
+    const reason = unfilled
+        ? 'This stop is not filled yet'
+        : parseFailed
+          ? 'Some files of this stop failed to parse — retry the parse'
+          : 'The ranges of this stop are still being counted';
     return (
         <>
             {failedViewed === null ? null : (

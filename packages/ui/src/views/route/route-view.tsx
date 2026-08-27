@@ -55,6 +55,7 @@ import {
     buildRouteModel,
     composersForGroup,
     countStopComments,
+    entryParseFailed,
     entryPending,
     entryUnfilled,
     filterOtherView,
@@ -908,8 +909,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
             // A mark writes seen ranges, which can only be counted from parsed models:
             // before parsing, the mark would reach the server with an empty set and would not be rewritten later.
-            // An unfilled stop has no ranges at all. Clearing its mark requires none.
-            if (viewed && (entryPending(entry, model.totals) || unfilledEntry(entry))) {
+            // An unfilled stop has no ranges at all, and a file whose parsing failed
+            // will have none until a retry. Clearing a mark does not require ranges.
+            if (
+                viewed &&
+                (entryPending(entry, model.totals) ||
+                    entryParseFailed(entry, model.totals) ||
+                    unfilledEntry(entry))
+            ) {
                 return;
             }
             if (!viewed) {
@@ -987,7 +994,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>
             stopProgress.isViewed(entryId(entry)) ||
-            (!entryPending(entry, model.totals) && !unfilledEntry(entry)),
+            (!entryPending(entry, model.totals) &&
+                !entryParseFailed(entry, model.totals) &&
+                !unfilledEntry(entry)),
         [model.totals, stopProgress, unfilledEntry],
     );
     useShortcut({
@@ -1256,6 +1265,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             keptInView={entryId(entry) === keptStopId}
                             viewed={stopViewed.get(entry.view.stop.id) === true}
                             pending={entry.view.pending}
+                            parseFailed={entry.view.parseFailed}
                             filledBeforeStop={agentStopped}
                             collapsed={collapsedOf(entry.view)}
                             collapsedManually={stopState.collapsed.has(entry.view.stop.id)}
@@ -1304,6 +1314,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             view={entry.view}
                             stopCount={model.stopCount}
                             pending={model.totals.pendingFiles > 0}
+                            parseFailed={model.totals.failedFiles > 0}
                             filling={filling}
                             failedFiles={model.totals.failedFiles}
                             onRetryFailed={retryFailed}
@@ -1345,6 +1356,8 @@ interface StopSectionProps {
     readonly viewed: boolean;
     /** Stop files are still being parsed, so mark ranges cannot be computed yet. */
     readonly pending: boolean;
+    /** Parsing failed for some files. Their ranges are unavailable until retry. */
+    readonly parseFailed: boolean;
     /** Agent disconnected during generation: filled stops get a quiet note (SPEC §4.4). */
     readonly filledBeforeStop: boolean;
     /** Collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
@@ -1379,6 +1392,7 @@ function StopSection({
     keptInView,
     viewed,
     pending,
+    parseFailed,
     filledBeforeStop,
     collapsed,
     collapsedManually,
@@ -1498,6 +1512,7 @@ function StopSection({
                 comments={comments}
                 viewed={viewed}
                 pending={pending}
+                parseFailed={parseFailed}
                 filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
                 failedViewed={failedViewed}
@@ -1525,6 +1540,7 @@ function OtherSection({
     view,
     stopCount,
     pending,
+    parseFailed,
     filling,
     failedFiles,
     onRetryFailed,
@@ -1541,6 +1557,8 @@ function OtherSection({
     view: RouteOtherView;
     stopCount: number;
     pending: boolean;
+    /** Some diff files failed to parse, so their uncovered ranges have not been counted. */
+    parseFailed: boolean;
     /** The route is still filling: Other counts vacant plan slots, not what the model left over. */
     filling: boolean;
     failedFiles: number;
@@ -1567,6 +1585,7 @@ function OtherSection({
                 view={filtered}
                 stopCount={stopCount}
                 pending={pending}
+                parseFailed={parseFailed}
                 filling={filling}
                 failedFiles={failedFiles}
                 onRetryFailed={onRetryFailed}

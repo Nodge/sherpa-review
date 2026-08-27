@@ -163,6 +163,17 @@ describe('writing reading progress', () => {
         expect(shared.writer.shouldReload(2)).toBe(true);
     });
 
+    it('still requests a refetch for lower-revision events after a server restart', () => {
+        const { writer } = harness();
+
+        writer.finishReload({ files: [], stops: [], progressRevision: 12 }, writer.beginReload());
+        expect(writer.shouldReload(12)).toBe(false);
+
+        // The server restarted and reset its counter: revision 1 is another tab's mark on the new server,
+        // rather than an outdated event. Checking "greater than applied" would stay silent until revision 13.
+        expect(writer.shouldReload(1)).toBe(true);
+    });
+
     it('defers refetching while a write is in flight', async () => {
         const { writer, pending } = harness();
 
@@ -186,7 +197,7 @@ describe('writing reading progress', () => {
             mark,
         );
 
-        expect(merged?.files).toEqual([
+        expect(merged.files).toEqual([
             { fileId: 'b', viewed: true, seenRanges: [] },
             { fileId: 'a', viewed: true, seenRanges: [] },
         ]);
@@ -196,7 +207,7 @@ describe('writing reading progress', () => {
         await write;
     });
 
-    it('preserves snapshot ranges when overlaying a write and ignores a stale response', async () => {
+    it('preserves snapshot ranges when overlaying a write and accepts a response with a lower revision', async () => {
         const { writer, pending } = harness(2);
         const ranges = [{ side: 'new' as const, start: 1, end: 4 }];
 
@@ -207,9 +218,12 @@ describe('writing reading progress', () => {
             mark,
         );
 
-        expect(merged?.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: ranges }]);
-        // The response is older than the applied snapshot and would move the screen back.
-        expect(writer.finishReload({ files: [], stops: [], progressRevision: 2 }, mark)).toBeNull();
+        expect(merged.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: ranges }]);
+        // A revision lower than the one seen means the server restarted. The response is not outdated:
+        // its snapshot applies, and the write it missed still goes on top.
+        expect(writer.finishReload({ files: [], stops: [], progressRevision: 1 }, mark).files).toEqual([
+            { fileId: 'a', viewed: true, seenRanges: [] },
+        ]);
 
         await settle();
         pending[0]?.resolve(4);
@@ -246,8 +260,23 @@ describe('writing reading progress', () => {
             { files: [], stops: [{ stopId: 's01', viewed: true }], progressRevision: 1 },
             writer.beginReload(),
         );
-        expect(merged?.stops).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(merged.stops).toEqual([{ stopId: 's01', viewed: true }]);
         expect(writer.shouldReload(1)).toBe(false);
+    });
+
+    it('does not wait for a channel revision before refetching after marking a stop', async () => {
+        const { writer, pending } = harness();
+        // No progress event has reached the tab yet, so there is no channel revision at all.
+        expect(writer.shouldReload(null)).toBe(false);
+
+        const write = writer.writeStop('s01', true, []);
+        await settle();
+        pending[0]?.resolve(1);
+        await write;
+
+        expect(writer.shouldReload(null)).toBe(true);
+        writer.finishReload({ files: [], stops: [], progressRevision: 1 }, writer.beginReload());
+        expect(writer.shouldReload(null)).toBe(false);
     });
 
     it('does not roll back a stop mark absent from the refetched snapshot', async () => {
@@ -257,7 +286,7 @@ describe('writing reading progress', () => {
         const write = writer.writeStop('s01', true, []);
         const merged = writer.finishReload({ files: [], stops: [], progressRevision: 3 }, mark);
 
-        expect(merged?.stops).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(merged.stops).toEqual([{ stopId: 's01', viewed: true }]);
 
         await settle();
         pending[0]?.resolve(4);
@@ -274,7 +303,7 @@ describe('writing reading progress', () => {
             { files: [{ fileId: 'a', viewed: false, seenRanges: [] }], stops: [], progressRevision: 7 },
             mark,
         );
-        expect(merged?.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: [] }]);
+        expect(merged.files).toEqual([{ fileId: 'a', viewed: true, seenRanges: [] }]);
 
         await settle();
         pending[0]?.reject();
