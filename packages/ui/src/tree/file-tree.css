@@ -204,12 +204,23 @@
     flex: none;
     width: 10px;
     height: 10px;
+    padding: 0;
     border: 1px solid var(--read-box-border);
     border-radius: var(--radius-mark);
+    background: transparent;
     /* ✓ in a 10px box: the handoff scale has no such size. Value from prototype §10. */
+    font: inherit;
     font-size: 7px;
     line-height: 1;
     color: var(--surface-app);
+}
+
+.file-tree__row--file .file-tree__read {
+    cursor: pointer;
+}
+
+.file-tree__row--file .file-tree__read:hover {
+    border-color: var(--read-border);
 }
 
 .file-tree__read--partial {

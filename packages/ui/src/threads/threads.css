@@ -137,7 +137,8 @@
 .thread__actions button,
 .thread__more,
 .thread__undo button,
-.thread-composer button {
+.thread-composer__status button,
+.thread-composer__confirm button {
     padding: 0;
     border: 0;
     background: none;
@@ -149,7 +150,8 @@
 
 .thread__actions button:hover,
 .thread__more:hover,
-.thread-composer button:hover {
+.thread-composer__status button:hover,
+.thread-composer__confirm button:hover {
     color: var(--text-muted);
 }
 
@@ -186,6 +188,18 @@
 .thread-composer__input:focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.thread-composer__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-inner);
+    margin-top: var(--space-inner);
+}
+
+.thread-composer__actions .ghost-button:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
 }
 
 .thread-composer__status,

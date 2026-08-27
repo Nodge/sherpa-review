@@ -7,6 +7,10 @@
     padding: 26px var(--space-page) var(--space-page);
 }
 
+.overview {
+    padding-bottom: var(--space-bar-reserve);
+}
+
 .view-frame__title {
     margin: 0;
     font-size: var(--font-size-screen-title);

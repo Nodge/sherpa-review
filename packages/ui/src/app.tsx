@@ -33,7 +33,11 @@ import type { BannerSource } from './components/banner-slot.tsx';
 import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
-import { ReviewActionBar } from './components/review-action-bar.tsx';
+import {
+    reviewActionBarVisible,
+    ReviewActionBar,
+    ReviewActionBarLoading,
+} from './components/review-action-bar.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
 import { createDiffViewStore } from './diff-view/store.js';
@@ -851,6 +855,20 @@ export function App({ store, session, token }: AppProps) {
         );
     }
 
+    const reviewActionBarDataReady =
+        currentReview.progress !== null &&
+        currentReview.threads !== null &&
+        currentDiff !== null &&
+        diffStore !== null &&
+        threadStore !== null;
+    const showReviewActionBar = reviewActionBarVisible({
+        view,
+        completed: completion !== null,
+        reviewHost,
+        pr: state.pr,
+        dataReady: reviewActionBarDataReady,
+    });
+
     return (
         <>
             <TopBar
@@ -1005,27 +1023,23 @@ export function App({ store, session, token }: AppProps) {
                 }}
             />
 
-            {completion === null &&
-            (view === 'route' || view === 'diff') &&
-            reviewHost !== null &&
-            state.pr !== null &&
-            currentReview.progress !== null &&
-            currentReview.threads !== null &&
-            currentDiff !== null &&
-            diffStore !== null &&
-            threadStore !== null ? (
-                <ReviewActionBar
-                    pr={state.pr}
-                    diff={currentDiff}
-                    diffStore={diffStore}
-                    threadStore={threadStore}
-                    connection={snapshot.connection}
-                    hostName={hostDisplayName(reviewHost)}
-                    route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
-                    composerTransport={composerTransport}
-                    onPublish={(verdict: Verdict) => publishReview(token, verdict)}
-                    onComplete={completeReview}
-                />
+            {showReviewActionBar ? (
+                reviewActionBarDataReady && reviewHost !== null && state.pr !== null ? (
+                    <ReviewActionBar
+                        pr={state.pr}
+                        diff={currentDiff}
+                        diffStore={diffStore}
+                        threadStore={threadStore}
+                        connection={snapshot.connection}
+                        hostName={hostDisplayName(reviewHost)}
+                        route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
+                        composerTransport={composerTransport}
+                        onPublish={(verdict: Verdict) => publishReview(token, verdict)}
+                        onComplete={completeReview}
+                    />
+                ) : (
+                    <ReviewActionBarLoading diffError={currentReview.diffError} />
+                )
             ) : null}
         </>
     );
