@@ -1,6 +1,5 @@
 import type {
     PrDiff,
-    PrMeta,
     Thread,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
@@ -17,7 +16,6 @@ import {
     cancelTask,
     fetchReviewDiff,
     fetchReviewLenses,
-    fetchReviewPr,
     fetchReviewProgress,
     fetchReviewRoute,
     fetchReviewThreads,
@@ -51,7 +49,7 @@ import {
 import { updateFragment } from './fragment.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
-import { breadcrumbFromPrKey } from './pr-key.js';
+import { breadcrumbFor } from './pr-key.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
 import { createStopProgressStore } from './progress/stop-progress-store.js';
@@ -106,19 +104,16 @@ interface RouteActionFailure {
 
 interface ReviewState {
     readonly key: string;
-    readonly pr: PrMeta | null;
     readonly diff: PrDiff | null;
     readonly lenses: UiReviewLensesResponse | null;
     readonly progress: UiReviewProgressResponse | null;
     readonly threads: readonly Thread[] | null;
     readonly route: UiRouteState | null;
-    readonly prError: string | null;
     readonly diffError: string | null;
     readonly lensesError: string | null;
     readonly progressError: string | null;
     readonly threadsError: string | null;
     readonly routeError: string | null;
-    readonly prLoading: boolean;
     readonly diffLoading: boolean;
     readonly lensesLoading: boolean;
     readonly progressLoading: boolean;
@@ -202,39 +197,6 @@ export function App({ store, session, token }: AppProps) {
         completionState?.key === reviewKey && completionState.viewSelection === viewSelection
             ? completionState.value
             : null;
-
-    // The header and final actions need PR metadata. It loads independently of the other data.
-    useEffect(() => {
-        if (!reviewReady || reviewHost === null) {
-            return;
-        }
-        let alive = true;
-        void fetchReviewPr(token).then(
-            (pr) => {
-                if (alive) {
-                    setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
-                        pr,
-                        prError: null,
-                        prLoading: false,
-                    }));
-                }
-            },
-            (error: unknown) => {
-                if (alive) {
-                    setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
-                        pr: null,
-                        prError: errorMessage(error),
-                        prLoading: false,
-                    }));
-                }
-            },
-        );
-        return () => {
-            alive = false;
-        };
-    }, [reviewHost, reviewKey, reviewReady, token]);
 
     // Publish the diff as soon as it is ready. Lens and thread requests do not block the reader.
     useEffect(() => {
@@ -860,22 +822,10 @@ export function App({ store, session, token }: AppProps) {
     );
     const completeReview = useCallback(
         (value: ReviewCompletion) => {
+            // After publishing, the server reloads the PR status itself and sends it in a snapshot.
             setCompletionState({ key: reviewKey, viewSelection: session.getViewSelectionSnapshot(), value });
-            void fetchReviewPr(token).then(
-                (pr) => {
-                    setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
-                        pr,
-                        prError: null,
-                        prLoading: false,
-                    }));
-                },
-                () => {
-                    // The publish endpoint has already confirmed the result. The header status reloads with the page.
-                },
-            );
         },
-        [reviewKey, session, token],
+        [reviewKey, session],
     );
     const openCompletedThread = useCallback(
         (threadId: string) => {
@@ -909,7 +859,7 @@ export function App({ store, session, token }: AppProps) {
         <>
             <TopBar
                 version={UI_VERSION}
-                breadcrumb={breadcrumbFromPrKey(state.prKey)}
+                breadcrumb={breadcrumbFor(state.prKey, state.pr)}
                 agent={agentPillView(state.worker, state.tasks)}
                 reconnectCommand={reconnectCommand(state.prKey)}
                 view={view}
@@ -941,8 +891,7 @@ export function App({ store, session, token }: AppProps) {
                     token={token}
                     prKey={state.prKey}
                     session={session}
-                    pr={currentReview.pr}
-                    prError={currentReview.prError}
+                    pr={state.pr}
                     diff={currentDiff}
                     diffError={currentReview.diffError}
                     lenses={currentReview.lenses}
@@ -967,8 +916,7 @@ export function App({ store, session, token }: AppProps) {
                 <RouteView
                     token={token}
                     session={session}
-                    pr={currentReview.pr}
-                    prError={currentReview.prError}
+                    pr={state.pr}
                     diff={currentDiff}
                     diffError={currentReview.diffError}
                     lenses={currentReview.lenses}
@@ -1007,6 +955,7 @@ export function App({ store, session, token }: AppProps) {
                     token={token}
                     prKey={state.prKey}
                     session={session}
+                    pr={state.pr}
                     diff={currentDiff}
                     lenses={currentReview.lenses}
                     threads={currentReview.threads}
@@ -1063,14 +1012,14 @@ export function App({ store, session, token }: AppProps) {
             {completion === null &&
             (view === 'route' || view === 'diff') &&
             reviewHost !== null &&
-            currentReview.pr !== null &&
+            state.pr !== null &&
             currentReview.progress !== null &&
             currentReview.threads !== null &&
             currentDiff !== null &&
             diffStore !== null &&
             threadStore !== null ? (
                 <ReviewActionBar
-                    pr={currentReview.pr}
+                    pr={state.pr}
                     diff={currentDiff}
                     diffStore={diffStore}
                     threadStore={threadStore}
@@ -1098,19 +1047,16 @@ export function MessageScreen({ title, children }: { title: string; children: Re
 function emptyReviewState(key: string, loading: boolean): ReviewState {
     return {
         key,
-        pr: null,
         diff: null,
         lenses: null,
         progress: null,
         threads: null,
         route: null,
-        prError: null,
         diffError: null,
         lensesError: null,
         progressError: null,
         threadsError: null,
         routeError: null,
-        prLoading: loading,
         diffLoading: loading,
         lensesLoading: loading,
         progressLoading: loading,

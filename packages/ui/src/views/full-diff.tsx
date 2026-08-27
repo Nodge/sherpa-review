@@ -75,7 +75,6 @@ export interface FullDiffViewProps {
     readonly prKey: string;
     readonly session: SessionStore;
     readonly pr: PrMeta | null;
-    readonly prError: string | null;
     /** Raw patches load at the App level so the palette works over any view. */
     readonly diff: PrDiff | null;
     readonly diffError: string | null;
@@ -105,7 +104,6 @@ export function FullDiffView({
     prKey,
     session,
     pr,
-    prError,
     diff,
     diffError,
     lenses,
@@ -179,7 +177,6 @@ export function FullDiffView({
     }, []);
 
     if (
-        prError !== null ||
         diffError !== null ||
         lensesError !== null ||
         (progress === null && progressError !== null) ||
@@ -200,7 +197,7 @@ export function FullDiffView({
                         <h1 className="full-diff__title">Full diff</h1>
                     </div>
                     <p className="full-diff__status">
-                        {prError ?? diffError ?? lensesError ?? progressError ?? 'Loading the diff…'}
+                        {diffError ?? lensesError ?? progressError ?? 'Loading diff…'}
                     </p>
                 </div>
             </main>

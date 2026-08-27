@@ -31,6 +31,7 @@ import {
     serversDirOf,
     workerIdPathFor,
 } from './paths.js';
+import { PrMetaCache } from './pr-meta.js';
 import { ProgressStore } from './progress-store.js';
 import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
@@ -201,6 +202,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
         const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
+        // The snapshot includes PR metadata, and `buildState` is synchronous. The network `getPr()` call uses a cache.
+        const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         const routeOrchestrator = new RouteOrchestrator({
@@ -230,6 +233,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 registry: workerRegistry,
                 reviewHost: reviewHost?.name ?? null,
                 reviewFeed,
+                prMeta,
                 progress,
                 route: routeStore,
                 shutdownSignal: shutdownController.signal,
@@ -238,6 +242,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 host: reviewHost?.host ?? null,
                 reviewFeed,
                 progress,
+                prMeta,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
@@ -255,6 +260,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             shutdownController,
             idleWatch,
             reviewFeed,
+            prMeta,
             progress,
             routeStore,
             routeOrchestrator,
@@ -262,6 +268,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         // Warm up the route after building the handle, on its own timer. Server startup doesn't wait for `getDiff()`,
         // otherwise the "diff on screen in under two seconds" requirement (§7) would wait on the host's network call.
         routeOrchestrator.start();
+        // PR metadata also loads in the background. The snapshot is served immediately, and metadata arrives over SSE.
+        prMeta.start();
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
         idleWatch.arm(() => {
             options.onIdleStop?.(idleSeconds);
@@ -342,6 +350,7 @@ function createHandle(parts: {
     shutdownController: AbortController;
     idleWatch: IdleWatch;
     reviewFeed: ReviewFeed | null;
+    prMeta: PrMetaCache;
     progress: ProgressStore;
     routeStore: RouteStore;
     routeOrchestrator: RouteOrchestrator;
@@ -367,6 +376,8 @@ function createHandle(parts: {
                 parts.workerRegistry.close();
                 // Stop host polling here too, or the subscription would outlive server shutdown.
                 parts.reviewFeed?.close();
+                // The metadata load retry must not wake up after server shutdown.
+                parts.prMeta.close();
                 parts.progress.close();
                 // Stop the route state machine before closing storage. Its delayed warmup must not
                 // wake up with the database already closed.

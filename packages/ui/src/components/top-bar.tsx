@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 
+import type { BreadcrumbSegment } from '../pr-key.js';
 import type { ViewId } from '../session/views.js';
 import type { AgentPillView } from './agent-pill-view.js';
 import { CommandBox } from './command-box.tsx';
@@ -13,8 +14,8 @@ import { ViewTabs } from './view-tabs.tsx';
 export interface TopBarProps {
     /** Distribution version from the UI package.json, injected at build time. */
     readonly version: string;
-    /** Breadcrumb segments from left to right. The last is the PR itself. */
-    readonly breadcrumb: readonly string[];
+    /** Brandcrumb segments from left to right. The last is the PR itself, and a link once metadata is known. */
+    readonly breadcrumb: readonly BreadcrumbSegment[];
     readonly agent: AgentPillView;
     readonly reconnectCommand: string;
     readonly view: ViewId;
@@ -41,13 +42,20 @@ export function TopBar({
 
             <nav className="top-bar__breadcrumb" aria-label="Pull request">
                 {breadcrumb.map((segment, index) => (
-                    <Fragment key={`${String(index)}:${segment}`}>
+                    <Fragment key={`${String(index)}:${segment.text}`}>
                         {index === 0 ? null : (
                             <span className="top-bar__breadcrumb-separator" aria-hidden="true">
                                 /
                             </span>
                         )}
-                        <span className="top-bar__breadcrumb-item">{segment}</span>
+                        {segment.href === null ? (
+                            <span className="top-bar__breadcrumb-item">{segment.text}</span>
+                        ) : (
+                            // Normal navigation: open the PR on its host in the reviewer's browser.
+                            <a className="top-bar__breadcrumb-item" href={segment.href}>
+                                {segment.text}
+                            </a>
+                        )}
                     </Fragment>
                 ))}
             </nav>

@@ -1,4 +1,4 @@
-import type { PrDiff, Thread, UiReviewLensesResponse, UiRouteState } from '@sherpa/protocol';
+import type { PrDiff, PrMeta, Thread, UiReviewLensesResponse, UiRouteState } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
@@ -9,7 +9,9 @@ import {
     updateReviewDraft,
 } from '../api.js';
 import { CommandBox } from '../components/command-box.tsx';
+import { PrHeader } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
+import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { SessionStore } from '../session/session-store.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
@@ -47,6 +49,8 @@ export interface ViewFrameProps {
     readonly token?: string;
     readonly prKey: string;
     readonly session: SessionStore;
+    /** PR metadata from the snapshot. null means no host or metadata still loading, so the header does not render. */
+    readonly pr?: PrMeta | null;
     readonly diff: PrDiff | null;
     readonly lenses: UiReviewLensesResponse | null;
     readonly threads: readonly Thread[] | null;
@@ -134,6 +138,7 @@ export function OverviewView({
     token,
     prKey,
     session,
+    pr = null,
     diff,
     lenses,
     threads,
@@ -204,6 +209,17 @@ export function OverviewView({
         [resolvedWriter, transport],
     );
     const [now] = useState(() => threadNow ?? Date.now());
+    // Audit scope chip in the header: the same set of lenses that feeds Full diff filters.
+    const pci = useMemo(
+        () =>
+            diff === null || lenses === null
+                ? null
+                : findFilter(
+                      buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
+                      PCI_FILTER_ID,
+                  ),
+        [diff, lenses],
+    );
 
     const openDiff = (): void => {
         session.setView('diff');
@@ -215,51 +231,73 @@ export function OverviewView({
 
     return (
         <main className="overview" id="view-overview">
-            <div className="overview__main">
-                <SummaryCard prKey={prKey} route={route} onReadDiff={openDiff} />
-                <OwnershipCard
-                    diff={diff}
-                    ownership={lenses?.ownership ?? null}
-                    hostAvailable={reviewHostAvailable}
-                    diffLoading={diffLoading}
-                    lensesLoading={lensesLoading}
-                    diffError={diffError}
-                    lensesError={lensesError}
-                    segment={segment}
-                    onSegment={setSegment}
-                    onOpenDiff={openDiff}
-                />
-            </div>
-            <aside className="overview__rail">
-                {route === null ? null : (
-                    <GenerationCard
-                        route={route}
-                        diffFiles={diff?.files.length ?? null}
-                        longRunning={generation?.longRunning ?? false}
-                        cancelling={generation?.cancelling ?? false}
-                        retrying={generation?.retrying ?? false}
-                        actionError={generation?.actionError ?? null}
-                        onOpenRoute={openRoute}
-                        onOpenDiff={openDiff}
-                        onRetry={generation?.onRetry ?? NOOP}
-                        onCancel={generation?.onCancel ?? NOOP}
-                    />
-                )}
-                <DiscussionCard
-                    threads={reviewHostAvailable && threads !== null ? threadSnapshot.threads : null}
-                    outside={reviewHostAvailable && threads !== null ? threadSnapshot.outside : EMPTY_THREADS}
-                    store={threadStore}
-                    actions={threadActions}
+            {pr === null ? null : (
+                <PrHeader
+                    variant="overview"
+                    pr={pr}
+                    counts={diff === null ? null : diffCounts(diff)}
+                    pci={pci}
                     now={now}
-                    loading={reviewHostAvailable && threadsLoading}
-                    error={threadsError}
                 />
-                <OverviewCard title="Snapshots">
-                    <p className="overview-card__empty">No snapshots yet. They will appear with the first route.</p>
-                </OverviewCard>
-            </aside>
+            )}
+            <div className="overview__grid">
+                <div className="overview__main">
+                    <SummaryCard prKey={prKey} route={route} onReadDiff={openDiff} />
+                    <OwnershipCard
+                        diff={diff}
+                        ownership={lenses?.ownership ?? null}
+                        hostAvailable={reviewHostAvailable}
+                        diffLoading={diffLoading}
+                        lensesLoading={lensesLoading}
+                        diffError={diffError}
+                        lensesError={lensesError}
+                        segment={segment}
+                        onSegment={setSegment}
+                        onOpenDiff={openDiff}
+                    />
+                </div>
+                <aside className="overview__rail">
+                    {route === null ? null : (
+                        <GenerationCard
+                            route={route}
+                            diffFiles={diff?.files.length ?? null}
+                            longRunning={generation?.longRunning ?? false}
+                            cancelling={generation?.cancelling ?? false}
+                            retrying={generation?.retrying ?? false}
+                            actionError={generation?.actionError ?? null}
+                            onOpenRoute={openRoute}
+                            onOpenDiff={openDiff}
+                            onRetry={generation?.onRetry ?? NOOP}
+                            onCancel={generation?.onCancel ?? NOOP}
+                        />
+                    )}
+                    <DiscussionCard
+                        threads={reviewHostAvailable && threads !== null ? threadSnapshot.threads : null}
+                        outside={reviewHostAvailable && threads !== null ? threadSnapshot.outside : EMPTY_THREADS}
+                        store={threadStore}
+                        actions={threadActions}
+                        now={now}
+                        loading={reviewHostAvailable && threadsLoading}
+                        error={threadsError}
+                    />
+                    <OverviewCard title="Snapshots">
+                        <p className="overview-card__empty">No snapshots yet — they appear with the first route.</p>
+                    </OverviewCard>
+                </aside>
+            </div>
         </main>
     );
+}
+
+/** Diff totals for the Overview header metadata row, the same numbers as in other view headers. */
+function diffCounts(diff: PrDiff): { additions: number; deletions: number; files: number } {
+    let additions = 0;
+    let deletions = 0;
+    for (const file of diff.files) {
+        additions += file.additions;
+        deletions += file.deletions;
+    }
+    return { additions, deletions, files: diff.files.length };
 }
 
 /**

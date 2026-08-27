@@ -1,8 +1,9 @@
-import type { PrMeta } from '@sherpa/protocol';
+import type { PrChecks, PrMeta } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { formatCount, plural } from '../text.js';
+import { relativeTime } from '../threads/relative-time.js';
 import './pr-header.css';
 
 /**
@@ -12,9 +13,14 @@ import './pr-header.css';
  *
  * The header's right side is the `aside` slot: the route uses it for the snapshot selector (README §1),
  * the full diff leaves it empty. M2 has no working snapshot selection. It arrives in M4.
+ *
+ * The `overview` variant has its own layout from the prototype Overview screen (`Sherpa.dc.html:523-529`):
+ * PR number in the metadata row, a larger title, author without an avatar, time, branches and check
+ * checks, the audit scope chip is not clickable, and there is no `aside` slot.
  */
 
-export interface PrHeaderProps {
+export interface PrHeaderDefaultProps {
+    readonly variant?: 'default';
     readonly pr: PrMeta;
     readonly additions: number;
     readonly deletions: number;
@@ -30,7 +36,38 @@ export interface PrHeaderProps {
     readonly aside?: ReactNode;
 }
 
-export function PrHeader({ pr, additions, deletions, files, pci, pciActive, onTogglePci, aside = null }: PrHeaderProps) {
+export interface PrHeaderOverviewProps {
+    readonly variant: 'overview';
+    readonly pr: PrMeta;
+    /** Diff counters. null means the diff has not arrived yet and the metadata row only has the PR number. */
+    readonly counts: { readonly additions: number; readonly deletions: number; readonly files: number } | null;
+    /**
+     * Audit scope lens. This chip is only a marker. The filter shortcut lives in Full diff.
+     * The marker has no counter or disabled state, so show it only when the lens
+     * works and the PR actually contains its files. Otherwise a PR outside the audit scope
+     * would receive an unrelated label.
+     */
+    readonly pci: FileFilter | null;
+    /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
+    readonly now: number;
+}
+
+export type PrHeaderProps = PrHeaderDefaultProps | PrHeaderOverviewProps;
+
+export function PrHeader(props: PrHeaderProps) {
+    return props.variant === 'overview' ? <OverviewHeader {...props} /> : <DefaultHeader {...props} />;
+}
+
+function DefaultHeader({
+    pr,
+    additions,
+    deletions,
+    files,
+    pci,
+    pciActive,
+    onTogglePci,
+    aside = null,
+}: PrHeaderDefaultProps) {
     return (
         <header className="pr-header">
             <div className="pr-header__meta">
@@ -83,6 +120,58 @@ export function PrHeader({ pr, additions, deletions, files, pci, pciActive, onTo
         </header>
     );
 }
+
+function OverviewHeader({ pr, counts, pci, now }: PrHeaderOverviewProps) {
+    return (
+        <header className="pr-header pr-header--overview">
+            <div className="pr-header__meta">
+                <span>PR {pr.id}</span>
+                {counts === null ? null : (
+                    <>
+                        <Separator />
+                        <span className="pr-header__add">+{formatCount(counts.additions)}</span>
+                        <span className="pr-header__del">−{formatCount(counts.deletions)}</span>
+                        <Separator />
+                        <span>
+                            {formatCount(counts.files)} {plural(counts.files, 'file', 'files', 'files')}
+                        </span>
+                    </>
+                )}
+                {pci === null || !pci.available || pci.count === 0 ? null : (
+                    <>
+                        <Separator />
+                        <span className="pr-header__pci-tag">PCI DSS</span>
+                    </>
+                )}
+            </div>
+
+            <h1 className="pr-header__title">{pr.title}</h1>
+
+            <div className="pr-header__author">
+                <span>{pr.author.login}</span>
+                <Separator />
+                <span>{relativeTime(pr.updatedAt, now)}</span>
+                <Separator />
+                <span className="pr-header__branches">
+                    {pr.toBranch} ← {pr.fromBranch}
+                </span>
+                {pr.checks === null ? null : (
+                    <>
+                        <Separator />
+                        <span className={`pr-header__checks is-${pr.checks}`}>{CHECKS_LABELS[pr.checks]}</span>
+                    </>
+                )}
+            </div>
+        </header>
+    );
+}
+
+/** Check status in words. The host returns three states, `null` omits the segment entirely. */
+const CHECKS_LABELS: Readonly<Record<PrChecks, string>> = {
+    passed: 'checks passed',
+    failed: 'checks failed',
+    pending: 'checks running',
+};
 
 function Separator() {
     return (

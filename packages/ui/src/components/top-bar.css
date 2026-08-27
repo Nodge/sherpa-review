@@ -77,6 +77,15 @@
     color: var(--text-secondary);
 }
 
+/* Last segment links to the PR on the host. The prototype gives it the same `--text-secondary`
+   uses the same style as a text segment. The global link's accent colour and underline are unnecessary here. */
+a.top-bar__breadcrumb-item,
+a.top-bar__breadcrumb-item:visited,
+a.top-bar__breadcrumb-item:hover {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
 .top-bar__breadcrumb-separator {
     color: var(--text-separator);
 }

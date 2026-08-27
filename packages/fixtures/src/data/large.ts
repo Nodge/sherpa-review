@@ -134,6 +134,7 @@ export function makeLargeFixture(): FixtureData {
             toBranch: 'main',
             state: 'open',
             statusLabel: 'review_in_progress',
+            checks: 'failed',
             updatedAt: '2026-08-19T11:02:00.000Z',
             capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
         },

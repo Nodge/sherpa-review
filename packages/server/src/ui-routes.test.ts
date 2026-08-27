@@ -88,6 +88,8 @@ describe('UI endpoints', () => {
             expect(state.prKey).toBe(PR_KEY);
             expect(state.worker.kind).toBe('never');
             expect(state.tasks).toEqual([]);
+            // This suite has no host, so there is no source for PR metadata, and the snapshot is empty.
+            expect(state.pr).toBeNull();
         });
 
         it('does not expose server-internal task details', async () => {

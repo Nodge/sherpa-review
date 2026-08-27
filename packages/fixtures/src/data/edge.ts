@@ -162,6 +162,7 @@ export function makeEdgeFixture(): FixtureData {
             toBranch: 'main',
             state: 'open',
             statusLabel: 'needs_work',
+            checks: null,
             updatedAt: '2026-08-19T13:20:00.000Z',
             capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false },
         },

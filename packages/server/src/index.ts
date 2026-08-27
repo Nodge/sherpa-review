@@ -54,6 +54,8 @@ export {
     prStateDirOf,
     serversDirOf,
 } from './paths.js';
+export type { PrMetaCacheOptions } from './pr-meta.js';
+export { PrMetaCache } from './pr-meta.js';
 export type {
     CancelOutcome,
     EnqueueInput,
@@ -77,7 +79,7 @@ export type { HealthResponse, SherpaServer, StartServerOptions } from './server.
 export { startServer } from './server.js';
 export type { StaticAsset, StaticAssets } from './static.js';
 export { bundledAssets, contentTypeOf, directoryAssets, isStaticPath, serveStatic } from './static.js';
-export type { UiRoutesOptions } from './ui-routes.js';
+export type { PrMetaSource, UiRoutesOptions } from './ui-routes.js';
 export { createUiRoutes } from './ui-routes.js';
 export { SERVER_VERSION } from './version.js';
 export type { WorkerRegistryOptions, WorkerStatusListener } from './worker-registry.js';

@@ -1228,6 +1228,7 @@ export function makeMediumFixture(): FixtureData {
             toBranch: 'main',
             state: 'open',
             statusLabel: 'review_in_progress',
+            checks: 'passed',
             updatedAt: '2026-08-19T16:42:00.000Z',
             capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
         },

@@ -1,5 +1,5 @@
 import { fixtureData } from '@sherpa/fixtures';
-import type { Lens, UiReviewLensesResponse } from '@sherpa/protocol';
+import type { Lens, PrMeta, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
@@ -65,6 +65,30 @@ export const M1_T15_STATES: readonly M1T15GalleryState[] = [
         ),
     },
     {
+        id: 'overview-checks-failed',
+        group: 'Overview and Route',
+        title: 'Overview: checks failed',
+        render: () => <ViewState view="overview" pr={{ ...DATA.pr, checks: 'failed' }} />,
+    },
+    {
+        id: 'overview-checks-pending',
+        group: 'Overview and Route',
+        title: 'Overview: checks pending',
+        render: () => <ViewState view="overview" pr={{ ...DATA.pr, checks: 'pending' }} />,
+    },
+    {
+        id: 'overview-checks-unknown',
+        group: 'Overview and Route',
+        title: 'Overview: checks unknown',
+        render: () => <ViewState view="overview" pr={{ ...DATA.pr, checks: null }} />,
+    },
+    {
+        id: 'overview-pr-meta-pending',
+        group: 'Overview and Route',
+        title: 'Overview: PR metadata has not arrived yet',
+        render: () => <ViewState view="overview" pr={null} />,
+    },
+    {
         id: 'banner-agent-disconnected',
         group: 'Banners',
         title: 'agent disconnected',
@@ -95,9 +119,11 @@ export const M1_T15_STATES: readonly M1T15GalleryState[] = [
 function ViewState({
     view,
     lenses = { ownership: DATA.ownership, extra: DATA.extraLenses },
+    pr = DATA.pr,
 }: {
     view: 'overview' | 'route';
     lenses?: UiReviewLensesResponse;
+    pr?: PrMeta | null;
 }) {
     const session = useMemo(() => createSessionStore({ initial: { view, filter: 'all' } }), [view]);
     return (
@@ -106,10 +132,13 @@ function ViewState({
                 view={view}
                 prKey={PR_KEY}
                 session={session}
+                pr={pr}
                 diff={DATA.diff}
                 lenses={lenses}
                 threads={DATA.threads}
                 reviewHostAvailable
+                // The same fixed "now" keeps both relative time in the PR header
+                // and comment times deterministic.
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
             />
         </div>

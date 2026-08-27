@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { agentPillView } from '../../components/agent-pill-view.js';
 import { reconnectCommand } from '../../components/reconnect-command.js';
 import { AgentPill, TopBar } from '../../components/top-bar.tsx';
+import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
 import { UI_VERSION } from '../../version.js';
 import { DIFF_STATES } from './diff-states.tsx';
@@ -82,8 +83,8 @@ const AGENT_STATES = [
     },
 ] as const;
 
-/** Fixture PR breadcrumb: the host from its URL, followed by the number. */
-const MEDIUM_BREADCRUMB = [new URL(MEDIUM.pr.url).hostname, `PR ${MEDIUM.pr.id}`];
+/** Fixture PR breadcrumb: host from the PR key, last segment linked using metadata. */
+const MEDIUM_BREADCRUMB = breadcrumbFor('fixture-medium', MEDIUM.pr);
 
 export const GALLERY_STATES: readonly GalleryState[] = [
     ...AGENT_STATES.map((state) => ({

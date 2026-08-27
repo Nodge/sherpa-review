@@ -155,6 +155,8 @@
     --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
+    /* Overview screen in the prototype: its PR title is larger than in Route and Full diff. */
+    --font-size-pr-title-overview: 24px;
     --font-size-pr-title: 22px;
     --font-size-screen-title: 19px;
     --font-size-stop-title-high: 17px;
