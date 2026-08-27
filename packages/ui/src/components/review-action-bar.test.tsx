@@ -7,11 +7,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
-import type { RouteProgress } from './review-action-bar.tsx';
 import { countDraftComments } from '../progress/summary.js';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
-import { ReviewActionBar } from './review-action-bar.tsx';
+import type { RouteProgress } from './review-action-bar.tsx';
+import {
+    reviewActionBarVisible,
+    ReviewActionBar,
+    ReviewActionBarLoading,
+} from './review-action-bar.tsx';
 import { ReviewComplete } from './review-complete.tsx';
 
 const DATA = fixtureData('medium');
@@ -184,6 +188,75 @@ describe('PR comment composer', () => {
         expect(host.querySelector<HTMLTextAreaElement>('.review-pr-composer textarea')?.value).toBe(
             'an unfinished thought',
         );
+    });
+
+    it('shows ghost buttons, an empty save explains why it is disabled, Cancel opens confirmation', () => {
+        const { host, commentButton, threadStore } = mountBar();
+        act(() => {
+            commentButton.click();
+        });
+        const buttons = [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__actions button')];
+        const save = buttons.find((button) => button.textContent === 'Save draft');
+        const cancel = buttons.find((button) => button.textContent === 'Cancel');
+
+        expect(save?.classList.contains('ghost-button')).toBe(true);
+        expect(save?.disabled).toBe(true);
+        expect(save?.title).toBe('Type the comment text.');
+        expect(cancel?.classList.contains('ghost-button')).toBe(true);
+        expect(cancel?.disabled).toBe(false);
+
+        act(() => {
+            threadStore.updateComposer('new:pr', { text: 'draft' });
+        });
+        expect(save?.disabled).toBe(false);
+
+        act(() => {
+            cancel?.click();
+        });
+        expect(host.textContent).toContain('Discard this draft?');
+    });
+});
+
+describe('floating bar mount condition', () => {
+    const base = {
+        completed: false,
+        reviewHost: 'fixture',
+        pr: DATA.pr,
+    } as const;
+
+    it('is visible on Overview before the diff is ready, route and diff keep waiting for data as before', () => {
+        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false })).toBe(true);
+        expect(reviewActionBarVisible({ ...base, view: 'route', dataReady: false })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, view: 'diff', dataReady: false })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, view: 'route', dataReady: true })).toBe(true);
+        expect(reviewActionBarVisible({ ...base, view: 'diff', dataReady: true })).toBe(true);
+    });
+
+    it('hides the bar after review completion or without a PR or host', () => {
+        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, completed: true })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, reviewHost: null })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, pr: null })).toBe(false);
+    });
+
+    it('loading keeps the counter label and disables dependent actions with a reason', () => {
+        const html = renderToStaticMarkup(<ReviewActionBarLoading diffError={null} />);
+
+        expect(html).toContain('aria-busy="true"');
+        expect(html).toContain('review-action-bar__progress-spinner');
+        expect(html).toContain('files');
+        expect(html).toContain('The diff and review data are still loading.');
+        expect(html.match(/disabled=""/g)).toHaveLength(4);
+    });
+
+    it('a diff error replaces the spinner and loading reason', () => {
+        const html = renderToStaticMarkup(<ReviewActionBarLoading diffError="host refused" />);
+
+        expect(html).not.toContain('aria-busy');
+        expect(html).not.toContain('review-action-bar__progress-spinner');
+        expect(html).toContain('review-action-bar__progress is-error');
+        expect(html).toContain('diff failed to load');
+        expect(html).toContain('The diff failed to load: host refused');
+        expect(html).not.toContain('The diff and review data are still loading.');
     });
 });
 

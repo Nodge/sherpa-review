@@ -10,6 +10,23 @@ import { FilePanel } from './file-panel.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+vi.mock('@tanstack/react-virtual', () => ({
+    defaultRangeExtractor: () => [],
+    useVirtualizer: ({ count }: { count: number }) => ({
+        getTotalSize: () => count * 26,
+        getVirtualItems: () =>
+            Array.from({ length: count }, (_, index) => ({
+                index,
+                key: index,
+                start: index * 26,
+                size: 26,
+                end: (index + 1) * 26,
+                lane: 0,
+            })),
+        scrollToIndex: () => undefined,
+    }),
+}));
+
 const EDGE = fixtureData('edge');
 const FILES = EDGE.diff.files.filter((file) => !file.generated);
 const EMPTY_PCI: Lens = {
@@ -36,6 +53,8 @@ function mount() {
     document.body.append(host);
     const root = createRoot(host);
     const onFilter = vi.fn<(id: string) => void>();
+    const onOpenFile = vi.fn<(fileId: string) => void>();
+    const onToggleViewed = vi.fn<(fileId: string) => void>();
 
     act(() => {
         root.render(
@@ -49,10 +68,10 @@ function mount() {
                 readState={new Map()}
                 route={null}
                 activeFileId={null}
-                onOpenFile={() => undefined}
-                onToggleViewed={() => undefined}
+                onOpenFile={onOpenFile}
+                onToggleViewed={onToggleViewed}
                 writeError={null}
-                outline={{ state: 'empty', reason: 'Nothing to outline.' }}
+                outline={null}
                 onOpenHunk={() => undefined}
                 prKey="fixture-edge-zero-lenses"
                 storage={null}
@@ -66,7 +85,7 @@ function mount() {
         host.remove();
     });
 
-    return { host, onFilter };
+    return { host, onFilter, onOpenFile, onToggleViewed };
 }
 
 describe('FilePanel filter chips', () => {
@@ -85,5 +104,39 @@ describe('FilePanel filter chips', () => {
             mine?.click();
         });
         expect(onFilter).not.toHaveBeenCalled();
+    });
+});
+
+describe('FilePanel viewed checkboxes', () => {
+    it('uses a button outside the tab order to toggle viewed without opening the file', () => {
+        const { host, onOpenFile, onToggleViewed } = mount();
+        const button = host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__read');
+        const row = button?.closest<HTMLElement>('[role="treeitem"]');
+        const tree = host.querySelector<HTMLElement>('[role="tree"]');
+
+        expect(button).not.toBeNull();
+        expect(button?.type).toBe('button');
+        expect(button?.tabIndex).toBe(-1);
+        expect(button?.getAttribute('aria-pressed')).toBe('false');
+        expect(button?.getAttribute('aria-hidden')).toBe('true');
+
+        act(() => {
+            button?.click();
+        });
+
+        expect(onToggleViewed).toHaveBeenCalledTimes(1);
+        expect(FILES.map((file) => file.fileId)).toContain(onToggleViewed.mock.calls[0]?.[0]);
+        expect(onOpenFile).not.toHaveBeenCalled();
+        expect(row?.classList.contains('is-cursor')).toBe(true);
+        expect(tree?.getAttribute('aria-activedescendant')).toBe(row?.id);
+    });
+
+    it('omits the checkbox for directories but keeps the reading summary in the row title', () => {
+        const { host } = mount();
+        const directory = host.querySelector<HTMLElement>('.file-tree__row--dir');
+
+        expect(directory).not.toBeNull();
+        expect(directory?.querySelector('.file-tree__read')).toBeNull();
+        expect(directory?.title).toMatch(/^\d+ of \d+ read$/);
     });
 });

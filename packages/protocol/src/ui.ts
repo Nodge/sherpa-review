@@ -47,6 +47,18 @@ export const uiTaskSchema = z.object({
 export type UiTask = z.infer<typeof uiTaskSchema>;
 
 /**
+ * Feedback channel availability (M2F-T19). Depends only on the issue channel credentials
+ * in the reviewer's environment. Neither the review host nor a live worker is required. Travels
+ * in the snapshot so the form explains reduced functionality before sending (SPEC §1.1).
+ */
+export const uiFeedbackAvailabilitySchema = z.object({
+    available: z.boolean(),
+    /** When `available: false`, explains why and where to write manually. Otherwise null. */
+    reason: z.string().nullable(),
+});
+export type UiFeedbackAvailability = z.infer<typeof uiFeedbackAvailabilitySchema>;
+
+/**
  * PR state snapshot for the UI. Returned by `GET state` and sent in full by the SSE channel
  * on every change. The queue is small in M0, so granular events are not worth the cost.
  */
@@ -66,6 +78,8 @@ export const uiStateSchema = z.object({
      * assembly and refreshes it after publishing a verdict, so the status arrives over SSE).
      */
     pr: prMetaSchema.nullable(),
+    /** Feedback channel availability (M2F-T19): depends only on issue channel credentials in the environment. */
+    feedback: uiFeedbackAvailabilitySchema,
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -187,6 +201,40 @@ export const uiRouteGenerateResponseSchema = z.object({
     outcome: z.enum(['started', 'already_running', 'small_pr']),
 });
 export type UiRouteGenerateResponse = z.infer<typeof uiRouteGenerateResponseSchema>;
+
+/**
+ * Sending feedback (M2F-T19): Feedback button in the top bar → project issue.
+ * The UI supplies the view and route phase as automatic context (unknown to the server). The server adds the rest
+ * (versions, prKey, worker status, login) to the issue itself. Without channel credentials,
+ * returns `outcome: 'unavailable'` with instructions for sending feedback manually. This is reduced functionality,
+ * not an endpoint error. A failure in the issue service is a normal RPC error, and the entered text
+ * stays in the form for a retry.
+ */
+export const uiFeedbackContextSchema = z.object({
+    view: z.string().min(1),
+    routePhase: uiRoutePhaseSchema,
+    /** UI bundle version. It can differ from the server version. The issue includes both. */
+    uiVersion: z.string().min(1),
+});
+export type UiFeedbackContext = z.infer<typeof uiFeedbackContextSchema>;
+
+export const uiFeedbackRequestSchema = z.object({
+    text: z.string().min(1).max(20000),
+    /** "Include context" checkbox. When false, `context` is ignored. */
+    includeContext: z.boolean(),
+    context: uiFeedbackContextSchema.nullable(),
+});
+export type UiFeedbackRequest = z.infer<typeof uiFeedbackRequestSchema>;
+
+export const uiFeedbackResponseSchema = z.object({
+    outcome: z.enum(['created', 'unavailable']),
+    /** Key and URL of the created issue when `created`, otherwise null. */
+    issueKey: z.string().nullable(),
+    issueUrl: z.string().nullable(),
+    /** Where to write manually when `unavailable`. null when `created`. */
+    message: z.string().nullable(),
+});
+export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
@@ -391,6 +439,8 @@ export const UI_ENDPOINTS = {
     reviewRouteGenerate: '/api/ui/review/route/generate',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
+    /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
+    feedback: '/api/ui/feedback',
 } as const;
 
 /** SSE event name for a state snapshot. */

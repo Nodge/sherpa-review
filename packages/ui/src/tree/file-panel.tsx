@@ -13,7 +13,7 @@ import { formatCount } from '../text.js';
 import type { CollapsedStorage } from './collapsed-storage.js';
 import { readCollapsed, writeCollapsed } from './collapsed-storage.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
-import { buildFileTree, filterByQuery, readBox, readSummary, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
+import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
 import { treeKeyCommand } from './tree-keys.js';
 
@@ -66,7 +66,7 @@ export interface FilePanelProps {
     /** The active file is the top card in the viewport (right-panel scroll-spy). */
     readonly activeFileId: string | null;
     readonly onOpenFile: (fileId: string) => void;
-    /** The `v` key on a file row (SPEC §2.10). The tree has no checkbox of its own. */
+    /** Shared action for the viewed checkbox and the `v` key on a file row (SPEC §2.10). */
     readonly onToggleViewed: (fileId: string) => void;
     /** Failed mark write from the tree: an inline hint with retry (SPEC §1.2, §2.10). */
     readonly writeError: { readonly text: string; readonly onRetry: () => void } | null;
@@ -303,6 +303,11 @@ function FileTreeView({
                             aria-level={row.depth + 1}
                             aria-expanded={row.kind === 'dir' ? !row.collapsed : undefined}
                             aria-selected={row.kind === 'file' && row.fileId === activeFileId}
+                            title={
+                                row.kind === 'dir'
+                                    ? `read ${String(row.readFiles)} of ${String(row.files)}`
+                                    : undefined
+                            }
                             className={rowClassName(row, activeFileId, item.index === cursor)}
                             // Position with `top`, not `transform`. Lesson from T6: transforms break
                             // sticky elements inside a scrolling panel.
@@ -323,6 +328,10 @@ function FileTreeView({
                                     row={row}
                                     otherStopId={route?.otherStopId ?? null}
                                     onJumpToStop={onJumpToStop}
+                                    onToggleViewed={(fileId) => {
+                                        setCursor(item.index);
+                                        onToggleViewed(fileId);
+                                    }}
                                 />
                             )}
                         </div>
@@ -356,17 +365,10 @@ function rowClassName(row: TreeRow, activeFileId: string | null, cursor: boolean
 }
 
 function DirRow({ row }: { row: TreeDirRow }) {
-    const summary = readSummary(row);
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true">
                 {row.collapsed ? '›' : '⌄'}
-            </span>
-            <span
-                className={`file-tree__read file-tree__read--${summary}`}
-                title={`${String(row.readFiles)} of ${String(row.files)} read`}
-            >
-                {summary === 'full' ? '✓' : ''}
             </span>
             <Label label={row.label} title={row.path} />
             <Counts additions={row.additions} deletions={row.deletions} />
@@ -378,18 +380,34 @@ function FileRow({
     row,
     otherStopId,
     onJumpToStop,
+    onToggleViewed,
 }: {
     row: TreeFileRow;
     otherStopId: string | null;
     onJumpToStop?: ((stopId: string) => void) | undefined;
+    onToggleViewed: (fileId: string) => void;
 }) {
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
             {/* Three read-state values (SPEC §2.12). The tooltip always has counts. */}
-            <span className={`file-tree__read file-tree__read--${readBox(row.read.state)}`} title={row.read.tooltip}>
+            <button
+                type="button"
+                className={`file-tree__read file-tree__read--${readBox(row.read.state)}`}
+                aria-pressed={row.read.state === 'read'}
+                aria-hidden="true"
+                tabIndex={-1}
+                title={row.read.tooltip}
+                onMouseDown={(event) => {
+                    event.preventDefault();
+                }}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleViewed(row.fileId);
+                }}
+            >
                 {row.read.state === 'read' ? '✓' : ''}
-            </span>
+            </button>
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}

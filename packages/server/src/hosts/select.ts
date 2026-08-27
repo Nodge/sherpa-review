@@ -17,6 +17,8 @@ export interface SelectedHost {
     /** Adapter name for `uiState.reviewHost`. */
     readonly name: string;
     readonly host: ReviewHost;
+    /** Optional host-specific whoami for automatic feedback context. */
+    readonly currentUser?: () => string | null | Promise<string | null>;
 }
 
 export type ReviewHostFactory = (prKey: string) => SelectedHost | null;
@@ -31,6 +33,7 @@ export function selectReviewHost(prKey: string): SelectedHost | null {
         if (!/^[1-9]\d*$/.test(raw)) {
             return null;
         }
+        
         
     }
 

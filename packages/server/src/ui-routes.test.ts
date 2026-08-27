@@ -50,7 +50,13 @@ describe('UI endpoints', () => {
     async function start(uiDir?: string): Promise<SherpaServer> {
         // This suite uses a hosted review key, but tests must not call a live service (requirements §7):
         // no host means review endpoints return `no_review_host` and SSE only sends state.
-        const base = { prKey: PR_KEY, sherpaDir, longPollSeconds: 0.3, reviewHostFactory: () => null };
+        const base = {
+            prKey: PR_KEY,
+            sherpaDir,
+            longPollSeconds: 0.3,
+            reviewHostFactory: () => null,
+            feedback: { env: {} },
+        };
         const server = await startServer(
             uiDir === undefined ? base : { ...base, assets: directoryAssets(uiDir) },
         );
@@ -88,6 +94,10 @@ describe('UI endpoints', () => {
             expect(state.prKey).toBe(PR_KEY);
             expect(state.worker.kind).toBe('never');
             expect(state.tasks).toEqual([]);
+            expect(state.feedback).toEqual({
+                available: false,
+                reason: 'You can send feedback directly to issue #2300 or to Alice Ingram.',
+            });
             // This suite has no host, so there is no source for PR metadata, and the snapshot is empty.
             expect(state.pr).toBeNull();
         });

@@ -29,9 +29,35 @@ function topBar(pr: typeof PR | null): string {
             view="overview"
             onSelectView={() => undefined}
             onOpenSearch={() => undefined}
+            feedback={{ available: true, reason: null }}
+            feedbackContext={{
+                uiVersion: '0.0.0',
+                prKey: 'github-quillmart--quillmart--4821',
+                view: 'overview',
+                routePhase: 'ready',
+                worker: { kind: 'never' },
+            }}
+            onSendFeedback={() =>
+                Promise.resolve({
+                    outcome: 'created',
+                    issueKey: '#1',
+                    issueUrl: 'https://github.com/quillmart/quillmart/issues/1',
+                    message: null,
+                })
+            }
         />,
     );
 }
+
+describe('top bar', () => {
+    it('renders the Feedback button after search', () => {
+        const html = topBar(PR);
+
+        expect(html).toContain('class="ghost-button search-button"');
+        expect(html).toContain('class="ghost-button feedback-button"');
+        expect(html.indexOf('search-button')).toBeLessThan(html.indexOf('feedback-button'));
+    });
+});
 
 describe('top bar brandcrumb', () => {
     it('last segment links to the PR on the host', () => {

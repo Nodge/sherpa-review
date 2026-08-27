@@ -200,8 +200,12 @@ const EXPECTED: Record<string, string> = {
     '--font-size-gutter': '10.5px',
     '--font-size-badge': '10px',
     '--font-size-scope': '9.5px',
-    // README §10: the `pci` tag is 9px mono. The README scale has no such size.
+    // README §10: the `pci` tag is 9px mono, outside the main scale.
     '--font-size-tag': '9px',
+    // Prototype: initials in the 18×18 reply avatar.
+    '--font-size-avatar-glyph': '9px',
+    // Prototype: tick in the 11×11 viewed checkbox.
+    '--font-size-box-glyph': '8px',
     '--font-size-code': '12px',
     '--line-height-body': '1.62',
     '--line-height-code': '20px',

@@ -10,6 +10,7 @@ import {
     reviewProgressSummary,
 } from '../progress/summary.js';
 import { useShortcut } from '../shortcuts/context.tsx';
+import type { ViewId } from '../session/views.js';
 import type { ConnectionState } from '../store.js';
 import { formatCount, plural } from '../text.js';
 import { closePublishedComposers } from '../threads/composer.js';
@@ -87,6 +88,84 @@ export interface ReviewActionBarProps {
     readonly defaultComposerOpen?: boolean;
     readonly initialFailure?: PublicationFailure | null;
     readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+}
+
+/** Panel mount condition: Overview shows loading, the other views wait for usable data. */
+export function reviewActionBarVisible({
+    view,
+    completed,
+    reviewHost,
+    pr,
+    dataReady,
+}: {
+    readonly view: ViewId;
+    readonly completed: boolean;
+    readonly reviewHost: string | null;
+    readonly pr: PrMeta | null;
+    readonly dataReady: boolean;
+}): boolean {
+    if (completed || reviewHost === null || pr === null) {
+        return false;
+    }
+    switch (view) {
+        case 'overview':
+            return true;
+        case 'route':
+        case 'diff':
+            return dataReady;
+    }
+}
+
+/** Panel without a usable diff: keeps the layout and distinguishes loading from errors. */
+export function ReviewActionBarLoading({ diffError }: { readonly diffError: string | null }) {
+    const errored = diffError !== null;
+    const disabledReason = errored ? `The diff failed to load: ${diffError}` : 'The diff and review data are still loading.';
+    return (
+        <div className="review-action-bar" aria-busy={errored ? undefined : true}>
+            <span
+                className={`review-action-bar__progress ${errored ? 'is-error' : 'is-loading'}`}
+                aria-label={errored ? undefined : 'File counter loading'}
+            >
+                {errored ? (
+                    'diff failed to load'
+                ) : (
+                    <>
+                        <span className="review-action-bar__progress-spinner" aria-hidden="true" />
+                        <span>files</span>
+                    </>
+                )}
+            </span>
+            <span className="review-action-bar__divider" aria-hidden="true" />
+            <span className="review-action-bar__no-drafts">comments loading</span>
+            <span className="review-action-bar__divider" aria-hidden="true" />
+            <button type="button" className="review-action-bar__button" disabled title={disabledReason}>
+                Comment on the PR
+            </button>
+            <button
+                type="button"
+                className="review-action-bar__button review-action-bar__request"
+                disabled
+                title={disabledReason}
+            >
+                Request changes
+            </button>
+            <div className="review-action-bar__ship">
+                <button type="button" className="review-action-bar__ship-primary" disabled title={disabledReason}>
+                    <span className="review-action-bar__thumb" aria-hidden="true">👍</span>
+                    Ship
+                </button>
+                <button
+                    type="button"
+                    className="review-action-bar__ship-caret"
+                    disabled
+                    title={disabledReason}
+                    aria-label="Choose ship mode"
+                >
+                    ⌄
+                </button>
+            </div>
+        </div>
+    );
 }
 
 /** Final review actions with live counters, a save check and one publishing batch. */

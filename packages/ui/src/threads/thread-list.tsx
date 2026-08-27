@@ -298,6 +298,15 @@ function Composer({
     );
     const resolvedWhileTyping = thread !== null && !composer.resolvedAtOpen && thread.resolved;
     const ambiguousFirstSave = composer.status === 'error' && composer.saveUncertain && composer.commentId === null;
+    const saveDisabledReason =
+        composer.status === 'discarding'
+            ? 'The draft is being deleted.'
+            : ambiguousFirstSave
+              ? 'Use the retry link in the save status.'
+              : composer.text.trim() === ''
+                ? 'Type the comment text.'
+                : null;
+    const cancelDisabledReason = composer.status === 'discarding' ? 'The draft is being deleted.' : null;
     return (
         <div className="thread-composer">
             {resolvedWhileTyping ? (
@@ -324,6 +333,26 @@ function Composer({
                     }
                 }}
             />
+            <div className="thread-composer__actions">
+                <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={saveDisabledReason !== null}
+                    title={saveDisabledReason ?? undefined}
+                    onClick={() => void controller.saveNow(true)}
+                >
+                    Save draft
+                </button>
+                <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={cancelDisabledReason !== null}
+                    title={cancelDisabledReason ?? undefined}
+                    onClick={controller.escape}
+                >
+                    Cancel
+                </button>
+            </div>
             {composer.confirmDiscard ? (
                 <p className="thread-composer__confirm">
                     Discard this draft?{' '}

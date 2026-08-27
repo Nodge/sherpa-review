@@ -38,7 +38,14 @@ afterEach(() => {
 });
 
 function uiState(pr: PrMeta | null): UiState {
-    return { prKey: 'github-quillmart--quillmart--4821', worker: { kind: 'never' }, tasks: [], reviewHost: null, pr };
+    return {
+        prKey: 'github-quillmart--quillmart--4821',
+        worker: { kind: 'never' },
+        tasks: [],
+        reviewHost: null,
+        pr,
+        feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+    };
 }
 
 /** A store with manually replaced snapshots. PR metadata arrives in the second snapshot, as over SSE. */

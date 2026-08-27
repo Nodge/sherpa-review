@@ -14,7 +14,7 @@
     border: 1px solid var(--checkbox-border);
     border-radius: var(--radius-mark);
     /* ✓ is always in the markup, but visible only when the box is filled. */
-    font-size: var(--font-size-scope);
+    font-size: var(--font-size-box-glyph);
     line-height: 1;
     color: transparent;
     transition:
