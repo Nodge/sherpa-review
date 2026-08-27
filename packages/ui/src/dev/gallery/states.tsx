@@ -18,6 +18,7 @@ import { M2_T8_STATES } from './m2-t8-states.tsx';
 import { M2_T9_STATES } from './m2-t9-states.tsx';
 import { M2_T10_STATES } from './m2-t10-states.tsx';
 import { M2_T11_STATES } from './m2-t11-states.tsx';
+import { M2F_T17_STATES } from './m2f-t17-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -113,6 +114,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     },
     ...M1_T15_STATES.filter((state) => state.id !== START_STATE_ID),
     ...M1_T14_STATES,
+    ...M2F_T17_STATES.map((state) => ({
+        id: state.id,
+        group: 'Filters',
+        title: state.title,
+        render: state.render,
+    })),
     ...DIFF_STATES.map((state) => ({
         id: state.id,
         group: 'Diff',

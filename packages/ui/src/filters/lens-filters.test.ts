@@ -1,3 +1,4 @@
+import { fixtureData } from '@sherpa/fixtures';
 import type { FileDiff, Lens } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +8,7 @@ import {
     filterFiles,
     filterFragmentValue,
     filterStats,
+    type FileFilter,
     findFilter,
     selectFilter,
     zeroResultText,
@@ -131,25 +133,80 @@ describe('buildFileFilters', () => {
         expect(selectFilter(filters, null).id).toBe(ALL_FILTER_ID);
     });
 
-    it('disables the filter with a count of 0 when there are no generated files', () => {
+    it('without generated files the generated filter is excluded', () => {
         const filters = buildFileFilters({ files: [file('src/a.ts')], ownership: null, extra: [] });
 
-        const generated = findFilter(filters, 'generated');
-        expect(generated?.count).toBe(0);
-        expect(generated?.available).toBe(false);
-        expect(generated?.note).not.toBeNull();
+        expect(findFilter(filters, 'generated')).toBeNull();
     });
 
-    it('keeps an empty host lens selectable because no matching files is also an answer', () => {
-        const filters = buildFileFilters({
+    it('an empty host lens is excluded regardless of available', () => {
+        const available = buildFileFilters({
             files: FILES,
             ownership: null,
             extra: [lens('pci', 'PCI DSS', [])],
         });
+        const unavailable = buildFileFilters({
+            files: FILES,
+            ownership: null,
+            extra: [lens('pci', 'PCI DSS', [], { available: false, note: 'scope unavailable' })],
+        });
 
-        const pci = findFilter(filters, 'pci');
-        expect(pci?.count).toBe(0);
-        expect(pci?.available).toBe(true);
+        expect(findFilter(available, 'pci')).toBeNull();
+        expect(findFilter(unavailable, 'pci')).toBeNull();
+    });
+
+    it('large: empty unavailable PCI is hidden while nonempty ownership and generated remain', () => {
+        const data = fixtureData('large');
+        const filters = buildFileFilters({
+            files: data.diff.files,
+            ownership: data.ownership,
+            extra: data.extraLenses,
+        });
+
+        expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'generated']);
+        expect(findFilter(filters, 'pci')).toBeNull();
+    });
+
+    it('edge: ownership without a zone stays disabled with the host reason', () => {
+        const data = fixtureData('edge');
+        const filters = buildFileFilters({
+            files: data.diff.files,
+            ownership: data.ownership,
+            extra: data.extraLenses,
+        });
+
+        expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'generated']);
+        expect(findFilter(filters, 'mine')).toMatchObject({
+            available: false,
+            count: 0,
+            note: 'You do not own any CODEOWNERS zone touched by this PR.',
+        });
+    });
+
+    it('medium: both host lenses and generated form the complete list', () => {
+        const data = fixtureData('medium');
+        const filters = buildFileFilters({
+            files: data.diff.files,
+            ownership: data.ownership,
+            extra: data.extraLenses,
+        });
+
+        expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'pci', 'generated']);
+        expect(filters.every((filter) => filter.available)).toBe(true);
+    });
+
+    it('available ownership with no owned files stays listed with a UI reason', () => {
+        const filters = buildFileFilters({
+            files: FILES,
+            ownership: lens('mine', 'My files', []),
+            extra: [],
+        });
+
+        expect(findFilter(filters, 'mine')).toMatchObject({
+            available: false,
+            count: 0,
+            note: ruDictionary['lens.mine.empty'],
+        });
     });
 });
 
@@ -212,21 +269,26 @@ describe('filterFragmentValue', () => {
 });
 
 describe('zeroResultText', () => {
-    const filters = buildFileFilters({
-        files: FILES,
-        ownership: null,
-        extra: [
-            lens('pci', 'PCI DSS', []),
-            lens('sox', 'SOX scope', [], { note: 'the SOX scope for this commit has not been published yet' }),
-        ],
-    });
+    function emptyFilter(id: string, label: string, note: string | null): FileFilter {
+        return {
+            id,
+            label,
+            shortLabel: label,
+            count: 0,
+            available: true,
+            note,
+            fileIds: new Set(),
+        };
+    }
 
     it('without a host reason the UI explains in its own words', () => {
-        expect(zeroResultText(selectFilter(filters, 'pci'))).toBe('No files in the "PCI DSS files" filter in this PR.');
+        expect(zeroResultText(emptyFilter('pci', 'Файлы PCI DSS', null))).toBe(
+            ruDictionary['lens.zeroResult'](ruDictionary['lens.audit']('PCI DSS')),
+        );
     });
 
     it('the host note takes precedence over UI text', () => {
-        expect(zeroResultText(selectFilter(filters, 'sox'))).toBe(
+        expect(zeroResultText(emptyFilter('sox', 'SOX scope', 'SOX scope for this commit has not been published yet'))).toBe(
             'SOX scope for this commit has not been published yet',
         );
     });
