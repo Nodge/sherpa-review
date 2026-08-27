@@ -458,17 +458,26 @@ function OwnershipCard({
                     </div>
                     <div className="ownership-list">
                         {summary.groups.map((group) => (
-                            <button key={group.path} type="button" className="ownership-row" onClick={onOpenDiff}>
-                                <span className="ownership-row__path">{group.path}</span>
-                                {group.ownership === null ? null : <OwnershipChip kind={group.ownership} />}
-                                <span className="ownership-row__stats">
-                                    {formatCount(group.files)} {plural(group.files, 'file', 'files', 'files')} ·{' '}
-                                    {formatCount(group.lines)} {plural(group.lines, 'line', 'lines', 'lines')}
-                                </span>
-                                <span className="ownership-row__delta">
-                                    <span className="ownership-row__add">+{formatCount(group.additions)}</span>/
+                            <button
+                                key={`${group.path}:${group.owner ?? ''}:${group.ownership ?? ''}`}
+                                type="button"
+                                className="ownership-row"
+                                onClick={onOpenDiff}
+                            >
+                                <span className="ownership-row__main">
+                                    <span className="ownership-row__path">{group.path}</span>
+                                    {group.ownership === null ? null : (
+                                        <OwnershipChip kind={group.ownership} owner={group.owner} />
+                                    )}
+                                    <span className="ownership-row__spacer" />
+                                    <span className="ownership-row__stats">
+                                        {formatCount(group.files)} {plural(group.files, 'file', 'files', 'files')} ·{' '}
+                                        {formatCount(group.lines)} {plural(group.lines, 'line', 'lines', 'lines')}
+                                    </span>
+                                    <span className="ownership-row__add">+{formatCount(group.additions)}</span>
                                     <span className="ownership-row__del">−{formatCount(group.deletions)}</span>
                                 </span>
+                                <span className="ownership-row__note">{group.note}</span>
                             </button>
                         ))}
                     </div>
@@ -478,14 +487,18 @@ function OwnershipCard({
     );
 }
 
-function OwnershipChip({ kind }: { kind: OwnershipKind }) {
-    const labels: Readonly<Record<OwnershipKind, string>> = {
-        mine: 'your zone',
-        other: 'other',
-        mixed: 'mixed',
-        generated: 'generated',
-    };
-    return <span className={`ownership-chip ownership-chip--${kind}`}>{labels[kind]}</span>;
+function OwnershipChip({ kind, owner }: { kind: OwnershipKind; owner: string | null }) {
+    const label =
+        kind === 'mine'
+            ? owner === null
+                ? 'you'
+                : `you · ${owner}`
+            : kind === 'other'
+              ? (owner ?? 'other')
+              : kind === 'generated'
+                ? 'generated'
+                : 'mixed';
+    return <span className={`ownership-chip ownership-chip--${kind}`}>{label}</span>;
 }
 
 function DiscussionCard({

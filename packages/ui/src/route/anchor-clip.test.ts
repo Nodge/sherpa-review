@@ -133,7 +133,9 @@ describe('clipping the model by anchors', () => {
 
         expect(collapsed).toHaveLength(2);
         expect(clipModelToAnchors(model, []).changedLines).toBe(0);
-        expect(clipModelToAnchors(model, collapsed).changedLines).toBe(289);
+        const changed = changedLinesOf(model);
+        const total = (changed?.old.size ?? 0) + (changed?.new.size ?? 0);
+        expect(clipModelToAnchors(model, collapsed).changedLines).toBe(total);
     });
 
     it('merges uncovered ranges to cover the remaining changed lines', () => {

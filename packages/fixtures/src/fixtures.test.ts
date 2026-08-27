@@ -145,6 +145,16 @@ describe('fixtures: shared invariants', () => {
                 }
             });
 
+            it('has each ownership file in at most one zone', () => {
+                const seen = new Set<string>();
+                for (const zone of fixtureData(name).ownership?.zones ?? []) {
+                    for (const path of zone.paths) {
+                        expect(seen.has(path), `${path} is duplicated across zones`).toBe(false);
+                        seen.add(path);
+                    }
+                }
+            });
+
             it('has no drafts in the source data', () => {
                 const drafts = fixtureData(name).threads.reduce(
                     (total, thread) => total + countDrafts(thread.root),
@@ -165,6 +175,20 @@ describe('medium fixture', () => {
             additions: MEDIUM_TOTALS.additions,
             deletions: MEDIUM_TOTALS.deletions,
         });
+    });
+
+    it('ownership gives 12 of 18 files and 570 of 862 lines, generated files stay outside zones', () => {
+        const mine = new Set(data.ownership?.paths ?? []);
+        const mineLines = data.diff.files.reduce(
+            (total, file) => total + (mine.has(file.path) ? file.additions + file.deletions : 0),
+            0,
+        );
+        const zoned = new Set(data.ownership?.zones?.flatMap((zone) => zone.paths) ?? []);
+
+        expect(mine.size).toBe(12);
+        expect(mineLines).toBe(570);
+        expect(totalChanges(data.diff.files)).toEqual({ additions: 806, deletions: 56 });
+        expect(data.diff.files.filter((file) => file.generated).every((file) => !zoned.has(file.path))).toBe(true);
     });
 
     it('has a deep branching thread (observed host maximum is 14)', () => {

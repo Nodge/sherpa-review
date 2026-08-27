@@ -4,6 +4,7 @@ import {
     commentDraftSchema,
     commentSchema,
     generateJsonSchemas,
+    lensZoneSchema,
     LONG_POLL_CEILING_SECONDS,
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
@@ -178,6 +179,18 @@ describe('review domain', () => {
             }).success,
         ).toBe(true);
         expect(commentDraftSchema.safeParse({ body: '', parentId: null, anchor: null }).success).toBe(false);
+    });
+
+    it('requires a boundary and at least one path for an ownership zone', () => {
+        const zone = {
+            path: 'services/orders/src/domain',
+            mine: true,
+            owner: 'checkout-domain',
+            paths: ['services/orders/src/domain/order.ts'],
+        };
+        expect(lensZoneSchema.parse(zone)).toEqual(zone);
+        expect(lensZoneSchema.safeParse({ ...zone, path: '' }).success).toBe(false);
+        expect(lensZoneSchema.safeParse({ ...zone, paths: [] }).success).toBe(false);
     });
 });
 

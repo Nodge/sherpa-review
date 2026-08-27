@@ -198,6 +198,28 @@ export const publishResultSchema = z.object({
 export type PublishResult = z.infer<typeof publishResultSchema>;
 
 /**
+ * Ownership lens zone (M2F-T7, decision #3): the boundary from ownership configuration is
+ * the owning configuration directory, or a subpath within it for subpath rules.
+ * A diff file belongs to at most one zone, the deepest boundary.
+ * Zones describe the entire PR (not just the reviewer's zones) and remain meaningful even when
+ * the lens has `available: false`. The reviewer has no zone, but other ownership zones exist in the PR.
+ */
+export const lensZoneSchema = z.object({
+    /** Zone boundary relative to the repository root, without leading or trailing `/`. */
+    path: z.string().min(1),
+    /** The reviewer owns the zone ("you · owner" chip). */
+    mine: z.boolean(),
+    /**
+     * Owner name for the chip (ownership rule alias, for example `modules-team`).
+     * null means the rule has no alias, so the UI uses an unnamed chip label.
+     */
+    owner: z.string().nullable(),
+    /** Current diff file paths within the zone, membership as in the lens's `paths`. There are no empty zones. */
+    paths: z.array(z.string()).min(1),
+});
+export type LensZone = z.infer<typeof lensZoneSchema>;
+
+/**
  * A lens is a named set of paths for filtering files (README filter model).
  * `available: false` means the lens mechanism is unavailable (the reviewer has no zone, an
  * undocumented endpoint broke). The UI disables the filter and explains why using `note`.
@@ -209,5 +231,12 @@ export const lensSchema = z.object({
     paths: z.array(z.string()),
     available: z.boolean(),
     note: z.string().nullable(),
+    /**
+     * PR ownership zones, only for the ownership lens. null means the implementation does not
+     * distinguish zones (directory fallback in the review host, extra lenses), so the UI groups
+     * files by path prefix, as before M2F-T7. The UI groups files outside all zones
+     * (generated files and files not covered by CODEOWNERS).
+     */
+    zones: z.array(lensZoneSchema).nullable(),
 });
 export type Lens = z.infer<typeof lensSchema>;

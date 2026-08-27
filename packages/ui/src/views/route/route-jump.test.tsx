@@ -61,6 +61,7 @@ const PARTIAL_LENS: Lens = {
         .filter((path) => !path.endsWith('__tests__/edit-window.test.ts')),
     available: true,
     note: null,
+    zones: null,
 };
 
 interface Mounted {

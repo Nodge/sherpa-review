@@ -163,6 +163,7 @@ const EMPTY_PCI: Lens = {
     paths: [],
     available: true,
     note: 'This PR has no files in the PCI DSS audit scope.',
+    zones: null,
 };
 
 const ALL_THREADS: ThreadsShow = { people: true, bots: true, resolved: true };

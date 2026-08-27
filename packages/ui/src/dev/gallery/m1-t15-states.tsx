@@ -30,11 +30,16 @@ const UNAVAILABLE_OWNERSHIP: Lens = {
         id: 'mine',
         label: 'My files',
         paths: [],
+        zones: null,
     }),
     available: false,
     paths: [],
     note: 'The review host could not determine your ownership zone from CODEOWNERS.',
+    zones: DATA.ownership?.zones?.map((zone) => ({ ...zone, mine: false })) ?? null,
 };
+
+const PREFIX_FALLBACK_OWNERSHIP: Lens | null =
+    DATA.ownership === null ? null : { ...DATA.ownership, zones: null };
 
 export interface M1T15GalleryState {
     readonly id: string;
@@ -62,6 +67,17 @@ export const M1_T15_STATES: readonly M1T15GalleryState[] = [
         title: 'Overview: ownership zone unavailable',
         render: () => (
             <ViewState view="overview" lenses={{ ownership: UNAVAILABLE_OWNERSHIP, extra: DATA.extraLenses }} />
+        ),
+    },
+    {
+        id: 'overview-ownership-prefix-fallback',
+        group: 'Overview and Route',
+        title: 'Overview: prefix fallback without zones',
+        render: () => (
+            <ViewState
+                view="overview"
+                lenses={{ ownership: PREFIX_FALLBACK_OWNERSHIP, extra: DATA.extraLenses }}
+            />
         ),
     },
     {

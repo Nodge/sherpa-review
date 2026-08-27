@@ -19,7 +19,7 @@ function file(
 
 const FILES = [
     file('mine', 'services/orders/a.ts', 4, 1),
-    file('other-same-root', 'services/orders/b.ts', 2, 2),
+    file('uncovered', 'services/orders/b.ts', 2, 2),
     file('other', 'infra/ci/config.ts', 3, 0),
     file('generated', 'pnpm-lock.yaml', 10, 5, true),
 ];
@@ -29,10 +29,24 @@ const OWNERSHIP: Lens = {
     paths: ['services/orders/a.ts'],
     available: true,
     note: null,
+    zones: [
+        {
+            path: 'services/orders',
+            mine: true,
+            owner: 'checkout-team',
+            paths: ['services/orders/a.ts'],
+        },
+        {
+            path: 'infra/ci',
+            mine: false,
+            owner: null,
+            paths: ['infra/ci/config.ts'],
+        },
+    ],
 };
 
 describe('Overview: files by ownership', () => {
-    it('calculates the header, deltas and directory chips for the "All" segment', () => {
+    it('groups files by zones, owners and files outside zones', () => {
         const summary = ownershipSummary(FILES, OWNERSHIP, 'all');
 
         expect(summary).toMatchObject({
@@ -45,11 +59,13 @@ describe('Overview: files by ownership', () => {
         expect(summary.groups).toEqual([
             {
                 path: 'services/orders',
-                files: 2,
-                lines: 9,
-                additions: 6,
-                deletions: 3,
-                ownership: 'mixed',
+                files: 1,
+                lines: 5,
+                additions: 4,
+                deletions: 1,
+                ownership: 'mine',
+                owner: 'checkout-team',
+                note: 'Your ownership zone by CODEOWNERS.',
             },
             {
                 path: 'infra/ci',
@@ -58,19 +74,33 @@ describe('Overview: files by ownership', () => {
                 additions: 3,
                 deletions: 0,
                 ownership: 'other',
+                owner: null,
+                note: 'Outside your CODEOWNERS zone.',
             },
             {
-                path: 'pnpm-lock.yaml',
+                path: 'Outside CODEOWNERS zones',
+                files: 1,
+                lines: 4,
+                additions: 2,
+                deletions: 2,
+                ownership: 'other',
+                owner: null,
+                note: 'These files are not covered by CODEOWNERS zones.',
+            },
+            {
+                path: 'Generated files',
                 files: 1,
                 lines: 15,
                 additions: 10,
                 deletions: 5,
                 ownership: 'generated',
+                owner: null,
+                note: 'Generated files are dimmed and count as read by default.',
             },
         ]);
     });
 
-    it('the "My zone" segment aggregates only lens files', () => {
+    it('keeps only ownership.paths files in the "My zone" segment', () => {
         expect(ownershipSummary(FILES, OWNERSHIP, 'mine').groups).toEqual([
             {
                 path: 'services/orders',
@@ -79,21 +109,45 @@ describe('Overview: files by ownership', () => {
                 additions: 4,
                 deletions: 1,
                 ownership: 'mine',
+                owner: 'checkout-team',
+                note: 'Your ownership zone by CODEOWNERS.',
             },
         ]);
     });
 
-    it('shows the reason and removes ownership chips when the lens is unavailable', () => {
-        const summary = ownershipSummary(
-            FILES,
-            { ...OWNERSHIP, available: false, paths: [], note: 'no CODEOWNERS zone' },
-            'mine',
-        );
+    it('zones:null keeps the prefix fallback with a mixed group', () => {
+        const summary = ownershipSummary(FILES, { ...OWNERSHIP, zones: null }, 'all');
+
+        expect(summary.groups.map((group) => [group.path, group.ownership])).toEqual([
+            ['services/orders', 'mixed'],
+            ['infra/ci', 'other'],
+            ['pnpm-lock.yaml', 'generated'],
+        ]);
+    });
+
+    it('keeps zones owned by others visible when the edge fixture filter is unavailable', () => {
+        const edge = fixtureData('edge');
+        const summary = ownershipSummary(edge.diff.files, edge.ownership, 'mine');
 
         expect(summary.available).toBe(false);
-        expect(summary.note).toBe('no CODEOWNERS zone');
-        expect(summary.groups).toHaveLength(3);
-        expect(summary.groups.every((group) => group.ownership === null)).toBe(true);
+        expect(summary.note).toContain('do not own');
+        expect(summary.groups.some((group) => group.ownership === 'other' && group.owner !== null)).toBe(true);
+        expect(summary.groups.some((group) => group.ownership === 'generated')).toBe(true);
+    });
+
+    it('derives header counts from the same files as the zones in the medium fixture', () => {
+        const summary = ownershipSummary(DATA.diff.files, DATA.ownership, 'all');
+        const mine = new Set(DATA.ownership?.paths ?? []);
+        const mineLines = DATA.diff.files.reduce(
+            (total, item) => total + (mine.has(item.path) ? item.additions + item.deletions : 0),
+            0,
+        );
+
+        expect(summary).toMatchObject({ mineFiles: 12, totalFiles: 18, mineLines: 570, totalLines: 862 });
+        expect(mineLines).toBe(570);
+        expect(DATA.ownership?.zones?.filter((zone) => zone.mine).flatMap((zone) => zone.paths)).toEqual(
+            DATA.ownership?.paths,
+        );
     });
 });
 
@@ -108,17 +162,17 @@ describe('Overview: discussion counters', () => {
 });
 
 function requiredFile(): FileDiff {
-    const file = DATA.diff.files[0];
-    if (file === undefined) {
+    const found = DATA.diff.files[0];
+    if (found === undefined) {
         throw new Error('medium fixture has no files');
     }
-    return file;
+    return found;
 }
 
 function requiredThread(predicate: (thread: Thread) => boolean): Thread {
-    const thread = DATA.threads.find(predicate);
-    if (thread === undefined) {
+    const found = DATA.threads.find(predicate);
+    if (found === undefined) {
         throw new Error('medium fixture lacks required thread');
     }
-    return thread;
+    return found;
 }

@@ -1,4 +1,4 @@
-import type { FileDiff, Thread } from '@sherpa/protocol';
+import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 
 import { anchor, bot, comment, human, lens, thread } from '../builders.js';
 import { lockLines } from '../content.js';
@@ -29,6 +29,39 @@ const KAI = human('kai', 'Kai Kennedy');
 const IRIS = human('iris', 'Iris Park');
 const AI_REVIEW = bot('ai-review-bot', 'AI Review (security)');
 const LINT_BOT = bot('lint-bot', 'AI Review (style)');
+
+const ROLLOUT_CHECKS = [
+    'contract tests',
+    'flag defaults off',
+    'internal edit',
+    'closed-window 409',
+    'express-order 400',
+    'dispatch closes early',
+    'fresh-food override',
+    'pharmacy override',
+    'advisory countdown',
+    'audit actor',
+    'audit retention',
+    'cache after write',
+    'old config unused',
+    'contract job green',
+    'metrics baseline',
+    'internal error budget',
+    '10% error budget',
+    '50% error budget',
+    '100% error budget',
+    'flag cleanup filed',
+] as const;
+
+/** 63 lines bring the ownership part of the fixture to the 570 lines in README §6. */
+function rolloutChecklistLines(): string[] {
+    return [
+        '+',
+        '+## Operational checklist',
+        '+',
+        ...ROLLOUT_CHECKS.flatMap((check) => [`+- [ ] ${check}`, '+  Evidence: #2281.', '+']),
+    ];
+}
 
 /** Hand-written files. The lockfile is added separately at the end. */
 const HAND_WRITTEN: readonly FileSpec[] = [
@@ -949,6 +982,7 @@ const HAND_WRITTEN: readonly FileSpec[] = [
                     '+1. Deploy with the flag `checkout_edit_window` off — the new code path is dormant.',
                     '+2. Turn the flag on for internal accounts and watch `checkout.edit_window.rejected`.',
                     '+3. Ramp to 100% over three days, then delete the config key and the old tests.',
+                    ...rolloutChecklistLines(),
                 ],
             },
         ],
@@ -1218,10 +1252,7 @@ function threads(): Thread[] {
     ];
 }
 
-/**
- * Ownership: 12 of 18 files are "mine", matching the README §6 proportion. Granularity is supplied
- * as concrete file paths: the review host adapter expands ownership-rule directories into diff files itself.
- */
+/** Ownership: 12 of 18 files are mine. Zones at different depths mirror CODEOWNERS rules. */
 const MY_FILES = [
     'services/orders/src/domain/edit-window.ts',
     'services/orders/src/domain/order.ts',
@@ -1235,6 +1266,38 @@ const MY_FILES = [
     'services/orders/src/infra/logging.ts',
     'services/orders/docs/edit-window.md',
     'services/orders/README.md',
+];
+
+const OWNERSHIP_ZONES: readonly LensZone[] = [
+    {
+        path: 'services/orders/src/domain',
+        mine: true,
+        owner: 'checkout-domain',
+        paths: MY_FILES.filter((path) => path.startsWith('services/orders/src/domain/')),
+    },
+    {
+        path: 'services/orders/src/api',
+        mine: true,
+        owner: 'checkout-api',
+        paths: MY_FILES.filter((path) => path.startsWith('services/orders/src/api/')),
+    },
+    {
+        path: 'services/orders',
+        mine: true,
+        owner: null,
+        paths: MY_FILES.filter(
+            (path) => !path.startsWith('services/orders/src/domain/') && !path.startsWith('services/orders/src/api/'),
+        ),
+    },
+    {
+        path: 'services/orders/src/payments',
+        mine: false,
+        owner: 'payments-platform',
+        paths: [
+            'services/orders/src/payments/card-token.ts',
+            'services/orders/src/payments/pci-audit.ts',
+        ],
+    },
 ];
 
 /** PCI scope overlaps with generated (`psp-schema.ts`), a real case from the M1-T1 spike. */
@@ -1266,7 +1329,7 @@ export function makeMediumFixture(): FixtureData {
             files: files(),
         },
         threads: threads(),
-        ownership: lens({ id: 'mine', label: 'My files', paths: MY_FILES }),
+        ownership: lens({ id: 'mine', label: 'My files', paths: MY_FILES, zones: OWNERSHIP_ZONES }),
         extraLenses: [lens({ id: 'pci', label: 'PCI DSS', paths: PCI_FILES })],
         currentUser: REVIEWER,
         mutationEpoch: '2026-08-20T09:00:00.000Z',

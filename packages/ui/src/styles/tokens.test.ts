@@ -50,6 +50,7 @@ const EXPECTED: Record<string, string> = {
     '--border-chip': '#262a30',
     '--border-strong': '#2b2f36',
     '--border-strong-lifted': '#2f333a',
+    '--ownership-mine-border': '#24422f',
     '--border-raised-bar': '#303540',
     '--border-raised-dialog': '#313640',
     '--border-raised-popover': '#333842',

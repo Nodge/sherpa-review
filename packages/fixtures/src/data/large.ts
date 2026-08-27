@@ -1,4 +1,4 @@
-import type { FileDiff } from '@sherpa/protocol';
+import type { FileDiff, LensZone } from '@sherpa/protocol';
 
 import { anchor, comment, human, lens, thread } from '../builders.js';
 import { tsLines } from '../content.js';
@@ -123,6 +123,17 @@ export function makeLargeFixture(): FixtureData {
     }
 
     const reviewer = human('alice', 'Alice Ingram');
+    const zones: LensZone[] = Array.from({ length: MODULES }, (_, moduleIndex) => {
+        const path = modulePath(moduleIndex);
+        const mine = moduleIndex % 2 === 0;
+        return {
+            path,
+            mine,
+            owner: mine ? 'checkout-platform' : 'checkout-runtime',
+            paths: files.filter((file) => !file.generated && file.path.startsWith(`${path}/`)).map((file) => file.path),
+        };
+    });
+    const minePaths = zones.filter((zone) => zone.mine).flatMap((zone) => zone.paths);
 
     return {
         pr: {
@@ -148,7 +159,8 @@ export function makeLargeFixture(): FixtureData {
         ownership: lens({
             id: 'mine',
             label: 'My files',
-            paths: files.filter((_, index) => index % 3 === 0).map((file) => file.path),
+            paths: minePaths,
+            zones,
         }),
         extraLenses: [
             lens({
