@@ -20,6 +20,7 @@ import type { ThreadActions } from '../threads/thread-list.tsx';
 import { OutsideThreads } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
+import { Markdown } from '../markdown/markdown.tsx';
 import { provenanceLine, summaryParagraphs } from '../route/generation.js';
 import { formatCount, plural } from '../text.js';
 import type { ViewId } from '../session/views.js';
@@ -320,7 +321,7 @@ function SummaryCard({
             <OverviewCard title="Summary">
                 {summaryParagraphs(snapshot.summary).map((paragraph) => (
                     <p key={paragraph} className="overview-card__text">
-                        {paragraph}
+                        <Markdown text={paragraph} profile="route" />
                     </p>
                 ))}
                 <p className="summary-card__provenance">{provenanceLine(snapshot)}</p>

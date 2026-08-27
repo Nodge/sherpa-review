@@ -117,13 +117,21 @@ interface StopSpec {
  * the other has no anchor at all (the diff has no file to attach it to).
  */
 const DIGEST: DigestEntry[] = [
-    { kind: 'new', text: 'The window is open immediately after the order is placed.', test: { path: P.windowTest, line: 10 } },
+    {
+        kind: 'new',
+        text: 'The window is open immediately after the order is placed. `isOpen` is true.',
+        test: { path: P.windowTest, line: 10 },
+    },
     {
         kind: 'new',
         text: 'After 30 minutes and one millisecond, the window is closed.',
         test: { path: P.windowTest, line: 17 },
     },
-    { kind: 'new', text: 'An express slot (not scheduled) has no window at all.', test: { path: P.windowTest, line: 24 } },
+    {
+        kind: 'new',
+        text: 'An express slot (`scheduled: false`) has no window at all.',
+        test: { path: P.windowTest, line: 24 },
+    },
     {
         kind: 'new',
         text: 'For open-window cases, the makeOrder factory builds an order with a scheduled slot by default.',
@@ -132,7 +140,7 @@ const DIGEST: DigestEntry[] = [
     },
     {
         kind: 'new',
-        text: 'Dispatch to a courier closes the window early, with the dispatch reason.',
+        text: 'Dispatch to the courier closes the window early with reason `dispatch`.',
         test: { path: P.windowTest, line: 44 },
     },
     {
@@ -213,7 +221,7 @@ const MODEL_STOPS: StopSpec[] = [
         id: 's02',
         planIndex: 2,
         tier: 'high',
-        title: 'The policy decides by the window, not the clock',
+        title: 'The policy decides through `EditWindow` instead of the clock',
         intent: 'EditPolicy now uses EditWindow and machine-readable rejection codes. The order model becomes strict.',
         paragraph:
             '`EditPolicy` no longer accepts a number of hours. It receives `EditWindow` and returns a decision with a machine-readable rejection code (`edit-window-closed`, `already-dispatched`, `not-scheduled`) instead of a free-form string. In `Order`, `slot` and `scheduled` became required, `items` and `dispatchedAt` were added, and the duplicate `editable` flag was removed. As a result, every caller must handle three rejection reasons, and reading "editable" can no longer bypass the policy.',
@@ -318,7 +326,7 @@ const MODEL_STOPS: StopSpec[] = [
         id: 's05',
         planIndex: 5,
         tier: 'low',
-        title: 'README catches up with the new domain layout',
+        title: '`README.md` catches up with the domain layout',
         intent: 'The domain and test sections: new files, the removed config setting and the FrozenClock rule.',
         paragraph:
             'The domain section names `edit-window.ts` and `infra/clock.ts` and no longer references the `checkout.edit_window_hours` config setting. The test section requires `FrozenClock` instead of `Date.now()` in `domain/`. As a result, the clock rule and the window test command are where readers look first.',

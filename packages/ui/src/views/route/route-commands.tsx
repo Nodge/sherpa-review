@@ -1,5 +1,6 @@
 import type { RouteSnapshot, UiRoutePhase } from '@sherpa/protocol';
 
+import { stripInlineCode } from '../../markdown/markdown.js';
 import { planLabel } from '../../route/route-model.js';
 import type { RoutePreset } from '../../session/session-store.js';
 import type { ViewId } from '../../session/views.js';
@@ -26,7 +27,7 @@ export function RouteCommands({
                 <StopCommand
                     key={stop.id}
                     id={stop.id}
-                    label={`Go to stop ${planLabel(stop.planIndex)} · ${stop.title}`}
+                    label={`Go to stop ${planLabel(stop.planIndex)} · ${stripInlineCode(stop.title)}`}
                     onJump={onJump}
                 />
             ))}

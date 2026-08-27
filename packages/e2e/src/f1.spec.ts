@@ -221,7 +221,9 @@ test('F1 failure: a broken plan fails generation, Retry finishes the route', asy
 async function expectHalfFilled(page: Page): Promise<void> {
     // 3 stops submitted, the fourth is leased and filling. 05 and 06 are still queued.
     await expect(page.locator('.route-skeleton-card')).toHaveCount(3);
-    await expect(stop(page, 's01')).toContainText('The `EditWindow` class was added');
+    // The Markdown renderer consumes model backticks. `EditWindow` appears as monospace code without backticks.
+    await expect(stop(page, 's01')).toContainText('The EditWindow class and an injectable time source have been added');
+    await expect(stop(page, 's01').locator('.route-stop__paragraph code.md-code').first()).toHaveText('EditWindow');
     await expect(stop(page, 's04')).toContainText('The agent has not filled this stop yet');
     await expect(page.locator('.coverage__legend-text')).toHaveText('coverage known after the plan');
 

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { stripInlineCode } from '../../markdown/markdown.js';
+import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
 import { formatCount, plural } from '../../text.js';
 import { StopViewedToggle } from './stop-card.tsx';
@@ -67,7 +69,7 @@ export function OtherCard({
             className={`route-stop route-stop--other${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${view.stop.id}`}
             role="region"
-            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${view.stop.title}`}
+            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stripInlineCode(view.stop.title)}`}
         >
             <div className="route-stop__side">
                 <div className="route-stop__head">
@@ -86,7 +88,9 @@ export function OtherCard({
                         />
                     )}
                 </div>
-                <h2 className="route-stop__title">{view.stop.title}</h2>
+                <h2 className="route-stop__title">
+                    <Markdown text={view.stop.title} profile="route" />
+                </h2>
                 {filling ? (
                     <p className="route-stop__paragraph">
                         The route is still filling. For now, everything the agent has not reached goes here.

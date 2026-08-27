@@ -251,6 +251,55 @@ function botThreadWithFortyReplies(): Thread[] {
     return [{ ...source, root: { ...source.root, replies } }];
 }
 
+/**
+ * Markdown gallery (M2F-T5): one thread whose body uses the entire `comment` profile,
+ * including content that must not render: raw HTML, a `javascript:` link and an unmatched backtick
+ * must remain text.
+ */
+const MARKDOWN_SHOWCASE = [
+    '# Level-one heading, a bold line at the same font size',
+    '###### And level six, at the same size',
+    '',
+    'A regular paragraph with **bold**, *italic* and inline code `EditPolicy.decide()`.',
+    'A single line break stays a line break. People write plain text.',
+    '',
+    'Nested list:',
+    '',
+    '- first item with a link [to the issue](https://github.com/quillmart/quillmart/issues/2281)',
+    '  - nested item with `code`',
+    '- second item',
+    '',
+    '1. numbered',
+    '2. and second',
+    '',
+    'A long bare URL wraps instead of stretching the column:',
+    'https://wiki.example.internal/checkout/security/incident-response/historical-records-scrubbing/#retention',
+    '',
+    '```ts',
+    'const decision = policy.decide(order, clock.now());',
+    'if (!decision.allowed) throw new EditWindowClosed(decision.reason, decision.remainingMs);',
+    '```',
+    '',
+    'Raw HTML stays text: <img src=x onerror="alert(1)"> and <b>bold</b>.',
+    'A link with another scheme stays text too: [click](javascript:alert(1)).',
+    'An unmatched backtick is literal: field `slot became required.',
+].join('\n');
+
+function markdownShowcaseThread(): Thread[] {
+    const source = fixtureData('medium').threads.find((thread) => thread.root.author.bot);
+    const file = fileOf('medium', 'services/orders/src/api/handlers.ts');
+    if (source === undefined) {
+        return [];
+    }
+    return [
+        {
+            ...source,
+            anchor: { fileId: file.fileId, path: file.path, position: { side: 'new' as const, line: 48, size: 1 } },
+            root: { ...source.root, body: MARKDOWN_SHOWCASE, replies: [] },
+        },
+    ];
+}
+
 export interface FullDiffGalleryState {
     readonly id: string;
     readonly title: string;
@@ -379,6 +428,19 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 showThreads
                 onlyPath="services/orders/src/payments/card-token.ts"
                 threads={botThreadWithFortyReplies()}
+                threadsShow={ALL_THREADS}
+            />
+        ),
+    },
+    {
+        id: 'threads-markdown',
+        title: 'markdown display: the entire comment profile at once',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/api/handlers.ts"
+                threads={markdownShowcaseThread()}
                 threadsShow={ALL_THREADS}
             />
         ),

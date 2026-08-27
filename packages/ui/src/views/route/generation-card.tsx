@@ -1,6 +1,7 @@
 import type { RouteSnapshot, UiRouteFailure, UiRouteState } from '@sherpa/protocol';
 import { useState } from 'react';
 
+import { Markdown } from '../../markdown/markdown.tsx';
 import { generationCardKind, generationProgress } from '../../route/generation.js';
 import { formatCount, plural } from '../../text.js';
 import './generation.css';
@@ -100,7 +101,9 @@ export function GenerationCard({
                     {progress.slots.map((slot) => (
                         <li key={slot.id} className={`gen-plan__item gen-plan__item--${slot.status}`}>
                             <span className="gen-plan__number">{slot.planLabel}</span>
-                            <span className="gen-plan__title">{slot.title}</span>
+                            <span className="gen-plan__title">
+                                <Markdown text={slot.title} profile="route" />
+                            </span>
                             <span className="gen-plan__state">{PLAN_STATE[slot.status]}</span>
                         </li>
                     ))}

@@ -58,6 +58,10 @@ describe('Overview during generation', () => {
         expect(html).toContain('The PR introduces a 30-minute edit window');
         expect(html).toContain('claude-code · claude-opus-5 · ');
         expect(html).toContain('4 of 7 ready');
+        // Summary and plan slots use the route profile: backticks become monospace code.
+        expect(html).toContain('<code class="md-code">EditWindow</code>');
+        expect(html).toContain('<code class="md-code">README.md</code>');
+        expect(html).not.toContain('`');
     });
 
     it('failure: Summary says the description is missing, with a red card alongside', () => {

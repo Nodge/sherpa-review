@@ -208,6 +208,19 @@ describe('route view', () => {
         expect(html).toContain('>high<');
     });
 
+    it('model backticks produce monospace text and plain attribute values', () => {
+        const html = render();
+        const head = section(html, 's02').slice(0, section(html, 's02').indexOf('route-stop__diff'));
+
+        // Stop title and paragraph: backticked code becomes an element, with no backticks on screen.
+        expect(head).toContain('<code class="md-code">EditWindow</code>');
+        expect(head).not.toContain('`');
+        // The same title in the region announcement has no markup at all.
+        expect(html).toContain('aria-label="Stop 02 of 7 — Policy decides by EditWindow, not by the clock"');
+        // Digest assertions use the same rendering rules.
+        expect(section(html, 's04')).toContain('<code class="md-code">dispatch</code>');
+    });
+
     it('collapsed low stops have dashed cards, expanded ones do not', () => {
         const collapsed = render();
         const expanded = render({ stops: { ...EMPTY_STOPS, expanded: new Set(['s05']) } });
