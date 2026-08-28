@@ -82,6 +82,7 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
         () => ({
             files: DATA.diff.files,
             activeFileId: DATA.diff.files[0]?.fileId ?? null,
+            searchModels: () => new Map(),
             goToFile: () => undefined,
             goToLine: () => undefined,
             toggleDiffMode: () => undefined,

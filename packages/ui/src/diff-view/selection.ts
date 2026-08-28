@@ -5,7 +5,7 @@ import type { DiffFileModel, DiffLine } from '../diff/model.js';
  *
  * A line is addressed by its file line numbers, not its position in the model: context expansion
  * reindexes blocks (gaps disappear, adjacent hunks merge), so selection tied
- * to indices would highlight different lines after "Context ±20". File line numbers never change.
+ * to indexes would highlight other lines after a gap control is clicked. Line numbers stay the same.
  *
  * Keys do not define line order (an added line has only a new number, a deleted line has
  * only an old one), so the range expands into a set of lines in the model's own order:

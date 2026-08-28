@@ -40,6 +40,8 @@ export interface DiffLine {
     malformed?: true;
     /** The patch line was followed by `\ No newline at end of file`. */
     noNewline?: true;
+    /** Original gap from which this line was expanded. Post-processing needs it to preserve the result. */
+    sourceGapKey?: string;
 }
 
 /** Lines the parser can confidently assign to the hunk entity. */
@@ -87,6 +89,8 @@ export interface DiffGap {
      * so calling them "unchanged" would be false.
      */
     hiddenChanged?: number;
+    /** Stable key of the original gap, added after the first partial expansion. */
+    sourceKey?: string;
     /** First hidden line in each version, an anchor for loading more context (T6). */
     oldStart: number;
     newStart: number;

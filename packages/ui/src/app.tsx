@@ -42,6 +42,7 @@ import {
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
 import { globalCollapsedStorage, readCollapsed as readFileCollapsed } from './diff-view/collapsed-storage.js';
+import { expandFileContext } from './diff-view/expand.js';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
     ALL_FILTER_ID,
@@ -553,6 +554,19 @@ export function App({ store, session, token }: AppProps) {
         return {
             files: currentDiff.files,
             activeFileId,
+            searchModels: () => {
+                const snapshot = diffStore.getSnapshot();
+                return new Map(
+                    [...snapshot.models].map(([fileId, model]) => [
+                        fileId,
+                        expandFileContext(
+                            model,
+                            snapshot.content.get(fileId) ?? null,
+                            snapshot.expansion.get(fileId) ?? new Map(),
+                        ),
+                    ]),
+                );
+            },
             goToFile: (fileId) => {
                 navigateFromPalette({ kind: 'file', fileId });
             },

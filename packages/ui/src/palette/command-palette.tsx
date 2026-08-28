@@ -123,7 +123,7 @@ export function CommandPalette({
     const diffSearch = useMemo(
         () =>
             parsed.kind === 'diff' && source !== null && parsed.text !== ''
-                ? searchDiff(source.files, parsed.text)
+                ? searchDiff(source.files, parsed.text, 50, source.searchModels())
                 : null,
         [parsed, source],
     );

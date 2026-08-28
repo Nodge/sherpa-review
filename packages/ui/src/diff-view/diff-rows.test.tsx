@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+
+import type { FileContent } from '@sherpa/protocol';
 
 import { parseFileDiff } from '../diff/parse.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { LineSelection } from './selection.js';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MODEL = parseFileDiff({
     fileId: 'f1',
@@ -16,6 +22,24 @@ const MODEL = parseFileDiff({
 });
 
 const SELECTION: LineSelection = { fileId: 'f1', anchor: 'd2', focus: 'c3:3' };
+const GAP_MODEL = parseFileDiff({
+    fileId: 'f2',
+    path: 'src/gaps.ts',
+    oldPath: null,
+    changeType: 'modify',
+    binary: false,
+    patch: '@@ -21,1 +21,1 @@\n-old-21\n+new-21\n@@ -51,1 +51,1 @@\n-old-51\n+new-51\n',
+});
+const REMAINDER_MODEL = parseFileDiff({
+    fileId: 'f3',
+    path: 'src/remainder.ts',
+    oldPath: null,
+    changeType: 'modify',
+    binary: false,
+    patch: '@@ -21,1 +21,1 @@\n-old-21\n+new-21\n@@ -41,1 +41,1 @@\n-old-41\n+new-41\n',
+});
+const GAP_LINES = Array.from({ length: 80 }, (_, index) => `line-${String(index + 1)}`);
+const GAP_CONTENT: FileContent = { oldText: GAP_LINES.join('\n'), newText: GAP_LINES.join('\n') };
 
 function render(mode: 'unified' | 'split'): HTMLElement {
     const host = document.createElement('div');
@@ -30,6 +54,84 @@ function render(mode: 'unified' | 'split'): HTMLElement {
     );
     return host;
 }
+
+function renderGaps(mode: 'unified' | 'split', model = GAP_MODEL): HTMLElement {
+    const host = document.createElement('div');
+    host.innerHTML = renderToStaticMarkup(
+        <DiffRows model={model} mode={mode} content={GAP_CONTENT} selection={null} />,
+    );
+    return host;
+}
+
+describe('context gap bars', () => {
+    it.each(['unified', 'split'] as const)('preserve directions and one tab stop in mode %s', (mode) => {
+        const host = renderGaps(mode);
+        const leading = host.querySelector<HTMLElement>('.diff-gap[data-edge="leading"]');
+        const inner = host.querySelector<HTMLElement>('.diff-gap[data-edge="inner"]');
+        const trailing = host.querySelector<HTMLElement>('.diff-gap[data-edge="trailing"]');
+
+        expect(leading?.querySelectorAll('[data-direction="up"]')).toHaveLength(1);
+        expect(leading?.querySelectorAll('[data-direction="down"]')).toHaveLength(0);
+        expect(inner?.querySelectorAll('[data-direction="up"], [data-direction="down"]')).toHaveLength(2);
+        expect(trailing?.querySelectorAll('[data-direction="up"]')).toHaveLength(0);
+        expect(trailing?.querySelectorAll('[data-direction="down"]')).toHaveLength(1);
+
+        for (const gap of [leading, inner, trailing]) {
+            expect(gap?.getAttribute('tabindex')).toBe('0');
+            expect(gap?.querySelectorAll('button[tabindex="-1"]')).toHaveLength(
+                gap?.querySelectorAll('button').length ?? 0,
+            );
+        }
+    });
+
+    it('remainder smaller than the step produces one updown target with an exact aria-label', () => {
+        const host = renderGaps('unified', REMAINDER_MODEL);
+        const inner = host.querySelector<HTMLElement>('.diff-gap[data-edge="inner"]');
+        const target = inner?.querySelector<HTMLButtonElement>('[data-direction="all"]');
+
+        expect(target).not.toBeNull();
+        expect(target?.getAttribute('aria-label')).toBe('load 19 lines, 19 lines hidden');
+        expect(target?.querySelector('svg[data-icon="updown"]')).not.toBeNull();
+        expect(inner?.textContent).toContain('19 unchanged lines — expand');
+    });
+
+    it('arrow keys change the selected direction visually and through aria-activedescendant', () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        act(() => {
+            root.render(<DiffRows model={GAP_MODEL} mode="unified" content={GAP_CONTENT} selection={null} />);
+        });
+
+        const inner = host.querySelector<HTMLElement>('.diff-gap[data-edge="inner"]');
+        const up = inner?.querySelector<HTMLElement>('[data-direction="up"]');
+        const down = inner?.querySelector<HTMLElement>('[data-direction="down"]');
+        if (inner === null || up === null || up === undefined || down === null || down === undefined) {
+            throw new Error('inner gap bar did not render both directions');
+        }
+
+        expect(inner.getAttribute('role')).toBe('radiogroup');
+        expect(inner.getAttribute('aria-activedescendant')).toBe(up.id);
+        expect(up.classList.contains('is-active')).toBe(true);
+        expect(up.getAttribute('aria-checked')).toBe('true');
+        expect(down.getAttribute('aria-checked')).toBe('false');
+
+        act(() => {
+            inner.focus();
+            inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        });
+
+        expect(inner.getAttribute('aria-activedescendant')).toBe(down.id);
+        expect(down.classList.contains('is-active')).toBe(true);
+        expect(down.getAttribute('aria-checked')).toBe('true');
+        expect(up.getAttribute('aria-checked')).toBe('false');
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+});
 
 describe('line comment button', () => {
     it.each(['unified', 'split'] as const)('sits in the gutter and uses a 15px pencil in mode %s', (mode) => {

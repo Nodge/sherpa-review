@@ -1,20 +1,21 @@
 import { fileContentOf, fixtureData } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
-import type { FileDiff } from '@sherpa/protocol';
+import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import type { DiffGap, DiffHunk } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
-import type { DiffHunk } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
 import { lineKey } from '../../diff-view/selection.js';
 import { readStateOf } from '../../progress/read-state.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
 import { DiffFileList } from '../../diff-view/file-list.tsx';
+import type { ExpandDirection, FileExpansion } from '../../diff-view/expand.js';
+import { gapKeyOf, hiddenLinesOf } from '../../diff-view/expand.js';
 import type { DiffMode, DiffViewStore } from '../../diff-view/store.js';
 import { createDiffViewStore, fileCollapseReason } from '../../diff-view/store.js';
-import type { ExpandAmount } from '../../diff-view/expand.js';
 import '../../diff-view/diff-view.css';
 
 /**
@@ -23,11 +24,13 @@ import '../../diff-view/diff-view.css';
  * the same frame on every run.
  */
 
+type ExpansionPreset = 'step' | 'remainder' | 'all';
+
 interface CardStateProps {
     readonly fixture: FixtureName;
     readonly path: string;
     readonly mode?: DiffMode;
-    readonly expansion?: ExpandAmount;
+    readonly expansion?: ExpansionPreset;
     readonly viewed?: boolean;
     /** Explicit manual choice: true collapses, false expands. */
     readonly collapsed?: boolean;
@@ -41,7 +44,10 @@ interface CardStateProps {
     readonly keptInView?: boolean;
     /** Initial card hint: shows a write failure that cannot occur without a click. */
     readonly hint?: Feedback;
+    readonly gapError?: boolean;
 }
+
+const EMPTY_EXPANSION: FileExpansion = new Map();
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
     const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
@@ -51,12 +57,35 @@ function fileOf(fixture: FixtureName, path: string): FileDiff {
     return file;
 }
 
+function applyExpansionPreset(
+    store: DiffViewStore,
+    fileId: string,
+    model: ReturnType<typeof parseFileDiff>,
+    content: FileContent,
+    preset: Exclude<ExpansionPreset, 'all'>,
+): void {
+    const gaps = model.content.kind === 'text'
+        ? model.content.blocks.filter((block): block is DiffGap => block.kind === 'gap')
+        : [];
+    const gap = gaps.find((candidate) => {
+        const hidden = hiddenLinesOf(candidate, content);
+        return preset === 'step' ? hidden === null || hidden >= 20 : hidden !== null && hidden > 7;
+    });
+    if (gap === undefined) {
+        return;
+    }
+    const direction: ExpandDirection = gap.edge === 'trailing' ? 'down' : 'up';
+    const hidden = hiddenLinesOf(gap, content);
+    const amount = preset === 'remainder' && hidden !== null ? hidden - 7 : undefined;
+    store.expandGap(fileId, gapKeyOf(gap), direction, amount);
+}
+
 /** Fixture-backed card: the store is populated immediately, so the first frame is already final. */
 function CardState({
     fixture,
     path,
     mode = 'unified',
-    expansion = 0,
+    expansion,
     viewed,
     collapsed,
     restoreAfterUnmark = false,
@@ -64,6 +93,7 @@ function CardState({
     opened,
     keptInView = false,
     hint,
+    gapError = false,
 }: CardStateProps) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
@@ -75,13 +105,17 @@ function CardState({
             storage: null,
             ...(collapsed === undefined ? {} : { collapsed: new Map([[file.fileId, collapsed]]) }),
         });
-        created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
+        const model = parseFileDiff(toParseRequest(file));
+        const content = contentAvailable ? fileContentOf(file) : null;
+        created.setModel(file.fileId, model);
         if (contentAvailable) {
-            created.setContent(file.fileId, fileContentOf(file));
+            created.setContent(file.fileId, content);
         }
         created.setDiffMode(mode);
-        if (expansion !== 0) {
-            created.expand(file.fileId, expansion);
+        if (expansion === 'all') {
+            created.expandFile(file.fileId);
+        } else if (expansion !== undefined && content !== null) {
+            applyExpansionPreset(created, file.fileId, model, content, expansion);
         }
         if (restoreAfterUnmark) {
             created.revealFile(file.fileId);
@@ -122,7 +156,7 @@ function CardState({
             mode={snapshot.effectiveMode}
             content={snapshot.content.get(file.fileId)}
             contentAvailable={contentAvailable}
-            expansion={snapshot.expansion.get(file.fileId) ?? 0}
+            expansion={snapshot.expansion.get(file.fileId) ?? EMPTY_EXPANSION}
             read={snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null })}
             collapseReason={fileCollapseReason(snapshot, file)}
             onToggleCollapse={() => {
@@ -132,6 +166,7 @@ function CardState({
             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
             keptInView={keptInView}
             initialHint={hint ?? null}
+            initialGapError={gapError}
             selection={snapshot.selection}
             actions={actions}
         />
@@ -208,9 +243,18 @@ function galleryActions(store: DiffViewStore): FileCardActions {
             store.markViewed(fileId, viewed);
             return Promise.resolve(null);
         },
-        onExpand: (fileId, amount) => {
-            store.expand(fileId, amount);
-            return Promise.resolve(null);
+        onExpand: (fileId, request) => {
+            if (request.kind === 'file') {
+                store.expandFile(fileId, request.gapKeys);
+            } else {
+                store.expandGap(fileId, request.gapKey, request.direction, request.amount);
+            }
+            const snapshot = store.getSnapshot();
+            return Promise.resolve({
+                feedback: null,
+                content: snapshot.content.get(fileId) ?? null,
+                expansion: snapshot.expansion.get(fileId) ?? new Map(),
+            });
         },
         onRetryParse: () => {
             // Gallery parsing is synchronous and does not fail, so there is nothing to retry.
@@ -304,12 +348,27 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
     {
         id: 'diff-expand',
         title: 'context expanded by 20 lines',
-        render: () => <CardState fixture="medium" path={ORDER} expansion={20} />,
+        render: () => <CardState fixture="medium" path={ORDER} expansion="step" />,
     },
     {
         id: 'diff-expand-all',
         title: 'context fully expanded',
         render: () => <CardState fixture="medium" path={ORDER} expansion="all" />,
+    },
+    {
+        id: 'diff-gap-idle',
+        title: 'context gap: rest',
+        render: () => <CardState fixture="medium" path={ORDER} />,
+    },
+    {
+        id: 'diff-gap-remainder',
+        title: 'context gap: fewer than 20 lines remain',
+        render: () => <CardState fixture="medium" path={ORDER} expansion="remainder" />,
+    },
+    {
+        id: 'diff-gap-error',
+        title: 'context gap: loading error',
+        render: () => <CardState fixture="medium" path={ORDER} gapError />,
     },
     {
         id: 'diff-expand-unavailable',

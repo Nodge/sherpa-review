@@ -274,15 +274,122 @@
 }
 
 .diff-gap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 13px;
-    font-size: var(--font-size-meta);
+    display: grid;
+    grid-template-columns: 46px 46px 16px minmax(0, 1fr);
+    height: 24px;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
     color: var(--text-dim-strong);
     background: var(--surface-diff-gap);
-    border-top: 1px solid var(--border-hairline);
-    border-bottom: 1px solid var(--border-hairline);
+    border: 0;
+    border-top: 1px solid var(--border-hairline-soft);
+    border-bottom: 1px solid var(--border-hairline-soft);
+}
+
+.diff-gap--split {
+    grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
+}
+
+.diff-gap:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.diff-gap__slot,
+.diff-gap__empty,
+.diff-gap__target {
+    width: 46px;
+    height: 24px;
+}
+
+.diff-gap__slot--up {
+    grid-column: 1;
+}
+
+.diff-gap--unified .diff-gap__slot--down {
+    grid-column: 2;
+}
+
+.diff-gap--split .diff-gap__slot--down {
+    grid-column: 4;
+}
+
+.diff-gap__empty {
+    display: block;
+}
+
+.diff-gap__target {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--text-separator);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+/* The selected arrow is visible only while the group has keyboard focus.
+   Both targets are transparent at rest (state table §1a). */
+.diff-gap:focus-visible .diff-gap__target.is-active,
+.diff-gap__target:hover {
+    color: var(--text-muted);
+    background: var(--surface-raised);
+}
+
+.diff-gap:has(.diff-gap__target:hover) .diff-gap__counter {
+    color: var(--text-muted);
+}
+
+.diff-gap.is-loading .diff-gap__target.is-active {
+    color: var(--text-secondary);
+    background: var(--border-hairline-strong);
+}
+
+.diff-gap__target:disabled {
+    opacity: 1;
+    cursor: default;
+}
+
+.diff-gap__counter {
+    align-self: center;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.diff-gap--unified .diff-gap__counter {
+    grid-column: 4;
+}
+
+.diff-gap--split .diff-gap__counter {
+    grid-column: 3;
+}
+
+.diff-gap--error {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.diff-gap--error:hover {
+    color: var(--text-muted);
+    background: var(--surface-raised);
+}
+
+.diff-gap--unified .diff-gap__error-label {
+    grid-column: 4;
+}
+
+.diff-gap--split .diff-gap__error-label {
+    grid-column: 3;
+}
+
+.diff-gap__error-label {
+    align-self: center;
 }
 
 .diff-row {

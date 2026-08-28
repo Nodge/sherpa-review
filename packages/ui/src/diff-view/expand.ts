@@ -3,20 +3,23 @@ import type { FileContent } from '@sherpa/protocol';
 import type { DiffBlock, DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
 import { tokenizeLine } from '../diff/syntax.js';
 
-/**
- * "Expand context" (SPEC §2.13): each click adds 20 unchanged lines above and below
- * every hunk in the file. "Expand all" reveals the gaps in full.
- *
- * This pure function calculates from the original model, rather than the previous result. UI state is
- * one number (or `all`), and each calculation starts from scratch. Lines come from file content (`FileContent`),
- * and numbering comes from hunk boundaries. An unchanged line has the same text in both versions,
- * only its number differs, so text comes from the new side and the old number comes from an offset.
- */
-
-/** Expansion step from SPEC §2.13. */
+/** Context gap bar expansion step. */
 export const EXPAND_STEP = 20;
 
-export type ExpandAmount = number | 'all';
+export type GapKey = string;
+export type ExpandDirection = 'up' | 'down' | 'all';
+
+/** Internal key for the "Expand file" action. transform expands all allowed context. */
+export const FILE_EXPANSION_KEY: GapKey = 'file:all';
+
+export interface GapExpansion {
+    readonly up: number;
+    readonly down: number;
+    readonly all: boolean;
+}
+
+/** Expansion for one file, with independent state for each original gap bar. */
+export type FileExpansion = ReadonlyMap<GapKey, GapExpansion>;
 
 interface Sides {
     /** New-version lines (1-based indexing through `at`). */
@@ -30,8 +33,7 @@ function split(text: string | null): readonly string[] | null {
         return null;
     }
     const lines = text.split('\n');
-    // A file almost always ends with a newline. The last split segment is an empty tail,
-    // not a file line. Counting it would add one to the length and draw an empty line past the end.
+    // A file almost always ends with a newline, so the last split segment is an empty tail.
     if (lines.at(-1) === '') {
         lines.pop();
     }
@@ -43,9 +45,54 @@ export function newFileLength(content: FileContent): number {
     return split(content.newText)?.length ?? 0;
 }
 
+/** Stable gap key derived from its boundaries in the original file model. */
+export function gapKeyOf(gap: DiffGap): GapKey {
+    const hidden = gap.hiddenLines === null ? 'end' : String(gap.hiddenLines);
+    return gap.sourceKey ?? `${gap.edge}:${String(gap.oldStart)}:${String(gap.newStart)}:${hidden}`;
+}
+
+/** New immutable state after one target action. */
+export function expandGap(
+    expansion: FileExpansion,
+    key: GapKey,
+    direction: ExpandDirection,
+    amount = EXPAND_STEP,
+): FileExpansion {
+    const current = expansion.get(key) ?? { up: 0, down: 0, all: false };
+    const next: GapExpansion =
+        direction === 'all'
+            ? { ...current, all: true }
+            : direction === 'up'
+              ? { ...current, up: current.up + amount }
+              : { ...current, down: current.down + amount };
+    return new Map(expansion).set(key, next);
+}
+
+/** Full expansion adds `all` to original file gaps and gaps visible after transform. */
+export function expandAllGaps(
+    model: DiffFileModel,
+    expansion: FileExpansion,
+    visibleGapKeys: readonly GapKey[] = [],
+): FileExpansion {
+    const next = new Map(expansion);
+    const keys = new Set<GapKey>([FILE_EXPANSION_KEY, ...visibleGapKeys]);
+    if (model.content.kind === 'text') {
+        for (const block of model.content.blocks) {
+            if (block.kind === 'gap') {
+                keys.add(gapKeyOf(block));
+            }
+        }
+    }
+    for (const key of keys) {
+        const current = next.get(key) ?? { up: 0, down: 0, all: false };
+        next.set(key, { ...current, all: true });
+    }
+    return next;
+}
+
 /**
- * How many unchanged lines a gap hides. For the trailing gap, the parser sets `null`
- * (the patch cannot give the file length). Here, the content finally provides it.
+ * Number of unchanged lines hidden by a gap. The parser sets `null` for a trailing gap:
+ * the exact length becomes known only after loading the file contents.
  */
 export function hiddenLinesOf(gap: DiffGap, content: FileContent | null): number | null {
     if (gap.hiddenLines !== null) {
@@ -58,16 +105,39 @@ export function hiddenLinesOf(gap: DiffGap, content: FileContent | null): number
     return total === 0 ? null : Math.max(total - gap.newStart + 1, 0);
 }
 
+/** Lines remaining in a specific visible gap. A gap that disappeared is fully expanded. */
+export function hiddenLinesForGap(model: DiffFileModel, content: FileContent | null, key: GapKey): number | null {
+    if (model.content.kind !== 'text') {
+        return 0;
+    }
+    const gap = model.content.blocks.find(
+        (block): block is DiffGap => block.kind === 'gap' && gapKeyOf(block) === key,
+    );
+    return gap === undefined ? 0 : hiddenLinesOf(gap, content);
+}
+
+/** Exact counts for one action, measured on models before and after expansion. */
+export function gapExpansionDelta(
+    before: DiffFileModel,
+    after: DiffFileModel,
+    content: FileContent | null,
+    key: GapKey,
+): { readonly loaded: number; readonly hidden: number } {
+    const beforeHidden = hiddenLinesForGap(before, content, key) ?? 0;
+    const afterHidden = hiddenLinesForGap(after, content, key) ?? 0;
+    return { loaded: Math.max(0, beforeHidden - afterHidden), hidden: afterHidden };
+}
+
 /**
- * Model with expanded context. If `content` lacks the required side or the model is empty, returns
- * the original model unchanged. Lines must not be invented.
+ * Model with directionally expanded context. The function always computes from the original model,
+ * so the same state produces the same result for every card consumer.
  */
 export function expandFileContext(
     model: DiffFileModel,
     content: FileContent | null,
-    amount: ExpandAmount,
+    expansion: FileExpansion,
 ): DiffFileModel {
-    if (content === null || model.content.kind !== 'text' || amount === 0) {
+    if (content === null || model.content.kind !== 'text' || expansion.size === 0) {
         return model;
     }
 
@@ -78,9 +148,8 @@ export function expandFileContext(
 
     const blocks: DiffBlock[] = [];
     const source = model.content.blocks;
-    /** Lines revealed above a hunk that has not been emitted yet. The hunk will absorb them. */
+    /** Lines expanded at the bottom edge of the gap. The next hunk takes them at its start. */
     let prefix: DiffLine[] = [];
-    /** The gap before this hunk expanded in full, so the hunk merges with the previous one. */
     let merge = false;
 
     for (const [index, block] of source.entries()) {
@@ -99,18 +168,30 @@ export function expandFileContext(
 
         const hidden = hiddenLinesOf(block, content);
         if (hidden === null || hidden <= 0) {
-            // The tail length is unknown even with content, so the gap stays unchanged.
+            blocks.push(block);
+            continue;
+        }
+
+        const state = expansion.get(gapKeyOf(block));
+        if (state === undefined) {
             blocks.push(block);
             continue;
         }
 
         const hasPrevious = source[index - 1]?.kind === 'hunk';
         const hasNext = source[index + 1]?.kind === 'hunk';
-        const below = hasPrevious ? step(amount, hidden) : 0;
-        const above = hasNext ? step(amount, hidden) : 0;
+        const towardPrevious = state.all
+            ? hasPrevious
+                ? hidden
+                : 0
+            : Math.min(block.edge === 'inner' ? state.up : block.edge === 'trailing' ? state.down : 0, hidden);
+        const towardNext = state.all
+            ? hasNext
+                ? hidden
+                : 0
+            : Math.min(block.edge === 'inner' ? state.down : block.edge === 'leading' ? state.up : 0, hidden);
 
-        if (below + above >= hidden) {
-            // The gap closed: adjacent hunks are consecutive and the gap no longer exists.
+        if (towardPrevious + towardNext >= hidden) {
             const revealed = reveal(model, sides, block, 0, hidden);
             if (hasPrevious) {
                 growDown(blocks, revealed);
@@ -121,29 +202,21 @@ export function expandFileContext(
             continue;
         }
 
-        growDown(blocks, reveal(model, sides, block, 0, below));
+        growDown(blocks, reveal(model, sides, block, 0, towardPrevious));
         blocks.push({
             ...block,
-            // The patch still cannot tell us the trailing gap's length. Its line count comes
-            // from `hiddenLinesOf` using the content and the already shifted start.
-            hiddenLines: block.hiddenLines === null ? null : hidden - below - above,
-            oldStart: block.oldStart + below,
-            newStart: block.newStart + below,
+            sourceKey: gapKeyOf(block),
+            hiddenLines: block.hiddenLines === null ? null : hidden - towardPrevious - towardNext,
+            oldStart: block.oldStart + towardPrevious,
+            newStart: block.newStart + towardPrevious,
         });
-        prefix = reveal(model, sides, block, hidden - above, above);
+        prefix = reveal(model, sides, block, hidden - towardNext, towardNext);
     }
 
     return { ...model, content: { kind: 'text', blocks } };
 }
 
-function step(amount: ExpandAmount, hidden: number): number {
-    return amount === 'all' ? hidden : Math.min(amount, hidden);
-}
-
-/**
- * `count` lines from a gap, starting at `offset` within it, as context lines
- * with line numbers for both sides.
- */
+/** `count` lines of a gap starting at `offset`. */
 function reveal(
     model: DiffFileModel,
     sides: Sides,
@@ -152,16 +225,16 @@ function reveal(
     count: number,
 ): DiffLine[] {
     const lines: DiffLine[] = [];
+    const sourceGapKey = gapKeyOf(gap);
     for (let i = 0; i < count; i += 1) {
         const newLine = gap.newStart + offset + i;
         const oldLine = gap.oldStart + offset + i;
         const text = sides.lines[newLine - 1] ?? sides.oldLines?.[oldLine - 1];
         if (text === undefined) {
-            // The content is shorter than the gap promised. Add nothing further, without an error.
             break;
         }
 
-        const line: DiffLine = { kind: 'context', oldLine, newLine, text };
+        const line: DiffLine = { kind: 'context', oldLine, newLine, text, sourceGapKey };
         if (model.language !== null) {
             const tokens = tokenizeLine(text, model.language);
             if (tokens.length > 0) {
@@ -187,10 +260,7 @@ function growDown(blocks: DiffBlock[], lines: DiffLine[]): void {
     };
 }
 
-/**
- * Merges two hunks with no hidden lines between them. A hunk is a continuous block,
- * so closing the gap must merge the neighbours. The entity header comes from the first hunk.
- */
+/** Two hunks become one when the gap bar between them disappears. */
 function join(first: DiffHunk, second: DiffHunk): DiffHunk {
     return {
         ...first,
@@ -213,10 +283,7 @@ function growUp(hunk: DiffHunk, lines: DiffLine[]): DiffHunk {
     };
 }
 
-/**
- * What remains hidden: zero means nothing more to expand, so the button is disabled.
- * `null` means the tail length is unknown, so there is still something to expand.
- */
+/** Zero means nothing remains to expand. `null` means the tail length is still unknown. */
 export function remainingHiddenLines(model: DiffFileModel, content: FileContent | null): number | null {
     if (model.content.kind !== 'text') {
         return 0;

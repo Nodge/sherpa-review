@@ -5,9 +5,9 @@ import type { DiffFileModel } from '../../diff/model.js';
 import type { FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
-import type { DiffMode } from '../../diff-view/store.js';
-import type { ExpandAmount } from '../../diff-view/expand.js';
+import type { FileExpansion } from '../../diff-view/expand.js';
 import { expandFileContext } from '../../diff-view/expand.js';
+import type { DiffMode } from '../../diff-view/store.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
@@ -33,7 +33,7 @@ export interface StopFileCardProps {
     readonly mode: DiffMode;
     readonly content: FileContent | null | undefined;
     readonly contentAvailable: boolean;
-    readonly expansion: ExpandAmount;
+    readonly expansion: FileExpansion;
     readonly read: FileReadState;
     readonly showWhitespace: boolean;
     readonly threads: readonly Thread[];
@@ -74,11 +74,9 @@ export function StopFileCard({
         () => anchorSpans(collapsedOpen ? [...group.anchors, ...group.collapsedAnchors] : group.anchors),
         [collapsedOpen, group.anchors, group.collapsedAnchors],
     );
-    // Context expansion widens the window around anchors by +20 unchanged lines per click.
-    const context = expansion === 'all' ? Number.MAX_SAFE_INTEGER : ANCHOR_CONTEXT + expansion;
     const clip = useCallback(
-        (source: DiffFileModel) => clipModelToAnchors(source, anchors, context).model,
-        [anchors, context],
+        (source: DiffFileModel) => clipModelToAnchors(source, anchors, ANCHOR_CONTEXT, expansion).model,
+        [anchors, expansion],
     );
     // Exactly the model the card will render (`FileCard`: context expansion, then slice):
     // thread placement uses it, and the two models must never diverge.

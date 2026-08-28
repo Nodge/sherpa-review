@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import { expandFileContext } from './expand.js';
+import { expandAllGaps, expandFileContext } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 import { lineKey, selectedLines } from './selection.js';
 
@@ -81,8 +81,7 @@ describe('line selection', () => {
         const range = selection('d21', 'a21');
         const before = selectedTexts(model, range);
 
-        // The same file after "Context ±20": gaps disappear and hunks merge into one block.
-        const expanded = expandFileContext(model, CONTENT, 20);
+        const expanded = expandFileContext(model, CONTENT, expandAllGaps(model, new Map()));
         expect(selectedTexts(expanded, range)).toEqual(before);
     });
 

@@ -7,9 +7,10 @@ import type { DiffFileModel } from '../diff/model.js';
 import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
+import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
-import type { ExpandAmount } from './expand.js';
-import { expandFileContext, remainingHiddenLines } from './expand.js';
+import type { FileExpansion } from './expand.js';
+import { expandFileContext, gapExpansionDelta, gapKeyOf, remainingHiddenLines } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 import { parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
@@ -39,8 +40,8 @@ export type Feedback = string | FeedbackHint | null;
 export interface FileCardActions {
     /** Optimistic viewed mark. The response reports a failed write. */
     readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
-    /** Without `amount`, the next step is +20 lines. Returned text describes a failed load. */
-    readonly onExpand: (fileId: string, amount?: ExpandAmount) => Promise<Feedback>;
+    /** Expand one gap bar or the whole file. The response carries final content/expansion after lazy-fetch. */
+    readonly onExpand: (fileId: string, request: ContextExpandRequest) => Promise<ContextExpandResult>;
     /** Retry patch parsing after a worker failure. */
     readonly onRetryParse: (fileId: string) => void;
     /** Full diff only. The route omits this and keeps its stop behaviour. */
@@ -67,7 +68,7 @@ export interface FileCardProps {
     readonly content: FileContent | null | undefined;
     /** The host can supply file contents (`capabilities.fileContent`). */
     readonly contentAvailable: boolean;
-    readonly expansion: ExpandAmount;
+    readonly expansion: FileExpansion;
     /** File reading progress (SPEC §2.12): box state and tooltip counts. */
     readonly read: FileReadState;
     /** Collapse reason per SPEC §2.9. null means the manual/read/generated layer is expanded. */
@@ -87,6 +88,8 @@ export interface FileCardProps {
     readonly loadingMinHeight?: number | undefined;
     /** Initial hint lets the gallery show a failed write without a click. */
     readonly initialHint?: Feedback;
+    /** Gallery only: deterministic error state for the first gap bar. */
+    readonly initialGapError?: boolean;
     /**
      * Post-process the model before rendering, after context expansion. Route uses this
      * to clip the model to stop anchors, so "Expand context" keeps working. Expansion
@@ -122,6 +125,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         keptInView = false,
         loadingMinHeight,
         initialHint = null,
+        initialGapError = false,
         transform,
         counts,
         selection,
@@ -132,6 +136,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         actions,
     } = props;
     const [hint, setHint] = useState<Feedback>(initialHint);
+    const [announcement, setAnnouncement] = useState('');
 
     // Model with context already expanded. Expansion is a pure function of the original model.
     const shown = useMemo(() => {
@@ -180,6 +185,27 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         },
         [actions, file.fileId],
     );
+    const onExpandContext = useCallback(
+        async (request: ContextExpandRequest): Promise<GapExpandResult> => {
+            const result = await actions.onExpand(file.fileId, request);
+            if (result.feedback !== null || request.kind !== 'gap' || model === null) {
+                return { feedback: result.feedback, loaded: 0, hidden: 0 };
+            }
+
+            const beforeExpanded = expandFileContext(model, result.content, expansion);
+            const afterExpanded = expandFileContext(model, result.content, result.expansion);
+            const beforeShown = transform === undefined ? beforeExpanded : transform(beforeExpanded);
+            const afterShown = transform === undefined ? afterExpanded : transform(afterExpanded);
+            return {
+                feedback: null,
+                ...gapExpansionDelta(beforeShown, afterShown, result.content, request.gapKey),
+            };
+        },
+        [actions, expansion, file.fileId, model, transform],
+    );
+    const onContextExpanded = useCallback((loaded: number, hidden: number) => {
+        setAnnouncement(`loaded ${String(loaded)} lines, ${String(hidden)} hidden`);
+    }, []);
 
     return (
         <article
@@ -242,13 +268,16 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     )}
                 </span>
 
-                <ExpandButtons
+                <ExpandButton
                     model={shown}
                     content={content}
                     contentAvailable={contentAvailable}
-                    expanded={expansion !== 0}
-                    onExpand={(amount) => {
-                        run(actions.onExpand(file.fileId, amount));
+                    onExpand={(gapKeys) => {
+                        run(
+                            actions
+                                .onExpand(file.fileId, { kind: 'file', gapKeys })
+                                .then((result) => result.feedback),
+                        );
                     }}
                 />
 
@@ -343,9 +372,9 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     model={shown}
                     mode={mode}
                     content={content ?? null}
+                    contextAvailable={contentAvailable && content !== null}
                     loadingMinHeight={loadingMinHeight}
                     selection={selection}
-                    expansion={expansion}
                     showWhitespace={showWhitespace}
                     onShowWhitespace={onShowWhitespace}
                     onSelectStart={onSelectStart}
@@ -354,8 +383,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     onCommentLine={onCommentLine}
                     onLineFocus={onLineFocus}
                     onLineBlur={actions.onLineBlur}
+                    onExpandContext={onExpandContext}
+                    onContextExpanded={onContextExpanded}
+                    initialGapError={initialGapError}
                 />
             )}
+            <span className="visually-hidden" aria-live="polite">
+                {announcement}
+            </span>
         </article>
     );
 });
@@ -409,56 +444,45 @@ function FileName({ file }: { file: FileDiff }) {
     );
 }
 
-/**
- * "Expand context" and "Expand all" buttons (SPEC §2.13). When disabled, they always have a `title`
- * explaining why, as required by the disabled contract in SPEC §1.1.
- */
-function ExpandButtons({
+/** The only header button expands the whole file. The 20-line step belongs to gap bars. */
+function ExpandButton({
     model,
     content,
     contentAvailable,
-    expanded,
     onExpand,
 }: {
     model: DiffFileModel | null;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
-    expanded: boolean;
-    onExpand: (amount?: ExpandAmount) => void;
+    onExpand: (gapKeys: readonly string[]) => void;
 }) {
+    const gapKeys =
+        model?.content.kind === 'text'
+            ? model.content.blocks.filter((block) => block.kind === 'gap').map((gap) => gapKeyOf(gap))
+            : [];
     const disabledReason = !contentAvailable
         ? 'the host does not provide file contents — there is nothing to expand from'
-        : content === null
-          ? 'this file has no contents'
-          : model !== null && remainingHiddenLines(model, content ?? null) === 0
-            ? 'the whole file is already on screen'
-            : null;
-    const disabled = disabledReason !== null;
+        : model === null
+          ? 'the diff is still being parsed'
+          : content === null
+            ? 'this file has no content'
+            : remainingHiddenLines(model, content ?? null) === 0
+              ? 'the entire file is already on screen'
+              : null;
 
     return (
         <span className="file-card__expand">
             <button
                 type="button"
                 className="file-card__action"
-                disabled={disabled}
-                title={disabledReason ?? 'show 20 unchanged lines around each block'}
+                disabled={disabledReason !== null}
+                title={disabledReason ?? 'show the entire file'}
                 onClick={() => {
-                    onExpand();
+                    onExpand(gapKeys);
                 }}
             >
-                Context ±20
+                Expand file
             </button>
-            {expanded && !disabled ? (
-                <button
-                    type="button"
-                    className="file-card__action"
-                    onClick={() => {
-                        onExpand('all');
-                    }}
-                >
-                    Expand all
-                </button>
-            ) : null}
         </span>
     );
 }
@@ -506,9 +530,9 @@ interface BodyProps {
     readonly model: DiffFileModel | null;
     readonly mode: DiffMode;
     readonly content: FileContent | null;
+    readonly contextAvailable: boolean;
     readonly loadingMinHeight?: number | undefined;
     readonly selection: LineSelection | null;
-    readonly expansion: ExpandAmount;
     readonly showWhitespace: boolean;
     readonly onShowWhitespace: () => void;
     readonly onSelectStart: (key: LineKey, extend: boolean) => void;
@@ -517,6 +541,9 @@ interface BodyProps {
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
+    readonly onExpandContext: (request: ContextExpandRequest) => Promise<GapExpandResult>;
+    readonly onContextExpanded: (loaded: number, hidden: number) => void;
+    readonly initialGapError: boolean;
 }
 
 function Body(props: BodyProps) {
@@ -581,6 +608,10 @@ function Body(props: BodyProps) {
                 onCommentLine={props.onCommentLine}
                 onLineFocus={props.onLineFocus}
                 onLineBlur={props.onLineBlur}
+                onExpandContext={props.onExpandContext}
+                onContextExpanded={props.onContextExpanded}
+                initialGapError={props.initialGapError}
+                contextAvailable={props.contextAvailable}
             />
         </div>
     );

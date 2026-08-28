@@ -1,5 +1,7 @@
 import type { FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
+
+import type { DiffFileModel } from '../diff/model.js';
 import { createContext, useContext } from 'react';
 
 export type PaletteNavigationTarget =
@@ -14,6 +16,8 @@ export interface PaletteNavigation {
 export interface PaletteDiffSource {
     readonly files: readonly FileDiff[];
     readonly activeFileId: string | null;
+    /** Current models with expanded context, read when the search query runs. */
+    readonly searchModels: () => ReadonlyMap<string, DiffFileModel>;
     readonly goToFile: (fileId: string) => void;
     readonly goToLine: (fileId: string, side: 'old' | 'new', line: number) => void;
     readonly toggleDiffMode: () => void;
