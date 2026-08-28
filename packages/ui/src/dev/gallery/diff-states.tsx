@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData } from '@sherpa/fixtures';
+import { fileContentOf, fixtureData, LONG_LINE_FILE_PATH } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -290,6 +290,16 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-split',
         title: 'card, side by side',
         render: () => <CardState fixture="medium" path={ORDER} mode="split" />,
+    },
+    {
+        id: 'diff-long-lines',
+        title: 'long URLs, minified code and tabs wrap',
+        render: () => <CardState fixture="large" path={LONG_LINE_FILE_PATH} />,
+    },
+    {
+        id: 'diff-long-lines-split',
+        title: 'long lines side by side, paired halves have equal height',
+        render: () => <CardState fixture="large" path={LONG_LINE_FILE_PATH} mode="split" />,
     },
     {
         id: 'diff-split-one-sided',

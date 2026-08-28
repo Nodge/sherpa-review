@@ -40,6 +40,19 @@ const REMAINDER_MODEL = parseFileDiff({
 });
 const GAP_LINES = Array.from({ length: 80 }, (_, index) => `line-${String(index + 1)}`);
 const GAP_CONTENT: FileContent = { oldText: GAP_LINES.join('\n'), newText: GAP_LINES.join('\n') };
+const LONG_MODEL = parseFileDiff({
+    fileId: 'f-long',
+    path: 'src/long.ts',
+    oldPath: null,
+    changeType: 'modify',
+    binary: false,
+    patch: [
+        '@@ -1,1 +1,1 @@',
+        `-const endpoint = "https://wrap-fixture.invalid/payload/${'b'.repeat(600)}/orders";`,
+        `+\tconst endpoint = "https://wrap-fixture.invalid/payload/${'a'.repeat(600)}/orders";   `,
+        '\\ No newline at end of file',
+    ].join('\n'),
+});
 
 function render(mode: 'unified' | 'split'): HTMLElement {
     const host = document.createElement('div');
@@ -125,6 +138,43 @@ describe('context gap bars', () => {
         expect(down.classList.contains('is-active')).toBe(true);
         expect(down.getAttribute('aria-checked')).toBe('true');
         expect(up.getAttribute('aria-checked')).toBe('false');
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+});
+
+describe('long line wrapping', () => {
+    it('preserves tabs and markup in a long line', () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        act(() => {
+            root.render(
+                <DiffRows
+                    model={LONG_MODEL}
+                    mode="unified"
+                    content={null}
+                    selection={{ fileId: LONG_MODEL.fileId, anchor: 'a1', focus: 'a1' }}
+                    onCommentLine={() => undefined}
+                />,
+            );
+        });
+
+        const code = host.querySelector<HTMLElement>('.diff-row--add .diff-row__code');
+        if (code === null) {
+            throw new Error('long line did not render');
+        }
+
+        // jsdom does not apply CSS. E2E checks the computed white-space/overflow-wrap.
+        expect(code.classList.contains('diff-row__code')).toBe(true);
+        expect(code.textContent).toContain('    const endpoint');
+        expect(code.querySelector('.diff-word')).not.toBeNull();
+        expect(code.querySelector('.diff-trailing')?.textContent).toBe('   ');
+        expect(code.querySelector('.diff-row__no-newline')).not.toBeNull();
+        expect(code.closest('.diff-row')?.classList.contains('is-selected')).toBe(true);
 
         act(() => {
             root.unmount();

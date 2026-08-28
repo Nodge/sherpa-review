@@ -23,6 +23,12 @@ function modulePath(moduleIndex: number): string {
     return `services/orders/src/modules/mod-${String(moduleIndex + 1).padStart(2, '0')}`;
 }
 
+/** File with long lines for the gallery and browser checks of line wrapping. */
+export const LONG_LINE_FILE_PATH = `${modulePath(0)}/repository.ts`;
+/** Unique part of a long URL that lets the test find the line after patch parsing. */
+export const LONG_LINE_MARKER = 'wrap-fixture.invalid';
+const LONG_LINE_FILE_INDEX = 1;
+
 /** Every eighth file is generated, so generated folding has data to test. */
 function isGenerated(index: number): boolean {
     return index % 8 === 7;
@@ -51,6 +57,16 @@ function fileAt(index: number): FileDiff {
         });
     }
 
+    const deletedLines = tsLines('-', deletions, index + 5);
+    const addedLines = tsLines('+', additions, index + 11);
+    if (index === LONG_LINE_FILE_INDEX) {
+        deletedLines[0] = `-    const endpoint = "https://${LONG_LINE_MARKER}/payload/${'b'.repeat(600)}/orders";`;
+        addedLines[0] = `+    const endpoint = "https://${LONG_LINE_MARKER}/payload/${'a'.repeat(600)}/orders";`;
+        addedLines[deletions] = `+    const minifiedPayload = "${'eyJrZXkiOiJ2YWx1ZSIsImZsYWciOnRydWV9'.repeat(35)}";`;
+        addedLines[deletions + 1] = `+\t\tconst tabbedTail = "${'tabbed-tail-'.repeat(100)}";`;
+        addedLines[deletions + 2] = `+    const trailingWhitespace = "${'tail-'.repeat(180)}";   `;
+    }
+
     return makeFileDiff(DIFF_ID, {
         path,
         changeType,
@@ -61,11 +77,7 @@ function fileAt(index: number): FileDiff {
                 oldStart: 12,
                 newStart: 12,
                 section: `export class Module${String(moduleIndex + 1)}`,
-                lines: [
-                    ...tsLines(' ', context, index + 1),
-                    ...tsLines('-', deletions, index + 5),
-                    ...tsLines('+', additions, index + 11),
-                ],
+                lines: [...tsLines(' ', context, index + 1), ...deletedLines, ...addedLines],
             },
         ],
     });

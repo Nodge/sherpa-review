@@ -11,15 +11,18 @@ export const meta = {
   ],
 }
 
+// The harness may pass args as a parsed object or a JSON string. Accept both.
+const input = typeof args === 'string' ? JSON.parse(args) : args
+
 // Task working tree: defaults to the main checkout. Pass args.repo to use a worktree
-const REPO = (args && args.repo) || '/Users/alice/Sites/sherpa'
-const taskId = args && args.taskId
-const brief = args && args.brief
-const gateCmd = (args && args.gateCmd) || 'pnpm -r typecheck && pnpm -r lint && pnpm -r test'
-const maxFixRounds = (args && args.maxFixRounds) != null ? args.maxFixRounds : 2
+const REPO = (input && input.repo) || '/Users/alice/Sites/sherpa'
+const taskId = input && input.taskId
+const brief = input && input.brief
+const gateCmd = (input && input.gateCmd) || 'pnpm -r typecheck && pnpm -r lint && pnpm -r test'
+const maxFixRounds = (input && input.maxFixRounds) != null ? input.maxFixRounds : 2
 // Code comes from a native Opus subagent (default) or a nested GPT session.
 // Review, triage and verification do not depend on this choice.
-const coder = (args && args.coder) || 'opus'
+const coder = (input && input.coder) || 'opus'
 
 if (!taskId || !brief) throw new Error('args.taskId and args.brief are required')
 if (coder !== 'opus' && coder !== 'codex') throw new Error(`args.coder: expected "opus" or "codex", got ${JSON.stringify(coder)}`)

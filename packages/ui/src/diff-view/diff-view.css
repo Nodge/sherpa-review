@@ -477,11 +477,10 @@
 
 .diff-row__code {
     padding-right: 13px;
-    white-space: pre;
-    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     color: var(--code-text);
-    /* Long lines scroll individually. In split mode, each panel scrolls independently (SPEC §2.14). */
-    scrollbar-width: thin;
+    /* Long tokens wrap inside the code column. Gutters and the sign keep their width. */
 }
 
 .diff-row--add,
