@@ -274,6 +274,9 @@
 }
 
 .diff-gap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 0 13px;
     font-size: var(--font-size-meta);
     color: var(--text-dim-strong);
@@ -304,7 +307,7 @@
 }
 
 .diff-row:hover {
-    background: var(--row-hover);
+    background: var(--surface-card-header);
 }
 
 .diff-row__gutter {
@@ -314,6 +317,11 @@
     color: var(--text-gutter);
     user-select: none;
     cursor: default;
+}
+
+.diff-row__gutter--comment {
+    position: relative;
+    padding-right: 25px;
 }
 
 .diff-row__sign {

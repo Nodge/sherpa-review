@@ -204,8 +204,6 @@ const EXPECTED: Record<string, string> = {
     '--font-size-tag': '9px',
     // Prototype: initials in the 18×18 reply avatar.
     '--font-size-avatar-glyph': '9px',
-    // Prototype: tick in the 11×11 viewed checkbox.
-    '--font-size-box-glyph': '8px',
     '--font-size-code': '12px',
     '--line-height-body': '1.62',
     '--line-height-code': '20px',
@@ -236,8 +234,10 @@ const EXPECTED: Record<string, string> = {
     // Prototype: Sherpa.dc.html:217 reserves 180px below Route. Shared by all reader views.
     '--space-bar-reserve': '180px',
 
-    // Shadows — popover `0 8px 24px rgba(0,0,0,.5)` · menu `0 16px 40px rgba(0,0,0,.6)` ·
-    // floating bar `0 16px 44px rgba(0,0,0,.6)` · dialog `0 24px 64px rgba(0,0,0,.65)`.
+    // Shadows — SPEC-additions §1d line comment `0 1px 4px rgba(0,0,0,.45)`; popover
+    // `0 8px 24px rgba(0,0,0,.5)` · menu `0 16px 40px rgba(0,0,0,.6)` · floating bar
+    // `0 16px 44px rgba(0,0,0,.6)` · dialog `0 24px 64px rgba(0,0,0,.65)`.
+    '--shadow-line-comment': '0 1px 4px rgba(0,0,0,.45)',
     '--shadow-popover': '0 8px 24px rgba(0,0,0,.5)',
     '--shadow-menu': '0 16px 40px rgba(0,0,0,.6)',
     '--shadow-floating': '0 16px 44px rgba(0,0,0,.6)',

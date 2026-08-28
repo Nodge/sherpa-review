@@ -70,7 +70,9 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
         await expect(page.locator('.review-action-bar')).toContainText('5 / 18 files');
         const filterInput = page.getByRole('searchbox', { name: 'Filter files by name' });
         await filterInput.fill('pci-audit');
-        await expect(page.getByRole('treeitem').filter({ hasText: 'pci-audit.ts' })).toContainText('✓');
+        await expect(
+            page.getByRole('treeitem').filter({ hasText: 'pci-audit.ts' }).locator('svg[data-icon="check"]'),
+        ).toBeVisible();
         await filterInput.fill('');
         // Jumping to a line first expands the viewed card temporarily, then finishes scrolling.
         await openPciAuditBySearch(page);
@@ -83,7 +85,9 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
 
     await test.step('a draft is saved and included in the ship batch', async () => {
         const card = pciAuditCard(page);
-        await card.getByRole('button', { name: /Comment on line \d+/ }).first().click();
+        const button = card.getByRole('button', { name: /Comment on line \d+/ }).first();
+        await button.locator('..').hover();
+        await button.click();
         const composer = page.getByRole('textbox', { name: 'New comment' });
         await composer.fill(COMMENT);
         await expect(page.getByText('saved as a draft', { exact: true })).toBeVisible({ timeout: 6_000 });

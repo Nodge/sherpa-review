@@ -250,10 +250,9 @@ async function expectSummary(page: Page): Promise<void> {
 
 /** A draft on a stop line uses the same composer as the full diff. */
 async function addDraft(page: Page, stopId: string, text: string): Promise<void> {
-    await stop(page, stopId)
-        .getByRole('button', { name: /Comment on line \d+/ })
-        .first()
-        .click();
+    const button = stop(page, stopId).getByRole('button', { name: /Comment on line \d+/ }).first();
+    await button.locator('..').hover();
+    await button.click();
     const composer = stop(page, stopId).getByRole('textbox', { name: 'New comment' });
     await composer.fill(text);
     await expect(stop(page, stopId).getByText('saved as a draft', { exact: true })).toBeVisible({

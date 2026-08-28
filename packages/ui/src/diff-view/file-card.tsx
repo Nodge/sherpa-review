@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
+import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import { formatCount, plural } from '../text.js';
 import { DiffRows } from './diff-rows.tsx';
@@ -373,7 +374,7 @@ function CollapsedFileSummary({
     return (
         <button type="button" className="file-card__collapsed file-card__collapsed--file" onClick={onExpand}>
             <span className="file-card__collapsed-mark" aria-hidden="true">
-                ⌄
+                <Icon name="chev-down" size={13} />
             </span>
             <span className="file-card__add">+{formatCount(file.additions)}</span>
             <span className="file-card__del">−{formatCount(file.deletions)}</span>

@@ -72,7 +72,7 @@ export interface DiffHunk {
     lines: DiffLine[];
 }
 
-/** Gap of unchanged lines between hunks or at file edges ("↕ N unchanged lines"). */
+/** Gap of unchanged lines: between hunks or at file edges. */
 export interface DiffGap {
     kind: 'gap';
     edge: 'leading' | 'inner' | 'trailing';

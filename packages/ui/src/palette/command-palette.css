@@ -30,8 +30,6 @@
 
 .command-palette__search-icon {
     color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-input);
 }
 
 .command-palette__query {

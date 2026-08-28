@@ -2,6 +2,7 @@ import type { FileAnchor, Thread } from '@sherpa/protocol';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
+import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
 import { composerControllerFor } from './composer.js';
@@ -103,7 +104,12 @@ function ThreadBlock({
                     className={`thread__row${index > 0 ? ' thread__row--reply' : ''}`}
                     style={{ marginLeft: `${String(row.indent)}px` }}
                 >
-                    {row.replyHint === null ? null : <div className="thread__reply-hint">{row.replyHint}</div>}
+                    {row.replyHint === null ? null : (
+                        <div className="thread__reply-hint">
+                            <Icon name="reply" size={13} />
+                            {row.replyHint}
+                        </div>
+                    )}
                     <div className="thread__author-line">
                         <span className={`thread__avatar${row.comment.author.bot ? ' thread__avatar--bot' : ''}`}>
                             {initials(row.comment.author.displayName ?? row.comment.author.login)}
@@ -129,11 +135,13 @@ function ThreadBlock({
                                         setRepliesOpen((value) => !value);
                                     }}
                                 >
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')} {repliesOpen ? '⌄' : '›'}
+                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    <Icon name={repliesOpen ? 'chev-down' : 'chev-right'} size={13} />
                                 </button>
                             ) : (
                                 <span className="thread__reply-count">
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')} ›
+                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    <Icon name="chev-right" size={13} />
                                 </span>
                             )
                         ) : null}
@@ -236,7 +244,8 @@ export function OutsideThreads({
                     setOpened(!open);
                 }}
             >
-                {threads.length}{' '}{plural(threads.length, 'thread', 'threads', 'threads')} outside the diff {open ? '⌄' : '›'}
+                {threads.length}{' '}{plural(threads.length, 'thread', 'threads', 'threads')} outside the diff
+                <Icon name={open ? 'chev-down' : 'chev-right'} size={13} />
             </button>
             {open ? (
                 <ThreadList threads={threads} store={store} actions={actions} now={now} onFocusThread={onFocusThread} />

@@ -41,7 +41,6 @@
 }
 
 .filter-select__caret {
-    font-size: var(--font-size-badge);
     color: var(--text-dim-strong);
 }
 
@@ -73,7 +72,9 @@
 }
 
 .filter-select__tick {
-    width: 10px;
+    display: flex;
+    align-items: center;
+    width: 13px;
     flex: none;
     color: var(--accent-hover);
 }

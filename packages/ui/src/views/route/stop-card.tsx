@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
+import { Icon } from '../../icons/icon.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
@@ -243,7 +244,7 @@ export function CollapsedStop({
     return (
         <button type="button" className="route-collapsed" onClick={onExpand}>
             <span className="route-collapsed__mark" aria-hidden="true">
-                ⌄
+                <Icon name="chev-down" size={13} />
             </span>
             Collapsed · {formatCount(lines)} {plural(lines, 'line', 'lines', 'lines')} in {formatCount(files)}{' '}
             {plural(files, 'file', 'files', 'files')} · {reason}
@@ -272,7 +273,7 @@ export function ViewedSummary({
     return (
         <button type="button" className="route-collapsed route-collapsed--viewed" onClick={onExpand}>
             <span className="route-collapsed__mark" aria-hidden="true">
-                ⌄
+                <Icon name="chev-down" size={13} />
             </span>
             {assertions === 0
                 ? null

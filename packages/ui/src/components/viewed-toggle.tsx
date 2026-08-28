@@ -1,8 +1,9 @@
+import { Icon } from '../icons/icon.tsx';
 import './viewed-toggle.css';
 
 /**
  * Viewed mark: the same control for file cards and stops (SPEC §2.10):
- * a checkbox with ✓ and the label "Mark viewed / Viewed".
+ * a checkbox with an icon and the "Mark viewed / Viewed" label.
  *
  * The control has two states. The three-state reading progress indicator (§2.12) is a separate entity:
  * it lives in the tree and on file chips, and the button has no "partial" state.
@@ -32,7 +33,7 @@ export function ViewedToggle({ viewed, className, disabled = false, title, onTog
             }}
         >
             <span className="viewed-toggle__box" aria-hidden="true">
-                ✓
+                <Icon name="check" size={9} />
             </span>
             {viewed ? 'Viewed' : 'Mark viewed'}
         </button>

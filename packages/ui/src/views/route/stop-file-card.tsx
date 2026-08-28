@@ -8,6 +8,7 @@ import type { LineSelection } from '../../diff-view/selection.js';
 import type { DiffMode } from '../../diff-view/store.js';
 import type { ExpandAmount } from '../../diff-view/expand.js';
 import { expandFileContext } from '../../diff-view/expand.js';
+import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
@@ -125,7 +126,7 @@ export function StopFileCard({
             {collapsedHidden ? (
                 <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
-                        ↕
+                        <Icon name="updown" size={13} />
                     </span>
                     {formatCount(group.collapsedLines)}{' '}
                     {plural(group.collapsedLines, 'changed line', 'changed lines', 'changed lines')} collapsed
@@ -137,7 +138,7 @@ export function StopFileCard({
             {collapsedOpen && group.collapsedLines > 0 ? (
                 <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
-                        ⌃
+                        <Icon name="chev-down" size={13} className="route-stop__collapsed-icon--up" />
                     </span>
                     collapse again
                 </button>

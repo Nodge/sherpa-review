@@ -40,6 +40,9 @@
 }
 
 .thread__reply-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-bottom: 4px;
     font-family: var(--font-mono);
     font-size: var(--font-size-scope);
@@ -82,6 +85,12 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--text-dim);
+}
+
+.thread__reply-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .thread__reply-toggle {
@@ -229,31 +238,30 @@
 
 .diff-row__comment {
     position: absolute;
-    left: 79px;
-    top: 2px;
+    right: 0;
+    top: calc((var(--line-height-code) - 23px) / 2);
     z-index: 1;
-    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    padding: 0;
     border: 0;
-    border-radius: var(--radius-mark);
-    background: var(--surface-raised);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--accent-hover);
+    border-radius: var(--radius-button);
+    background: var(--accent);
+    box-shadow: var(--shadow-line-comment);
+    color: var(--surface-app);
     cursor: pointer;
     opacity: 0;
+    pointer-events: none;
 }
 
 .diff-row:hover .diff-row__comment,
-.diff-row:focus-within .diff-row__comment {
+.diff-row:focus-within .diff-row__comment,
+.diff-row__comment.is-selection-start {
     opacity: 1;
-}
-
-.diff-row__comment--old {
-    left: 32px;
-}
-
-.diff-row__comment--new {
-    left: calc(50% + 32px);
+    pointer-events: auto;
 }
 
 .thread-outside {
@@ -271,6 +279,9 @@
 }
 
 .thread-outside__toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     width: 100%;
     padding: 10px 13px;
     border: 0;

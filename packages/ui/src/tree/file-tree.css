@@ -29,7 +29,6 @@
 
 .file-panel__search-icon {
     color: var(--text-dim-strong);
-    font-size: var(--font-size-secondary);
 }
 
 .file-panel__input {
@@ -188,11 +187,11 @@
 }
 
 .file-tree__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
-    width: 9px;
-    text-align: center;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-badge);
+    width: 13px;
     color: var(--text-dim-strong);
 }
 
@@ -202,16 +201,12 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 10px;
-    height: 10px;
+    width: 11px;
+    height: 11px;
     padding: 0;
     border: 1px solid var(--read-box-border);
     border-radius: var(--radius-mark);
     background: transparent;
-    /* ✓ in a 10px box: the handoff scale has no such size. Value from prototype §10. */
-    font: inherit;
-    font-size: 7px;
-    line-height: 1;
     color: var(--surface-app);
 }
 

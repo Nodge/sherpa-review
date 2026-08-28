@@ -35,8 +35,9 @@ describe('viewed mark', () => {
 
         expect(html).toContain('aria-pressed="true"');
         expect(html).toContain('is-viewed');
-        // ✓ belongs in the box, not the label: otherwise a screen reader would read it aloud.
-        expect(html).toContain('aria-hidden="true">✓</span>Viewed</button>');
+        expect(html).toContain('data-icon="check"');
+        expect(html).toContain('width="9"');
+        expect(html).toContain('</span>Viewed</button>');
     });
 
     it('both places use the same control: markup differs only by the location class', () => {

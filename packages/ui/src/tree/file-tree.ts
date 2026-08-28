@@ -304,7 +304,7 @@ export function filterByQuery(files: readonly FileDiff[], query: string): readon
     return query.trim() === '' ? files : files.filter((file) => matchesQuery(file.path, query));
 }
 
-/** Directory reading summary (SPEC §2.20): all read → ✓, some read → half-filled box. */
+/** Directory reading summary (SPEC §2.20): all read gives a full box, some read gives a half box. */
 export type ReadSummary = 'none' | 'partial' | 'full';
 
 export function readSummary(row: TreeDirRow): ReadSummary {

@@ -158,6 +158,9 @@
 }
 
 .gen-plan__state {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     flex: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-badge);

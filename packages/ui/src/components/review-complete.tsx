@@ -1,5 +1,6 @@
 import type { Verdict } from '@sherpa/protocol';
 
+import { Icon } from '../icons/icon.tsx';
 import { formatCount, plural } from '../text.js';
 import type { ReviewCompletion } from './review-action-bar.tsx';
 import './review-complete.css';
@@ -18,7 +19,9 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
         <main className="review-complete">
             <section className="review-complete__card" aria-labelledby="review-complete-title">
                 <header className="review-complete__header">
-                    <span className="review-complete__check" aria-hidden="true">✓</span>
+                    <span className="review-complete__check" aria-hidden="true">
+                        <Icon name="check" size={14} />
+                    </span>
                     <h1 id="review-complete-title">{verdictTitle(completion.verdict)} · PR {completion.prId}</h1>
                     <span className="review-complete__provenance">{verdictProvenance(completion.verdict, commit)}</span>
                 </header>

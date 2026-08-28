@@ -1,5 +1,6 @@
 import { PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { FileFilter, FilterStats } from '../filters/lens-filters.js';
+import { Icon } from '../icons/icon.tsx';
 import type { ViewId } from '../session/views.js';
 import { formatCount, plural } from '../text.js';
 import './audit-banner.css';
@@ -72,7 +73,7 @@ export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }:
                 title="Hide the banner. The filter stays on"
                 onClick={onDismiss}
             >
-                ✕
+                <Icon name="cross" size={14} />
             </button>
         </div>
     );

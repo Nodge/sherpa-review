@@ -1,6 +1,7 @@
 import type { RouteSnapshot, UiRouteFailure, UiRouteState } from '@sherpa/protocol';
 import { useState } from 'react';
 
+import { Icon } from '../../icons/icon.tsx';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { generationCardKind, generationProgress } from '../../route/generation.js';
 import { formatCount, plural } from '../../text.js';
@@ -104,7 +105,10 @@ export function GenerationCard({
                             <span className="gen-plan__title">
                                 <Markdown text={slot.title} profile="route" />
                             </span>
-                            <span className="gen-plan__state">{PLAN_STATE[slot.status]}</span>
+                            <span className="gen-plan__state">
+                                {slot.status === 'ready' ? <Icon name="check" size={13} /> : null}
+                                {PLAN_STATE[slot.status]}
+                            </span>
                         </li>
                     ))}
                 </ul>
@@ -351,7 +355,7 @@ function RetryButton({ retrying, onRetry }: { retrying: boolean; onRetry: () => 
 }
 
 const PLAN_STATE: Readonly<Record<'queued' | 'filling' | 'ready' | 'failed', string>> = {
-    ready: '✓ ready',
+    ready: 'ready',
     filling: 'filling',
     queued: 'queued',
     failed: 'unfilled',

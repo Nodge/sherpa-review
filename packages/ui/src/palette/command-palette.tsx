@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { Icon } from '../icons/icon.tsx';
 import { useShortcut, useShortcutList } from '../shortcuts/context.tsx';
 import type { Shortcut } from '../shortcuts/registry.js';
 import { plural } from '../text.js';
@@ -376,7 +377,7 @@ export function CommandPalette({
                 </h2>
                 <div className="command-palette__query-row">
                     <span className="command-palette__search-icon" aria-hidden="true">
-                        ⌕
+                        <Icon name="search" size={14} />
                     </span>
                     <input
                         ref={inputRef}
