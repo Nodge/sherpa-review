@@ -23,7 +23,6 @@ import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
-import { copyFileLink } from './copy-link.js';
 import type { ExpandAmount } from './expand.js';
 import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
@@ -88,7 +87,6 @@ export interface DiffFileListProps {
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
-    readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     /** Viewed mark. The view owns the optimistic write, the list only calls it. */
     readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
     readonly threadStore?: ThreadStore | undefined;
@@ -129,7 +127,6 @@ export function DiffFileList({
     contentAvailable,
     parse,
     loadContent,
-    onOpenInEditor,
     onViewed,
     threadStore = EMPTY_THREAD_STORE,
     threadActions = EMPTY_THREAD_ACTIONS,
@@ -518,13 +515,11 @@ export function DiffFileList({
                 }
             },
             onSelectExtend: store.extendSelection,
-            onOpenInEditor,
-            onCopyLink: copyFileLink,
             onCommentLine,
             onLineFocus,
             onLineBlur,
         }),
-        [expand, onCommentLine, onLineBlur, onLineFocus, onOpenInEditor, onViewed, retryParse, store],
+        [expand, onCommentLine, onLineBlur, onLineFocus, onViewed, retryParse, store],
     );
 
     return (

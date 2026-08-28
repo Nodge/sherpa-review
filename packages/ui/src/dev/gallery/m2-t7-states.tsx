@@ -137,7 +137,6 @@ function ViewedRouteState({ stopIds, auto = false }: { stopIds: readonly string[
                     const file = DATA.diff.files.find((candidate) => candidate.fileId === fileId);
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
-                onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={() => Promise.resolve(0)}
             />

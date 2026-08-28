@@ -110,7 +110,6 @@ function WorkspaceState({
                     const file = data.diff.files.find((candidate) => candidate.fileId === fileId);
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
-                onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 // The gallery has no progress endpoint: the record stays in the store, as does the diff mode choice.
                 onSetViewed={() => Promise.resolve(0)}
             />

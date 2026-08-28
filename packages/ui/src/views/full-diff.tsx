@@ -14,7 +14,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import {
     fetchFileContent,
     deleteReviewDraft,
-    openInEditor,
     saveReviewDraft,
     setReviewThreadResolved,
     updateReviewDraft,
@@ -153,13 +152,6 @@ export function FullDiffView({
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],
     );
-    const openFileInEditor = useCallback(
-        async (path: string): Promise<Feedback> => {
-            const result = await openInEditor(token, path);
-            return result.outcome === 'opened' ? null : result.message;
-        },
-        [token],
-    );
     const [fragmentTarget, setFragmentTarget] = useState(() => ({
         fileId: readFragmentParam(window.location.hash, 'file'),
         threadId: readFragmentParam(window.location.hash, 'thread'),
@@ -214,7 +206,6 @@ export function FullDiffView({
             {...(onFilterChangeHandler === undefined ? {} : { onFilterChangeHandler })}
             parse={parse}
             loadContent={loadContent}
-            onOpenInEditor={openFileInEditor}
             progressWriter={progressWriter}
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
@@ -239,7 +230,6 @@ export interface DiffWorkspaceProps {
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
-    readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     /** Write a mark for a standalone workspace (gallery and tests). */
     readonly onSetViewed?: (fileId: string, viewed: boolean) => Promise<number>;
     /** In the application, one writer is created one level up and survives Full diff remounts. */
@@ -279,7 +269,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         session,
         parse,
         loadContent,
-        onOpenInEditor,
         onSetViewed = EMPTY_SET_VIEWED,
         reloadProgress,
         progressRevision = null,
@@ -977,7 +966,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         contentAvailable={pr.capabilities.fileContent}
                         parse={parse}
                         loadContent={loadContent}
-                        onOpenInEditor={onOpenInEditor}
                         onViewed={markViewed}
                         threadStore={threadStore}
                         threadActions={threadActions}

@@ -183,7 +183,6 @@ function mount(
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={() => Promise.resolve(null)}
-                onOpenInEditor={() => Promise.resolve(null)}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={(stopId) => {
                     stopWrites.push(stopId);

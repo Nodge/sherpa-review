@@ -149,6 +149,43 @@
     gap: 6px;
 }
 
+.file-card__header-action {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    height: 23px;
+    padding: 0 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: none;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-dim-strong);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color var(--motion-hover) var(--motion-hover-ease),
+        background var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.file-card__header-action:hover:not([disabled]) {
+    border-color: var(--checkbox-border);
+    background: var(--surface-popover);
+    color: var(--text-muted);
+}
+
+.file-card__header-action:active {
+    color: var(--text-dim);
+}
+
+.file-card__header-action[disabled] {
+    opacity: 0.45;
+    cursor: default;
+}
+
 .file-card__action {
     padding: 0;
     border: 0;

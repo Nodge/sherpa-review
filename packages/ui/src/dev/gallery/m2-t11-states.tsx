@@ -69,7 +69,6 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
                     const file = diff.files.find((candidate) => candidate.fileId === fileId);
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
-                onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 onSetViewed={() => Promise.resolve(0)}
                 {...(route ? { routeSnapshot: readySnapshot() } : {})}
                 onJumpToStop={() => {

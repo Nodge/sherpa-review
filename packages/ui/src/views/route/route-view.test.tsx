@@ -79,7 +79,6 @@ function render(
             {...(options.stopViewed === undefined ? {} : { initialStopViewed: options.stopViewed })}
             parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
             loadContent={() => Promise.resolve(null)}
-            onOpenInEditor={() => Promise.resolve(null)}
             onSetViewed={() => Promise.resolve(0)}
             onSetStopViewed={options.onSetStopViewed ?? (() => Promise.resolve(0))}
         />,

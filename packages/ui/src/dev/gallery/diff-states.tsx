@@ -159,7 +159,6 @@ function ListState({ fixture }: { fixture: FixtureName }) {
                     const file = data.diff.files.find((candidate) => candidate.fileId === fileId);
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
-                onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 onViewed={(fileId, viewed) => {
                     store.markViewed(fileId, viewed);
                     return Promise.resolve(null);
@@ -192,7 +191,6 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
                     return Promise.reject(new Error('worker did not respond'));
                 }}
                 loadContent={() => Promise.resolve(null)}
-                onOpenInEditor={() => Promise.resolve('the gallery does not open an editor')}
                 onViewed={(fileId, viewed) => {
                     store.markViewed(fileId, viewed);
                     return Promise.resolve(null);
@@ -225,8 +223,6 @@ function galleryActions(store: DiffViewStore): FileCardActions {
             }
         },
         onSelectExtend: store.extendSelection,
-        onOpenInEditor: () => Promise.resolve('the gallery does not open an editor'),
-        onCopyLink: () => Promise.resolve('the gallery does not copy links'),
     };
 }
 

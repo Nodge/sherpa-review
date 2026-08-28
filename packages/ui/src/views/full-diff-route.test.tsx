@@ -147,7 +147,6 @@ function mount(
                         return Promise.resolve(parseFileDiff(toParseRequest(file)));
                     }}
                     loadContent={() => Promise.resolve(null)}
-                    onOpenInEditor={() => Promise.resolve(null)}
                     onSetViewed={() => Promise.resolve(0)}
                     {...(options.route === false ? {} : { routeSnapshot: SNAPSHOT })}
                     onJumpToStop={(stopId) => {

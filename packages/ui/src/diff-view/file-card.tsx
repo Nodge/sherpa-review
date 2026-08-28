@@ -48,8 +48,6 @@ export interface FileCardActions {
     readonly onShowWhitespace: (fileId: string) => void;
     readonly onSelectStart: (fileId: string, key: LineKey, extend: boolean) => void;
     readonly onSelectExtend: (fileId: string, key: LineKey) => void;
-    readonly onOpenInEditor: (path: string) => Promise<Feedback>;
-    readonly onCopyLink: (fileId: string) => Promise<Feedback>;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
@@ -210,36 +208,18 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
                 {routeBadge}
 
-                <span className="file-card__actions">
-                    <button
-                        type="button"
-                        className="file-card__action"
-                        onClick={() => {
-                            run(actions.onCopyLink(file.fileId));
-                        }}
-                    >
-                        Copy link
-                    </button>
-                    <button
-                        type="button"
-                        className="file-card__action"
-                        onClick={() => {
-                            run(actions.onOpenInEditor(file.path));
-                        }}
-                    >
-                        Open in editor
-                    </button>
-                    {file.blameUrl === null ? null : (
+                {file.blameUrl === null ? null : (
+                    <span className="file-card__actions">
                         <a
-                            className="file-card__action"
+                            className="file-card__header-action"
                             href={file.blameUrl}
                             target="_blank"
                             rel="noreferrer noopener"
                         >
                             Blame
                         </a>
-                    )}
-                </span>
+                    </span>
+                )}
 
                 <ExpandButtons
                     model={shown}
@@ -295,15 +275,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 </p>
             )}
 
-            {collapseReason === null ? (
-                <Notices
-                    model={shown}
-                    file={file}
-                    onOpenInEditor={() => {
-                        run(actions.onOpenInEditor(file.path));
-                    }}
-                />
-            ) : null}
+            {collapseReason === null ? <Notices model={shown} file={file} /> : null}
 
             {collapseReason !== null ? (
                 <CollapsedFileSummary
@@ -438,7 +410,7 @@ function ExpandButtons({
         <span className="file-card__expand">
             <button
                 type="button"
-                className="file-card__action"
+                className="file-card__header-action"
                 disabled={disabled}
                 title={disabledReason ?? 'show 20 unchanged lines around each block'}
                 onClick={() => {
@@ -450,7 +422,7 @@ function ExpandButtons({
             {expanded && !disabled ? (
                 <button
                     type="button"
-                    className="file-card__action"
+                    className="file-card__header-action"
                     onClick={() => {
                         onExpand('all');
                     }}
@@ -463,29 +435,14 @@ function ExpandButtons({
 }
 
 /** Single-line notices from SPEC §2.14: binary, mode change, whitespace only. */
-function Notices({
-    model,
-    file,
-    onOpenInEditor,
-}: {
-    model: DiffFileModel | null;
-    file: FileDiff;
-    onOpenInEditor: () => void;
-}) {
+function Notices({ model, file }: { model: DiffFileModel | null; file: FileDiff }) {
     if (model === null) {
         return null;
     }
 
     return (
         <>
-            {model.content.kind === 'binary' ? (
-                <p className="file-card__notice">
-                    binary file not shown
-                    <button type="button" className="file-card__action" onClick={onOpenInEditor}>
-                        Open in editor
-                    </button>
-                </p>
-            ) : null}
+            {model.content.kind === 'binary' ? <p className="file-card__notice">binary file not shown</p> : null}
             {model.modeChange === null ? null : (
                 <p className="file-card__notice">
                     mode {model.modeChange.from} → {model.modeChange.to}

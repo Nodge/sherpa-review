@@ -16,7 +16,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import {
     deleteReviewDraft,
     fetchFileContent,
-    openInEditor,
     saveReviewDraft,
     setReviewThreadResolved,
     updateReviewDraft,
@@ -26,7 +25,6 @@ import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
-import { copyFileLink } from '../../diff-view/copy-link.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import type { ExpandAmount } from '../../diff-view/expand.js';
 import { flashRow } from '../../diff-view/line-target.js';
@@ -192,14 +190,6 @@ export function RouteView({
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],
     );
-    const openFileInEditor = useCallback(
-        async (path: string): Promise<Feedback> => {
-            const result = await openInEditor(token, path);
-            return result.outcome === 'opened' ? null : result.message;
-        },
-        [token],
-    );
-
     // Two sources of stop navigation: the palette and the `stop` fragment parameter (a link
     // copied from the stop header). One counter lets the view distinguish jumps by increasing id.
     const [target, setTarget] = useState<{ id: number; stopId: string } | null>(null);
@@ -267,7 +257,6 @@ export function RouteView({
             progressLoaded={progress !== null}
             parse={parse}
             loadContent={loadContent}
-            onOpenInEditor={openFileInEditor}
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
             navigation={target}
@@ -302,7 +291,6 @@ export interface RouteWorkspaceProps {
     ) => Promise<number>;
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
-    readonly onOpenInEditor: (path: string) => Promise<Feedback>;
     readonly threadTransport?: ComposerTransport;
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
@@ -326,7 +314,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         threadStore,
         parse,
         loadContent,
-        onOpenInEditor,
         onSetViewed = EMPTY_SET_VIEWED,
         onSetStopViewed = EMPTY_SET_STOP_VIEWED,
         progressLoaded = true,
@@ -1252,11 +1239,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 }
             },
             onSelectExtend: store.extendSelection,
-            onOpenInEditor,
-            onCopyLink: copyFileLink,
             onCommentLine: commentLine,
         }),
-        [commentLine, expand, markViewed, onOpenInEditor, retryParse, store],
+        [commentLine, expand, markViewed, retryParse, store],
     );
 
     const cardFor = useCallback(
