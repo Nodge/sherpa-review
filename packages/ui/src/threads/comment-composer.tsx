@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { ComposerIcon } from '../icons/composer-icons.tsx';
+import { Icon } from '../icons/icon.tsx';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import {
@@ -15,15 +15,15 @@ import type { VisualEditorHandle } from './visual-editor.js';
 
 const TOOLS: readonly {
     tool: ComposerTool;
-    icon: 'ic-bold' | 'ic-italic' | 'ic-link' | 'ic-code' | 'ic-codeblock' | 'ic-list';
+    icon: 'bold' | 'italic' | 'link' | 'code' | 'codeblock' | 'list';
     title: string;
 }[] = [
-    { tool: 'bold', icon: 'ic-bold', title: 'Bold · ⌘B' },
-    { tool: 'italic', icon: 'ic-italic', title: 'Italic · ⌘I' },
-    { tool: 'link', icon: 'ic-link', title: 'Link · ⌘K' },
-    { tool: 'code', icon: 'ic-code', title: 'Inline code' },
-    { tool: 'codeblock', icon: 'ic-codeblock', title: 'Code block' },
-    { tool: 'list', icon: 'ic-list', title: 'List' },
+    { tool: 'bold', icon: 'bold', title: 'Bold · ⌘B' },
+    { tool: 'italic', icon: 'italic', title: 'Italic · ⌘I' },
+    { tool: 'link', icon: 'link', title: 'Link · ⌘K' },
+    { tool: 'code', icon: 'code', title: 'Inline code' },
+    { tool: 'codeblock', icon: 'codeblock', title: 'Code block' },
+    { tool: 'list', icon: 'list', title: 'List' },
 ];
 
 export interface CommentComposerProps {
@@ -168,7 +168,7 @@ export function CommentComposer({
                                 format(item.tool);
                             }}
                         >
-                            <ComposerIcon name={item.icon} size={14} />
+                            <Icon name={item.icon} size={14} />
                         </button>
                     ))}
                     <span className="thread-composer__toolbar-spacer" />
@@ -313,7 +313,7 @@ function ComposerStatus({
     if (composer.status === 'saved') {
         return (
             <span className="thread-composer__status is-saved">
-                <ComposerIcon name="ic-check" size={13} /> saved as a draft
+                <Icon name="check" size={13} /> saved as a draft
                 {composer.savedAt == null ? null : <> · {formatTime(composer.savedAt)}</>}
             </span>
         );

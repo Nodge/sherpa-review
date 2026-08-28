@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { readFragmentParam } from '../../fragment.js';
+import { IconSprite } from '../../icons/icon.tsx';
 import '../../styles/base.css';
 import { Gallery } from './gallery.tsx';
 
@@ -12,6 +13,7 @@ if (!container) {
 
 createRoot(container).render(
     <StrictMode>
+        <IconSprite />
         <Gallery initialId={readFragmentParam(window.location.hash, 'state')} />
     </StrictMode>,
 );

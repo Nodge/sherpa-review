@@ -535,8 +535,6 @@
     height: 11px;
     border: 1px solid var(--read-box-border);
     border-radius: var(--radius-mark);
-    font-size: var(--font-size-tag);
-    line-height: 1;
     color: var(--surface-app);
 }
 
@@ -630,7 +628,13 @@
 }
 
 .route-stop__collapsed-mark {
-    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    color: var(--text-dim-strong);
+}
+
+.route-stop__collapsed-icon--up {
+    transform: rotate(180deg);
 }
 
 .route-stop__collapsed-hint {
@@ -783,8 +787,8 @@
 }
 
 .route-collapsed__mark {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
+    display: flex;
+    align-items: center;
     color: var(--text-dim-strong);
 }
 

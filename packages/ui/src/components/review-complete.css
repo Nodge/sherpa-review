@@ -31,8 +31,6 @@
     border-radius: 50%;
     background: var(--success-surface);
     color: var(--diff-add-text-strong);
-    font-size: var(--font-size-ui);
-    font-weight: 600;
 }
 
 .review-complete__header h1 {

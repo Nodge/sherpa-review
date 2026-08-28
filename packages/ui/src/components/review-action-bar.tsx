@@ -2,6 +2,7 @@ import type { PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { DiffViewStore } from '../diff-view/store.js';
+import { Icon } from '../icons/icon.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
     commentBodies,
@@ -151,7 +152,7 @@ export function ReviewActionBarLoading({ diffError }: { readonly diffError: stri
             </button>
             <div className="review-action-bar__ship">
                 <button type="button" className="review-action-bar__ship-primary" disabled title={disabledReason}>
-                    <span className="review-action-bar__thumb" aria-hidden="true">👍</span>
+                    <Icon name="thumb" size={15} className="review-action-bar__thumb" />
                     Ship
                 </button>
                 <button
@@ -161,7 +162,7 @@ export function ReviewActionBarLoading({ diffError }: { readonly diffError: stri
                     title={disabledReason}
                     aria-label="Choose ship mode"
                 >
-                    ⌄
+                    <Icon name="chev-down" size={14} />
                 </button>
             </div>
         </div>
@@ -472,7 +473,7 @@ export function ReviewActionBar({
                     title={disabledReason ?? publishConsequence(effectiveShipMode, drafts)}
                     onClick={() => void publish(effectiveShipMode)}
                 >
-                    <span className="review-action-bar__thumb" aria-hidden="true">👍</span>
+                    <Icon name="thumb" size={15} className="review-action-bar__thumb" />
                     {publishing === null
                         ? `${shipModeLabel(effectiveShipMode)}${drafts === 0 ? '' : ` · ${formatCount(drafts)}`}`
                         : 'Publishing…'}
@@ -501,7 +502,7 @@ export function ReviewActionBar({
                         }
                     }}
                 >
-                    ⌄
+                    <Icon name="chev-down" size={14} />
                 </button>
                 {menuOpen ? (
                     <div
@@ -648,7 +649,9 @@ function ShipOption({
                 }
             }}
         >
-            <span className="review-action-menu__tick" aria-hidden="true">{active ? '✓' : ''}</span>
+            <span className="review-action-menu__tick" aria-hidden="true">
+                {active ? <Icon name="check" size={13} /> : null}
+            </span>
             <span>
                 <strong>{label}</strong>
                 <span>{description}</span>

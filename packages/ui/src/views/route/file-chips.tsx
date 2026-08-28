@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
 import { formatCount, plural } from '../../text.js';
@@ -72,7 +73,7 @@ function FileChip({
             <span className="route-chip__del">−{formatCount(group.deletions)}</span>
             {/* The three-state box uses the shared `readStateOf`. The tooltip always includes counts (SPEC §2.12). */}
             <span className={`route-chip__read route-chip__read--${read.state}`} title={read.tooltip}>
-                {read.state === 'read' ? '✓' : ''}
+                {read.state === 'read' ? <Icon name="check" size={9} /> : null}
             </span>
         </button>
     );

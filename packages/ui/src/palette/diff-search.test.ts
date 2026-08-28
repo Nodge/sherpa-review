@@ -1,6 +1,9 @@
-import type { FileDiff } from '@sherpa/protocol';
+import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { toParseRequest } from '../diff/model.js';
+import { parseFileDiff } from '../diff/parse.js';
+import { expandFileContext, expandGap, gapKeyOf } from '../diff-view/expand.js';
 import { lineSideInDiff, searchDiff } from './diff-search.js';
 
 function file(patch: string | null): FileDiff {
@@ -73,6 +76,22 @@ describe('searchDiff', () => {
         expect(lineSideInDiff(deleted, 40)).toBe('old');
         expect(lineSideInDiff(deleted, 41)).toBeNull();
         expect(lineSideInDiff(context, 50)).toBe('new');
+    });
+
+    it('finds a loaded context line absent from the patch', () => {
+        const target = file(['@@ -3,1 +3,1 @@', '-old', '+new'].join('\n'));
+        const source = parseFileDiff(toParseRequest(target));
+        const gap = source.content.kind === 'text' ? source.content.blocks.find((block) => block.kind === 'gap') : undefined;
+        if (gap?.kind !== 'gap') {
+            throw new Error('model has no leading gap');
+        }
+        const content: FileContent = { oldText: 'needle from context\nline-2\nold', newText: 'needle from context\nline-2\nnew' };
+        const expansion = expandGap(new Map(), gapKeyOf(gap), 'up');
+        const shown = expandFileContext(source, content, expansion);
+
+        expect(searchDiff([target], 'needle', 50, new Map([[target.fileId, shown]])).matches).toEqual([
+            expect.objectContaining({ side: 'new', line: 1, text: 'needle from context' }),
+        ]);
     });
 
     it('does not match @@ headers or patch metadata lines', () => {

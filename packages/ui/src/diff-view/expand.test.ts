@@ -3,17 +3,21 @@ import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel, DiffGap, DiffHunk } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import { expandFileContext, hiddenLinesOf, remainingHiddenLines } from './expand.js';
-
-/**
- * Context expansion is a pure function of the model and file content. Tests cover the behaviour
- * behind the card button: gaps disappear when they close, line numbers stay correct,
- * expansion stops at file boundaries, and the tail's actual length comes from the content.
- */
+import type { ExpandDirection, FileExpansion } from './expand.js';
+import {
+    expandAllGaps,
+    expandFileContext,
+    expandGap,
+    gapExpansionDelta,
+    gapKeyOf,
+    hiddenLinesOf,
+    remainingHiddenLines,
+} from './expand.js';
 
 /** A 120-line file: `line-1` … `line-120`. */
 const LINES = Array.from({ length: 120 }, (_, index) => `line-${String(index + 1)}`);
 const CONTENT: FileContent = { oldText: LINES.join('\n'), newText: LINES.join('\n') };
+const EMPTY_EXPANSION: FileExpansion = new Map();
 
 /** A diff with two hunks. Lines 21 and 41 change, and gaps hide the rest. */
 function twoHunks(): DiffFileModel {
@@ -52,68 +56,139 @@ function hunks(model: DiffFileModel): DiffHunk[] {
     return blocks(model).filter((block): block is DiffHunk => block.kind === 'hunk');
 }
 
-describe('context expansion', () => {
-    it('initial model has a leading gap, an inner gap and a tail of unknown length', () => {
-        const model = twoHunks();
+function expansionFor(
+    model: DiffFileModel,
+    edge: DiffGap['edge'],
+    direction: ExpandDirection,
+    amount = 20,
+): FileExpansion {
+    const gap = gaps(model).find((candidate) => candidate.edge === edge);
+    if (gap === undefined) {
+        throw new Error(`model has no ${edge} gap`);
+    }
+    return expandGap(EMPTY_EXPANSION, gapKeyOf(gap), direction, amount);
+}
 
-        expect(gaps(model).map((gap) => [gap.edge, gap.hiddenLines])).toEqual([
+describe('directional context expansion', () => {
+    it('initial model has a leading gap, an inner gap and a tail of unknown length', () => {
+        expect(gaps(twoHunks()).map((gap) => [gap.edge, gap.hiddenLines])).toEqual([
             ['leading', 20],
             ['inner', 19],
             ['trailing', null],
         ]);
     });
 
-    it('a +20 step reveals 20 lines around each hunk with correct line numbers', () => {
-        const expanded = expandFileContext(twoHunks(), CONTENT, 20);
-        const first = hunks(expanded)[0];
+    it('up arrow expands the top edge of only the selected inner gap', () => {
+        const model = twoHunks();
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'inner', 'up', 5));
+        const inner = gaps(expanded).find((gap) => gap.edge === 'inner');
+        const [first, second] = hunks(expanded);
 
-        // Leading gap: lines 1–20 appeared above the hunk, so the gap disappeared entirely.
-        expect(first?.newStart).toBe(1);
-        expect(first?.lines[0]).toMatchObject({ newLine: 1, oldLine: 1, text: 'line-1', kind: 'context' });
-        // Twenty tail lines appeared below the second hunk, so the block ends at line 61.
-        expect(first?.lines.at(-1)).toMatchObject({ newLine: 61, text: 'line-61' });
-        expect(gaps(expanded).map((gap) => gap.edge)).toEqual(['trailing']);
+        expect(first?.lines.at(-1)).toMatchObject({ newLine: 26, text: 'line-26' });
+        expect(second?.lines[0]).toMatchObject({ oldLine: 41, kind: 'del' });
+        expect(inner).toMatchObject({ hiddenLines: 14, newStart: 27 });
     });
 
-    it('closing an inner gap merges the hunks into one continuous block', () => {
-        const expanded = expandFileContext(twoHunks(), CONTENT, 20);
+    it('down arrow expands the bottom edge of only the selected inner gap', () => {
+        const model = twoHunks();
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'inner', 'down', 5));
+        const inner = gaps(expanded).find((gap) => gap.edge === 'inner');
+        const [first, second] = hunks(expanded);
+
+        expect(first?.lines.at(-1)).toMatchObject({ newLine: 21, kind: 'add' });
+        expect(second?.lines[0]).toMatchObject({ newLine: 36, text: 'line-36' });
+        expect(inner).toMatchObject({ hiddenLines: 14, newStart: 22 });
+    });
+
+    it('repeated clicks accumulate and preserve the original gap key', () => {
+        const model = twoHunks();
+        const inner = gaps(model).find((gap) => gap.edge === 'inner');
+        if (inner === undefined) {
+            throw new Error('model has no inner gap');
+        }
+        const key = gapKeyOf(inner);
+        const once = expandGap(EMPTY_EXPANSION, key, 'up');
+        const twice = expandGap(once, key, 'up');
+        const expanded = expandFileContext(model, CONTENT, twice);
+        const remaining = gaps(expanded).find((gap) => gap.edge === 'inner');
+
+        expect(twice.get(key)?.up).toBe(40);
+        expect(remaining).toBeUndefined();
+    });
+
+    it('remainder below 20 expands with one target and the gap bar disappears', () => {
+        const model = twoHunks();
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'inner', 'all'));
+
+        expect(gaps(expanded).some((gap) => gap.edge === 'inner')).toBe(false);
+        expect(hunks(expanded)).toHaveLength(1);
+    });
+
+    it('meeting expansion directions merge adjacent hunks', () => {
+        const model = twoHunks();
+        const inner = gaps(model).find((gap) => gap.edge === 'inner');
+        if (inner === undefined) {
+            throw new Error('model has no inner gap');
+        }
+        const key = gapKeyOf(inner);
+        const up = expandGap(EMPTY_EXPANSION, key, 'up', 10);
+        const both = expandGap(up, key, 'down', 9);
+        const expanded = expandFileContext(model, CONTENT, both);
         const merged = hunks(expanded);
 
         expect(merged).toHaveLength(1);
-        const lines = merged[0]?.lines ?? [];
-        // Lines are consecutive on the new side, without gaps.
-        const numbers = lines.filter((line) => line.newLine !== null).map((line) => line.newLine);
-        expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => index + 1));
-        expect(numbers.length).toBe(61);
+        const middle = merged[0]?.lines.filter((line) => line.newLine !== null).map((line) => line.newLine);
+        expect(middle).toEqual(Array.from({ length: 21 }, (_, index) => index + 21));
     });
 
-    it('a small step leaves a gap and shifts its start', () => {
-        const expanded = expandFileContext(twoHunks(), CONTENT, 5);
-        const [leading, inner] = gaps(expanded);
+    it('leading gap expands toward the first hunk', () => {
+        const model = twoHunks();
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'leading', 'up'));
 
-        expect(leading).toMatchObject({ edge: 'leading', hiddenLines: 15, newStart: 1 });
-        // The inner gap gave up 5 lines at each end: 19 − 10, with its start shifted by 5.
-        expect(inner).toMatchObject({ edge: 'inner', hiddenLines: 9, newStart: 27 });
+        expect(gaps(expanded).some((gap) => gap.edge === 'leading')).toBe(false);
+        expect(hunks(expanded)[0]?.newStart).toBe(1);
+        expect(hunks(expanded)[0]?.lines[0]).toMatchObject({ newLine: 1, text: 'line-1' });
     });
 
-    it('gets the tail length from the content instead of inventing it', () => {
+    it('trailing gap with hiddenLines=null derives its length from content and expands downward', () => {
         const model = twoHunks();
         const trailing = gaps(model).at(-1);
         if (trailing === undefined) {
             throw new Error('model has no trailing gap');
         }
-
         expect(hiddenLinesOf(trailing, null)).toBeNull();
         expect(hiddenLinesOf(trailing, CONTENT)).toBe(79);
 
-        const expanded = expandFileContext(model, CONTENT, 5);
-        const expandedTrailing = gaps(expanded).at(-1);
-        expect(expandedTrailing?.newStart).toBe(47);
-        expect(hiddenLinesOf(expandedTrailing ?? trailing, CONTENT)).toBe(74);
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'trailing', 'down'));
+        const remaining = gaps(expanded).at(-1);
+        expect(hunks(expanded).at(-1)?.lines.at(-1)).toMatchObject({ newLine: 61, text: 'line-61' });
+        expect(remaining?.newStart).toBe(62);
+        expect(hiddenLinesOf(remaining ?? trailing, CONTENT)).toBe(59);
     });
 
-    it('"expand all" leaves no gaps', () => {
-        const expanded = expandFileContext(twoHunks(), CONTENT, 'all');
+    it('computes aria-live after loading from the actual expanded lines and remainder', () => {
+        const model = twoHunks();
+        const trailing = gaps(model).at(-1);
+        if (trailing === undefined) {
+            throw new Error('model has no trailing gap');
+        }
+        const key = gapKeyOf(trailing);
+        const before = expandFileContext(model, CONTENT, EMPTY_EXPANSION);
+        const expansion = expandGap(EMPTY_EXPANSION, key, 'down');
+        const after = expandFileContext(model, CONTENT, expansion);
+
+        expect(gapExpansionDelta(before, after, CONTENT, key)).toEqual({ loaded: 20, hidden: 59 });
+
+        const shortLines = LINES.slice(0, 55);
+        const short: FileContent = { oldText: shortLines.join('\n'), newText: shortLines.join('\n') };
+        const beforeLast = expandFileContext(model, short, EMPTY_EXPANSION);
+        const afterLast = expandFileContext(model, short, expansion);
+        expect(gapExpansionDelta(beforeLast, afterLast, short, key)).toEqual({ loaded: 14, hidden: 0 });
+    });
+
+    it('"expand file" leaves no gaps', () => {
+        const model = twoHunks();
+        const expanded = expandFileContext(model, CONTENT, expandAllGaps(model, EMPTY_EXPANSION));
 
         expect(gaps(expanded)).toEqual([]);
         expect(remainingHiddenLines(expanded, CONTENT)).toBe(0);
@@ -122,20 +197,13 @@ describe('context expansion', () => {
 
     it('newline at the end of a file does not become an extra line', () => {
         const model = twoHunks();
-        const trailing = gaps(model).at(-1);
-        if (trailing === undefined) {
-            throw new Error('model has no trailing gap');
-        }
-
-        // A real file almost always ends with `\n`. The tail count must be the same without it.
         const withNewline: FileContent = { oldText: `${LINES.join('\n')}\n`, newText: `${LINES.join('\n')}\n` };
-        expect(hiddenLinesOf(trailing, withNewline)).toBe(hiddenLinesOf(trailing, CONTENT));
+        const expanded = expandFileContext(model, withNewline, expandAllGaps(model, EMPTY_EXPANSION));
 
-        const expanded = expandFileContext(twoHunks(), withNewline, 'all');
         expect(hunks(expanded)[0]?.lines.at(-1)).toMatchObject({ newLine: 120, text: 'line-120' });
     });
 
-    it('returns an added file model unchanged because there is nothing to expand', () => {
+    it('added file and model without content stay unchanged', () => {
         const added = parseFileDiff({
             fileId: 'f2',
             path: 'new.ts',
@@ -144,20 +212,19 @@ describe('context expansion', () => {
             binary: false,
             patch: ['@@ -0,0 +1,2 @@', '+line-1', '+line-2', ''].join('\n'),
         });
-
-        expect(remainingHiddenLines(added, { oldText: null, newText: 'line-1\nline-2' })).toBe(0);
-        expect(expandFileContext(added, { oldText: null, newText: 'line-1\nline-2' }, 'all')).toEqual(added);
-    });
-
-    it('leaves the model unchanged without content', () => {
+        const addedContent = { oldText: null, newText: 'line-1\nline-2' };
         const model = twoHunks();
-        expect(expandFileContext(model, null, 'all')).toEqual(model);
+
+        expect(remainingHiddenLines(added, addedContent)).toBe(0);
+        expect(expandFileContext(added, addedContent, expandAllGaps(added, EMPTY_EXPANSION))).toEqual(added);
+        expect(expandFileContext(model, null, expandAllGaps(model, EMPTY_EXPANSION))).toEqual(model);
         expect(remainingHiddenLines(model, null)).toBeNull();
     });
 
-    it('only adds existing lines when the content is shorter than expected', () => {
+    it('content shorter than expected adds only real lines', () => {
+        const model = twoHunks();
         const short: FileContent = { oldText: 'line-1\nline-2', newText: 'line-1\nline-2' };
-        const expanded = expandFileContext(twoHunks(), short, 'all');
+        const expanded = expandFileContext(model, short, expandAllGaps(model, EMPTY_EXPANSION));
         const revealed = hunks(expanded)
             .flatMap((hunk) => hunk.lines)
             .filter((line) => line.kind === 'context');
@@ -184,13 +251,9 @@ describe('context expansion', () => {
             binary: false,
             patch,
         });
-
-        const expanded = expandFileContext(model, CONTENT, 3);
-        const inner = gaps(expanded).find((gap) => gap.edge === 'inner');
-        // Gap between hunks: old side 22…40, new side 24…42, shifted by two additions.
-        expect(inner).toMatchObject({ oldStart: 25, newStart: 27 });
-
+        const expanded = expandFileContext(model, CONTENT, expansionFor(model, 'inner', 'down', 3));
         const revealed = hunks(expanded)[1]?.lines[0];
+
         expect(revealed).toMatchObject({ oldLine: 38, newLine: 40, text: 'line-40' });
     });
 });

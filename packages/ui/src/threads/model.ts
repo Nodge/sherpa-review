@@ -40,7 +40,7 @@ export function flattenThread(root: Comment): FlatComment[] {
             parent,
             depth,
             indent: Math.min(Math.max(depth - 1, 0), 3) * 15,
-            replyHint: depth > 4 && parent !== null ? `↳ reply to ${authorName(parent)}` : null,
+            replyHint: depth > 4 && parent !== null ? `reply to ${authorName(parent)}` : null,
             subtreeReplies: 0,
         });
 

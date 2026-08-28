@@ -23,7 +23,9 @@ import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
-import type { ExpandAmount } from './expand.js';
+import type { ContextExpandRequest, ContextExpandResult } from './context-expansion.js';
+import { expandContext } from './context-expansion.js';
+import type { FileExpansion } from './expand.js';
 import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
@@ -470,31 +472,8 @@ export function DiffFileList({
     }, [topFileId, onTopFileChange]);
 
     const expand = useCallback(
-        async (fileId: string, amount?: ExpandAmount): Promise<Feedback> => {
-            if (!contentAvailable) {
-                return null;
-            }
-            if (store.getSnapshot().content.has(fileId)) {
-                store.expand(fileId, amount);
-                return null;
-            }
-
-            let content: FileContent | null;
-            try {
-                content = await loadContent(fileId);
-            } catch (error: unknown) {
-                // A failed request does not mean "no content". Caching it as null would
-                // disable the button permanently for the wrong reason. Leave the cache untouched and retry.
-                const reason = (error instanceof Error ? error.message : String(error)).replace(/\s*\.\s*$/, '');
-                return `Could not fetch the file contents: ${reason}. Try again.`;
-            }
-
-            store.setContent(fileId, content);
-            if (content !== null) {
-                store.expand(fileId, amount);
-            }
-            return null;
-        },
+        (fileId: string, request: ContextExpandRequest): Promise<ContextExpandResult> =>
+            expandContext({ store, fileId, request, contentAvailable, loadContent }),
         [contentAvailable, loadContent, store],
     );
 
@@ -553,7 +532,7 @@ export function DiffFileList({
                             collapseReason={collapseReasons.get(file.fileId) ?? null}
                             content={snapshot.content.get(file.fileId)}
                             contentAvailable={contentAvailable}
-                            expansion={snapshot.expansion.get(file.fileId) ?? 0}
+                            expansion={snapshot.expansion.get(file.fileId) ?? EMPTY_EXPANSION}
                             read={readStateOf(snapshot, file)}
                             opened={snapshot.opened.has(file.fileId)}
                             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
@@ -582,6 +561,7 @@ export function DiffFileList({
 
 const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();
+const EMPTY_EXPANSION: FileExpansion = new Map();
 const EMPTY_COMPOSERS: readonly ComposerSnapshot[] = [];
 const EMPTY_SPANS: readonly AnchorSpan[] = [];
 
@@ -628,7 +608,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     collapseReason: FileCollapseReason | null;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
-    expansion: ExpandAmount;
+    expansion: FileExpansion;
     read: FileReadState;
     opened: boolean;
     showWhitespace: boolean;

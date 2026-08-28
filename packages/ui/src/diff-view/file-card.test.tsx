@@ -13,7 +13,7 @@ const DATA = fixtureData('edge');
 
 const ACTIONS: FileCardActions = {
     onViewed: () => Promise.resolve(null),
-    onExpand: () => Promise.resolve(null),
+    onExpand: () => Promise.resolve({ feedback: null, content: null, expansion: new Map() }),
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
@@ -29,7 +29,7 @@ function render(file: FileDiff, hint = false): string {
             mode="unified"
             content={null}
             contentAvailable={false}
-            expansion={0}
+            expansion={new Map()}
             read={readStateOf({ file, record: null })}
             opened={false}
             showWhitespace={false}
@@ -58,7 +58,7 @@ describe('file card header', () => {
 
         expect(html).toContain('class="file-card__header-action"');
         expect(html).toContain('>Blame</a>');
-        expect(html).toContain('>Context ±20</button>');
+        expect(html).toContain('>Expand the file</button>');
         expect(html).not.toContain('Copy file link');
         expect(html).not.toContain('Open in editor');
         expect(html).toContain('class="file-card__action">retry</button>');

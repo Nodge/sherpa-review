@@ -1,10 +1,17 @@
 import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { FileDiff } from '@sherpa/protocol';
+import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
+import {
+    expandAllGaps,
+    expandFileContext,
+    expandGap,
+    gapKeyOf,
+    remainingHiddenLines,
+} from '../diff-view/expand.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { AnchorSpan, ClippedModel } from './anchor-clip.js';
 import {
@@ -120,6 +127,100 @@ describe('clipping the model by anchors', () => {
         expect(gaps).toHaveLength(1);
         expect(gaps[0]?.kind === 'gap' ? (gaps[0].hiddenChanged ?? 0) : 0).toBeGreaterThan(0);
         expect(clipped.changedLines).toBe(2);
+    });
+
+    it('expands only the selected slice gap and preserves its key', () => {
+        const context = Array.from({ length: 17 }, (_, index) => ` line-${String(index + 3)}`);
+        const model = parseFileDiff({
+            fileId: 'route-gap',
+            path: 'src/route-gap.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,20 +1,20 @@', ' line-1', '-old-2', '+new-2', ...context, '-old-20', '+new-20'].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [
+            { side: 'new', start: 2, end: 2 },
+            { side: 'new', start: 20, end: 20 },
+        ];
+        const initial = clipModelToAnchors(model, anchors);
+        const gap = gapsOf(initial)[0];
+        if (gap === undefined) {
+            throw new Error('slice has no gap');
+        }
+        const key = gapKeyOf(gap);
+        const expansion = expandGap(new Map(), key, 'up', 2);
+        const expanded = clipModelToAnchors(model, anchors, ANCHOR_CONTEXT, expansion);
+        const nextGap = gapsOf(expanded)[0];
+
+        expect(lines(expanded.model).filter((line) => line.kind === 'context')).toHaveLength(
+            lines(initial.model).filter((line) => line.kind === 'context').length + 2,
+        );
+        expect(nextGap?.sourceKey).toBe(key);
+        expect(nextGap?.hiddenChanged).toBe(gap.hiddenChanged);
+    });
+
+    it('keeps expanded context from the original gap visible and preserves its key until it disappears', () => {
+        const contentLines = Array.from({ length: 60 }, (_, index) => `line-${String(index + 1)}`);
+        const content: FileContent = { oldText: contentLines.join('\n'), newText: contentLines.join('\n') };
+        const model = parseFileDiff({
+            fileId: 'route-source-gap',
+            path: 'src/route-source-gap.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: [
+                '@@ -1,5 +1,5 @@',
+                ' line-1',
+                ' line-2',
+                '-old-3',
+                '+new-3',
+                ' line-4',
+                ' line-5',
+                '@@ -50,5 +50,5 @@',
+                ' line-50',
+                ' line-51',
+                '-old-52',
+                '+new-52',
+                ' line-53',
+                ' line-54',
+            ].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [
+            { side: 'new', start: 3, end: 3 },
+            { side: 'new', start: 52, end: 52 },
+        ];
+        const sourceGap =
+            model.content.kind === 'text'
+                ? model.content.blocks.find((block): block is DiffGap => block.kind === 'gap' && block.edge === 'inner')
+                : undefined;
+        if (sourceGap === undefined) {
+            throw new Error('original model has no internal gap');
+        }
+        const key = gapKeyOf(sourceGap);
+        const show = (expansion: ReturnType<typeof expandGap>) =>
+            clipModelToAnchors(expandFileContext(model, content, expansion), anchors, ANCHOR_CONTEXT, expansion);
+        const visibleNewLines = (clipped: ClippedModel): number =>
+            new Set(lines(clipped.model).flatMap((line) => (line.newLine === null ? [] : [line.newLine]))).size;
+
+        const initial = show(new Map());
+        const onceExpansion = expandGap(new Map(), key, 'up');
+        const once = show(onceExpansion);
+        const twiceExpansion = expandGap(onceExpansion, key, 'up');
+        const twice = show(twiceExpansion);
+
+        expect(visibleNewLines(once)).toBe(visibleNewLines(initial) + 20);
+        expect(gapsOf(once)[0]?.sourceKey).toBe(key);
+        expect(gapsOf(twice)[0]?.sourceKey).toBe(key);
+
+        const fullyExpanded = show(expandGap(twiceExpansion, key, 'up'));
+        expect(visibleNewLines(fullyExpanded)).toBe(visibleNewLines(initial) + 46);
+        expect(gapsOf(fullyExpanded)[0]).toMatchObject({ sourceKey: key, hiddenLines: 0, hiddenChanged: 1 });
+
+        const allExpansion = expandAllGaps(model, new Map());
+        const all = show(allExpansion);
+        expect(visibleNewLines(all)).toBe(60);
+        expect(remainingHiddenLines(all.model, content)).toBe(0);
     });
 
     it('counts collapsed anchors separately from displayed anchors', () => {

@@ -153,7 +153,7 @@ for (const gesture of ['up', 'down'] as const) {
         console.log(`MODE fixture-large ${description}`);
 
         // The mode really switched, otherwise the measurement would be of a stationary list.
-        expect(report.after).toBe('⇄ side by side');
+        expect(report.after).toBe('side by side');
         expect(report.lost).toBe(0);
         expect(report.drift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
     });

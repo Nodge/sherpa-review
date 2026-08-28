@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
+import { IconSprite } from './icons/icon.tsx';
 import type { SessionState } from './session/session-store.js';
 import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
@@ -24,6 +25,7 @@ if (token === null) {
     // Make no requests without a token. The skill/server launch prints a URL containing it.
     root.render(
         <StrictMode>
+            <IconSprite />
             <MessageScreen title="Sherpa">
                 <p>Open the UI using the link printed by the Sherpa skill or server. It contains the access token.</p>
                 <p className="message-screen__hint">http://127.0.0.1:&lt;port&gt;/#token=&lt;token&gt;</p>
@@ -85,6 +87,7 @@ if (token === null) {
 
     root.render(
         <StrictMode>
+            <IconSprite />
             <ShortcutsProvider registry={shortcuts}>
                 <App store={store} session={session} token={token} />
             </ShortcutsProvider>

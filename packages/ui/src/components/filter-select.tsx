@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import { Icon } from '../icons/icon.tsx';
 import './filter-select.css';
 
 /**
  * File filter select (SPEC §2.7, README §Filters): a "label + count" button and a
- * 250px dropdown with a ✓ beside the active item.
+ * a 250px list with an icon next to the active item.
  *
  * Keyboard follows SPEC: ↓ opens, ↑/↓ navigate, ⏎ selects, Esc and an outside click close
  * and restore focus to the button. Arrow keys can still reach disabled items so the reviewer can read
@@ -100,7 +101,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
                 {active.label}
                 <span className="filter-select__count">{active.count}</span>
                 <span className="filter-select__caret" aria-hidden="true">
-                    ⌄
+                    <Icon name="chev-down" size={13} />
                 </span>
             </button>
 
@@ -147,7 +148,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
                             }}
                         >
                             <span className="filter-select__tick" aria-hidden="true">
-                                {filter.id === active.id ? '✓' : ''}
+                                {filter.id === active.id ? <Icon name="check" size={13} /> : null}
                             </span>
                             <span className="filter-select__label">{filter.label}</span>
                             <span className="filter-select__count">{filter.count}</span>

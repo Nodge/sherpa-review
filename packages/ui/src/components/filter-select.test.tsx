@@ -64,7 +64,7 @@ describe('FilterSelect items', () => {
         const options = [...host.querySelectorAll<HTMLElement>('[role="option"]')];
 
         expect(options.map((option) => option.textContent.trim())).toEqual([
-            `✓All files${String(FILES.length)}`,
+            `All files${String(FILES.length)}`,
             'My files · CODEOWNERS0',
         ]);
         const mine = options[1];

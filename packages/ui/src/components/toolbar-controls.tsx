@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 
 import type { DiffViewStore } from '../diff-view/store.js';
+import { Icon } from '../icons/icon.tsx';
 import type { ThreadsShow } from '../session/session-store.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
 import './toolbar-controls.css';
@@ -31,7 +32,8 @@ export function DiffModeToggle({ store }: { store: DiffViewStore }) {
                 store.setDiffMode(diffMode === 'unified' ? 'split' : 'unified');
             }}
         >
-            ⇄ {effectiveMode === 'unified' ? 'unified' : 'side by side'}
+            <Icon name="swap" size={14} />
+            {effectiveMode === 'unified' ? 'unified' : 'side by side'}
         </button>
     );
 }

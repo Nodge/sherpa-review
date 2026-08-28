@@ -4,6 +4,7 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
@@ -90,7 +91,7 @@ export function FilePanel(props: FilePanelProps) {
         <aside className="file-panel" aria-label="Diff files">
             <div className="file-panel__search">
                 <span className="file-panel__search-icon" aria-hidden="true">
-                    ⌕
+                    <Icon name="search" size={13} />
                 </span>
                 <input
                     ref={inputRef}
@@ -368,7 +369,7 @@ function DirRow({ row }: { row: TreeDirRow }) {
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true">
-                {row.collapsed ? '›' : '⌄'}
+                <Icon name={row.collapsed ? 'chev-right' : 'chev-down'} size={13} />
             </span>
             <Label label={row.label} title={row.path} />
             <Counts additions={row.additions} deletions={row.deletions} />
@@ -406,7 +407,7 @@ function FileRow({
                     onToggleViewed(row.fileId);
                 }}
             >
-                {row.read.state === 'read' ? '✓' : ''}
+                {row.read.state === 'read' ? <Icon name="check" size={9} /> : null}
             </button>
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}

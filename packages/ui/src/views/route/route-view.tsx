@@ -25,8 +25,10 @@ import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
+import type { ContextExpandRequest, ContextExpandResult } from '../../diff-view/context-expansion.js';
+import { expandContext } from '../../diff-view/context-expansion.js';
+import type { FileExpansion } from '../../diff-view/expand.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
-import type { ExpandAmount } from '../../diff-view/expand.js';
 import { flashRow } from '../../diff-view/line-target.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
@@ -1184,27 +1186,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     }, [threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible]);
 
     const expand = useCallback(
-        async (fileId: string, amount?: ExpandAmount): Promise<Feedback> => {
-            if (!pr.capabilities.fileContent) {
-                return null;
-            }
-            if (store.getSnapshot().content.has(fileId)) {
-                store.expand(fileId, amount);
-                return null;
-            }
-            let content: FileContent | null;
-            try {
-                content = await loadContent(fileId);
-            } catch (error: unknown) {
-                const reason = (error instanceof Error ? error.message : String(error)).replace(/\s*\.\s*$/, '');
-                return `Could not fetch the file contents: ${reason}. Try again.`;
-            }
-            store.setContent(fileId, content);
-            if (content !== null) {
-                store.expand(fileId, amount);
-            }
-            return null;
-        },
+        (fileId: string, request: ContextExpandRequest): Promise<ContextExpandResult> =>
+            expandContext({
+                store,
+                fileId,
+                request,
+                contentAvailable: pr.capabilities.fileContent,
+                loadContent,
+            }),
         [loadContent, pr.capabilities.fileContent, store],
     );
 
@@ -1256,7 +1245,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     mode={diffSnapshot.effectiveMode}
                     content={diffSnapshot.content.get(group.fileId)}
                     contentAvailable={pr.capabilities.fileContent}
-                    expansion={diffSnapshot.expansion.get(group.fileId) ?? 0}
+                    expansion={diffSnapshot.expansion.get(group.fileId) ?? EMPTY_EXPANSION}
                     read={
                         diffSnapshot.readState.get(group.fileId) ??
                         readStateOf({ file: group.file, record: null })
@@ -1760,6 +1749,7 @@ const useAnchorEffect = typeof document === 'undefined' ? useEffect : useLayoutE
 
 /** Thread focus is needed only by the full diff reply shortcut, which the route does not have. */
 const NOOP_THREAD = (): void => undefined;
+const EMPTY_EXPANSION: FileExpansion = new Map();
 
 const FLASH_MS = 900;
 /** Allow time after the animation: the browser dispatches scroll events after the final step. */

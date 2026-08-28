@@ -1,6 +1,9 @@
 import type { FileDiff } from '@sherpa/protocol';
+
+import type { DiffFileModel } from '../diff/model.js';
 import { describe, expect, it } from 'vitest';
 
+import { FILE_EXPANSION_KEY } from './expand.js';
 import { createDiffViewStore, fileCollapseReason, SPLIT_MIN_WIDTH } from './store.js';
 
 /** Diff view state: mode, width, marks, context expansion, and selection. */
@@ -23,6 +26,27 @@ function file(fileId: string, viewed: boolean | null = false): FileDiff {
 
 function generated(fileId: string): FileDiff {
     return { ...file(fileId), generated: true };
+}
+
+function modelWithGap(fileId: string): DiffFileModel {
+    return {
+        fileId,
+        path: `src/${fileId}.ts`,
+        oldPath: null,
+        changeType: 'modify',
+        language: 'ts',
+        modeChange: null,
+        additions: 1,
+        deletions: 1,
+        onlyAdditions: false,
+        onlyDeletions: false,
+        whitespaceOnly: false,
+        malformed: false,
+        content: {
+            kind: 'text',
+            blocks: [{ kind: 'gap', edge: 'leading', hiddenLines: 40, oldStart: 1, newStart: 1 }],
+        },
+    };
 }
 
 function memoryStorage(initial?: string): Pick<Storage, 'getItem' | 'setItem'> & { value: string | null } {
@@ -240,16 +264,19 @@ describe('diff view store', () => {
         expect(store.getSnapshot().effectiveMode).toBe('split');
     });
 
-    it('each context click adds a step, and all overrides it', () => {
+    it('stores expansion by gap control and direction, full expansion sets all', () => {
         const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const key = 'leading:1:1:40';
 
-        store.expand('a');
-        store.expand('a');
-        expect(store.getSnapshot().expansion.get('a')).toBe(40);
+        store.expandGap('a', key, 'up');
+        store.expandGap('a', key, 'up');
+        expect(store.getSnapshot().expansion.get('a')?.get(key)).toEqual({ up: 40, down: 0, all: false });
 
-        store.expand('a', 'all');
-        store.expand('a');
-        expect(store.getSnapshot().expansion.get('a')).toBe('all');
+        store.setModel('a', modelWithGap('a'));
+        store.expandFile('a', ['clip:visible']);
+        expect(store.getSnapshot().expansion.get('a')?.get(key)).toEqual({ up: 40, down: 0, all: true });
+        expect(store.getSnapshot().expansion.get('a')?.get('clip:visible')?.all).toBe(true);
+        expect(store.getSnapshot().expansion.get('a')?.get(FILE_EXPANSION_KEY)?.all).toBe(true);
     });
 
     it('extends selection in both directions and clears it', () => {

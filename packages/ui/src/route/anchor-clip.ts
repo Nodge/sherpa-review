@@ -1,6 +1,8 @@
 import type { RouteAnchor } from '@sherpa/protocol';
 
 import type { DiffBlock, DiffFileModel, DiffHunk, DiffLine } from '../diff/model.js';
+import type { FileExpansion } from '../diff-view/expand.js';
+import { FILE_EXPANSION_KEY, gapKeyOf } from '../diff-view/expand.js';
 
 /**
  * Clip the file model to stop anchors (README §1: the stop's right column shows
@@ -194,6 +196,7 @@ export function clipModelToAnchors(
     model: DiffFileModel,
     anchors: readonly AnchorSpan[],
     context = ANCHOR_CONTEXT,
+    expansion: FileExpansion = new Map(),
 ): ClippedModel {
     if (model.content.kind !== 'text') {
         return { model, changedLines: 0, hunks: 0 };
@@ -204,7 +207,7 @@ export function clipModelToAnchors(
 
     const blocks: DiffBlock[] = [];
     /** Content omitted between the chunk already placed and the next one. A gap forms only between them. */
-    let skipped = { context: 0, changed: 0 };
+    let skipped: SkippedLines = { context: 0, changed: 0 };
     let changedLines = 0;
     let hunks = 0;
 
@@ -222,15 +225,19 @@ export function clipModelToAnchors(
 
     for (const block of model.content.blocks) {
         if (block.kind === 'gap') {
-            // A gap in the original model contains unchanged lines between file hunks.
-            skipped = { ...skipped, context: skipped.context + (block.hiddenLines ?? 0) };
+            // A gap in the original model keeps its key and expands before anchor clipping.
+            skipped = {
+                ...skipped,
+                context: skipped.context + (block.hiddenLines ?? 0),
+                key: skipped.key ?? gapKeyOf(block),
+            };
             continue;
         }
 
-        const keep = keepMask(block.lines, anchors, context);
+        const keep = keepPlan(block.lines, anchors, context, expansion);
         let run: DiffLine[] = [];
         for (const [index, line] of block.lines.entries()) {
-            if (keep[index] === true) {
+            if (keep.mask[index] === true) {
                 run.push(line);
                 if (line.kind !== 'context' && lineInAnchors(line, anchors)) {
                     changedLines += 1;
@@ -242,10 +249,11 @@ export function clipModelToAnchors(
             // The gap counts everything the slice hid, including changed whitespace lines.
             // the whitespace rule (decision log, 2026-08-26) excludes them from coverage counts,
             // not from what the card must report.
+            const key = skipped.key ?? keep.gapKeys[index];
             skipped =
                 line.kind === 'context'
-                    ? { ...skipped, context: skipped.context + 1 }
-                    : { ...skipped, changed: skipped.changed + 1 };
+                    ? { ...skipped, context: skipped.context + 1, ...(key === undefined ? {} : { key }) }
+                    : { ...skipped, changed: skipped.changed + 1, ...(key === undefined ? {} : { key }) };
         }
         flush(run, block);
     }
@@ -253,14 +261,35 @@ export function clipModelToAnchors(
     return { model: { ...model, content: { kind: 'text', blocks } }, changedLines, hunks };
 }
 
+interface KeepPlan {
+    readonly mask: boolean[];
+    readonly gapKeys: (string | undefined)[];
+}
+
+interface SkippedLines {
+    readonly context: number;
+    readonly changed: number;
+    readonly key?: string;
+}
+
 /**
- * Hunk lines to keep: those within an anchor plus up to `context` unchanged lines
- * around it. Expansion stops at the first changed line outside the anchor. Changes from other stops
- * stay out of the slice because their own stop explains them.
+ * Hunk lines to keep: anchors, base context and directed expansion of specific
+ * gaps. A changed line from another stop always stops expansion.
  */
-function keepMask(lines: readonly DiffLine[], anchors: readonly AnchorSpan[], context: number): boolean[] {
+function keepPlan(
+    lines: readonly DiffLine[],
+    anchors: readonly AnchorSpan[],
+    context: number,
+    expansion: FileExpansion,
+): KeepPlan {
     const mask = Array.from({ length: lines.length }, () => false);
+    const gapKeys: (string | undefined)[] = Array.from({ length: lines.length }, () => undefined);
+    const revealAllContext = expansion.get(FILE_EXPANSION_KEY)?.all === true;
     for (const [index, line] of lines.entries()) {
+        // Expansion happened before transform. The slice must not hide these lines again.
+        if (line.sourceGapKey !== undefined || (revealAllContext && line.kind === 'context')) {
+            mask[index] = true;
+        }
         if (!lineInAnchors(line, anchors)) {
             continue;
         }
@@ -275,15 +304,72 @@ function keepMask(lines: readonly DiffLine[], anchors: readonly AnchorSpan[], co
             }
         }
     }
-    return mask;
+
+    let index = 0;
+    while (index < lines.length) {
+        if (mask[index] === true) {
+            index += 1;
+            continue;
+        }
+        const start = index;
+        while (index < lines.length && mask[index] !== true) {
+            index += 1;
+        }
+        const end = index - 1;
+        if (start === 0 || end === lines.length - 1) {
+            continue;
+        }
+
+        const beforeSource = lines[start - 1]?.sourceGapKey;
+        const afterSource = lines[end + 1]?.sourceGapKey;
+        const sourceKey =
+            beforeSource === undefined || afterSource === undefined || beforeSource === afterSource
+                ? (beforeSource ?? afterSource)
+                : undefined;
+        const key = sourceKey ?? `clip:${lineBoundary(lines[start - 1])}>${lineBoundary(lines[end + 1])}`;
+        for (let cursor = start; cursor <= end; cursor += 1) {
+            gapKeys[cursor] = key;
+        }
+        const state = expansion.get(key);
+        if (state === undefined) {
+            continue;
+        }
+        const up = state.all ? Number.MAX_SAFE_INTEGER : state.up;
+        const down = state.all ? Number.MAX_SAFE_INTEGER : state.down;
+        revealContext(mask, lines, start, 1, up);
+        revealContext(mask, lines, end, -1, down);
+    }
+
+    return { mask, gapKeys };
 }
 
-function gapOf(next: DiffLine | undefined, skipped: { context: number; changed: number }): DiffBlock {
+function revealContext(
+    mask: boolean[],
+    lines: readonly DiffLine[],
+    start: number,
+    step: 1 | -1,
+    amount: number,
+): void {
+    for (let offset = 0; offset < amount; offset += 1) {
+        const index = start + step * offset;
+        if (lines[index]?.kind !== 'context') {
+            break;
+        }
+        mask[index] = true;
+    }
+}
+
+function lineBoundary(line: DiffLine | undefined): string {
+    return line === undefined ? 'none' : `${line.kind}:${String(line.oldLine ?? 0)}:${String(line.newLine ?? 0)}`;
+}
+
+function gapOf(next: DiffLine | undefined, skipped: SkippedLines): DiffBlock {
     return {
         kind: 'gap',
         edge: 'inner',
         hiddenLines: skipped.context,
         ...(skipped.changed === 0 ? {} : { hiddenChanged: skipped.changed }),
+        ...(skipped.key === undefined ? {} : { sourceKey: skipped.key }),
         // The gap starts where its following content does. A gap has no line numbers of its own.
         oldStart: next?.oldLine ?? 0,
         newStart: next?.newLine ?? 0,

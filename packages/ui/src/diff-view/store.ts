@@ -3,8 +3,8 @@ import type { FileContent, FileDiff, UiFileProgress } from '@sherpa/protocol';
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { changedLinesOf, readStateOf } from '../progress/read-state.js';
-import type { ExpandAmount } from './expand.js';
-import { EXPAND_STEP } from './expand.js';
+import type { ExpandDirection, FileExpansion, GapKey } from './expand.js';
+import { expandAllGaps, expandGap } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 
 /**
@@ -34,7 +34,7 @@ export interface DiffViewSnapshot {
     readonly models: ReadonlyMap<string, DiffFileModel>;
     /** File content for "Expand context". null means the file has none. */
     readonly content: ReadonlyMap<string, FileContent | null>;
-    readonly expansion: ReadonlyMap<string, ExpandAmount>;
+    readonly expansion: ReadonlyMap<string, FileExpansion>;
     /** Explicit progress records by fileId. An absent record means the default state. */
     readonly progress: ReadonlyMap<string, UiFileProgress>;
     /** Effective read-state for every diff file (SPEC §2.12). */
@@ -63,8 +63,10 @@ export interface DiffViewStore {
     readonly setAvailableWidth: (width: number) => void;
     readonly setModel: (fileId: string, model: DiffFileModel) => void;
     readonly setContent: (fileId: string, content: FileContent | null) => void;
-    /** Next context expansion step: +20 lines or everything at once. */
-    readonly expand: (fileId: string, amount?: ExpandAmount) => void;
+    /** Expand one gap control in a given direction. */
+    readonly expandGap: (fileId: string, gapKey: GapKey, direction: ExpandDirection, amount?: number) => void;
+    /** Fully expand all original file gaps and those visible after transform. */
+    readonly expandFile: (fileId: string, visibleGapKeys?: readonly GapKey[]) => void;
     /** Full server progress: overrides everything the store calculated itself. */
     readonly setProgress: (files: readonly UiFileProgress[]) => void;
     /** Optimistic mark: the record appears immediately, the view calls the endpoint. */
@@ -281,10 +283,19 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             update({ content: new Map(snapshot.content).set(fileId, content) });
         },
 
-        expand: (fileId, amount) => {
-            const current = snapshot.expansion.get(fileId) ?? 0;
-            const next =
-                amount ?? (current === 'all' ? 'all' : current + EXPAND_STEP);
+        expandGap: (fileId, gapKey, direction, amount) => {
+            const current = snapshot.expansion.get(fileId) ?? new Map();
+            const next = expandGap(current, gapKey, direction, amount);
+            update({ expansion: new Map(snapshot.expansion).set(fileId, next) });
+        },
+
+        expandFile: (fileId, visibleGapKeys = []) => {
+            const model = snapshot.models.get(fileId);
+            if (model === undefined) {
+                return;
+            }
+            const current = snapshot.expansion.get(fileId) ?? new Map();
+            const next = expandAllGaps(model, current, visibleGapKeys);
             update({ expansion: new Map(snapshot.expansion).set(fileId, next) });
         },
 

@@ -1,10 +1,13 @@
 import type { FileContent } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
-import { Fragment, memo, useMemo } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
+import { Icon } from '../icons/icon.tsx';
 import { formatCount, plural } from '../text.js';
-import { hiddenLinesOf } from './expand.js';
+import type { ContextExpandRequest, GapExpandResult } from './context-expansion.js';
+import type { ExpandDirection } from './expand.js';
+import { EXPAND_STEP, gapKeyOf, hiddenLinesOf } from './expand.js';
 import type { LineSegment } from './line-segments.js';
 import { hasTabs, lineSegments } from './line-segments.js';
 import type { LineKey, LineSelection } from './selection.js';
@@ -46,7 +49,14 @@ export interface DiffRowsProps {
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
+    readonly onExpandContext?: ((request: ContextExpandRequest) => Promise<GapExpandResult>) | undefined;
+    readonly onContextExpanded?: ((loaded: number, hidden: number) => void) | undefined;
+    readonly initialGapError?: boolean;
+    readonly contextAvailable?: boolean;
 }
+
+const NOOP_EXPAND = (): Promise<GapExpandResult> => Promise.resolve({ feedback: null, loaded: 0, hidden: 0 });
+const NOOP_ANNOUNCE = (): void => undefined;
 
 export function DiffRows({
     model,
@@ -57,12 +67,19 @@ export function DiffRows({
     onCommentLine,
     onLineFocus,
     onLineBlur,
+    onExpandContext = NOOP_EXPAND,
+    onContextExpanded = NOOP_ANNOUNCE,
+    initialGapError = false,
+    contextAvailable = true,
 }: DiffRowsProps) {
     // A one-sided file in split mode would leave half the card empty (README §1).
     const oneSided = model.onlyAdditions || model.onlyDeletions;
     const effective: DiffMode = mode === 'split' && !oneSided ? 'split' : 'unified';
     const rows = useMemo(() => buildRows(model, effective), [model, effective]);
     const selected = useMemo(() => selectedLines(model, selection), [model, selection]);
+    const selectionStart = selected.values().next().value ?? null;
+    const firstGap = rows.find((row) => row.kind === 'gap');
+    const firstGapKey = firstGap?.kind === 'gap' ? gapKeyOf(firstGap.gap) : null;
 
     return (
         <div
@@ -76,7 +93,18 @@ export function DiffRows({
         >
             {rows.map((row, index) => {
                 if (row.kind === 'gap') {
-                    return <GapRow key={`gap-${String(index)}`} gap={row.gap} content={content} mode={effective} />;
+                    return (
+                        <GapRow
+                            key={gapKeyOf(row.gap)}
+                            gap={row.gap}
+                            content={content}
+                            mode={effective}
+                            onExpand={onExpandContext}
+                            onExpanded={onContextExpanded}
+                            initialError={initialGapError && gapKeyOf(row.gap) === firstGapKey}
+                            contextAvailable={contextAvailable}
+                        />
+                    );
                 }
                 if (row.kind === 'line') {
                     const positions = positionsOf(row.cell);
@@ -85,6 +113,7 @@ export function DiffRows({
                             <UnifiedRow
                                 cell={row.cell}
                                 selected={isSelected(selected, row.cell)}
+                                selectionStart={row.cell.key === selectionStart}
                                 hunk={row.hunk}
                                 onCommentLine={onCommentLine}
                                 onLineFocus={onLineFocus}
@@ -109,6 +138,7 @@ export function DiffRows({
                             right={row.right}
                             leftSelected={isSelected(selected, row.left)}
                             rightSelected={isSelected(selected, row.right)}
+                            selectionStart={selectionStart}
                             hunk={row.hunk}
                             onCommentLine={onCommentLine}
                             onLineFocus={onLineFocus}
@@ -204,29 +234,212 @@ function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
 function gapLabel(gap: DiffGap, content: FileContent | null): string {
     const changed = gap.hiddenChanged ?? 0;
     const hidden = hiddenLinesOf(gap, content);
-    if (hidden === null) {
-        return '↕ unchanged to the end of the file';
-    }
-    const unchanged = `↕ ${formatCount(hidden)} ${plural(hidden, 'unchanged line', 'unchanged lines', 'unchanged lines')}`;
+    const unchanged =
+        hidden === null
+            ? 'unchanged to the end of the file'
+            : `${formatCount(hidden)} ${plural(hidden, 'unchanged line', 'unchanged lines', 'unchanged lines')}`;
     if (changed === 0) {
         return unchanged;
     }
     // Clip to the stop anchors. Changed lines outside the slice are explained in other stops.
     const elsewhere = `${formatCount(changed)} ${plural(changed, 'changed line', 'changed lines', 'changed lines')} — in other stops`;
-    return hidden === 0 ? `↕ ${elsewhere}` : `${unchanged} and ${elsewhere}`;
+    return hidden === 0 ? elsewhere : `${unchanged} and ${elsewhere}`;
 }
 
-function GapRow({ gap, content, mode }: { gap: DiffGap; content: FileContent | null; mode: DiffMode }) {
+function GapRow({
+    gap,
+    content,
+    mode,
+    onExpand,
+    onExpanded,
+    initialError,
+    contextAvailable,
+}: {
+    gap: DiffGap;
+    content: FileContent | null;
+    mode: DiffMode;
+    onExpand: (request: ContextExpandRequest) => Promise<GapExpandResult>;
+    onExpanded: (loaded: number, hidden: number) => void;
+    initialError: boolean;
+    contextAvailable: boolean;
+}) {
+    const hidden = hiddenLinesOf(gap, content);
+    const directions = contextAvailable ? gapDirections(gap, hidden) : [];
+    const [selected, setSelected] = useState<ExpandDirection>(directions[0] ?? 'all');
+    const [hovered, setHovered] = useState<ExpandDirection | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [pendingState, setPendingState] = useState(false);
+    const [failed, setFailed] = useState(initialError);
+    const targetIdPrefix = useId();
+    const pending = useRef(false);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const active = directions.includes(selected) ? selected : (directions[0] ?? 'all');
+    const key = gapKeyOf(gap);
+    const targetId = (direction: ExpandDirection): string => `${targetIdPrefix}-${direction}`;
+
+    const run = (direction: ExpandDirection): void => {
+        if (pending.current || directions.length === 0) {
+            return;
+        }
+        pending.current = true;
+        setPendingState(true);
+        setSelected(direction);
+        setFailed(false);
+        timer.current = setTimeout(() => {
+            setLoading(true);
+        }, 150);
+        const amount = hidden === null ? EXPAND_STEP : Math.min(EXPAND_STEP, hidden);
+        void onExpand({ kind: 'gap', gapKey: key, direction, ...(direction === 'all' ? { amount } : {}) }).then(
+            (result) => {
+                if (timer.current !== null) {
+                    clearTimeout(timer.current);
+                }
+                timer.current = null;
+                pending.current = false;
+                setPendingState(false);
+                setLoading(false);
+                if (result.feedback !== null) {
+                    setFailed(true);
+                    return;
+                }
+                onExpanded(result.loaded, result.hidden);
+            },
+            () => {
+                if (timer.current !== null) {
+                    clearTimeout(timer.current);
+                }
+                timer.current = null;
+                pending.current = false;
+                setPendingState(false);
+                setLoading(false);
+                setFailed(true);
+            },
+        );
+    };
+
+    if (failed) {
+        return (
+            <button
+                type="button"
+                className={`diff-gap diff-gap--${mode} diff-gap--error`}
+                data-gap-key={key}
+                onClick={() => {
+                    run(active);
+                }}
+            >
+                <span className="diff-gap__error-label">could not load · retry</span>
+            </button>
+        );
+    }
+
+    const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            if (directions.length > 1) {
+                const index = directions.indexOf(active);
+                const step = event.key === 'ArrowRight' ? 1 : -1;
+                setSelected(directions[(index + step + directions.length) % directions.length] ?? active);
+            }
+            return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            run(active);
+        }
+    };
+
+    const label = loading ? 'loading…' : gapCounterLabel(gap, content, hovered);
+    const target = (direction: ExpandDirection): ReactNode => {
+        if (!directions.includes(direction)) {
+            return <span className="diff-gap__empty" aria-hidden="true" />;
+        }
+        const icon = direction === 'all' ? 'updown' : direction === 'up' ? 'arrow-up' : 'arrow-down';
+        return (
+            <button
+                type="button"
+                id={targetId(direction)}
+                className={`diff-gap__target${active === direction ? ' is-active' : ''}`}
+                data-direction={direction}
+                role="radio"
+                tabIndex={-1}
+                disabled={pendingState}
+                aria-checked={active === direction}
+                aria-label={gapAriaLabel(direction, hidden)}
+                onMouseEnter={() => {
+                    setHovered(direction);
+                }}
+                onMouseLeave={() => {
+                    setHovered(null);
+                }}
+                onClick={() => {
+                    run(direction);
+                }}
+            >
+                <Icon name={icon} size={13} />
+            </button>
+        );
+    };
+
     return (
-        <div className={`diff-gap diff-gap--${mode}`} role="separator">
-            {gapLabel(gap, content)}
+        <div
+            className={`diff-gap diff-gap--${mode}${loading ? ' is-loading' : ''}`}
+            data-gap-key={key}
+            data-edge={gap.edge}
+            data-hidden={hidden ?? 'unknown'}
+            role="radiogroup"
+            aria-label="direction to expand the hidden context"
+            aria-activedescendant={directions.length === 0 ? undefined : targetId(active)}
+            tabIndex={directions.length === 0 ? undefined : 0}
+            onKeyDown={onKeyDown}
+        >
+            <span className="diff-gap__slot diff-gap__slot--up">{target(directions.includes('all') ? 'all' : 'up')}</span>
+            <span className="diff-gap__slot diff-gap__slot--down">{target('down')}</span>
+            <span className="diff-gap__counter">{label}</span>
         </div>
     );
+}
+
+function gapDirections(gap: DiffGap, hidden: number | null): readonly ExpandDirection[] {
+    if (hidden === 0) {
+        return [];
+    }
+    if (hidden !== null && hidden < EXPAND_STEP) {
+        return ['all'];
+    }
+    if (gap.edge === 'leading') {
+        return ['up'];
+    }
+    if (gap.edge === 'trailing') {
+        return ['down'];
+    }
+    return ['up', 'down'];
+}
+
+function gapCounterLabel(gap: DiffGap, content: FileContent | null, hovered: ExpandDirection | null): string {
+    const hidden = hiddenLinesOf(gap, content);
+    const base = gapLabel(gap, content);
+    if (hidden !== null && hidden < EXPAND_STEP) {
+        return `${base} — expand`;
+    }
+    if (hovered === 'up' || hovered === 'down') {
+        return `+${String(EXPAND_STEP)} lines ${hovered === 'up' ? 'up' : 'down'} · ${base}`;
+    }
+    return base;
+}
+
+function gapAriaLabel(direction: ExpandDirection, hidden: number | null): string {
+    const amount = hidden === null ? EXPAND_STEP : Math.min(EXPAND_STEP, hidden);
+    const hiddenLabel = hidden === null ? 'lines hidden to the end of the file' : `${String(hidden)} lines hidden`;
+    if (direction === 'all') {
+        return `load ${String(amount)} lines, ${hiddenLabel}`;
+    }
+    return `load ${String(amount)} lines ${direction === 'up' ? 'up' : 'down'}, ${hiddenLabel}`;
 }
 
 const UnifiedRow = memo(function UnifiedRow({
     cell,
     selected,
+    selectionStart,
     hunk,
     onCommentLine,
     onLineFocus,
@@ -234,6 +447,7 @@ const UnifiedRow = memo(function UnifiedRow({
 }: {
     cell: LineCell;
     selected: boolean;
+    selectionStart: boolean;
     hunk: number | undefined;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -255,19 +469,19 @@ const UnifiedRow = memo(function UnifiedRow({
             onBlur={onLineBlur}
         >
             <span className="diff-row__gutter">{line.oldLine ?? ''}</span>
-            <span className="diff-row__gutter">{line.newLine ?? ''}</span>
+            <span className="diff-row__gutter diff-row__gutter--comment">
+                {line.newLine ?? ''}
+                {position === null ? null : (
+                    <CommentButton
+                        side={position.side}
+                        line={position.line}
+                        selectionStart={selectionStart}
+                        onCommentLine={onCommentLine}
+                    />
+                )}
+            </span>
             <span className="diff-row__sign">{sign(line)}</span>
             <Code line={line} />
-            {position === null ? null : (
-                <button
-                    type="button"
-                    className="diff-row__comment"
-                    aria-label={`Comment on line ${String(position.line)}`}
-                    onClick={() => onCommentLine?.(position.side, position.line)}
-                >
-                    ✎
-                </button>
-            )}
         </div>
     );
 });
@@ -277,6 +491,7 @@ const SplitRow = memo(function SplitRow({
     right,
     leftSelected,
     rightSelected,
+    selectionStart,
     hunk,
     onCommentLine,
     onLineFocus,
@@ -286,6 +501,7 @@ const SplitRow = memo(function SplitRow({
     right: LineCell | null;
     leftSelected: boolean;
     rightSelected: boolean;
+    selectionStart: LineKey | null;
     hunk: number | undefined;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -297,6 +513,7 @@ const SplitRow = memo(function SplitRow({
                 cell={left}
                 side="old"
                 selected={leftSelected}
+                selectionStart={left?.key === selectionStart && left !== right}
                 onCommentLine={onCommentLine}
                 onLineFocus={onLineFocus}
                 onLineBlur={onLineBlur}
@@ -305,6 +522,7 @@ const SplitRow = memo(function SplitRow({
                 cell={right}
                 side="new"
                 selected={rightSelected}
+                selectionStart={right?.key === selectionStart}
                 onCommentLine={onCommentLine}
                 onLineFocus={onLineFocus}
                 onLineBlur={onLineBlur}
@@ -317,6 +535,7 @@ function Side({
     cell,
     side,
     selected,
+    selectionStart,
     onCommentLine,
     onLineFocus,
     onLineBlur,
@@ -324,6 +543,7 @@ function Side({
     cell: LineCell | null;
     side: 'old' | 'new';
     selected: boolean;
+    selectionStart: boolean;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineBlur: (() => void) | undefined;
@@ -344,8 +564,19 @@ function Side({
     const position = positionOf(cell, side);
     return (
         <>
-            <span className={`diff-row__gutter ${className}`} data-key={key}>
+            <span className={`diff-row__gutter diff-row__gutter--comment ${className}`} data-key={key}>
                 {(side === 'old' ? line.oldLine : line.newLine) ?? ''}
+                {position === null ? null : (
+                    <CommentButton
+                        side={position.side}
+                        line={position.line}
+                        split
+                        selectionStart={selectionStart}
+                        onFocus={() => onLineFocus?.(position.side, position.line)}
+                        onBlur={onLineBlur}
+                        onCommentLine={onCommentLine}
+                    />
+                )}
             </span>
             <span className={`diff-row__sign ${className}`} data-key={key}>
                 {sign(line)}
@@ -364,19 +595,39 @@ function Side({
                 }
                 onBlur={onLineBlur}
             />
-            {position === null ? null : (
-                <button
-                    type="button"
-                    className={`diff-row__comment diff-row__comment--${side}`}
-                    aria-label={`Comment on ${side === 'old' ? 'old' : 'new'} line ${String(position.line)}`}
-                    onFocus={() => onLineFocus?.(position.side, position.line)}
-                    onBlur={onLineBlur}
-                    onClick={() => onCommentLine?.(position.side, position.line)}
-                >
-                    ✎
-                </button>
-            )}
         </>
+    );
+}
+
+function CommentButton({
+    side,
+    line,
+    split = false,
+    selectionStart,
+    onFocus,
+    onBlur,
+    onCommentLine,
+}: {
+    side: 'old' | 'new';
+    line: number;
+    split?: boolean;
+    selectionStart: boolean;
+    onFocus?: (() => void) | undefined;
+    onBlur?: (() => void) | undefined;
+    onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
+}) {
+    const sideLabel = side === 'old' ? 'old' : 'new';
+    return (
+        <button
+            type="button"
+            className={`diff-row__comment${selectionStart ? ' is-selection-start' : ''}`}
+            aria-label={split ? `Comment on ${sideLabel} line ${String(line)}` : `Comment on line ${String(line)}`}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            onClick={() => onCommentLine?.(side, line)}
+        >
+            <Icon name="pencil" size={15} />
+        </button>
     );
 }
 
