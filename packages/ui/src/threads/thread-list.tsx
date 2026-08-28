@@ -1,11 +1,12 @@
-import type { FileAnchor, Thread } from '@sherpa/protocol';
+import type { Comment, FileAnchor, Thread } from '@sherpa/protocol';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
+import { ComposerIcon } from '../icons/composer-icons.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
-import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
+import { CommentComposer } from './comment-composer.tsx';
 import { authorName, flattenThread } from './model.js';
 import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
@@ -170,14 +171,6 @@ function ThreadBlock({
                         <button
                             type="button"
                             onClick={() => {
-                                openReply(store, thread);
-                            }}
-                        >
-                            Reply
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
                                 void copyThreadLink(thread.id);
                             }}
                         >
@@ -249,14 +242,32 @@ export function NewCommentComposer({
     composerKey,
     store,
     transport,
+    contextLabel,
+    placeholder,
+    saveLabel,
 }: {
     composerKey: string;
     store: ThreadStore;
     transport: ComposerTransport;
+    contextLabel?: string;
+    placeholder?: string;
+    saveLabel?: 'Save draft' | 'Save changes';
 }) {
     const composer = useComposerSnapshot(store, composerKey);
-    return composer === null ? null : (
-        <Composer composer={composer} store={store} transport={transport} thread={null} />
+    if (composer === null) {
+        return null;
+    }
+    const line = composer.anchor?.position?.line;
+    return (
+        <CommentComposer
+            composer={composer}
+            store={store}
+            transport={transport}
+            contextLabel={contextLabel ?? (line === undefined ? 'PR comment' : `new comment · line ${String(line)}`)}
+            placeholder={placeholder ?? (line === undefined ? 'A general remark on the PR, not tied to a line' : 'Comment on the code line')}
+            inputLabel="New comment"
+            {...(saveLabel === undefined ? {} : { saveLabel })}
+        />
     );
 }
 
@@ -270,8 +281,54 @@ function ComposerForThread({
     transport: ComposerTransport;
 }) {
     const composer = useComposerSnapshot(store, `reply:${thread.id}`);
-    return composer === null ? null : (
-        <Composer composer={composer} store={store} transport={transport} thread={thread} />
+    const draft = replyDraft(thread);
+    if (composer === null) {
+        if (draft !== null) {
+            return (
+                <button
+                    type="button"
+                    className="thread-composer-draft-preview"
+                    aria-label="Continue draft"
+                    onClick={() => {
+                        openReply(store, thread, draft);
+                    }}
+                >
+                    <span className="thread-composer-draft-preview__meta">
+                        <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
+                    </span>
+                    <span className="thread-composer-draft-preview__body">{draft.body}</span>
+                </button>
+            );
+        }
+        return (
+            <button
+                type="button"
+                className="thread-composer-entry"
+                onClick={() => {
+                    openReply(store, thread, null);
+                }}
+            >
+                <span>Reply…</span>
+                <ComposerIcon name="ic-pencil" size={13} />
+            </button>
+        );
+    }
+    const resolvedWhileTyping = !composer.resolvedAtOpen && thread.resolved;
+    return (
+        <CommentComposer
+            composer={composer}
+            store={store}
+            transport={transport}
+            contextLabel={`reply to ${authorName(thread.root)}`}
+            placeholder="Reply in the thread"
+            inputLabel="Thread reply"
+            saveLabel={composer.commentId === null ? 'Save draft' : 'Save changes'}
+            notice={
+                resolvedWhileTyping
+                    ? `resolved by ${thread.resolvedBy ?? 'another reviewer'} while you were writing · your reply will reopen it`
+                    : undefined
+            }
+        />
     );
 }
 
@@ -281,117 +338,14 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-function Composer({
-    composer,
-    store,
-    transport,
-    thread,
-}: {
-    composer: ComposerSnapshot;
-    store: ThreadStore;
-    transport: ComposerTransport;
-    thread: Thread | null;
-}) {
-    const controller = useMemo(
-        () => composerControllerFor({ store, key: composer.key, transport }),
-        [composer.key, store, transport],
-    );
-    const resolvedWhileTyping = thread !== null && !composer.resolvedAtOpen && thread.resolved;
-    const ambiguousFirstSave = composer.status === 'error' && composer.saveUncertain && composer.commentId === null;
-    const saveDisabledReason =
-        composer.status === 'discarding'
-            ? 'The draft is being deleted.'
-            : ambiguousFirstSave
-              ? 'Use the retry link in the save status.'
-              : composer.text.trim() === ''
-                ? 'Type the comment text.'
-                : null;
-    const cancelDisabledReason = composer.status === 'discarding' ? 'The draft is being deleted.' : null;
-    return (
-        <div className="thread-composer">
-            {resolvedWhileTyping ? (
-                <p className="thread-composer__notice">
-                    resolved by {thread.resolvedBy ?? 'another reviewer'} while you were typing · your reply will reopen the thread
-                </p>
-            ) : null}
-            <textarea
-                className="thread-composer__input"
-                value={composer.text}
-                autoFocus
-                disabled={composer.status === 'discarding'}
-                aria-label={thread === null ? 'New comment' : 'Thread reply'}
-                onChange={(event) => {
-                    controller.input(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                        event.preventDefault();
-                        void controller.saveNow(true);
-                    } else if (event.key === 'Escape') {
-                        event.preventDefault();
-                        controller.escape();
-                    }
-                }}
-            />
-            <div className="thread-composer__actions">
-                <button
-                    type="button"
-                    className="ghost-button"
-                    disabled={saveDisabledReason !== null}
-                    title={saveDisabledReason ?? undefined}
-                    onClick={() => void controller.saveNow(true)}
-                >
-                    Save draft
-                </button>
-                <button
-                    type="button"
-                    className="ghost-button"
-                    disabled={cancelDisabledReason !== null}
-                    title={cancelDisabledReason ?? undefined}
-                    onClick={controller.escape}
-                >
-                    Cancel
-                </button>
-            </div>
-            {composer.confirmDiscard ? (
-                <p className="thread-composer__confirm">
-                    Discard this draft?{' '}
-                    <button type="button" onClick={() => void controller.confirmDiscard()}>
-                        discard
-                    </button>{' '}
-                    <button type="button" onClick={controller.keepEditing}>
-                        continue
-                    </button>
-                </p>
-            ) : (
-                <p className={`thread-composer__status${composer.status === 'error' ? ' is-error' : ''}`}>
-                    {composer.status === 'discarding' ? (
-                        'deleting…'
-                    ) : ambiguousFirstSave ? (
-                        <>
-                            could not confirm the save · retrying may create a duplicate ·{' '}
-                            <button type="button" onClick={() => void controller.retry()}>
-                                retry anyway
-                            </button>
-                        </>
-                    ) : composer.status === 'error' ? (
-                        <>
-                            not saved ·{' '}
-                            <button type="button" onClick={() => void controller.retry()}>
-                                retry
-                            </button>
-                        </>
-                    ) : composer.slow ? (
-                        'saving…'
-                    ) : composer.commentId !== null || composer.status === 'saved' ? (
-                        'saved as draft'
-                    ) : (
-                        'will save as draft'
-                    )}
-                </p>
-            )}
-        </div>
-    );
+function replyDraft(thread: Thread): Comment | null {
+    let draft: Comment | null = null;
+    for (const row of flattenThread(thread.root)) {
+        if (row.comment.id !== thread.root.id && row.comment.draft) {
+            draft = row.comment;
+        }
+    }
+    return draft;
 }
 
 export function openPrComposer(store: ThreadStore): void {
@@ -437,7 +391,7 @@ export function openNewComposer(
     });
 }
 
-export function openReply(store: ThreadStore, thread: Thread): void {
+export function openReply(store: ThreadStore, thread: Thread, draft: Comment | null = replyDraft(thread)): void {
     const key = `reply:${thread.id}`;
     if (store.getComposer(key) !== null) {
         return;
@@ -447,9 +401,10 @@ export function openReply(store: ThreadStore, thread: Thread): void {
         threadId: thread.id,
         parentId: thread.root.id,
         anchor: null,
-        text: '',
-        commentId: null,
-        status: 'idle',
+        text: draft?.body ?? '',
+        commentId: draft?.id ?? null,
+        status: draft === null ? 'idle' : 'saved',
+        savedAt: draft === null ? null : Date.parse(draft.editedAt ?? draft.createdAt),
         saveUncertain: false,
         slow: false,
         confirmDiscard: false,

@@ -52,6 +52,7 @@ import {
     PCI_FILTER_ID,
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
+import { ComposerIconSprite } from './icons/composer-icons.tsx';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
@@ -880,6 +881,7 @@ export function App({ store, session, token }: AppProps) {
 
     return (
         <>
+            <ComposerIconSprite />
             <TopBar
                 version={UI_VERSION}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}

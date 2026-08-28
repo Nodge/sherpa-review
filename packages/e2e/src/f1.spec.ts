@@ -256,9 +256,10 @@ async function addDraft(page: Page, stopId: string, text: string): Promise<void>
         .click();
     const composer = stop(page, stopId).getByRole('textbox', { name: 'New comment' });
     await composer.fill(text);
-    await expect(stop(page, stopId).getByText('saved as a draft', { exact: true })).toBeVisible({
-        timeout: 6_000,
-    });
+    await expect(stop(page, stopId).locator('.thread-composer__status.is-saved')).toContainText(
+        /saved as a draft · \d{2}:\d{2}/,
+        { timeout: 6_000 },
+    );
 }
 
 function stop(page: Page, stopId: string): Locator {

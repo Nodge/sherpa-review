@@ -1,10 +1,11 @@
 import { fixtureData } from '@sherpa/fixtures';
-import type { Thread } from '@sherpa/protocol';
+import type { Comment, Thread } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { createThreadStore } from './store.js';
-import { ThreadList } from './thread-list.tsx';
+import type { ThreadStore } from './store.js';
+import { openReply, ThreadList } from './thread-list.tsx';
 
 /**
  * Comment bodies render as markdown (M2F-T5). Bots write headings, lists,
@@ -21,11 +22,25 @@ const TRANSPORT = {
     delete: () => Promise.reject(new Error('this test does not save')),
 };
 
-function render(threads: readonly Thread[]): string {
+const DRAFT: Comment = {
+    id: 'draft-reply',
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    body: 'I will check the race again before Ship.',
+    draft: true,
+    createdAt: '2026-08-24T10:00:00.000Z',
+    editedAt: null,
+    replies: [],
+};
+
+function render(threads: readonly Thread[], store = createThreadStore(threads, FILE_IDS)): string {
+    return renderWithStore(threads, store);
+}
+
+function renderWithStore(threads: readonly Thread[], store: ThreadStore): string {
     return renderToStaticMarkup(
         <ThreadList
             threads={threads}
-            store={createThreadStore(threads, FILE_IDS)}
+            store={store}
             actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
             now={NOW}
         />,
@@ -68,5 +83,30 @@ describe('comment body', () => {
 
         expect(body).toContain('<p class="md-p">Why is the window a class');
         expect(body).toContain('<code class="md-code">Clock</code>');
+    });
+});
+
+describe('reply draft', () => {
+    it('shows a field with text and a chip when closed', () => {
+        const source = threadOf('kai');
+        const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
+        const html = render([thread]);
+
+        expect(html).toContain('class="thread-composer-draft-preview"');
+        expect(html).toContain('draft · publishes on ship');
+        expect(html).toContain(DRAFT.body);
+        expect(html).not.toContain('Continue draft…');
+    });
+
+    it('offers to save changes after opening', () => {
+        const source = threadOf('kai');
+        const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
+        const store = createThreadStore([thread], FILE_IDS);
+        openReply(store, thread, DRAFT);
+
+        const html = renderWithStore([thread], store);
+
+        expect(html).toContain('Save changes');
+        expect(html).not.toContain('thread-composer-draft-preview');
     });
 });

@@ -133,6 +133,15 @@
     min-height: 100%;
 }
 
+.gallery-composer {
+    max-width: 720px;
+    overflow: hidden;
+    padding-top: var(--space-control);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-diff-card);
+}
+
 /* --- Token display --- */
 
 .showcase {

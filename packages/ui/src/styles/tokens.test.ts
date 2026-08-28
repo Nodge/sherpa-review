@@ -101,6 +101,9 @@ const EXPECTED: Record<string, string> = {
     '--attention-border': '#4a4230',
     '--attention-border-alt': '#3d3524',
     '--attention-border-strong': '#6b5b39',
+    // SPEC additions §1d: closed field with a draft `#141210`, save status `#5e8a6d`.
+    '--draft-field-surface': '#141210',
+    '--draft-saved': '#5e8a6d',
     // README §10 (full diff tree): "an optional `pci` tag (9px mono `#c9a464`,
     // border `#3d3a2c`)". The token table does not list the tag border.
     '--tag-pci-border': '#3d3a2c',

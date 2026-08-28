@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { updateFragment } from '../../fragment.js';
+import { ComposerIconSprite } from '../../icons/composer-icons.tsx';
 import './gallery.css';
 import type { GalleryState } from './states.tsx';
 import { GALLERY_STATES } from './states.tsx';
@@ -21,6 +22,7 @@ export function Gallery({ initialId }: { initialId: string | null }) {
 
     return (
         <div className="gallery">
+            <ComposerIconSprite />
             <nav className="gallery__sidebar" aria-label="States">
                 <div className="gallery__brand">State gallery</div>
                 {groupBy(GALLERY_STATES).map(([group, states]) => (

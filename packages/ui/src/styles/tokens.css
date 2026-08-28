@@ -88,6 +88,9 @@
     --attention-border: #4a4230;
     --attention-border-alt: #3d3524;
     --attention-border-strong: #6b5b39;
+    /* SPEC additions §1d: closed field with a draft and confirmed autosave. */
+    --draft-field-surface: #141210;
+    --draft-saved: #5e8a6d;
     /* README §10: the tree row `pci` tag has a distinct border shade. */
     --tag-pci-border: #3d3a2c;
 

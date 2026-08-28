@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
 import { countDraftComments } from '../progress/summary.js';
+import { COMPOSER_LAYOUT_KEY } from '../threads/composer-markdown.js';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import type { RouteProgress } from './review-action-bar.tsx';
@@ -76,6 +77,7 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
+    localStorage.removeItem(COMPOSER_LAYOUT_KEY);
 });
 
 /** Live bar: the PR composer is a toggle, which static markup cannot verify. */
@@ -84,6 +86,7 @@ function mountBar(): {
     readonly commentButton: HTMLButtonElement;
     readonly threadStore: ThreadStore;
 } {
+    localStorage.setItem(COMPOSER_LAYOUT_KEY, 'markdown');
     const host = document.createElement('div');
     document.body.append(host);
     const threadStore = createThreadStore(DRAFT_THREADS, FILE_IDS);

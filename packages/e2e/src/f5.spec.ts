@@ -86,7 +86,10 @@ test('F5: full review of fixture-medium without an agent', async ({ page, launch
         await card.getByRole('button', { name: /Comment on line \d+/ }).first().click();
         const composer = page.getByRole('textbox', { name: 'New comment' });
         await composer.fill(COMMENT);
-        await expect(page.getByText('saved as a draft', { exact: true })).toBeVisible({ timeout: 6_000 });
+        await expect(page.locator('.thread-composer__status.is-saved')).toContainText(
+            /saved as a draft · \d{2}:\d{2}/,
+            { timeout: 6_000 },
+        );
         await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
         await expect(page.getByText('draft · goes out on ship', { exact: true })).toBeVisible();
     });

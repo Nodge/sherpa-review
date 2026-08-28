@@ -166,35 +166,308 @@
     font-family: var(--font-mono);
 }
 
-.thread-composer {
-    padding: 0 12px 10px 37px;
-}
-
-.thread-composer__input {
-    display: block;
-    width: 100%;
-    min-height: 70px;
-    resize: vertical;
-    padding: 8px 10px;
+.thread-composer-entry {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    width: calc(100% - 49px);
+    height: 32px;
+    margin: 0 12px 10px 37px;
+    padding: 0 10px;
     border: 1px solid var(--border-control);
     border-radius: var(--radius-input);
-    background: var(--surface-input);
-    font-family: var(--font-sans);
+    background: var(--surface-diff-gap);
+    font: inherit;
     font-size: var(--font-size-ui);
-    line-height: 1.5;
-    color: var(--text-primary-soft);
+    color: var(--text-dim);
+    cursor: text;
 }
 
-.thread-composer__input:focus-visible {
+.thread-composer-entry:hover,
+.thread-composer-entry:focus-visible {
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+}
+
+.thread-composer-entry:focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
+.thread-composer-entry > :first-child {
+    flex: 1;
+    text-align: left;
+}
+
+.thread-composer-entry > svg {
+    color: var(--text-muted-dim);
+}
+
+.thread-composer-draft-preview {
+    display: block;
+    width: calc(100% - 49px);
+    margin: 0 12px 10px 37px;
+    padding: 8px 10px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-input);
+    background: var(--draft-field-surface);
+    font: inherit;
+    text-align: left;
+    color: var(--attention-text-soft);
+    cursor: text;
+}
+
+.thread-composer-draft-preview:hover,
+.thread-composer-draft-preview:focus-visible {
+    border-color: var(--attention-border-strong);
+}
+
+.thread-composer-draft-preview:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.thread-composer-draft-preview__meta {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.thread-composer-draft-preview__body {
+    display: block;
+    font-size: var(--font-size-ui);
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.thread-composer {
+    padding: 0 12px 10px 37px;
+}
+
+.thread-composer__context {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    min-height: 25px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-dim);
+}
+
+.thread-composer__editor {
+    overflow: hidden;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-popover);
+    background: var(--surface-diff-gap);
+}
+
+.thread-composer__editor:focus-within {
+    box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.thread-composer__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-card-header);
+}
+
+.thread-composer__tool {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-badge);
+    background: transparent;
+    color: var(--text-muted-dim);
+    cursor: pointer;
+}
+
+.thread-composer__tool:hover {
+    background: var(--border-standard);
+    color: var(--text-on-selected);
+}
+
+.thread-composer__tool:active {
+    background: var(--surface-segment-active);
+}
+
+.thread-composer__tool:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
+}
+
+.thread-composer__toolbar-spacer,
+.thread-composer__actions-spacer {
+    flex: 1;
+}
+
+.thread-composer__layout {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+    padding: 2px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    background: var(--surface-diff-card);
+}
+
+.thread-composer__layout button {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: var(--radius-key);
+    background: transparent;
+    font: inherit;
+    font-size: var(--font-size-meta);
+    color: var(--text-muted-dim);
+    cursor: pointer;
+}
+
+.thread-composer__layout button:last-child {
+    font-family: var(--font-mono);
+}
+
+.thread-composer__layout button.is-active {
+    background: var(--surface-segment-active);
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.thread-composer__markdown,
+.thread-composer__prosemirror {
+    display: block;
+    width: 100%;
+    min-height: 88px;
+    padding: 9px 10px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary-soft);
+}
+
+.thread-composer__markdown {
+    resize: vertical;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-code);
+    line-height: 1.65;
+}
+
+.thread-composer__visual-wrap {
+    position: relative;
+    min-height: 88px;
+}
+
+.thread-composer__visual {
+    min-height: 88px;
+}
+
+.thread-composer__visual-fallback {
+    position: absolute;
+    inset: 0;
+    padding: 9px 10px;
+    font-size: var(--font-size-ui);
+    line-height: var(--line-height-body);
+    color: var(--text-primary-soft);
+    white-space: pre-wrap;
+}
+
+.thread-composer__prosemirror {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-ui);
+    line-height: var(--line-height-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.thread-composer__prosemirror p {
+    margin: 0 0 8px;
+}
+
+.thread-composer__prosemirror p:last-child {
+    margin-bottom: 0;
+}
+
+.thread-composer__prosemirror ul,
+.thread-composer__prosemirror ol {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.thread-composer__prosemirror code {
+    padding: 1px 4px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-key);
+    background: var(--border-hairline-soft);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    color: var(--code-text);
+}
+
+.thread-composer__prosemirror pre {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border-hairline-strong);
+    border-radius: var(--radius-button);
+    background: var(--surface-diff-empty);
+    font: var(--font-size-control) / 1.55 var(--font-mono);
+    color: var(--code-text);
+    white-space: pre-wrap;
+}
+
+.thread-composer__prosemirror pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+}
+
+.thread-composer__placeholder {
+    position: absolute;
+    top: 9px;
+    left: 10px;
+    z-index: 1;
+    font-size: var(--font-size-ui);
+    line-height: var(--line-height-body);
+    color: var(--text-dim-strong);
+    pointer-events: none;
+}
+
 .thread-composer__actions {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: var(--space-inner);
     margin-top: var(--space-inner);
+}
+
+.thread-composer__actions .ghost-button {
+    height: 29px;
+    padding-inline: 11px;
+    border-color: var(--border-strong);
+    border-radius: var(--radius-input);
+    font-size: var(--font-size-ui);
+    white-space: nowrap;
+}
+
+.thread-composer__actions .thread-composer__save {
+    border-color: var(--border-raised-dialog);
+    background: var(--border-standard);
+    color: var(--text-primary-soft);
+    font-weight: 500;
+}
+
+.thread-composer__actions .thread-composer__save:hover {
+    background: var(--surface-segment-active);
 }
 
 .thread-composer__actions .ghost-button:disabled {
@@ -205,14 +478,24 @@
 .thread-composer__status,
 .thread-composer__confirm,
 .thread-composer__notice {
-    margin: 4px 0 0;
     font-family: var(--font-mono);
-    font-size: var(--font-size-gutter);
+    font-size: var(--font-size-control);
     color: var(--text-dim);
 }
 
+.thread-composer__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    text-align: right;
+}
+
+.thread-composer__status.is-saved > svg {
+    color: var(--draft-saved);
+}
+
 .thread-composer__status.is-error {
-    color: var(--error-text);
+    color: var(--error);
 }
 
 .thread-composer__notice {

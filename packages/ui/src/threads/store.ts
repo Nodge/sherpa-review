@@ -12,6 +12,8 @@ export interface ComposerSnapshot {
     readonly text: string;
     readonly commentId: string | null;
     readonly status: ComposerStatus;
+    /** Time of the last confirmed save, for the status under the field. */
+    readonly savedAt?: number | null;
     /** The first save may have reached the host, but the UI received no commentId. */
     readonly saveUncertain: boolean;
     readonly slow: boolean;

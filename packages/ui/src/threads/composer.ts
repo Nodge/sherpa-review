@@ -128,8 +128,8 @@ export function createComposerController(options: ComposerControllerOptions): Co
                         options.store.updateDraft(current.commentId, body);
                     }
                 }
-                if (!discardRequested) {
-                    options.store.updateComposer(options.key, { status: 'saved', slow: false });
+                if (!discardRequested && state()?.text === body) {
+                    options.store.updateComposer(options.key, { status: 'saved', slow: false, savedAt: Date.now() });
                 }
                 return true;
             } catch {
@@ -163,7 +163,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         if (ok && queued !== null && queued !== body) {
             return perform(shouldClose, allowUncertain);
         }
-        if (ok && shouldClose) {
+        if (ok && shouldClose && state()?.text === body) {
             options.store.closeComposer(options.key);
             closed = true;
             forget();

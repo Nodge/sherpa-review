@@ -118,6 +118,7 @@ function WorkspaceState({
 }
 
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
+const DRAFT_SAVED_AT = Date.parse('2026-08-24T10:00:00.000Z');
 
 const MEDIUM_VIEWED = [
     'services/orders/src/api/handlers.ts',
@@ -190,6 +191,7 @@ function prepareDraftComposer(store: ThreadStore, threads: readonly Thread[]): v
         text: draft.body,
         commentId: draft.id,
         status: 'saved',
+        savedAt: DRAFT_SAVED_AT,
         saveUncertain: false,
         slow: false,
         confirmDiscard: false,

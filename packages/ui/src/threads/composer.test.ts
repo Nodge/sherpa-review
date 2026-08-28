@@ -170,6 +170,46 @@ describe('composer state machine', () => {
         expect(update).toHaveBeenCalledWith('draft-1', 'second');
     });
 
+    it('does not mark new text as saved when an earlier save responds', async () => {
+        vi.useFakeTimers();
+        const { store, controller, save, update } = setup();
+        const pendingSave = deferred<Comment>();
+        save.mockImplementationOnce(() => pendingSave.promise);
+        controller.input('first');
+        const saving = controller.saveNow();
+
+        controller.input('second');
+        pendingSave.resolve(CREATED);
+        await saving;
+
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'second', status: 'idle' });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(update).toHaveBeenCalledWith('draft-1', 'second');
+        expect(store.getComposer('new:f1:new:10')?.status).toBe('saved');
+    });
+
+    it('does not mark a cleared field as saved when an earlier save responds', async () => {
+        vi.useFakeTimers();
+        const { store, controller, save, update } = setup();
+        const pendingSave = deferred<Comment>();
+        save.mockImplementationOnce(() => pendingSave.promise);
+        controller.input('first');
+        const saving = controller.saveNow();
+
+        controller.input('');
+        pendingSave.resolve(CREATED);
+        await saving;
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({
+            text: '',
+            commentId: 'draft-1',
+            status: 'idle',
+        });
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+        expect(update).not.toHaveBeenCalled();
+    });
+
     it('keeps one controller across remounts while the composer is open', () => {
         const { store, save, update, remove } = setup();
         const transport = { save, update, delete: remove };
