@@ -112,12 +112,13 @@ describe('route generation command', () => {
         return { command, calls };
     };
 
-    it('calls it regeneration in the failed phase and states the consequence', () => {
-        const { command } = run('failed');
-
-        expect(command.label).toBe('Regenerate the route');
-        expect(command.consequence).toBe('resets stop marks');
-        expect(command.when?.()).toBe(true);
+    it('is called regeneration in ready and failed and states when its consequence takes effect', () => {
+        for (const phase of ['ready', 'failed'] as const) {
+            const { command } = run(phase);
+            expect(command.label).toBe('Regenerate the route');
+            expect(command.consequence).toBe('clears the stop marks once the new route arrives');
+            expect(command.when?.()).toBe(true);
+        }
     });
 
     it('offers to build a route when there has never been one', () => {
@@ -127,20 +128,21 @@ describe('route generation command', () => {
         expect(command.when?.()).toBe(true);
     });
 
-    it('hides the command during generation or when the route is ready because the server would reject it', () => {
+    it('hides the command while generation runs because the server would reject it', () => {
         expect(run('reading').command.when?.()).toBe(false);
         expect(run('filling').command.when?.()).toBe(false);
-        expect(run('ready').command.when?.()).toBe(false);
     });
 
     it('hides the command while the request is in flight, before the phase changes', () => {
         expect(run('failed', false, true).command.when?.()).toBe(false);
         expect(run('none', false, true).command.when?.()).toBe(false);
+        expect(run('ready', false, true).command.when?.()).toBe(false);
     });
 
     it('never shows the command for a small PR because it does not bypass the threshold', () => {
         expect(run('none', true).command.when?.()).toBe(false);
         expect(run('failed', true).command.when?.()).toBe(false);
+        expect(run('ready', true).command.when?.()).toBe(false);
     });
 
     it('appears in the palette and calls generation', () => {

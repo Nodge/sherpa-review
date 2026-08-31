@@ -105,6 +105,39 @@ describe('route orchestration', () => {
         return section;
     }
 
+    /** Bring the current generation to ready through the normal worker loop. */
+    async function completeRoute(server: SherpaServer): Promise<void> {
+        completeTask(server, routeTasks(server, 'route.skeleton').at(-1) ?? 0, mediumRawResults().skeleton);
+        for (const [position, taskId] of routeTasks(server, 'route.section').entries()) {
+            completeTask(server, taskId, sectionFor(position + 1));
+        }
+        expect((await readRoute(server)).route.phase).toBe('ready');
+    }
+
+    async function readProgress(server: SherpaServer) {
+        return uiReviewProgressResponseSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
+        );
+    }
+
+    async function markStop(server: SherpaServer): Promise<void> {
+        const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId;
+        if (snapshotId === undefined) {
+            throw new Error('a stop mark requires a route snapshot');
+        }
+        await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopViewed,
+            {
+                snapshotId,
+                stopId: 's01',
+                viewed: true,
+                ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }],
+            },
+            server.token,
+        );
+    }
+
     it('warmup enqueues a skeleton when an agent is connected, the PR exceeds the threshold and there is no route', async () => {
         const server = await startWithWorker();
 
@@ -325,10 +358,13 @@ describe('route orchestration', () => {
             expect((await readRoute(server)).route.phase).toBe('reading');
         });
 
-        it('returns already_running from filling, without duplicates', async () => {
+        it('returns already_running from phases reading/filling without duplicates', async () => {
             const server = await startWithWorker();
-            completeTask(server, routeTasks(server, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
 
+            expect(await generate(server)).toBe('already_running');
+            expect(routeTasks(server, 'route.skeleton')).toHaveLength(1);
+
+            completeTask(server, routeTasks(server, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
             expect(await generate(server)).toBe('already_running');
             expect(routeTasks(server, 'route.skeleton')).toHaveLength(1);
         });
@@ -348,6 +384,132 @@ describe('route orchestration', () => {
             expect(route.phase).toBe('reading');
             expect(route.failure).toBeNull();
             expect(routeTasks(server, 'route.skeleton')).toHaveLength(2);
+        });
+
+        it('starts a new skeleton from ready, leaving the old snapshot and progress readable', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+
+            expect(await generate(server)).toBe('started');
+
+            const rebuilding = (await readRoute(server)).route;
+            expect(rebuilding.phase).toBe('reading');
+            expect(rebuilding.snapshot).toEqual(before);
+            expect(rebuilding.failure).toBeNull();
+            expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
+            expect(routeTasks(server, 'route.skeleton')).toHaveLength(2);
+        });
+
+        it('cancelling a rebuild returns to ready with the old snapshot and progress', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+
+            expect(await generate(server)).toBe('started');
+            server.queue.cancel(routeTasks(server, 'route.skeleton').at(-1) ?? 0);
+
+            const restored = (await readRoute(server)).route;
+            expect(restored.phase).toBe('ready');
+            expect(restored.snapshot).toEqual(before);
+            expect(restored.failure).toBeNull();
+            expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
+        });
+
+        it('a rebuild skeleton failure preserves the old snapshot and progress', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+
+            expect(await generate(server)).toBe('started');
+            const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
+            expect(server.queue.next(WORKER)?.task.id).toBe(skeletonId);
+            server.queue.fail(WORKER, skeletonId, 'could not rebuild');
+
+            const failed = (await readRoute(server)).route;
+            expect(failed.phase).toBe('failed');
+            expect(failed.snapshot).toEqual(before);
+            expect(failed.failure?.message).toContain('could not rebuild');
+            expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
+        });
+
+        it('clears previous stop progress only when the new skeleton is accepted atomically', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+
+            expect(await generate(server)).toBe('started');
+            expect((await readProgress(server)).stops).toHaveLength(1);
+
+            const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
+            expect(completeTask(server, skeletonId, mediumRawResults().skeleton).kind).toBe('accepted');
+
+            const accepted = (await readRoute(server)).route;
+            expect(accepted.phase).toBe('filling');
+            expect(accepted.snapshot?.snapshotId).not.toBe(before?.snapshotId);
+            expect((await readProgress(server)).stops).toEqual([]);
+        });
+
+        it('a late mark for the old snapshot does not reach a new stop with the same id', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            const oldSnapshotId = (await readRoute(server)).route.snapshot?.snapshotId;
+            if (oldSnapshotId === undefined) {
+                throw new Error('a ready route needs a snapshotId');
+            }
+
+            expect(await generate(server)).toBe('started');
+            const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
+            expect(completeTask(server, skeletonId, mediumRawResults().skeleton).kind).toBe('accepted');
+
+            const activeSnapshotId = (await readRoute(server)).route.snapshot?.snapshotId;
+            expect(activeSnapshotId).not.toBe(oldSnapshotId);
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewStopViewed,
+                {
+                    snapshotId: oldSnapshotId,
+                    stopId: 's01',
+                    viewed: true,
+                    ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }],
+                },
+                server.token,
+            );
+
+            expect(await readProgress(server)).toMatchObject({ files: [], stops: [] });
+        });
+
+        it('rolls back snapshot replacement too if clearing progress fails', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+            expect(await generate(server)).toBe('started');
+
+            const db = new DatabaseSync(databasePathFor(sherpaDir, MEDIUM_PR));
+            db.exec(`
+                CREATE TRIGGER reject_stop_progress_clear
+                BEFORE DELETE ON stop_progress
+                BEGIN
+                    SELECT RAISE(ABORT, 'test rollback');
+                END;
+            `);
+            try {
+                const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
+                expect(completeTask(server, skeletonId, mediumRawResults().skeleton).kind).toBe('accepted');
+
+                const rebuilding = (await readRoute(server)).route;
+                expect(rebuilding.phase).toBe('reading');
+                expect(rebuilding.snapshot).toEqual(before);
+                expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
+            } finally {
+                db.exec('DROP TRIGGER reject_stop_progress_clear;');
+                db.close();
+            }
         });
 
         it('a new generation clears stop progress but preserves file marks', async () => {
@@ -509,6 +671,22 @@ describe('route orchestration', () => {
 
             expect(routeTasks(second, 'route.skeleton')).toHaveLength(1);
             expect((await readRoute(second)).route.phase).toBe('reading');
+        });
+
+        it('a rebuild survives a restart with the old snapshot and its own task', async () => {
+            const first = await startWithWorker();
+            await completeRoute(first);
+            const before = (await readRoute(first)).route.snapshot;
+            expect(await first.route.generate()).toBe('started');
+            const skeletons = routeTasks(first, 'route.skeleton');
+            await first.close();
+
+            const second = await startWithWorker();
+            const rebuilding = (await readRoute(second)).route;
+
+            expect(rebuilding.phase).toBe('reading');
+            expect(rebuilding.snapshot).toEqual(before);
+            expect(routeTasks(second, 'route.skeleton')).toEqual(skeletons);
         });
     });
 

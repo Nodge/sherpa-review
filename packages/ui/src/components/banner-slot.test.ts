@@ -29,11 +29,12 @@ describe('banner slot', () => {
         expect(selection.hidden).toEqual([]);
     });
 
-    it('follows all SPEC §2.21 priorities: failure → action failure → underexplained → filling → audit', () => {
+    it('covers the full SPEC §2.21 priority order: failure → action failure → rebuild → underexplained → filling → audit', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),
             source('route-filling', BANNER_PRIORITY.routeFilling),
             source('route-under-explained', BANNER_PRIORITY.routeUnderExplained),
+            source('route-regenerating', BANNER_PRIORITY.routeRegenerating),
             source('route-action-error', BANNER_PRIORITY.routeActionError),
             source('generation-failed', BANNER_PRIORITY.generationFailed),
         ]);
@@ -41,6 +42,7 @@ describe('banner slot', () => {
         expect([selection.primary?.id, ...selection.hidden.map((item) => item.id)]).toEqual([
             'generation-failed',
             'route-action-error',
+            'route-regenerating',
             'route-under-explained',
             'route-filling',
             'audit-scope',

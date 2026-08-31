@@ -63,8 +63,11 @@ import {
     generationIsLong,
     openRouteTasks,
     routeActionErrorInPlace,
+    routeGenerationAvailable,
     routeViewKind,
 } from './route/generation.js';
+import type { ReportedRouteSummary, RouteSummary } from './route/route-summary.js';
+import { routeFactsForSnapshot } from './route/route-summary.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import type { Store } from './store.js';
@@ -77,11 +80,11 @@ import {
     GenerationFailedBanner,
     RouteActionErrorBanner,
     RouteFillingBanner,
+    RouteRegeneratingBanner,
 } from './views/route/generation-card.tsx';
 import { RegenerateBanner } from './views/route/other-card.tsx';
 import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views/route/route-commands.tsx';
 import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
-import type { RouteSummary } from './views/route/route-view.tsx';
 import { RouteView } from './views/route/route-view.tsx';
 import { ViewFrame } from './views/view-frames.tsx';
 
@@ -90,16 +93,6 @@ export interface AppProps {
     readonly store: Store;
     readonly session: SessionStore;
     readonly token: string;
-}
-
-/**
- * What the application knows about the route beyond its snapshot. `uncoveredLines: null` means the route view
- * has not been opened in this session, so nothing has calculated uncovered lines yet.
- */
-interface RouteFacts {
-    readonly stopIds: readonly string[];
-    readonly otherStopId: string | null;
-    readonly uncoveredLines: number | null;
 }
 
 /** A generation or cancellation endpoint failed. The phase is the one when the reviewer clicked. */
@@ -144,6 +137,7 @@ export function App({ store, session, token }: AppProps) {
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
     const currentDiff = currentReview.diff;
+    const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const diffStore = useMemo(
         () =>
@@ -180,14 +174,19 @@ export function App({ store, session, token }: AppProps) {
                           read: (stopId) => stopProgress.getSnapshot().get(stopId) ?? null,
                           apply: stopProgress.setViewed,
                           restore: stopProgress.restore,
-                          send: async (stopId, viewed, ranges) =>
-                              (await setStopViewed(token, stopId, viewed, ranges)).progressRevision,
+                          send: async (stopId, viewed, ranges) => {
+                              if (routeSnapshotId === null) {
+                                  throw new Error('Cannot mark a stop without a route snapshot.');
+                              }
+                              return (await setStopViewed(token, routeSnapshotId, stopId, viewed, ranges))
+                                  .progressRevision;
+                          },
                       },
                       onSettled: () => {
                           setProgressWritesSettled((settled) => settled + 1);
                       },
                   }),
-        [diffStore, stopProgress, token],
+        [diffStore, routeSnapshotId, stopProgress, token],
     );
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [paletteNavigation, setPaletteNavigation] = useState<PaletteNavigation | null>(null);
@@ -199,9 +198,11 @@ export function App({ store, session, token }: AppProps) {
     const [routeUnderExplained, setRouteUnderExplained] = useState(false);
     /**
      * Route counts from the view: only it knows them (uncovered lines are counted from parsed models).
-     * The view keeps them when unmounting because the action bar and review summary also appear in the full diff.
+     * The report survives outside the tab, but only for its own snapshot.
      */
-    const [routeSummaryState, setRouteSummaryState] = useState<{ key: string; value: RouteSummary } | null>(null);
+    const [routeSummaryState, setRouteSummaryState] = useState<
+        ({ readonly key: string } & ReportedRouteSummary) | null
+    >(null);
     // Every session.setView call, including reselecting the current tab, clears Review complete.
     const [completionState, setCompletionState] = useState<{
         key: string;
@@ -643,9 +644,13 @@ export function App({ store, session, token }: AppProps) {
         }
     }, [generating, routePhase, stopGenerating]);
     const startGeneration = useCallback(() => {
-        // The server would reject a second request with `already_running`, and its response would clear
-        // the loading indicator for the generation already in progress.
-        if (generationInFlight.current) {
+        if (
+            !routeGenerationAvailable({
+                phase: routePhase,
+                smallPr: route?.smallPr === true,
+                generating: generationInFlight.current,
+            })
+        ) {
             return;
         }
         generationInFlight.current = true;
@@ -670,7 +675,7 @@ export function App({ store, session, token }: AppProps) {
                 setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
             },
         );
-    }, [routePhase, stopGenerating, token]);
+    }, [route?.smallPr, routePhase, stopGenerating, token]);
     const cancelGeneration = useCallback(() => {
         const ids = routeTasks.map((task) => task.id);
         if (ids.length === 0) {
@@ -721,17 +726,23 @@ export function App({ store, session, token }: AppProps) {
     }, [route?.smallPr, routePhase, session]);
 
     const actionErrorInPlace = routeActionErrorInPlace(view, route);
+    const generateAvailable = routeGenerationAvailable({
+        phase: routePhase,
+        smallPr: route?.smallPr === true,
+        generating,
+    });
 
     const bannerSources: readonly BannerSource[] = [
         {
             id: 'generation-failed',
             priority: BANNER_PRIORITY.generationFailed,
-            // Do not duplicate this on the route tab: the red card there shows the same reason.
-            active: () => routePhase === 'failed' && view !== 'route',
+            // Without a snapshot, the route tab shows the same reason in a full-screen red card.
+            active: () => routePhase === 'failed' && (view !== 'route' || route?.snapshot != null),
             render: () =>
                 route?.failure == null ? null : (
                     <GenerationFailedBanner
                         message={route.failure.message}
+                        rebuilding={route.snapshot !== null}
                         retrying={generating}
                         onRetry={startGeneration}
                     />
@@ -745,10 +756,16 @@ export function App({ store, session, token }: AppProps) {
                 routeActionError === null ? null : <RouteActionErrorBanner message={routeActionError} />,
         },
         {
+            id: 'route-regenerating',
+            priority: BANNER_PRIORITY.routeRegenerating,
+            active: () => view === 'route' && routePhase === 'reading' && route?.snapshot != null,
+            render: () => <RouteRegeneratingBanner cancelling={cancelling} onCancel={cancelGeneration} />,
+        },
+        {
             id: 'route-under-explained',
             priority: BANNER_PRIORITY.routeUnderExplained,
             active: () => view === 'route' && routeUnderExplained,
-            render: () => <RegenerateBanner />,
+            render: () => <RegenerateBanner {...(generateAvailable ? { onGenerate: startGeneration } : {})} />,
         },
         {
             id: 'route-filling',
@@ -783,13 +800,12 @@ export function App({ store, session, token }: AppProps) {
         },
     ];
     /**
-     * The snapshot behind review counts: only a ready route. A partial one lives in the route
-     * view (README §8), but cannot supply counts for the action panel or review outcome because half
-     * its slots are still unfilled.
+     * The snapshot behind the review counts is a completed route with a `contentHash`. The old ready
+     * snapshot still qualifies during a rebuild. The new partial snapshot stays out until `ready`.
      */
-    const routeSnapshot = routePhase === 'ready' ? (route?.snapshot ?? null) : null;
-    /** What the "Route" tab renders: a ready or partially filled route. */
-    const routeViewSnapshot = routePhase === 'ready' || routePhase === 'filling' ? (route?.snapshot ?? null) : null;
+    const routeSnapshot = route?.snapshot?.contentHash == null ? null : route.snapshot;
+    /** The Route tab renders any live snapshot, including the old one during a rebuild. */
+    const routeViewSnapshot = routeKind === 'workspace' ? (route?.snapshot ?? null) : null;
     const stopViewed = useSyncExternalStore(
         stopProgress.subscribe,
         stopProgress.getSnapshot,
@@ -801,32 +817,22 @@ export function App({ store, session, token }: AppProps) {
      * lines it is not rendered. Otherwise the guardrail would keep asking to view a nonexistent
      * stop. The mounted view refines the set because only it knows whether uncovered lines remain.
      */
-    const routeSummary = useMemo<RouteFacts | null>(() => {
+    const routeSummary = useMemo(() => {
         if (routeSnapshot === null) {
             return null;
         }
-        const reported = routeSummaryState?.key === reviewKey ? routeSummaryState.value : null;
-        if (reported !== null) {
-            return reported;
-        }
-        const otherStopId = routeSnapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null;
-        return {
-            stopIds: routeSnapshot.stops
-                .filter((stop) => stop.tier !== 'other' || stopViewed.get(stop.id) === true)
-                .map((stop) => stop.id),
-            otherStopId,
-            uncoveredLines: null,
-        };
+        const reported = routeSummaryState?.key === reviewKey ? routeSummaryState : null;
+        return routeFactsForSnapshot(routeSnapshot, stopViewed, reported);
     }, [reviewKey, routeSnapshot, routeSummaryState, stopViewed]);
     const reportRouteSummary = useCallback(
         (value: RouteSummary) => {
             // Counts are intermediate while the route is being filled. The guardrail and review result
             // pick them up at `ready` (the phase dependency restarts the report).
-            if (routePhase === 'ready') {
-                setRouteSummaryState({ key: reviewKey, value });
+            if (routePhase === 'ready' && routeSnapshot !== null) {
+                setRouteSummaryState({ key: reviewKey, snapshotId: routeSnapshot.snapshotId, value });
             }
         },
-        [reviewKey, routePhase],
+        [reviewKey, routePhase, routeSnapshot],
     );
     const jumpToStop = useCallback(
         (stopId: string) => {
@@ -977,6 +983,7 @@ export function App({ store, session, token }: AppProps) {
                     agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}
+                    {...(generateAvailable ? { onGenerate: startGeneration } : {})}
                     onRouteSummary={reportRouteSummary}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (

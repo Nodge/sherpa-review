@@ -82,7 +82,11 @@ export class RouteStore {
     private readonly db: SherpaDatabase;
     private readonly now: () => Date;
     private readonly listeners = new Set<RouteListener>();
-    private readonly txWrite: (state: UiRouteState, intents: ReadonlyMap<number, string>) => void;
+    private readonly txWrite: (
+        state: UiRouteState,
+        intents: ReadonlyMap<number, string>,
+        inTransaction?: () => () => void,
+    ) => (() => void) | undefined;
 
     private state: UiRouteState;
     private intents: ReadonlyMap<number, string>;
@@ -92,9 +96,13 @@ export class RouteStore {
     constructor(options: RouteStoreOptions) {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
-        this.txWrite = transaction(this.db, (state: UiRouteState, intents: ReadonlyMap<number, string>) => {
-            this.writeInTransaction(state, intents);
-        });
+        this.txWrite = transaction(
+            this.db,
+            (state: UiRouteState, intents: ReadonlyMap<number, string>, inTransaction?: () => () => void) => {
+                this.writeInTransaction(state, intents);
+                return inTransaction?.();
+            },
+        );
 
         const loaded = this.load();
         this.state = loaded.state;
@@ -118,13 +126,13 @@ export class RouteStore {
         return new Map(this.intents);
     }
 
-    /** New generation: clear the plan and previous failure, set the phase to "reading the diff". */
+    /** New generation. The old snapshot stays readable until the new plan is accepted. */
     beginSkeleton(): void {
-        this.commit({ ...this.state, phase: 'reading', snapshot: null, failure: null }, new Map());
+        this.commit({ ...this.state, phase: 'reading', failure: null }, new Map());
     }
 
-    /** Skeleton accepted: a snapshot with a plan is available, phase is "filling sections". */
-    acceptSkeleton(input: AcceptedSkeletonInput): void {
+    /** Skeleton accepted: commit the new snapshot and clear previous stop progress together. */
+    acceptSkeleton(input: AcceptedSkeletonInput, clearStopProgress?: () => () => void): void {
         const snapshot: RouteSnapshot = {
             snapshotId: input.snapshotId,
             commit: input.diff.headCommit,
@@ -139,6 +147,7 @@ export class RouteStore {
         this.commit(
             { ...this.state, phase: 'filling', snapshot, failure: null },
             new Map(input.skeleton.intents),
+            clearStopProgress,
         );
     }
 
@@ -212,6 +221,15 @@ export class RouteStore {
         this.commit({ ...this.state, smallPr });
     }
 
+    /** Skeleton cancellation. Rebuild restores the old route, first generation restores an empty state. */
+    cancelSkeleton(): void {
+        if (this.state.snapshot === null) {
+            this.reset();
+            return;
+        }
+        this.commit({ ...this.state, phase: 'ready', failure: null }, new Map());
+    }
+
     /** No generation now or in the past. Prompts the reviewer to run the skill. */
     reset(): void {
         this.commit({ ...this.state, phase: 'none', snapshot: null, failure: null }, new Map());
@@ -276,22 +294,30 @@ export class RouteStore {
      * State write order: contract validation, storage, revision, then notification.
      * A mutator that changes nothing stays silent because there is nothing to notify tabs about.
      */
-    private commit(next: UiRouteState, intents: ReadonlyMap<number, string> = this.intents): void {
+    private commit(
+        next: UiRouteState,
+        intents: ReadonlyMap<number, string> = this.intents,
+        inTransaction?: () => () => void,
+    ): void {
         const parsed = uiRouteStateSchema.parse(next);
-        if (JSON.stringify(parsed) === JSON.stringify(this.state) && sameIntents(intents, this.intents)) {
+        if (
+            inTransaction === undefined &&
+            JSON.stringify(parsed) === JSON.stringify(this.state) &&
+            sameIntents(intents, this.intents)
+        ) {
             return;
         }
 
-        this.txWrite(parsed, intents);
+        const afterCommit = this.txWrite(parsed, intents, inTransaction);
         this.state = parsed;
         this.intents = intents;
         this.revisionValue += 1;
-        if (this.closed) {
-            return;
+        if (!this.closed) {
+            for (const listener of [...this.listeners]) {
+                listener(this.revisionValue);
+            }
         }
-        for (const listener of [...this.listeners]) {
-            listener(this.revisionValue);
-        }
+        afterCommit?.();
     }
 
     private writeInTransaction(state: UiRouteState, intents: ReadonlyMap<number, string>): void {

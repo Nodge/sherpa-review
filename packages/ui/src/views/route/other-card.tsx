@@ -169,11 +169,18 @@ export function OtherCard({
 }
 
 /** SPEC §4.3 banner: the plan explains less than half the diff. */
-export function RegenerateBanner() {
+export function RegenerateBanner({ onGenerate }: { readonly onGenerate?: () => void }) {
     return (
         <div className="route-regenerate" role="status">
             <span className="route-regenerate__dot" aria-hidden="true" />
-            the plan explains less than half of this diff — consider regenerating
+            <span className="route-regenerate__text">
+                the plan explains less than half of this diff — consider regenerating
+            </span>
+            {onGenerate === undefined ? null : (
+                <button type="button" className="route-regenerate__action" onClick={onGenerate}>
+                    Regenerate
+                </button>
+            )}
         </div>
     );
 }

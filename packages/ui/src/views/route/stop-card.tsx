@@ -36,6 +36,8 @@ export interface StopCardProps {
     readonly marked?: boolean;
     /** "Kept in view — outside the current filter" label (SPEC §2.7). */
     readonly keptInView?: boolean;
+    /** Full rebuild for an unfilled stop. Targeted filling remains a separate task. */
+    readonly onGenerate?: () => void;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
     /** Accent line flash above the diff column after jumping to a file (README Interactions). */
@@ -54,6 +56,7 @@ export function StopCard({
     failedViewed = null,
     marked = false,
     keptInView = false,
+    onGenerate,
     chips,
     diff,
     flash = false,
@@ -105,7 +108,14 @@ export function StopCard({
                 ) : null}
 
                 {stop.paragraph === null ? (
-                    <p className="route-stop__note">{unfilledNote(stop.status)}</p>
+                    <p className="route-stop__note">
+                        {unfilledNote(stop.status)}
+                        {stop.status !== 'failed' || onGenerate === undefined ? null : (
+                            <button type="button" className="route-stop__regenerate" onClick={onGenerate}>
+                                Regenerate
+                            </button>
+                        )}
+                    </p>
                 ) : (
                     <Paragraph text={stop.paragraph} />
                 )}

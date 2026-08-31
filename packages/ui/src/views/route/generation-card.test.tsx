@@ -10,6 +10,7 @@ import {
     GenerationFailedBanner,
     RouteActionErrorBanner,
     RouteFillingBanner,
+    RouteRegeneratingBanner,
 } from './generation-card.tsx';
 
 /** Generation card: what the reviewer sees in each phase and where its counts come from. */
@@ -54,6 +55,15 @@ describe('route generation card', () => {
         expect(html).not.toMatch(/\d+ of \d+ ready/);
     });
 
+    it('a phase A rebuild keeps an entry point to the previous route', () => {
+        const html = render({ ...state('reading'), snapshot: state('ready').snapshot });
+
+        expect(html).toContain('Building a new route');
+        expect(html).toContain('The previous route stays available');
+        expect(html).toContain('Open the previous route');
+        expect(html).toContain('the new plan replaces it whole only once accepted');
+    });
+
     it('phase B: "4 of 7 ready", a segment per slot and the full plan list with statuses', () => {
         const html = render(state('filling'));
 
@@ -91,6 +101,12 @@ describe('route generation card', () => {
         expect(html).toContain('Retry');
         expect(html).not.toContain('Show the raw output');
         expect(html).not.toContain('The reader below is untouched');
+    });
+
+    it('a failed rebuild names the new route, leaving the old readable route distinct', () => {
+        const html = render({ ...state('failed'), snapshot: state('ready').snapshot });
+
+        expect(html).toContain('The new route was not built');
     });
 
     it('shows no card when generation has never started', () => {
@@ -142,6 +158,13 @@ describe('generation banners', () => {
         expect(html).toContain('Meanwhile you can read the full diff');
     });
 
+    it('the rebuild banner warns about marks and offers cancellation', () => {
+        const html = renderToStaticMarkup(<RouteRegeneratingBanner onCancel={NOOP} />);
+
+        expect(html).toContain('Building a new route — stop marks go away once it lands');
+        expect(html).toContain('>Cancel</button>');
+    });
+
     it('the failure banner shows the reason and exactly one action', () => {
         const html = renderToStaticMarkup(
             <GenerationFailedBanner message="Generation stopped at validation." onRetry={NOOP} />,
@@ -150,6 +173,18 @@ describe('generation banners', () => {
         expect(html).toContain('The route was not built.');
         expect(html).toContain('Generation stopped at validation.');
         expect(count(html, '<button')).toBe(1);
+    });
+
+    it('the rebuild failure banner identifies the failed route as the new one', () => {
+        const html = renderToStaticMarkup(
+            <GenerationFailedBanner
+                message="Generation stopped at validation."
+                rebuilding
+                onRetry={NOOP}
+            />,
+        );
+
+        expect(html).toContain('The new route was not built.');
     });
 });
 

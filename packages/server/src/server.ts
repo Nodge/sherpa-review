@@ -247,6 +247,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 host: reviewHost?.host ?? null,
                 reviewFeed,
                 progress,
+                route: routeStore,
                 prMeta,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),

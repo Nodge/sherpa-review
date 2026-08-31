@@ -69,7 +69,7 @@ function RouteState({
                 id: 'route-under-explained',
                 priority: 200,
                 active: () => underExplained,
-                render: () => <RegenerateBanner />,
+                render: () => <RegenerateBanner onGenerate={() => undefined} />,
             },
         ],
         [underExplained],

@@ -34,6 +34,7 @@ import { handlingRpcFailures, readJsonBody } from './http.js';
 import type { PrMetaCache } from './pr-meta.js';
 import type { ProgressStore } from './progress-store.js';
 import type { ReviewFeed } from './review-feed.js';
+import type { RouteStore } from './route-store.js';
 
 /**
  * UI review endpoints (M1-T10): active iteration diff, threads, lenses, file content.
@@ -67,6 +68,8 @@ export interface ReviewRoutesOptions {
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress for this PR: the local source of truth for viewed marks. */
     readonly progress: ProgressStore;
+    /** Active route snapshot: discard late marks from the previous generation. */
+    readonly route: Pick<RouteStore, 'read'>;
     /** PR metadata cache: publishing a verdict changes the status, so it must be fetched again. */
     readonly prMeta: Pick<PrMetaCache, 'refresh'>;
     readonly editor?: EditorOptions;
@@ -229,11 +232,11 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 );
                 // Stop marks are not mirrored to the host (decision log, 2026-08-26). Mirroring handles
                 // explicit file marks, and the server cannot calculate how much of a file a stop covers.
-                const progressRevision = options.progress.setStopViewed(
-                    request.stopId,
-                    request.viewed,
-                    request.ranges,
-                );
+                const activeSnapshotId = options.route.read().snapshot?.snapshotId ?? null;
+                const progressRevision =
+                    request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId
+                        ? options.progress.revision
+                        : options.progress.setStopViewed(request.stopId, request.viewed, request.ranges);
                 return respond(uiSetStopViewedResponseSchema, { progressRevision }, 'local');
             }),
         },

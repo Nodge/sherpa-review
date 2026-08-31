@@ -178,9 +178,14 @@ export const uiRouteStateSchema = z.object({
     phase: uiRoutePhaseSchema,
     /** PR below the route threshold (requirements §3.6): no generation task, UI opens on Full diff with a note. */
     smallPr: z.boolean(),
-    /** Present once the skeleton is accepted. Partial during `filling` (see `stops[].status`). */
+    /**
+     * Exists once the skeleton is accepted. Partial in `filling` (see `stops[].status`).
+     * During regeneration from `ready` (M2F-T28), the old snapshot lives until the new skeleton is accepted:
+     * `reading` with a non-null snapshot means "building a new one, the old one is readable", replaced atomically
+     * at acceptance.
+     */
     snapshot: routeSnapshotSchema.nullable(),
-    /** Only in the `failed` phase. */
+    /** Only in the `failed` phase. Regeneration failure can coexist with an old snapshot, which remains readable. */
     failure: uiRouteFailureSchema.nullable(),
 });
 export type UiRouteState = z.infer<typeof uiRouteStateSchema>;
@@ -193,9 +198,11 @@ export type UiReviewRouteResponse = z.infer<typeof uiReviewRouteResponseSchema>;
 
 /**
  * Start/restart route generation (Retry from Generation failed, "regenerate"
- * from the palette). Enqueues `route.skeleton` even without a live worker. The task waits
- * in the queue, and the agent pill shows the reduced functionality. `small_pr` rejects the request: this endpoint
- * cannot bypass the threshold (requirements §3.6).
+ * from the palette. Since M2F-T28, also regeneration from `ready`, with the old snapshot
+ * remaining until the new skeleton is accepted). Enqueues `route.skeleton` even without a live
+ * worker. The task waits in the queue, and the agent pill shows the reduced functionality.
+ * `already_running` only applies to `reading`/`filling` (generation already in progress).
+ * `small_pr` means refusal: this endpoint does not bypass the threshold (requirements §3.6).
  */
 export const uiRouteGenerateResponseSchema = z.object({
     outcome: z.enum(['started', 'already_running', 'small_pr']),
@@ -301,6 +308,8 @@ export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSche
  * which the server cannot calculate without a diff model). The server stores them bound to the stop
  * without interpreting them. Clearing the mark removes only this stop's ranges and leaves
  * other stops' ranges and manual file marks untouched (SPEC §2.10).
+ * The request carries `snapshotId`: a late write from a previous route must not reach
+ * a new stop with the same deterministic id. The field is optional for older UI bundles.
  * Stop marks are not mirrored to the host: `fileViewedSync` still handles explicit
  * file marks.
  */
@@ -310,6 +319,8 @@ export type UiStopSeenRange = z.infer<typeof uiStopSeenRangeSchema>;
 export const uiSetStopViewedRequestSchema = z.object({
     stopId: z.string().min(1),
     viewed: z.boolean(),
+    /** The snapshot the UI saw: the server silently discards requests from an older route. */
+    snapshotId: z.string().min(1).optional(),
     /** Ignored when `viewed: false`: clearing the mark removes the stop's stored ranges. */
     ranges: z.array(uiStopSeenRangeSchema),
 });

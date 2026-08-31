@@ -58,6 +58,8 @@ const WARMUP_DELAY_MS = 200;
 /** The part of `ProgressStore` the orchestrator needs to clear previous stop progress. */
 export interface StopProgressReset {
     readonly clearStopProgress: () => number;
+    /** Called within the `RouteStore.acceptSkeleton` transaction. Apply the effect only after commit. */
+    readonly clearStopProgressInTransaction: () => () => void;
 }
 
 export interface RouteOrchestratorOptions {
@@ -70,7 +72,7 @@ export interface RouteOrchestratorOptions {
     readonly payloadDir: string;
     /**
      * Reading progress: a new generation clears previous stop marks and their seen ranges
-     * (decision log, 2026-08-26, progress carryover is M4). `null` means nothing to clear (tests).
+     * when the new plan is accepted (progress carryover is M4). `null` means nothing to clear (tests).
      */
     readonly progress?: StopProgressReset | null;
     readonly config?: Partial<RouteConfig>;
@@ -194,9 +196,8 @@ export class RouteOrchestrator {
     }
 
     /**
-     * `review/route/generate` endpoint: start and restart generation.
-     * Full regeneration from a ready route (with "what changed since the last pass" context)
-     * belongs to M4, so `ready` returns `already_running`: the snapshot is present, nothing to do.
+     * The `review/route/generate` endpoint starts and restarts generation. From `ready`, the old route
+     * stays readable until the new skeleton is accepted. Its progress carryover remains in M4.
      */
     async generate(): Promise<UiRouteGenerateResponse['outcome']> {
         if (this.host === null) {
@@ -213,7 +214,7 @@ export class RouteOrchestrator {
         }
 
         const phase = this.store.read().phase;
-        if (phase === 'reading' || phase === 'filling' || phase === 'ready') {
+        if (phase === 'reading' || phase === 'filling') {
             return 'already_running';
         }
 
@@ -262,7 +263,15 @@ export class RouteOrchestrator {
         return {
             kind: 'accepted',
             onCommitted: () => {
-                this.store.acceptSkeleton({ skeleton, diff, provenance, snapshotId: randomUUID() });
+                const progress = this.progress;
+                const clearStopProgress =
+                    this.store.read().snapshot === null || progress === null
+                        ? undefined
+                        : () => progress.clearStopProgressInTransaction();
+                this.store.acceptSkeleton(
+                    { skeleton, diff, provenance, snapshotId: randomUUID() },
+                    clearStopProgress,
+                );
                 this.reconcile();
             },
         };
@@ -416,7 +425,7 @@ export class RouteOrchestrator {
             return;
         }
         if (last.status === 'cancelled') {
-            this.store.reset();
+            this.store.cancelSkeleton();
             return;
         }
         // The task is `done`, but the phase is still `reading`: applying the accepted result failed (the server died
@@ -442,16 +451,19 @@ export class RouteOrchestrator {
         this.startSkeletonTask();
     }
 
-    /** New generation: cancel previous route tasks, clear the plan and failure. */
+    /** New generation cancels previous tasks and keeps the live snapshot until a new one is accepted. */
     private startSkeleton(): void {
+        const hasSnapshot = this.store.read().snapshot !== null;
         this.cancelOpenRouteTasks();
         this.store.clearBindings();
         this.store.beginSkeleton();
         // The previous generation payload is no longer needed. Its tasks were just cancelled.
         this.payload.beginGeneration();
-        // The old route's stops disappear with the plan, along with their marks and ranges.
-        // Manual file marks stay untouched: they belong to files, not stops.
-        this.progress?.clearStopProgress();
+        // Keep the previous clearing point for initial generation. During a rebuild, old stops
+        // live until the new plan is accepted and are cleared atomically with its snapshot.
+        if (!hasSnapshot) {
+            this.progress?.clearStopProgress();
+        }
         this.startSkeletonTask();
     }
 

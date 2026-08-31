@@ -16,8 +16,8 @@ import { planLabel } from './route-model.js';
  * What the "Route" tab renders (README §6–8, §12, SPEC §4.1). The decision lives outside App:
  * There are 5 phases, snapshots can be partial, and phase selection must be testable without a server.
  *
- * Fail-closed rule: a phase missing its data (ready without a snapshot, failed without a reason)
- * falls back to an invitation instead of an empty screen.
+ * An available snapshot always takes precedence over the phase. The old route stays usable
+ * during a rebuild and after its failure. A phase without its data falls back to the invitation instead of an empty screen.
  */
 export type RouteViewKind = 'workspace' | 'reading' | 'failed' | 'small-pr' | 'invitation';
 
@@ -25,7 +25,7 @@ export function routeViewKind(route: UiRouteState | null): RouteViewKind {
     if (route === null) {
         return 'invitation';
     }
-    if ((route.phase === 'ready' || route.phase === 'filling') && route.snapshot !== null) {
+    if (route.snapshot !== null) {
         return 'workspace';
     }
     if (route.phase === 'reading') {
@@ -35,6 +35,19 @@ export function routeViewKind(route: UiRouteState | null): RouteViewKind {
         return 'failed';
     }
     return route.smallPr ? 'small-pr' : 'invitation';
+}
+
+/** Shared guard for every route generation entry point. */
+export function routeGenerationAvailable({
+    phase,
+    smallPr,
+    generating,
+}: {
+    readonly phase: UiRouteState['phase'] | null;
+    readonly smallPr: boolean;
+    readonly generating: boolean;
+}): boolean {
+    return !smallPr && !generating && (phase === 'none' || phase === 'ready' || phase === 'failed');
 }
 
 /**

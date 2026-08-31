@@ -141,6 +141,17 @@ export class ProgressStore {
         return this.bumped(this.txClearStops());
     }
 
+    /**
+     * Clearing within an already open transaction when accepting a new skeleton. The returned effect
+     * advances the revision only after the shared transaction commits.
+     */
+    clearStopProgressInTransaction(): () => void {
+        const changed = this.clearStopsInTransaction();
+        return () => {
+            this.bumped(changed);
+        };
+    }
+
     subscribe(listener: ProgressListener): () => void {
         if (this.closed) {
             return () => undefined;

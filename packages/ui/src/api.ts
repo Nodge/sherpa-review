@@ -128,16 +128,22 @@ export async function setFileViewed(
 }
 
 /**
- * A stop's "viewed" mark (M2-T7) is sent with seen ranges calculated by
- * the UI. With `viewed: false`, the server removes this stop's stored ranges.
+ * A stop's "viewed" mark (M2-T7) sends the visible snapshot ID
+ * and seen ranges with it. With `viewed: false`, the server deletes this stop's saved ranges.
  */
 export async function setStopViewed(
     token: string,
+    snapshotId: string,
     stopId: string,
     viewed: boolean,
     ranges: readonly UiStopSeenRange[],
 ): Promise<UiSetStopViewedResponse> {
-    return post(UI_ENDPOINTS.reviewStopViewed, token, { stopId, viewed, ranges }, uiSetStopViewedResponseSchema);
+    return post(
+        UI_ENDPOINTS.reviewStopViewed,
+        token,
+        { snapshotId, stopId, viewed, ranges },
+        uiSetStopViewedResponseSchema,
+    );
 }
 
 /**

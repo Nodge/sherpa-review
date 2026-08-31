@@ -907,6 +907,27 @@
     background: var(--attention);
 }
 
+.route-regenerate__text {
+    flex: 1;
+    min-width: 0;
+}
+
+.route-regenerate__action,
+.route-stop__regenerate {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--attention-text);
+    font-size: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.route-stop__regenerate {
+    margin-left: 6px;
+}
+
 /* Empty filter result, as in the full diff: explanation and a way out (SPEC §2.7). */
 .route__zero {
     display: flex;

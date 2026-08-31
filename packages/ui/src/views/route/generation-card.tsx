@@ -49,6 +49,7 @@ export function GenerationCard({
         return (
             <RouteFailedCard
                 failure={route.failure}
+                rebuilding={route.snapshot !== null}
                 retrying={retrying}
                 actionError={actionError}
                 onRetry={onRetry}
@@ -146,7 +147,9 @@ export function GenerationCard({
         <section className="gen-card" aria-label="Route generation">
             <div className="gen-card__head">
                 <span className="gen-card__spinner" aria-hidden="true" />
-                <h2 className="gen-card__title">Reading the diff, planning the route</h2>
+                <h2 className="gen-card__title">
+                    {snapshot === null ? 'Reading the diff, planning the route' : 'Building a new route'}
+                </h2>
                 <span className="gen-card__counter">~40 c</span>
             </div>
 
@@ -161,16 +164,21 @@ export function GenerationCard({
             </ol>
 
             <p className="gen-card__note">
-                The plan comes first. Until it exists, there is no stop count to show. The diff is already open below. Nothing
-                waits for the agent.
+                {snapshot === null
+                    ? 'The plan comes first — until it lands there is nothing to count stops from. The diff is already open below. Nothing waits for the agent.'
+                    : 'The previous route stays available. Stop marks are cleared only once the new plan is accepted.'}
             </p>
 
             {longRunning ? <StillWorking counter={null} cancelling={cancelling} onCancel={onCancel} /> : null}
 
             <button type="button" className="gen-card__cta" onClick={onOpenRoute}>
-                Open the route skeleton
+                {snapshot === null ? 'Open the route skeleton' : 'Open the previous route'}
             </button>
-            <p className="gen-card__hint">placeholders for now, stops appear as they become ready</p>
+            <p className="gen-card__hint">
+                {snapshot === null
+                    ? 'placeholders for now, stops appear as they get ready'
+                    : 'the new plan replaces it whole only once accepted'}
+            </p>
             {actionError === null ? null : (
                 <p className="gen-card__error" role="status">
                     {actionError}
@@ -202,6 +210,7 @@ function StillWorking({
 
 export interface RouteFailedCardProps {
     readonly failure: UiRouteFailure;
+    readonly rebuilding?: boolean;
     readonly retrying?: boolean;
     readonly actionError?: string | null;
     readonly onRetry: () => void;
@@ -220,6 +229,7 @@ export interface RouteFailedCardProps {
  */
 export function RouteFailedCard({
     failure,
+    rebuilding = false,
     retrying = false,
     actionError = null,
     onRetry,
@@ -234,9 +244,11 @@ export function RouteFailedCard({
         <section
             className={`gen-failed${compact ? ' gen-failed--compact' : ''}`}
             role="region"
-            aria-label="Route generation failed"
+            aria-label={rebuilding ? 'The new route was not built' : 'The route was not built'}
         >
-            <h2 className="gen-failed__title">Route generation failed</h2>
+            <h2 className="gen-failed__title">
+                {rebuilding ? 'The new route was not built' : 'The route was not built'}
+            </h2>
             <p className="gen-failed__reason">{failure.message}</p>
 
             <div className="gen-failed__actions">
@@ -302,13 +314,36 @@ export function RouteFillingBanner({
     );
 }
 
+/** Rebuilding a ready route: the old route stays usable until the new plan is accepted. */
+export function RouteRegeneratingBanner({
+    cancelling = false,
+    onCancel,
+}: {
+    cancelling?: boolean;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="gen-filling" role="status">
+            <span className="gen-filling__dot" aria-hidden="true" />
+            <span className="gen-filling__text">
+                Building a new route — stop marks go away once it lands
+            </span>
+            <button type="button" className="gen-filling__link" disabled={cancelling} onClick={onCancel}>
+                {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+        </div>
+    );
+}
+
 /** Generation failure banner: highest priority in the slot (SPEC §2.21). */
 export function GenerationFailedBanner({
     message,
+    rebuilding = false,
     retrying = false,
     onRetry,
 }: {
     message: string;
+    rebuilding?: boolean;
     retrying?: boolean;
     onRetry: () => void;
 }) {
@@ -316,7 +351,9 @@ export function GenerationFailedBanner({
         <div className="gen-banner" role="region" aria-label="Route generation failed">
             <span className="gen-banner__dot" aria-hidden="true" />
             <div className="gen-banner__body">
-                <div className="gen-banner__title">Route generation failed.</div>
+                <div className="gen-banner__title">
+                    {rebuilding ? 'The new route was not built.' : 'The route was not built.'}
+                </div>
                 <div className="gen-banner__text">{message}</div>
             </div>
             <RetryButton retrying={retrying} onRetry={onRetry} />

@@ -434,6 +434,11 @@
     cursor: pointer;
 }
 
+.gen-filling__link:disabled {
+    opacity: var(--disabled-opacity);
+    cursor: default;
+}
+
 /* --- Failure banner --- */
 
 .gen-banner {

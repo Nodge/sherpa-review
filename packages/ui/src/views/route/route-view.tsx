@@ -51,6 +51,7 @@ import { buildCoverageStrip } from '../../route/coverage-model.js';
 import { buildDigest, buildDigestTestCode, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteOtherView, RouteStopView } from '../../route/route-model.js';
 import { generationProgress, snapshotFilling } from '../../route/generation.js';
+import type { RouteSummary } from '../../route/route-summary.js';
 import { stopCoveredByProgress } from '../../route/stop-coverage.js';
 import {
     buildRouteModel,
@@ -129,16 +130,9 @@ export interface RouteViewProps {
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     /** Uncovered fraction exceeds the threshold: App shows "consider regenerating" (SPEC §4.3). */
     readonly onUnderExplained?: (value: boolean) => void;
+    readonly onGenerate?: () => void;
     /** Expose route counts. Only the view computes them, and the action panel and review summary need them. */
     readonly onRouteSummary?: (summary: RouteSummary) => void;
-}
-
-/** What the route view reports to the application: route slots and uncovered lines (README §13, SPEC §2.19). */
-export interface RouteSummary {
-    /** Stops in render order, including "Other" if present. */
-    readonly stopIds: readonly string[];
-    readonly otherStopId: string | null;
-    readonly uncoveredLines: number;
 }
 
 export function RouteView({
@@ -159,6 +153,7 @@ export function RouteView({
     agentStopped = false,
     navigation = null,
     onUnderExplained,
+    onGenerate,
     onRouteSummary,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
@@ -263,6 +258,7 @@ export function RouteView({
             onResolveThread={resolveThread}
             navigation={target}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
+            {...(onGenerate === undefined ? {} : { onGenerate })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
         />
     );
@@ -299,6 +295,7 @@ export interface RouteWorkspaceProps {
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     readonly onUnderExplained?: (value: boolean) => void;
+    readonly onGenerate?: () => void;
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
@@ -321,6 +318,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         progressLoaded = true,
         navigation = null,
         onUnderExplained,
+        onGenerate,
         onRouteSummary,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
@@ -1393,6 +1391,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             onViewed={(value) => {
                                 void markStop(entry.view.stop.id, value);
                             }}
+                            {...(onGenerate === undefined || filling ? {} : { onGenerate })}
                             onExpand={() => {
                                 expandStop(entry.view.stop.id);
                             }}
@@ -1477,6 +1476,7 @@ interface StopSectionProps {
     readonly flash: boolean;
     readonly readStateOf: (fileId: string) => ReturnType<typeof readStateOf>;
     readonly onViewed: (viewed: boolean) => void;
+    readonly onGenerate?: () => void;
     readonly onExpand: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
@@ -1507,6 +1507,7 @@ function StopSection({
     flash,
     readStateOf: readState,
     onViewed,
+    onGenerate,
     onExpand,
     onOpenFile,
     onVisible,
@@ -1628,6 +1629,7 @@ function StopSection({
                 parseFailed={parseFailed}
                 filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
+                {...(onGenerate === undefined ? {} : { onGenerate })}
                 failedViewed={failedViewed}
                 marked={marked}
                 keptInView={keptInView}

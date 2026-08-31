@@ -20,6 +20,7 @@ import { M2_T10_STATES } from './m2-t10-states.tsx';
 import { M2_T11_STATES } from './m2-t11-states.tsx';
 import { M2F_T17_STATES } from './m2f-t17-states.tsx';
 import { M2F_T23_STATES } from './m2f-t23-states.tsx';
+import { M2F_T28_STATES } from './m2f-t28-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -146,6 +147,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         ...M2_T9_STATES,
         ...M2_T10_STATES,
         ...M2_T11_STATES,
+        ...M2F_T28_STATES,
     ].map((state) => ({
         id: state.id,
         group: 'Route',

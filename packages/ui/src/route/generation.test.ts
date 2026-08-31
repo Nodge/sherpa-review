@@ -10,6 +10,7 @@ import {
     openRouteTasks,
     provenanceLine,
     routeActionErrorInPlace,
+    routeGenerationAvailable,
     routeViewKind,
     snapshotFilling,
     summaryParagraphs,
@@ -31,6 +32,13 @@ function snapshotOf(phase: 'filling' | 'ready'): RouteSnapshot {
         throw new Error(`state ${phase} needs a snapshot`);
     }
     return snapshot;
+}
+
+function rebuildState(phase: 'reading' | 'failed'): UiRouteState {
+    return {
+        ...state(phase),
+        snapshot: snapshotOf('ready'),
+    };
 }
 
 function task(overrides: Partial<UiTask> & Pick<UiTask, 'id'>): UiTask {
@@ -55,7 +63,12 @@ describe('Route tab phase selection', () => {
         expect(routeViewKind(state('filling'))).toBe('workspace');
     });
 
-    it('reading, failure, small PR and invitation each have their own screen', () => {
+    it('keeps a working route from the old snapshot during a rebuild and after its failure', () => {
+        expect(routeViewKind(rebuildState('reading'))).toBe('workspace');
+        expect(routeViewKind(rebuildState('failed'))).toBe('workspace');
+    });
+
+    it('shows separate screens for reading and failure without a snapshot, a small PR and the invitation', () => {
         expect(routeViewKind(state('reading'))).toBe('reading');
         expect(routeViewKind(state('failed'))).toBe('failed');
         expect(routeViewKind(routeFixtures('small')?.states.none ?? null)).toBe('small-pr');
@@ -80,6 +93,19 @@ describe('generation card in the Overview rail', () => {
     });
 });
 
+describe('route generation availability', () => {
+    it('disables the palette, banner and card consistently during generation and for a small PR', () => {
+        expect(routeGenerationAvailable({ phase: 'ready', smallPr: false, generating: false })).toBe(true);
+        expect(routeGenerationAvailable({ phase: 'failed', smallPr: false, generating: false })).toBe(true);
+        expect(routeGenerationAvailable({ phase: 'none', smallPr: false, generating: false })).toBe(true);
+        expect(routeGenerationAvailable({ phase: 'reading', smallPr: false, generating: false })).toBe(false);
+        expect(routeGenerationAvailable({ phase: 'filling', smallPr: false, generating: false })).toBe(false);
+        expect(routeGenerationAvailable({ phase: 'ready', smallPr: false, generating: true })).toBe(false);
+        expect(routeGenerationAvailable({ phase: 'ready', smallPr: true, generating: false })).toBe(false);
+        expect(routeGenerationAvailable({ phase: null, smallPr: false, generating: false })).toBe(false);
+    });
+});
+
 describe('where to show generation endpoint errors', () => {
     it('shows errors next to the triggering action in the red route card and Overview generation card', () => {
         expect(routeActionErrorInPlace('route', state('failed'))).toBe(true);
@@ -94,6 +120,7 @@ describe('where to show generation endpoint errors', () => {
         expect(routeActionErrorInPlace('diff', state('none'))).toBe(false);
         expect(routeActionErrorInPlace('diff', state('failed'))).toBe(false);
         expect(routeActionErrorInPlace('route', state('reading'))).toBe(false);
+        expect(routeActionErrorInPlace('route', rebuildState('failed'))).toBe(false);
         // The ready route has no error row in its card.
         expect(routeActionErrorInPlace('overview', state('ready'))).toBe(false);
     });
