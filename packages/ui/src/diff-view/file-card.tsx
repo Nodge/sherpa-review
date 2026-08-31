@@ -10,7 +10,13 @@ import { formatCount, plural } from '../text.js';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { FileExpansion } from './expand.js';
-import { expandFileContext, gapExpansionDelta, gapKeyOf, remainingHiddenLines } from './expand.js';
+import {
+    expandFileContext,
+    gapExpansionDelta,
+    gapKeyOf,
+    remainingHiddenChanged,
+    remainingHiddenLines,
+} from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 import { parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
@@ -201,8 +207,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         },
         [actions, expansion, file.fileId, model, transform],
     );
-    const onContextExpanded = useCallback((loaded: number, hidden: number) => {
-        setAnnouncement(`loaded ${String(loaded)} lines, ${String(hidden)} hidden`);
+    const onContextExpanded = useCallback((loaded: number, hidden: number, hiddenChanged: number) => {
+        setAnnouncement(expansionAnnouncement(loaded, hidden, hiddenChanged));
     }, []);
 
     return (
@@ -416,6 +422,28 @@ function FileName({ file }: { file: FileDiff }) {
     );
 }
 
+/** Same wording as the slice gap bar (`gapLabel` in diff-rows), since both describe the same hidden lines. */
+function elsewhereLabel(changed: number): string {
+    const lines = plural(changed, 'changed line', 'changed lines', 'changed lines');
+    return `${formatCount(changed)} ${lines} — in other stops`;
+}
+
+/**
+ * aria-live announcement after loading more context in a gap.
+ * Keep the Full diff pair "loaded N, hidden H" unchanged because `hiddenChanged` is always 0 there.
+ * In a route slice, "hidden 0" would be false, so report changed lines from other stops separately.
+ */
+export function expansionAnnouncement(loaded: number, hidden: number, hiddenChanged: number): string {
+    const parts = [`${String(loaded)} lines loaded`];
+    if (hidden > 0 || hiddenChanged === 0) {
+        parts.push(`${String(hidden)} hidden`);
+    }
+    if (hiddenChanged > 0) {
+        parts.push(elsewhereLabel(hiddenChanged));
+    }
+    return parts.join(', ');
+}
+
 /** The only header button expands the whole file. The 20-line step belongs to gap bars. */
 function ExpandButton({
     model,
@@ -432,15 +460,20 @@ function ExpandButton({
         model?.content.kind === 'text'
             ? model.content.blocks.filter((block) => block.kind === 'gap').map((gap) => gapKeyOf(gap))
             : [];
+    // The button cannot expand changed lines from other stops, so it stays disabled,
+    // but it cannot claim the whole file is on screen either.
+    const hiddenChanged = model === null ? 0 : remainingHiddenChanged(model);
     const disabledReason = !contentAvailable
         ? 'the host does not provide file contents — there is nothing to expand from'
         : model === null
           ? 'the diff is still being parsed'
           : content === null
             ? 'this file has no content'
-            : remainingHiddenLines(model, content ?? null) === 0
-              ? 'the entire file is already on screen'
-              : null;
+            : remainingHiddenLines(model, content ?? null) !== 0
+              ? null
+              : hiddenChanged > 0
+                ? `all context is on screen; ${elsewhereLabel(hiddenChanged)}`
+                : 'the whole file is already on screen';
 
     return (
         <span className="file-card__expand">
@@ -499,7 +532,7 @@ interface BodyProps {
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
     readonly onExpandContext: (request: ContextExpandRequest) => Promise<GapExpandResult>;
-    readonly onContextExpanded: (loaded: number, hidden: number) => void;
+    readonly onContextExpanded: (loaded: number, hidden: number, hiddenChanged: number) => void;
     readonly initialGapError: boolean;
 }
 

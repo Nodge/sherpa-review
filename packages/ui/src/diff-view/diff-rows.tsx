@@ -50,7 +50,8 @@ export interface DiffRowsProps {
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
     readonly onExpandContext?: ((request: ContextExpandRequest) => Promise<GapExpandResult>) | undefined;
-    readonly onContextExpanded?: ((loaded: number, hidden: number) => void) | undefined;
+    /** The third number counts changed lines from other stops. Expansion cannot reveal them. */
+    readonly onContextExpanded?: ((loaded: number, hidden: number, hiddenChanged: number) => void) | undefined;
     readonly initialGapError?: boolean;
     readonly contextAvailable?: boolean;
 }
@@ -259,7 +260,7 @@ function GapRow({
     content: FileContent | null;
     mode: DiffMode;
     onExpand: (request: ContextExpandRequest) => Promise<GapExpandResult>;
-    onExpanded: (loaded: number, hidden: number) => void;
+    onExpanded: (loaded: number, hidden: number, hiddenChanged: number) => void;
     initialError: boolean;
     contextAvailable: boolean;
 }) {
@@ -302,7 +303,8 @@ function GapRow({
                     setFailed(true);
                     return;
                 }
-                onExpanded(result.loaded, result.hidden);
+                // Expansion leaves changed lines from other stops alone. The gap hides the same count as before.
+                onExpanded(result.loaded, result.hidden, gap.hiddenChanged ?? 0);
             },
             () => {
                 if (timer.current !== null) {
@@ -418,7 +420,8 @@ function gapDirections(gap: DiffGap, hidden: number | null): readonly ExpandDire
 function gapCounterLabel(gap: DiffGap, content: FileContent | null, hovered: ExpandDirection | null): string {
     const hidden = hiddenLinesOf(gap, content);
     const base = gapLabel(gap, content);
-    if (hidden !== null && hidden < EXPAND_STEP) {
+    // Invite expansion only when there is context to expand: a gap with only other stops' changes has no targets.
+    if (hidden !== null && hidden > 0 && hidden < EXPAND_STEP) {
         return `${base} — expand`;
     }
     if (hovered === 'up' || hovered === 'down') {
