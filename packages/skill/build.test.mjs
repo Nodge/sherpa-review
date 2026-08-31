@@ -12,7 +12,8 @@ const binDir = join(distDir, 'bin');
 const cliPath = join(binDir, 'sherpa.mjs');
 const serverPath = join(binDir, 'sherpa-server.mjs');
 const uiRoot = resolve(packageRoot, '../ui');
-const cliVersion = JSON.parse(readFileSync(join(packageRoot, '../cli/package.json'), 'utf8')).version;
+/** Distribution version from the root package.json, the single source for all three bundles. */
+const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')).version;
 
 describe('skill package build', () => {
     beforeAll(() => {
@@ -38,7 +39,7 @@ describe('skill package build', () => {
     it('runs the built CLI with plain node', () => {
         const stdout = execFileSync(process.execPath, [cliPath, '--version'], { encoding: 'utf8' });
 
-        expect(stdout.trim()).toBe(cliVersion);
+        expect(stdout.trim()).toBe(releaseVersion);
     });
 
     // The worker loop calls the CLI on every request. The server and UI would add overhead to every step.

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { makeTempSherpaDir, postJson, removeTempSherpaDir, get } from './test-support.js';
+import { SERVER_VERSION } from './version.js';
 
 const PR_KEY = 'fixture-medium';
 
@@ -90,7 +91,7 @@ describe('feedback channel', () => {
             summary: '[Sherpa] Publication status is not visible',
         });
         expect(body.description).toContain('Publication status is not visible\nProblem details.');
-        expect(body.description).toContain('Version: UI 0.6.0, server 0.1.0, protocol 0.6.0');
+        expect(body.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol 0.6.0`);
         expect(body.description).toContain('PR: fixture-medium');
         expect(body.description).toContain('View: overview');
         expect(body.description).toContain('Route phase: ready');

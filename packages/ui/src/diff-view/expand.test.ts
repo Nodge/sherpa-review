@@ -11,6 +11,7 @@ import {
     gapExpansionDelta,
     gapKeyOf,
     hiddenLinesOf,
+    remainingHiddenChanged,
     remainingHiddenLines,
 } from './expand.js';
 
@@ -255,5 +256,44 @@ describe('directional context expansion', () => {
         const revealed = hunks(expanded)[1]?.lines[0];
 
         expect(revealed).toMatchObject({ oldLine: 38, newLine: 40, text: 'line-40' });
+    });
+});
+
+describe('changed lines from other stops', () => {
+    /** Gap in an anchor slice. No unchanged lines remain behind it, but changes from other stops do. */
+    function clipLike(changed: number): DiffFileModel {
+        const model = twoHunks();
+        if (model.content.kind !== 'text') {
+            throw new Error('fixture needs a text model');
+        }
+        return {
+            ...model,
+            content: {
+                kind: 'text',
+                blocks: model.content.blocks.map((block) =>
+                    block.kind === 'gap' ? { ...block, hiddenLines: 0, hiddenChanged: changed } : block,
+                ),
+            },
+        };
+    }
+
+    it('full diff hides no changed lines', () => {
+        expect(remainingHiddenChanged(twoHunks())).toBe(0);
+    });
+
+    it('sums hiddenChanged across all gaps in the slice', () => {
+        const model = clipLike(3);
+
+        expect(gaps(model)).toHaveLength(3);
+        expect(remainingHiddenLines(model, CONTENT)).toBe(0);
+        expect(remainingHiddenChanged(model)).toBe(9);
+    });
+
+    it('expanding the file leaves gaps containing only changes from other stops untouched', () => {
+        const model = clipLike(4);
+        const expanded = expandFileContext(model, CONTENT, expandAllGaps(model, EMPTY_EXPANSION));
+
+        expect(remainingHiddenLines(expanded, CONTENT)).toBe(0);
+        expect(remainingHiddenChanged(expanded)).toBe(12);
     });
 });

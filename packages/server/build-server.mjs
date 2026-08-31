@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = dirname(fileURLToPath(import.meta.url));
+// One release version for the whole distribution: the `version` field in the root package.json
+// (decision log, 2026-09-01).
+const version = JSON.parse(readFileSync(resolve(root, '../../package.json'), 'utf8')).version;
 const uiDist = resolve(root, '../ui/dist');
 const assetsModule = resolve(root, 'src/ui-assets.ts');
 const outfile = resolve(root, 'dist/sherpa-server.mjs');
@@ -32,6 +35,7 @@ await build({
     target: 'node22.13',
     packages: 'bundle',
     banner: { js: '#!/usr/bin/env node' },
+    define: { __SHERPA_VERSION__: JSON.stringify(version) },
     plugins: [inlineUiAssets(assetsModule, assets)],
     logLevel: 'info',
 });

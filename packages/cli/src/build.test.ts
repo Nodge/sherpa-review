@@ -8,8 +8,9 @@ import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bundlePath = join(packageRoot, 'dist', 'sherpa.mjs');
-const packageVersion = (
-    JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { version: string }
+/** Distribution version from the root package.json, the single source for all three bundles. */
+const releaseVersion = (
+    JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
 ).version;
 
 // The bundle is built once in globalSetup (`src/bundle.global-setup.ts`).
@@ -33,7 +34,7 @@ describe('CLI build', () => {
             encoding: 'utf8',
         });
 
-        expect(stdout.trim()).toBe(packageVersion);
+        expect(stdout.trim()).toBe(releaseVersion);
     });
 
     // No old Node is available, so a wrapper around the bundle overrides process.versions.node.

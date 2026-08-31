@@ -7,8 +7,10 @@ import react from '@vitejs/plugin-react';
 import type { ProxyOptions } from 'vite';
 import { defineConfig } from 'vite';
 
-const packageJson = JSON.parse(
-    readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+// One release version for the whole distribution: the `version` field in the root package.json
+// (decision log, 2026-09-01). The UI package version is not a source.
+const rootPackageJson = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
 /**
@@ -22,7 +24,7 @@ const proxy = devProxy();
 
 export default defineConfig({
     plugins: [react()],
-    define: { __SHERPA_VERSION__: JSON.stringify(packageJson.version) },
+    define: { __SHERPA_VERSION__: JSON.stringify(rootPackageJson.version) },
     server: proxy === null ? {} : { proxy },
 });
 

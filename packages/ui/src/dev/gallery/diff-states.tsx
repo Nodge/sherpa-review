@@ -273,6 +273,7 @@ function galleryActions(store: DiffViewStore): FileCardActions {
 const EDIT_WINDOW = 'services/orders/src/domain/edit-window.ts';
 const ORDER = 'services/orders/src/domain/order.ts';
 const HANDLERS = 'services/orders/src/api/handlers.ts';
+const CARD_TOKEN = 'services/orders/src/payments/card-token.ts';
 
 export interface DiffGalleryState {
     readonly id: string;
@@ -375,6 +376,18 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-gap-error',
         title: 'context gap: loading error',
         render: () => <CardState fixture="medium" path={ORDER} gapError />,
+    },
+    {
+        id: 'diff-gap-directional',
+        // handlers.ts gaps: an internal 34-line gap gives ↑ and ↓, a 16-line gap gives one ↕, a trailing 30-line gap gives ↓.
+        title: 'context gap: directional targets ↑/↓ for gaps of at least 20 lines',
+        render: () => <CardState fixture="medium" path={HANDLERS} />,
+    },
+    {
+        id: 'diff-gap-leading',
+        // The first card-token.ts hunk starts at line 44: expansion is only possible upwards.
+        title: 'context gap: leading gap of at least 20 lines, only ↑',
+        render: () => <CardState fixture="medium" path={CARD_TOKEN} />,
     },
     {
         id: 'diff-expand-unavailable',

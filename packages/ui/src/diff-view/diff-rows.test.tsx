@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { FileContent } from '@sherpa/protocol';
 
 import { parseFileDiff } from '../diff/parse.js';
+import { clipModelToAnchors } from '../route/anchor-clip.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { LineSelection } from './selection.js';
 
@@ -243,5 +244,37 @@ describe('line comment button', () => {
                 pair?.querySelectorAll(`.diff-row__gutter[data-side="${side}"] .diff-row__comment`),
             ).toHaveLength(1);
         }
+    });
+});
+
+describe('route slice gap bar', () => {
+    /** Only changes from other stops lie between new lines 2 and 5. There is no context to expand. */
+    function clippedGap(): HTMLElement {
+        const model = parseFileDiff({
+            fileId: 'f-clip',
+            path: 'src/clip.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: ['@@ -1,2 +1,6 @@', ' alpha', '+one', '+', '+two', '+three', ' omega', ''].join('\n'),
+        });
+        const clipped = clipModelToAnchors(model, [
+            { side: 'new', start: 2, end: 2 },
+            { side: 'new', start: 5, end: 5 },
+        ]);
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <DiffRows model={clipped.model} mode="unified" content={null} selection={null} />,
+        );
+        return host;
+    }
+
+    it('gap containing only changed lines from other stops offers no expansion and takes no tab stop', () => {
+        const gap = clippedGap().querySelector<HTMLElement>('.diff-gap');
+
+        expect(gap?.getAttribute('data-hidden')).toBe('0');
+        expect(gap?.textContent).toBe('2 changed lines — in other stops');
+        expect(gap?.querySelectorAll('[data-direction]')).toHaveLength(0);
+        expect(gap?.getAttribute('tabindex')).toBeNull();
     });
 });

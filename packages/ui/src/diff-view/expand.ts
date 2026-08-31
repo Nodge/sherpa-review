@@ -302,3 +302,21 @@ export function remainingHiddenLines(model: DiffFileModel, content: FileContent 
     }
     return total;
 }
+
+/**
+ * Number of changed lines from other stops hidden by gaps. A slice card cannot expand them
+ * because other stops explain them. Always 0 in Full diff because only clipping sets `hiddenChanged`.
+ */
+export function remainingHiddenChanged(model: DiffFileModel): number {
+    if (model.content.kind !== 'text') {
+        return 0;
+    }
+
+    let total = 0;
+    for (const block of model.content.blocks) {
+        if (block.kind === 'gap') {
+            total += block.hiddenChanged ?? 0;
+        }
+    }
+    return total;
+}
