@@ -19,6 +19,7 @@ import type {
     UiSetStopViewedResponse,
     UiStopSeenRange,
     UiTask,
+    UiViewedMirrorRequest,
     Verdict,
 } from '@sherpa/protocol';
 import {
@@ -144,6 +145,11 @@ export async function setStopViewed(
         { snapshotId, stopId, viewed, ranges },
         uiSetStopViewedResponseSchema,
     );
+}
+
+/** Mirrors read transitions from coverage. This endpoint does not change local progress. */
+export async function mirrorViewedFiles(token: string, entries: UiViewedMirrorRequest['entries']): Promise<void> {
+    await post(UI_ENDPOINTS.reviewViewedMirror, token, { entries }, uiReviewWriteAckSchema);
 }
 
 /**

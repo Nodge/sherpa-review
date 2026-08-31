@@ -24,6 +24,7 @@ import {
     uiSetStopViewedRequestSchema,
     uiSetStopViewedResponseSchema,
     uiSetThreadResolvedRequestSchema,
+    uiViewedMirrorRequestSchema,
     uiUpdateDraftRequestSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
@@ -230,14 +231,29 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                     uiSetStopViewedRequestSchema,
                     'setting a viewed mark on a stop',
                 );
-                // Stop marks are not mirrored to the host (decision log, 2026-08-26). Mirroring handles
-                // explicit file marks, and the server cannot calculate how much of a file a stop covers.
+                // The stop mark itself stays local. The UI separately reports files becoming read through its ranges
+                // via reviewViewedMirror, once it recalculates diff coverage.
                 const activeSnapshotId = options.route.read().snapshot?.snapshotId ?? null;
                 const progressRevision =
                     request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId
                         ? options.progress.revision
                         : options.progress.setStopViewed(request.stopId, request.viewed, request.ranges);
                 return respond(uiSetStopViewedResponseSchema, { progressRevision }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewViewedMirror,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(
+                    ctx,
+                    uiViewedMirrorRequestSchema,
+                    'mirroring files becoming viewed',
+                );
+                for (const entry of request.entries) {
+                    mirrorFileViewed(entry.fileId, entry.viewed);
+                }
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),
         },
         {

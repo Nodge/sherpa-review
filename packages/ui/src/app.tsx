@@ -21,6 +21,7 @@ import {
     fetchReviewThreads,
     deleteReviewDraft,
     generateReviewRoute,
+    mirrorViewedFiles,
     publishReview,
     saveReviewDraft,
     sendFeedback,
@@ -59,6 +60,7 @@ import { breadcrumbFor, documentTitleFor } from './pr-key.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
 import { createStopProgressStore } from './progress/stop-progress-store.js';
+import { viewedMirrorUpdate } from './progress/viewed-mirror.js';
 import {
     generationIsLong,
     openRouteTasks,
@@ -137,6 +139,8 @@ export function App({ store, session, token }: AppProps) {
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
     const currentDiff = currentReview.diff;
+    const progressLoaded = currentReview.progress !== null;
+    const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const diffStore = useMemo(
@@ -160,6 +164,7 @@ export function App({ store, session, token }: AppProps) {
         setStopProgressState({ key: reviewKey, store: createStopProgressStore() });
     }
     const stopProgress = stopProgressState.store;
+    const mirroredFileWrites = useRef(new Set<string>());
     const progressWriter = useMemo<ProgressWriter | null>(
         () =>
             diffStore === null
@@ -167,9 +172,26 @@ export function App({ store, session, token }: AppProps) {
                 : createProgressWriter({
                       initialRevision: 0,
                       read: (fileId) => diffStore.getSnapshot().progress.get(fileId) ?? null,
-                      apply: diffStore.markViewed,
+                      apply: (fileId, viewed) => {
+                          if (viewed) {
+                              mirroredFileWrites.current.delete(fileId);
+                          } else {
+                              mirroredFileWrites.current.add(fileId);
+                          }
+                          // markViewed synchronously notifies the mirror subscriber. Change the flag before writing to the store.
+                          diffStore.markViewed(fileId, viewed);
+                      },
                       restore: diffStore.restoreProgress,
-                      send: async (fileId, viewed) => (await setFileViewed(token, fileId, viewed)).progressRevision,
+                      send: async (fileId, viewed) => {
+                          try {
+                              return (await setFileViewed(token, fileId, viewed)).progressRevision;
+                          } catch (error) {
+                              if (!viewed) {
+                                  mirroredFileWrites.current.delete(fileId);
+                              }
+                              throw error;
+                          }
+                      },
                       stops: {
                           read: (stopId) => stopProgress.getSnapshot().get(stopId) ?? null,
                           apply: stopProgress.setViewed,
@@ -188,6 +210,11 @@ export function App({ store, session, token }: AppProps) {
                   }),
         [diffStore, routeSnapshotId, stopProgress, token],
     );
+    const viewedMirrorBaseline = useRef<{
+        readonly reviewKey: string;
+        readonly diffId: string;
+        readonly state: ReadonlyMap<string, boolean>;
+    } | null>(null);
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [paletteNavigation, setPaletteNavigation] = useState<PaletteNavigation | null>(null);
     const navigationId = useRef(0);
@@ -315,6 +342,8 @@ export function App({ store, session, token }: AppProps) {
                 }
                 const merged = progressWriter.finishReload(response, mark);
                 diffStore.setProgress(merged.files);
+                // setProgress synchronously notifies the mirror. Clear the flag after writing the cleared ranges.
+                mirroredFileWrites.current.clear();
                 stopProgress.setAll(merged.stops);
                 setReviewState((current) => ({
                     ...reviewStateForKey(current, reviewKey),
@@ -363,6 +392,34 @@ export function App({ store, session, token }: AppProps) {
         stopProgress,
         token,
     ]);
+
+    // One app-level subscriber mirrors only coverage-driven read transitions. The first complete snapshot
+    // of diff and progress is the baseline. Opening a tab does not replay history to the host.
+    useEffect(() => {
+        if (!viewedMirrorAvailable || currentDiff === null || diffStore === null || !progressLoaded) {
+            return;
+        }
+        const sync = (): void => {
+            const previous = viewedMirrorBaseline.current;
+            const diffSnapshot = diffStore.getSnapshot();
+            const update = viewedMirrorUpdate(
+                previous?.reviewKey === reviewKey && previous.diffId === currentDiff.diffId ? previous.state : null,
+                {
+                    readStates: diffSnapshot.readState,
+                    progress: diffSnapshot.progress,
+                    fileWrites: mirroredFileWrites.current,
+                },
+            );
+            viewedMirrorBaseline.current = { reviewKey, diffId: currentDiff.diffId, state: update.state };
+            if (update.entries.length > 0) {
+                void mirrorViewedFiles(token, update.entries).catch(() => undefined);
+            }
+        };
+
+        const unsubscribe = diffStore.subscribe(sync);
+        sync();
+        return unsubscribe;
+    }, [currentDiff, diffStore, progressLoaded, reviewKey, token, viewedMirrorAvailable]);
 
     // App is the sole owner of thread reads. A revision is marked seen only after a successful read.
     const seenThreads = useRef<{ key: string; revision: number | null; loaded: boolean }>({

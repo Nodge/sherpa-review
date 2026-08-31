@@ -649,6 +649,13 @@ describe('server review endpoints', () => {
             return postJson(server.port, UI_ENDPOINTS.reviewStopViewed, { stopId, viewed, ranges }, server.token);
         }
 
+        async function mirrorViewed(
+            server: SherpaServer,
+            entries: readonly { fileId: string; viewed: boolean }[],
+        ): Promise<Response> {
+            return postJson(server.port, UI_ENDPOINTS.reviewViewedMirror, { entries }, server.token);
+        }
+
         it('an empty PR has no records and revision zero', async () => {
             const server = await start(FIXTURE_PR);
 
@@ -784,6 +791,62 @@ describe('server review endpoints', () => {
 
             expect((await readProgress(server)).files).toEqual([{ fileId: file, viewed: true, seenRanges: [] }]);
             expect((await host.getDiff()).files.find((candidate) => candidate.fileId === file)?.viewed).toBeNull();
+        });
+
+        it('the mirror endpoint passes the entire batch to the host without changing local progress', async () => {
+            const host = makeFixtureHost('medium');
+            const applied: { fileId: string; viewed: boolean }[] = [];
+            const original = host.setFileViewed?.bind(host);
+            if (original === undefined) {
+                throw new Error('the medium fixture host must support fileViewedSync');
+            }
+            host.setFileViewed = async (fileId, viewed) => {
+                await original(fileId, viewed);
+                applied.push({ fileId, viewed });
+            };
+            const server = await start(FIXTURE_PR, host);
+            const [first, second] = await fileIds(server);
+            if (first === undefined || second === undefined) {
+                throw new Error('the fixture diff has fewer than two files');
+            }
+            const before = await readProgress(server);
+            const entries = [
+                { fileId: first, viewed: true },
+                { fileId: second, viewed: false },
+            ];
+
+            const response = await mirrorViewed(server, entries);
+
+            expect(response.status).toBe(200);
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+            await expect.poll(() => applied).toEqual(expect.arrayContaining(entries));
+            expect(applied).toHaveLength(entries.length);
+            expect(await readProgress(server)).toEqual(before);
+        });
+
+        it('the mirror endpoint without fileViewedSync acknowledges a no-op and leaves progress unchanged', async () => {
+            const host = makeFixtureHost('small');
+            expect(host.setFileViewed).toBeUndefined();
+            const server = await start('fixture-small', host);
+            const file = (await firstFileId(server)) ?? '';
+            const before = await readProgress(server);
+
+            const response = await mirrorViewed(server, [{ fileId: file, viewed: true }]);
+
+            expect(response.status).toBe(200);
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+            expect(await readProgress(server)).toEqual(before);
+            expect((await host.getDiff()).files.find((candidate) => candidate.fileId === file)?.viewed).toBeNull();
+        });
+
+        it('the mirror endpoint also acknowledges a no-op without a review host', async () => {
+            const server = await start(UNKNOWN_PR);
+
+            const response = await mirrorViewed(server, [{ fileId: 'file-1', viewed: true }]);
+
+            expect(response.status).toBe(200);
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
         });
 
         it('a mirror failure does not roll back the write or break the response', async () => {
