@@ -37,7 +37,7 @@ export function publishDisabledReason(input: PublishGuardInput): string | null {
         return 'no connection to the server';
     }
     if (input.pendingComposer) {
-        return 'a draft is still being saved';
+        return 'there is unsaved text';
     }
     if (input.failure === true) {
         return 'retry the previous publication first';

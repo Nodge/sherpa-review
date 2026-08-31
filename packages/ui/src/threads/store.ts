@@ -73,6 +73,9 @@ export interface ThreadStore {
     readonly addDraft: (draft: CommentDraft, comment: Comment) => void;
     readonly updateDraft: (commentId: string, body: string) => void;
     readonly deleteDraft: (commentId: string) => void;
+    /** Keeps the publication guard active until a confirmed draft deletion completes. */
+    readonly beginDraftDeletion: (commentId: string) => void;
+    readonly endDraftDeletion: (commentId: string) => void;
     readonly setResolved: (threadId: string, resolved: boolean) => void;
     /** Accepts a request rollback until the next server snapshot, when the server becomes the source of truth again. */
     readonly restoreResolved: (threadId: string, resolved: boolean) => void;
@@ -87,8 +90,8 @@ export interface ThreadStore {
     readonly openComposer: (composer: ComposerSnapshot) => void;
     readonly updateComposer: (key: string, patch: Partial<Omit<ComposerSnapshot, 'key'>>) => void;
     readonly closeComposer: (key: string) => void;
-    /** Closes the composers of published drafts and returns their keys to the controllers. */
-    readonly closePublishedComposers: (commentIds: ReadonlySet<string>) => readonly string[];
+    /** Closes composers for the given comments and returns their keys to the controllers. */
+    readonly closeComposersForComments: (commentIds: ReadonlySet<string>) => readonly string[];
 }
 
 export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlySet<string>): ThreadStore {
@@ -105,6 +108,7 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
     const undoTimers = new Map<string, ReturnType<typeof setTimeout>>();
     let undoGeneration = 0;
     const composers = new Map<string, ComposerSnapshot>();
+    const draftDeletions = new Map<string, number>();
     let snapshot = buildSnapshot(null);
     let composersSnapshot: ComposerLayoutSnapshot = { byFile: new Map() };
     let composerGuardSnapshot: ComposerGuardSnapshot = { pending: false };
@@ -137,11 +141,15 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
     };
 
     const publishComposerGuard = (): void => {
-        const pending = [...composers.values()].some(
-            (composer) =>
-                composer.status === 'discarding' ||
-                (composer.commentId === null ? composer.text.trim() !== '' : composer.status !== 'saved'),
-        );
+        const pending =
+            draftDeletions.size > 0 ||
+            [...composers.values()].some(
+                (composer) =>
+                    composer.status === 'saving' ||
+                    composer.status === 'discarding' ||
+                    composer.saveUncertain ||
+                    (composer.commentId === null ? composer.text.trim() !== '' : composer.status !== 'saved'),
+            );
         if (pending === composerGuardSnapshot.pending) {
             return;
         }
@@ -251,6 +259,22 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
             serverThreads = removeComment(serverThreads, commentId);
             publish();
         },
+        beginDraftDeletion: (commentId) => {
+            draftDeletions.set(commentId, (draftDeletions.get(commentId) ?? 0) + 1);
+            publishComposerGuard();
+        },
+        endDraftDeletion: (commentId) => {
+            const count = draftDeletions.get(commentId);
+            if (count === undefined) {
+                return;
+            }
+            if (count === 1) {
+                draftDeletions.delete(commentId);
+            } else {
+                draftDeletions.set(commentId, count - 1);
+            }
+            publishComposerGuard();
+        },
         setResolved: (threadId, value) => {
             reconcileResolved.delete(threadId);
             resolved.set(threadId, value);
@@ -338,7 +362,7 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
         closeComposer: (key) => {
             closeComposer(key);
         },
-        closePublishedComposers: (commentIds) => {
+        closeComposersForComments: (commentIds) => {
             const keys = [...composers.values()]
                 .filter((composer) => composer.commentId !== null && commentIds.has(composer.commentId))
                 .map((composer) => composer.key);

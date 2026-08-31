@@ -1,5 +1,5 @@
 import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot } from '@sherpa/protocol';
+import type { RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -27,6 +27,11 @@ if (READY?.snapshot == null) {
 }
 const SNAPSHOT: RouteSnapshot = READY.snapshot;
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
+const ORDER_FILE = DATA.diff.files.find((file) => file.path === 'services/orders/src/domain/order.ts');
+const GENERATED_FILE = DATA.diff.files.find((file) => file.path === 'pnpm-lock.yaml');
+if (ORDER_FILE === undefined || GENERATED_FILE === undefined) {
+    throw new Error('the medium fixture needs order.ts and pnpm-lock.yaml');
+}
 
 function render(
     options: {
@@ -43,11 +48,18 @@ function render(
         parsed?: boolean;
         /** Global diff mode (SPEC §2.6): applies to route cards too. */
         mode?: 'unified' | 'split';
+        progress?: readonly UiFileProgress[];
+        collapsed?: ReadonlyMap<string, boolean>;
         onSetStopViewed?: (stopId: string, viewed: boolean) => Promise<number>;
         onFillStop?: (planIndex: number) => void;
     } = {},
 ): string {
-    const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
+    const store = createDiffViewStore({
+        files: DATA.diff.files,
+        storage: null,
+        ...(options.progress === undefined ? {} : { progress: options.progress }),
+        ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
+    });
     if (options.mode !== undefined) {
         store.setDiffMode(options.mode);
     }
@@ -532,6 +544,33 @@ describe('route view', () => {
         expect(shown).toContain('12 assertions · 3 files · 172 lines · viewed');
         expect(hidden).toContain('</span>Viewed</button>');
         expect(shown).toContain('</span>Viewed</button>');
+    });
+
+    it('a viewed file collapses inside its stop', () => {
+        const html = section(
+            render({ progress: [{ fileId: ORDER_FILE.fileId, viewed: true, seenRanges: [] }] }),
+            's02',
+        );
+
+        expect(html).toContain('order.ts');
+        expect(html).toContain('file-card__collapsed--file');
+        expect(html).toContain('· viewed');
+    });
+
+    it('the generated file summary counts the slice and hides the separate collapsed-anchor button', () => {
+        const stops = { ...EMPTY_STOPS, expanded: new Set(['s06']) };
+        const collapsed = section(render({ stops }), 's06');
+        const expanded = section(
+            render({ stops, collapsed: new Map([[GENERATED_FILE.fileId, false]]) }),
+            's06',
+        );
+
+        expect(collapsed).toContain('+217');
+        expect(collapsed).toContain('−9');
+        expect(collapsed).toContain('· generated file');
+        expect(collapsed).not.toContain('route-stop__collapsed-lines');
+        expect(expanded).toContain('route-stop__collapsed-lines');
+        expect(expanded).toContain('226 changed lines collapsed by the model');
     });
 
     it('the stop card renders the diff clipped by its anchors', () => {

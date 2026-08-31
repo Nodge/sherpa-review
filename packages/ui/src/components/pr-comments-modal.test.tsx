@@ -221,8 +221,17 @@ describe('PR comments modal', () => {
             (button) => button.textContent === 'Cancel',
         );
 
-        await act(async () => {
+        act(() => {
             cancel?.click();
+        });
+        const confirm = item?.querySelector('.thread-composer__confirm');
+        expect(confirm?.textContent).toContain('Discard this draft?');
+        expect(update).not.toHaveBeenCalled();
+
+        await act(async () => {
+            [...(confirm?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+                .find((button) => button.textContent === 'discard')
+                ?.click();
             await vi.waitFor(() => {
                 expect(update).toHaveBeenCalledWith(DRAFT.root.id, DRAFT.root.body);
             });

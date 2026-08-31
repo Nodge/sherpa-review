@@ -183,6 +183,32 @@ describe('long line wrapping', () => {
     });
 });
 
+describe('range thread focus', () => {
+    it.each(['unified', 'split'] as const)('highlights all lines in its range in mode %s', (mode) => {
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <DiffRows
+                model={MODEL}
+                mode={mode}
+                content={null}
+                selection={null}
+                focusedThreadRange={{ side: 'new', line: 1, size: 3 }}
+            />,
+        );
+
+        const focusedKeys = new Set(
+            [...host.querySelectorAll('.is-thread-focused')]
+                .map((element) => element.getAttribute('data-key'))
+                .filter((key): key is string => key !== null),
+        );
+        expect(focusedKeys).toEqual(new Set(['c1:1', 'a2', 'c3:3']));
+        if (mode === 'split') {
+            expect(host.querySelectorAll('.diff-side[data-side="old"].is-thread-focused')).toHaveLength(0);
+        }
+        expect(host.querySelectorAll('.is-selected')).toHaveLength(0);
+    });
+});
+
 describe('line comment button', () => {
     it.each(['unified', 'split'] as const)('sits in the gutter and uses a 15px pencil in mode %s', (mode) => {
         const host = render(mode);
@@ -205,5 +231,17 @@ describe('line comment button', () => {
                 ? visible[0]?.closest('.diff-row')?.getAttribute('data-key')
                 : visible[0]?.parentElement?.getAttribute('data-key');
         expect(key).toBe('d2');
+    });
+
+    it('each split half associates its pencil only with its own cells', () => {
+        const host = render('split');
+        const pair = host.querySelector('.diff-row--pair');
+
+        for (const side of ['old', 'new']) {
+            expect(pair?.querySelectorAll(`.diff-side[data-side="${side}"]`).length).toBeGreaterThan(0);
+            expect(
+                pair?.querySelectorAll(`.diff-row__gutter[data-side="${side}"] .diff-row__comment`),
+            ).toHaveLength(1);
+        }
     });
 });

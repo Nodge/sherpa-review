@@ -642,7 +642,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
         (opened || changed <= COLLAPSE_THRESHOLD);
-    const { threadsUnderHeader, renderAfterLine: renderThreads } = useCardThreads({
+    const { threadsUnderHeader, renderAfterLine: renderThreads, focusedThreadRange } = useCardThreads({
         model: shownModel,
         rowsShown: canRenderRows,
         threads: visibleThreads,
@@ -716,6 +716,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 }
                 routeStrips={stripsUnderHeader}
                 threadsUnderHeader={threadsUnderHeader}
+                focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 actions={actions}
             />

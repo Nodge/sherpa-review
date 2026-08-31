@@ -24,7 +24,6 @@ export interface ComposerControllerOptions {
     readonly store: ThreadStore;
     readonly key: string;
     readonly transport: ComposerTransport;
-    readonly debounceMs?: number;
     readonly slowMs?: number;
 }
 
@@ -43,20 +42,23 @@ export function composerControllerFor(options: ComposerControllerOptions): Compo
     return created;
 }
 
-/** A published draft can no longer be edited through the old composer. */
-export function closePublishedComposers(store: ThreadStore, commentIds: readonly string[]): void {
-    const keys = store.closePublishedComposers(new Set(commentIds));
+/** Closes composers for comments that can no longer be edited. */
+export function closeCommentComposers(store: ThreadStore, commentIds: readonly string[]): void {
+    const keys = store.closeComposersForComments(new Set(commentIds));
     const byKey = controllers.get(store);
     for (const key of keys) {
         byKey?.get(key)?.close();
     }
 }
 
-/** Draft autosave: debounce ≤1s, the first save returns an id, then updates follow. */
+/** A published draft can no longer be edited through the old composer. */
+export function closePublishedComposers(store: ThreadStore, commentIds: readonly string[]): void {
+    closeCommentComposers(store, commentIds);
+}
+
+/** Saves drafts explicitly: the first save returns an id, subsequent saves use update. */
 export function createComposerController(options: ComposerControllerOptions): ComposerController {
-    const debounceMs = options.debounceMs ?? 1000;
     const slowMs = options.slowMs ?? 500;
-    let debounce: ReturnType<typeof setTimeout> | null = null;
     let slow: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
     let inFlight: Promise<boolean> | null = null;
@@ -84,10 +86,6 @@ export function createComposerController(options: ComposerControllerOptions): Co
     };
 
     const clearTimers = (): void => {
-        if (debounce !== null) {
-            clearTimeout(debounce);
-            debounce = null;
-        }
         clearSlow();
     };
 
@@ -128,7 +126,11 @@ export function createComposerController(options: ComposerControllerOptions): Co
                         createdWhileDiscarding = { draft, comment };
                     } else {
                         options.store.addDraft(draft, comment);
-                        options.store.updateComposer(options.key, { commentId: comment.id, saveUncertain: false });
+                        options.store.updateComposer(options.key, {
+                            commentId: comment.id,
+                            originalText: body,
+                            saveUncertain: false,
+                        });
                     }
                 } else {
                     const issueUpdate = issue === lastWrittenIssue ? undefined : issue;
@@ -140,10 +142,19 @@ export function createComposerController(options: ComposerControllerOptions): Co
                     }
                     if (!ignoreRequestResult()) {
                         options.store.updateDraft(current.commentId, body);
+                        options.store.updateComposer(options.key, { originalText: body });
                     }
                 }
-                if (!ignoreRequestResult() && state()?.text === body && state()?.issue === issue) {
-                    options.store.updateComposer(options.key, { status: 'saved', slow: false, savedAt: Date.now() });
+                if (!ignoreRequestResult()) {
+                    const latest = state();
+                    if (latest?.text === body && latest.issue === issue) {
+                        options.store.updateComposer(options.key, { status: 'saved', slow: false, savedAt: Date.now() });
+                    } else if (latest?.status === 'saving') {
+                        options.store.updateComposer(options.key, {
+                            status: latest.saveUncertain ? 'error' : 'idle',
+                            slow: false,
+                        });
+                    }
                 }
                 return true;
             } catch {
@@ -156,7 +167,6 @@ export function createComposerController(options: ComposerControllerOptions): Co
                 }
                 return false;
             } finally {
-                // Input during a request starts a new debounce. Completing the old save does not cancel it.
                 clearSlow();
                 inFlight = null;
             }
@@ -212,6 +222,10 @@ export function createComposerController(options: ComposerControllerOptions): Co
     };
 
     const discard = (): Promise<boolean> => {
+        const current = state();
+        if (current?.commentId !== null && current?.commentId !== undefined && current.originalText !== undefined) {
+            return restore(current.originalText);
+        }
         if (discardPromise !== null) {
             return discardPromise;
         }
@@ -271,27 +285,23 @@ export function createComposerController(options: ComposerControllerOptions): Co
         return discardPromise;
     };
 
-    const schedule = (): void => {
-        if (debounce !== null) {
-            clearTimeout(debounce);
-        }
-        debounce = setTimeout(() => {
-            debounce = null;
-            void perform(false);
-        }, debounceMs);
-    };
-
     const restore = async (text: string): Promise<boolean> => {
-        const commentId = state()?.commentId;
-        if (closed || reverting || commentId === null || commentId === undefined) {
+        const current = state();
+        if (closed || reverting || current?.commentId == null) {
             return false;
+        }
+        const commentId = current.commentId;
+        if (current.text === text && current.status === 'saved') {
+            options.store.closeComposer(options.key);
+            closed = true;
+            forget();
+            return true;
         }
         clearTimers();
         reverting = true;
         queuedDraft = null;
         closeQueued = false;
         options.store.updateComposer(options.key, {
-            text,
             status: 'saving',
             slow: false,
             confirmDiscard: false,
@@ -320,20 +330,13 @@ export function createComposerController(options: ComposerControllerOptions): Co
                 return;
             }
             const current = state();
+            const saving = current?.status === 'saving';
             options.store.updateComposer(options.key, {
                 text,
-                status: current?.saveUncertain === true ? 'error' : 'idle',
-                slow: false,
+                status: saving ? 'saving' : current?.saveUncertain === true ? 'error' : 'idle',
+                slow: saving ? current.slow : false,
                 confirmDiscard: false,
             });
-            if (text.trim() === '' || current?.saveUncertain === true) {
-                if (debounce !== null) {
-                    clearTimeout(debounce);
-                    debounce = null;
-                }
-            } else {
-                schedule();
-            }
         },
         setIssue: (issue) => {
             if (closed || reverting) {
@@ -343,15 +346,14 @@ export function createComposerController(options: ComposerControllerOptions): Co
             if (current?.issue === undefined || current.issue === issue) {
                 return;
             }
+            // Changing issue only marks the composer as unsaved. The write happens on the next
+            // explicit save (perform compares issue with lastWrittenIssue).
             options.store.updateComposer(options.key, {
                 issue,
                 status: current.saveUncertain ? 'error' : 'idle',
                 slow: false,
                 confirmDiscard: false,
             });
-            if (current.text.trim() !== '' && !current.saveUncertain) {
-                schedule();
-            }
         },
         saveNow: (close = false) => perform(close),
         // The first save is not idempotent in the UI contract. The UI must show the risk of retrying.
@@ -363,7 +365,13 @@ export function createComposerController(options: ComposerControllerOptions): Co
                 return;
             }
             clearTimers();
-            if (current.text.trim() === '') {
+            if (current.commentId !== null && current.originalText !== undefined) {
+                if (current.text === current.originalText) {
+                    void restore(current.originalText);
+                } else {
+                    options.store.updateComposer(options.key, { confirmDiscard: true });
+                }
+            } else if (current.text.trim() === '') {
                 void discard();
             } else {
                 options.store.updateComposer(options.key, { confirmDiscard: true });

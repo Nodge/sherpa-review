@@ -14,7 +14,8 @@ export function draftEditComposerKey(commentId: string): string {
 /** Opens an existing draft for editing independently of the bottom line composer. */
 export function openDraftEditor(store: ThreadStore, thread: Thread, comment: Comment): void {
     const key = draftEditComposerKey(comment.id);
-    if (store.getComposer(key) !== null) {
+    const replyComposer = store.getComposer(`reply:${thread.id}`);
+    if (store.getComposer(key) !== null || replyComposer?.commentId === comment.id) {
         return;
     }
     // `Comment` omits the current issue status: update without `issue` preserves it on the host.
@@ -89,6 +90,7 @@ export function DraftEditor({
             placeholder={placeholder}
             inputLabel={inputLabel}
             saveLabel="Save changes"
+            closeOnSave
             {...(footerHint === undefined ? {} : { footerHint })}
             {...(initialLayout === undefined ? {} : { initialLayout })}
             restoreOnCancel={composer.originalText ?? comment.body}

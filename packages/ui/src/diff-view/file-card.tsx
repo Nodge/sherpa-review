@@ -11,7 +11,7 @@ import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from 
 import { DiffRows } from './diff-rows.tsx';
 import type { FileExpansion } from './expand.js';
 import { expandFileContext, gapExpansionDelta, gapKeyOf, remainingHiddenLines } from './expand.js';
-import type { LineKey, LineSelection } from './selection.js';
+import type { LineKey, LineRange, LineSelection } from './selection.js';
 import { parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
 
@@ -44,7 +44,7 @@ export interface FileCardActions {
     readonly onExpand: (fileId: string, request: ContextExpandRequest) => Promise<ContextExpandResult>;
     /** Retry patch parsing after a worker failure. */
     readonly onRetryParse: (fileId: string) => void;
-    /** Full diff only. The route omits this and keeps its stop behaviour. */
+    /** Toggle manual/read/generated file card collapse. */
     readonly onToggleCollapse?: ((fileId: string) => void) | undefined;
     readonly onOpenFile: (fileId: string) => void;
     readonly onShowWhitespace: (fileId: string) => void;
@@ -71,7 +71,7 @@ export interface FileCardProps {
     readonly read: FileReadState;
     /** Collapse reason per SPEC §2.9. null means the manual/read/generated layer is expanded. */
     readonly collapseReason?: FileCollapseReason | null;
-    /** Toggles manual/read/generated collapse. Without it, the header keeps its previous behaviour (Route). */
+    /** Toggle manual/read/generated collapse. Without it the header ignores clicks. */
     readonly onToggleCollapse?: (() => void) | undefined;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
@@ -102,6 +102,7 @@ export interface FileCardProps {
     /** Strips for uncovered ranges with no row, grouped below the header. */
     readonly routeStrips?: ReactNode;
     readonly threadsUnderHeader?: ReactNode;
+    readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly actions: FileCardActions;
 }
@@ -130,6 +131,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         routeBadge = null,
         routeStrips = null,
         threadsUnderHeader = null,
+        focusedThreadRange = null,
         renderAfterLine,
         actions,
     } = props;
@@ -310,6 +312,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             {collapseReason !== null ? (
                 <CollapsedFileSummary
                     file={file}
+                    counts={counts}
                     reason={collapseReason}
                     onExpand={() => {
                         onToggleCollapse?.();
@@ -347,6 +350,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     contextAvailable={contentAvailable && content !== null}
                     loadingMinHeight={loadingMinHeight}
                     selection={selection}
+                    focusedThreadRange={focusedThreadRange}
                     showWhitespace={showWhitespace}
                     onShowWhitespace={onShowWhitespace}
                     onSelectStart={onSelectStart}
@@ -369,10 +373,12 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
 function CollapsedFileSummary({
     file,
+    counts,
     reason,
     onExpand,
 }: {
     file: FileDiff;
+    counts: FileCardProps['counts'];
     reason: FileCollapseReason;
     onExpand: () => void;
 }) {
@@ -383,8 +389,8 @@ function CollapsedFileSummary({
             <span className="file-card__collapsed-mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            <span className="file-card__add">+{formatCount(file.additions)}</span>
-            <span className="file-card__del">−{formatCount(file.deletions)}</span>
+            <span className="file-card__add">+{formatCount(counts?.additions ?? file.additions)}</span>
+            <span className="file-card__del">−{formatCount(counts?.deletions ?? file.deletions)}</span>
             <span>· {text}</span>
             <span className="file-card__collapsed-spacer" />
             <span className="file-card__collapsed-hint">click to expand the lines</span>
@@ -490,6 +496,7 @@ interface BodyProps {
     readonly contextAvailable: boolean;
     readonly loadingMinHeight?: number | undefined;
     readonly selection: LineSelection | null;
+    readonly focusedThreadRange: LineRange | null;
     readonly showWhitespace: boolean;
     readonly onShowWhitespace: () => void;
     readonly onSelectStart: (key: LineKey, extend: boolean) => void;
@@ -561,6 +568,7 @@ function Body(props: BodyProps) {
                 mode={mode}
                 content={content}
                 selection={selection}
+                focusedThreadRange={props.focusedThreadRange}
                 renderAfterLine={props.renderAfterLine}
                 onCommentLine={props.onCommentLine}
                 onLineFocus={props.onLineFocus}

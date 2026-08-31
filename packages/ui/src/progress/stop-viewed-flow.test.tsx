@@ -4,9 +4,10 @@ import type { RouteSnapshot, UiFileProgress, UiStopProgress, UiStopSeenRange } f
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../app.tsx';
+import { collapsedStorageKey } from '../diff-view/collapsed-storage.js';
 import { parseFileDiff } from '../diff/parse.js';
 import type { SessionStore } from '../session/session-store.js';
 import { createSessionStore } from '../session/session-store.js';
@@ -126,6 +127,7 @@ afterEach(() => {
     for (const cleanup of cleanups.splice(0)) {
         cleanup();
     }
+    vi.restoreAllMocks();
 });
 
 interface MountOptions {
@@ -341,6 +343,37 @@ function fileViewedToggle(section: HTMLElement, fileId: string): HTMLButtonEleme
 function filesRead(host: HTMLElement): string {
     return host.querySelector('.review-action-bar__progress')?.textContent ?? '';
 }
+
+describe('collapse persistence at the App level', () => {
+    it('writes only when collapsePreferences changes', async () => {
+        const key = collapsedStorageKey('fixture/medium');
+        localStorage.removeItem(key);
+        const setItem = vi.spyOn(Storage.prototype, 'setItem');
+        const view = mount();
+        await view.settle();
+        setItem.mockClear();
+
+        const mode = view.host.querySelector<HTMLButtonElement>('.diff-mode-toggle');
+        const card = stopSection(view.host, 's01').querySelector<HTMLElement>('.file-card');
+        const name = card?.querySelector<HTMLElement>('.file-card__name');
+        const fileId = card?.dataset.file;
+        if (mode === null || name === null || name === undefined || fileId === undefined) {
+            throw new Error('route needs a mode toggle and a file card');
+        }
+
+        act(() => {
+            mode.click();
+        });
+        expect(setItem.mock.calls.filter(([storageKey]) => storageKey === key)).toHaveLength(0);
+
+        act(() => {
+            name.click();
+        });
+        expect(setItem.mock.calls.filter(([storageKey]) => storageKey === key)).toHaveLength(1);
+        expect(JSON.parse(localStorage.getItem(key) ?? '{}')).toMatchObject({ [fileId]: true });
+        localStorage.removeItem(key);
+    });
+});
 
 describe('marking a stop updates its file read-state boxes', () => {
     it('updates without reloading after ranges are sent and the progress snapshot reaches the file store', async () => {

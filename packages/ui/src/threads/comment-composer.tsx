@@ -38,6 +38,7 @@ export interface CommentComposerProps {
     readonly footerHint?: ReactNode;
     readonly initialLayout?: ComposerLayout;
     readonly onSaveComplete?: (() => void) | undefined;
+    readonly closeOnSave?: boolean;
     readonly showDraftChip?: boolean;
     readonly restoreOnCancel?: string;
     readonly onCancel?: (() => void) | undefined;
@@ -56,6 +57,7 @@ export function CommentComposer({
     footerHint,
     initialLayout,
     onSaveComplete,
+    closeOnSave = true,
     showDraftChip = false,
     restoreOnCancel,
     onCancel,
@@ -67,6 +69,8 @@ export function CommentComposer({
     const [layout, setLayout] = useState<ComposerLayout>(() => initialLayout ?? readStoredLayout());
     const [visualReady, setVisualReady] = useState(false);
     const resolvedSaveLabel = saveLabel ?? 'Save draft';
+    const resolvedRestoreOnCancel =
+        restoreOnCancel ?? (composer.commentId === null ? undefined : (composer.originalText ?? composer.text));
     const resolvedWhileTyping = notice !== undefined;
     const ambiguousFirstSave = composer.status === 'error' && composer.saveUncertain && composer.commentId === null;
     const disabled = composer.status === 'discarding';
@@ -83,13 +87,17 @@ export function CommentComposer({
             ? 'Type the comment text.'
             : null;
     const save = useCallback(async (): Promise<void> => {
-        if (await controller.saveNow(true)) {
+        if (await controller.saveNow(closeOnSave)) {
             onSaveComplete?.();
         }
-    }, [controller, onSaveComplete]);
+    }, [closeOnSave, controller, onSaveComplete]);
     const cancel = useCallback((): void => {
-        if (restoreOnCancel !== undefined) {
-            void controller.restore(restoreOnCancel).then((restored) => {
+        if (resolvedRestoreOnCancel !== undefined) {
+            if (composer.text !== resolvedRestoreOnCancel) {
+                controller.escape();
+                return;
+            }
+            void controller.restore(resolvedRestoreOnCancel).then((restored) => {
                 if (restored) {
                     onCancel?.();
                 }
@@ -103,7 +111,7 @@ export function CommentComposer({
         controller.close();
         store.closeComposer(composer.key);
         onCancel();
-    }, [composer.key, controller, onCancel, restoreOnCancel, store]);
+    }, [composer.key, composer.text, controller, onCancel, resolvedRestoreOnCancel, store]);
 
     useEffect(() => {
         currentTextRef.current = composer.text;
@@ -352,7 +360,7 @@ function ComposerStatus({
     if (composer.status === 'error') {
         return (
             <span className="thread-composer__status is-error">
-                not saved, the draft stays in the field, will retry ·{' '}
+                not saved — the draft stays in the field ·{' '}
                 <button type="button" onClick={() => void onRetry()}>
                     retry
                 </button>
@@ -369,6 +377,9 @@ function ComposerStatus({
                 {composer.savedAt == null ? null : <> · {formatTime(composer.savedAt)}</>}
             </span>
         );
+    }
+    if (composer.text !== '' || composer.commentId !== null) {
+        return <span className="thread-composer__status">not saved — ⌘⏎ or the button</span>;
     }
     return null;
 }

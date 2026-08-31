@@ -1,6 +1,15 @@
+// @vitest-environment jsdom
+import { schema } from 'prosemirror-markdown';
+import { EditorState } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 
-import { serializeMarkdown } from './visual-editor.js';
+import {
+    inlineMarkdownInputRules,
+    parseClipboardMarkdown,
+    serializeMarkdown,
+    serializeMarkdownDocument,
+} from './visual-editor.js';
 
 const CASES = [
     ['bold', '**important**', '**important**'],
@@ -24,5 +33,39 @@ const CASES = [
 describe('visual editor Markdown round trip', () => {
     it.each(CASES)('%s', (_title, markdown, expected) => {
         expect(serializeMarkdown(markdown)).toBe(expected);
+    });
+
+    it('parses pasted plain text as Markdown without adding backslashes', () => {
+        const slice = parseClipboardMarkdown('check **bold** and `code`');
+        const doc = schema.topNodeType.create(null, slice.content);
+
+        expect(doc.firstChild?.child(1).marks[0]?.type.name).toBe('strong');
+        expect(doc.firstChild?.child(3).marks[0]?.type.name).toBe('code');
+        expect(serializeMarkdownDocument(doc)).toBe('check **bold** and `code`');
+    });
+
+    it.each([
+        ['**bold**', 'strong'],
+        ['*italic*', 'em'],
+        ['`code`', 'code'],
+    ])('turns typed %s into mark %s', (input, markName) => {
+        const host = document.createElement('div');
+        const view = new EditorView(host, {
+            state: EditorState.create({ schema, plugins: [inlineMarkdownInputRules()] }),
+        });
+
+        for (const character of input) {
+            const { from, to } = view.state.selection;
+            const handled = view.someProp('handleTextInput', (handler) =>
+                handler(view, from, to, character, () => view.state.tr.insertText(character, from, to)),
+            );
+            if (!handled) {
+                view.dispatch(view.state.tr.insertText(character, from, to));
+            }
+        }
+
+        expect(view.state.doc.textContent).toBe(input.replace(/^\*\*|\*\*$|^\*|\*$|^`|`$/g, ''));
+        expect(view.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe(markName);
+        view.destroy();
     });
 });

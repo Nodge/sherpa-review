@@ -1,5 +1,6 @@
 import { baseKeymap, setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
+import { InputRule, inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import {
     defaultMarkdownParser,
@@ -8,7 +9,8 @@ import {
     MarkdownSerializer,
     schema,
 } from 'prosemirror-markdown';
-import type { MarkType, NodeType } from 'prosemirror-model';
+import { Slice } from 'prosemirror-model';
+import type { MarkType, Node as ProseMirrorNode, NodeType } from 'prosemirror-model';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import type { Command, Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -67,8 +69,26 @@ export function parseMarkdown(markdown: string) {
     return markdownParser.parse(markdown);
 }
 
+export function parseClipboardMarkdown(markdown: string): Slice {
+    return Slice.maxOpen(parseMarkdown(markdown).content);
+}
+
+export function inlineMarkdownInputRules() {
+    return inputRules({
+        rules: [
+            markInputRule(/\*\*([^*\n]+)\*\*$/, schema.marks.strong, 1),
+            markInputRule(/(^|[^*])\*([^*\n]+)\*$/, schema.marks.em, 2, 1),
+            markInputRule(/`([^`\n]+)`$/, schema.marks.code, 1),
+        ],
+    });
+}
+
+export function serializeMarkdownDocument(doc: ProseMirrorNode): string {
+    return markdownSerializer.serialize(doc);
+}
+
 export function serializeMarkdown(markdown: string): string {
-    return markdownSerializer.serialize(parseMarkdown(markdown));
+    return serializeMarkdownDocument(parseMarkdown(markdown));
 }
 
 function parsesAsPlainText(markdown: string): boolean {
@@ -98,7 +118,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
             if (!transaction.docChanged) {
                 return;
             }
-            lastMarkdown = markdownSerializer.serialize(nextState.doc);
+            lastMarkdown = serializeMarkdownDocument(nextState.doc);
             options.onChange(lastMarkdown);
         },
         editable: () => !disabled,
@@ -108,6 +128,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
             'aria-label': options.ariaLabel,
             'aria-multiline': 'true',
         },
+        clipboardTextParser: parseClipboardMarkdown,
         handleKeyDown: (_view, event) => {
             if (isComposerShortcut(event) || isComposerInputKey(event.key)) {
                 event.stopPropagation();
@@ -151,6 +172,7 @@ function stateFor(markdown: string, options: VisualEditorOptions): EditorState {
         doc: parseMarkdown(markdown),
         plugins: [
             history(),
+            inlineMarkdownInputRules(),
             keymap({
                 'Mod-b': formatMark(schema.marks.strong, 'text'),
                 'Mod-i': formatMark(schema.marks.em, 'text'),
@@ -169,6 +191,31 @@ function stateFor(markdown: string, options: VisualEditorOptions): EditorState {
             keymap(baseKeymap),
         ],
     });
+}
+
+function markInputRule(
+    pattern: RegExp,
+    mark: MarkType,
+    contentIndex: number,
+    prefixIndex?: number,
+): InputRule {
+    return new InputRule(
+        pattern,
+        (state, match, start, end) => {
+            const content = match[contentIndex];
+            if (content === undefined) {
+                return null;
+            }
+            const prefix = prefixIndex === undefined ? '' : (match[prefixIndex] ?? '');
+            const from = start + prefix.length;
+            return state.tr
+                .delete(from, end)
+                .insertText(content, from)
+                .addMark(from, from + content.length, mark.create())
+                .removeStoredMark(mark);
+        },
+        { inCodeMark: false },
+    );
 }
 
 function commandFor(tool: ComposerTool): Command {

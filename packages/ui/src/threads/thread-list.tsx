@@ -6,10 +6,11 @@ import { updateFragment } from '../fragment.js';
 import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
+import { closeCommentComposers } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
 import type { ComposerLayout } from './composer-markdown.js';
-import { DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
+import { draftEditComposerKey, DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
 import { authorName, flattenThread } from './model.js';
 import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
@@ -77,6 +78,9 @@ function ThreadBlock({
     const editingId = useActiveDraftEditor(store, commentIds);
     const [repliesOpen, setRepliesOpen] = useState(true);
     const [expanded, setExpanded] = useState(false);
+    const [confirmingId, setConfirmingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
     const collapseBot = repliesOpen && thread.root.author.bot && all.length > 5 && !expanded;
     const shown = !repliesOpen
         ? all.slice(0, 1)
@@ -84,11 +88,17 @@ function ThreadBlock({
           ? [all[0], all[1], ...all.slice(-2)].filter((row) => row !== undefined)
           : all;
     const hidden = Math.max(all.length - shown.length, 0);
+    const draftReply = replyDraft(thread);
+    const replyComposer = useComposerSnapshot(store, `reply:${thread.id}`);
+    // OutsideThreads also edits drafts inline: the row sets availability, not the list container.
+    const draftEditorAvailable =
+        draftReply !== null &&
+        (editingId === draftReply.id || shown.some((row) => row.comment.id === draftReply.id));
     // The third argument is the same snapshot. The store is isomorphic, and tests render the cards statically.
     const undoEntry =
         useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).undo.get(thread.id) ?? null;
     const undo = undoEntry?.resolved ?? null;
-    const hideActions = inlineDraftEditing && thread.root.draft;
+    const hideActions = thread.root.draft;
 
     const setResolved = (resolved: boolean): void => {
         const generation = store.startUndo(thread.id, resolved);
@@ -97,6 +107,23 @@ function ThreadBlock({
                 store.clearUndo(thread.id, generation);
             }
         });
+    };
+
+    const deleteDraft = async (commentId: string): Promise<void> => {
+        setDeletingId(commentId);
+        setDeleteErrorId(null);
+        store.beginDraftDeletion(commentId);
+        try {
+            await actions.transport.delete(commentId);
+            closeCommentComposers(store, [commentId]);
+            store.deleteDraft(commentId);
+            setConfirmingId(null);
+        } catch {
+            setDeleteErrorId(commentId);
+        } finally {
+            store.endDraftDeletion(commentId);
+            setDeletingId(null);
+        }
     };
 
     return (
@@ -145,19 +172,37 @@ function ThreadBlock({
                             <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
                         ) : null}
                         <span className="thread__spacer" />
-                        {inlineDraftEditing && row.comment.draft && editingId !== row.comment.id ? (
-                            <button
-                                type="button"
-                                className="thread__edit-draft"
-                                aria-label={`Edit draft ${row.comment.id}`}
-                                title="Edit the draft"
-                                disabled={editingId !== null}
-                                onClick={() => {
-                                    openDraftEditor(store, thread, row.comment);
-                                }}
-                            >
-                                <Icon name="pencil" size={14} />
-                            </button>
+                        {row.comment.draft &&
+                        editingId !== row.comment.id &&
+                        replyComposer?.commentId !== row.comment.id ? (
+                            <span className="thread__draft-actions">
+                                <button
+                                    type="button"
+                                    className="thread__edit-draft"
+                                    aria-label={`Edit draft ${row.comment.id}`}
+                                    title="Edit the draft"
+                                    disabled={editingId !== null || deletingId !== null}
+                                    onClick={() => {
+                                        setConfirmingId(null);
+                                        openDraftEditor(store, thread, row.comment);
+                                    }}
+                                >
+                                    <Icon name="pencil" size={14} />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="thread__delete-draft"
+                                    aria-label={`Delete draft ${row.comment.id}`}
+                                    title="Delete the draft"
+                                    disabled={editingId !== null || deletingId !== null}
+                                    onClick={() => {
+                                        setDeleteErrorId(null);
+                                        setConfirmingId(row.comment.id);
+                                    }}
+                                >
+                                    <Icon name="trash" size={14} />
+                                </button>
+                            </span>
                         ) : null}
                         {row.subtreeReplies > 0 ? (
                             index === 0 ? (
@@ -195,6 +240,35 @@ function ThreadBlock({
                             <Markdown text={row.comment.body} profile="comment" />
                         </div>
                     )}
+                    {confirmingId === row.comment.id ? (
+                        <div className="thread__delete-confirm">
+                            <span>
+                                {deleteErrorId === row.comment.id
+                                    ? 'Could not delete the draft. Retry?'
+                                    : 'Delete the draft? It will not be published'}
+                            </span>
+                            <span className="thread__spacer" />
+                            <button
+                                type="button"
+                                className="thread__delete-confirm-button"
+                                disabled={deletingId === row.comment.id}
+                                onClick={() => void deleteDraft(row.comment.id)}
+                            >
+                                {deletingId === row.comment.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                            <button
+                                type="button"
+                                className="thread__keep-draft"
+                                disabled={deletingId === row.comment.id}
+                                onClick={() => {
+                                    setDeleteErrorId(null);
+                                    setConfirmingId(null);
+                                }}
+                            >
+                                Keep
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
             ))}
 
@@ -253,7 +327,9 @@ function ThreadBlock({
                         thread={thread}
                         store={store}
                         transport={actions.transport}
-                        inlineDraftEditing={inlineDraftEditing}
+                        draft={draftReply}
+                        draftEditorAvailable={draftEditorAvailable}
+                        composer={replyComposer}
                     />
                 </>
             )}
@@ -330,17 +406,21 @@ export function NewCommentComposer({
     if (composer === null) {
         return null;
     }
-    const line = composer.anchor?.position?.line;
+    const position = composer.anchor?.position;
     return (
         <CommentComposer
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={contextLabel ?? (line === undefined ? 'PR comment' : `new comment · line ${String(line)}`)}
-            placeholder={placeholder ?? (line === undefined ? 'A general remark on the PR, not tied to a line' : 'Comment on the code line')}
+            contextLabel={contextLabel ?? (position == null ? 'PR comment' : `new comment · ${lineRangeLabel(position)}`)}
+            placeholder={placeholder ?? (position == null ? 'A general remark on the PR — not tied to a line' : 'Comment on the code line')}
             inputLabel="New comment"
+            saveLabel={saveLabel ?? (composer.commentId === null ? 'Save draft' : 'Save changes')}
+            closeOnSave
             showDraftChip={showDraftChip}
-            {...(saveLabel === undefined ? {} : { saveLabel })}
+            {...(composer.commentId === null
+                ? {}
+                : { restoreOnCancel: composer.originalText ?? composer.text })}
             {...(footerHint === undefined ? {} : { footerHint })}
             {...(initialLayout === undefined ? {} : { initialLayout })}
             {...(onSaveComplete === undefined ? {} : { onSaveComplete })}
@@ -352,17 +432,19 @@ function ComposerForThread({
     thread,
     store,
     transport,
-    inlineDraftEditing,
+    draft,
+    draftEditorAvailable,
+    composer,
 }: {
     thread: Thread;
     store: ThreadStore;
     transport: ComposerTransport;
-    inlineDraftEditing: boolean;
+    draft: Comment | null;
+    draftEditorAvailable: boolean;
+    composer: ComposerSnapshot | null;
 }) {
-    const composer = useComposerSnapshot(store, `reply:${thread.id}`);
-    const draft = replyDraft(thread);
     if (composer === null) {
-        if (draft !== null && inlineDraftEditing) {
+        if (draft !== null && draftEditorAvailable) {
             return null;
         }
         if (draft !== null) {
@@ -405,6 +487,10 @@ function ComposerForThread({
             placeholder="Reply in the thread"
             inputLabel="Thread reply"
             saveLabel={composer.commentId === null ? 'Save draft' : 'Save changes'}
+            closeOnSave
+            {...(composer.commentId === null
+                ? {}
+                : { restoreOnCancel: composer.originalText ?? draft?.body ?? composer.text })}
             notice={
                 resolvedWhileTyping
                     ? `resolved by ${thread.resolvedBy ?? 'another reviewer'} while you were writing · your reply will reopen it`
@@ -480,7 +566,10 @@ export function openNewComposer(
 
 export function openReply(store: ThreadStore, thread: Thread, draft: Comment | null = replyDraft(thread)): void {
     const key = `reply:${thread.id}`;
-    if (store.getComposer(key) !== null) {
+    if (
+        store.getComposer(key) !== null ||
+        (draft !== null && store.getComposer(draftEditComposerKey(draft.id)) !== null)
+    ) {
         return;
     }
     store.openComposer({
@@ -489,6 +578,7 @@ export function openReply(store: ThreadStore, thread: Thread, draft: Comment | n
         parentId: thread.root.id,
         anchor: null,
         text: draft?.body ?? '',
+        ...(draft === null ? {} : { originalText: draft.body }),
         commentId: draft?.id ?? null,
         status: draft === null ? 'idle' : 'saved',
         savedAt: draft === null ? null : Date.parse(draft.editedAt ?? draft.createdAt),
@@ -501,8 +591,17 @@ export function openReply(store: ThreadStore, thread: Thread, draft: Comment | n
 
 function metaOf(thread: Thread, createdAt: string, now: number): string {
     const path = thread.anchor?.path.split('/').at(-1) ?? 'PR';
-    const line = thread.anchor?.position?.line;
-    return `${path}${line === undefined ? '' : `:${String(line)}`} · ${relativeTime(createdAt, now)}`;
+    const position = thread.anchor?.position;
+    return `${path}${position == null ? '' : `:${lineRange(position)}`} · ${relativeTime(createdAt, now)}`;
+}
+
+function lineRangeLabel(position: { readonly line: number; readonly size: number }): string {
+    return position.size > 1 ? `lines ${lineRange(position)}` : `line ${String(position.line)}`;
+}
+
+function lineRange(position: { readonly line: number; readonly size: number }): string {
+    const last = position.line + Math.max(position.size, 1) - 1;
+    return last === position.line ? String(position.line) : `${String(position.line)}–${String(last)}`;
 }
 
 function initials(name: string): string {
