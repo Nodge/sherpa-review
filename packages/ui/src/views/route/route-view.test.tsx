@@ -221,10 +221,11 @@ describe('route view', () => {
         expect(order(tour)).toEqual([...SNAPSHOT.tourOrder]);
     });
 
-    it('the header has a snapshot pill with a short commit hash', () => {
+    it('shows a snapshot pill in the header with a short commit and no version picker', () => {
         const html = render();
 
-        expect(html).toContain(`snapshot ${SNAPSHOT.commit.slice(0, 7)} · current`);
+        expect(html).toContain(`snapshot ${SNAPSHOT.commit.slice(0, 7)}`);
+        expect(html).not.toContain('· current');
     });
 
     it('a high stop gets a badge and a numbered region role', () => {

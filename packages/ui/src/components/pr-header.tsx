@@ -11,8 +11,8 @@ import './pr-header.css';
  * The component is shared with the route view in M2, so it knows nothing about
  * data loading or the chip destination. Both come through props.
  *
- * The header's right side is the `aside` slot: the route uses it for the snapshot selector (README §1),
- * the full diff leaves it empty. M2 has no working snapshot selection. It arrives in M4.
+ * The right side of the header is the `aside` slot. Route puts the snapshot pill there (README §1),
+ * Full diff leaves it empty. Snapshot selection arrives in M4.
  *
  * The `overview` variant has its own layout from the prototype Overview screen (`Sherpa.dc.html:523-529`):
  * PR number in the metadata row, a larger title, author without an avatar, time, branches and check

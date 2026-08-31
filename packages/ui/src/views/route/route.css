@@ -35,7 +35,7 @@
     color: var(--text-dim);
 }
 
-/* --- Snapshot pill (README §1: `snapshot 9f3c1ab · current`) --- */
+/* --- Snapshot pill (`snapshot 9f3c1ab`) --- */
 
 .route-snapshot {
     display: inline-flex;

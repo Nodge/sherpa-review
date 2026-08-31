@@ -85,6 +85,13 @@ describe('Overview during generation', () => {
         expect(html).not.toContain('Run the skill');
         expect(html).not.toContain('gen-card');
     });
+
+    it('has no snapshot card even after the route is ready', () => {
+        const html = render('overview', state('medium', 'ready'));
+
+        expect(html).not.toContain('Snapshots');
+        expect(html).not.toContain('No snapshots yet');
+    });
 });
 
 describe('Route tab without a route', () => {

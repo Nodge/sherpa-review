@@ -1722,7 +1722,7 @@ function OtherSection({
 export function SnapshotPill({ snapshot }: { snapshot: RouteSnapshot }) {
     return (
         <span className="route-snapshot" title={`Route built for commit ${snapshot.commit}`}>
-            snapshot {snapshot.commit.slice(0, 7)} · current
+            snapshot {snapshot.commit.slice(0, 7)}
         </span>
     );
 }

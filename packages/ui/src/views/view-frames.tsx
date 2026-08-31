@@ -281,9 +281,6 @@ export function OverviewView({
                         loading={reviewHostAvailable && threadsLoading}
                         error={threadsError}
                     />
-                    <OverviewCard title="Snapshots">
-                        <p className="overview-card__empty">No snapshots yet — they appear with the first route.</p>
-                    </OverviewCard>
                 </aside>
             </div>
         </main>

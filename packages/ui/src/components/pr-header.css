@@ -68,7 +68,7 @@
     color: var(--text-primary);
 }
 
-/* Header bottom row: author on the left, `aside` slot (snapshot selector) on the right. */
+/* Bottom header row: author on the left, `aside` slot (snapshot pill) on the right. */
 .pr-header__bottom {
     display: flex;
     align-items: center;
