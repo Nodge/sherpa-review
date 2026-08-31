@@ -13,6 +13,8 @@ import type {
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiRouteFillStopRequest,
+    UiRouteFillStopResponse,
     UiRouteGenerateResponse,
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
@@ -36,6 +38,7 @@ import {
     uiReviewRouteResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
+    uiRouteFillStopResponseSchema,
     uiRouteGenerateResponseSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
@@ -164,6 +167,20 @@ export async function generateReviewRoute(token: string): Promise<UiRouteGenerat
         token,
         {},
         uiRouteGenerateResponseSchema,
+    );
+    return body.outcome;
+}
+
+/** Fills one failed slot in the current snapshot without rebuilding the entire route. */
+export async function fillRouteStop(
+    token: string,
+    request: UiRouteFillStopRequest,
+): Promise<UiRouteFillStopResponse['outcome']> {
+    const body: UiRouteFillStopResponse = await post(
+        UI_ENDPOINTS.reviewRouteFillStop,
+        token,
+        request,
+        uiRouteFillStopResponseSchema,
     );
     return body.outcome;
 }

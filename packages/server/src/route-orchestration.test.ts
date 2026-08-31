@@ -11,6 +11,7 @@ import {
     uiReviewProgressResponseSchema,
     uiReviewRouteResponseSchema,
     uiRouteEventSchema,
+    uiRouteFillStopResponseSchema,
     uiRouteGenerateResponseSchema,
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -114,13 +115,30 @@ describe('route orchestration', () => {
         expect((await readRoute(server)).route.phase).toBe('ready');
     }
 
+    /** Ready route with one failed slot, the initial state for the fill-stop endpoint. */
+    async function completeRouteWithFailedFirstStop(server: SherpaServer): Promise<void> {
+        completeTask(server, routeTasks(server, 'route.skeleton').at(-1) ?? 0, mediumRawResults().skeleton);
+        const sections = routeTasks(server, 'route.section');
+        const failedTaskId = sections[0] ?? 0;
+        expect(server.queue.next(WORKER)?.task.id).toBe(failedTaskId);
+        server.queue.fail(WORKER, failedTaskId, 'the agent stopped early');
+        for (const [position, taskId] of sections.entries()) {
+            if (taskId !== failedTaskId) {
+                completeTask(server, taskId, sectionFor(position + 1));
+            }
+        }
+        const route = (await readRoute(server)).route;
+        expect(route.phase).toBe('ready');
+        expect(route.snapshot?.stops[0]?.status).toBe('failed');
+    }
+
     async function readProgress(server: SherpaServer) {
         return uiReviewProgressResponseSchema.parse(
             await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
         );
     }
 
-    async function markStop(server: SherpaServer): Promise<void> {
+    async function markStop(server: SherpaServer, stopId = 's01', fileId = 'file-1'): Promise<void> {
         const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId;
         if (snapshotId === undefined) {
             throw new Error('a stop mark requires a route snapshot');
@@ -130,12 +148,23 @@ describe('route orchestration', () => {
             UI_ENDPOINTS.reviewStopViewed,
             {
                 snapshotId,
-                stopId: 's01',
+                stopId,
                 viewed: true,
-                ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }],
+                ranges: [{ fileId, side: 'new', start: 3, end: 7 }],
             },
             server.token,
         );
+    }
+
+    async function fillStop(server: SherpaServer, snapshotId: string, planIndex: number): Promise<string> {
+        const response = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewRouteFillStop,
+            { snapshotId, planIndex },
+            server.token,
+        );
+        expect(response.status).toBe(200);
+        return uiRouteFillStopResponseSchema.parse(await response.json()).outcome;
     }
 
     it('warmup enqueues a skeleton when an agent is connected, the PR exceeds the threshold and there is no route', async () => {
@@ -543,6 +572,162 @@ describe('route orchestration', () => {
             expect(response.status).toBe(404);
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
             expect((await readRoute(server)).route.phase).toBe('none');
+        });
+    });
+
+    describe('fill-stop endpoint', () => {
+        function openSectionTasks(server: SherpaServer): TaskRecord[] {
+            return server.queue
+                .listTasks()
+                .filter(
+                    (task) =>
+                        task.type === 'route.section' && (task.status === 'queued' || task.status === 'leased'),
+                );
+        }
+
+        it('fills a failed stop with one section without changing the snapshot or losing other progress', async () => {
+            const server = await startWithWorker();
+            await completeRouteWithFailedFirstStop(server);
+            await markStop(server, 's02', 'file-2');
+            const before = (await readRoute(server)).route.snapshot;
+            const snapshotId = before?.snapshotId ?? '';
+            const beforeHash = before?.contentHash;
+
+            expect(await fillStop(server, snapshotId, 1)).toBe('started');
+
+            const filling = (await readRoute(server)).route;
+            expect(filling.phase).toBe('filling');
+            expect(filling.snapshot?.snapshotId).toBe(snapshotId);
+            expect(filling.snapshot?.contentHash).toBeNull();
+            expect(filling.snapshot?.stops[0]).toMatchObject({ status: 'queued', validationNotes: [] });
+            const [section] = openSectionTasks(server);
+            expect(openSectionTasks(server)).toHaveLength(1);
+            expect(server.route.stopsOfTask(section?.id ?? 0)).toEqual([1]);
+
+            expect(completeTask(server, section?.id ?? 0, sectionFor(1)).kind).toBe('accepted');
+
+            const ready = (await readRoute(server)).route;
+            expect(ready.phase).toBe('ready');
+            expect(ready.snapshot?.snapshotId).toBe(snapshotId);
+            expect(ready.snapshot?.stops[0]).toEqual(mediumReadySnapshot().stops[0]);
+            expect(ready.snapshot?.contentHash).toMatch(/^[0-9a-f]{12}$/);
+            expect(ready.snapshot?.contentHash).not.toBe(beforeHash);
+            expect((await readProgress(server)).stops).toEqual([{ stopId: 's02', viewed: true }]);
+        });
+
+        it('an unavailable diff leaves the route outside filling and the failed stop unchanged', async () => {
+            const first = await startWithWorker();
+            await completeRouteWithFailedFirstStop(first);
+            const before = await readRoute(first);
+            const snapshotId = before.route.snapshot?.snapshotId ?? '';
+            await first.close();
+
+            const broken = makeFixtureHost('medium');
+            broken.getDiff = () => Promise.reject(new Error('host is down'));
+            const second = await startServer({
+                prKey: MEDIUM_PR,
+                sherpaDir,
+                longPollSeconds: 0.3,
+                reviewHostFactory: () => ({ name: 'fixture', host: broken }),
+            });
+            servers.push(second);
+            const beforeFill = await readRoute(second);
+            expect(beforeFill.route).toEqual(before.route);
+
+            const response = await postJson(
+                second.port,
+                UI_ENDPOINTS.reviewRouteFillStop,
+                { snapshotId, planIndex: 1 },
+                second.token,
+            );
+
+            expect(response.status).toBe(502);
+            const error = rpcErrorSchema.parse(await response.json());
+            expect(error.error.code).toBe('host_unavailable');
+            expect(error.error.message).toContain('Host adapter did not return the diff');
+            expect(await readRoute(second)).toEqual(beforeFill);
+            expect(openSectionTasks(second)).toHaveLength(0);
+        });
+
+        it('guards distinguish a busy phase, an old snapshot and an already filled stop', async () => {
+            const server = await startWithWorker();
+            expect(await fillStop(server, 'another-snapshot', 1)).toBe('already_running');
+
+            completeTask(server, routeTasks(server, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
+            const sections = routeTasks(server, 'route.section');
+            const fillingSnapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
+            expect(await fillStop(server, fillingSnapshotId, 1)).toBe('already_running');
+
+            const failedTaskId = sections[0] ?? 0;
+            expect(server.queue.next(WORKER)?.task.id).toBe(failedTaskId);
+            server.queue.fail(WORKER, failedTaskId, 'the agent stopped early');
+            for (const [position, taskId] of sections.entries()) {
+                if (taskId !== failedTaskId) {
+                    completeTask(server, taskId, sectionFor(position + 1));
+                }
+            }
+
+            const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
+            expect(await fillStop(server, 'old-snapshot', 1)).toBe('stale_snapshot');
+            expect(await fillStop(server, snapshotId, 1)).toBe('started');
+            expect(await fillStop(server, snapshotId, 1)).toBe('already_running');
+            const [refill] = openSectionTasks(server);
+            expect(openSectionTasks(server)).toHaveLength(1);
+
+            expect(completeTask(server, refill?.id ?? 0, sectionFor(1)).kind).toBe('accepted');
+            expect(await fillStop(server, snapshotId, 1)).toBe('not_unfilled');
+            expect(openSectionTasks(server)).toHaveLength(0);
+        });
+
+        it('a fill failure restores the failed stop and phase ready in the same snapshot', async () => {
+            const server = await startWithWorker();
+            await completeRouteWithFailedFirstStop(server);
+            const before = (await readRoute(server)).route.snapshot;
+            const snapshotId = before?.snapshotId ?? '';
+
+            expect(await fillStop(server, snapshotId, 1)).toBe('started');
+            const [section] = openSectionTasks(server);
+            expect(server.queue.next(WORKER)?.task.id).toBe(section?.id);
+            server.queue.fail(WORKER, section?.id ?? 0, 'refill failed');
+
+            const ready = (await readRoute(server)).route;
+            expect(ready.phase).toBe('ready');
+            expect(ready.snapshot?.snapshotId).toBe(snapshotId);
+            expect(ready.snapshot?.stops[0]?.status).toBe('failed');
+            expect(ready.snapshot?.stops[0]?.validationNotes.join(' ')).toContain('refill failed');
+            expect(ready.snapshot?.stops.slice(1)).toEqual(before?.stops.slice(1));
+        });
+
+        it('full regeneration and filling block each other', async () => {
+            const server = await startWithWorker();
+            expect((await readRoute(server)).route.phase).toBe('reading');
+            expect(await fillStop(server, 'another-snapshot', 1)).toBe('already_running');
+
+            await completeRouteWithFailedFirstStop(server);
+            const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
+            expect(await fillStop(server, snapshotId, 1)).toBe('started');
+            expect(await server.route.generate()).toBe('already_running');
+            expect(openSectionTasks(server)).toHaveLength(1);
+        });
+
+        it('a restart during filling preserves the task and reconciliation brings the stop to ready', async () => {
+            const first = await startWithWorker();
+            await completeRouteWithFailedFirstStop(first);
+            const snapshotId = (await readRoute(first)).route.snapshot?.snapshotId ?? '';
+            expect(await fillStop(first, snapshotId, 1)).toBe('started');
+            const taskId = openSectionTasks(first)[0]?.id ?? 0;
+            await first.close();
+
+            const second = await startWithWorker();
+            expect((await readRoute(second)).route.phase).toBe('filling');
+            expect(openSectionTasks(second).map((task) => task.id)).toEqual([taskId]);
+            expect(second.route.stopsOfTask(taskId)).toEqual([1]);
+
+            expect(completeTask(second, taskId, sectionFor(1)).kind).toBe('accepted');
+            const ready = (await readRoute(second)).route;
+            expect(ready.phase).toBe('ready');
+            expect(ready.snapshot?.snapshotId).toBe(snapshotId);
+            expect(ready.snapshot?.stops[0]?.status).toBe('ready');
         });
     });
 

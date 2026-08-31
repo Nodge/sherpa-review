@@ -20,6 +20,7 @@ import {
     fetchReviewRoute,
     fetchReviewThreads,
     deleteReviewDraft,
+    fillRouteStop,
     generateReviewRoute,
     publishReview,
     saveReviewDraft,
@@ -441,6 +442,13 @@ export function App({ store, session, token }: AppProps) {
     });
     const [routeRetry, setRouteRetry] = useState<{ key: string; attempt: number }>({ key: reviewKey, attempt: 0 });
     const routeRetryAttempt = routeRetry.key === reviewKey ? routeRetry.attempt : 0;
+    const refreshRoute = useCallback(() => {
+        seenRoute.current.loaded = false;
+        setRouteRetry((current) => ({
+            key: reviewKey,
+            attempt: current.key === reviewKey ? current.attempt + 1 : 1,
+        }));
+    }, [reviewKey]);
     useEffect(() => {
         if (!reviewReady || reviewHost === null) {
             return;
@@ -676,6 +684,27 @@ export function App({ store, session, token }: AppProps) {
             },
         );
     }, [route?.smallPr, routePhase, stopGenerating, token]);
+    const fillStop = useCallback(
+        (planIndex: number) => {
+            const snapshotId = route?.snapshot?.snapshotId;
+            if (routePhase !== 'ready' || snapshotId === undefined) {
+                return;
+            }
+
+            setRouteActionFailure(null);
+            void fillRouteStop(token, { snapshotId, planIndex }).then(
+                (outcome) => {
+                    if (outcome === 'stale_snapshot' || outcome === 'not_unfilled') {
+                        refreshRoute();
+                    }
+                },
+                (error: unknown) => {
+                    setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
+                },
+            );
+        },
+        [refreshRoute, route?.snapshot?.snapshotId, routePhase, token],
+    );
     const cancelGeneration = useCallback(() => {
         const ids = routeTasks.map((task) => task.id);
         if (ids.length === 0) {
@@ -983,7 +1012,7 @@ export function App({ store, session, token }: AppProps) {
                     agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}
-                    {...(generateAvailable ? { onGenerate: startGeneration } : {})}
+                    {...(routePhase === 'ready' ? { onFillStop: fillStop } : {})}
                     onRouteSummary={reportRouteSummary}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (
