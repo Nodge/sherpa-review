@@ -13,11 +13,5 @@
       "runtimeArgs": ["--filter", "@sherpa/ui", "dev", "--port", "5173", "--strictPort"],
       "port": 5173
     },
-    {
-      "name": "sherpa-ui-wt",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "/Users/alice/Sites/sherpa-wt-m2f-t36-t37", "--filter", "@sherpa/ui", "dev", "--port", "5199", "--strictPort"],
-      "port": 5199
-    }
   ]
 }
