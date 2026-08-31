@@ -1320,7 +1320,7 @@ export function makeMediumFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'passed',
             updatedAt: '2026-08-19T16:42:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
         },
         diff: {
             diffId: DIFF_ID,

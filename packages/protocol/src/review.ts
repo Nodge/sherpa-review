@@ -30,6 +30,8 @@ export const hostCapabilitiesSchema = z.object({
     fileViewedSync: z.boolean(),
     /** The host can return full file contents (`getFileContent`). Without it, "Expand context" is unavailable. */
     fileContent: z.boolean(),
+    /** The host distinguishes "comment opens an issue / needs no reply" (`CommentDraft.issue`). Without it, the UI hides the control. */
+    commentIssues: z.boolean(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -179,6 +181,12 @@ export const commentDraftSchema = z.object({
     body: z.string().min(1),
     parentId: hostIdSchema.nullable(),
     anchor: fileAnchorSchema.nullable(),
+    /**
+     * Whether the comment opens an issue (requires a reply). Passed only for new threads and
+     * PR-level comments. Omitted for replies and hosts without `commentIssues`,
+     * so the host uses its default.
+     */
+    issue: z.boolean().optional(),
 });
 export type CommentDraft = z.infer<typeof commentDraftSchema>;
 

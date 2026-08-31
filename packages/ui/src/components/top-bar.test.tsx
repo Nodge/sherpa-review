@@ -16,7 +16,7 @@ const PR = {
     statusLabel: 'review_in_progress',
     checks: 'passed',
     updatedAt: '2026-08-24T06:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
+    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
 } as const;
 
 function topBar(pr: typeof PR | null): string {

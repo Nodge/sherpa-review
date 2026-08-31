@@ -627,7 +627,7 @@ describe('server review endpoints', () => {
 
     describe('reading progress', () => {
         async function readProgress(server: SherpaServer): Promise<{
-            files: { fileId: string; viewed: boolean; seenRanges: unknown[] }[];
+            files: { fileId: string; viewed: boolean | null; seenRanges: unknown[] }[];
             stops: { stopId: string; viewed: boolean }[];
             progressRevision: number;
         }> {
