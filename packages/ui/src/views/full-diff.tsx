@@ -302,8 +302,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     useEffect(() => {
-        writeFileCollapsed(collapsedStorage, prKey, snapshot.collapsePreferences);
-    }, [collapsedStorage, prKey, snapshot.collapsePreferences]);
+        if (props.store === undefined) {
+            writeFileCollapsed(collapsedStorage, prKey, snapshot.collapsePreferences);
+        }
+    }, [collapsedStorage, prKey, props.store, snapshot.collapsePreferences]);
     useEffect(() => {
         if (props.store !== undefined && props.progressWriter === undefined && initialProgress !== undefined) {
             store.setProgress(initialProgress.files);

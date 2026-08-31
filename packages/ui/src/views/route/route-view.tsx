@@ -31,6 +31,7 @@ import type { FileExpansion } from '../../diff-view/expand.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { flashRow } from '../../diff-view/line-target.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
+import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
@@ -702,6 +703,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             if (hidden) {
                 session.setFilter(ALL_FILTER_ID);
             }
+            if (fileId !== null) {
+                store.revealFile(fileId);
+            }
             if (entry.kind === 'other') {
                 setOtherOpen(true);
                 return;
@@ -713,7 +717,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 session.setStopTestCode(entry.view.stop.id, true);
             }
         },
-        [expandStop, filter.fileIds, matches, session],
+        [expandStop, filter.fileIds, matches, session, store],
     );
 
     const openFile = useCallback(
@@ -1258,6 +1262,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const cardFor = useCallback(
         (stopId: string, group: RouteFileGroup) => {
             const key = `${stopId}\u0000${group.fileId}`;
+            const collapseReason = fileCollapseReason(diffSnapshot, group.file);
             return (
                 <StopFileCard
                     key={group.fileId}
@@ -1272,6 +1277,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         diffSnapshot.readState.get(group.fileId) ??
                         readStateOf({ file: group.file, record: null })
                     }
+                    collapseReason={collapseReason}
+                    onToggleCollapse={() => {
+                        actions.onLineBlur?.();
+                        store.toggleFileCollapse(group.fileId);
+                    }}
                     showWhitespace={diffSnapshot.whitespaceShown.has(group.fileId)}
                     selection={diffSnapshot.selection?.fileId === group.fileId ? diffSnapshot.selection : null}
                     threads={visibleThreads(group)}
@@ -1303,6 +1313,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             openedCollapsed,
             parseErrors,
             pr.capabilities.fileContent,
+            store,
             threadActions,
             threadNow,
             threadStore,

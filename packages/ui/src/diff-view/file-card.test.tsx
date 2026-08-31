@@ -47,7 +47,40 @@ function render(file: FileDiff, hint = false): string {
     );
 }
 
-describe('file card header', () => {
+describe('file card', () => {
+    it('collapsed card summary uses the supplied slice counters', () => {
+        const file = DATA.diff.files.find(
+            (candidate) => !candidate.binary && candidate.additions !== 3 && candidate.deletions !== 2,
+        );
+        if (file === undefined) {
+            throw new Error('edge fixture needs a text file');
+        }
+
+        const html = renderToStaticMarkup(
+            <FileCard
+                file={file}
+                model={parseFileDiff(toParseRequest(file))}
+                mode="unified"
+                content={null}
+                contentAvailable={false}
+                expansion={new Map()}
+                read={readStateOf({ file, record: null })}
+                collapseReason="manual"
+                onToggleCollapse={() => undefined}
+                opened
+                showWhitespace={false}
+                counts={{ additions: 3, deletions: 2 }}
+                selection={null}
+                actions={ACTIONS}
+            />,
+        );
+        const summary = html.slice(html.indexOf('file-card__collapsed--file'));
+
+        expect(summary).toContain('+3');
+        expect(summary).toContain('−2');
+        expect(summary).not.toContain(`+${String(file.additions)}`);
+        expect(summary).not.toContain(`−${String(file.deletions)}`);
+    });
     it('keeps Blame and context expansion as buttons, without copy/open actions', () => {
         const source = DATA.diff.files.find((file) => !file.binary);
         if (source === undefined) {

@@ -7,7 +7,7 @@ import { FileCard } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import { expandFileContext } from '../../diff-view/expand.js';
-import type { DiffMode } from '../../diff-view/store.js';
+import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
@@ -35,6 +35,8 @@ export interface StopFileCardProps {
     readonly contentAvailable: boolean;
     readonly expansion: FileExpansion;
     readonly read: FileReadState;
+    readonly collapseReason: FileCollapseReason | null;
+    readonly onToggleCollapse: () => void;
     readonly showWhitespace: boolean;
     readonly threads: readonly Thread[];
     readonly composers: readonly ComposerSnapshot[];
@@ -58,6 +60,8 @@ export function StopFileCard({
     contentAvailable,
     expansion,
     read,
+    collapseReason,
+    onToggleCollapse,
     showWhitespace,
     threads,
     composers,
@@ -87,7 +91,10 @@ export function StopFileCard({
     // Same condition as the full diff card: notices (binary, "whitespace only")
     // replace lines, so placing threads on them would make the threads disappear.
     const rowsShown =
-        parseError === null && shown?.content.kind === 'text' && (!shown.whitespaceOnly || showWhitespace);
+        collapseReason === null &&
+        parseError === null &&
+        shown?.content.kind === 'text' &&
+        (!shown.whitespaceOnly || showWhitespace);
     const { threadsUnderHeader, renderAfterLine } = useCardThreads({
         model: shown,
         rowsShown,
@@ -114,6 +121,8 @@ export function StopFileCard({
                 transform={clip}
                 counts={{ additions: group.additions, deletions: group.deletions }}
                 read={read}
+                collapseReason={collapseReason}
+                onToggleCollapse={onToggleCollapse}
                 opened
                 showWhitespace={showWhitespace}
                 selection={selection}
@@ -121,7 +130,7 @@ export function StopFileCard({
                 renderAfterLine={renderAfterLine}
                 actions={actions}
             />
-            {collapsedHidden ? (
+            {collapseReason === null && collapsedHidden ? (
                 <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="updown" size={13} />
@@ -133,7 +142,7 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-hint">nothing is hidden — click to expand</span>
                 </button>
             ) : null}
-            {collapsedOpen && group.collapsedLines > 0 ? (
+            {collapseReason === null && collapsedOpen && group.collapsedLines > 0 ? (
                 <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="chev-down" size={13} className="route-stop__collapsed-icon--up" />

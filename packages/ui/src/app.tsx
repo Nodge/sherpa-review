@@ -42,7 +42,11 @@ import {
 } from './components/review-action-bar.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
-import { globalCollapsedStorage, readCollapsed as readFileCollapsed } from './diff-view/collapsed-storage.js';
+import {
+    globalCollapsedStorage,
+    readCollapsed as readFileCollapsed,
+    writeCollapsed as writeFileCollapsed,
+} from './diff-view/collapsed-storage.js';
 import { expandFileContext } from './diff-view/expand.js';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
@@ -143,16 +147,32 @@ export function App({ store, session, token }: AppProps) {
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
+    const collapsedStorage = useMemo(() => globalCollapsedStorage(), []);
     const diffStore = useMemo(
         () =>
             currentDiff === null || prKey === null
                 ? null
                 : createDiffViewStore({
                       files: currentDiff.files,
-                      collapsed: readFileCollapsed(globalCollapsedStorage(), prKey),
+                      collapsed: readFileCollapsed(collapsedStorage, prKey),
                   }),
-        [currentDiff, prKey],
+        [collapsedStorage, currentDiff, prKey],
     );
+    useEffect(() => {
+        if (diffStore === null || prKey === null) {
+            return;
+        }
+        let collapsePreferences = diffStore.getSnapshot().collapsePreferences;
+        writeFileCollapsed(collapsedStorage, prKey, collapsePreferences);
+        return diffStore.subscribe(() => {
+            const next = diffStore.getSnapshot().collapsePreferences;
+            if (next === collapsePreferences) {
+                return;
+            }
+            collapsePreferences = next;
+            writeFileCollapsed(collapsedStorage, prKey, collapsePreferences);
+        });
+    }, [collapsedStorage, diffStore, prKey]);
     const [progressWritesSettled, setProgressWritesSettled] = useState(0);
     // Stop marks live alongside file marks. They share a progress revision and one writer.
     // A different PR or host means a different route. Previous marks do not apply.

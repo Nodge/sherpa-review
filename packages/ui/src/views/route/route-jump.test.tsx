@@ -262,6 +262,90 @@ function flashed(host: HTMLElement): HTMLElement | null {
     return host.querySelector<HTMLElement>('.diff-row--palette-target');
 }
 
+describe('collapsing route file cards', () => {
+    it('clicking the header collapses the card and the summary row expands it again', () => {
+        const view = mount();
+        const card = stopSection(view.host, 's01').querySelector<HTMLElement>('.file-card');
+        const name = card?.querySelector<HTMLElement>('.file-card__name');
+        if (card === null || name === null || name === undefined) {
+            throw new Error('the first stop needs a file card');
+        }
+
+        click(name);
+        expect(card.querySelector('.file-card__collapsed--file')?.textContent).toContain('collapsed by hand');
+
+        const summary = card.querySelector<HTMLElement>('.file-card__collapsed--file');
+        if (summary === null) {
+            throw new Error('a summary row is required after the click');
+        }
+        click(summary);
+        expect(card.querySelector('.file-card__collapsed--file')).toBeNull();
+    });
+
+    it('anchored threads in a collapsed card remain below the header', () => {
+        const view = mount();
+        const card = [...stopSection(view.host, 's01').querySelectorAll<HTMLElement>('.file-card')].find(
+            (candidate) => candidate.querySelector('.file-card__name')?.textContent === 'edit-window.ts',
+        );
+        const name = card?.querySelector<HTMLElement>('.file-card__name');
+        if (card === undefined || name === null || name === undefined) {
+            throw new Error('stop s01 needs an edit-window.ts card');
+        }
+        const before = [...card.querySelectorAll<HTMLElement>('.thread')].map((thread) => thread.dataset.threadId);
+        expect(before.length).toBeGreaterThan(0);
+
+        click(name);
+
+        expect(card.querySelector('.file-card__collapsed--file')).not.toBeNull();
+        expect([...card.querySelectorAll<HTMLElement>('.thread')].map((thread) => thread.dataset.threadId)).toEqual(
+            before,
+        );
+        const threads = card.querySelector<HTMLElement>('.thread-list');
+        expect(threads?.parentElement).toBe(card);
+        expect(threads?.previousElementSibling?.classList.contains('file-card__header')).toBe(true);
+    });
+
+    it('marking viewed collapses the card and clearing the mark expands it', () => {
+        const view = mount();
+        const card = stopSection(view.host, 's01').querySelector<HTMLElement>('.file-card');
+        const viewed = card?.querySelector<HTMLElement>('.file-card__viewed');
+        if (card === null || viewed === null || viewed === undefined) {
+            throw new Error('the first stop needs a card with a viewed toggle');
+        }
+
+        click(viewed);
+        expect(card.querySelector('.file-card__collapsed--file')?.textContent).toContain('viewed');
+
+        click(viewed);
+        expect(card.querySelector('.file-card__collapsed--file')).toBeNull();
+    });
+
+    it('jumping from a chip expands the collapsed card first', async () => {
+        const view = mount();
+        const stop = stopSection(view.host, 's01');
+        const card = stop.querySelector<HTMLElement>('.file-card');
+        const name = card?.querySelector<HTMLElement>('.file-card__name');
+        const fileId = card?.dataset.file;
+        if (card === null || name === null || name === undefined || fileId === undefined) {
+            throw new Error('the first stop needs a file card');
+        }
+        const chip = [...stop.querySelectorAll<HTMLElement>('.route-chip')].find((candidate) => {
+            const candidateName = candidate.querySelector('.route-chip__name')?.textContent;
+            return candidateName === name.textContent;
+        });
+        if (chip === undefined) {
+            throw new Error(`file ${fileId} needs a jump chip`);
+        }
+
+        click(name);
+        expect(card.querySelector('.file-card__collapsed--file')).not.toBeNull();
+        click(chip);
+        await view.settle();
+
+        expect(card.querySelector('.file-card__collapsed--file')).toBeNull();
+    });
+});
+
 describe('marking a stop viewed jumps to the next visible stop', () => {
     it('the first snapshot with full coverage sets a baseline without automatic marking or jumping', async () => {
         const progress = DATA.diff.files.map(
