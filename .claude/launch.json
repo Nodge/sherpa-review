@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "/Users/alice/Sites/sherpa-wt-m2f-t24-t25-t27", "--filter", "@sherpa/ui", "dev", "--port", "5199", "--strictPort"],
       "port": 5199
+    },
+    {
+      "name": "sherpa-ui-wt2",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "/Users/alice/Sites/sherpa-wt-m2f-t28-t29-t30", "--filter", "@sherpa/ui", "dev", "--port", "5201", "--strictPort"],
+      "port": 5201
     }
   ]
 }
