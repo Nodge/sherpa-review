@@ -1,10 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-/** Bearer token length in bytes, stored as hex in the manifest (rpc-design §8). */
-const TOKEN_BYTES = 32;
+/** 48 bits give 8 base64url characters without padding (rpc-design §8). */
+const TOKEN_BYTES = 6;
 
 export function createToken(): string {
-    return randomBytes(TOKEN_BYTES).toString('hex');
+    return randomBytes(TOKEN_BYTES).toString('base64url');
 }
 
 /** Extracts the token from the `Authorization: Bearer <token>` header. The scheme is case-insensitive. */

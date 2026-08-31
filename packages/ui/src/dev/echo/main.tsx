@@ -26,7 +26,7 @@ if (token === null) {
             <main className="screen screen--message">
                 <h1>M0 echo loop demo</h1>
                 <p>Access token required: open this page with the same fragment printed when Sherpa starts.</p>
-                <p className="muted">http://localhost:5173/dev.html#token=&lt;token&gt;</p>
+                <p className="muted">http://localhost:5173/dev.html#t=&lt;token&gt;</p>
             </main>
         </StrictMode>,
     );

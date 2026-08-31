@@ -43,5 +43,5 @@ export async function isDirectory(dir: string): Promise<boolean> {
  * a page reload. `sherpa up` prints the same URL for the reviewer, built in the CLI.
  */
 export function formatUiUrl(port: number, token: string): string {
-    return `UI: http://127.0.0.1:${String(port)}/#token=${token}`;
+    return `UI: http://127.0.0.1:${String(port)}/#t=${token}`;
 }

@@ -97,9 +97,11 @@ Otherwise the server marks the worker dead → the UI switches to "Agent disconn
 
 ## 8. Discovery and security
 
-- The server uses a random localhost port. The manifest at `~/.sherpa/servers/<pr-id>.json` contains the port, PID, version and bearer token. File permissions are 0600.
+- The server uses a random localhost port. The manifest at `~/.sherpa/servers/<pr-id>.json` contains the port, PID, version and bearer token. File permissions are 0600. A new token is 6 random bytes (48 bits), base64url without padding, 8 characters.
 - The CLI resolves the PR from cwd (or `SHERPA_PR` in env) → manifest → port+token. The agent knows neither.
-- **Every channel requires a token**, including the UI (the browser gets it in the URL fragment when opened). A local API without authentication is a security hole: any process on the machine can write to the review.
+- **The token is required for every channel**, including the UI. The link is `http://127.0.0.1:<port>/#t=<token>`. The fragment never reaches the server. The UI also reads the old `#token=` for running servers of the previous version. SSE still passes the token through its internal `?token=` query parameter.
+- 48 bits are enough for a server that lives for hours on loopback: at 10⁴ checks/s, an average brute-force attempt would take about 450 years. There is no separate attempt limiter, because this margin is enough (decision M2F-T30).
+- On a cold start, `sherpa up` calls `open` / `xdg-open` / `start` directly, without a shell. The URL stays out of command history but is briefly visible in the opener process's argv. This trade-off is accepted for a local machine. The process is short-lived, and the same link is always printed to stdout. `--no-open` disables the call.
 - Stale manifests (dead PID) are cleaned up on the next skill launch.
 
 ## 9. Versioning

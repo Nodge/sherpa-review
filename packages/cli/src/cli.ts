@@ -5,6 +5,8 @@ import { RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import type { Command } from './args.js';
 import { parseArgs } from './args.js';
+import type { OpenBrowserOptions } from './browser.js';
+import { openBrowser } from './browser.js';
 import type { WorkerLabels } from './client.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
 import { connect, connectAs, freshWorkerId, resolvePrKey } from './discovery.js';
@@ -21,6 +23,7 @@ import {
 } from './format.js';
 import { serverBinOverrideFrom, sherpaDirFrom } from './paths.js';
 import type { CommandRunner } from './pr-discovery.js';
+import type { EnsureServerOptions, EnsureServerResult } from './up.js';
 import { ensureServer } from './up.js';
 import { CLI_VERSION } from './version.js';
 
@@ -33,6 +36,10 @@ export interface CliIo {
     readonly entry?: string;
     /** External command runner for PR discovery from cwd. Defaults to the real Git executable. */
     readonly runCommand?: CommandRunner;
+    /** Test substitute for server discovery/startup. */
+    readonly ensureServer?: (options: EnsureServerOptions) => Promise<EnsureServerResult>;
+    /** Test substitute for the system opener. Tests don't launch a real browser. */
+    readonly openBrowser?: (options: OpenBrowserOptions) => void;
 }
 
 /**
@@ -78,7 +85,7 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
     // and discovery from cwd (`pr-discovery.ts`) must happen exactly once per command.
     const prKey = await resolvePrKey(command.prKey, io.env, io.runCommand);
 
-    const uiUrl = await ensureServer({
+    const server = await (io.ensureServer ?? ensureServer)({
         prKey,
         sherpaDir: sherpaDirFrom(io.env),
         entry: io.entry ?? process.argv[1],
@@ -88,7 +95,14 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
     // (decision 2026-08-20), so `up` registers through the normal path with no fallback.
     await registerWorker(prKey, labelsOf(command), io);
 
-    io.out(formatUpReady(uiUrl, prKey));
+    io.out(formatUpReady(server.uiUrl, prKey));
+    if (server.started && !command.noOpen) {
+        try {
+            (io.openBrowser ?? openBrowser)({ uiUrl: server.uiUrl });
+        } catch {
+            // The link is already printed. Headless/ssh use and opener failure don't turn a successful up into an error.
+        }
+    }
     return 0;
 }
 

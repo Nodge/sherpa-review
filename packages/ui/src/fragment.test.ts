@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { parseFragment, readFragmentParam, readToken, updateFragment } from './fragment.js';
 
 describe('readToken', () => {
-    it('extracts the token from the URL fragment', () => {
-        expect(readToken('#token=abc123')).toBe('abc123');
+    it('reads the short t parameter first', () => {
+        expect(readToken('#t=abc123')).toBe('abc123');
+        expect(readToken('#token=old&t=new')).toBe('new');
     });
 
-    it('handles adjacent parameters and a leading hash', () => {
+    it('reads the old token for compatibility with a running server', () => {
         expect(readToken('#pr=github-quillmart--quillmart--1&token=abc123')).toBe('abc123');
         expect(readToken('token=abc123')).toBe('abc123');
     });
@@ -15,7 +16,7 @@ describe('readToken', () => {
     it('a missing or empty token returns null', () => {
         expect(readToken('')).toBeNull();
         expect(readToken('#')).toBeNull();
-        expect(readToken('#token=')).toBeNull();
+        expect(readToken('#t=&token=')).toBeNull();
         expect(readToken('#other=1')).toBeNull();
     });
 });
@@ -37,7 +38,13 @@ describe('updateFragment', () => {
     });
 
     it('replaces a value in place', () => {
-        expect(updateFragment('#token=abc&view=overview', { view: 'diff' })).toBe('#token=abc&view=diff');
+        expect(updateFragment('#t=abc&view=overview', { view: 'diff' })).toBe('#t=abc&view=diff');
+    });
+
+    it('does not leave both t and the old token', () => {
+        expect(updateFragment('#token=old&view=route', { t: 'new' })).toBe('#t=new&view=route');
+        expect(updateFragment('#t=new&token=old&view=route', { view: 'diff' })).toBe('#t=new&view=diff');
+        expect(updateFragment('#t=new', { token: 'old' })).toBe('#token=old');
     });
 
     it('a thread link preserves token and view but removes the conflicting file target', () => {

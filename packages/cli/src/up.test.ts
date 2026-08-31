@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -112,9 +113,18 @@ describe('server startup in `up`', () => {
         const sherpaDir = process.argv[process.argv.indexOf('--sherpa-dir') + 1];
         const token = 'f'.repeat(64);
 
+        let slowFirstHealth = process.argv.includes('--slow-first-health');
         const server = http.createServer((req, res) => {
-            res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ ok: true, prKey, pid: process.pid, serverVersion: '0.1.0', protocolVersion: '0.1.0' }));
+            const respond = () => {
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, prKey, pid: process.pid, serverVersion: '0.1.0', protocolVersion: '0.1.0' }));
+            };
+            if (slowFirstHealth) {
+                slowFirstHealth = false;
+                setTimeout(respond, 1_200);
+                return;
+            }
+            respond();
         });
         await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 
@@ -132,7 +142,7 @@ describe('server startup in `up`', () => {
         await fs.writeFile(path.join(sherpaDir, 'servers', prKey + '.json'), JSON.stringify(manifest));
     `;
 
-    async function up(serverBin: string): Promise<string> {
+    async function up(serverBin: string) {
         return ensureServer({
             prKey: PR_KEY,
             sherpaDir,
@@ -142,11 +152,25 @@ describe('server startup in `up`', () => {
         });
     }
 
+    async function waitForManifest(): Promise<TestManifest> {
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+            try {
+                return await readManifest(sherpaDir);
+            } catch {
+                await delay(20);
+            }
+        }
+        throw new Error('server did not publish a manifest');
+    }
+
     it('starts the daemon when there is no manifest and builds the link from its manifest', async () => {
-        const uiUrl = await up(await fakeServer(WORKING_SERVER));
+        const result = await up(await fakeServer(WORKING_SERVER));
 
         const manifest = await readManifest(sherpaDir);
-        expect(uiUrl).toBe(`http://127.0.0.1:${String(manifest.port)}/#token=${manifest.token}`);
+        expect(result).toEqual({
+            uiUrl: `http://127.0.0.1:${String(manifest.port)}/#t=${manifest.token}`,
+            started: true,
+        });
         expect(manifest.pid).not.toBe(process.pid);
     });
 
@@ -157,8 +181,28 @@ describe('server startup in `up`', () => {
 
         const second = await up(serverBin);
 
-        expect(second).toBe(first);
+        expect(first.started).toBe(true);
+        expect(second).toEqual({ uiUrl: first.uiUrl, started: false });
         expect((await readManifest(sherpaDir)).pid).toBe(firstPid);
+    });
+
+    it('does not treat another server manifest after spawn as a cold start', async () => {
+        const serverBin = await fakeServer(WORKING_SERVER);
+        const foreign = spawn(
+            process.execPath,
+            [serverBin, '--pr', PR_KEY, '--sherpa-dir', sherpaDir, '--slow-first-health'],
+            { stdio: 'ignore' },
+        );
+        spawned.push(foreign);
+        const foreignManifest = await waitForManifest();
+        const losingDaemon = await fakeServer('setTimeout(() => process.exit(0), 500);');
+
+        const result = await up(losingDaemon);
+
+        expect(result).toEqual({
+            uiUrl: `http://127.0.0.1:${String(foreignManifest.port)}/#t=${foreignManifest.token}`,
+            started: false,
+        });
     });
 
     it('starts the server again when the manifest is dead', async () => {

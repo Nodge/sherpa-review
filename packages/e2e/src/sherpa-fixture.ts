@@ -134,7 +134,7 @@ function readUiUrl(child: ChildProcessWithoutNullStreams): Promise<string> {
         };
         const onStdout = (chunk: Buffer): void => {
             stdout += chunk.toString('utf8');
-            const match = /UI:\s+(http:\/\/127\.0\.0\.1:\d+\/#token=[^\s]+)/.exec(stdout);
+            const match = /UI:\s+(http:\/\/127\.0\.0\.1:\d+\/#t=[^\s]+)/.exec(stdout);
             if (match?.[1] !== undefined) {
                 succeed(match[1]);
             }

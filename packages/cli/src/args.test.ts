@@ -20,9 +20,18 @@ describe('argument parsing', () => {
                 prKey: 'github-quillmart--quillmart--1',
                 harness: 'claude-code',
                 model: 'claude-opus-5',
+                noOpen: false,
             },
         );
-        expect(parseArgs(['up'])).toEqual({ kind: 'up', prKey: undefined, harness: undefined, model: undefined });
+        expect(parseArgs(['up'])).toEqual({
+            kind: 'up',
+            prKey: undefined,
+            harness: undefined,
+            model: undefined,
+            noOpen: false,
+        });
+        expect(parseArgs(['up', '--no-open'])).toMatchObject({ kind: 'up', noOpen: true });
+        expect(() => parseArgs(['up', '--no-open=true'])).toThrow('does not take a value');
         expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up [--pr <pr key>]');
     });
 

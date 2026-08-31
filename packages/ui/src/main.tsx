@@ -28,7 +28,7 @@ if (token === null) {
             <IconSprite />
             <MessageScreen title="Sherpa">
                 <p>Open the UI using the link printed by the Sherpa skill or server. It contains the access token.</p>
-                <p className="message-screen__hint">http://127.0.0.1:&lt;port&gt;/#token=&lt;token&gt;</p>
+                <p className="message-screen__hint">http://127.0.0.1:&lt;port&gt;/#t=&lt;token&gt;</p>
             </MessageScreen>
         </StrictMode>,
     );

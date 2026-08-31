@@ -31,6 +31,11 @@ const STATE_DIR_MODE = 0o700;
 const TERMINATE_GRACE_MS = 2_000;
 const EXIT_POLL_INTERVAL_MS = 20;
 
+export interface EnsureServerResult {
+    readonly uiUrl: string;
+    readonly started: boolean;
+}
+
 export interface EnsureServerOptions {
     readonly prKey: string;
     /** State root: the server does not read `SHERPA_DIR`. The CLI passes it the path. */
@@ -54,12 +59,12 @@ interface Daemon {
  * is found through the manifest (rpc-design §8) and reused, otherwise the server bundle starts as a daemon
  * that outlives the CLI. Neither pnpm nor a repository checkout is required.
  */
-export async function ensureServer(options: EnsureServerOptions): Promise<string> {
+export async function ensureServer(options: EnsureServerOptions): Promise<EnsureServerResult> {
     const manifestPath = manifestPathFor(options.sherpaDir, options.prKey);
 
     const running = await readManifestFile(manifestPath);
     if (running !== null && running.prKey === options.prKey && (await isManifestServerAlive(running))) {
-        return formatUiUrl(running.port, running.token);
+        return { uiUrl: formatUiUrl(running.port, running.token), started: false };
     }
 
     const serverBin = await resolveServerBin(options.entry, options.serverBin);
@@ -74,7 +79,8 @@ export async function ensureServer(options: EnsureServerOptions): Promise<string
         throw new CliError(await startupFailed(options.prKey, daemon, logPath, timeoutMs, reaped));
     }
 
-    return formatUiUrl(manifest.port, manifest.token);
+    const started = daemon.process.pid !== undefined && manifest.pid === daemon.process.pid;
+    return { uiUrl: formatUiUrl(manifest.port, manifest.token), started };
 }
 
 /**

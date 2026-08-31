@@ -197,7 +197,11 @@ export function createRequestListener(options: RequestListenerOptions): RequestL
     };
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse, options: RequestListenerOptions): Promise<void> {
+async function handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+    options: RequestListenerOptions,
+): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     let route = findRoute(options.routes, req.method, url.pathname);
 
@@ -253,11 +257,12 @@ function findRoute(routes: readonly Route[], method: string | undefined, pathnam
     return routes.find((item) => item.method === method && item.path === pathname);
 }
 
-function authorized(token: string, req: IncomingMessage, url: URL, auth: RouteAuth): boolean {
-    if (tokenMatches(token, extractBearerToken(req.headers.authorization))) {
-        return true;
+function authorized(expected: string, req: IncomingMessage, url: URL, auth: RouteAuth): boolean {
+    const provided = [extractBearerToken(req.headers.authorization)];
+    if (auth === 'bearer-or-query') {
+        provided.push(url.searchParams.get('token'));
     }
-    return auth === 'bearer-or-query' && tokenMatches(token, url.searchParams.get('token'));
+    return provided.some((token) => tokenMatches(expected, token));
 }
 
 function unauthorizedResponse(): JsonResponse {

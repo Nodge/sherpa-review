@@ -41,7 +41,7 @@ export function formatTask(task: Task): string {
  * The token is in the fragment: it is not sent to the server, but survives page reloads (rpc-design §8).
  */
 export function formatUiUrl(port: number, token: string): string {
-    return `http://127.0.0.1:${String(port)}/#token=${token}`;
+    return `http://127.0.0.1:${String(port)}/#t=${token}`;
 }
 
 /**
@@ -137,7 +137,7 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
-        ['sherpa up [--harness <name>] [--model <name>]', 'start the PR server and become its worker'],
+        ['sherpa up [--harness <name>] [--model <name>] [--no-open]', 'start the PR server and become its worker'],
         ['sherpa worker register [--harness <name>] [--model <name>]', 'register this session as the PR worker'],
         [
             'sherpa worker next [--wait-seconds <n>]',
@@ -151,6 +151,7 @@ export function helpText(): string {
         ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
+        ['--no-open', 'do not open the browser after `up` starts a new server'],
         [
             '--wait-seconds <n>',
             `how long \`worker next\` may block, 1..${String(LONG_POLL_CEILING_SECONDS)}; ` +

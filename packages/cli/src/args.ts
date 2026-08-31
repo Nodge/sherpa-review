@@ -13,6 +13,8 @@ export type Command =
           readonly harness: string | undefined;
           /** Worker model name for worker status in the UI. Optional. */
           readonly model: string | undefined;
+          /** Skip opening the browser after a cold start. */
+          readonly noOpen: boolean;
       }
     | {
           readonly kind: 'worker-next';
@@ -48,7 +50,9 @@ export type Command =
       };
 
 const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model', '--wait-seconds'] as const;
+const FLAGS = ['--no-open'] as const;
 type OptionName = (typeof OPTIONS)[number];
+type FlagName = (typeof FLAGS)[number];
 
 type TaskSubcommand = 'complete' | 'progress' | 'fail';
 
@@ -67,12 +71,15 @@ export function parseArgs(argv: readonly string[]): Command {
         return { kind: 'help' };
     }
 
-    const { options, positionals } = splitArgs(argv);
+    const { options, flags, positionals } = splitArgs(argv);
     const prKey = options.get('--pr');
     const group = positionals[0];
 
+    if (group !== 'up' && flags.size > 0) {
+        throw new CliError('sherpa: --no-open is only available for `sherpa up`.');
+    }
     if (group === 'up') {
-        return parseUpCommand(positionals, options, prKey);
+        return parseUpCommand(positionals, options, flags, prKey);
     }
     if (group === 'worker') {
         return parseWorkerCommand(positionals, options, prKey);
@@ -109,12 +116,13 @@ export function sanitizeLabel(raw: string | undefined): string | undefined {
 function parseUpCommand(
     positionals: readonly string[],
     options: ReadonlyMap<OptionName, string>,
+    flags: ReadonlySet<FlagName>,
     prKey: string | undefined,
 ): Command {
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>]`; ' +
+                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>] [--no-open]`; ' +
                 'without `--pr` the PR is taken from the Git branch of the current directory.',
         );
     }
@@ -124,6 +132,7 @@ function parseUpCommand(
         prKey,
         harness: sanitizeLabel(options.get('--harness')),
         model: sanitizeLabel(options.get('--model')),
+        noOpen: flags.has('--no-open'),
     };
 }
 
@@ -246,9 +255,11 @@ function requiredOptionOf(sub: TaskSubcommand): OptionName {
 /** Both flag forms are supported: `--file path` and `--file=path`. */
 function splitArgs(argv: readonly string[]): {
     options: ReadonlyMap<OptionName, string>;
+    flags: ReadonlySet<FlagName>;
     positionals: readonly string[];
 } {
     const options = new Map<OptionName, string>();
+    const flags = new Set<FlagName>();
     const positionals: string[] = [];
 
     for (let index = 0; index < argv.length; index += 1) {
@@ -260,9 +271,16 @@ function splitArgs(argv: readonly string[]): {
 
         const separator = arg.indexOf('=');
         const name = separator === -1 ? arg : arg.slice(0, separator);
+        if (isFlag(name)) {
+            if (separator !== -1) {
+                throw new CliError(`sherpa: flag ${name} does not take a value.`);
+            }
+            flags.add(name);
+            continue;
+        }
         if (!isOption(name)) {
             throw new CliError(
-                `sherpa: unknown flag ${name}.\nAvailable: ${OPTIONS.join(', ')}, --version, --help.`,
+                `sherpa: unknown flag ${name}.\nAvailable: ${[...OPTIONS, ...FLAGS].join(', ')}, --version, --help.`,
             );
         }
 
@@ -279,9 +297,13 @@ function splitArgs(argv: readonly string[]): {
         index += 1;
     }
 
-    return { options, positionals };
+    return { options, flags, positionals };
 }
 
 function isOption(name: string): name is OptionName {
     return (OPTIONS as readonly string[]).includes(name);
+}
+
+function isFlag(name: string): name is FlagName {
+    return (FLAGS as readonly string[]).includes(name);
 }

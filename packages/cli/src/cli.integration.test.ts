@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from '@sherpa/protocol';
 import type { SherpaServer } from '@sherpa/server';
 import { startServer } from '@sherpa/server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
@@ -58,6 +58,8 @@ describe('CLI against server', () => {
 
     interface Overrides {
         readonly extraEnv?: Record<string, string>;
+        readonly ensureServer?: NonNullable<CliIo['ensureServer']>;
+        readonly openBrowser?: NonNullable<CliIo['openBrowser']>;
     }
 
     async function sherpaWith(overrides: Overrides, ...argv: string[]): Promise<Invocation> {
@@ -69,6 +71,8 @@ describe('CLI against server', () => {
             err: (text) => stderr.push(text),
             // No server bundle beside the test file: it is not needed when the server is already running.
             entry: fileURLToPath(import.meta.url),
+            ...(overrides.ensureServer === undefined ? {} : { ensureServer: overrides.ensureServer }),
+            ...(overrides.openBrowser === undefined ? {} : { openBrowser: overrides.openBrowser }),
         };
 
         const code = await run(argv, io);
@@ -106,23 +110,73 @@ describe('CLI against server', () => {
         return file;
     }
 
-    it('up finds a live server, registers the worker and prints the link with instructions', async () => {
+    it('up finds a live server, opens no new tab and prints a link with instructions', async () => {
         const running = await start();
+        const opened: string[] = [];
 
-        const result = await sherpaWith({}, 'up', '--harness', 'claude-code');
+        const result = await sherpaWith(
+            { openBrowser: ({ uiUrl }) => opened.push(uiUrl) },
+            'up',
+            '--harness',
+            'claude-code',
+        );
 
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain(`http://127.0.0.1:${String(running.port)}/#token=`);
+        expect(result.stdout).toContain(`http://127.0.0.1:${String(running.port)}/#t=`);
         expect(result.stdout).toContain('Show this link to the user in full');
         expect(result.stdout).toContain(`sherpa worker next --pr ${PR_KEY}`);
         // Output never mentions the server or registration. The model has no need to know about them.
         expect(result.stdout).not.toContain('register');
+        expect(opened).toEqual([]);
 
         expect(running.workerRegistry.status()).toMatchObject({
             kind: 'connected',
             workerId: await readWorkerIdFile(),
             harness: 'claude-code',
         });
+    });
+
+    it('opens the browser only on a cold start and without --no-open', async () => {
+        const running = await start();
+        const uiUrl = `http://127.0.0.1:${String(running.port)}/#t=${running.token}`;
+        const open = vi.fn();
+
+        const cold = await sherpaWith(
+            { ensureServer: () => Promise.resolve({ uiUrl, started: true }), openBrowser: open },
+            'up',
+        );
+        expect(cold.code).toBe(0);
+        expect(open).toHaveBeenCalledWith({ uiUrl });
+
+        open.mockClear();
+        await sherpaWith({ ensureServer: () => Promise.resolve({ uiUrl, started: false }), openBrowser: open }, 'up');
+        expect(open).not.toHaveBeenCalled();
+
+        await sherpaWith(
+            { ensureServer: () => Promise.resolve({ uiUrl, started: true }), openBrowser: open },
+            'up',
+            '--no-open',
+        );
+        expect(open).not.toHaveBeenCalled();
+    });
+
+    it('opener failure does not fail up and the link stays in stdout', async () => {
+        const running = await start();
+        const uiUrl = `http://127.0.0.1:${String(running.port)}/#t=${running.token}`;
+
+        const result = await sherpaWith(
+            {
+                ensureServer: () => Promise.resolve({ uiUrl, started: true }),
+                openBrowser: () => {
+                    throw new Error('no graphical session');
+                },
+            },
+            'up',
+        );
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain(uiUrl);
+        expect(result.stderr).toBe('');
     });
 
     it('passes --model to worker status and strips wrapping', async () => {

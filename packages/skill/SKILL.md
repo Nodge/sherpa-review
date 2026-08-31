@@ -28,7 +28,8 @@ node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harnes
 
 Without a PR key run the same command without `--pr <pr>`; if it cannot work out the PR either, it says so — then ask the user for the key.
 
-The command prints a link to the UI — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).
+The command opens the UI in the default browser when it starts a new server, and always prints the link — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).
+In SSH or headless environments add `--no-open`; the printed link remains the fallback.
 Its output also shows the next command with the PR key Sherpa settled on — use that key for the rest of the session.
 On error — show the text to the user and stop; do not start the loop.
 

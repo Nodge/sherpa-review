@@ -1,6 +1,7 @@
 /**
  * Address bar state lives in the URL fragment in `URLSearchParams` format:
- * `#token=<token>&view=route`. The fragment stays out of server requests and logs and survives
+ * `#t=<token>&view=route`. The old `token` is read for compatibility with running servers.
+ * The fragment is not sent to the server, stays out of logs and survives
  * reloads, so it holds both the access token (rpc-design §8) and what should return
  * after F5: the active view, later the filter (SPEC §2.7) and other view parameters.
  *
@@ -18,7 +19,7 @@ export function readFragmentParam(hash: string, name: string): string | null {
 }
 
 export function readToken(hash: string): string | null {
-    return readFragmentParam(hash, 'token');
+    return readFragmentParam(hash, 't') ?? readFragmentParam(hash, 'token');
 }
 
 /**
@@ -26,13 +27,36 @@ export function readToken(hash: string): string | null {
  * The order of other parameters is preserved, so the token stays first.
  */
 export function updateFragment(hash: string, patch: Readonly<Record<string, string | null>>): string {
-    const params = parseFragment(hash);
+    let params = parseFragment(hash);
+
+    if (Object.hasOwn(patch, 't')) {
+        params.delete('token');
+    } else if (Object.hasOwn(patch, 'token')) {
+        params.delete('t');
+    } else if (params.has('t')) {
+        params.delete('token');
+    }
+
     for (const [name, value] of Object.entries(patch)) {
         if (value === null) {
             params.delete(name);
         } else {
             params.set(name, value);
         }
+    }
+    if (params.has('t')) {
+        params.delete('token');
+    }
+
+    const tokenName = params.has('t') ? 't' : params.has('token') ? 'token' : null;
+    if (tokenName !== null) {
+        const ordered = new URLSearchParams([[tokenName, params.get(tokenName) ?? '']]);
+        for (const [name, value] of params) {
+            if (name !== tokenName) {
+                ordered.append(name, value);
+            }
+        }
+        params = ordered;
     }
 
     const next = params.toString();

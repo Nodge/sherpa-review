@@ -8,6 +8,7 @@ import {
     formatOversizedResult,
     formatRpcError,
     formatTask,
+    formatUiUrl,
 } from './format.js';
 
 const task: Task = {
@@ -18,6 +19,12 @@ const task: Task = {
     instructions: 'Return the contents of the file as is.',
     contextFiles: ['/tmp/sherpa/task-42-context.md'],
 };
+
+describe('UI link', () => {
+    it('uses the short fragment parameter name', () => {
+        expect(formatUiUrl(4317, 'Ab_cd-12')).toBe('http://127.0.0.1:4317/#t=Ab_cd-12');
+    });
+});
 
 describe('task prompt format', () => {
     it('contains a title, instructions, context and submission commands', () => {
