@@ -30,6 +30,7 @@ import type { Feedback } from '../diff-view/file-card.tsx';
 import type { DiffListHandle } from '../diff-view/file-list.tsx';
 import { DiffFileList } from '../diff-view/file-list.tsx';
 import { findLineRow, flashRow } from '../diff-view/line-target.js';
+import { selectedLineRange } from '../diff-view/selection.js';
 import type { DiffViewStore } from '../diff-view/store.js';
 import { createDiffViewStore } from '../diff-view/store.js';
 import '../diff-view/diff-view.css';
@@ -811,11 +812,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             if (file === undefined) {
                 return;
             }
-            const position = commentPosition(snapshot.selection, fileId, side, line);
+            const position = commentPosition(snapshot.selection, snapshot.models.get(fileId) ?? null, fileId, side, line);
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
             openNewComposer(threadStore, key, { fileId, path: file.path, position });
         },
-        [diff.files, snapshot.selection, threadStore],
+        [diff.files, snapshot.models, snapshot.selection, threadStore],
     );
 
     useShortcut({
@@ -1080,40 +1081,19 @@ const NO_STOP_WRITES: StopWriterHooks = {
 
 export function commentPosition(
     selection: { fileId: string; anchor: string; focus: string } | null,
+    model: DiffFileModel | null,
     fileId: string,
     side: 'old' | 'new',
     line: number,
 ): { side: 'old' | 'new'; line: number; size: number } {
-    if (selection?.fileId !== fileId) {
+    if (selection?.fileId !== fileId || model === null) {
         return { side, line, size: 1 };
     }
-    const first = lineOfKey(selection.anchor, side);
-    const last = lineOfKey(selection.focus, side);
-    if (first === null || last === null) {
+    const range = selectedLineRange(model, selection, side);
+    if (range === null || line < range.line || line >= range.line + range.size) {
         return { side, line, size: 1 };
     }
-    const start = Math.min(first, last);
-    const end = Math.max(first, last);
-    if (line < start || line > end) {
-        return { side, line, size: 1 };
-    }
-    return { side, line: start, size: end - start + 1 };
-}
-
-function lineOfKey(key: string, side: 'old' | 'new'): number | null {
-    const add = /^a(\d+)$/.exec(key);
-    if (add !== null) {
-        return side === 'new' ? Number(add[1]) : null;
-    }
-    const del = /^d(\d+)$/.exec(key);
-    if (del !== null) {
-        return side === 'old' ? Number(del[1]) : null;
-    }
-    const context = /^c(\d+):(\d+)$/.exec(key);
-    if (context === null) {
-        return null;
-    }
-    return Number(context[side === 'old' ? 1 : 2]);
+    return { side, ...range };
 }
 
 function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {

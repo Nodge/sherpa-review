@@ -42,17 +42,17 @@ export function parseLineKey(value: string | null | undefined): LineKey | null {
     return value === null || value === undefined || value === '' ? null : value;
 }
 
-/**
- * Model lines within the range: finds both boundaries in model order and selects everything
- * between them. Ignores a missing boundary, shrinking selection to
- * the other one instead of spreading over the whole file.
- */
-export function selectedLines(model: DiffFileModel, selection: LineSelection | null): ReadonlySet<LineKey> {
-    if (selection === null || model.content.kind !== 'text') {
-        return EMPTY;
+interface OrderedLine {
+    readonly key: LineKey;
+    readonly line: DiffLine;
+}
+
+function orderedLines(model: DiffFileModel): OrderedLine[] {
+    if (model.content.kind !== 'text') {
+        return [];
     }
 
-    const order: LineKey[] = [];
+    const order: OrderedLine[] = [];
     for (const block of model.content.blocks) {
         if (block.kind !== 'hunk') {
             continue;
@@ -60,18 +60,65 @@ export function selectedLines(model: DiffFileModel, selection: LineSelection | n
         for (const line of block.lines) {
             const key = lineKey(line);
             if (key !== null) {
-                order.push(key);
+                order.push({ key, line });
             }
         }
     }
+    return order;
+}
 
-    const anchor = order.indexOf(selection.anchor);
-    const focus = order.indexOf(selection.focus);
+function selectionBounds(order: readonly OrderedLine[], selection: LineSelection): { from: number; to: number } | null {
+    const anchor = order.findIndex((entry) => entry.key === selection.anchor);
+    const focus = order.findIndex((entry) => entry.key === selection.focus);
     if (anchor < 0 && focus < 0) {
+        return null;
+    }
+
+    return {
+        from: anchor < 0 ? focus : focus < 0 ? anchor : Math.min(anchor, focus),
+        to: anchor < 0 ? focus : focus < 0 ? anchor : Math.max(anchor, focus),
+    };
+}
+
+/**
+ * Model lines within the range: finds both boundaries in model order and selects everything
+ * between them. Ignores a missing boundary, shrinking selection to
+ * the other one instead of spreading over the whole file.
+ */
+export function selectedLines(model: DiffFileModel, selection: LineSelection | null): ReadonlySet<LineKey> {
+    if (selection === null) {
         return EMPTY;
     }
 
-    const from = anchor < 0 ? focus : focus < 0 ? anchor : Math.min(anchor, focus);
-    const to = anchor < 0 ? focus : focus < 0 ? anchor : Math.max(anchor, focus);
-    return new Set(order.slice(from, to + 1));
+    const order = orderedLines(model);
+    const bounds = selectionBounds(order, selection);
+    return bounds === null ? EMPTY : new Set(order.slice(bounds.from, bounds.to + 1).map((entry) => entry.key));
+}
+
+/** For a mixed d/a range, takes only existing numbers on the selected side. */
+export function selectedLineRange(
+    model: DiffFileModel,
+    selection: LineSelection | null,
+    side: 'old' | 'new',
+): { line: number; size: number } | null {
+    if (selection === null) {
+        return null;
+    }
+
+    const order = orderedLines(model);
+    const bounds = selectionBounds(order, selection);
+    if (bounds === null) {
+        return null;
+    }
+
+    let first: number | null = null;
+    let last: number | null = null;
+    for (const entry of order.slice(bounds.from, bounds.to + 1)) {
+        const line = side === 'old' ? entry.line.oldLine : entry.line.newLine;
+        if (line !== null) {
+            first = first === null ? line : Math.min(first, line);
+            last = last === null ? line : Math.max(last, line);
+        }
+    }
+    return first === null || last === null ? null : { line: first, size: last - first + 1 };
 }

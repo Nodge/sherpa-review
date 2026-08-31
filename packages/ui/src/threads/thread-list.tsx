@@ -9,6 +9,7 @@ import { plural } from '../text.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
 import type { ComposerLayout } from './composer-markdown.js';
+import { DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
 import { authorName, flattenThread } from './model.js';
 import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
@@ -25,12 +26,16 @@ export function ThreadList({
     actions,
     now,
     onFocusThread,
+    inlineDraftEditing = false,
+    initialLayout,
 }: {
     threads: readonly Thread[];
     store: ThreadStore;
     actions: ThreadActions;
     now: number;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
+    inlineDraftEditing?: boolean;
+    initialLayout?: ComposerLayout;
 }) {
     return (
         <div className="thread-list">
@@ -42,6 +47,8 @@ export function ThreadList({
                     actions={actions}
                     now={now}
                     onFocusThread={onFocusThread}
+                    inlineDraftEditing={inlineDraftEditing}
+                    {...(initialLayout === undefined ? {} : { initialLayout })}
                 />
             ))}
         </div>
@@ -54,14 +61,20 @@ function ThreadBlock({
     actions,
     now,
     onFocusThread,
+    inlineDraftEditing,
+    initialLayout,
 }: {
     thread: Thread;
     store: ThreadStore;
     actions: ThreadActions;
     now: number;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
+    inlineDraftEditing: boolean;
+    initialLayout?: ComposerLayout;
 }) {
     const all = useMemo(() => flattenThread(thread.root), [thread.root]);
+    const commentIds = useMemo(() => all.map((row) => row.comment.id), [all]);
+    const editingId = useActiveDraftEditor(store, commentIds);
     const [repliesOpen, setRepliesOpen] = useState(true);
     const [expanded, setExpanded] = useState(false);
     const collapseBot = repliesOpen && thread.root.author.bot && all.length > 5 && !expanded;
@@ -75,6 +88,7 @@ function ThreadBlock({
     const undoEntry =
         useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).undo.get(thread.id) ?? null;
     const undo = undoEntry?.resolved ?? null;
+    const hideActions = inlineDraftEditing && thread.root.draft;
 
     const setResolved = (resolved: boolean): void => {
         const generation = store.startUndo(thread.id, resolved);
@@ -103,7 +117,7 @@ function ThreadBlock({
             {shown.map((row, index) => (
                 <div
                     key={row.comment.id}
-                    className={`thread__row${index > 0 ? ' thread__row--reply' : ''}`}
+                    className={`thread__row${index > 0 ? ' thread__row--reply' : ''}${editingId === row.comment.id ? ' is-editing' : ''}`}
                     style={{ marginLeft: `${String(row.indent)}px` }}
                 >
                     {row.replyHint === null ? null : (
@@ -125,8 +139,26 @@ function ThreadBlock({
                         ) : null}
                         {thread.resolved && index === 0 ? <span className="thread__chip">resolved</span> : null}
                         {thread.outdated && index === 0 ? <span className="thread__chip">outdated</span> : null}
-                        {row.comment.draft ? <span className="thread__chip thread__chip--draft">draft · will publish on ship</span> : null}
+                        {editingId === row.comment.id ? (
+                            <span className="thread__chip thread__chip--editing">editing</span>
+                        ) : row.comment.draft ? (
+                            <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
+                        ) : null}
                         <span className="thread__spacer" />
+                        {inlineDraftEditing && row.comment.draft && editingId !== row.comment.id ? (
+                            <button
+                                type="button"
+                                className="thread__edit-draft"
+                                aria-label={`Edit draft ${row.comment.id}`}
+                                title="Edit the draft"
+                                disabled={editingId !== null}
+                                onClick={() => {
+                                    openDraftEditor(store, thread, row.comment);
+                                }}
+                            >
+                                <Icon name="pencil" size={14} />
+                            </button>
+                        ) : null}
                         {row.subtreeReplies > 0 ? (
                             index === 0 ? (
                                 <button
@@ -148,9 +180,21 @@ function ThreadBlock({
                             )
                         ) : null}
                     </div>
-                    <div className="thread__body">
-                        <Markdown text={row.comment.body} profile="comment" />
-                    </div>
+                    {editingId === row.comment.id ? (
+                        <DraftEditor
+                            comment={row.comment}
+                            store={store}
+                            transport={actions.transport}
+                            contextLabel="draft editing"
+                            placeholder="Comment on the line"
+                            inputLabel="Draft editing"
+                            {...(initialLayout === undefined ? {} : { initialLayout })}
+                        />
+                    ) : (
+                        <div className="thread__body">
+                            <Markdown text={row.comment.body} profile="comment" />
+                        </div>
+                    )}
                 </div>
             ))}
 
@@ -166,42 +210,53 @@ function ThreadBlock({
                 </button>
             ) : null}
 
-            <div className={`thread__actions${undo === null ? '' : ' thread__actions--undo'}`}>
-                {undo === null ? (
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setResolved(!thread.resolved);
-                            }}
-                        >
-                            {thread.resolved ? 'Reopen' : 'Resolve'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                void copyThreadLink(thread.id);
-                            }}
-                        >
-                            Copy link
-                        </button>
-                    </>
-                ) : (
-                    <span className="thread__undo">
-                        {undo ? 'resolved' : 'reopened'} ·{' '}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setResolved(!undo);
-                            }}
-                        >
-                            undo
-                        </button>
-                    </span>
-                )}
-            </div>
+            {hideActions ? null : (
+                <>
+                    <div className={`thread__actions${undo === null ? '' : ' thread__actions--undo'}`}>
+                        {undo === null ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setResolved(!thread.resolved);
+                                    }}
+                                >
+                                    {thread.resolved ? 'Reopen' : 'Resolve'}
+                                </button>
+                                {inlineDraftEditing ? null : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            void copyThreadLink(thread.id);
+                                        }}
+                                    >
+                                        Copy link
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            <span className="thread__undo">
+                                {undo ? 'resolved' : 'reopened'} ·{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setResolved(!undo);
+                                    }}
+                                >
+                                    undo
+                                </button>
+                            </span>
+                        )}
+                    </div>
 
-            <ComposerForThread thread={thread} store={store} transport={actions.transport} />
+                    <ComposerForThread
+                        thread={thread}
+                        store={store}
+                        transport={actions.transport}
+                        inlineDraftEditing={inlineDraftEditing}
+                    />
+                </>
+            )}
         </section>
     );
 }
@@ -258,6 +313,7 @@ export function NewCommentComposer({
     footerHint,
     initialLayout,
     onSaveComplete,
+    showDraftChip = false,
 }: {
     composerKey: string;
     store: ThreadStore;
@@ -268,6 +324,7 @@ export function NewCommentComposer({
     footerHint?: ReactNode;
     initialLayout?: ComposerLayout;
     onSaveComplete?: (() => void) | undefined;
+    showDraftChip?: boolean;
 }) {
     const composer = useComposerSnapshot(store, composerKey);
     if (composer === null) {
@@ -282,6 +339,7 @@ export function NewCommentComposer({
             contextLabel={contextLabel ?? (line === undefined ? 'PR comment' : `new comment · line ${String(line)}`)}
             placeholder={placeholder ?? (line === undefined ? 'A general remark on the PR, not tied to a line' : 'Comment on the code line')}
             inputLabel="New comment"
+            showDraftChip={showDraftChip}
             {...(saveLabel === undefined ? {} : { saveLabel })}
             {...(footerHint === undefined ? {} : { footerHint })}
             {...(initialLayout === undefined ? {} : { initialLayout })}
@@ -294,14 +352,19 @@ function ComposerForThread({
     thread,
     store,
     transport,
+    inlineDraftEditing,
 }: {
     thread: Thread;
     store: ThreadStore;
     transport: ComposerTransport;
+    inlineDraftEditing: boolean;
 }) {
     const composer = useComposerSnapshot(store, `reply:${thread.id}`);
     const draft = replyDraft(thread);
     if (composer === null) {
+        if (draft !== null && inlineDraftEditing) {
+            return null;
+        }
         if (draft !== null) {
             return (
                 <button

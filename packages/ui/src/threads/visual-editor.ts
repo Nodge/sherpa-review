@@ -109,7 +109,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
             'aria-multiline': 'true',
         },
         handleKeyDown: (_view, event) => {
-            if (isComposerShortcut(event)) {
+            if (isComposerShortcut(event) || isComposerInputKey(event.key)) {
                 event.stopPropagation();
             }
             return false;
@@ -247,6 +247,10 @@ function listCommand(): Command {
         }
         return wrapIn(list)(nextState, dispatch);
     };
+}
+
+function isComposerInputKey(key: string): boolean {
+    return key.length === 1;
 }
 
 function isComposerShortcut(event: KeyboardEvent): boolean {

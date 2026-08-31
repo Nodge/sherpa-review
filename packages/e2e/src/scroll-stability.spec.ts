@@ -159,6 +159,90 @@ for (const gesture of ['up', 'down'] as const) {
     });
 }
 
+test('the line composer in the middle of a large diff opens and closes without a jump', async ({
+    page,
+    launchSherpa,
+}) => {
+    const server = await launchSherpa('fixture-large');
+    await openFullDiff(page, server.url);
+
+    const anchor = await page.locator('.full-diff').evaluate(async (scroller) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        scroller.scrollTop = Math.round((scroller.scrollHeight - scroller.clientHeight) / 2);
+        for (let frame = 0; frame < 90 && document.querySelector('.file-card__loading') !== null; frame += 1) {
+            await nextFrame();
+        }
+        for (let frame = 0; frame < 12; frame += 1) {
+            await nextFrame();
+        }
+        const toolbarBottom = document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+        const row = [...document.querySelectorAll<HTMLElement>('.diff-row[tabindex="0"]')].find((candidate) => {
+            const rect = candidate.getBoundingClientRect();
+            return rect.top >= toolbarBottom + 1 && rect.bottom <= window.innerHeight - 1;
+        });
+        const item = row?.closest<HTMLElement>('.diff-list__item') ?? null;
+        if (row === undefined || item === null) {
+            throw new Error('No visible focusable line found in the middle of fixture-large');
+        }
+        row.focus();
+        return {
+            index: Number(item.dataset.index),
+            offset: item.getBoundingClientRect().top - toolbarBottom,
+        };
+    });
+
+    await page.keyboard.press('c');
+    await expect(page.locator('.diff-line-composer')).toBeVisible();
+    const openedDrift = await observeItemDrift(page, anchor);
+
+    await page.locator('.diff-line-composer').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.locator('.diff-line-composer')).toHaveCount(0);
+    const closedDrift = await observeItemDrift(page, anchor);
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `line composer: open=${openedDrift.toFixed(1)}px, close=${closedDrift.toFixed(1)}px`,
+    });
+    expect(openedDrift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+    expect(closedDrift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});
+
+async function observeItemDrift(
+    page: Page,
+    anchor: { readonly index: number; readonly offset: number },
+): Promise<number> {
+    return page.locator('.full-diff').evaluate(
+        async (_scroller, target) => {
+            const nextFrame = (): Promise<void> =>
+                new Promise<void>((resolve) => {
+                    requestAnimationFrame(() => {
+                    resolve();
+                });
+                });
+            let worst = 0;
+            for (let frame = 0; frame < 20; frame += 1) {
+                await nextFrame();
+                const toolbarBottom =
+                    document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+                const item = document.querySelector<HTMLElement>(
+                    `.diff-list__item[data-index="${String(target.index)}"]`,
+                );
+                if (item === null) {
+                    throw new Error('The anchor card left the DOM while remeasuring the composer');
+                }
+                worst = Math.max(worst, Math.abs(item.getBoundingClientRect().top - toolbarBottom - target.offset));
+            }
+            return Number(worst.toFixed(1));
+        },
+        anchor,
+    );
+}
+
 async function openFullDiff(page: Page, url: string): Promise<void> {
     // Navigate through `about:blank`. Navigating to the same address would change only the fragment, and the tab
     // would keep running with all the cards it had already parsed and measured.

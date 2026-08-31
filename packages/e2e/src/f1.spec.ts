@@ -100,6 +100,19 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         await page.getByRole('tab', { name: 'Route', exact: true }).click();
     });
 
+    await test.step('focused line + c opens the same composer as the pencil', async () => {
+        const firstLine = stop(page, 's01').locator('.diff-row[tabindex="0"]').first();
+        await firstLine.focus();
+        await page.keyboard.press('c');
+
+        const composer = stop(page, 's01').locator('.diff-line-composer');
+        await expect(composer).toBeVisible();
+        await expect(composer.locator('.thread-composer__context')).toContainText('new comment · line');
+        await expect(composer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
+        await composer.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(composer).toHaveCount(0);
+    });
+
     await test.step('plan numbers do not depend on the preset (SPEC §8 item 4)', async () => {
         await page.keyboard.press('t');
         await expect(page.getByRole('button', { name: 'Full tour', exact: true })).toHaveAttribute(

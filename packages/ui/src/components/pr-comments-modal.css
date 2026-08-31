@@ -153,9 +153,9 @@
 }
 
 .pr-comments-modal__item.is-editing {
-    border-color: var(--pr-comments-edit-border);
+    border-color: var(--comment-edit-border);
     border-left-color: var(--accent);
-    background: var(--pr-comments-edit-surface);
+    background: var(--comment-edit-surface);
 }
 
 .pr-comments-modal__item-header {
@@ -210,9 +210,9 @@
 }
 
 .pr-comments-modal__chip.is-editing {
-    border-color: var(--pr-comments-edit-border);
-    background: var(--pr-comments-edit-chip-surface);
-    color: var(--pr-comments-edit-chip-text);
+    border-color: var(--comment-edit-border);
+    background: var(--comment-edit-chip-surface);
+    color: var(--comment-edit-chip-text);
 }
 
 .pr-comments-modal__item-actions {

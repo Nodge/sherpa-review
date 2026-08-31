@@ -39,6 +39,22 @@
     border-left: 1px solid var(--border-standard);
 }
 
+.thread__row.is-editing {
+    border: 1px solid var(--comment-edit-border);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    background: var(--comment-edit-surface);
+}
+
+.thread__row.is-editing .thread-composer {
+    margin-top: 8px;
+    padding: 0;
+}
+
+.thread__row.is-editing .thread-composer__context {
+    display: none;
+}
+
 .thread__reply-hint {
     display: flex;
     align-items: center;
@@ -115,8 +131,39 @@
     color: var(--attention-text);
 }
 
+.thread__chip--editing {
+    border-color: var(--comment-edit-border);
+    background: var(--comment-edit-chip-surface);
+    color: var(--comment-edit-chip-text);
+}
+
 .thread__spacer {
     flex: 1;
+}
+
+.thread__edit-draft {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted-dim);
+    cursor: pointer;
+}
+
+.thread__edit-draft:hover:not(:disabled) {
+    border-color: var(--checkbox-border);
+    color: var(--text-secondary);
+}
+
+.thread__edit-draft:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
 }
 
 /* Comment bodies render as markdown. Paragraphs and line breaks use elements, not `pre-wrap`. */
@@ -515,8 +562,23 @@
     color: var(--attention-text-soft);
 }
 
-.diff-row-extra {
-    border-top: 1px solid var(--border-hairline-strong);
+.diff-line-composer {
+    padding: 12px 13px 13px 62px;
+    border-top: 1px solid var(--border-hairline-soft);
+    border-bottom: 1px solid var(--border-hairline-soft);
+    background: var(--surface-app);
+}
+
+.diff-line-composer .thread-composer {
+    max-width: 620px;
+    padding: 0;
+}
+
+.diff-line-composer .thread-composer__context {
+    min-height: 0;
+    margin-bottom: 8px;
+    color: var(--text-dim-strong);
+    font-size: var(--font-size-meta);
 }
 
 .diff-row__comment {

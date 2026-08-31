@@ -125,6 +125,47 @@ describe('comment composer', () => {
         expect(host.querySelector('.thread-composer__status')?.textContent.trim()).toBe('saved as a draft');
     });
 
+    it.each(['c', 'v'])('Markdown takes the plain %s key from global shortcuts', (key) => {
+        const { host } = mount('markdown');
+        const textarea = host.querySelector<HTMLTextAreaElement>('.thread-composer__markdown');
+        if (textarea === null) {
+            throw new Error('no Markdown textarea');
+        }
+        const globalKeydown = vi.fn();
+        document.addEventListener('keydown', globalKeydown);
+
+        act(() => {
+            textarea.dispatchEvent(
+                new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true }),
+            );
+        });
+
+        document.removeEventListener('keydown', globalKeydown);
+        expect(globalKeydown).not.toHaveBeenCalled();
+    });
+
+    it.each(['c', 'v'])('visual layout takes the plain %s key from global shortcuts', async (key) => {
+        const { host } = mount('visual');
+        await act(async () => {
+            await vi.waitFor(() => {
+                expect(host.querySelector('.ProseMirror')).not.toBeNull();
+            });
+        });
+        const editor = host.querySelector<HTMLElement>('.ProseMirror');
+        if (editor === null) {
+            throw new Error('no ProseMirror');
+        }
+        const globalKeydown = vi.fn();
+        document.addEventListener('keydown', globalKeydown);
+
+        act(() => {
+            editor.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+        });
+
+        document.removeEventListener('keydown', globalKeydown);
+        expect(globalKeydown).not.toHaveBeenCalled();
+    });
+
     it('visual layout formats on ⌘K without opening the global palette', async () => {
         const { host, store } = mount('visual');
         await act(async () => {

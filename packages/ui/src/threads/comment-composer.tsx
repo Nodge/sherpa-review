@@ -38,6 +38,7 @@ export interface CommentComposerProps {
     readonly footerHint?: ReactNode;
     readonly initialLayout?: ComposerLayout;
     readonly onSaveComplete?: (() => void) | undefined;
+    readonly showDraftChip?: boolean;
     readonly restoreOnCancel?: string;
     readonly onCancel?: (() => void) | undefined;
 }
@@ -55,6 +56,7 @@ export function CommentComposer({
     footerHint,
     initialLayout,
     onSaveComplete,
+    showDraftChip = false,
     restoreOnCancel,
     onCancel,
 }: CommentComposerProps) {
@@ -177,9 +179,9 @@ export function CommentComposer({
             {resolvedWhileTyping ? <div className="thread-composer__notice">{notice}</div> : null}
             <div className="thread-composer__context">
                 <span>{contextLabel}</span>
-                {composer.commentId === null ? null : (
+                {showDraftChip || composer.commentId !== null ? (
                     <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
-                )}
+                ) : null}
             </div>
             <div className="thread-composer__editor">
                 <div className="thread-composer__toolbar" role="toolbar" aria-label="Comment formatting">
@@ -238,6 +240,9 @@ export function CommentComposer({
                             controller.input(event.target.value);
                         }}
                         onKeyDown={(event) => {
+                            if (isComposerInputCode(event.code)) {
+                                event.stopPropagation();
+                            }
                             const shortcut =
                                 event.code === 'KeyB' ? 'bold' : event.code === 'KeyI' ? 'italic' : event.code === 'KeyK' ? 'link' : null;
                             if ((event.metaKey || event.ctrlKey) && shortcut !== null) {
@@ -350,6 +355,10 @@ function ComposerStatus({
         );
     }
     return null;
+}
+
+function isComposerInputCode(code: string): boolean {
+    return code.startsWith('Key') || code.startsWith('Digit') || code === 'Space';
 }
 
 function formatTime(timestamp: number): string {

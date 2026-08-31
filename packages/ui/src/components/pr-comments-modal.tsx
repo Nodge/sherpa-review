@@ -7,10 +7,15 @@ import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { useShortcutRegistry } from '../shortcuts/context.tsx';
 import { formatCount, plural } from '../text.js';
-import { CommentComposer } from '../threads/comment-composer.tsx';
 import { composerControllerFor } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ComposerLayout } from '../threads/composer-markdown.js';
+import {
+    DraftEditor,
+    draftEditComposerKey,
+    openDraftEditor,
+    useActiveDraftEditor,
+} from '../threads/draft-editor.tsx';
 import { authorName, prLevelHumanThreads } from '../threads/model.js';
 import { relativeTime } from '../threads/relative-time.js';
 import {
@@ -47,9 +52,9 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
         () => prThreads.filter((thread) => thread.root.id !== prComposer?.commentId),
         [prComposer?.commentId, prThreads],
     );
+    const commentIds = useMemo(() => comments.map((thread) => thread.root.id), [comments]);
+    const editingId = useActiveDraftEditor(store, commentIds);
     const drafts = prThreads.filter((thread) => thread.root.draft).length;
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editingOriginalBody, setEditingOriginalBody] = useState<string | null>(null);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
@@ -81,7 +86,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
         if (editingId === null) {
             return;
         }
-        const key = editComposerKey(editingId);
+        const key = draftEditComposerKey(editingId);
         const controller = composerControllerFor({ store, key, transport });
         return () => {
             controller.close();
@@ -133,26 +138,8 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
             return;
         }
         const comment = thread.root;
-        const key = editComposerKey(comment.id);
-        if (store.getComposer(key) === null) {
-            store.openComposer({
-                key,
-                threadId: thread.id,
-                parentId: null,
-                anchor: null,
-                text: comment.body,
-                commentId: comment.id,
-                status: 'saved',
-                savedAt: Date.parse(comment.editedAt ?? comment.createdAt),
-                saveUncertain: false,
-                slow: false,
-                confirmDiscard: false,
-                resolvedAtOpen: thread.resolved,
-            });
-        }
+        openDraftEditor(store, thread, comment);
         setConfirmingId(null);
-        setEditingOriginalBody(comment.body);
-        setEditingId(comment.id);
     };
 
     const deleteDraft = async (commentId: string): Promise<void> => {
@@ -275,16 +262,15 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                         </div>
 
                                         {editing ? (
-                                            <EditDraftComposer
-                                                commentId={comment.id}
-                                                originalBody={editingOriginalBody ?? comment.body}
+                                            <DraftEditor
+                                                comment={comment}
                                                 store={store}
                                                 transport={transport}
+                                                contextLabel="draft editing"
+                                                placeholder="Comment on the PR"
+                                                inputLabel="Draft editing"
+                                                footerHint={<ComposerShortcutHint escapeLabel="cancel" />}
                                                 {...(initialLayout === undefined ? {} : { initialLayout })}
-                                                onDone={() => {
-                                                    setEditingId(null);
-                                                    setEditingOriginalBody(null);
-                                                }}
                                             />
                                         ) : (
                                             <div className="pr-comments-modal__body">
@@ -363,44 +349,6 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
-function EditDraftComposer({
-    commentId,
-    originalBody,
-    store,
-    transport,
-    initialLayout,
-    onDone,
-}: {
-    commentId: string;
-    originalBody: string;
-    store: ThreadStore;
-    transport: ComposerTransport;
-    initialLayout?: ComposerLayout;
-    onDone: () => void;
-}) {
-    const key = editComposerKey(commentId);
-    const composer = useComposerSnapshot(store, key);
-    if (composer === null) {
-        return null;
-    }
-    return (
-        <CommentComposer
-            composer={composer}
-            store={store}
-            transport={transport}
-            contextLabel="draft editing"
-            placeholder="Comment on the PR"
-            inputLabel="Draft editing"
-            saveLabel="Save changes"
-            footerHint={<ComposerShortcutHint escapeLabel="cancel" />}
-            {...(initialLayout === undefined ? {} : { initialLayout })}
-            onSaveComplete={onDone}
-            restoreOnCancel={originalBody}
-            onCancel={onDone}
-        />
-    );
-}
-
 function ComposerShortcutHint({ escapeLabel }: { escapeLabel: string }) {
     return (
         <span className="pr-comments-modal__shortcuts">
@@ -413,10 +361,6 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function editComposerKey(commentId: string): string {
-    return `edit:${commentId}`;
 }
 
 function focusableElements(root: HTMLElement | null): HTMLElement[] {

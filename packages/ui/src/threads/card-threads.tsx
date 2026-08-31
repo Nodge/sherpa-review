@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { ComposerLayout } from './composer-markdown.js';
 import { placeThreadsOnVisibleLines } from './model.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import type { ThreadActions } from './thread-list.tsx';
@@ -28,6 +29,8 @@ export interface CardThreadsInput {
     readonly actions: ThreadActions;
     readonly now: number;
     readonly onFocusThread: (threadId: string | null) => void;
+    /** Gallery only: the editor layout must be deterministic. */
+    readonly initialLayout?: ComposerLayout;
     /**
      * Where to place a thread whose line is absent from the rendered model. `nearest` (full diff) puts
      * it at the nearest visible line. That model is complete, so the adjacent line is part of the same change.
@@ -51,6 +54,7 @@ export function useCardThreads({
     actions,
     now,
     onFocusThread,
+    initialLayout,
     placement = 'nearest',
 }: CardThreadsInput): CardThreads {
     const layout = useMemo(() => {
@@ -91,16 +95,31 @@ export function useCardThreads({
                             actions={actions}
                             now={now}
                             onFocusThread={onFocusThread}
+                            inlineDraftEditing
+                            {...(initialLayout === undefined ? {} : { initialLayout })}
                         />
                     )}
                     {composerLayout.underHeader.map((composer) => (
                         <div key={composer.key} className="diff-row-extra thread-fade">
-                            <NewCommentComposer composerKey={composer.key} store={store} transport={actions.transport} />
+                            <NewCommentComposer
+                                composerKey={composer.key}
+                                store={store}
+                                transport={actions.transport}
+                                {...(initialLayout === undefined ? {} : { initialLayout })}
+                            />
                         </div>
                     ))}
                 </>
             ),
-        [actions, composerLayout.underHeader, layout.underHeader, now, onFocusThread, store],
+        [
+            actions,
+            composerLayout.underHeader,
+            initialLayout,
+            layout.underHeader,
+            now,
+            onFocusThread,
+            store,
+        ],
     );
 
     const renderAfterLine = useCallback(
@@ -121,15 +140,33 @@ export function useCardThreads({
                             actions={actions}
                             now={now}
                             onFocusThread={onFocusThread}
+                            inlineDraftEditing
+                            {...(initialLayout === undefined ? {} : { initialLayout })}
                         />
                     )}
                     {composer === undefined ? null : (
-                        <NewCommentComposer composerKey={composer.key} store={store} transport={actions.transport} />
+                        <div className="diff-line-composer">
+                            <NewCommentComposer
+                                composerKey={composer.key}
+                                store={store}
+                                transport={actions.transport}
+                                showDraftChip
+                                {...(initialLayout === undefined ? {} : { initialLayout })}
+                            />
+                        </div>
                     )}
                 </div>
             );
         },
-        [actions, composerLayout.byLine, layout.byLine, now, onFocusThread, store],
+        [
+            actions,
+            composerLayout.byLine,
+            initialLayout,
+            layout.byLine,
+            now,
+            onFocusThread,
+            store,
+        ],
     );
 
     return { threadsUnderHeader, renderAfterLine };

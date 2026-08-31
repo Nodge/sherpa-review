@@ -115,6 +115,23 @@ describe('PR comments modal', () => {
         expect(editInput?.value).toBe('Updated draft text.');
     });
 
+    it('closing the edit composer restores the body and clears the editing state', () => {
+        const { store } = mountModal([DRAFT]);
+        act(() => {
+            document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`)?.click();
+        });
+        const item = document.querySelector<HTMLElement>(`[data-comment-id="${DRAFT.root.id}"]`);
+        expect(item?.classList.contains('is-editing')).toBe(true);
+
+        act(() => {
+            store.closeComposer(`edit:${DRAFT.root.id}`);
+        });
+
+        expect(item?.classList.contains('is-editing')).toBe(false);
+        expect(item?.querySelector('.pr-comments-modal__chip')?.textContent).toBe('draft · publishes on ship');
+        expect(item?.querySelector('.pr-comments-modal__body')?.textContent).toContain(DRAFT.root.body);
+    });
+
     it('deletes only after inline confirmation, and Keep cancels', async () => {
         const deleteDraft = vi.fn(() => Promise.resolve());
         mountModal([DRAFT, PUBLISHED], { delete: deleteDraft });
