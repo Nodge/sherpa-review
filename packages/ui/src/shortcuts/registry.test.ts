@@ -101,6 +101,22 @@ describe('shortcut registry', () => {
         expect(single.preventDefault).not.toHaveBeenCalled();
     });
 
+    it('a modal layer disables all global commands', () => {
+        const registry = createShortcutRegistry();
+        const action = vi.fn();
+        registry.register(shortcut({ id: 'view.route', keys: ['2'], action }));
+        registry.setModalOpen(true);
+
+        const event = keydown('2');
+        expect(registry.handle(event)).toBe(false);
+        expect(action).not.toHaveBeenCalled();
+        expect(event.preventDefault).not.toHaveBeenCalled();
+
+        registry.setModalOpen(false);
+        expect(registry.handle(keydown('2'))).toBe(true);
+        expect(action).toHaveBeenCalledOnce();
+    });
+
     it('empty keys keeps the command in the list but never matches', () => {
         const registry = createShortcutRegistry();
         const action = vi.fn();

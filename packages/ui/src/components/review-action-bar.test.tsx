@@ -9,7 +9,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { countDraftComments } from '../progress/summary.js';
 import { COMPOSER_LAYOUT_KEY } from '../threads/composer-markdown.js';
-import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import type { RouteProgress } from './review-action-bar.tsx';
 import {
@@ -78,14 +77,11 @@ afterEach(() => {
         unmount();
     }
     localStorage.removeItem(COMPOSER_LAYOUT_KEY);
+    document.body.style.overflow = '';
 });
 
-/** Live bar: the PR composer is a toggle, which static markup cannot verify. */
-function mountBar(): {
-    readonly host: HTMLElement;
-    readonly commentButton: HTMLButtonElement;
-    readonly threadStore: ThreadStore;
-} {
+/** Mounted bar: static markup cannot test opening a modal in a portal. */
+function mountBar(): { readonly commentButton: HTMLButtonElement } {
     localStorage.setItem(COMPOSER_LAYOUT_KEY, 'markdown');
     const host = document.createElement('div');
     document.body.append(host);
@@ -122,101 +118,35 @@ function mountBar(): {
     if (commentButton === undefined) {
         throw new Error('the bar has no PR comment button');
     }
-    return { host, commentButton, threadStore };
+    return { commentButton };
 }
 
-describe('PR comment composer', () => {
-    it('the button toggles: pressing it again closes the composer', () => {
-        const { host, commentButton } = mountBar();
+describe('PR comments modal', () => {
+    it('opens a dialog from the button and returns focus to it on close', async () => {
+        const { commentButton } = mountBar();
 
         expect(commentButton.getAttribute('aria-expanded')).toBe('false');
-        expect(host.querySelector('.review-pr-composer')).toBeNull();
+        expect(document.querySelector('.pr-comments-modal')).toBeNull();
 
         act(() => {
             commentButton.click();
         });
+        const dialog = document.querySelector<HTMLElement>('.pr-comments-modal');
         expect(commentButton.getAttribute('aria-expanded')).toBe('true');
-        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
+        expect(dialog?.getAttribute('role')).toBe('dialog');
+        expect(dialog?.getAttribute('aria-modal')).toBe('true');
+        expect(dialog?.contains(document.activeElement)).toBe(true);
 
-        act(() => {
-            commentButton.click();
+        const close = document.querySelector<HTMLButtonElement>('[aria-label="Close the PR comments"]');
+        await act(async () => {
+            close?.click();
+            await Promise.resolve();
         });
+
+        expect(document.querySelector('.pr-comments-modal')).toBeNull();
         expect(commentButton.getAttribute('aria-expanded')).toBe('false');
-        expect(host.querySelector('.review-pr-composer')).toBeNull();
-    });
-
-    it('reopens a composer closed through the store on the first click', () => {
-        const { host, commentButton, threadStore } = mountBar();
-
-        act(() => {
-            commentButton.click();
-        });
-        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
-
-        // Escape with empty text and the "reset" button close the composer this way, bypassing the bar button.
-        act(() => {
-            threadStore.closeComposer('new:pr');
-        });
-        expect(host.querySelector('.review-pr-composer')).toBeNull();
-        expect(commentButton.getAttribute('aria-expanded')).toBe('false');
-
-        act(() => {
-            commentButton.click();
-        });
-        expect(host.querySelector('.review-pr-composer')).not.toBeNull();
-        expect(commentButton.getAttribute('aria-expanded')).toBe('true');
-    });
-
-    it('preserves the draft on close: the text returns with the composer', () => {
-        const { host, commentButton, threadStore } = mountBar();
-
-        act(() => {
-            commentButton.click();
-        });
-        // Composer text lives in the store, where real input keeps it too.
-        act(() => {
-            threadStore.updateComposer('new:pr', { text: 'an unfinished thought' });
-        });
-        expect(host.querySelector<HTMLTextAreaElement>('.review-pr-composer textarea')?.value).toBe(
-            'an unfinished thought',
-        );
-
-        act(() => {
-            commentButton.click();
-        });
-        act(() => {
-            commentButton.click();
-        });
-
-        expect(host.querySelector<HTMLTextAreaElement>('.review-pr-composer textarea')?.value).toBe(
-            'an unfinished thought',
-        );
-    });
-
-    it('shows ghost buttons, an empty save explains why it is disabled, Cancel opens confirmation', () => {
-        const { host, commentButton, threadStore } = mountBar();
-        act(() => {
-            commentButton.click();
-        });
-        const buttons = [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__actions button')];
-        const save = buttons.find((button) => button.textContent === 'Save draft');
-        const cancel = buttons.find((button) => button.textContent === 'Cancel');
-
-        expect(save?.classList.contains('ghost-button')).toBe(true);
-        expect(save?.disabled).toBe(true);
-        expect(save?.title).toBe('Type the comment text.');
-        expect(cancel?.classList.contains('ghost-button')).toBe(true);
-        expect(cancel?.disabled).toBe(false);
-
-        act(() => {
-            threadStore.updateComposer('new:pr', { text: 'draft' });
-        });
-        expect(save?.disabled).toBe(false);
-
-        act(() => {
-            cancel?.click();
-        });
-        expect(host.textContent).toContain('Discard this draft?');
+        expect(document.activeElement).toBe(commentButton);
+        expect(document.body.style.overflow).toBe('');
     });
 });
 

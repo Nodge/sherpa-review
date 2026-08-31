@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import { countThreadSources, flattenThread, groupThreads, placeThreadsOnVisibleLines, threadIsVisible } from './model.js';
+import {
+    countThreadSources,
+    flattenThread,
+    groupThreads,
+    isPrLevelThread,
+    placeThreadsOnVisibleLines,
+    prLevelHumanThreads,
+    threadIsVisible,
+} from './model.js';
 
 describe('thread model', () => {
     it('flattens a branching tree, counts the subtree and limits indentation', () => {
@@ -19,14 +27,55 @@ describe('thread model', () => {
         expect(rows.filter((row) => row.parent?.id === '4820158')).toHaveLength(2);
     });
 
-    it('groups PR-level threads and unknown files separately', () => {
+    it('keeps only PR-level bots and unknown files in outside', () => {
         const data = fixtureData('medium');
         const known = new Set(data.diff.files.slice(0, 2).map((file) => file.fileId));
 
         const grouped = groupThreads(data.threads, known);
 
-        expect(grouped.outside.some((thread) => thread.anchor === null)).toBe(true);
+        expect(grouped.outside.every((thread) => thread.anchor !== null || thread.root.author.bot)).toBe(true);
         expect([...grouped.byFile.keys()].every((fileId) => known.has(fileId))).toBe(true);
+    });
+
+    it('separates human PR-level comments from bots and missing files, including a draft', () => {
+        const source = fixtureData('medium').threads[0];
+        if (source === undefined) {
+            throw new Error('fixture has no thread');
+        }
+        const published = {
+            ...source,
+            id: 'pr-published',
+            anchor: null,
+            root: { ...source.root, id: 'pr-published-root', draft: false, author: { ...source.root.author, bot: false } },
+        };
+        const draft = {
+            ...published,
+            id: 'pr-draft',
+            root: { ...published.root, id: 'pr-draft-root', draft: true },
+        };
+        const bot = {
+            ...published,
+            id: 'pr-bot',
+            root: { ...published.root, id: 'pr-bot-root', author: { ...published.root.author, bot: true } },
+        };
+        const disappeared = {
+            ...published,
+            id: 'disappeared-file',
+            anchor: { fileId: 'missing-file', path: 'removed.ts', position: null },
+            root: { ...published.root, id: 'disappeared-file-root' },
+        };
+
+        expect(isPrLevelThread(published)).toBe(true);
+        expect(isPrLevelThread(disappeared)).toBe(false);
+        expect(prLevelHumanThreads([published, draft, bot, disappeared]).map((thread) => thread.id)).toEqual([
+            'pr-published',
+            'pr-draft',
+        ]);
+        expect(prLevelHumanThreads([draft])[0]?.root.draft).toBe(true);
+        expect(groupThreads([published, draft, bot, disappeared], new Set()).outside.map((thread) => thread.id)).toEqual([
+            'pr-bot',
+            'disappeared-file',
+        ]);
     });
 
     it('pulls an anchor in hidden context to the nearest visible line', () => {

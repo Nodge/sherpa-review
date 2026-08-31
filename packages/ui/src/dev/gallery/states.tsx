@@ -20,6 +20,7 @@ import { M2_T10_STATES } from './m2-t10-states.tsx';
 import { M2_T11_STATES } from './m2-t11-states.tsx';
 import { M2F_T17_STATES } from './m2f-t17-states.tsx';
 import { M2F_T23_STATES } from './m2f-t23-states.tsx';
+import { M2F_T24_STATES } from './m2f-t24-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -124,6 +125,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...M2F_T23_STATES.map((state) => ({
         id: state.id,
         group: 'Comment composer',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M2F_T24_STATES.map((state) => ({
+        id: state.id,
+        group: 'PR comments',
         title: state.title,
         render: state.render,
     })),

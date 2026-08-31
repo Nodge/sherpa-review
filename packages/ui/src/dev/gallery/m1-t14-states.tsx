@@ -9,7 +9,6 @@ import type { ReviewCompletion } from '../../components/review-action-bar.tsx';
 import { ReviewComplete } from '../../components/review-complete.tsx';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { createThreadStore } from '../../threads/store.js';
-import { openPrComposer } from '../../threads/thread-list.tsx';
 
 const DATA = fixtureData('medium');
 const DRAFT_THREADS = withDraft(DATA.threads);
@@ -67,12 +66,6 @@ export const M1_T14_STATES: readonly M1T14GalleryState[] = [
         render: () => <BarState threads={[]} />,
     },
     {
-        id: 'review-bar-pr-composer',
-        group: 'Finish review',
-        title: 'PR comment editor open',
-        render: () => <BarState threads={DRAFT_THREADS} composerOpen />,
-    },
-    {
         id: 'review-ship-menu',
         group: 'Finish review',
         title: 'ship menu with a guard',
@@ -124,25 +117,19 @@ function withDraft(threads: readonly Thread[]): Thread[] {
 function BarState({
     threads,
     menuOpen = false,
-    composerOpen = false,
     failure = null,
     stickyAvailable = true,
 }: {
     threads: readonly Thread[];
     menuOpen?: boolean;
-    composerOpen?: boolean;
     failure?: PublicationFailure | null;
     stickyAvailable?: boolean;
 }) {
     const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files, storage: null }), []);
-    const threadStore = useMemo(() => {
-        const store = createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId)));
-        if (composerOpen) {
-            // A button opens the composer in the app store. The gallery opens it directly.
-            openPrComposer(store);
-        }
-        return store;
-    }, [threads, composerOpen]);
+    const threadStore = useMemo(
+        () => createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId))),
+        [threads],
+    );
     const pr = useMemo<PrMeta>(
         () => ({ ...DATA.pr, capabilities: { ...DATA.pr.capabilities, stickyShip: stickyAvailable } }),
         [stickyAvailable],
@@ -160,7 +147,6 @@ function BarState({
                 onPublish={() => Promise.reject(new Error('the gallery does not write to the host'))}
                 onComplete={() => undefined}
                 defaultMenuOpen={menuOpen}
-                defaultComposerOpen={composerOpen}
                 initialFailure={failure}
                 storage={null}
             />

@@ -1,4 +1,5 @@
 import type { Comment, FileAnchor, Thread } from '@sherpa/protocol';
+import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
@@ -7,6 +8,7 @@ import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
+import type { ComposerLayout } from './composer-markdown.js';
 import { authorName, flattenThread } from './model.js';
 import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
@@ -253,6 +255,9 @@ export function NewCommentComposer({
     contextLabel,
     placeholder,
     saveLabel,
+    footerHint,
+    initialLayout,
+    onSaveComplete,
 }: {
     composerKey: string;
     store: ThreadStore;
@@ -260,6 +265,9 @@ export function NewCommentComposer({
     contextLabel?: string;
     placeholder?: string;
     saveLabel?: 'Save draft' | 'Save changes';
+    footerHint?: ReactNode;
+    initialLayout?: ComposerLayout;
+    onSaveComplete?: (() => void) | undefined;
 }) {
     const composer = useComposerSnapshot(store, composerKey);
     if (composer === null) {
@@ -275,6 +283,9 @@ export function NewCommentComposer({
             placeholder={placeholder ?? (line === undefined ? 'A general remark on the PR, not tied to a line' : 'Comment on the code line')}
             inputLabel="New comment"
             {...(saveLabel === undefined ? {} : { saveLabel })}
+            {...(footerHint === undefined ? {} : { footerHint })}
+            {...(initialLayout === undefined ? {} : { initialLayout })}
+            {...(onSaveComplete === undefined ? {} : { onSaveComplete })}
         />
     );
 }
@@ -356,8 +367,10 @@ function replyDraft(thread: Thread): Comment | null {
     return draft;
 }
 
+export const PR_COMPOSER_KEY = 'new:pr';
+
 export function openPrComposer(store: ThreadStore): void {
-    const key = 'new:pr';
+    const key = PR_COMPOSER_KEY;
     if (store.getComposer(key) !== null) {
         return;
     }

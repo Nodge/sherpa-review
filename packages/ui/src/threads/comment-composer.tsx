@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
 import { composerControllerFor } from './composer.js';
@@ -35,7 +35,11 @@ export interface CommentComposerProps {
     readonly inputLabel: string;
     readonly saveLabel?: 'Save draft' | 'Save changes';
     readonly notice?: ReactNode;
+    readonly footerHint?: ReactNode;
     readonly initialLayout?: ComposerLayout;
+    readonly onSaveComplete?: (() => void) | undefined;
+    readonly restoreOnCancel?: string;
+    readonly onCancel?: (() => void) | undefined;
 }
 
 /** Shared composer for replies, PR comments and line comments. */
@@ -48,7 +52,11 @@ export function CommentComposer({
     inputLabel,
     saveLabel,
     notice,
+    footerHint,
     initialLayout,
+    onSaveComplete,
+    restoreOnCancel,
+    onCancel,
 }: CommentComposerProps) {
     const controller = useMemo(
         () => composerControllerFor({ store, key: composer.key, transport }),
@@ -72,6 +80,28 @@ export function CommentComposer({
           : composer.text.trim() === ''
             ? 'Type the comment text.'
             : null;
+    const save = useCallback(async (): Promise<void> => {
+        if (await controller.saveNow(true)) {
+            onSaveComplete?.();
+        }
+    }, [controller, onSaveComplete]);
+    const cancel = useCallback((): void => {
+        if (restoreOnCancel !== undefined) {
+            void controller.restore(restoreOnCancel).then((restored) => {
+                if (restored) {
+                    onCancel?.();
+                }
+            });
+            return;
+        }
+        if (onCancel === undefined) {
+            controller.escape();
+            return;
+        }
+        controller.close();
+        store.closeComposer(composer.key);
+        onCancel();
+    }, [composer.key, controller, onCancel, restoreOnCancel, store]);
 
     useEffect(() => {
         currentTextRef.current = composer.text;
@@ -97,9 +127,9 @@ export function CommentComposer({
                 ariaLabel: inputLabel,
                 onChange: controller.input,
                 onSave: () => {
-                    void controller.saveNow(true);
+                    void save();
                 },
-                onCancel: controller.escape,
+                onCancel: cancel,
             });
             visualRef.current = handle;
             setVisualReady(true);
@@ -110,7 +140,7 @@ export function CommentComposer({
             visualRef.current?.destroy();
             visualRef.current = null;
         };
-    }, [composer.key, controller, inputLabel, layout]);
+    }, [cancel, composer.key, controller, inputLabel, layout, save]);
 
     useEffect(() => {
         visualRef.current?.setMarkdown(composer.text);
@@ -217,11 +247,11 @@ export function CommentComposer({
                             } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                void controller.saveNow(true);
+                                void save();
                             } else if (event.key === 'Escape') {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                controller.escape();
+                                cancel();
                             }
                         }}
                     />
@@ -243,7 +273,7 @@ export function CommentComposer({
                     className="ghost-button thread-composer__save"
                     disabled={saveDisabledReason !== null}
                     title={saveDisabledReason ?? undefined}
-                    onClick={() => void controller.saveNow(true)}
+                    onClick={() => void save()}
                 >
                     {resolvedSaveLabel}
                 </button>
@@ -252,11 +282,12 @@ export function CommentComposer({
                     className="ghost-button"
                     disabled={disabled}
                     title={disabled ? 'The draft is being deleted.' : undefined}
-                    onClick={controller.escape}
+                    onClick={cancel}
                 >
                     Cancel
                 </button>
                 <span className="thread-composer__actions-spacer" />
+                {footerHint}
                 {composer.confirmDiscard ? (
                     <span className="thread-composer__confirm">
                         Discard this draft?{' '}

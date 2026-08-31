@@ -12,6 +12,7 @@ export interface ComposerController {
     readonly input: (text: string) => void;
     readonly saveNow: (close?: boolean) => Promise<boolean>;
     readonly retry: () => Promise<boolean>;
+    readonly restore: (text: string) => Promise<boolean>;
     readonly escape: () => void;
     readonly confirmDiscard: () => Promise<boolean>;
     readonly keepEditing: () => void;
@@ -58,9 +59,11 @@ export function createComposerController(options: ComposerControllerOptions): Co
     let slow: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
     let inFlight: Promise<boolean> | null = null;
+    let drainPromise: Promise<boolean> | null = null;
     let queuedText: string | null = null;
     let closeQueued = false;
     let discardRequested = false;
+    let reverting = false;
     let discardPromise: Promise<boolean> | null = null;
     let createdWhileDiscarding: { draft: CommentDraft; comment: Comment } | null = null;
 
@@ -87,11 +90,13 @@ export function createComposerController(options: ComposerControllerOptions): Co
     };
 
     const state = () => options.store.getComposer(options.key);
+    const ignoreRequestResult = (): boolean => discardRequested || reverting;
 
-    const perform = async (closeAfter: boolean, allowUncertain = false): Promise<boolean> => {
+    const run = async (closeAfter: boolean, allowUncertain: boolean): Promise<boolean> => {
         const current = state();
         if (
             closed ||
+            reverting ||
             current === null ||
             current.text.trim() === '' ||
             (current.saveUncertain && current.commentId === null && !allowUncertain)
@@ -99,12 +104,6 @@ export function createComposerController(options: ComposerControllerOptions): Co
             return false;
         }
         clearTimers();
-        if (inFlight !== null) {
-            queuedText = current.text;
-            closeQueued ||= closeAfter;
-            return inFlight;
-        }
-
         const body = current.text;
         options.store.updateComposer(options.key, { status: 'saving', slow: false, confirmDiscard: false });
         slow = setTimeout(() => {
@@ -124,16 +123,16 @@ export function createComposerController(options: ComposerControllerOptions): Co
                     }
                 } else {
                     await options.transport.update(current.commentId, body);
-                    if (!discardRequested) {
+                    if (!ignoreRequestResult()) {
                         options.store.updateDraft(current.commentId, body);
                     }
                 }
-                if (!discardRequested && state()?.text === body) {
+                if (!ignoreRequestResult() && state()?.text === body) {
                     options.store.updateComposer(options.key, { status: 'saved', slow: false, savedAt: Date.now() });
                 }
                 return true;
             } catch {
-                if (!discardRequested) {
+                if (!ignoreRequestResult()) {
                     options.store.updateComposer(options.key, {
                         status: 'error',
                         slow: false,
@@ -150,7 +149,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         inFlight = request;
         const ok = await request;
 
-        if (discardRequested) {
+        if (ignoreRequestResult()) {
             queuedText = null;
             closeQueued = false;
             return ok;
@@ -161,7 +160,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         queuedText = null;
         closeQueued = false;
         if (ok && queued !== null && queued !== body) {
-            return perform(shouldClose, allowUncertain);
+            return run(shouldClose, allowUncertain);
         }
         if (ok && shouldClose && state()?.text === body) {
             options.store.closeComposer(options.key);
@@ -169,6 +168,32 @@ export function createComposerController(options: ComposerControllerOptions): Co
             forget();
         }
         return ok;
+    };
+
+    const perform = (closeAfter: boolean, allowUncertain = false): Promise<boolean> => {
+        const current = state();
+        if (
+            closed ||
+            reverting ||
+            current === null ||
+            current.text.trim() === '' ||
+            (current.saveUncertain && current.commentId === null && !allowUncertain)
+        ) {
+            return Promise.resolve(false);
+        }
+        clearTimers();
+        if (drainPromise !== null) {
+            queuedText = current.text;
+            closeQueued ||= closeAfter;
+            return drainPromise;
+        }
+        const drain = run(closeAfter, allowUncertain).finally(() => {
+            if (drainPromise === drain) {
+                drainPromise = null;
+            }
+        });
+        drainPromise = drain;
+        return drain;
     };
 
     const discard = (): Promise<boolean> => {
@@ -241,9 +266,42 @@ export function createComposerController(options: ComposerControllerOptions): Co
         }, debounceMs);
     };
 
+    const restore = async (text: string): Promise<boolean> => {
+        const commentId = state()?.commentId;
+        if (closed || reverting || commentId === null || commentId === undefined) {
+            return false;
+        }
+        clearTimers();
+        reverting = true;
+        queuedText = null;
+        closeQueued = false;
+        options.store.updateComposer(options.key, {
+            text,
+            status: 'saving',
+            slow: false,
+            confirmDiscard: false,
+        });
+        const active = drainPromise;
+        if (active !== null) {
+            await active;
+        }
+        try {
+            await options.transport.update(commentId, text);
+            options.store.updateDraft(commentId, text);
+            options.store.closeComposer(options.key);
+            closed = true;
+            forget();
+            return true;
+        } catch {
+            reverting = false;
+            options.store.updateComposer(options.key, { status: 'error', slow: false });
+            return false;
+        }
+    };
+
     const controller: ComposerController = {
         input: (text) => {
-            if (closed) {
+            if (closed || reverting) {
                 return;
             }
             const current = state();
@@ -265,6 +323,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         saveNow: (close = false) => perform(close),
         // The first save is not idempotent in the UI contract. The UI must show the risk of retrying.
         retry: () => perform(false, true),
+        restore,
         escape: () => {
             const current = state();
             if (current === null) {
