@@ -70,7 +70,7 @@ function LineCommentState({ mode, editing = false }: { mode: DiffMode; editing?:
                 fileId: FILE.fileId,
                 path: FILE.path,
                 position: POSITION,
-            });
+            }, true);
         }
         return created;
     }, [draft, editing]);

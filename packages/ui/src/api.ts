@@ -87,8 +87,8 @@ export async function saveReviewDraft(token: string, draft: CommentDraft): Promi
     return (await post(UI_ENDPOINTS.reviewSaveDraft, token, { draft }, uiSaveDraftResponseSchema)).comment;
 }
 
-export async function updateReviewDraft(token: string, commentId: string, body: string): Promise<void> {
-    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body }, uiReviewWriteAckSchema);
+export async function updateReviewDraft(token: string, commentId: string, body: string, issue?: boolean): Promise<void> {
+    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body, issue }, uiReviewWriteAckSchema);
 }
 
 export async function deleteReviewDraft(token: string, commentId: string): Promise<void> {

@@ -4,12 +4,13 @@ import type { ThreadStore } from './store.js';
 
 export interface ComposerTransport {
     readonly save: (draft: CommentDraft) => Promise<Comment>;
-    readonly update: (commentId: string, body: string) => Promise<void>;
+    readonly update: (commentId: string, body: string, issue?: boolean) => Promise<void>;
     readonly delete: (commentId: string) => Promise<void>;
 }
 
 export interface ComposerController {
     readonly input: (text: string) => void;
+    readonly setIssue: (issue: boolean) => void;
     readonly saveNow: (close?: boolean) => Promise<boolean>;
     readonly retry: () => Promise<boolean>;
     readonly restore: (text: string) => Promise<boolean>;
@@ -60,12 +61,13 @@ export function createComposerController(options: ComposerControllerOptions): Co
     let closed = false;
     let inFlight: Promise<boolean> | null = null;
     let drainPromise: Promise<boolean> | null = null;
-    let queuedText: string | null = null;
+    let queuedDraft: { text: string; issue: boolean | undefined } | null = null;
     let closeQueued = false;
     let discardRequested = false;
     let reverting = false;
     let discardPromise: Promise<boolean> | null = null;
     let createdWhileDiscarding: { draft: CommentDraft; comment: Comment } | null = null;
+    let lastWrittenIssue: boolean | undefined;
 
     const forget = (): void => {
         const byKey = controllers.get(options.store);
@@ -105,6 +107,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         }
         clearTimers();
         const body = current.text;
+        const issue = current.issue;
         options.store.updateComposer(options.key, { status: 'saving', slow: false, confirmDiscard: false });
         slow = setTimeout(() => {
             options.store.updateComposer(options.key, { slow: true });
@@ -113,8 +116,14 @@ export function createComposerController(options: ComposerControllerOptions): Co
         const request = (async () => {
             try {
                 if (current.commentId === null) {
-                    const draft: CommentDraft = { body, parentId: current.parentId, anchor: current.anchor };
+                    const draft: CommentDraft = {
+                        body,
+                        parentId: current.parentId,
+                        anchor: current.anchor,
+                        ...(issue === undefined ? {} : { issue }),
+                    };
                     const comment = await options.transport.save(draft);
+                    lastWrittenIssue = issue;
                     if (discardRequested) {
                         createdWhileDiscarding = { draft, comment };
                     } else {
@@ -122,12 +131,18 @@ export function createComposerController(options: ComposerControllerOptions): Co
                         options.store.updateComposer(options.key, { commentId: comment.id, saveUncertain: false });
                     }
                 } else {
-                    await options.transport.update(current.commentId, body);
+                    const issueUpdate = issue === lastWrittenIssue ? undefined : issue;
+                    if (issueUpdate === undefined) {
+                        await options.transport.update(current.commentId, body);
+                    } else {
+                        await options.transport.update(current.commentId, body, issueUpdate);
+                        lastWrittenIssue = issueUpdate;
+                    }
                     if (!ignoreRequestResult()) {
                         options.store.updateDraft(current.commentId, body);
                     }
                 }
-                if (!ignoreRequestResult() && state()?.text === body) {
+                if (!ignoreRequestResult() && state()?.text === body && state()?.issue === issue) {
                     options.store.updateComposer(options.key, { status: 'saved', slow: false, savedAt: Date.now() });
                 }
                 return true;
@@ -150,19 +165,19 @@ export function createComposerController(options: ComposerControllerOptions): Co
         const ok = await request;
 
         if (ignoreRequestResult()) {
-            queuedText = null;
+            queuedDraft = null;
             closeQueued = false;
             return ok;
         }
 
-        const queued = queuedText;
+        const queued = queuedDraft;
         const shouldClose = closeAfter || closeQueued;
-        queuedText = null;
+        queuedDraft = null;
         closeQueued = false;
-        if (ok && queued !== null && queued !== body) {
+        if (ok && queued !== null && (queued.text !== body || queued.issue !== issue)) {
             return run(shouldClose, allowUncertain);
         }
-        if (ok && shouldClose && state()?.text === body) {
+        if (ok && shouldClose && state()?.text === body && state()?.issue === issue) {
             options.store.closeComposer(options.key);
             closed = true;
             forget();
@@ -183,7 +198,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         }
         clearTimers();
         if (drainPromise !== null) {
-            queuedText = current.text;
+            queuedDraft = { text: current.text, issue: current.issue };
             closeQueued ||= closeAfter;
             return drainPromise;
         }
@@ -273,7 +288,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
         }
         clearTimers();
         reverting = true;
-        queuedText = null;
+        queuedDraft = null;
         closeQueued = false;
         options.store.updateComposer(options.key, {
             text,
@@ -317,6 +332,24 @@ export function createComposerController(options: ComposerControllerOptions): Co
                     debounce = null;
                 }
             } else {
+                schedule();
+            }
+        },
+        setIssue: (issue) => {
+            if (closed || reverting) {
+                return;
+            }
+            const current = state();
+            if (current?.issue === undefined || current.issue === issue) {
+                return;
+            }
+            options.store.updateComposer(options.key, {
+                issue,
+                status: current.saveUncertain ? 'error' : 'idle',
+                slow: false,
+                confirmDiscard: false,
+            });
+            if (current.text.trim() !== '' && !current.saveUncertain) {
                 schedule();
             }
         },

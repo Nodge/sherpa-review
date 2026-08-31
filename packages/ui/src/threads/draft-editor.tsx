@@ -17,6 +17,7 @@ export function openDraftEditor(store: ThreadStore, thread: Thread, comment: Com
     if (store.getComposer(key) !== null) {
         return;
     }
+    // `Comment` omits the current issue status: update without `issue` preserves it on the host.
     store.openComposer({
         key,
         threadId: thread.id,

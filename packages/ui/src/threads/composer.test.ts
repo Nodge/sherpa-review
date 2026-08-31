@@ -1,7 +1,8 @@
-import type { Comment } from '@sherpa/protocol';
+import type { Comment, Thread } from '@sherpa/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { closePublishedComposers, composerControllerFor, createComposerController } from './composer.js';
+import { openNewComposer, openReply } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
 
 const CREATED: Comment = {
@@ -12,6 +13,15 @@ const CREATED: Comment = {
     createdAt: '2026-08-24T10:00:00.000Z',
     editedAt: null,
     replies: [],
+};
+
+const THREAD: Thread = {
+    id: 'thread-1',
+    anchor: null,
+    resolved: false,
+    resolvedBy: null,
+    outdated: false,
+    root: { ...CREATED, id: 'root-1', draft: false },
 };
 
 function deferred<T>() {
@@ -46,11 +56,119 @@ function setup() {
     return { store, controller, save, update, remove };
 }
 
+function setupIssueComposer(kind: 'new' | 'reply') {
+    const store = createThreadStore(kind === 'reply' ? [THREAD] : [], new Set(['f1']));
+    const key = kind === 'new' ? 'new:f1:new:10' : `reply:${THREAD.id}`;
+    if (kind === 'new') {
+        openNewComposer(
+            store,
+            key,
+            { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+            true,
+        );
+    } else {
+        openReply(store, THREAD, null);
+    }
+    const save = vi.fn(() => Promise.resolve(CREATED));
+    const update = vi.fn(() => Promise.resolve());
+    const remove = vi.fn(() => Promise.resolve());
+    const controller = createComposerController({ store, key, transport: { save, update, delete: remove } });
+    return { store, controller, save, update };
+}
+
 afterEach(() => {
     vi.useRealTimers();
 });
 
 describe('composer state machine', () => {
+    it('saves a new thread with issue: true by default', async () => {
+        const { controller, save } = setupIssueComposer('new');
+
+        controller.input('first');
+        await controller.saveNow();
+
+        expect(save).toHaveBeenCalledWith({
+            body: 'first',
+            parentId: null,
+            anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+            issue: true,
+        });
+    });
+
+    it('passes issue disabled before the first save to save', async () => {
+        const { controller, save } = setupIssueComposer('new');
+
+        controller.setIssue(false);
+        controller.input('no reply needed');
+        await controller.saveNow();
+
+        expect(save).toHaveBeenCalledWith(expect.objectContaining({ issue: false }));
+    });
+
+    it('changing issue after the first save reaches update through the same autosave', async () => {
+        vi.useFakeTimers();
+        const { controller, update } = setupIssueComposer('new');
+        controller.input('first');
+        await controller.saveNow();
+
+        controller.setIssue(false);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(update).toHaveBeenCalledWith('draft-1', 'first', false);
+    });
+
+    it('autosaving text after create does not send issue again', async () => {
+        vi.useFakeTimers();
+        const { controller, update } = setupIssueComposer('new');
+        controller.input('first');
+        await controller.saveNow();
+
+        controller.input('second');
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(update.mock.calls).toEqual([['draft-1', 'second']]);
+    });
+
+    it('autosaving text after changing issue does not send it again', async () => {
+        vi.useFakeTimers();
+        const { controller, update } = setupIssueComposer('new');
+        controller.input('first');
+        await controller.saveNow();
+        controller.setIssue(false);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        controller.input('second');
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(update.mock.calls).toEqual([
+            ['draft-1', 'first', false],
+            ['draft-1', 'second'],
+        ]);
+    });
+
+    it('does not resend issue when it returns to the stored value', async () => {
+        vi.useFakeTimers();
+        const { controller, update } = setupIssueComposer('new');
+        controller.input('first');
+        await controller.saveNow();
+
+        controller.setIssue(false);
+        controller.setIssue(true);
+        controller.input('second');
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(update.mock.calls).toEqual([['draft-1', 'second']]);
+    });
+
+    it('a reply does not pass issue', async () => {
+        const { controller, save } = setupIssueComposer('reply');
+
+        controller.input('reply');
+        await controller.saveNow();
+
+        expect(save).toHaveBeenCalledWith({ body: 'reply', parentId: 'root-1', anchor: null });
+    });
+
     it('debounces for 1s, calls save first and update afterward', async () => {
         vi.useFakeTimers();
         const { controller, save, update } = setup();

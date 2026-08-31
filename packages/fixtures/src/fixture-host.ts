@@ -91,6 +91,8 @@ export class FixtureHost implements ReviewHost {
     private readonly data: FixtureData;
     private readonly failPublishFor: ReadonlySet<HostId>;
     private readonly watchers = new Set<(threads: Thread[]) => void>();
+    /** Issue status is absent from `Comment`, but the fixture stores it as host state. */
+    private readonly commentIssues = new Map<HostId, boolean>();
 
     /** Next mutation number, used for timestamps and ids of new drafts. */
     private mutations = 0;
@@ -166,6 +168,9 @@ export class FixtureHost implements ReviewHost {
         }
 
         const root = this.makeDraftComment(parsed.body, createdAt, parsed.anchor === null);
+        if (this.data.pr.capabilities.commentIssues && parsed.issue !== undefined) {
+            this.commentIssues.set(root.id, parsed.issue);
+        }
         this.data.threads.push({
             id: root.id,
             anchor: parsed.anchor,
@@ -178,7 +183,7 @@ export class FixtureHost implements ReviewHost {
         return Promise.resolve(structuredClone(root));
     }
 
-    updateDraft(commentId: HostId, body: string): Promise<void> {
+    updateDraft(commentId: HostId, body: string, issue?: boolean): Promise<void> {
         const found = locate(this.data.threads, commentId);
         if (found === null) {
             return Promise.reject(new Error(`comment ${commentId} not found`));
@@ -187,6 +192,9 @@ export class FixtureHost implements ReviewHost {
             return Promise.reject(new Error(`comment ${commentId} is already published and cannot be edited`));
         }
         found.comment.body = body;
+        if (this.data.pr.capabilities.commentIssues && issue !== undefined) {
+            this.commentIssues.set(commentId, issue);
+        }
         found.comment.editedAt = this.nextTimestamp();
         this.emit();
         return Promise.resolve();
@@ -206,6 +214,7 @@ export class FixtureHost implements ReviewHost {
             return Promise.reject(new Error(`draft ${commentId} has replies: delete them first`));
         }
 
+        this.commentIssues.delete(commentId);
         if (found.parent === null) {
             this.data.threads = this.data.threads.filter((thread) => thread !== found.thread);
         } else {
@@ -274,6 +283,11 @@ export class FixtureHost implements ReviewHost {
     /** Fixture inspection: the last applied verdict (null if none). */
     appliedVerdict(): Verdict | null {
         return this.verdict;
+    }
+
+    /** Makes the host issue status observable in the fixture. The public `Comment` omits it. */
+    issueOf(commentId: HostId): boolean | undefined {
+        return this.commentIssues.get(commentId);
     }
 
     /** An unknown file is a host error. A known file without content (binary) returns null. */

@@ -528,7 +528,7 @@ export function App({ store, session, token }: AppProps) {
     const composerTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body) => updateReviewDraft(token, commentId, body),
+            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
             delete: (commentId) => deleteReviewDraft(token, commentId),
         }),
         [token],

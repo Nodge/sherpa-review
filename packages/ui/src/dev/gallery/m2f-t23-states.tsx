@@ -43,6 +43,9 @@ export const M2F_T23_STATES = [
     { id: 'composer-markdown', title: 'text, Markdown', render: () => <OpenState layout="markdown" kind="saved" /> },
     { id: 'composer-error', title: 'autosave error', render: () => <OpenState layout="markdown" kind="error" /> },
     { id: 'composer-confirm', title: 'discard confirmation', render: () => <OpenState layout="visual" kind="confirm" /> },
+    { id: 'composer-issue-open', title: 'new comment · issue open', render: () => <IssueState issue /> },
+    { id: 'composer-issue-off', title: 'new comment · issue off', render: () => <IssueState issue={false} /> },
+    { id: 'composer-no-issue', title: 'new comment · host without issues', render: () => <IssueState /> },
     { id: 'composer-closed-draft', title: 'field closed, draft exists', render: () => <CollapsedState draft /> },
 ] as const;
 
@@ -92,6 +95,47 @@ function OpenState({
                 placeholder="Reply in the thread"
                 inputLabel="Thread reply"
                 initialLayout={layout}
+            />
+        </div>
+    );
+}
+
+function IssueState({ issue }: { issue?: boolean }) {
+    const [store] = useState(() => {
+        const created = createThreadStore([], FILE_IDS);
+        created.openComposer({
+            key: `gallery:issue:${issue === undefined ? 'unsupported' : String(issue)}`,
+            threadId: null,
+            parentId: null,
+            anchor: null,
+            ...(issue === undefined ? {} : { issue }),
+            text: 'Check zero width before Ship.',
+            commentId: null,
+            status: 'idle',
+            saveUncertain: false,
+            slow: false,
+            confirmDiscard: false,
+            resolvedAtOpen: false,
+        });
+        return created;
+    });
+    const key = `gallery:issue:${issue === undefined ? 'unsupported' : String(issue)}`;
+    const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
+    const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
+    const composer = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    if (composer === null) {
+        return null;
+    }
+    return (
+        <div className="gallery-composer">
+            <CommentComposer
+                composer={composer}
+                store={store}
+                transport={TRANSPORT}
+                contextLabel="PR comment"
+                placeholder="A general remark on the PR — not tied to a line"
+                inputLabel="New comment"
+                initialLayout="markdown"
             />
         </div>
     );

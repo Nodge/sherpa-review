@@ -180,7 +180,7 @@ export function OverviewView({
                 ? EMPTY_THREAD_TRANSPORT
                 : {
                       save: (draft) => saveReviewDraft(token, draft),
-                      update: (commentId, body) => updateReviewDraft(token, commentId, body),
+                      update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
                       delete: (commentId) => deleteReviewDraft(token, commentId),
                   },
         [token],

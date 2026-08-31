@@ -9,6 +9,8 @@ export interface ComposerSnapshot {
     readonly threadId: string | null;
     readonly parentId: string | null;
     readonly anchor: FileAnchor | null;
+    /** undefined means replies, editing an existing draft, or a host without commentIssues. */
+    readonly issue?: boolean;
     readonly text: string;
     /** Original text when editing an existing draft, needed for cancellation after remounting. */
     readonly originalText?: string;

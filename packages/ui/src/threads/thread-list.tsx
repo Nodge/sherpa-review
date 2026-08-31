@@ -432,7 +432,7 @@ function replyDraft(thread: Thread): Comment | null {
 
 export const PR_COMPOSER_KEY = 'new:pr';
 
-export function openPrComposer(store: ThreadStore): void {
+export function openPrComposer(store: ThreadStore, commentIssues: boolean): void {
     const key = PR_COMPOSER_KEY;
     if (store.getComposer(key) !== null) {
         return;
@@ -442,6 +442,7 @@ export function openPrComposer(store: ThreadStore): void {
         threadId: null,
         parentId: null,
         anchor: null,
+        ...(commentIssues ? { issue: true } : {}),
         text: '',
         commentId: null,
         status: 'idle',
@@ -456,6 +457,7 @@ export function openNewComposer(
     store: ThreadStore,
     key: string,
     anchor: FileAnchor,
+    commentIssues: boolean,
 ): void {
     if (store.getComposer(key) !== null) {
         return;
@@ -465,6 +467,7 @@ export function openNewComposer(
         threadId: null,
         parentId: null,
         anchor,
+        ...(commentIssues ? { issue: true } : {}),
         text: '',
         commentId: null,
         status: 'idle',

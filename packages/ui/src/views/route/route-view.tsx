@@ -178,7 +178,7 @@ export function RouteView({
     const threadTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body) => updateReviewDraft(token, commentId, body),
+            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
             delete: (commentId) => deleteReviewDraft(token, commentId),
         }),
         [token],
@@ -1210,9 +1210,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 line,
             );
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
-            openNewComposer(threadStore, key, { fileId, path: file.path, position });
+            openNewComposer(threadStore, key, { fileId, path: file.path, position }, pr.capabilities.commentIssues);
         },
-        [diff.files, diffSnapshot.models, diffSnapshot.selection, threadStore],
+        [diff.files, diffSnapshot.models, diffSnapshot.selection, pr.capabilities.commentIssues, threadStore],
     );
     useShortcut({
         id: 'thread.commentLine',

@@ -241,8 +241,14 @@ export function describeReviewHostContract(
             const feed = subscribe(host);
             await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
 
+            const supportsIssues = (await host.getPr()).capabilities.commentIssues;
             let seen = feed.snapshots.length;
-            const created = await host.saveDraft({ body: 'contract draft', parentId: null, anchor: null });
+            const created = await host.saveDraft({
+                body: 'contract draft',
+                parentId: null,
+                anchor: null,
+                ...(supportsIssues ? { issue: true } : {}),
+            });
             expect(created.draft).toBe(true);
 
             await waitFreshSnapshot(
@@ -252,9 +258,14 @@ export function describeReviewHostContract(
                 'draft in the new thread snapshot',
             );
             expect(findInThreads(lastSnapshot(feed), created.id)?.draft).toBe(true);
+            expect(lastSnapshot(feed).find((thread) => thread.id === created.id)?.resolved).toBe(false);
 
             seen = feed.snapshots.length;
-            await host.updateDraft(created.id, 'contract draft, edited');
+            if (supportsIssues) {
+                await host.updateDraft(created.id, 'contract draft, edited', false);
+            } else {
+                await host.updateDraft(created.id, 'contract draft, edited');
+            }
             await waitFreshSnapshot(
                 feed,
                 seen,

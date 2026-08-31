@@ -322,11 +322,11 @@ describe('server review endpoints', () => {
             const updated = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewUpdateDraft,
-                { commentId: created.id, body: 'revised draft' },
+                { commentId: created.id, body: 'edited draft', issue: false },
                 server.token,
             );
             expect(uiReviewWriteAckSchema.parse(await updated.json())).toEqual({ acknowledged: true });
-            expect(update).toHaveBeenCalledWith(created.id, 'revised draft');
+            expect(update).toHaveBeenCalledWith(created.id, 'edited draft', false);
 
             const deleted = await postJson(
                 server.port,
