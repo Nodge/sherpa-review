@@ -10,6 +10,8 @@ export interface ComposerSnapshot {
     readonly parentId: string | null;
     readonly anchor: FileAnchor | null;
     readonly text: string;
+    /** Original text when editing an existing draft, needed for cancellation after remounting. */
+    readonly originalText?: string;
     readonly commentId: string | null;
     readonly status: ComposerStatus;
     /** Time of the last confirmed save, for the status under the field. */

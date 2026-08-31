@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
 import { fixtureData } from '@sherpa/fixtures';
 import type { Comment, Thread } from '@sherpa/protocol';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -11,6 +14,8 @@ import { openReply, ThreadList } from './thread-list.tsx';
  * Comment bodies render as markdown (M2F-T5). Bots write headings, lists,
  * links and code blocks, and the thread card must render that markup instead of a raw string.
  */
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const DATA = fixtureData('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
@@ -36,13 +41,14 @@ function render(threads: readonly Thread[], store = createThreadStore(threads, F
     return renderWithStore(threads, store);
 }
 
-function renderWithStore(threads: readonly Thread[], store: ThreadStore): string {
+function renderWithStore(threads: readonly Thread[], store: ThreadStore, inlineDraftEditing = false): string {
     return renderToStaticMarkup(
         <ThreadList
             threads={threads}
             store={store}
             actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
             now={NOW}
+            inlineDraftEditing={inlineDraftEditing}
         />,
     );
 }
@@ -83,6 +89,100 @@ describe('comment body', () => {
 
         expect(body).toContain('<p class="md-p">Why is the window a class');
         expect(body).toContain('<code class="md-code">Clock</code>');
+    });
+});
+
+describe('editing a line comment', () => {
+    it('does not show an edit pencil on a published comment by another author', () => {
+        const thread = threadOf('kai');
+        const html = renderWithStore([thread], createThreadStore([thread], FILE_IDS), true);
+
+        expect(html).not.toContain('Edit the draft');
+        expect(html).toContain('Reply…');
+        expect(html).toContain('Resolve');
+        expect(html).not.toContain('Copy link');
+    });
+
+    it('edits your draft in place with a blue border and chip', () => {
+        const source = threadOf('kai');
+        const draft: Thread = {
+            ...source,
+            root: { ...source.root, id: 'line-draft', body: DRAFT.body, draft: true, replies: [] },
+        };
+        const store = createThreadStore([draft], FILE_IDS);
+        const host = document.createElement('div');
+        document.body.append(host);
+        let root = createRoot(host);
+        act(() => {
+            root.render(
+                <ThreadList
+                    threads={[draft]}
+                    store={store}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                    inlineDraftEditing
+                    initialLayout="markdown"
+                />,
+            );
+        });
+
+        const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit draft line-draft"]');
+        act(() => {
+            edit?.click();
+        });
+
+        const row = host.querySelector('.thread__row.is-editing');
+        expect(row).not.toBeNull();
+        expect(row?.querySelector('.thread__chip--editing')?.textContent).toBe('editing');
+        expect(row?.querySelector('.thread-composer__markdown')).not.toBeNull();
+        expect(host.querySelectorAll('.thread-composer')).toHaveLength(1);
+        expect(host.querySelector('.thread-composer-draft-preview')).toBeNull();
+        expect(host.querySelector('.thread-composer-entry')).toBeNull();
+
+        act(() => {
+            root.unmount();
+        });
+        expect(store.getComposer('edit:line-draft')).not.toBeNull();
+
+        root = createRoot(host);
+        act(() => {
+            root.render(
+                <ThreadList
+                    threads={[draft]}
+                    store={store}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                    inlineDraftEditing
+                    initialLayout="markdown"
+                />,
+            );
+        });
+        expect(host.querySelector('.thread__row.is-editing .thread-composer__markdown')).not.toBeNull();
+
+        act(() => {
+            store.closeComposer('edit:line-draft');
+        });
+        expect(host.querySelector('.thread__row.is-editing')).toBeNull();
+        expect(host.querySelector('.thread__chip--editing')).toBeNull();
+        expect(host.querySelector('.thread__body')?.textContent).toContain(DRAFT.body);
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    it('keeps the existing draft actions outside the diff flow', () => {
+        const source = threadOf('kai');
+        const draft: Thread = {
+            ...source,
+            root: { ...source.root, id: 'outside-draft', body: DRAFT.body, draft: true, replies: [] },
+        };
+        const html = renderWithStore([draft], createThreadStore([draft], FILE_IDS));
+
+        expect(html).toContain('Resolve');
+        expect(html).toContain('Copy link');
+        expect(html).toContain('Reply…');
     });
 });
 

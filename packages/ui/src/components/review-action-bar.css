@@ -227,26 +227,6 @@
     font-size: var(--font-size-gutter);
 }
 
-.review-pr-composer {
-    position: absolute;
-    right: 176px;
-    bottom: 47px;
-    width: 360px;
-    padding: 11px;
-    border: 1px solid var(--border-raised-popover);
-    border-radius: var(--radius-popover);
-    background: var(--surface-popover);
-    box-shadow: var(--shadow-popover);
-    white-space: normal;
-}
-
-.review-pr-composer__title {
-    margin-bottom: var(--space-inner-tight);
-    color: var(--text-primary-soft);
-    font-size: var(--font-size-ui);
-    font-weight: 500;
-}
-
 .review-action-bar--error {
     align-items: stretch;
     width: min(540px, calc(100vw - 44px));

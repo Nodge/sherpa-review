@@ -1195,18 +1195,36 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [loadContent, pr.capabilities.fileContent, store],
     );
 
+    const [focusedLine, setFocusedLine] = useState<{ fileId: string; side: 'old' | 'new'; line: number } | null>(null);
     const commentLine = useCallback(
         (fileId: string, side: 'old' | 'new', line: number) => {
             const file = diff.files.find((candidate) => candidate.fileId === fileId);
             if (file === undefined) {
                 return;
             }
-            const position = commentPosition(diffSnapshot.selection, fileId, side, line);
+            const position = commentPosition(
+                diffSnapshot.selection,
+                diffSnapshot.models.get(fileId) ?? null,
+                fileId,
+                side,
+                line,
+            );
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
             openNewComposer(threadStore, key, { fileId, path: file.path, position });
         },
-        [diff.files, diffSnapshot.selection, threadStore],
+        [diff.files, diffSnapshot.models, diffSnapshot.selection, threadStore],
     );
+    useShortcut({
+        id: 'thread.commentLine',
+        keys: ['c'],
+        label: 'Comment on the line under the cursor',
+        when: () => focusedLine !== null,
+        action: () => {
+            if (focusedLine !== null) {
+                commentLine(focusedLine.fileId, focusedLine.side, focusedLine.line);
+            }
+        },
+    });
 
     const actions = useMemo<FileCardActions>(
         () => ({
@@ -1227,6 +1245,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             },
             onSelectExtend: store.extendSelection,
             onCommentLine: commentLine,
+            onLineFocus: (fileId, side, line) => {
+                setFocusedLine({ fileId, side, line });
+            },
+            onLineBlur: () => {
+                setFocusedLine(null);
+            },
         }),
         [commentLine, expand, markViewed, retryParse, store],
     );

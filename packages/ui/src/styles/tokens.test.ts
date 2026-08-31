@@ -39,6 +39,16 @@ const EXPECTED: Record<string, string> = {
     '--overlay-dialog': 'rgba(7,8,9,.66)',
     // README §1 (Sticky toolbar): «background `rgba(13,14,16,.92)`, `backdrop-filter:blur(8px)`».
     '--surface-toolbar': 'rgba(13,14,16,.92)',
+    // SPEC additions §1c/§1d: comment and draft editing states.
+    '--pr-comments-overlay': 'rgba(8,9,10,.55)',
+    '--pr-comments-draft-surface': '#131210',
+    '--comment-edit-surface': '#12141c',
+    '--pr-comments-published-chip-surface': '#191b21',
+    '--comment-edit-chip-surface': '#1b2030',
+    '--pr-comments-delete-surface': '#170f0f',
+    '--pr-comments-delete-button-surface': '#3a1f1e',
+    '--pr-comments-delete-button-hover': '#4a2725',
+    '--pr-comments-list-fade': 'linear-gradient(180deg,rgba(15,16,18,0) 0%,#0f1012 92%)',
 
     // Borders — hairline `#1a1d21`, `#1e2126`, `#191c20`; standard `#22252b`, `#24272d`,
     // `#262a30`; strong `#2b2f36`, `#2f333a`; raised `#303540`, `#313640`, `#333842`.
@@ -56,6 +66,11 @@ const EXPECTED: Record<string, string> = {
     '--border-raised-bar': '#303540',
     '--border-raised-dialog': '#313640',
     '--border-raised-popover': '#333842',
+    '--pr-comments-draft-border': '#33301f',
+    '--comment-edit-border': '#3c4560',
+    '--pr-comments-delete-border': '#4a2f2d',
+    '--pr-comments-delete-button-border': '#5c3230',
+    '--pr-comments-editor-border': '#343941',
 
     // Text — primary `#f0f1f4` / `#e9eaee`; secondary `#c7cad1`, `#b9bec7`; body `#a9aeb7`;
     // muted `#9ba1ab`, `#8a8f98`; dim `#6b7078`, `#5e636b`; gutter `#43474e`.
@@ -69,6 +84,11 @@ const EXPECTED: Record<string, string> = {
     '--text-dim': '#6b7078',
     '--text-dim-strong': '#5e636b',
     '--text-gutter': '#43474e',
+    '--pr-comments-published-chip-text': '#8a90a0',
+    '--comment-edit-chip-text': '#9ea8ff',
+    '--pr-comments-body-text': '#c3c8d1',
+    '--pr-comments-delete-button-text': '#f2c4c0',
+    '--pr-comments-note-icon': '#8a7550',
 
     // Accent (interactive) — `#7f8cff`; link/hover `#8f9bff` → `#b3bcff`; on-accent ink `#101223`;
     // accent text on dark `#aeb6ff`, `#c9cdf0`, `#dfe2ff`; accent surfaces `#131424`, `#141520`,
@@ -245,6 +265,7 @@ const EXPECTED: Record<string, string> = {
     '--shadow-menu': '0 16px 40px rgba(0,0,0,.6)',
     '--shadow-floating': '0 16px 44px rgba(0,0,0,.6)',
     '--shadow-dialog': '0 24px 64px rgba(0,0,0,.65)',
+    '--shadow-pr-comments': '0 18px 50px rgba(0,0,0,.55)',
 
     // Motion — spinner `spin .8s linear infinite` · skeleton/streaming `shimmer 1.6s ease-in-out
     // infinite` · caret `caret 1s step-end infinite` · jump scroll ~320ms ease-in-out cubic ·

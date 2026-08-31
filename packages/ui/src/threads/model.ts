@@ -29,6 +29,16 @@ export interface ThreadVisibility {
     readonly resolved: boolean;
 }
 
+/** A PR-level thread is anchored to neither a file nor a line. */
+export function isPrLevelThread(thread: Thread): boolean {
+    return thread.anchor === null;
+}
+
+/** Human root comments at PR level. Replies and bot threads stay in the regular reader. */
+export function prLevelHumanThreads(threads: readonly Thread[]): Thread[] {
+    return threads.filter((thread) => isPrLevelThread(thread) && !thread.root.author.bot);
+}
+
 /** Flattens a branching tree into depth-first order and counts the full subtree of each reply. */
 export function flattenThread(root: Comment): FlatComment[] {
     const rows: FlatComment[] = [];
@@ -59,14 +69,20 @@ export function flattenThread(root: Comment): FlatComment[] {
     return rows;
 }
 
-/** Threads in the known diff go into file cards. PR-level threads and missing files go into a shared group. */
+/** Threads in the known diff go to files. outside keeps PR-level bots and missing files. */
 export function groupThreads(threads: readonly Thread[], fileIds: ReadonlySet<string>): ThreadGroups {
     const byFile = new Map<string, Thread[]>();
     const outside: Thread[] = [];
 
     for (const thread of threads) {
         const fileId = thread.anchor?.fileId ?? null;
-        if (fileId === null || !fileIds.has(fileId)) {
+        if (fileId === null) {
+            if (thread.root.author.bot) {
+                outside.push(thread);
+            }
+            continue;
+        }
+        if (!fileIds.has(fileId)) {
             outside.push(thread);
             continue;
         }

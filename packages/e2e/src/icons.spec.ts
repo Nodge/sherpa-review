@@ -164,6 +164,10 @@ for (const mode of ['unified', 'split'] as const) {
 
         await button.focus();
         await expect(button).toHaveCSS('pointer-events', 'auto');
+        await page.keyboard.press('c');
+        await expect(page.locator('.diff-line-composer')).toBeVisible();
+        await page.locator('.diff-line-composer').getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(page.locator('.diff-line-composer')).toHaveCount(0);
         await button.evaluate((element) => {
             element.blur();
         });
@@ -183,6 +187,12 @@ for (const mode of ['unified', 'split'] as const) {
         ).toBe(true);
 
         await button.click();
-        await expect(page.locator('.thread-composer')).toBeVisible();
+        const lineComposer = page.locator('.diff-line-composer');
+        await expect(lineComposer).toBeVisible();
+        await expect(lineComposer).toHaveCSS('padding-left', '62px');
+        await expect(lineComposer).toHaveCSS('background-color', 'rgb(13, 14, 16)');
+        await expect(lineComposer).toHaveCSS('border-top-color', 'rgb(25, 28, 32)');
+        await expect(lineComposer.locator('.thread-composer')).toHaveCSS('max-width', '620px');
+        await expect(lineComposer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
     });
 }

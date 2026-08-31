@@ -12,6 +12,23 @@ import { ViewFrame } from './view-frames.tsx';
 
 const DATA = fixtureData('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
+const THREADS = withOutsideBot();
+
+function withOutsideBot() {
+    const source = DATA.threads.find((thread) => thread.root.author.bot) ?? DATA.threads[0];
+    if (source === undefined) {
+        throw new Error('the test needs a thread');
+    }
+    return [
+        ...DATA.threads,
+        {
+            ...source,
+            id: 'overview-pr-bot',
+            anchor: null,
+            root: { ...source.root, id: 'overview-pr-bot-root', author: { ...source.root.author, bot: true } },
+        },
+    ];
+}
 
 function render(): string {
     return renderToStaticMarkup(
@@ -22,8 +39,8 @@ function render(): string {
             pr={DATA.pr}
             diff={DATA.diff}
             lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
-            threads={DATA.threads}
-            threadStore={createThreadStore(DATA.threads, FILE_IDS)}
+            threads={THREADS}
+            threadStore={createThreadStore(THREADS, FILE_IDS)}
             threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
             reviewHostAvailable
         />,
@@ -31,13 +48,12 @@ function render(): string {
 }
 
 describe('discussion in Overview', () => {
-    it('collapses threads outside the diff and keeps the button visible', () => {
+    it('does not duplicate human PR-level threads but keeps the bot thread outside the diff', () => {
         const html = render();
 
         expect(html).toContain('class="thread-outside__toggle"');
-        expect(html).toContain('outside the diff');
+        expect(html).toContain('1 thread outside the diff');
         expect(html).toContain('aria-expanded="false"');
-        // Collapsed means no thread bodies appear in the markup.
         expect(html).not.toContain('thread__body');
     });
 });

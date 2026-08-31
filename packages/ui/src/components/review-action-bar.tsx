@@ -16,9 +16,9 @@ import type { ConnectionState } from '../store.js';
 import { formatCount, plural } from '../text.js';
 import { closePublishedComposers } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
-import { NewCommentComposer, openPrComposer } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
 import { discussionStats } from '../views/overview-model.js';
+import { PrCommentsModal } from './pr-comments-modal.tsx';
 import {
     availableShipMode,
     loadShipMode,
@@ -36,7 +36,6 @@ const SHIP_DESCRIPTION = 'Approves this snapshot only. A new push drops the appr
 // The promise in README §5 to revoke by CODEOWNERS zone is absent here. This publishes the regular sticky ship
 // of the host. We have no zone-based mechanism (decision log, #36).
 const STICKY_DESCRIPTION = 'The approval carries over to later pushes — the host’s own sticky ship.';
-const PR_COMPOSER_KEY = 'new:pr';
 
 /**
  * The route layer in the action bar (SPEC §2.19, README §13): the guardrail counts unviewed
@@ -85,8 +84,6 @@ export interface ReviewActionBarProps {
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
-    /** State gallery only: the PR composer is open from the first render. */
-    readonly defaultComposerOpen?: boolean;
     readonly initialFailure?: PublicationFailure | null;
     readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
@@ -182,7 +179,6 @@ export function ReviewActionBar({
     onPublish,
     onComplete,
     defaultMenuOpen = false,
-    defaultComposerOpen = false,
     initialFailure = null,
     storage,
 }: ReviewActionBarProps) {
@@ -193,21 +189,12 @@ export function ReviewActionBar({
         threadStore.getComposerGuardSnapshot,
         threadStore.getComposerGuardSnapshot,
     );
-    const subscribePrComposer = useCallback(
-        (listener: () => void) => threadStore.subscribeComposer(PR_COMPOSER_KEY, listener),
-        [threadStore],
-    );
-    const getPrComposer = useCallback(() => threadStore.getComposer(PR_COMPOSER_KEY), [threadStore]);
-    const prComposer = useSyncExternalStore(subscribePrComposer, getPrComposer, getPrComposer);
     const stickyAvailable = pr.capabilities.stickyShip;
     const [shipMode, setShipMode] = useState<ShipMode>(() => loadShipMode(stickyAvailable, storage));
     const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
     const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
     const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
-    const [composerOpen, setComposerOpen] = useState(defaultComposerOpen);
-    // The composer can close itself (Escape or "discard" calls store.closeComposer), so
-    // the toggle and aria-expanded follow the visible composer, not a local flag.
-    const composerVisible = composerOpen && prComposer !== null;
+    const [prCommentsOpen, setPrCommentsOpen] = useState(false);
     const [publishing, setPublishing] = useState<Verdict | null>(null);
     const [failure, setFailure] = useState<PublicationFailure | null>(initialFailure);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -261,29 +248,6 @@ export function ReviewActionBar({
             document.removeEventListener('mousedown', closeOutside);
         };
     }, [closeMenu, menuOpen]);
-
-    useEffect(() => {
-        if (!composerVisible) {
-            return;
-        }
-        const closeOutside = (event: MouseEvent): void => {
-            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
-                setComposerOpen(false);
-            }
-        };
-        const closeOnEscape = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape' && !event.defaultPrevented) {
-                setComposerOpen(false);
-                commentButtonRef.current?.focus();
-            }
-        };
-        document.addEventListener('mousedown', closeOutside);
-        document.addEventListener('keydown', closeOnEscape);
-        return () => {
-            document.removeEventListener('mousedown', closeOutside);
-            document.removeEventListener('keydown', closeOnEscape);
-        };
-    }, [composerVisible]);
 
     const publish = useCallback(
         async (verdict: Verdict, retryFailure = false): Promise<void> => {
@@ -362,11 +326,10 @@ export function ReviewActionBar({
         keys: ['mod+enter'],
         label: 'Open the ship menu',
         consequence: publishConsequence(effectiveShipMode, drafts),
-        when: () => !draggingSelection && !disabled,
+        when: () => !draggingSelection && !disabled && !prCommentsOpen,
         action: () => {
             setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
             setMenuOpen(true);
-            setComposerOpen(false);
         },
     });
     useShortcut({
@@ -374,7 +337,7 @@ export function ReviewActionBar({
         keys: ['mod+shift+enter'],
         label: 'Request changes',
         consequence: publishConsequence('request_changes', drafts),
-        when: () => !draggingSelection && !disabled,
+        when: () => !draggingSelection && !disabled && !prCommentsOpen,
         action: () => {
             void publish('request_changes');
         },
@@ -441,15 +404,10 @@ export function ReviewActionBar({
                 ref={commentButtonRef}
                 type="button"
                 className="review-action-bar__button"
-                aria-expanded={composerVisible}
+                aria-expanded={prCommentsOpen}
+                aria-haspopup="dialog"
                 onClick={() => {
-                    if (composerVisible) {
-                        // Only hide the composer: the draft lives in the store and survives closing.
-                        setComposerOpen(false);
-                        return;
-                    }
-                    openPrComposer(threadStore);
-                    setComposerOpen(true);
+                    setPrCommentsOpen(true);
                     setMenuOpen(false);
                 }}
             >
@@ -491,7 +449,7 @@ export function ReviewActionBar({
                         } else {
                             setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
                             setMenuOpen(true);
-                            setComposerOpen(false);
+                            setPrCommentsOpen(false);
                         }
                     }}
                     onKeyDown={(event) => {
@@ -562,11 +520,18 @@ export function ReviewActionBar({
                 ) : null}
             </div>
 
-            {composerVisible ? (
-                <div className="review-pr-composer" role="dialog" aria-label="Comment on the PR">
-                    <div className="review-pr-composer__title">Comment on the PR</div>
-                    <NewCommentComposer composerKey={PR_COMPOSER_KEY} store={threadStore} transport={composerTransport} />
-                </div>
+            {prCommentsOpen ? (
+                <PrCommentsModal
+                    pr={pr}
+                    store={threadStore}
+                    transport={composerTransport}
+                    onClose={() => {
+                        setPrCommentsOpen(false);
+                        queueMicrotask(() => {
+                            commentButtonRef.current?.focus();
+                        });
+                    }}
+                />
             ) : null}
         </div>
     );

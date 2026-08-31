@@ -46,6 +46,8 @@ export interface ShortcutRegistry {
     readonly list: () => readonly Shortcut[];
     /** The palette subscribes to view commands that mount and unmount with their views. */
     readonly subscribe: (listener: () => void) => () => void;
+    /** A modal layer temporarily disables commands in the background interface. */
+    readonly setModalOpen: (open: boolean) => void;
     /** `true` means a command was found and executed (the event was suppressed). */
     readonly handle: (event: ShortcutEvent) => boolean;
 }
@@ -61,6 +63,7 @@ export function createShortcutRegistry(): ShortcutRegistry {
     const shortcuts = new Map<string, Shortcut>();
     const listeners = new Set<() => void>();
     let snapshot: readonly Shortcut[] = [];
+    let modalOpen = false;
 
     const notify = (): void => {
         snapshot = [...shortcuts.values()];
@@ -89,7 +92,13 @@ export function createShortcutRegistry(): ShortcutRegistry {
                 listeners.delete(listener);
             };
         },
+        setModalOpen: (open) => {
+            modalOpen = open;
+        },
         handle: (event) => {
+            if (modalOpen) {
+                return false;
+            }
             const editable = isEditable(event.target);
             const hasMod = event.metaKey || event.ctrlKey;
 

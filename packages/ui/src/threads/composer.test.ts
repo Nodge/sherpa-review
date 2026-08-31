@@ -343,4 +343,56 @@ describe('composer state machine', () => {
         expect(store.getSnapshot().threads).toEqual([]);
         expect(store.getComposer('new:f1:new:10')).toBeNull();
     });
+
+    it('waits for the latest queued text in saveNow', async () => {
+        const { store, controller, update } = setup();
+        controller.input('original');
+        await controller.saveNow();
+        const firstUpdate = deferred<undefined>();
+        const lastUpdate = deferred<undefined>();
+        update.mockImplementationOnce(() => firstUpdate.promise).mockImplementationOnce(() => lastUpdate.promise);
+
+        controller.input('intermediate');
+        void controller.saveNow();
+        controller.input('latest');
+        let completed = false;
+        const savingLast = controller.saveNow(true).then((saved) => {
+            completed = true;
+            return saved;
+        });
+
+        firstUpdate.resolve(undefined);
+        await vi.waitFor(() => {
+            expect(update).toHaveBeenLastCalledWith('draft-1', 'last');
+        });
+        expect(completed).toBe(false);
+        expect(store.getComposer('new:f1:new:10')).not.toBeNull();
+
+        lastUpdate.resolve(undefined);
+        await expect(savingLast).resolves.toBe(true);
+        expect(store.getComposer('new:f1:new:10')).toBeNull();
+    });
+
+    it('restore waits for the active autosave and restores the original text in the final update', async () => {
+        const { store, controller, update } = setup();
+        controller.input('original');
+        await controller.saveNow();
+        const pendingUpdate = deferred<undefined>();
+        update.mockImplementationOnce(() => pendingUpdate.promise);
+
+        controller.input('broken');
+        void controller.saveNow();
+        const restoring = controller.restore('original');
+
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'original', status: 'saving' });
+        pendingUpdate.resolve(undefined);
+        await expect(restoring).resolves.toBe(true);
+
+        expect(update.mock.calls).toEqual([
+            ['draft-1', 'broken'],
+            ['draft-1', 'original'],
+        ]);
+        expect(store.getSnapshot().threads[0]?.root.body).toBe('original');
+        expect(store.getComposer('new:f1:new:10')).toBeNull();
+    });
 });

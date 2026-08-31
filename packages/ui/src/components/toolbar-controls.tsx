@@ -1,16 +1,41 @@
 import { useState, useSyncExternalStore } from 'react';
 
 import type { DiffViewStore } from '../diff-view/store.js';
+import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
 import type { ThreadsShow } from '../session/session-store.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
+import { FilterSelect } from './filter-select.tsx';
 import './toolbar-controls.css';
 
-/**
- * Shared controls for full diff and route toolbars: diff mode toggle and additive
- * comment source chips. The mode is global, held in one store for all views (SPEC §2.6),
- * so there is one control too. A second implementation could diverge.
- */
+/** Shared right cluster for the route and full diff toolbars in README §1 order. */
+export function ToolbarRightCluster({
+    store,
+    filters,
+    filter,
+    onFilter,
+    threadsShow,
+    threadCounts,
+    onThreadsShow,
+}: {
+    readonly store: DiffViewStore;
+    readonly filters: readonly FileFilter[];
+    readonly filter: FileFilter;
+    readonly onFilter: (id: string) => void;
+    readonly threadsShow: ThreadsShow;
+    readonly threadCounts: ThreadSourceCounts;
+    readonly onThreadsShow: (show: ThreadsShow) => void;
+}) {
+    return (
+        <div className="toolbar-right-cluster">
+            <DiffModeToggle store={store} />
+            <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
+            <span className="toolbar-right-cluster__divider" aria-hidden="true" />
+            <span className="toolbar-right-cluster__label">Comments:</span>
+            <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
+        </div>
+    );
+}
 
 /** Diff mode toggle, "deliberately quiet" (README §1) and global across views (SPEC §2.6). */
 export function DiffModeToggle({ store }: { store: DiffViewStore }) {
