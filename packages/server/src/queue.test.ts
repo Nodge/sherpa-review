@@ -470,7 +470,7 @@ describe('queue with leases', () => {
     describe('subscription', () => {
         it('enqueuing wakes subscribers and unsubscribing silences them', () => {
             let calls = 0;
-            const unsubscribe = queue.subscribe(() => {
+            const unsubscribe = queue.subscribeChanges(() => {
                 calls += 1;
             });
 

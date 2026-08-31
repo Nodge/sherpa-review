@@ -25,11 +25,14 @@ import { RpcFailure } from './errors.js';
 import type { RequestContext, Route } from './http.js';
 import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
 import type { TaskQueue } from './queue.js';
+import type { UiPresence } from './ui-presence.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 export interface WorkerRoutesOptions {
     readonly queue: TaskQueue;
     readonly registry: WorkerRegistry;
+    /** UI presence: its departure stops the worker once no open tasks remain. */
+    readonly presence: UiPresence;
     /** Long-poll window for `next` calls without `waitSeconds`. Shortened in tests. */
     readonly longPollSeconds: number;
     /** Server shutdown: aborts pending long-polls so close() does not wait for them. */
@@ -189,10 +192,10 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
 }
 
 /**
- * Long-poll `next`: returns a task as soon as one is available, or `idle` when the window expires
- * ("call again"). The harness sets the window (`waitSeconds`, decision #35). Only it knows its
- * tool timeout and whether it can wait in the background. Liveness does not depend on the window. While the call waits,
- * the open connection keeps the worker alive (rpc-design §7).
+ * Long-poll `next`: returns a task as soon as one appears. UI departure stops the worker
+ * when there are no open tasks. When the window expires, it returns `idle` ("call again"). The window length comes from the
+ * harness (`waitSeconds`, decision #35), which alone knows its tool timeout and whether it can wait
+ * in the background. Liveness is independent of it. While the call waits, the open connection keeps the worker alive.
  */
 async function pollForTask(
     options: WorkerRoutesOptions,
@@ -216,6 +219,10 @@ async function pollForTask(
             // without waiting for the old one to die. Otherwise the old worker would take its task.
             options.registry.assertOwner(workerId);
 
+            if (shouldFinishWorker(options)) {
+                return { kind: 'done', message: 'The reviewer closed the tab. Work is finished.' };
+            }
+
             const leased = options.queue.next(workerId);
             if (leased !== null) {
                 return { kind: 'task', task: leased.task, lease: leased.lease };
@@ -227,6 +234,7 @@ async function pollForTask(
             }
             await waitForWork(
                 options.queue,
+                options.presence,
                 subscribeSlotChange,
                 abort.signal,
                 Math.min(remaining, SAFETY_POLL_INTERVAL_MS),
@@ -240,9 +248,18 @@ async function pollForTask(
     return { kind: 'idle', message: 'No tasks yet. Call `sherpa worker next` again.' };
 }
 
-/** Waits for a task, slot ownership change, fallback tick or disconnect. The timer does not keep the process alive. */
+/** The UI has left and no task is waiting to be claimed or completed. */
+function shouldFinishWorker(options: WorkerRoutesOptions): boolean {
+    return (
+        options.presence.uiGone &&
+        !options.queue.listTasks().some((task) => task.status === 'queued' || task.status === 'leased')
+    );
+}
+
+/** Waits for a queue change, UI departure, slot change, fallback tick or disconnection. */
 function waitForWork(
     queue: TaskQueue,
+    presence: UiPresence,
     subscribeSlotChange: SubscribeSlotChange,
     signal: AbortSignal,
     timeoutMs: number,
@@ -253,19 +270,38 @@ function waitForWork(
             return;
         }
 
+        let timer: NodeJS.Timeout | null = null;
+        let unsubscribeQueue = (): void => undefined;
+        let unsubscribePresence = (): void => undefined;
+        let unsubscribeSlot = (): void => undefined;
+        let finished = false;
+
         const finish = (): void => {
-            clearTimeout(timer);
+            if (finished) {
+                return;
+            }
+            finished = true;
+            if (timer !== null) {
+                clearTimeout(timer);
+            }
             unsubscribeQueue();
+            unsubscribePresence();
             unsubscribeSlot();
             signal.removeEventListener('abort', finish);
             resolve();
         };
 
-        const timer = setTimeout(finish, timeoutMs);
+        timer = setTimeout(finish, timeoutMs);
         timer.unref();
-        const unsubscribeQueue = queue.subscribe(finish);
-        const unsubscribeSlot = subscribeSlotChange(finish);
+        unsubscribeQueue = queue.subscribeChanges(finish);
+        unsubscribePresence = presence.subscribe(finish);
+        unsubscribeSlot = subscribeSlotChange(finish);
         signal.addEventListener('abort', finish);
+
+        // The transition could occur between the check in `pollForTask` and subscription setup.
+        if (presence.uiGone) {
+            finish();
+        }
     });
 }
 

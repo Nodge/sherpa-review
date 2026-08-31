@@ -8,6 +8,7 @@ import {
     rpcErrorSchema,
     taskAckResponseSchema,
     taskCompleteResponseSchema,
+    UI_ENDPOINTS,
     WORKER_DEAD_AFTER_SECONDS,
     WORKER_ENDPOINTS,
     workerNextResponseSchema,
@@ -58,6 +59,19 @@ describe('worker endpoints', () => {
         return server;
     }
 
+    async function startWithShortUiGrace(longPollSeconds = 30): Promise<SherpaServer> {
+        const server = await startServer({
+            prKey: PR_KEY,
+            sherpaDir,
+            longPollSeconds,
+            uiGoneGraceSeconds: 0.1,
+            now: () => new Date(Date.now() + clockOffsetMs),
+            reviewHostFactory: () => null,
+        });
+        servers.push(server);
+        return server;
+    }
+
     function advanceServerClock(seconds: number): void {
         clockOffsetMs += seconds * 1000;
     }
@@ -69,6 +83,25 @@ describe('worker endpoints', () => {
             instructions,
             contextFiles: ['/tmp/sherpa/task-context.md'],
         }).id;
+    }
+
+    async function openUi(server: SherpaServer): Promise<() => Promise<void>> {
+        const controller = new AbortController();
+        const response = await fetch(
+            `http://127.0.0.1:${String(server.port)}${UI_ENDPOINTS.events}?token=${server.token}`,
+            { signal: controller.signal },
+        );
+        expect(response.status).toBe(200);
+        if (response.body === null) {
+            throw new Error('UI SSE channel opened without a body');
+        }
+
+        const reader = response.body.getReader();
+        await reader.read();
+        return async () => {
+            controller.abort();
+            await reader.cancel().catch(() => undefined);
+        };
     }
 
     describe('request boundary', () => {
@@ -449,6 +482,60 @@ describe('worker endpoints', () => {
             const body = workerNextResponseSchema.parse(await response.json());
             expect(body.kind).toBe('idle');
             expect(elapsed).toBeGreaterThanOrEqual(250);
+        });
+
+        it('preserves the previous idle response while the UI is alive', async () => {
+            const server = await startWithShortUiGrace(0.3);
+            const closeUi = await openUi(server);
+
+            const response = await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+
+            expect(workerNextResponseSchema.parse(await response.json()).kind).toBe('idle');
+            await closeUi();
+        });
+
+        it('wakes a pending long-poll and returns done immediately when the UI leaves', async () => {
+            const server = await startWithShortUiGrace();
+            const closeUi = await openUi(server);
+            const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const started = Date.now();
+            await closeUi();
+            const body = workerNextResponseSchema.parse(await (await pending).json());
+
+            expect(body.kind).toBe('done');
+            expect(body.kind === 'done' && body.message).toContain('closed the tab');
+            expect(Date.now() - started).toBeLessThan(1000);
+        });
+
+        it('keeps an open task when the UI leaves and returns done after it completes', async () => {
+            const server = await startWithShortUiGrace();
+            const closeUi = await openUi(server);
+            const taskId = enqueueEcho(server);
+            const issued = workerNextResponseSchema.parse(
+                await (await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token)).json(),
+            );
+            expect(issued).toMatchObject({ kind: 'task', task: { id: taskId } });
+
+            await closeUi();
+            await new Promise((resolve) => setTimeout(resolve, 150));
+
+            const stillWorking = workerNextResponseSchema.parse(
+                await (await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token)).json(),
+            );
+            expect(stillWorking).toMatchObject({ kind: 'task', task: { id: taskId } });
+
+            await postJson(
+                server.port,
+                WORKER_ENDPOINTS.complete,
+                { ...BASE, taskId, result: 'done' },
+                server.token,
+            );
+            const finished = workerNextResponseSchema.parse(
+                await (await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token)).json(),
+            );
+            expect(finished.kind).toBe('done');
         });
 
         it('returns a task immediately when it is enqueued during the wait', async () => {

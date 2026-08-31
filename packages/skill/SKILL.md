@@ -44,6 +44,7 @@ Repeat until you receive DONE.
 - **You cannot** — call it in the foreground, and raise your tool timeout before the call: it must exceed the wait by at least 30 seconds, or the harness kills the poll mid-flight and a task already handed to you hangs until its lease expires. The timeout is yours to set and its default is usually short: in Claude Code the Bash timeout defaults to 2 minutes and maxes out at 10, so pass `timeout: 600000` explicitly and use `--wait-seconds 540`.
 
 Idle is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Never stop the loop after repeated "No tasks" — stop only on DONE or an explicit "stop the loop" error.
+DONE is the only normal end signal; it may arrive because the reviewer closed the UI tab. Stop the loop and relay its message to the user.
 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
 - "No tasks" is not an error — call `worker next` again.
