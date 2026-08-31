@@ -9,6 +9,7 @@ import {
     groupThreads,
     isPrLevelThread,
     placeThreadsOnVisibleLines,
+    positionLastLine,
     prLevelHumanThreads,
     threadIsVisible,
 } from './model.js';
@@ -76,6 +77,36 @@ describe('thread model', () => {
             'pr-bot',
             'disappeared-file',
         ]);
+    });
+
+    it('places a range thread under the last line using the line + size convention', () => {
+        const data = fixtureData('medium');
+        const source = data.threads.find((candidate) => candidate.anchor?.position !== null && candidate.anchor !== null);
+        if (source?.anchor === null || source?.anchor === undefined) {
+            throw new Error('fixture has no line-anchored thread');
+        }
+        const file = data.diff.files.find((candidate) => candidate.fileId === source.anchor?.fileId);
+        if (file === undefined) {
+            throw new Error('thread file not found');
+        }
+        const model = parseFileDiff(toParseRequest(file));
+        const numbers =
+            model.content.kind === 'text'
+                ? model.content.blocks.flatMap((block) =>
+                      block.kind === 'hunk' ? block.lines.flatMap((line) => (line.newLine === null ? [] : [line.newLine])) : [],
+                  )
+                : [];
+        const first = numbers.find((line) => numbers.includes(line + 1));
+        if (first === undefined) {
+            throw new Error('fixture has no two adjacent new lines');
+        }
+        const position = { side: 'new' as const, line: first, size: 2 };
+        const ranged = { ...source, anchor: { ...source.anchor, position } };
+
+        const placed = placeThreadsOnVisibleLines(model, [ranged]);
+
+        expect(positionLastLine(position)).toBe(first + 1);
+        expect(placed.byLine.get(`new:${String(first + 1)}`)).toEqual([ranged]);
     });
 
     it('pulls an anchor in hidden context to the nearest visible line', () => {

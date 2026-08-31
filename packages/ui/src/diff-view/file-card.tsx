@@ -11,7 +11,7 @@ import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from 
 import { DiffRows } from './diff-rows.tsx';
 import type { FileExpansion } from './expand.js';
 import { expandFileContext, gapExpansionDelta, gapKeyOf, remainingHiddenLines } from './expand.js';
-import type { LineKey, LineSelection } from './selection.js';
+import type { LineKey, LineRange, LineSelection } from './selection.js';
 import { parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
 
@@ -102,6 +102,7 @@ export interface FileCardProps {
     /** Strips for uncovered ranges with no row, grouped below the header. */
     readonly routeStrips?: ReactNode;
     readonly threadsUnderHeader?: ReactNode;
+    readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly actions: FileCardActions;
 }
@@ -130,6 +131,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         routeBadge = null,
         routeStrips = null,
         threadsUnderHeader = null,
+        focusedThreadRange = null,
         renderAfterLine,
         actions,
     } = props;
@@ -348,6 +350,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     contextAvailable={contentAvailable && content !== null}
                     loadingMinHeight={loadingMinHeight}
                     selection={selection}
+                    focusedThreadRange={focusedThreadRange}
                     showWhitespace={showWhitespace}
                     onShowWhitespace={onShowWhitespace}
                     onSelectStart={onSelectStart}
@@ -493,6 +496,7 @@ interface BodyProps {
     readonly contextAvailable: boolean;
     readonly loadingMinHeight?: number | undefined;
     readonly selection: LineSelection | null;
+    readonly focusedThreadRange: LineRange | null;
     readonly showWhitespace: boolean;
     readonly onShowWhitespace: () => void;
     readonly onSelectStart: (key: LineKey, extend: boolean) => void;
@@ -564,6 +568,7 @@ function Body(props: BodyProps) {
                 mode={mode}
                 content={content}
                 selection={selection}
+                focusedThreadRange={props.focusedThreadRange}
                 renderAfterLine={props.renderAfterLine}
                 onCommentLine={props.onCommentLine}
                 onLineFocus={props.onLineFocus}

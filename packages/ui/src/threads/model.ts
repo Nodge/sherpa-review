@@ -125,6 +125,10 @@ export function authorName(comment: Comment): string {
     return comment.author.displayName ?? comment.author.login;
 }
 
+export function positionLastLine(position: { readonly line: number; readonly size: number }): number {
+    return position.line + Math.max(position.size, 1) - 1;
+}
+
 export interface ThreadPlacement {
     readonly byLine: ReadonlyMap<string, readonly Thread[]>;
     /** Line-anchored threads with no visible lines on their side in the model. */
@@ -168,10 +172,11 @@ export function placeThreadsOnVisibleLines(
             unplaced.push(thread);
             continue;
         }
-        const line = visible[position.side].has(position.line)
-            ? position.line
+        const lastLine = positionLastLine(position);
+        const line = visible[position.side].has(lastLine)
+            ? lastLine
             : candidates.reduce((nearest, candidate) =>
-                  Math.abs(candidate - position.line) < Math.abs(nearest - position.line) ? candidate : nearest,
+                  Math.abs(candidate - lastLine) < Math.abs(nearest - lastLine) ? candidate : nearest,
               );
         const key = `${position.side}:${String(line)}`;
         const bucket = byLine.get(key);

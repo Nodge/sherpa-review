@@ -10,7 +10,7 @@ import type { ExpandDirection } from './expand.js';
 import { EXPAND_STEP, gapKeyOf, hiddenLinesOf } from './expand.js';
 import type { LineSegment } from './line-segments.js';
 import { hasTabs, lineSegments } from './line-segments.js';
-import type { LineKey, LineSelection } from './selection.js';
+import type { LineKey, LineRange, LineSelection } from './selection.js';
 import { lineKey, selectedLines } from './selection.js';
 import type { DiffMode } from './store.js';
 
@@ -45,6 +45,7 @@ export interface DiffRowsProps {
     /** Needed only to report the trailing gap length accurately. */
     readonly content: FileContent | null;
     readonly selection: LineSelection | null;
+    readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -63,6 +64,7 @@ export function DiffRows({
     mode,
     content,
     selection,
+    focusedThreadRange = null,
     renderAfterLine,
     onCommentLine,
     onLineFocus,
@@ -113,6 +115,7 @@ export function DiffRows({
                             <UnifiedRow
                                 cell={row.cell}
                                 selected={isSelected(selected, row.cell)}
+                                threadFocused={isThreadFocused(row.cell, focusedThreadRange)}
                                 selectionStart={row.cell.key === selectionStart}
                                 hunk={row.hunk}
                                 onCommentLine={onCommentLine}
@@ -138,6 +141,8 @@ export function DiffRows({
                             right={row.right}
                             leftSelected={isSelected(selected, row.left)}
                             rightSelected={isSelected(selected, row.right)}
+                            leftThreadFocused={isThreadFocused(row.left, focusedThreadRange, 'old')}
+                            rightThreadFocused={isThreadFocused(row.right, focusedThreadRange, 'new')}
                             selectionStart={selectionStart}
                             hunk={row.hunk}
                             onCommentLine={onCommentLine}
@@ -159,6 +164,18 @@ export function DiffRows({
 
 function isSelected(selected: ReadonlySet<LineKey>, cell: LineCell | null): boolean {
     return cell?.key != null && selected.has(cell.key);
+}
+
+function isThreadFocused(
+    cell: LineCell | null,
+    range: LineRange | null,
+    side: 'old' | 'new' = range?.side ?? 'new',
+): boolean {
+    if (range?.side !== side) {
+        return false;
+    }
+    const line = side === 'old' ? cell?.line.oldLine : cell?.line.newLine;
+    return line != null && line >= range.line && line < range.line + Math.max(range.size, 1);
 }
 
 function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
@@ -439,6 +456,7 @@ function gapAriaLabel(direction: ExpandDirection, hidden: number | null): string
 const UnifiedRow = memo(function UnifiedRow({
     cell,
     selected,
+    threadFocused,
     selectionStart,
     hunk,
     onCommentLine,
@@ -447,6 +465,7 @@ const UnifiedRow = memo(function UnifiedRow({
 }: {
     cell: LineCell;
     selected: boolean;
+    threadFocused: boolean;
     selectionStart: boolean;
     hunk: number | undefined;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -457,7 +476,7 @@ const UnifiedRow = memo(function UnifiedRow({
     const position = positionOf(cell, 'new');
     return (
         <div
-            className={`diff-row diff-row--${line.kind}${selected ? ' is-selected' : ''}`}
+            className={`diff-row diff-row--${line.kind}${selected ? ' is-selected' : ''}${threadFocused ? ' is-thread-focused' : ''}`}
             data-key={cell.key ?? undefined}
             data-hunk={hunk}
             tabIndex={position === null ? undefined : 0}
@@ -491,6 +510,8 @@ const SplitRow = memo(function SplitRow({
     right,
     leftSelected,
     rightSelected,
+    leftThreadFocused,
+    rightThreadFocused,
     selectionStart,
     hunk,
     onCommentLine,
@@ -501,6 +522,8 @@ const SplitRow = memo(function SplitRow({
     right: LineCell | null;
     leftSelected: boolean;
     rightSelected: boolean;
+    leftThreadFocused: boolean;
+    rightThreadFocused: boolean;
     selectionStart: LineKey | null;
     hunk: number | undefined;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -513,6 +536,7 @@ const SplitRow = memo(function SplitRow({
                 cell={left}
                 side="old"
                 selected={leftSelected}
+                threadFocused={leftThreadFocused}
                 selectionStart={left?.key === selectionStart && left !== right}
                 onCommentLine={onCommentLine}
                 onLineFocus={onLineFocus}
@@ -522,6 +546,7 @@ const SplitRow = memo(function SplitRow({
                 cell={right}
                 side="new"
                 selected={rightSelected}
+                threadFocused={rightThreadFocused}
                 selectionStart={right?.key === selectionStart}
                 onCommentLine={onCommentLine}
                 onLineFocus={onLineFocus}
@@ -535,6 +560,7 @@ function Side({
     cell,
     side,
     selected,
+    threadFocused,
     selectionStart,
     onCommentLine,
     onLineFocus,
@@ -543,6 +569,7 @@ function Side({
     cell: LineCell | null;
     side: 'old' | 'new';
     selected: boolean;
+    threadFocused: boolean;
     selectionStart: boolean;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -559,12 +586,12 @@ function Side({
     }
 
     const { line } = cell;
-    const className = `diff-side diff-side--${line.kind}${selected ? ' is-selected' : ''}`;
+    const className = `diff-side diff-side--${line.kind}${selected ? ' is-selected' : ''}${threadFocused ? ' is-thread-focused' : ''}`;
     const key = cell.key ?? undefined;
     const position = positionOf(cell, side);
     return (
         <>
-            <span className={`diff-row__gutter diff-row__gutter--comment ${className}`} data-key={key}>
+            <span className={`diff-row__gutter diff-row__gutter--comment ${className}`} data-key={key} data-side={side}>
                 {(side === 'old' ? line.oldLine : line.newLine) ?? ''}
                 {position === null ? null : (
                     <CommentButton
@@ -578,13 +605,14 @@ function Side({
                     />
                 )}
             </span>
-            <span className={`diff-row__sign ${className}`} data-key={key}>
+            <span className={`diff-row__sign ${className}`} data-key={key} data-side={side}>
                 {sign(line)}
             </span>
             <Code
                 line={line}
                 className={className}
                 keyString={key}
+                side={side}
                 tabIndex={position === null ? undefined : 0}
                 onFocus={
                     position === null
@@ -635,6 +663,7 @@ function Code({
     line,
     className = '',
     keyString,
+    side,
     tabIndex,
     onFocus,
     onBlur,
@@ -642,6 +671,7 @@ function Code({
     line: DiffLine;
     className?: string;
     keyString?: string | undefined;
+    side?: 'old' | 'new' | undefined;
     tabIndex?: number | undefined;
     onFocus?: (() => void) | undefined;
     onBlur?: (() => void) | undefined;
@@ -651,6 +681,7 @@ function Code({
         <code
             className={`diff-row__code ${className}`}
             data-key={keyString}
+            data-side={side}
             tabIndex={tabIndex}
             onFocus={onFocus}
             onBlur={onBlur}

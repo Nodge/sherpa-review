@@ -13,7 +13,7 @@ import {
 describe('floating bar model', () => {
     it('blocks publishing with unsaved text, no connection or an in-flight request', () => {
         expect(publishDisabledReason({ connection: 'online', pendingComposer: true, publishing: false })).toBe(
-            'a draft is still being saved',
+            ru['ship.disabled.pending'],
         );
         expect(publishDisabledReason({ connection: 'reconnecting', pendingComposer: false, publishing: false })).toBe(
             'no connection to the server',

@@ -119,9 +119,27 @@ describe('thread store', () => {
         expect(store.getComposerGuardSnapshot().pending).toBe(false);
         expect(listener).toHaveBeenCalledTimes(2);
 
+        store.updateComposer('new:pr', { text: 'edited comment', status: 'idle' });
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+        expect(listener).toHaveBeenCalledTimes(3);
+
         store.updateComposer('new:pr', { text: '', status: 'idle' });
         expect(store.getComposerGuardSnapshot().pending).toBe(true);
         expect(listener).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps the publication guard active until a confirmed card deletion completes', () => {
+        const store = createThreadStore([], new Set());
+
+        store.beginDraftDeletion('draft-1');
+        store.beginDraftDeletion('draft-1');
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+
+        store.endDraftDeletion('draft-1');
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+
+        store.endDraftDeletion('draft-1');
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
     });
 
     it('clears a temporary resolve rollback on a server snapshot even if the value differs', () => {

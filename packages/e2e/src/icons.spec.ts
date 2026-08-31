@@ -102,8 +102,11 @@ for (const mode of ['unified', 'split'] as const) {
         const row = gutter.locator('..');
         const button = gutter.locator('.diff-row__comment');
 
-        await row.hover();
+        await (mode === 'split' ? gutter : row).hover();
         await expect(button).toHaveCSS('pointer-events', 'auto');
+        if (mode === 'split') {
+            await expect(row.locator('.diff-row__comment').nth(1)).toHaveCSS('pointer-events', 'none');
+        }
         const geometry = await gutter.evaluate((element) => {
             const comment = element.querySelector<HTMLElement>('.diff-row__comment');
             const sign = element.nextElementSibling as HTMLElement | null;

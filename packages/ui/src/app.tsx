@@ -77,6 +77,7 @@ import { routeFactsForSnapshot } from './route/route-summary.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import type { Store } from './store.js';
+import { attachComposerBeforeUnload } from './threads/before-unload.js';
 import type { ComposerTransport } from './threads/composer.js';
 import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
@@ -594,6 +595,7 @@ export function App({ store, session, token }: AppProps) {
             threadStore.setServerThreads(currentReview.threads);
         }
     }, [currentReview.threads, threadStore]);
+    useEffect(() => (threadStore === null ? undefined : attachComposerBeforeUnload(threadStore)), [threadStore]);
     const composerTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),

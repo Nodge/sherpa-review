@@ -525,6 +525,11 @@
     background: var(--surface-diff-empty);
 }
 
+.diff-row.is-thread-focused,
+.diff-side.is-thread-focused {
+    background: var(--accent-selection);
+}
+
 /* The selected range is the same in both modes (README §1, SPEC §2.14). */
 .diff-row.is-selected,
 .diff-side.is-selected {

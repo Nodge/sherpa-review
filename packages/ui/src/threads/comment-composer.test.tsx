@@ -3,15 +3,23 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ComposerTransport } from './composer.js';
 import { COMPOSER_LAYOUT_KEY } from './composer-markdown.js';
-import { NewCommentComposer, openPrComposer } from './thread-list.tsx';
+import { NewCommentComposer, openNewComposer, openPrComposer } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mounted: (() => void)[] = [];
 
-function mount(layout?: 'visual' | 'markdown') {
+function mount(
+    layout?: 'visual' | 'markdown',
+    transport: ComposerTransport = {
+        save: () => Promise.reject(new Error('the test does not save')),
+        update: () => Promise.resolve(),
+        delete: () => Promise.resolve(),
+    },
+) {
     if (layout === undefined) {
         localStorage.removeItem(COMPOSER_LAYOUT_KEY);
     } else {
@@ -27,11 +35,7 @@ function mount(layout?: 'visual' | 'markdown') {
             <NewCommentComposer
                 composerKey="new:pr"
                 store={store}
-                transport={{
-                    save: () => Promise.reject(new Error('test does not save')),
-                    update: () => Promise.resolve(),
-                    delete: () => Promise.resolve(),
-                }}
+                transport={transport}
             />,
         );
     });
@@ -123,6 +127,136 @@ describe('comment composer', () => {
         });
 
         expect(host.querySelector('.thread-composer__status')?.textContent.trim()).toBe('saved as a draft');
+    });
+
+    it('shows the line range in a new comment context', () => {
+        const store = createThreadStore([], new Set(['f1']));
+        openNewComposer(store, 'new:f1:new:10', {
+            fileId: 'f1',
+            path: 'src/app.ts',
+            position: { side: 'new', line: 10, size: 3 },
+        });
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        act(() => {
+            root.render(
+                <NewCommentComposer
+                    composerKey="new:f1:new:10"
+                    store={store}
+                    transport={{
+                        save: () => Promise.reject(new Error('this test does not save')),
+                        update: () => Promise.resolve(),
+                        delete: () => Promise.resolve(),
+                    }}
+                    initialLayout="markdown"
+                />,
+            );
+        });
+        mounted.push(() => {
+            act(() => {
+                root.unmount();
+            });
+            host.remove();
+        });
+
+        expect(host.querySelector('.thread-composer__context')?.textContent).toContain('new comment · lines 10–12');
+    });
+
+    it('shows the actual unsaved status after input, until an explicit save', () => {
+        const { host, store } = mount('markdown');
+        act(() => {
+            store.updateComposer('new:pr', { text: 'unsaved text', status: 'idle' });
+        });
+
+        expect(host.querySelector('.thread-composer__status')?.textContent).toBe('not saved — ⌘⏎ or the button');
+    });
+
+    it('closes the field after the first save, leaving the draft card', async () => {
+        const save = vi.fn(() =>
+            Promise.resolve({
+                id: 'draft-1',
+                author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+                body: 'ready draft',
+                draft: true,
+                createdAt: '2026-08-24T10:00:00.000Z',
+                editedAt: null,
+                replies: [],
+            }),
+        );
+        const { host, store } = mount('markdown', {
+            save,
+            update: () => Promise.resolve(),
+            delete: () => Promise.resolve(),
+        });
+        act(() => {
+            store.updateComposer('new:pr', { text: 'finished draft' });
+        });
+
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('.thread-composer__save')?.click();
+            await vi.waitFor(() => {
+                expect(store.getComposer('new:pr')).toBeNull();
+            });
+        });
+
+        expect(save).toHaveBeenCalledOnce();
+        expect(store.getSnapshot().threads[0]?.root).toMatchObject({ id: 'draft-1', body: 'finished draft' });
+        expect(host.querySelector('.thread-composer')).toBeNull();
+    });
+
+    it('Cancel asks for confirmation when the new text is nonempty', () => {
+        const { host, store } = mount('markdown');
+        act(() => {
+            store.updateComposer('new:pr', { text: 'keep this', status: 'idle' });
+        });
+        const cancel = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+            (button) => button.textContent === 'Cancel',
+        );
+
+        act(() => {
+            cancel?.click();
+        });
+
+        expect(host.querySelector('.thread-composer__confirm')?.textContent).toContain('Discard this draft?');
+        expect(store.getComposer('new:pr')).not.toBeNull();
+    });
+
+    it('Cancel asks for confirmation before cancelling edits to a saved draft', async () => {
+        const update = vi.fn(() => Promise.resolve());
+        const { host, store } = mount('markdown', {
+            save: () => Promise.reject(new Error('there is no first save here')),
+            update,
+            delete: () => Promise.resolve(),
+        });
+        act(() => {
+            store.updateComposer('new:pr', {
+                text: 'original text',
+                originalText: 'original text',
+                commentId: 'draft-1',
+                status: 'saved',
+            });
+            store.updateComposer('new:pr', { text: '', status: 'idle' });
+        });
+
+        act(() => {
+            [...host.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Cancel')?.click();
+        });
+
+        expect(host.querySelector('.thread-composer__confirm')?.textContent).toContain('Discard this draft?');
+        expect(update).not.toHaveBeenCalled();
+        expect(store.getComposer('new:pr')?.text).toBe('');
+
+        await act(async () => {
+            [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__confirm button')]
+                .find((button) => button.textContent === 'discard')
+                ?.click();
+            await vi.waitFor(() => {
+                expect(store.getComposer('new:pr')).toBeNull();
+            });
+        });
+
+        expect(update).toHaveBeenCalledWith('draft-1', 'original text');
     });
 
     it.each(['c', 'v'])('Markdown takes the plain %s key from global shortcuts', (key) => {

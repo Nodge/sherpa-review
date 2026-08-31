@@ -15,6 +15,12 @@ import type { DiffFileModel, DiffLine } from '../diff/model.js';
 /** `c<old>:<new>` for context, `a<new>` for additions, `d<old>` for deletions. */
 export type LineKey = string;
 
+export interface LineRange {
+    readonly side: 'old' | 'new';
+    readonly line: number;
+    readonly size: number;
+}
+
 export interface LineSelection {
     readonly fileId: string;
     /** Starting line (may be below the focus, since dragging works in either direction). */

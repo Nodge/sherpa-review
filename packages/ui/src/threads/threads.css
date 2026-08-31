@@ -141,7 +141,13 @@
     flex: 1;
 }
 
-.thread__edit-draft {
+.thread__draft-actions {
+    display: inline-flex;
+    gap: 5px;
+}
+
+.thread__edit-draft,
+.thread__delete-draft {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -156,12 +162,60 @@
     cursor: pointer;
 }
 
-.thread__edit-draft:hover:not(:disabled) {
+.thread__edit-draft:hover:not(:disabled),
+.thread__delete-draft:hover:not(:disabled) {
     border-color: var(--checkbox-border);
     color: var(--text-secondary);
 }
 
-.thread__edit-draft:disabled {
+.thread__delete-draft:hover:not(:disabled) {
+    color: var(--diff-del-text-strong);
+}
+
+.thread__edit-draft:disabled,
+.thread__delete-draft:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
+}
+
+.thread__delete-confirm {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 9px 0 0 25px;
+    padding: 7px 9px;
+    border: 1px solid var(--pr-comments-delete-border);
+    border-radius: 6px;
+    background: var(--pr-comments-delete-surface);
+    color: var(--diff-del-text-strong);
+    font-size: 12px;
+}
+
+.thread__delete-confirm-button,
+.thread__keep-draft {
+    height: 23px;
+    padding: 0 9px;
+    border-radius: 5px;
+    font: inherit;
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.thread__delete-confirm-button {
+    border: 1px solid var(--pr-comments-delete-button-border);
+    background: var(--pr-comments-delete-button-surface);
+    color: var(--pr-comments-delete-button-text);
+}
+
+.thread__keep-draft {
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.thread__delete-confirm-button:disabled,
+.thread__keep-draft:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
 }
@@ -602,8 +656,12 @@
     pointer-events: none;
 }
 
-.diff-row:hover .diff-row__comment,
-.diff-row:focus-within .diff-row__comment,
+.diff-row:not(.diff-row--pair):hover .diff-row__comment,
+.diff-row:not(.diff-row--pair):focus-within .diff-row__comment,
+.diff-row--pair:has(> .diff-side[data-side='old']:hover) > .diff-row__gutter[data-side='old'] .diff-row__comment,
+.diff-row--pair:has(> .diff-side[data-side='new']:hover) > .diff-row__gutter[data-side='new'] .diff-row__comment,
+.diff-row--pair:has(> .diff-side[data-side='old']:focus-within) > .diff-row__gutter[data-side='old'] .diff-row__comment,
+.diff-row--pair:has(> .diff-side[data-side='new']:focus-within) > .diff-row__gutter[data-side='new'] .diff-row__comment,
 .diff-row__comment.is-selection-start {
     opacity: 1;
     pointer-events: auto;

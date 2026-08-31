@@ -95,7 +95,7 @@ export function StopFileCard({
         parseError === null &&
         shown?.content.kind === 'text' &&
         (!shown.whitespaceOnly || showWhitespace);
-    const { threadsUnderHeader, renderAfterLine } = useCardThreads({
+    const { threadsUnderHeader, renderAfterLine, focusedThreadRange } = useCardThreads({
         model: shown,
         rowsShown,
         placement: 'exact',
@@ -127,6 +127,7 @@ export function StopFileCard({
                 showWhitespace={showWhitespace}
                 selection={selection}
                 threadsUnderHeader={threadsUnderHeader}
+                focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 actions={actions}
             />

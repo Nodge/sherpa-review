@@ -1,10 +1,11 @@
 import type { Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { LineRange } from '../diff-view/selection.js';
 import type { ComposerLayout } from './composer-markdown.js';
-import { placeThreadsOnVisibleLines } from './model.js';
+import { placeThreadsOnVisibleLines, positionLastLine } from './model.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import type { ThreadActions } from './thread-list.tsx';
 import { NewCommentComposer, ThreadList } from './thread-list.tsx';
@@ -43,6 +44,7 @@ export interface CardThreadsInput {
 export interface CardThreads {
     readonly threadsUnderHeader: ReactNode;
     readonly renderAfterLine: (side: 'old' | 'new', line: number) => ReactNode;
+    readonly focusedThreadRange: LineRange | null;
 }
 
 export function useCardThreads({
@@ -57,6 +59,15 @@ export function useCardThreads({
     initialLayout,
     placement = 'nearest',
 }: CardThreadsInput): CardThreads {
+    const [focusedThreadRange, setFocusedThreadRange] = useState<LineRange | null>(null);
+    const focusThread = useCallback(
+        (threadId: string | null): void => {
+            const thread = threads.find((candidate) => candidate.id === threadId);
+            setFocusedThreadRange(thread?.outdated === false ? (thread.anchor?.position ?? null) : null);
+            onFocusThread(threadId);
+        },
+        [onFocusThread, threads],
+    );
     const layout = useMemo(() => {
         const underHeader = threads.filter((thread) => thread.outdated || thread.anchor?.position === null);
         const positional = threads.filter((thread) => !thread.outdated && thread.anchor?.position !== null);
@@ -94,7 +105,7 @@ export function useCardThreads({
                             store={store}
                             actions={actions}
                             now={now}
-                            onFocusThread={onFocusThread}
+                            onFocusThread={focusThread}
                             inlineDraftEditing
                             {...(initialLayout === undefined ? {} : { initialLayout })}
                         />
@@ -117,7 +128,7 @@ export function useCardThreads({
             initialLayout,
             layout.underHeader,
             now,
-            onFocusThread,
+            focusThread,
             store,
         ],
     );
@@ -126,7 +137,8 @@ export function useCardThreads({
         (side: 'old' | 'new', line: number): ReactNode => {
             const lineThreads = layout.byLine.get(`${side}:${String(line)}`) ?? EMPTY_THREADS;
             const composer = composerLayout.byLine.find(
-                (candidate) => candidate.anchor?.position?.side === side && candidate.anchor.position.line === line,
+                (candidate) =>
+                    candidate.anchor?.position?.side === side && positionLastLine(candidate.anchor.position) === line,
             );
             if (lineThreads.length === 0 && composer === undefined) {
                 return null;
@@ -139,7 +151,7 @@ export function useCardThreads({
                             store={store}
                             actions={actions}
                             now={now}
-                            onFocusThread={onFocusThread}
+                            onFocusThread={focusThread}
                             inlineDraftEditing
                             {...(initialLayout === undefined ? {} : { initialLayout })}
                         />
@@ -164,21 +176,26 @@ export function useCardThreads({
             initialLayout,
             layout.byLine,
             now,
-            onFocusThread,
+            focusThread,
             store,
         ],
     );
 
-    return { threadsUnderHeader, renderAfterLine };
+    return { threadsUnderHeader, renderAfterLine, focusedThreadRange };
 }
 
 /** The position line is actually rendered in the card. */
 function positionShown(
     model: DiffFileModel | null,
     rowsShown: boolean,
-    position: { readonly side: 'old' | 'new'; readonly line: number } | null | undefined,
+    position: { readonly side: 'old' | 'new'; readonly line: number; readonly size: number } | null | undefined,
 ): boolean {
-    return rowsShown && position !== null && position !== undefined && modelHasPosition(model, position.side, position.line);
+    return (
+        rowsShown &&
+        position !== null &&
+        position !== undefined &&
+        modelHasPosition(model, position.side, positionLastLine(position))
+    );
 }
 
 export function modelHasPosition(model: DiffFileModel | null, side: 'old' | 'new', line: number): boolean {
