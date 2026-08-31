@@ -12,6 +12,6 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@sherpa/ui", "dev", "--port", "5173", "--strictPort"],
       "port": 5173
-    },
+    }
   ]
 }
