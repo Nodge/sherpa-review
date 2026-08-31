@@ -1,8 +1,24 @@
-/*
- * Shared toolbar controls (README §1, §10): diff mode toggle and comment source
- * chips. Values come unchanged from full diff styles. Both views use the same
- * control, which must look identical.
- */
+/* Shared right cluster for the route and full diff toolbars (README §1, §10). */
+
+.toolbar-right-cluster {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: var(--space-control);
+}
+
+.toolbar-right-cluster__divider {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    background: var(--border-divider);
+}
+
+.toolbar-right-cluster__label {
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+    white-space: nowrap;
+}
 
 .diff-mode-toggle {
     display: inline-flex;
@@ -21,12 +37,6 @@
 
 .diff-mode-toggle:hover {
     color: var(--text-muted);
-}
-
-.toolbar-label {
-    font-size: var(--font-size-secondary);
-    color: var(--text-dim);
-    white-space: nowrap;
 }
 
 .thread-chips {

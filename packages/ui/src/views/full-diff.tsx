@@ -18,9 +18,8 @@ import {
     setReviewThreadResolved,
     updateReviewDraft,
 } from '../api.js';
-import { FilterSelect } from '../components/filter-select.tsx';
 import { PrHeader } from '../components/pr-header.tsx';
-import { CommentSources, DiffModeToggle } from '../components/toolbar-controls.tsx';
+import { ToolbarRightCluster } from '../components/toolbar-controls.tsx';
 import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
@@ -1049,11 +1048,15 @@ export function FullDiffToolbar({
             </span>
             {smallPr ? <span className="full-diff__small-pr">small PR, no route needed</span> : null}
             <span className="full-diff__spacer" />
-            <DiffModeToggle store={store} />
-            <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
-            <span className="full-diff__divider" aria-hidden="true" />
-            <span className="toolbar-label">Comments:</span>
-            <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
+            <ToolbarRightCluster
+                store={store}
+                filters={filters}
+                filter={filter}
+                onFilter={onFilter}
+                threadsShow={threadsShow}
+                threadCounts={threadCounts}
+                onThreadsShow={onThreadsShow}
+            />
         </div>
     );
 }

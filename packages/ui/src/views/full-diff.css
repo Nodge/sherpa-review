@@ -92,13 +92,6 @@
     flex: 1;
 }
 
-.full-diff__divider {
-    flex: none;
-    width: 1px;
-    height: 18px;
-    background: var(--border-divider);
-}
-
 .full-diff__status {
     margin: 0;
     padding: var(--space-page);
