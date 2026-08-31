@@ -14,7 +14,7 @@ import { ViewTabs } from './view-tabs.tsx';
  * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search and Feedback.
  */
 export interface TopBarProps {
-    /** Distribution version from the UI package.json, injected at build time. */
+    /** Distribution version from the root package.json, inserted at build time. */
     readonly version: string;
     /** Brandcrumb segments from left to right. The last is the PR itself, and a link once metadata is known. */
     readonly breadcrumb: readonly BreadcrumbSegment[];

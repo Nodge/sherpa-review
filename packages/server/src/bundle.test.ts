@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -11,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isProcessAlive, readManifest } from './manifest.js';
 import { manifestPathFor } from './paths.js';
 import { get, makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
-import { SERVER_VERSION } from './version.js';
 
 /**
  * Fixture host key: this suite tests the process, not the adapter. Live review hosts
@@ -24,6 +24,13 @@ const STARTUP_TIMEOUT_MS = 15_000;
 const packageRoot = path.resolve(import.meta.dirname, '..');
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa-server.mjs');
+/**
+ * Distribution version from the root package.json: the build embeds it in the bundle, while `SERVER_VERSION`
+ * in this process is zero (development fallback), so it provides no useful comparison.
+ */
+const releaseVersion = (
+    JSON.parse(readFileSync(path.join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
+).version;
 
 /**
  * Server bundle as the skill distribution sees it: a separate process running plain node, state in tmp,
@@ -65,7 +72,7 @@ describe('server bundle', () => {
 
             const health = await get(manifest.port, '/healthz', manifest.token);
             expect(health.status).toBe(200);
-            expect(await health.json()).toMatchObject({ ok: true, prKey: PR_KEY, serverVersion: SERVER_VERSION });
+            expect(await health.json()).toMatchObject({ ok: true, prKey: PR_KEY, serverVersion: releaseVersion });
 
             // Static assets need no token: they contain no secrets (rpc-design §8).
             const index = await get(manifest.port, '/');

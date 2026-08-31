@@ -26,3 +26,17 @@ has not been built.
 
 To install in a harness, symlink the distribution: `~/.claude/skills/sherpa` → `<repo>/packages/skill/dist`.
 You can also copy the directory anywhere. It's self-contained.
+
+## Release
+
+`README.md` documents installing Sherpa. It ships to the repository beside
+the distribution, but stays outside `dist/` (which holds only what the harness sees).
+
+```
+pnpm release [--target <directory>]
+```
+
+`scripts/release.mjs` builds the chain, checks `sherpa --version` against the root
+`package.json` version (the sole source, see the decision log for 2026-09-01), and copies
+`README.md` + `skill/` to the target directory (`~/src/sherpa-review` by default).
+The script does not call `git`. It prints commands ready to run by hand.
