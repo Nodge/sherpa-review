@@ -310,8 +310,8 @@ export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSche
  * other stops' ranges and manual file marks untouched (SPEC §2.10).
  * The request carries `snapshotId`: a late write from a previous route must not reach
  * a new stop with the same deterministic id. The field is optional for older UI bundles.
- * Stop marks are not mirrored to the host: `fileViewedSync` still handles explicit
- * file marks.
+ * The stop mark itself is not mirrored to the host. The UI reports files becoming "read" through range
+ * ranges, the UI reports it through the separate `reviewViewedMirror` endpoint (M2F-T38).
  */
 export const uiStopSeenRangeSchema = uiSeenRangeSchema.extend({ fileId: hostIdSchema });
 export type UiStopSeenRange = z.infer<typeof uiStopSeenRangeSchema>;
@@ -330,6 +330,23 @@ export const uiSetStopViewedResponseSchema = z.object({
     progressRevision: z.number().int().min(0),
 });
 export type UiSetStopViewedResponse = z.infer<typeof uiSetStopViewedResponseSchema>;
+
+/**
+ * Mirrors "viewed" to the host without a local write (M2F-T38). The UI reports
+ * files changing to `read` and back through range coverage
+ * (marking or clearing a stop, server-side symmetry when clearing a file): no explicit file
+ * mark was made, so the `reviewFileViewed` mirror endpoint does not know about the change.
+ * Only the UI knows when this happens. The server has no diff model to determine
+ * whether "all file lines are covered". The server sends the change to the host on a best-effort basis through the same
+ * mirror queue. Without `capabilities.fileViewedSync`, it silently does nothing. A partially
+ * read file never reaches this endpoint, since the host has a binary status.
+ */
+export const uiViewedMirrorRequestSchema = z.object({
+    entries: z
+        .array(z.object({ fileId: hostIdSchema, viewed: z.boolean() }))
+        .min(1),
+});
+export type UiViewedMirrorRequest = z.infer<typeof uiViewedMirrorRequestSchema>;
 
 /**
  * Comment writes (M1-T13, the brief two-stage model): a draft is saved
@@ -434,6 +451,8 @@ export const UI_ENDPOINTS = {
     reviewFileViewed: '/api/ui/review/file-viewed',
     /** POST `uiSetStopViewedRequestSchema` → `uiSetStopViewedResponseSchema`. Available without a review host too. */
     reviewStopViewed: '/api/ui/review/stop-viewed',
+    /** POST `uiViewedMirrorRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewViewedMirror: '/api/ui/review/viewed-mirror',
     /** POST `uiSaveDraftRequestSchema` → `uiSaveDraftResponseSchema`. */
     reviewSaveDraft: '/api/ui/review/draft',
     /** POST `uiUpdateDraftRequestSchema` → `uiReviewWriteAckSchema`. */
