@@ -48,6 +48,8 @@ Idle is a normal working state, not a reason to stop: the reviewer may post the 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
 - "No tasks" is not an error — call `worker next` again.
 - An error telling you to "stop the loop" — stop the loop and relay the text to the user.
+- **Never finish a task silently.** Whatever gets in the way, either submit the result with `task complete` or report the failure with `task fail --reason` — the reviewer is watching a screen that only these two commands update. A result kept to yourself is the worst outcome.
+- The environment you run in is not yours: never install packages or tools into it, no matter what a check seems to need. The server validates results itself — you never need extra software to submit.
 
 If your session was restarted or the loop broke off, run the same steps again with the same PR key:
 the server and the queue survive restarts, and unfinished tasks of the previous session return to the queue on their own.

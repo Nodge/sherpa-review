@@ -246,6 +246,66 @@ const CASES: readonly Case[] = [
         run: () => validateSection(section([]), plan(), [1], mediumDiff()),
         patterns: [/^section\.stops: /],
     },
+    {
+        name: 'skeleton: filler phrase in summary',
+        run: () =>
+            validateSkeleton(
+                asRawText({
+                    ...mediumRawResults().skeleton,
+                    summary: `${String(bannedPhrases('ru')[0])}: the PR introduces an edit window.`,
+                }),
+            ),
+        errors: [
+            `skeleton.summary: drop the filler phrase "${String(bannedPhrases('ru')[0])}" and state the fact directly (see Voice in the methodology).`,
+        ],
+    },
+    {
+        name: 'skeleton: emoji in stop title',
+        run: () => {
+            const skeleton = mediumRawResults().skeleton;
+            const stops = skeleton.stops.map((stop, index) =>
+                index === 0 ? { ...stop, title: `${stop.title} 🚀` } : stop,
+            );
+            return validateSkeleton(asRawText({ ...skeleton, stops }));
+        },
+        errors: [
+            'skeleton.stops[0].title: contains emoji — route texts are plain prose (see Voice in the methodology).',
+        ],
+    },
+    {
+        name: 'section: filler phrase in paragraph',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        paragraph: `${String(bannedPhrases('ru')[1])}: the handler was rewritten.`,
+                    }),
+                ]),
+                plan(),
+                [1],
+                mediumDiff(),
+            ),
+        errors: [
+            `section.stops[0].paragraph: drop the filler phrase "${String(bannedPhrases('ru')[1])}" and state the fact directly (see Voice in the methodology).`,
+        ],
+    },
+    {
+        name: 'section: emoji in digest assertion',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        tests: [{ kind: 'new', text: 'Rejects edits after the window closes ✅', testPath: WINDOW, testLine: 12 }],
+                    }),
+                ]),
+                plan(),
+                [1],
+                mediumDiff(),
+            ),
+        errors: [
+            'section.stops[0].tests[0].text: contains emoji — route texts are plain prose (see Voice in the methodology).',
+        ],
+    },
 ];
 
 describe('route validator: negative corpus', () => {
