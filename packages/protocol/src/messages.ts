@@ -82,7 +82,11 @@ export const workerNextResponseSchema = z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('task'), task: taskSchema, lease: leaseSchema }),
     /** No tasks, the long poll timed out. Call `next` again. */
     z.object({ kind: z.literal('idle'), message: z.string() }),
-    /** Worker work is finished (DONE), the session can exit. */
+    /**
+     * The worker is done (DONE), so the session can end. The human-readable reason
+     * is in `message` (for example, "the reviewer closed the tab"). The worker passes it to the user.
+     * There is no machine-readable reason field: the harness behaves the same for any reason (decision M2F-T33).
+     */
     z.object({ kind: z.literal('done'), message: z.string() }),
 ]);
 export type WorkerNextResponse = z.infer<typeof workerNextResponseSchema>;

@@ -3,6 +3,7 @@ import { routeSkeletonResultSchema } from '@sherpa/protocol';
 
 import { parseResult } from './raw-result.js';
 import type { AcceptedSkeleton, RouteValidation } from './types.js';
+import { voiceErrors } from './voice.js';
 
 /**
  * Accept a `route.skeleton` task result: raw text → stop plan.
@@ -29,8 +30,14 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
 
     const result = parsed.value;
     const tourError = tourOrderError(result.tourOrder, result.stops.length);
-    if (tourError !== null) {
-        return { ok: false, errors: [tourError] };
+    // Voice checks apply only to reviewer-facing text. `intent` goes to the section model.
+    const errors = [
+        ...(tourError === null ? [] : [tourError]),
+        ...voiceErrors('skeleton.summary', result.summary),
+        ...result.stops.flatMap((stop, index) => voiceErrors(`skeleton.stops[${String(index)}].title`, stop.title)),
+    ];
+    if (errors.length > 0) {
+        return { ok: false, errors };
     }
 
     const stops: RouteStop[] = result.stops.map((stop, index) => ({

@@ -37,11 +37,19 @@ A slow route is a failed route: the reviewer is sitting in front of an empty scr
 Every text you produce is read by a human reviewer, so:
 
 - **Write in Russian.** Identifiers, paths and other names from the code stay as they are.
-- At most 25 words per sentence. One thought — one sentence.
-- Plain words. No "artifact", "surface", "primitive", no rhetorical flourish.
+- At most 25 words per sentence. One thought, one sentence. No trailing "which gives…" /
+  "which affects…" clauses: if the consequence matters, it is its own sentence.
+- Plain words. No "artifact", "surface", "primitive", no rhetorical flourish. No English
+  jargon transliterated into Russian ("coalescing", "surface", "primitive"). Describe the
+  thing in plain Russian; identifiers and API names are not affected.
 - Names from the code go in backticks, at most two per sentence.
 - No praise and no selling: no "elegant", "reliable", "simply", "critically important".
-- No emoji, no em dashes as decoration.
+  Facts and numbers instead of impressions: "40 lines shorter", not "much simpler".
+- No filler phrases: "important to note", "worth noting", "as we can see" and the like. Instead,
+  start with the fact itself. The server rejects texts containing these.
+- No rhetorical questions, no "not just X, but Y", no lists of three for rhythm, no summary
+  paragraph at the end.
+- No emoji (the server rejects them), no em dashes as decoration.
 - Say what the diff cannot say by itself: motivation, and the non-obvious decision in the form
   "X instead of Y, because Z". Retelling the code back to the reviewer is wasted text.`;
 
@@ -56,6 +64,12 @@ The server validates the result before accepting it (fail-closed). A rejected re
 as a list of errors with the path to the offending field of your JSON — fix exactly those places
 and call \`complete\` again with the corrected document. Do not restart the task and do not ask
 for permission: the rejection is part of the normal loop.
+
+The server is the only validator. Do not check the document against the schema yourself and do
+not install validators or packages for that — the environment you run in is not yours to change.
+Never end the task silently: submit what you produced even if you could not check it locally,
+and if submitting is truly impossible, report it with \`sherpa task fail <id> --reason <text>\`.
+A result you keep to yourself leaves the reviewer waiting in front of an empty screen.
 
 Return JSON only: no prose around it, no markdown fence, no comments inside.`;
 
@@ -205,6 +219,8 @@ export function skeletonInstructions(): string {
         'complete list of changed files and their patches.',
         '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
+        'The schema is checked by the server on submit — do not validate the result yourself and do not',
+        'install anything for that; always submit what you produced.',
     ].join('\n');
 }
 
@@ -220,5 +236,7 @@ export function sectionInstructions(planIndexes: readonly number[]): string {
         'are marked, each with the intent written for you) and the pull request itself.',
         '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
+        'The schema is checked by the server on submit — do not validate the result yourself and do not',
+        'install anything for that; always submit what you produced.',
     ].join('\n');
 }

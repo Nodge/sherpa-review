@@ -30,6 +30,7 @@ import type { ProgressStore } from './progress-store.js';
 import type { TaskQueue, TaskRecord } from './queue.js';
 import type { ReviewFeed } from './review-feed.js';
 import type { RouteStore } from './route-store.js';
+import type { UiPresence } from './ui-presence.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 /**
@@ -58,6 +59,8 @@ export interface UiRoutesOptions {
     readonly progress: ProgressStore;
     /** Route state: its revision is sent over the channel in the same way as progress. */
     readonly route: RouteStore;
+    /** Reviewer presence is tracked only through live SSE connections on this channel. */
+    readonly presence: UiPresence;
     /** Server shutdown: closes pending SSE connections so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
 }
@@ -128,6 +131,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     });
 
     const abort = abortOnDisconnect(ctx.req, options.shutdownSignal);
+    const disconnectPresence = options.presence.connect();
     let scheduled = false;
 
     const push = (): void => {
@@ -205,6 +209,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         unsubscribeReview?.();
         unsubscribeProgress?.();
         unsubscribeRoute?.();
+        disconnectPresence();
         abort.dispose();
         if (!res.writableEnded && !res.destroyed) {
             res.end();

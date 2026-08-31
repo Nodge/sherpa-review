@@ -44,6 +44,7 @@ import { RouteOrchestrator } from './route-orchestrator.js';
 import { createRouteRoutes } from './route-routes.js';
 import { RouteStore } from './route-store.js';
 import type { StaticAssets } from './static.js';
+import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
 import { SERVER_VERSION } from './version.js';
 import { writeWorkerIdFile } from './worker-id-file.js';
@@ -82,6 +83,8 @@ export interface StartServerOptions {
      * an open connection or a lease counts as alive. Internal policy, shortened in tests.
      */
     workerGapGraceSeconds?: number;
+    /** UI departure grace period. The contract default is overridden only in server tests. */
+    uiGoneGraceSeconds?: number;
     /**
      * Selects a host adapter by PR key. Defaults to `selectReviewHost`. Tests can inject a host
      * without a live service (`() => null` runs the server without review endpoints).
@@ -196,6 +199,10 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ? {}
                 : { gapGraceSeconds: options.workerGapGraceSeconds }),
         });
+        const uiPresence = new UiPresence({
+            ...(options.now === undefined ? {} : { now: options.now }),
+            ...(options.uiGoneGraceSeconds === undefined ? {} : { graceSeconds: options.uiGoneGraceSeconds }),
+        });
         // A lease is one condition for liveness, so the registry must see it appear and disappear:
         // otherwise, cancelling a task would leave the worker's death time calculated from stale data.
         const unsubscribeQueue = queue.subscribeChanges(() => {
@@ -225,6 +232,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             ...createWorkerRoutes({
                 queue,
                 registry: workerRegistry,
+                presence: uiPresence,
                 longPollSeconds: options.longPollSeconds ?? LONG_POLL_DEFAULT_SECONDS,
                 shutdownSignal: shutdownController.signal,
                 publishWorkerId: (workerId) => {
@@ -241,6 +249,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 feedback: feedbackAvailability(options.feedback?.env ?? process.env),
                 progress,
                 route: routeStore,
+                presence: uiPresence,
                 shutdownSignal: shutdownController.signal,
             }),
             ...createReviewRoutes({
@@ -268,6 +277,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             db,
             queue,
             workerRegistry,
+            uiPresence,
             unsubscribeQueue,
             shutdownController,
             idleWatch,
@@ -358,6 +368,7 @@ function createHandle(parts: {
     db: SherpaDatabase;
     queue: TaskQueue;
     workerRegistry: WorkerRegistry;
+    uiPresence: UiPresence;
     unsubscribeQueue: () => void;
     shutdownController: AbortController;
     idleWatch: IdleWatch;
@@ -386,6 +397,7 @@ function createHandle(parts: {
                 // after close(), nothing should read from it.
                 parts.unsubscribeQueue();
                 parts.workerRegistry.close();
+                parts.uiPresence.close();
                 // Stop host polling here too, or the subscription would outlive server shutdown.
                 parts.reviewFeed?.close();
                 // The metadata load retry must not wake up after server shutdown.

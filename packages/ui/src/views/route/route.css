@@ -65,6 +65,12 @@
     backdrop-filter: blur(8px);
 }
 
+.route .file-card__header {
+    top: calc(var(--route-toolbar-height) + var(--space-inner));
+    /* Closes the gap to the toolbar without changing alignment with the sticky stop column. */
+    box-shadow: 0 calc(-1 * var(--space-inner)) 0 var(--surface-card-header);
+}
+
 .route-toolbar__row {
     display: flex;
     align-items: center;

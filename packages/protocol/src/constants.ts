@@ -25,6 +25,13 @@ export const LONG_POLL_CEILING_SECONDS = 3600;
  */
 export const WORKER_DEAD_AFTER_SECONDS = 360;
 
+/**
+ * UI departure grace: sends `done` to the worker when the last UI connection has been closed longer than this
+ * threshold (M2F-T33). Page reloads, switching tabs, laptop sleep and brief network
+ * interruptions break SSE for seconds without the reviewer leaving, so this must be at least a minute.
+ */
+export const UI_GONE_GRACE_SECONDS = 60;
+
 /** Lease TTL by priority class. */
 export const LEASE_TTL_SECONDS = { interactive: 600, background: 1800 } as const;
 

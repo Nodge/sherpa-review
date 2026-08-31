@@ -115,7 +115,6 @@ interface TaskRow extends SqlRow {
 export class TaskQueue {
     private readonly db: SherpaDatabase;
     private readonly now: () => Date;
-    private readonly listeners = new Set<() => void>();
     private readonly changeListeners = new Set<() => void>();
 
     /**
@@ -171,20 +170,10 @@ export class TaskQueue {
     }
 
     /**
-     * Subscription to tasks becoming available in the queue, used by the `next` endpoint's long-poll.
+     * Subscribes to any queue change for the UI SSE channel and long-poll `next` endpoint:
+     * enqueuing, leasing, `complete`/`fail`/`progress`/`cancel` and requeuing tasks on
+     * lease expiry, including lazy expiry inside another operation.
      * Returns an unsubscribe function.
-     */
-    subscribe(listener: () => void): () => void {
-        this.listeners.add(listener);
-        return () => {
-            this.listeners.delete(listener);
-        };
-    }
-
-    /**
-     * Subscribes to any queue change for the UI SSE channel: enqueue, lease assignment,
-     * `complete`/`fail`/`progress`/`cancel` and returning tasks after lease expiry, including
-     * lazy expiry inside another operation. Returns an unsubscribe function.
      */
     subscribeChanges(listener: () => void): () => void {
         this.changeListeners.add(listener);
@@ -215,7 +204,6 @@ export class TaskQueue {
         const record = this.requireRecord(Number(info.lastInsertRowid));
         this.markChanged();
         this.flushChanges();
-        this.notify();
         return record;
     }
 
@@ -267,7 +255,6 @@ export class TaskQueue {
     releaseLeasesOf(workerId: string): void {
         this.txReleaseLeasesOf(workerId);
         this.flushChanges();
-        this.notify();
     }
 
     /**
@@ -605,12 +592,6 @@ export class TaskQueue {
 
     private requireRecord(taskId: TaskId): TaskRecord {
         return toRecord(this.requireRow(taskId));
-    }
-
-    private notify(): void {
-        for (const listener of [...this.listeners]) {
-            listener();
-        }
     }
 
     /**
