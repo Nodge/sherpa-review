@@ -69,7 +69,7 @@ function fakeProgress(): FakeProgress {
                 for (const range of list) {
                     const record = byFile.get(range.fileId) ?? {
                         fileId: range.fileId,
-                        viewed: false,
+                        viewed: null,
                         seenRanges: [],
                     };
                     byFile.set(range.fileId, {
@@ -326,6 +326,17 @@ function fileViewedToggles(section: HTMLElement): HTMLButtonElement[] {
     return [...section.querySelectorAll<HTMLButtonElement>('.file-card__viewed')];
 }
 
+function fileViewedToggle(section: HTMLElement, fileId: string): HTMLButtonElement {
+    const card = [...section.querySelectorAll<HTMLElement>('article[data-file]')].find(
+        (candidate) => candidate.dataset.file === fileId,
+    );
+    const toggle = card?.querySelector<HTMLButtonElement>('.file-card__viewed') ?? null;
+    if (toggle === null) {
+        throw new Error(`stop has no toggle for file ${fileId}`);
+    }
+    return toggle;
+}
+
 /** How many diff files the reader considers read, the same count shown by the action bar. */
 function filesRead(host: HTMLElement): string {
     return host.querySelector('.review-action-bar__progress')?.textContent ?? '';
@@ -345,6 +356,43 @@ describe('marking a stop updates its file read-state boxes', () => {
         // Stop 01 explains two whole files, so its own record must cover them.
         expect(new Set(view.progress.rangesForStop('s01').map((range) => range.fileId)).size).toBe(2);
         expect(filesRead(view.host)).toBe('6 / 18 files');
+    });
+
+    it.each([
+        ['s03', 'services/orders/src/payments/generated/psp-schema.ts', '8 / 18 files'],
+        ['s06', 'pnpm-lock.yaml', '4 / 18 files'],
+    ])('seen-only progress %s preserves the generated default', async (stopId, path, expectedFilesRead) => {
+        const view = mount();
+        await view.settle();
+        expect(filesRead(view.host)).toBe('4 / 18 files');
+
+        act(() => {
+            viewedToggle(stopSection(view.host, stopId)).click();
+        });
+        await view.settle();
+
+        const fileId = DATA.diff.files.find((file) => file.path === path)?.fileId;
+        if (fileId === undefined) {
+            throw new Error(`medium fixture has no generated file ${path}`);
+        }
+        const record = view.progress.read().find((candidate) => candidate.fileId === fileId);
+        expect(record?.viewed).toBeNull();
+        expect(record?.seenRanges.length).toBeGreaterThan(0);
+        expect(filesRead(view.host)).toBe(expectedFilesRead);
+
+        const section = stopSection(view.host, stopId);
+        const summary = section.querySelector<HTMLButtonElement>('.route-collapsed--viewed');
+        if (summary === null) {
+            throw new Error(`viewed stop ${stopId} did not collapse`);
+        }
+        act(() => {
+            summary.click();
+        });
+        await view.settle();
+
+        expect(fileViewedToggle(stopSection(view.host, stopId), fileId).title).toContain(
+            'generated — marked read by default',
+        );
     });
 
     it('refreshes without waiting for a progress event from the channel', async () => {

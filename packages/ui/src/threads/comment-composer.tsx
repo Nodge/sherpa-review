@@ -291,6 +291,22 @@ export function CommentComposer({
                 >
                     Cancel
                 </button>
+                {composer.issue === undefined ? null : (
+                    <button
+                        type="button"
+                        className={`thread-composer__issue${composer.issue ? ' is-active' : ''}`}
+                        aria-pressed={composer.issue}
+                        disabled={disabled}
+                        onClick={() => {
+                            controller.setIssue(!composer.issue);
+                        }}
+                    >
+                        <span className="thread-composer__issue-box" aria-hidden="true">
+                            {composer.issue ? <Icon name="check" size={9} /> : null}
+                        </span>
+                        Open an issue
+                    </button>
+                )}
                 <span className="thread-composer__actions-spacer" />
                 {footerHint}
                 {composer.confirmDiscard ? (

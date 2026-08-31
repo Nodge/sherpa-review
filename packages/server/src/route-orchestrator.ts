@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import type { PrDiff, PrMeta, ReviewHost, RouteProvenance, UiRouteGenerateResponse, WorkerStatus } from '@sherpa/protocol';
+import type {
+    PrDiff,
+    PrMeta,
+    ReviewHost,
+    RouteProvenance,
+    UiRouteFillStopResponse,
+    UiRouteGenerateResponse,
+    WorkerStatus,
+} from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
@@ -219,6 +227,29 @@ export class RouteOrchestrator {
         }
 
         this.startSkeleton();
+        return 'started';
+    }
+
+    /** Fills a failed stop through the regular `filling` phase and reconciliation. */
+    async fillStop(snapshotId: string, planIndex: number): Promise<UiRouteFillStopResponse['outcome']> {
+        await this.loadDiff();
+
+        const state = this.store.read();
+        if (state.phase !== 'ready') {
+            return 'already_running';
+        }
+        if (state.snapshot?.snapshotId !== snapshotId) {
+            return 'stale_snapshot';
+        }
+
+        const stop = state.snapshot.stops.find((candidate) => candidate.planIndex === planIndex);
+        if (stop?.status !== 'failed') {
+            return 'not_unfilled';
+        }
+
+        // Keep progress. The UI cannot mark an unfilled stop, and marks on other stops remain valid.
+        this.store.beginStopFill(planIndex);
+        this.reconcile();
         return 'started';
     }
 

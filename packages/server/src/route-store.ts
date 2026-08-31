@@ -192,6 +192,28 @@ export class RouteStore {
         this.commit({ ...this.state, snapshot: { ...snapshot, stops } });
     }
 
+    /** Returns an unfinished stop to the normal filling phase without resetting the rest of the route. */
+    beginStopFill(planIndex: number): void {
+        const snapshot = this.state.snapshot;
+        if (snapshot === null) {
+            return;
+        }
+
+        const stops = snapshot.stops.map((stop) =>
+            stop.planIndex === planIndex && stop.tier !== 'other'
+                ? { ...stop, status: 'queued' as const, validationNotes: [] }
+                : stop,
+        );
+        this.commit(
+            { ...this.state, phase: 'filling', snapshot: { ...snapshot, stops, contentHash: null } },
+            this.intents,
+            () => {
+                this.deleteSectionBindingsFor(planIndex);
+                return () => undefined;
+            },
+        );
+    }
+
     /**
      * All sections are closed. The snapshot becomes immutable, and only now is `contentHash` computed.
      * Before this point there is nothing final to hash because content is still arriving.
@@ -266,6 +288,15 @@ export class RouteStore {
      */
     clearBindings(): void {
         this.db.prepare('DELETE FROM route_tasks').run();
+    }
+
+    /** A closed task from a previous fill must not count as a task for the new reconciliation pass. */
+    private deleteSectionBindingsFor(planIndex: number): void {
+        for (const [taskId, binding] of this.bindings()) {
+            if (binding.kind === 'section' && binding.planIndexes.includes(planIndex)) {
+                this.db.prepare('DELETE FROM route_tasks WHERE task_id = ?').run(taskId);
+            }
+        }
     }
 
     subscribe(listener: RouteListener): () => void {

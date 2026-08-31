@@ -30,7 +30,11 @@ export interface ReviewHost {
     /** Save a draft to the host immediately (two-stage model). Returns the created comment. */
     saveDraft(draft: CommentDraft): Promise<Comment>;
 
-    updateDraft(commentId: HostId, body: string): Promise<void>;
+    /**
+     * Edits your own draft. `issue` is passed only with `capabilities.commentIssues`
+     * and only for thread roots / PR-level comments. undefined leaves the status unchanged.
+     */
+    updateDraft(commentId: HostId, body: string, issue?: boolean): Promise<void>;
 
     deleteDraft(commentId: HostId): Promise<void>;
 

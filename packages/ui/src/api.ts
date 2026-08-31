@@ -13,6 +13,8 @@ import type {
     UiOpenInEditorResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
+    UiRouteFillStopRequest,
+    UiRouteFillStopResponse,
     UiRouteGenerateResponse,
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
@@ -37,6 +39,7 @@ import {
     uiReviewRouteResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
+    uiRouteFillStopResponseSchema,
     uiRouteGenerateResponseSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
@@ -85,8 +88,8 @@ export async function saveReviewDraft(token: string, draft: CommentDraft): Promi
     return (await post(UI_ENDPOINTS.reviewSaveDraft, token, { draft }, uiSaveDraftResponseSchema)).comment;
 }
 
-export async function updateReviewDraft(token: string, commentId: string, body: string): Promise<void> {
-    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body }, uiReviewWriteAckSchema);
+export async function updateReviewDraft(token: string, commentId: string, body: string, issue?: boolean): Promise<void> {
+    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body, issue }, uiReviewWriteAckSchema);
 }
 
 export async function deleteReviewDraft(token: string, commentId: string): Promise<void> {
@@ -170,6 +173,20 @@ export async function generateReviewRoute(token: string): Promise<UiRouteGenerat
         token,
         {},
         uiRouteGenerateResponseSchema,
+    );
+    return body.outcome;
+}
+
+/** Fills one failed slot in the current snapshot without rebuilding the entire route. */
+export async function fillRouteStop(
+    token: string,
+    request: UiRouteFillStopRequest,
+): Promise<UiRouteFillStopResponse['outcome']> {
+    const body: UiRouteFillStopResponse = await post(
+        UI_ENDPOINTS.reviewRouteFillStop,
+        token,
+        request,
+        uiRouteFillStopResponseSchema,
     );
     return body.outcome;
 }

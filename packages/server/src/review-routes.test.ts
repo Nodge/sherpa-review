@@ -322,11 +322,11 @@ describe('server review endpoints', () => {
             const updated = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewUpdateDraft,
-                { commentId: created.id, body: 'revised draft' },
+                { commentId: created.id, body: 'edited draft', issue: false },
                 server.token,
             );
             expect(uiReviewWriteAckSchema.parse(await updated.json())).toEqual({ acknowledged: true });
-            expect(update).toHaveBeenCalledWith(created.id, 'revised draft');
+            expect(update).toHaveBeenCalledWith(created.id, 'edited draft', false);
 
             const deleted = await postJson(
                 server.port,
@@ -627,7 +627,7 @@ describe('server review endpoints', () => {
 
     describe('reading progress', () => {
         async function readProgress(server: SherpaServer): Promise<{
-            files: { fileId: string; viewed: boolean; seenRanges: unknown[] }[];
+            files: { fileId: string; viewed: boolean | null; seenRanges: unknown[] }[];
             stops: { stopId: string; viewed: boolean }[];
             progressRevision: number;
         }> {
@@ -676,8 +676,8 @@ describe('server review endpoints', () => {
             expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
             expect(progress.files).toEqual(
                 expect.arrayContaining([
-                    { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
-                    { fileId: 'file-2', viewed: false, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
+                    { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+                    { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
                 ]),
             );
         });
@@ -696,7 +696,7 @@ describe('server review endpoints', () => {
                 { stopId: 's02', viewed: true },
             ]);
             expect(progress.files).toEqual([
-                { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+                { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
             ]);
         });
 
@@ -711,7 +711,7 @@ describe('server review endpoints', () => {
 
             expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
             expect(progress.files).toEqual([
-                { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 5, end: 9 }] },
+                { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 5, end: 9 }] },
             ]);
         });
 

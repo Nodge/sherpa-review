@@ -38,6 +38,7 @@ export interface PrCommentsModalProps {
 /** Human PR-level comments: a list of written comments and a separate composer for a new draft. */
 export function PrCommentsModal({ pr, store, transport, onClose, now, initialLayout }: PrCommentsModalProps) {
     const shortcutRegistry = useShortcutRegistry();
+    const commentIssues = pr.capabilities.commentIssues;
     const [openedAt] = useState(() => now ?? Date.now());
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const prComposer = useComposerSnapshot(store, PR_COMPOSER_KEY);
@@ -63,8 +64,8 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     const listRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        openPrComposer(store);
-    }, [store]);
+        openPrComposer(store, commentIssues);
+    }, [commentIssues, store]);
 
     useEffect(() => {
         shortcutRegistry?.setModalOpen(true);
@@ -157,13 +158,13 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     };
 
     const savedNewComment = useCallback((): void => {
-        openPrComposer(store);
+        openPrComposer(store, commentIssues);
         queueMicrotask(() => {
             if (listRef.current !== null) {
                 listRef.current.scrollTop = 0;
             }
         });
-    }, [store]);
+    }, [commentIssues, store]);
 
     const content = (
         <div
@@ -321,7 +322,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                             type="button"
                             className="pr-comments-modal__composer-entry"
                             onClick={() => {
-                                openPrComposer(store);
+                                openPrComposer(store, commentIssues);
                             }}
                         >
                             <span>Write a comment on the PR…</span>

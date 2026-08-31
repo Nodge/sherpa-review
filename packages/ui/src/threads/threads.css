@@ -531,6 +531,56 @@
     opacity: var(--disabled-opacity);
 }
 
+.thread-composer__issue {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    height: 24px;
+    padding: 0 7px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    background: var(--surface-diff-card);
+    color: var(--text-muted-dim);
+    font: inherit;
+    font-size: var(--font-size-meta);
+    cursor: pointer;
+}
+
+.thread-composer__issue:hover,
+.thread-composer__issue.is-active {
+    border-color: var(--border-strong);
+    background: var(--surface-segment-active);
+    color: var(--text-primary-soft);
+}
+
+.thread-composer__issue:disabled {
+    cursor: default;
+    opacity: var(--disabled-opacity);
+}
+
+.thread-composer__issue-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border: 1px solid var(--checkbox-border);
+    border-radius: var(--radius-mark);
+}
+
+.thread-composer__issue.is-active .thread-composer__issue-box {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+    color: var(--surface-app);
+}
+
+.thread-composer__issue:focus-visible {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 1px;
+}
+
 .thread-composer__status,
 .thread-composer__confirm,
 .thread-composer__notice {

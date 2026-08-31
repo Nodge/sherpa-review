@@ -4,28 +4,41 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { COMPOSER_LAYOUT_KEY } from './composer-markdown.js';
-import { NewCommentComposer, openPrComposer } from './thread-list.tsx';
+import { NewCommentComposer, openNewComposer, openPrComposer, openReply, ThreadList } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mounted: (() => void)[] = [];
 
-function mount(layout?: 'visual' | 'markdown') {
+function mount(
+    layout?: 'visual' | 'markdown',
+    options: { commentIssues?: boolean; kind?: 'pr' | 'line' } = {},
+) {
     if (layout === undefined) {
         localStorage.removeItem(COMPOSER_LAYOUT_KEY);
     } else {
         localStorage.setItem(COMPOSER_LAYOUT_KEY, layout);
     }
-    const store = createThreadStore([], new Set());
-    openPrComposer(store);
+    const store = createThreadStore([], new Set(['f1']));
+    const key = options.kind === 'line' ? 'new:f1:new:10' : 'new:pr';
+    if (options.kind === 'line') {
+        openNewComposer(
+            store,
+            key,
+            { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+            options.commentIssues ?? true,
+        );
+    } else {
+        openPrComposer(store, options.commentIssues ?? true);
+    }
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
     act(() => {
         root.render(
             <NewCommentComposer
-                composerKey="new:pr"
+                composerKey={key}
                 store={store}
                 transport={{
                     save: () => Promise.reject(new Error('test does not save')),
@@ -44,6 +57,55 @@ function mount(layout?: 'visual' | 'markdown') {
     return { host, store };
 }
 
+function mountReply() {
+    const thread = {
+        id: 'thread-1',
+        anchor: null,
+        resolved: false,
+        resolvedBy: null,
+        outdated: false,
+        root: {
+            id: 'root-1',
+            author: { login: 'reviewer', displayName: null, bot: false },
+            body: 'root',
+            draft: false,
+            createdAt: '2026-08-24T10:00:00.000Z',
+            editedAt: null,
+            replies: [],
+        },
+    };
+    const store = createThreadStore([thread], new Set());
+    openReply(store, thread);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    act(() => {
+        root.render(
+            <ThreadList
+                threads={[thread]}
+                store={store}
+                actions={{
+                    transport: {
+                        save: () => Promise.reject(new Error('this test does not save')),
+                        update: () => Promise.resolve(),
+                        delete: () => Promise.resolve(),
+                    },
+                    resolve: () => Promise.resolve(true),
+                }}
+                now={Date.parse('2026-08-24T10:01:00.000Z')}
+                initialLayout="markdown"
+            />,
+        );
+    });
+    mounted.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+    return host;
+}
+
 afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
@@ -52,6 +114,34 @@ afterEach(() => {
 });
 
 describe('comment composer', () => {
+    it('shows the enabled issue control in a PR-level composer', () => {
+        const { host, store } = mount('markdown');
+        const issue = host.querySelector<HTMLButtonElement>('.thread-composer__issue');
+
+        expect(issue?.textContent).toContain('Open an issue');
+        expect(issue?.getAttribute('aria-pressed')).toBe('true');
+
+        act(() => {
+            issue?.click();
+        });
+        expect(store.getComposer('new:pr')?.issue).toBe(false);
+        expect(issue?.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('shows the issue control for a new line comment', () => {
+        const { host } = mount('markdown', { kind: 'line' });
+        expect(host.querySelector('.thread-composer__issue')).not.toBeNull();
+    });
+
+    it('hides the issue control for a host without the capability', () => {
+        const { host } = mount('markdown', { commentIssues: false });
+        expect(host.querySelector('.thread-composer__issue')).toBeNull();
+    });
+
+    it('hides the issue control for replies', () => {
+        expect(mountReply().querySelector('.thread-composer__issue')).toBeNull();
+    });
+
     it('the Markdown toolbar wraps the selection and takes ⌘K from the global shortcut', () => {
         const { host, store } = mount('markdown');
         act(() => {

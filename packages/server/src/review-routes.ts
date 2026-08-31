@@ -78,10 +78,16 @@ export interface ReviewRoutesOptions {
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     const mirrorFileViewed = createViewedMirror(options.host);
-    const updateDraft = createKeyedWriteQueue((commentId: string, body: string) => {
-        const host = hostOf(options);
-        return call(() => host.updateDraft(commentId, body));
-    });
+    const updateDraft = createKeyedWriteQueue(
+        (commentId: string, update: { body: string; issue?: boolean }) => {
+            const host = hostOf(options);
+            return call(() =>
+                update.issue === undefined
+                    ? host.updateDraft(commentId, update.body)
+                    : host.updateDraft(commentId, update.body, update.issue),
+            );
+        },
+    );
     const setThreadResolved = createKeyedWriteQueue((threadId: string, resolved: boolean) => {
         const host = hostOf(options);
         return call(() => host.setThreadResolved(threadId, resolved));
@@ -119,7 +125,10 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             path: UI_ENDPOINTS.reviewUpdateDraft,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(ctx, uiUpdateDraftRequestSchema, 'updating a draft');
-                await updateDraft(request.commentId, request.body);
+                await updateDraft(request.commentId, {
+                    body: request.body,
+                    ...(request.issue === undefined ? {} : { issue: request.issue }),
+                });
                 options.reviewFeed?.bumpLocalWrite();
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),

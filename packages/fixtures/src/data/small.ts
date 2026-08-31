@@ -30,7 +30,7 @@ export function makeSmallFixture(): FixtureData {
             statusLabel: 'waiting_for_review',
             checks: 'pending',
             updatedAt: '2026-08-20T07:18:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true },
+            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true },
         },
         diff: {
             diffId: DIFF_ID,

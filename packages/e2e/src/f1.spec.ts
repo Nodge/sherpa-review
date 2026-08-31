@@ -164,10 +164,9 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         // Review complete counters (README §13) agree with the actions taken by hand.
         await expect(counter(page, 'Stops viewed')).toHaveText('4 of 7');
         await expect(counter(page, 'Comments published')).toHaveText('2 (0 of them replies)');
-        // 88% versus 39% at the start (generated files and the host mark). The difference was recorded by
-        // by exactly four stop marks: if recording seen ranges breaks, the count drops to 39%.
-        // 95 → 88: T7 added 63 documentation lines outside stop anchors to the medium fixture.
-        await expect(counter(page, 'Diff seen')).toHaveText('88% of 862 lines');
+        // 90% versus 39% at the start. The marks on exactly 4 stops account for the difference.
+        // The generated default for psp-schema.ts survives partial coverage by stop s03.
+        await expect(counter(page, 'Diff seen')).toHaveText('90% of 862 lines');
         // "Other" is unmarked, so the line about reading outside the route must be absent.
         await expect(page.getByText('Of it read outside the route', { exact: true })).toHaveCount(0);
     });

@@ -210,6 +210,26 @@ export const uiRouteGenerateResponseSchema = z.object({
 export type UiRouteGenerateResponse = z.infer<typeof uiRouteGenerateResponseSchema>;
 
 /**
+ * Fills one unfilled stop (M2F-T41): the button on the slot marked
+ * "not filled, the agent stopped early" (SPEC §4.3). The stop moves to `queued`,
+ * the phase to `filling`, then normal reconciliation takes over. Full regeneration returns
+ * `already_running` during this time. `snapshotId` prevents a race with snapshot replacement,
+ * since stop ids are not stable across snapshots. `stale_snapshot` means the snapshot changed.
+ * `not_unfilled` means the stop is not `failed` (already filled or already in progress).
+ * `already_running` means the phase is not `ready`.
+ */
+export const uiRouteFillStopRequestSchema = z.object({
+    snapshotId: z.string().min(1),
+    planIndex: z.number().int().positive(),
+});
+export type UiRouteFillStopRequest = z.infer<typeof uiRouteFillStopRequestSchema>;
+
+export const uiRouteFillStopResponseSchema = z.object({
+    outcome: z.enum(['started', 'already_running', 'stale_snapshot', 'not_unfilled']),
+});
+export type UiRouteFillStopResponse = z.infer<typeof uiRouteFillStopResponseSchema>;
+
+/**
  * Sending feedback (M2F-T19): Feedback button in the top bar → project issue.
  * The UI supplies the view and route phase as automatic context (unknown to the server). The server adds the rest
  * (versions, prKey, worker status, login) to the issue itself. Without channel credentials,
@@ -245,10 +265,11 @@ export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
- * tracking. A file record exists only after an explicit reviewer action:
- * `viewed: true` is a manual mark that pins `read` permanently. `viewed: false` is
- * an explicit removal (unpin the generated default or undo a manual mark). A missing
- * record means the default state, interpreted by the UI (generated → `read`).
+ * viewport. `viewed` has 3 values (M2F-T40): `true` is a manual mark that pins `read`
+ * permanently. `false` explicitly clears the mark (unpins the generated default or undoes a manual
+ * mark). `null` means the reviewer has made no choice, the record exists only for
+ * seen ranges. The UI applies defaults as if there were no record
+ * (generated → `read`). A file without a record has the default state.
  *
  * Seen ranges are line ranges covered by manually marked stops
  * (written by `reviewStopViewed`). The UI derives tri-state (`unread`/`partial`/`read`) and
@@ -266,7 +287,7 @@ export type UiSeenRange = z.infer<typeof uiSeenRangeSchema>;
 
 export const uiFileProgressSchema = z.object({
     fileId: hostIdSchema,
-    viewed: z.boolean(),
+    viewed: z.boolean().nullable(),
     seenRanges: z.array(uiSeenRangeSchema),
 });
 export type UiFileProgress = z.infer<typeof uiFileProgressSchema>;
@@ -364,6 +385,8 @@ export type UiSaveDraftResponse = z.infer<typeof uiSaveDraftResponseSchema>;
 export const uiUpdateDraftRequestSchema = z.object({
     commentId: hostIdSchema,
     body: z.string().min(1),
+    /** Changes the draft issue status (M2F-T39). undefined leaves it unchanged. */
+    issue: z.boolean().optional(),
 });
 export type UiUpdateDraftRequest = z.infer<typeof uiUpdateDraftRequestSchema>;
 
@@ -467,6 +490,8 @@ export const UI_ENDPOINTS = {
     reviewRoute: '/api/ui/review/route',
     /** POST without a body → `uiRouteGenerateResponseSchema`. */
     reviewRouteGenerate: '/api/ui/review/route/generate',
+    /** POST `uiRouteFillStopRequestSchema` → `uiRouteFillStopResponseSchema`. */
+    reviewRouteFillStop: '/api/ui/review/route/fill-stop',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */

@@ -90,6 +90,20 @@ describe('FixtureHost', () => {
         expect(Number(inline.id)).toBeGreaterThan(0);
     });
 
+    it('stores issue for a supporting fixture, while edge ignores the flag', async () => {
+        const host = makeFixtureHost('medium');
+        const draft = await host.saveDraft({ body: 'issue', parentId: null, anchor: null, issue: true });
+        expect(host.issueOf(draft.id)).toBe(true);
+
+        await host.updateDraft(draft.id, 'not an issue', false);
+        expect(host.issueOf(draft.id)).toBe(false);
+
+        const edge = makeFixtureHost('edge');
+        const degraded = await edge.saveDraft({ body: 'ignored', parentId: null, anchor: null, issue: true });
+        await edge.updateDraft(degraded.id, 'still ignored', false);
+        expect(edge.issueOf(degraded.id)).toBeUndefined();
+    });
+
     it('a reply to a comment in an existing thread joins its subtree', async () => {
         const host = makeFixtureHost('medium');
         const before = threadsOf(host);

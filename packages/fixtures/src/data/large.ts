@@ -159,7 +159,7 @@ export function makeLargeFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'failed',
             updatedAt: '2026-08-19T11:02:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
         },
         diff: {
             diffId: DIFF_ID,

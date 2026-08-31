@@ -207,6 +207,7 @@ function prepareFailedComposer(store: ThreadStore): void {
         threadId: null,
         parentId: null,
         anchor,
+        issue: true,
         text: 'The remainingMs field misleads the client here.',
         commentId: null,
         status: 'error',

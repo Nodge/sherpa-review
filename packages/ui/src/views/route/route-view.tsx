@@ -130,7 +130,7 @@ export interface RouteViewProps {
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     /** Uncovered fraction exceeds the threshold: App shows "consider regenerating" (SPEC §4.3). */
     readonly onUnderExplained?: (value: boolean) => void;
-    readonly onGenerate?: () => void;
+    readonly onFillStop?: (planIndex: number) => void;
     /** Expose route counts. Only the view computes them, and the action panel and review summary need them. */
     readonly onRouteSummary?: (summary: RouteSummary) => void;
 }
@@ -153,7 +153,7 @@ export function RouteView({
     agentStopped = false,
     navigation = null,
     onUnderExplained,
-    onGenerate,
+    onFillStop,
     onRouteSummary,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
@@ -178,7 +178,7 @@ export function RouteView({
     const threadTransport = useMemo<ComposerTransport>(
         () => ({
             save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body) => updateReviewDraft(token, commentId, body),
+            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
             delete: (commentId) => deleteReviewDraft(token, commentId),
         }),
         [token],
@@ -258,7 +258,7 @@ export function RouteView({
             onResolveThread={resolveThread}
             navigation={target}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
-            {...(onGenerate === undefined ? {} : { onGenerate })}
+            {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
         />
     );
@@ -295,7 +295,7 @@ export interface RouteWorkspaceProps {
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     readonly onUnderExplained?: (value: boolean) => void;
-    readonly onGenerate?: () => void;
+    readonly onFillStop?: (planIndex: number) => void;
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
@@ -318,7 +318,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         progressLoaded = true,
         navigation = null,
         onUnderExplained,
-        onGenerate,
+        onFillStop,
         onRouteSummary,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
@@ -1210,9 +1210,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 line,
             );
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
-            openNewComposer(threadStore, key, { fileId, path: file.path, position });
+            openNewComposer(threadStore, key, { fileId, path: file.path, position }, pr.capabilities.commentIssues);
         },
-        [diff.files, diffSnapshot.models, diffSnapshot.selection, threadStore],
+        [diff.files, diffSnapshot.models, diffSnapshot.selection, pr.capabilities.commentIssues, threadStore],
     );
     useShortcut({
         id: 'thread.commentLine',
@@ -1415,7 +1415,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             onViewed={(value) => {
                                 void markStop(entry.view.stop.id, value);
                             }}
-                            {...(onGenerate === undefined || filling ? {} : { onGenerate })}
+                            {...(onFillStop === undefined || filling ? {} : { onFillStop })}
                             onExpand={() => {
                                 expandStop(entry.view.stop.id);
                             }}
@@ -1500,7 +1500,7 @@ interface StopSectionProps {
     readonly flash: boolean;
     readonly readStateOf: (fileId: string) => ReturnType<typeof readStateOf>;
     readonly onViewed: (viewed: boolean) => void;
-    readonly onGenerate?: () => void;
+    readonly onFillStop?: (planIndex: number) => void;
     readonly onExpand: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
@@ -1531,7 +1531,7 @@ function StopSection({
     flash,
     readStateOf: readState,
     onViewed,
-    onGenerate,
+    onFillStop,
     onExpand,
     onOpenFile,
     onVisible,
@@ -1653,7 +1653,7 @@ function StopSection({
                 parseFailed={parseFailed}
                 filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
-                {...(onGenerate === undefined ? {} : { onGenerate })}
+                {...(onFillStop === undefined ? {} : { onFillStop })}
                 failedViewed={failedViewed}
                 marked={marked}
                 keptInView={keptInView}

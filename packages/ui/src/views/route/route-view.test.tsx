@@ -44,7 +44,7 @@ function render(
         /** Global diff mode (SPEC §2.6): applies to route cards too. */
         mode?: 'unified' | 'split';
         onSetStopViewed?: (stopId: string, viewed: boolean) => Promise<number>;
-        onGenerate?: () => void;
+        onFillStop?: (planIndex: number) => void;
     } = {},
 ): string {
     const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
@@ -82,7 +82,7 @@ function render(
             loadContent={() => Promise.resolve(null)}
             onSetViewed={() => Promise.resolve(0)}
             onSetStopViewed={options.onSetStopViewed ?? (() => Promise.resolve(0))}
-            {...(options.onGenerate === undefined ? {} : { onGenerate: options.onGenerate })}
+            {...(options.onFillStop === undefined ? {} : { onFillStop: options.onFillStop })}
         />,
     );
 }
@@ -319,18 +319,24 @@ describe('route view', () => {
         expect(section(html, 'other')).toContain('kept in view — outside the current filter');
     });
 
-    it('offers regeneration for an unfilled stop only when available', () => {
+    it('an unfilled stop offers filling only when available', () => {
         const snapshot = withStops((stops) =>
             stops.stops.map((stop) =>
                 stop.id === 's01' ? { ...stop, status: 'failed', paragraph: null, bridge: null } : stop,
             ),
         );
-        const available = section(render({ snapshot, onGenerate: () => undefined }), 's01');
+        const fillingSnapshot = {
+            ...snapshot,
+            stops: snapshot.stops.map((stop) => (stop.id === 's02' ? { ...stop, status: 'queued' as const } : stop)),
+        };
+        const available = section(render({ snapshot, onFillStop: () => undefined }), 's01');
         const unavailable = section(render({ snapshot }), 's01');
+        const whileFilling = section(render({ snapshot: fillingSnapshot, onFillStop: () => undefined }), 's01');
 
         expect(available).toContain('Not filled — the agent stopped early');
-        expect(available).toContain('class="route-stop__regenerate">Regenerate</button>');
+        expect(available).toContain('class="route-stop__regenerate">Fill this stop</button>');
         expect(unavailable).not.toContain('route-stop__regenerate');
+        expect(whileFilling).not.toContain('route-stop__regenerate');
     });
 
     it('a stop without anchors shows a dashed card instead of an empty space', () => {
