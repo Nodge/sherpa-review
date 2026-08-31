@@ -48,16 +48,19 @@ export interface FileReadState {
 const GENERATED_NOTE = 'generated — marked read by default';
 
 /**
- * Merge sources. An explicit record takes precedence: `true` pins `read` permanently, `false` removes
- * the pin (including the generated default), then state comes from ranges. Without a record, `read` comes from
- * a host mark, then a generated file. Otherwise state comes from coverage.
+ * Merges sources. `true` pins `read` permanently, `false` explicitly unpins it and leaves
+ * the state to ranges. With `null` or no record, defaults apply: host mark first, then
+ * generated file. Otherwise, state comes from the record's range coverage.
  */
 export function readStateOf(input: ReadStateInput): FileReadState {
     const { file, record } = input;
     const total = file.additions + file.deletions;
 
-    if (record !== null) {
-        return record.viewed ? pinned(total, false) : fromCoverage(record.seenRanges, input.changed, total, false);
+    if (record?.viewed === true) {
+        return pinned(total, false);
+    }
+    if (record?.viewed === false) {
+        return fromCoverage(record.seenRanges, input.changed, total, false);
     }
     if (file.viewed === true) {
         return pinned(total, false);
@@ -65,7 +68,7 @@ export function readStateOf(input: ReadStateInput): FileReadState {
     if (file.generated) {
         return pinned(total, true);
     }
-    return fromCoverage([], input.changed, total, false);
+    return fromCoverage(record?.seenRanges ?? [], input.changed, total, false);
 }
 
 /** Changed model lines: the `changed` input for exact coverage counts. */

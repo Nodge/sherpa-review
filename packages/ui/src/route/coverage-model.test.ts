@@ -204,7 +204,7 @@ describe('read-state from a stop mark', () => {
         expect(seen.length).toBeGreaterThan(5);
     });
 
-    it('clearing a stop mark leaves the file partial from Other ranges', () => {
+    it('clearing a stop mark preserves the generated default for a file with Other ranges', () => {
         const built = model();
         const other = built.entries.find((entry) => entry.kind === 'other');
         const partialGroup = built.entries
@@ -214,18 +214,26 @@ describe('read-state from a stop mark', () => {
             throw new Error('fixture has no file shared between a stop and Other');
         }
 
-        // Both entries were viewed, then the stop mark was cleared. The server removed only its ranges.
+        // The stop and "Other" were viewed. Clearing the stop leaves only "Other"
+        // ranges and no file_progress row. The server returns viewed: null.
         const rest = stopSeenRanges(other)
             .filter((range) => range.fileId === partialGroup.fileId)
             .map(({ side, start, end }) => ({ side, start, end }));
         const state = readStateOf({
             file: partialGroup.file,
-            record: { fileId: partialGroup.fileId, viewed: false, seenRanges: rest },
+            record: { fileId: partialGroup.fileId, viewed: null, seenRanges: rest },
             changed: changedOf(partialGroup.fileId),
         });
 
-        expect(state.state).toBe('partial');
-        expect(state.seen).toBe(rest.reduce((total, range) => total + (range.end - range.start + 1), 0));
+        expect(partialGroup.file.path).toBe('services/orders/src/payments/generated/psp-schema.ts');
+        expect(rest.length).toBeGreaterThan(0);
+        expect(state).toMatchObject({
+            state: 'read',
+            seen: partialGroup.file.additions + partialGroup.file.deletions,
+            pinned: true,
+            generatedDefault: true,
+        });
+        expect(state.tooltip).toContain('generated file — read by default');
     });
 });
 

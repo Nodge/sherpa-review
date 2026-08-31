@@ -9,7 +9,7 @@ import { changedLinesOf, readStateOf } from './read-state.js';
 
 const PLAIN: ReadStateFile = { generated: false, viewed: null, additions: 40, deletions: 20 };
 
-function record(viewed: boolean, seenRanges: UiSeenRange[] = []): UiFileProgress {
+function record(viewed: boolean | null, seenRanges: UiSeenRange[] = []): UiFileProgress {
     return { fileId: 'f', viewed, seenRanges };
 }
 
@@ -46,12 +46,36 @@ describe('file read-state', () => {
         expect(state.tooltip).toBe('generated — marked read by default · 60 of 60 changed lines seen');
     });
 
+    it('preserves the generated default for a seen-only record', () => {
+        const state = readStateOf({
+            file: { ...PLAIN, generated: true },
+            record: record(null, [{ side: 'new', start: 1, end: 3 }]),
+        });
+
+        expect(state).toMatchObject({
+            state: 'read',
+            seen: 60,
+            pinned: true,
+            generatedDefault: true,
+        });
+    });
+
     it('gives records precedence over defaults for an unmarked generated file and host marks', () => {
         expect(readStateOf({ file: { ...PLAIN, generated: true }, record: record(false) })).toMatchObject({
             state: 'unread',
             generatedDefault: false,
         });
         expect(readStateOf({ file: { ...PLAIN, viewed: true }, record: record(false) }).state).toBe('unread');
+    });
+
+    it('calculates state from ranges for a regular file with a seen-only record', () => {
+        const state = readStateOf({
+            file: { generated: false, viewed: null, additions: 3, deletions: 2 },
+            record: record(null, [{ side: 'new', start: 20, end: 21 }]),
+            changed: { old: new Set([10, 11]), new: new Set([20, 21, 22]) },
+        });
+
+        expect(state).toMatchObject({ state: 'partial', seen: 2, total: 5, pinned: false });
     });
 
     it('returns partial for some range coverage and read for full coverage', () => {

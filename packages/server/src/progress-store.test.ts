@@ -113,7 +113,7 @@ describe('reading progress store', () => {
 
         expect(store.read()).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [{ side: 'new', start: 10, end: 20 }] },
-            { fileId: 'file-2', viewed: false, seenRanges: [{ side: 'old', start: 1, end: 3 }] },
+            { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'old', start: 1, end: 3 }] },
         ]);
     });
 
@@ -130,8 +130,8 @@ describe('reading progress store', () => {
         const restarted = new ProgressStore({ db: open() });
         expect(restarted.readStops()).toEqual([{ stopId: 's01', viewed: true }]);
         expect(restarted.read()).toEqual([
-            { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
-            { fileId: 'file-2', viewed: false, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
+            { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+            { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
         ]);
     });
 
@@ -217,7 +217,7 @@ describe('reading progress store', () => {
         expect(store.read()).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [] },
             // A range not belonging to a stop survives cleanup.
-            { fileId: 'file-9', viewed: false, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
+            { fileId: 'file-9', viewed: null, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
         ]);
         // Nothing to clear, so the revision stays the same.
         expect(store.clearStopProgress()).toBe(revision);

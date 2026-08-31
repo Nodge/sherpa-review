@@ -80,8 +80,8 @@ export class ProgressStore {
     }
 
     /**
-     * All PR progress. A file with only ranges (M2) arrives with `viewed: false`:
-     * it has no pin, and the UI calculates its state from ranges.
+     * All PR progress. A file with only ranges (M2) arrives with `viewed: null`:
+     * the reviewer has made no decision, so the UI applies defaults and counts ranges as needed.
      */
     read(): UiFileProgress[] {
         const ranges = new Map<string, UiSeenRange[]>();
@@ -104,7 +104,7 @@ export class ProgressStore {
         const marked = new Set(files.map((file) => file.fileId));
         for (const [fileId, seenRanges] of ranges) {
             if (!marked.has(fileId)) {
-                files.push({ fileId, viewed: false, seenRanges });
+                files.push({ fileId, viewed: null, seenRanges });
             }
         }
         return files;

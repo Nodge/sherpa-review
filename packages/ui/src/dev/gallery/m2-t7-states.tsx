@@ -99,7 +99,7 @@ function ViewedRouteState({ stopIds, auto = false }: { stopIds: readonly string[
                 if (skipped.has(range.fileId)) {
                     continue;
                 }
-                const record = byFile.get(range.fileId) ?? { fileId: range.fileId, viewed: false, seenRanges: [] };
+                const record = byFile.get(range.fileId) ?? { fileId: range.fileId, viewed: null, seenRanges: [] };
                 byFile.set(range.fileId, {
                     ...record,
                     seenRanges: [...record.seenRanges, { side: range.side, start: range.start, end: range.end }],
