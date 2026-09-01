@@ -250,6 +250,9 @@ export function describeReviewHostContract(
                 ...(supportsIssues ? { issue: true } : {}),
             });
             expect(created.draft).toBe(true);
+            // `null` is only for hosts without issue support. Where issues exist, "unknown" is not a valid state, and the UI
+            // renders a disabled toggle instead of hiding it.
+            expect(created.issue).toBe(supportsIssues ? true : null);
 
             await waitFreshSnapshot(
                 feed,
@@ -272,6 +275,7 @@ export function describeReviewHostContract(
                 () => findInThreads(lastSnapshot(feed), created.id)?.body === 'contract draft, edited',
                 'draft edit in the new snapshot',
             );
+            expect(findInThreads(lastSnapshot(feed), created.id)?.issue).toBe(supportsIssues ? false : null);
 
             seen = feed.snapshots.length;
             await host.deleteDraft(created.id);

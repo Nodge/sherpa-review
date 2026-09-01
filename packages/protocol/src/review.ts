@@ -143,8 +143,9 @@ export interface Comment {
     draft: boolean;
     /**
      * Whether the comment opens an issue, the same flag set by `CommentDraft.issue`.
-     * `null` means no status: the host does not distinguish issues (`capabilities.commentIssues === false`),
-     * or this is a thread reply, or the comment was created outside Sherpa and has no status.
+     * `null` only for hosts without `capabilities.commentIssues`. Where issues exist, "unknown" is not a state.
+     * A comment without an issue status does not open an issue, and the UI shows the toggle switched off
+     * instead of hiding it.
      */
     issue: boolean | null;
     createdAt: string;

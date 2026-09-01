@@ -82,6 +82,22 @@ function collectDrafts(comment: Comment, into: Comment[]): void {
     }
 }
 
+/**
+ * Contract invariant: `Comment.issue === null` occurs only for hosts without `commentIssues`.
+ * Fixture constructors omit status by default. The host sets its own on input.
+ */
+function normalizeIssues(threads: readonly Thread[], fallback: boolean | null): void {
+    const walk = (comment: Comment): void => {
+        comment.issue = fallback === null ? null : (comment.issue ?? false);
+        for (const reply of comment.replies) {
+            walk(reply);
+        }
+    };
+    for (const thread of threads) {
+        walk(thread.root);
+    }
+}
+
 /** Status label after an applied verdict, in the host's words as displayed by the review host. */
 function statusLabelFor(verdict: Verdict): string {
     return verdict === 'request_changes' ? 'needs_work' : 'shipped';
@@ -107,6 +123,9 @@ export class FixtureHost implements ReviewHost {
     constructor(name: FixtureName, options: FixtureHostOptions = {}) {
         this.data = fixtureData(name);
         this.failPublishFor = new Set(options.failPublishFor ?? []);
+        // Fixture data usually leaves issue status unset. The contract invariant is enforced here so
+        // every comment in every data file does not need manual annotation.
+        normalizeIssues(this.data.threads, this.issueOfNewComment());
 
         if (this.data.pr.capabilities.fileViewedSync) {
             this.setFileViewed = (fileId, viewed) => this.applyFileViewed(fileId, viewed);
@@ -313,11 +332,16 @@ export class FixtureHost implements ReviewHost {
             author: structuredClone(this.data.currentUser),
             body,
             draft: true,
-            issue: null,
+            issue: this.issueOfNewComment(),
             createdAt,
             editedAt: null,
             replies: [],
         };
+    }
+
+    /** Initial comment issue status: `null` means the fixture host does not distinguish issues at all. */
+    private issueOfNewComment(): boolean | null {
+        return this.data.pr.capabilities.commentIssues ? false : null;
     }
 
     private nextTimestamp(): string {

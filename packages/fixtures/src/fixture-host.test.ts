@@ -98,6 +98,10 @@ describe('FixtureHost', () => {
         await host.updateDraft(draft.id, 'not an issue', false);
         expect(host.issueOf(draft.id)).toBe(false);
 
+        // A draft without the flag is not an issue, rather than "status unknown". `null` occurs only in edge.
+        const plain = await host.saveDraft({ body: 'plain', parentId: null, anchor: null });
+        expect(host.issueOf(plain.id)).toBe(false);
+
         const edge = makeFixtureHost('edge');
         const degraded = await edge.saveDraft({ body: 'ignored', parentId: null, anchor: null, issue: true });
         await edge.updateDraft(degraded.id, 'still ignored', false);

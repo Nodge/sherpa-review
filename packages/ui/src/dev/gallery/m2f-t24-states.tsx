@@ -67,7 +67,8 @@ function thread(id: string, body: string, draft: boolean, createdAt: string): Th
             author: AUTHOR,
             body,
             draft,
-            issue: null,
+            // The medium fixture supports issue: a comment without it has the status off, not absent.
+            issue: false,
             createdAt,
             editedAt: null,
             replies: [],
