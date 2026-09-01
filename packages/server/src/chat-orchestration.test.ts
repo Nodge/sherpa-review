@@ -1,4 +1,5 @@
 import fsSync from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import type { ChatAnchor, TaskCompleteResponse, UiChatResponse } from '@sherpa/protocol';
@@ -97,7 +98,7 @@ describe('chat and notes', () => {
         return server.queue.complete(WORKER, taskId, answer);
     }
 
-    it('ask atomically creates a queued exchange and an interactive task with a minimal payload', async () => {
+    it('ask atomically creates a queued exchange and an interactive task with the full payload', async () => {
         const server = await start();
         const exchange = await ask(server, 'Explain the write order', ANCHOR);
         const [task] = server.queue.listTasks();
@@ -105,9 +106,18 @@ describe('chat and notes', () => {
         expect(exchange).toMatchObject({ status: 'queued', answer: null, anchor: ANCHOR });
         expect(task).toMatchObject({ type: 'chat', priority: 'interactive', status: 'queued' });
         expect(Buffer.byteLength(task?.instructions ?? '', 'utf8')).toBeLessThan(500);
-        expect(task?.contextFiles).toHaveLength(1);
-        expect(task?.contextFiles[0]?.startsWith(chatPayloadDirOf(sherpaDir, LOCAL_PR))).toBe(true);
-        expect(fsSync.readFileSync(task?.contextFiles[0] ?? '', 'utf8')).toContain('Explain the write order');
+        expect(task?.contextFiles.map((file) => path.basename(file))).toEqual([
+            'chat-guide.md',
+            'question.md',
+            'selection.patch.md',
+            'file-context.md',
+            'route-context.md',
+            'history.md',
+        ]);
+        expect(task?.contextFiles.every((file) => file.startsWith(chatPayloadDirOf(sherpaDir, LOCAL_PR)))).toBe(
+            true,
+        );
+        expect(fsSync.readFileSync(task?.contextFiles[1] ?? '', 'utf8')).toContain('Explain the write order');
         expect((await readChat(server)).exchanges).toEqual([exchange]);
     });
 

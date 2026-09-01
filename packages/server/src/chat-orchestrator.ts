@@ -1,6 +1,9 @@
 import type {
     ChatAnchor,
     ChatExchange,
+    FileContent,
+    PrDiff,
+    PrMeta,
     ReviewHost,
     UiChatCancelResponse,
     UiChatRetryResponse,
@@ -9,10 +12,12 @@ import type {
 import { buildChatPayload, materializeChatPayload } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
 import type { TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
+import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
 
 export interface ChatOrchestratorOptions {
     readonly store: ChatStore;
+    readonly route: RouteStore;
     readonly queue: TaskQueue;
     readonly host: ReviewHost | null;
     readonly payloadDir: string;
@@ -24,6 +29,7 @@ export interface ChatOrchestratorOptions {
  */
 export class ChatOrchestrator {
     private readonly store: ChatStore;
+    private readonly route: RouteStore;
     private readonly queue: TaskQueue;
     private readonly host: ReviewHost | null;
     private readonly payloadDir: string;
@@ -35,6 +41,7 @@ export class ChatOrchestrator {
 
     constructor(options: ChatOrchestratorOptions) {
         this.store = options.store;
+        this.route = options.route;
         this.queue = options.queue;
         this.host = options.host;
         this.payloadDir = options.payloadDir;
@@ -53,10 +60,18 @@ export class ChatOrchestrator {
     }
 
     async ask(question: string, anchor: ChatAnchor | null): Promise<ChatExchange> {
-        const context = await this.loadPrContext();
+        const context = await this.loadPrContext(anchor);
         const input = await materializeChatPayload(
             this.payloadDir,
-            buildChatPayload(question, anchor, context.pr),
+            buildChatPayload({
+                question,
+                anchor,
+                pr: context.pr,
+                diff: context.diff,
+                fileContent: context.fileContent,
+                route: this.route.read(),
+                history: this.store.read().exchanges,
+            }),
         );
         return this.store.ask(question, anchor, context.headCommit, () => this.queue.enqueueInTransaction(input));
     }
@@ -80,10 +95,18 @@ export class ChatOrchestrator {
             return 'noop';
         }
 
-        const context = await this.loadPrContext();
+        const context = await this.loadPrContext(stored.exchange.anchor);
         const input = await materializeChatPayload(
             this.payloadDir,
-            buildChatPayload(stored.exchange.question, stored.exchange.anchor, context.pr),
+            buildChatPayload({
+                question: stored.exchange.question,
+                anchor: stored.exchange.anchor,
+                pr: context.pr,
+                diff: context.diff,
+                fileContent: context.fileContent,
+                route: this.route.read(),
+                history: this.store.read().exchanges,
+            }),
         );
         return this.store.retry(exchangeId, context.headCommit, () => this.queue.enqueueInTransaction(input))
             ? 'retried'
@@ -217,13 +240,19 @@ export class ChatOrchestrator {
         }
     }
 
-    private async loadPrContext(): Promise<{ pr: Awaited<ReturnType<ReviewHost['getPr']>> | null; headCommit: string | null }> {
+    private async loadPrContext(anchor: ChatAnchor | null): Promise<{
+        pr: PrMeta | null;
+        diff: PrDiff | null;
+        fileContent: FileContent | null;
+        headCommit: string | null;
+    }> {
         const host = this.host;
         if (host === null) {
-            return { pr: null, headCommit: null };
+            return { pr: null, diff: null, fileContent: null, headCommit: null };
         }
 
-        const [pr, diff] = await Promise.all([
+        const getFileContent = host.getFileContent?.bind(host);
+        const [pr, diff, fileContent] = await Promise.all([
             host.getPr().then(
                 (value) => value,
                 () => null,
@@ -232,8 +261,14 @@ export class ChatOrchestrator {
                 (value) => value,
                 () => null,
             ),
+            anchor === null || getFileContent === undefined
+                ? Promise.resolve(null)
+                : getFileContent(anchor.fileId).then(
+                      (value) => value,
+                      () => null,
+                  ),
         ]);
-        return { pr, headCommit: diff?.headCommit ?? null };
+        return { pr, diff, fileContent, headCommit: diff?.headCommit ?? null };
     }
 }
 

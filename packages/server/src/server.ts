@@ -235,6 +235,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
         const chatOrchestrator = new ChatOrchestrator({
             store: chatStore,
+            route: routeStore,
             queue,
             host: reviewHost?.host ?? null,
             payloadDir: chatPayloadDirOf(sherpaDir, prKey),
