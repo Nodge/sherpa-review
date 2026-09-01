@@ -1,5 +1,6 @@
 import { makeFixtureHost } from '@sherpa/fixtures';
 import {
+    PROTOCOL_VERSION,
     rpcErrorSchema,
     UI_ENDPOINTS,
     uiFeedbackResponseSchema,
@@ -91,7 +92,7 @@ describe('feedback channel', () => {
             summary: '[Sherpa] Publication status is not visible',
         });
         expect(body.description).toContain('Publication status is not visible\nProblem details.');
-        expect(body.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol 0.6.0`);
+        expect(body.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol ${PROTOCOL_VERSION}`);
         expect(body.description).toContain('PR: fixture-medium');
         expect(body.description).toContain('View: overview');
         expect(body.description).toContain('Route phase: ready');

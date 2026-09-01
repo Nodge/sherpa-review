@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    agentNoteSchema,
+    chatExchangeSchema,
     commentDraftSchema,
     commentSchema,
     generateJsonSchemas,
@@ -17,6 +19,7 @@ import {
     taskCompleteResponseSchema,
     taskSchema,
     threadSchema,
+    uiChatAskRequestSchema,
     workerNextRequestSchema,
     workerNextResponseSchema,
 } from './index.js';
@@ -54,14 +57,15 @@ describe('task and lease', () => {
     });
 
     it('fails closed: rejects unknown types, zero attempts and empty instructions', () => {
-        expect(taskSchema.safeParse({ ...validTask, type: 'chat' }).success).toBe(false);
+        expect(taskSchema.safeParse({ ...validTask, type: 'regenerate.skeleton' }).success).toBe(false);
         expect(taskSchema.safeParse({ ...validTask, attempt: 0 }).success).toBe(false);
         expect(taskSchema.safeParse({ ...validTask, instructions: '' }).success).toBe(false);
     });
 
-    it('M2 generation types are valid', () => {
+    it('M2 generative types and chat (M3) are valid', () => {
         expect(taskSchema.safeParse({ ...validTask, type: 'route.skeleton' }).success).toBe(true);
         expect(taskSchema.safeParse({ ...validTask, type: 'route.section' }).success).toBe(true);
+        expect(taskSchema.safeParse({ ...validTask, type: 'chat' }).success).toBe(true);
     });
 
     it('waitSeconds in next: optional, integer, within sane bounds', () => {
@@ -277,6 +281,52 @@ describe('route (M2)', () => {
             contentHash: null,
         };
         expect(routeSnapshotSchema.parse(snapshot)).toEqual(snapshot);
+    });
+});
+
+describe('chat and notes (M3)', () => {
+    const anchor = { fileId: 'f1', path: 'src/order_service.py', side: 'new', start: 148, end: 151 };
+    const exchange = {
+        id: 1,
+        question: 'why is the cache invalidated before the write here?',
+        anchor,
+        status: 'done',
+        answer: 'The order is preserved from the old implementation: …',
+        progressText: null,
+        error: null,
+        createdAt: '2026-09-01T12:00:00.000Z',
+        updatedAt: '2026-09-01T12:01:00.000Z',
+    };
+
+    it('exchange: with and without an anchor (Ask AI about the PR), all lifecycle statuses', () => {
+        expect(chatExchangeSchema.parse(exchange)).toEqual(exchange);
+        expect(chatExchangeSchema.safeParse({ ...exchange, anchor: null }).success).toBe(true);
+        for (const status of ['queued', 'running', 'done', 'failed', 'cancelled']) {
+            expect(chatExchangeSchema.safeParse({ ...exchange, status }).success).toBe(true);
+        }
+        expect(chatExchangeSchema.safeParse({ ...exchange, status: 'streaming' }).success).toBe(false);
+        expect(chatExchangeSchema.safeParse({ ...exchange, question: '' }).success).toBe(false);
+    });
+
+    it('note: anchor is required, commit allows null', () => {
+        const note = {
+            id: 7,
+            exchangeId: 1,
+            anchor,
+            text: 'The order is preserved from the old implementation: …',
+            commit: null,
+            createdAt: '2026-09-01T12:01:00.000Z',
+        };
+        expect(agentNoteSchema.parse(note)).toEqual(note);
+        expect(agentNoteSchema.safeParse({ ...note, anchor: null }).success).toBe(false);
+        expect(agentNoteSchema.safeParse({ ...note, text: '' }).success).toBe(false);
+    });
+
+    it('ask: rejects empty and overlong questions, anchor is optional', () => {
+        expect(uiChatAskRequestSchema.safeParse({ text: 'question' }).success).toBe(true);
+        expect(uiChatAskRequestSchema.safeParse({ text: 'question', anchor }).success).toBe(true);
+        expect(uiChatAskRequestSchema.safeParse({ text: '' }).success).toBe(false);
+        expect(uiChatAskRequestSchema.safeParse({ text: 'x'.repeat(4001) }).success).toBe(false);
     });
 });
 

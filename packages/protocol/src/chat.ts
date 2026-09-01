@@ -1,0 +1,85 @@
+import { z } from 'zod';
+
+import { hostIdSchema } from './review.js';
+
+/**
+ * Chat with the agent and agent notes (M3, brief F2). Domain schemas. Endpoints and SSE are in `ui.ts`.
+ *
+ * The data model is an exchange (question + answer in one record), not a message feed: status
+ * lives in one place, an "answer without a question" is unrepresentable, and cancel/retry address one
+ * entity. The UI expands an exchange into a feed of two messages (you/agent, handoff README §4)
+ * (you/agent, `docs/design/README.md §4`).
+ */
+
+/**
+ * Question and note anchor: a line range on one side of a diff file (shaped like a
+ * route stop anchor). `path` duplicates `fileId` for the chip label
+ * ("order_service.py:148–151") and for when the file leaves the diff (M4):
+ * the label survives a failed resolution.
+ */
+export const chatAnchorSchema = z.object({
+    fileId: hostIdSchema,
+    path: z.string().min(1),
+    side: z.enum(['old', 'new']),
+    /** Inclusive, with `end >= start`. Uses file line numbers on the corresponding side. */
+    start: z.number().int().positive(),
+    end: z.number().int().positive(),
+});
+export type ChatAnchor = z.infer<typeof chatAnchorSchema>;
+
+/**
+ * Exchange lifecycle. `queued` means the task is waiting for a worker (including while
+ * a route is being generated, the queue is accurate, SPEC §2.18). `running` means the worker took
+ * the task. Terminal states: `done` means the answer was accepted. `failed` means an error or exhausted
+ * attempts, the question is preserved (SPEC §3), `retry` enqueues a new task. `cancelled` means
+ * the reviewer stopped it (a worker busy with a cancelled task learns about cancellation on
+ * its next CLI call, rpc-design §5, and the UI accurately shows "agent still busy").
+ */
+export const chatExchangeStatusSchema = z.enum(['queued', 'running', 'done', 'failed', 'cancelled']);
+export type ChatExchangeStatus = z.infer<typeof chatExchangeStatusSchema>;
+
+export const chatExchangeIdSchema = z.number().int().positive();
+export type ChatExchangeId = z.infer<typeof chatExchangeIdSchema>;
+
+export const chatExchangeSchema = z.object({
+    id: chatExchangeIdSchema,
+    /** Reviewer question as entered (plain text). */
+    question: z.string().min(1),
+    /** null means a question about the whole PR (Ask AI), not a selection. */
+    anchor: chatAnchorSchema.nullable(),
+    status: chatExchangeStatusSchema,
+    /** Markdown, only when `done`, otherwise null. No token streaming, it arrives in full (rpc-design §6). */
+    answer: z.string().nullable(),
+    /** Latest `task progress` line, only for `running`, otherwise null. */
+    progressText: z.string().nullable(),
+    /** Reason readable by the reviewer, only for `failed`, otherwise null. */
+    error: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+});
+export type ChatExchange = z.infer<typeof chatExchangeSchema>;
+
+/**
+ * Agent note beside code (SPEC §2.16): the server pins an accepted answer to an anchored question
+ * as a note in the same transaction. It is local and never reaches the review backend.
+ * `text` copies the answer: the note is self-contained, and lives and is deleted
+ * independently of chat history. The UI derives the exchange's "pinned as a note" mark
+ * by looking up `exchangeId`, so deleting the note clears the mark automatically.
+ */
+export const agentNoteIdSchema = z.number().int().positive();
+export type AgentNoteId = z.infer<typeof agentNoteIdSchema>;
+
+export const agentNoteSchema = z.object({
+    id: agentNoteIdSchema,
+    exchangeId: chatExchangeIdSchema,
+    anchor: chatAnchorSchema,
+    /** Markdown copy of the accepted answer. */
+    text: z.string().min(1),
+    /**
+     * Diff head commit at creation time, to prepare for anchor migration after a new
+     * push (M4). Not interpreted in M3. null means the server could not determine the commit.
+     */
+    commit: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+});
+export type AgentNote = z.infer<typeof agentNoteSchema>;

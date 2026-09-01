@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { agentNoteIdSchema, agentNoteSchema, chatAnchorSchema, chatExchangeIdSchema, chatExchangeSchema } from './chat.js';
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
 import {
@@ -230,6 +231,57 @@ export const uiRouteFillStopResponseSchema = z.object({
 export type UiRouteFillStopResponse = z.infer<typeof uiRouteFillStopResponseSchema>;
 
 /**
+ * Chat with the agent and notes (M3, domain schemas in `chat.ts`). History uses a separate
+ * endpoint instead of `uiState` (it grows without bounds). SSE event
+ * `UI_CHAT_EVENT` signals changes with a revision. `ask` returns the created exchange (as with `saveDraft`,
+ * the UI needs the id immediately for cancel and the popover's in-flight indicator). Later status updates
+ * arrive over SSE. Only the server enqueues the `chat` task, since it needs
+ * materialized context (as when `enqueue` was narrowed to `echo`).
+ */
+export const uiChatResponseSchema = z.object({
+    exchanges: z.array(chatExchangeSchema),
+    notes: z.array(agentNoteSchema),
+    chatRevision: z.number().int().min(0),
+});
+export type UiChatResponse = z.infer<typeof uiChatResponseSchema>;
+
+export const uiChatAskRequestSchema = z.object({
+    text: z.string().min(1).max(4000),
+    /** If absent, the question concerns the entire PR (Ask AI). */
+    anchor: chatAnchorSchema.optional(),
+});
+export type UiChatAskRequest = z.infer<typeof uiChatAskRequestSchema>;
+
+export const uiChatAskResponseSchema = z.object({ exchange: chatExchangeSchema });
+export type UiChatAskResponse = z.infer<typeof uiChatAskResponseSchema>;
+
+/**
+ * Stop an exchange ("Stop", SPEC §2.18). `cancelled` applies to both queued
+ * and leased exchanges, a formal cancellation the worker learns of on its next CLI call
+ * (rpc-design §5). `noop` means the exchange is already terminal.
+ */
+export const uiChatCancelRequestSchema = z.object({ exchangeId: chatExchangeIdSchema });
+export type UiChatCancelRequest = z.infer<typeof uiChatCancelRequestSchema>;
+
+export const uiChatCancelResponseSchema = z.object({ outcome: z.enum(['cancelled', 'noop']) });
+export type UiChatCancelResponse = z.infer<typeof uiChatCancelResponseSchema>;
+
+/**
+ * Retry a question from `failed` or `cancelled` (SPEC §2.18: question preserved): the same
+ * exchange returns to `queued`, and a new task is enqueued with the same text and anchor.
+ * `noop` means the exchange is not in a terminal failure state (`done` cannot be retried).
+ */
+export const uiChatRetryRequestSchema = z.object({ exchangeId: chatExchangeIdSchema });
+export type UiChatRetryRequest = z.infer<typeof uiChatRetryRequestSchema>;
+
+export const uiChatRetryResponseSchema = z.object({ outcome: z.enum(['retried', 'noop']) });
+export type UiChatRetryResponse = z.infer<typeof uiChatRetryResponseSchema>;
+
+/** Delete a note (SPEC §2.16). Leaves chat history intact. Repeated deletion is a no-op, also ack. */
+export const uiChatNoteDeleteRequestSchema = z.object({ noteId: agentNoteIdSchema });
+export type UiChatNoteDeleteRequest = z.infer<typeof uiChatNoteDeleteRequestSchema>;
+
+/**
  * Sending feedback (M2F-T19): Feedback button in the top bar → project issue.
  * The UI supplies the view and route phase as automatic context (unknown to the server). The server adds the rest
  * (versions, prKey, worker status, login) to the issue itself. Without channel credentials,
@@ -447,6 +499,15 @@ export const uiRouteEventSchema = z.object({
 export type UiRouteEvent = z.infer<typeof uiRouteEventSchema>;
 
 /**
+ * "Chat/notes changed" event (exchange status, answer, note). The UI rereads
+ * the `reviewChat` endpoint. Revision semantics match `uiReviewEventSchema`.
+ */
+export const uiChatEventSchema = z.object({
+    chatRevision: z.number().int().min(0),
+});
+export type UiChatEvent = z.infer<typeof uiChatEventSchema>;
+
+/**
  * UI channel endpoints. All require a bearer token except `events`: EventSource does not support
  * headers, so the SSE endpoint accepts the token in the `?token=` query parameter (localhost, own logs).
  * Review endpoints return the `no_review_host` error when `reviewHost: null`.
@@ -458,7 +519,7 @@ export const UI_ENDPOINTS = {
     enqueue: '/api/ui/tasks',
     /** POST `uiCancelRequestSchema` → `uiCancelResponseSchema`. */
     cancel: '/api/ui/tasks/cancel',
-    /** GET, SSE: `state` (`uiStateSchema`), `review`, `progress`, `route` events (revisions). */
+    /** GET, SSE: `state` (`uiStateSchema`), `review`, `progress`, `route`, `chat` events (revisions). */
     events: '/api/ui/events',
     /** GET → `uiReviewDiffResponseSchema` (active host iteration). */
     reviewDiff: '/api/ui/review/diff',
@@ -492,6 +553,16 @@ export const UI_ENDPOINTS = {
     reviewRouteGenerate: '/api/ui/review/route/generate',
     /** POST `uiRouteFillStopRequestSchema` → `uiRouteFillStopResponseSchema`. */
     reviewRouteFillStop: '/api/ui/review/route/fill-stop',
+    /** GET → `uiChatResponseSchema`. */
+    reviewChat: '/api/ui/review/chat',
+    /** POST `uiChatAskRequestSchema` → `uiChatAskResponseSchema`. */
+    reviewChatAsk: '/api/ui/review/chat/ask',
+    /** POST `uiChatCancelRequestSchema` → `uiChatCancelResponseSchema`. */
+    reviewChatCancel: '/api/ui/review/chat/cancel',
+    /** POST `uiChatRetryRequestSchema` → `uiChatRetryResponseSchema`. */
+    reviewChatRetry: '/api/ui/review/chat/retry',
+    /** POST `uiChatNoteDeleteRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewChatNoteDelete: '/api/ui/review/chat/note-delete',
     /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
     openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
@@ -509,3 +580,6 @@ export const UI_PROGRESS_EVENT = 'progress';
 
 /** SSE event name for route changes (`uiRouteEventSchema`). */
 export const UI_ROUTE_EVENT = 'route';
+
+/** SSE event name for chat and note changes (`uiChatEventSchema`). */
+export const UI_CHAT_EVENT = 'chat';

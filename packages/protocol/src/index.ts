@@ -2,6 +2,7 @@
  * C1↔C2 contract (rpc-design §3–§5, §9, spec §5).
  * Zod schemas are canonical. Types are inferred from them, JSON schemas are generated from them.
  */
+export * from './chat.js';
 export * from './constants.js';
 export * from './json-schema.js';
 export * from './manifest.js';
