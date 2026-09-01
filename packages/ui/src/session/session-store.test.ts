@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSessionStore, DEFAULT_THREADS_SHOW, EMPTY_STOPS, parsePreset } from './session-store.js';
+import {
+    createSessionStore,
+    DEFAULT_THREADS_SHOW,
+    EMPTY_NOTE_STACKS_EXPANDED,
+    EMPTY_NOTES_EXPANDED,
+    EMPTY_STOPS,
+    isNoteExpanded,
+    isNoteStackExpanded,
+    parsePreset,
+} from './session-store.js';
 import { DEFAULT_VIEW, parseViewId } from './views.js';
 
 describe('session store', () => {
@@ -31,6 +40,8 @@ describe('session store', () => {
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,
+            notesExpanded: EMPTY_NOTES_EXPANDED,
+            noteStacksExpanded: EMPTY_NOTE_STACKS_EXPANDED,
             stops: EMPTY_STOPS,
         });
     });
@@ -103,6 +114,8 @@ describe('session store', () => {
                     threadsShow: DEFAULT_THREADS_SHOW,
                     paletteOpen: false,
                     chatOpen: false,
+                    notesExpanded: EMPTY_NOTES_EXPANDED,
+                    noteStacksExpanded: EMPTY_NOTE_STACKS_EXPANDED,
                     stops: EMPTY_STOPS,
                 },
             ],
@@ -132,6 +145,8 @@ describe('session store', () => {
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,
+            notesExpanded: EMPTY_NOTES_EXPANDED,
+            noteStacksExpanded: EMPTY_NOTE_STACKS_EXPANDED,
             stops: EMPTY_STOPS,
         };
 
@@ -156,6 +171,39 @@ describe('session store', () => {
 
         expect(store.getSnapshot().chatOpen).toBe(true);
         expect(persist).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares note expansion between both views and keeps it only in the session', () => {
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(false);
+        store.toggleNoteExpanded(31);
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(true);
+
+        store.setView('diff');
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(true);
+        store.expandNote(31);
+        expect(store.getSnapshot().notesExpanded).toEqual(new Set(['31']));
+
+        store.toggleNoteExpanded(31);
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(false);
+    });
+
+    it('preserves stack expansion across view changes and closes its notes when collapsed', () => {
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+        const stackKey = 'file-1:new:41:43';
+
+        store.setNoteStackExpanded(stackKey, true);
+        store.expandNote(31);
+        store.setView('diff');
+
+        expect(isNoteStackExpanded(store.getSnapshot(), stackKey)).toBe(true);
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(true);
+
+        store.collapseNoteStack(stackKey, [31, 32]);
+
+        expect(isNoteStackExpanded(store.getSnapshot(), stackKey)).toBe(false);
+        expect(isNoteExpanded(store.getSnapshot(), 31)).toBe(false);
     });
 
     it('preserves previous expansion when clearing a stop mark but removes temporary expansion', () => {

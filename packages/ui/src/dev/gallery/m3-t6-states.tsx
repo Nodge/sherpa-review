@@ -134,6 +134,7 @@ function ChatState({
                 onCancel={() => Promise.resolve()}
                 onRetry={() => Promise.resolve()}
                 onNavigate={() => undefined}
+                onNavigateToNote={() => undefined}
                 now={Date.parse('2026-09-01T10:00:20.000Z')}
             />
         </div>

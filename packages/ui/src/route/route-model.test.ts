@@ -1,5 +1,5 @@
 import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
+import type { AgentNote, FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel } from '../diff/model.js';
@@ -16,6 +16,7 @@ import {
     filterOtherView,
     lazyCards,
     LAZY_HUNK_THRESHOLD,
+    notesForGroup,
     PROMOTE_THRESHOLD,
     stopMatchesFilter,
     stopSeenRanges,
@@ -416,6 +417,32 @@ describe('route model', () => {
         const far = at(anchor.end + 100);
 
         expect(threadsForGroup(group, new Map([[group.fileId, [context, far]]]))).toEqual([context]);
+    });
+
+    it('assigns a route note by the same range ownership rules as a thread', () => {
+        const group = stopFiles('s01')[0];
+        const anchor = group?.anchors[0];
+        if (group === undefined || anchor === undefined) {
+            throw new Error('stop s01 must have an anchor');
+        }
+        const at = (id: number, line: number): AgentNote => ({
+            id,
+            exchangeId: id,
+            anchor: {
+                fileId: group.fileId,
+                path: group.path,
+                side: anchor.side,
+                start: line,
+                end: line,
+            },
+            text: 'Agent answer',
+            commit: 'abcdef1',
+            createdAt: '2026-09-01T10:00:00.000Z',
+        });
+        const context = at(1, anchor.end + 1);
+        const far = at(2, anchor.end + 100);
+
+        expect(notesForGroup(group, new Map([[group.fileId, [context, far]]]))).toEqual([context]);
     });
 
     it('assigns context between two stops to one of them without duplicating the comment', () => {

@@ -1,4 +1,5 @@
 import type {
+    AgentNote,
     FileDiff,
     RouteAnchor,
     RouteSnapshot,
@@ -578,6 +579,21 @@ export function threadsForGroup(
         }
         return groupOwnsPosition(group, position);
     });
+}
+
+/** A note appears in only one route card, using the same ownership rule as a thread. */
+export function notesForGroup(
+    group: RouteFileGroup,
+    byFile: ReadonlyMap<string, readonly AgentNote[]>,
+): readonly AgentNote[] {
+    const notes = byFile.get(group.fileId) ?? [];
+    return notes.filter((note) =>
+        groupOwnsPosition(group, {
+            side: note.anchor.side,
+            line: note.anchor.start,
+            size: note.anchor.end - note.anchor.start + 1,
+        }),
+    );
 }
 
 /**

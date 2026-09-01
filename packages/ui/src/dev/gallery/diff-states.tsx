@@ -11,6 +11,7 @@ import { lineKey } from '../../diff-view/selection.js';
 import { readStateOf } from '../../progress/read-state.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
+import { createSessionStore } from '../../session/session-store.js';
 import { DiffFileList } from '../../diff-view/file-list.tsx';
 import type { ExpandDirection, FileExpansion } from '../../diff-view/expand.js';
 import { gapKeyOf, hiddenLinesOf } from '../../diff-view/expand.js';
@@ -177,6 +178,7 @@ function CardState({
 function ListState({ fixture }: { fixture: FixtureName }) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
     const store = useMemo(() => createDiffViewStore({ files: data.diff.files, storage: null }), [data]);
+    const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
     // The list takes its height from the outer scroller, so the state stage acts as that scroller in the gallery.
@@ -194,6 +196,7 @@ function ListState({ fixture }: { fixture: FixtureName }) {
                     const file = data.diff.files.find((candidate) => candidate.fileId === fileId);
                     return Promise.resolve(file === undefined ? null : fileContentOf(file));
                 }}
+                session={session}
                 onViewed={(fileId, viewed) => {
                     store.markViewed(fileId, viewed);
                     return Promise.resolve(null);
@@ -207,6 +210,7 @@ function ListState({ fixture }: { fixture: FixtureName }) {
 function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string }) {
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
     const store = useMemo(() => createDiffViewStore({ files: [file], storage: null }), [file]);
+    const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const failed = useRef(new Set<string>());
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
@@ -226,6 +230,7 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
                     return Promise.reject(new Error('worker did not respond'));
                 }}
                 loadContent={() => Promise.resolve(null)}
+                session={session}
                 onViewed={(fileId, viewed) => {
                     store.markViewed(fileId, viewed);
                     return Promise.resolve(null);

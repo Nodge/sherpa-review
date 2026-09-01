@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
-import { findLineRow, flashRow } from './line-target.js';
+import { findAgentNote, findLineRow, flashAgentNote, flashRow } from './line-target.js';
 
 /**
  * Finding a line in the card markup. The side matters: line 41 on the new side and line 41
@@ -52,5 +52,25 @@ describe('line flash', () => {
 
         row.dispatchEvent(new Event('animationend'));
         expect(row.classList.contains('diff-row--palette-target')).toBe(false);
+    });
+});
+
+describe('note focus', () => {
+    it('finds the note by id, focuses it, and removes highlighting when the animation ends', () => {
+        const root = document.createElement('div');
+        root.innerHTML = '<article data-note="31" tabindex="-1"></article>';
+        document.body.append(root);
+        const note = findAgentNote(root, 31);
+        if (note === null) {
+            throw new Error('the note must be found by data-note');
+        }
+
+        flashAgentNote(note);
+        expect(document.activeElement).toBe(note);
+        expect(note.classList.contains('agent-note--target')).toBe(true);
+
+        note.dispatchEvent(new Event('animationend'));
+        expect(note.classList.contains('agent-note--target')).toBe(false);
+        root.remove();
     });
 });

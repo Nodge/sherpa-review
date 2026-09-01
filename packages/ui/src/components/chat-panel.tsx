@@ -8,7 +8,7 @@ import { CommandBox } from './command-box.tsx';
 import './chat-panel.css';
 
 export type ChatActivityState = 'empty' | 'queued' | 'answering' | 'failed' | 'disconnected' | 'idle';
-export type ChatScrollTarget = 'queue' | 'error';
+export type ChatScrollTarget = 'queue' | 'error' | { readonly kind: 'exchange'; readonly exchangeId: number };
 
 export interface ChatPanelProps {
     readonly prKey: string;
@@ -29,6 +29,7 @@ export interface ChatPanelProps {
     readonly onCancel: (exchangeId: number) => Promise<void>;
     readonly onRetry: (exchangeId: number) => Promise<void>;
     readonly onNavigate: (anchor: ChatAnchor) => void;
+    readonly onNavigateToNote: (note: AgentNote) => void;
     /** Fixed clock for the gallery and tests. */
     readonly now?: number;
 }
@@ -115,6 +116,7 @@ export function ChatPanel(props: ChatPanelProps) {
         onCancel,
         onRetry,
         onNavigate,
+        onNavigateToNote,
     } = props;
     const feed = useMemo(() => expandChatExchanges(exchanges, notes), [exchanges, notes]);
     const feedVersion = feed
@@ -148,7 +150,14 @@ export function ChatPanel(props: ChatPanelProps) {
 
     useEffect(() => {
         if (scrollRequest !== null) {
-            const target = scrollRequest.target === 'queue' ? queueRef.current : errorRef.current;
+            const target =
+                scrollRequest.target === 'queue'
+                    ? queueRef.current
+                    : scrollRequest.target === 'error'
+                      ? errorRef.current
+                      : feedRef.current?.querySelector<HTMLElement>(
+                            `[data-exchange="${String(scrollRequest.target.exchangeId)}"]`,
+                        ) ?? null;
             if (target === null) {
                 return;
             }
@@ -261,6 +270,7 @@ export function ChatPanel(props: ChatPanelProps) {
                             onCancel={onCancel}
                             onRetry={onRetry}
                             onNavigate={onNavigate}
+                            onNavigateToNote={onNavigateToNote}
                             typingVisible={running?.id === exchange.id && typingVisible}
                             longRunning={running?.id === exchange.id && longRunning}
                         />
@@ -334,6 +344,7 @@ function ChatExchangeView({
     onCancel,
     onRetry,
     onNavigate,
+    onNavigateToNote,
     typingVisible,
     longRunning,
 }: {
@@ -344,6 +355,7 @@ function ChatExchangeView({
     readonly onCancel: (exchangeId: number) => Promise<void>;
     readonly onRetry: (exchangeId: number) => Promise<void>;
     readonly onNavigate: (anchor: ChatAnchor) => void;
+    readonly onNavigateToNote: (note: AgentNote) => void;
     readonly typingVisible: boolean;
     readonly longRunning: boolean;
 }) {
@@ -399,7 +411,7 @@ function ChatExchangeView({
                             className="chat-message__note"
                             title={chatAnchorTitle(note.anchor)}
                             onClick={() => {
-                                onNavigate(note.anchor);
+                                onNavigateToNote(note);
                             }}
                         >
                             ◆ Pinned by a note at {chatAnchorLabel(note.anchor)}

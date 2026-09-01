@@ -103,6 +103,7 @@ function mountPanel(overrides: Partial<ChatPanelProps> = {}) {
         onCancel: () => Promise.resolve(),
         onRetry: () => Promise.resolve(),
         onNavigate: () => undefined,
+        onNavigateToNote: () => undefined,
         ...overrides,
     };
     const render = (next: Partial<ChatPanelProps> = {}): void => {
@@ -264,6 +265,13 @@ describe('chat panel feed', () => {
         expect(targets).toEqual(['3']);
         expect(feed.scrollTop).toBe(0);
         expect(onScrollRequestHandled).toHaveBeenCalledWith(7);
+
+        render({
+            exchanges: [exchange(9, 'done')],
+            scrollRequest: { id: 8, target: { kind: 'exchange', exchangeId: 9 } },
+        });
+        expect(targets).toEqual(['3', '9']);
+        expect(onScrollRequestHandled).toHaveBeenCalledWith(8);
     });
 
     it('does not scroll to an old error without a request and keeps the full path in title', () => {
@@ -281,6 +289,37 @@ describe('chat panel feed', () => {
         expect(scrollIntoView).not.toHaveBeenCalled();
         expect(host.textContent).toContain('cache.ts:41–43');
         expect(host.querySelector('[title="services/cache/src/cache.ts:41–43"]')).not.toBeNull();
+    });
+
+    it('navigates to the note itself and clears its mark after removal from the shared list', () => {
+        const attached: AgentNote = {
+            id: 31,
+            exchangeId: 1,
+            anchor: ANCHOR,
+            text: 'Answer',
+            commit: 'abcdef1',
+            createdAt: '2026-09-01T10:01:00.000Z',
+        };
+        const onNavigate = vi.fn();
+        const onNavigateToNote = vi.fn();
+        const { host, render } = mountPanel({
+            exchanges: [exchange(1, 'done')],
+            notes: [attached],
+            onNavigate,
+            onNavigateToNote,
+        });
+
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.chat-message__note')?.click();
+        });
+        expect(onNavigateToNote).toHaveBeenCalledWith(attached);
+        expect(onNavigate).not.toHaveBeenCalled();
+        expect(host.textContent).toContain('Pinned by a note');
+        expect(host.textContent).toContain('Notes 1');
+
+        render({ notes: [] });
+        expect(host.textContent).not.toContain('Pinned by a note');
+        expect(host.textContent).not.toContain('Notes 1');
     });
 });
 
@@ -312,6 +351,7 @@ describe('chat panel composer', () => {
                     onCancel={() => Promise.resolve()}
                     onRetry={() => Promise.resolve()}
                     onNavigate={() => undefined}
+                    onNavigateToNote={() => undefined}
                 />,
             );
         });
@@ -376,6 +416,7 @@ describe('chat panel composer', () => {
                     onCancel={() => Promise.resolve()}
                     onRetry={() => Promise.resolve()}
                     onNavigate={() => undefined}
+                    onNavigateToNote={() => undefined}
                 />,
             );
         });

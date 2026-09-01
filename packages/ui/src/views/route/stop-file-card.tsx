@@ -1,4 +1,5 @@
-import type { FileContent, Thread } from '@sherpa/protocol';
+import type { AgentNote, FileContent, Thread } from '@sherpa/protocol';
+import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import type { DiffFileModel } from '../../diff/model.js';
@@ -8,9 +9,12 @@ import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
 import { Icon } from '../../icons/icon.tsx';
+import type { CardNoteActions } from '../../notes/card-notes.tsx';
+import { useCardNotes } from '../../notes/card-notes.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
+import type { SessionStore } from '../../session/session-store.js';
 import { useCardThreads } from '../../threads/card-threads.tsx';
 import type { ComposerSnapshot, ThreadStore } from '../../threads/store.js';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
@@ -38,6 +42,9 @@ export interface StopFileCardProps {
     readonly collapseReason: FileCollapseReason | null;
     readonly onToggleCollapse: () => void;
     readonly showWhitespace: boolean;
+    readonly session: SessionStore;
+    readonly notes: readonly AgentNote[];
+    readonly noteActions: CardNoteActions;
     readonly threads: readonly Thread[];
     readonly composers: readonly ComposerSnapshot[];
     readonly threadStore: ThreadStore;
@@ -81,6 +88,9 @@ export function StopFileCard({
     collapseReason,
     onToggleCollapse,
     showWhitespace,
+    session,
+    notes,
+    noteActions,
     threads,
     composers,
     threadStore,
@@ -107,7 +117,7 @@ export function StopFileCard({
         parseError === null &&
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace);
-    const { threadsUnderHeader, renderAfterLine, focusedThreadRange } = useCardThreads({
+    const { threadsUnderHeader, renderAfterLine: renderThreads, focusedThreadRange } = useCardThreads({
         model: shownModel,
         rowsShown,
         placement: 'exact',
@@ -118,6 +128,33 @@ export function StopFileCard({
         now: threadNow,
         onFocusThread,
     });
+    const { notesUnderHeader, renderAfterLine: renderNotes } = useCardNotes({
+        model: shownModel,
+        rowsShown,
+        notes,
+        placement: 'exact',
+        session,
+        actions: noteActions,
+    });
+    const underHeader = threadsUnderHeader === null && notesUnderHeader === null ? null : (
+        <>
+            {threadsUnderHeader}
+            {notesUnderHeader}
+        </>
+    );
+    const renderAfterLine = useCallback(
+        (side: 'old' | 'new', line: number): ReactNode => {
+            const threadRows = renderThreads(side, line);
+            const noteRows = renderNotes(side, line);
+            return threadRows === null && noteRows === null ? null : (
+                <>
+                    {threadRows}
+                    {noteRows}
+                </>
+            );
+        },
+        [renderNotes, renderThreads],
+    );
 
     const collapsedHidden = !collapsedOpen && group.collapsedLines > 0;
     return (
@@ -139,7 +176,7 @@ export function StopFileCard({
                 opened
                 showWhitespace={showWhitespace}
                 selection={selection}
-                threadsUnderHeader={threadsUnderHeader}
+                threadsUnderHeader={underHeader}
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 actions={actions}

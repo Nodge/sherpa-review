@@ -16,6 +16,19 @@ export interface ThreadsShow {
 }
 
 export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
+export const EMPTY_NOTES_EXPANDED: ReadonlySet<string> = new Set();
+export const EMPTY_NOTE_STACKS_EXPANDED: ReadonlySet<string> = new Set();
+
+export function isNoteExpanded(state: Pick<SessionState, 'notesExpanded'>, noteId: number | string): boolean {
+    return state.notesExpanded.has(String(noteId));
+}
+
+export function isNoteStackExpanded(
+    state: Pick<SessionState, 'noteStacksExpanded'>,
+    stackKey: string,
+): boolean {
+    return state.noteStacksExpanded.has(stackKey);
+}
 
 /**
  * Route stop expansion in the current session (M2-T6). Sets instead of one flag: the
@@ -71,6 +84,10 @@ export interface SessionState {
     readonly paletteOpen: boolean;
     /** Chat is open in the third column, only for the current tab session. */
     readonly chatOpen: boolean;
+    /** Expanded agent notes, shared between route and full diff, without persistence. */
+    readonly notesExpanded: ReadonlySet<string>;
+    /** Expanded note stacks, keyed by the stack's file, side and range. */
+    readonly noteStacksExpanded: ReadonlySet<string>;
     readonly stops: StopsState;
 }
 
@@ -92,6 +109,12 @@ export interface SessionStore {
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     readonly setChatOpen: (open: boolean) => void;
+    readonly toggleNoteExpanded: (noteId: number | string) => void;
+    /** Forces expansion for navigation from chat to a note. */
+    readonly expandNote: (noteId: number | string) => void;
+    readonly setNoteStackExpanded: (stackKey: string, expanded: boolean) => void;
+    /** Closes the stack and all expanded notes inside it in one update. */
+    readonly collapseNoteStack: (stackKey: string, noteIds: readonly (number | string)[]) => void;
     /** Normal stop expansion (low-tier stops are collapsed by default). */
     readonly setStopExpanded: (stopId: string, expanded: boolean) => void;
     /** Expansion of a viewed stop from its summary row. */
@@ -108,10 +131,12 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'stops' | 'preset'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset'> & {
         readonly threadsShow?: ThreadsShow;
         readonly paletteOpen?: boolean;
         readonly chatOpen?: boolean;
+        readonly notesExpanded?: ReadonlySet<string>;
+        readonly noteStacksExpanded?: ReadonlySet<string>;
         readonly stops?: StopsState;
         readonly preset?: RoutePreset;
     };
@@ -134,6 +159,8 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
         paletteOpen: options.initial.paletteOpen ?? false,
         chatOpen: options.initial.chatOpen ?? false,
+        notesExpanded: options.initial.notesExpanded ?? EMPTY_NOTES_EXPANDED,
+        noteStacksExpanded: options.initial.noteStacksExpanded ?? EMPTY_NOTE_STACKS_EXPANDED,
         stops: options.initial.stops ?? EMPTY_STOPS,
         preset: options.initial.preset ?? DEFAULT_PRESET,
     };
@@ -158,6 +185,33 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         for (const listener of [...listeners]) {
             listener();
         }
+    };
+
+    const setNoteExpanded = (noteId: number | string, expanded: boolean): void => {
+        const key = String(noteId);
+        if (state.notesExpanded.has(key) === expanded) {
+            return;
+        }
+        const notesExpanded = new Set(state.notesExpanded);
+        if (expanded) {
+            notesExpanded.add(key);
+        } else {
+            notesExpanded.delete(key);
+        }
+        update({ ...state, notesExpanded });
+    };
+
+    const setNoteStackExpanded = (stackKey: string, expanded: boolean): void => {
+        if (state.noteStacksExpanded.has(stackKey) === expanded) {
+            return;
+        }
+        const noteStacksExpanded = new Set(state.noteStacksExpanded);
+        if (expanded) {
+            noteStacksExpanded.add(stackKey);
+        } else {
+            noteStacksExpanded.delete(stackKey);
+        }
+        update({ ...state, noteStacksExpanded });
     };
 
     return {
@@ -214,6 +268,28 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
             if (chatOpen !== state.chatOpen) {
                 update({ ...state, chatOpen });
             }
+        },
+        toggleNoteExpanded: (noteId) => {
+            setNoteExpanded(noteId, !state.notesExpanded.has(String(noteId)));
+        },
+        expandNote: (noteId) => {
+            setNoteExpanded(noteId, true);
+        },
+        setNoteStackExpanded,
+        collapseNoteStack: (stackKey, noteIds) => {
+            const noteKeys = new Set(noteIds.map(String));
+            const stackChanged = state.noteStacksExpanded.has(stackKey);
+            const notesChanged = [...noteKeys].some((noteId) => state.notesExpanded.has(noteId));
+            if (!stackChanged && !notesChanged) {
+                return;
+            }
+            const noteStacksExpanded = new Set(state.noteStacksExpanded);
+            noteStacksExpanded.delete(stackKey);
+            const notesExpanded = new Set(state.notesExpanded);
+            for (const noteId of noteKeys) {
+                notesExpanded.delete(noteId);
+            }
+            update({ ...state, noteStacksExpanded, notesExpanded });
         },
 
         setStopExpanded: (stopId, expanded) => {

@@ -1,4 +1,5 @@
 import type {
+    AgentNote,
     ChatAnchor,
     PrDiff,
     Thread,
@@ -26,6 +27,7 @@ import {
     fetchReviewRoute,
     fetchReviewThreads,
     deleteReviewDraft,
+    deleteReviewChatNote,
     fillRouteStop,
     generateReviewRoute,
     mirrorViewedFiles,
@@ -58,6 +60,7 @@ import {
     writeCollapsed as writeFileCollapsed,
 } from './diff-view/collapsed-storage.js';
 import { expandFileContext } from './diff-view/expand.js';
+import { findAgentNote, flashAgentNote } from './diff-view/line-target.js';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
     ALL_FILTER_ID,
@@ -126,6 +129,17 @@ interface ChatState {
     readonly loading: boolean;
 }
 
+export interface ChatScrollRequest {
+    readonly id: number;
+    readonly target: ChatScrollTarget;
+}
+
+/** Opens the panel and returns an explicit feed target for the linked exchange. */
+export function openNoteInChatRequest(session: SessionStore, note: AgentNote, id: number): ChatScrollRequest {
+    session.setChatOpen(true);
+    return { id, target: { kind: 'exchange', exchangeId: note.exchangeId } };
+}
+
 interface ChatComposerContext {
     readonly key: string;
     readonly anchor: ChatAnchor | null;
@@ -173,6 +187,7 @@ export function App({ store, session, token }: AppProps) {
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
     const [chatState, setChatState] = useState<ChatState>(() => emptyChatState(chatKey, reviewHost !== null));
     const currentChat = chatState.key === chatKey ? chatState : emptyChatState(chatKey, reviewHost !== null);
+    const pendingNoteDeletions = useRef<{ key: string; ids: Set<number> }>({ key: chatKey, ids: new Set() });
     const [chatComposerContext, setChatComposerContext] = useState<ChatComposerContext>(() => ({
         key: chatKey,
         anchor: null,
@@ -183,12 +198,11 @@ export function App({ store, session, token }: AppProps) {
             ? chatComposerContext
             : { key: chatKey, anchor: null, latched: false } satisfies ChatComposerContext;
     const [chatFocusRequest, setChatFocusRequest] = useState(0);
-    const [chatScrollRequest, setChatScrollRequest] = useState<{
-        readonly id: number;
-        readonly target: ChatScrollTarget;
-    } | null>(null);
+    const [chatScrollRequest, setChatScrollRequest] = useState<ChatScrollRequest | null>(null);
     const chatScrollRequestId = useRef(0);
     const [chatAnchorNavigationRequest, setChatAnchorNavigationRequest] = useState(0);
+    const [noteFocusRequest, setNoteFocusRequest] = useState<{ readonly id: number; readonly noteId: number } | null>(null);
+    const noteFocusRequestId = useRef(0);
     const currentDiff = currentReview.diff;
     const progressLoaded = currentReview.progress !== null;
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
@@ -661,7 +675,13 @@ export function App({ store, session, token }: AppProps) {
                 seenChat.current = { key: chatKey, revision, loaded: true };
                 setChatState((current) => ({
                     key: chatKey,
-                    data: mergeChatResponse(response, chatStateForKey(current, chatKey).data),
+                    data: mergeChatResponse(
+                        response,
+                        chatStateForKey(current, chatKey).data,
+                        pendingNoteDeletions.current.key === chatKey
+                            ? pendingNoteDeletions.current.ids
+                            : EMPTY_NOTE_DELETIONS,
+                    ),
                     error: null,
                     loading: false,
                 }));
@@ -1116,6 +1136,13 @@ export function App({ store, session, token }: AppProps) {
     const handleChatScrollRequest = useCallback((id: number) => {
         setChatScrollRequest((current) => (current?.id === id ? null : current));
     }, []);
+    const openNoteInChat = useCallback(
+        (note: AgentNote) => {
+            chatScrollRequestId.current += 1;
+            setChatScrollRequest(openNoteInChatRequest(session, note, chatScrollRequestId.current));
+        },
+        [session],
+    );
     const askChat = useCallback(
         async (text: string, anchor?: ChatAnchor) => {
             const exchange = await askReviewChat(token, text, anchor);
@@ -1154,6 +1181,41 @@ export function App({ store, session, token }: AppProps) {
         },
         [chatKey, token],
     );
+    const deleteNote = useCallback(
+        async (noteId: number): Promise<void> => {
+            const pending =
+                pendingNoteDeletions.current.key === chatKey
+                    ? pendingNoteDeletions.current
+                    : { key: chatKey, ids: new Set<number>() };
+            pendingNoteDeletions.current = pending;
+            if (pending.ids.has(noteId)) {
+                return;
+            }
+            pending.ids.add(noteId);
+            const removed = chatData.notes.find((note) => note.id === noteId) ?? null;
+            setChatState((current) => {
+                const next = chatStateForKey(current, chatKey);
+                return next.data === null ? next : { ...next, data: withoutChatNote(next.data, noteId) };
+            });
+            try {
+                await deleteReviewChatNote(token, noteId);
+                pending.ids.delete(noteId);
+            } catch (error) {
+                pending.ids.delete(noteId);
+                if (removed !== null) {
+                    setChatState((current) => {
+                        const next = chatStateForKey(current, chatKey);
+                        const data = next.data ?? EMPTY_CHAT_RESPONSE;
+                        return data.notes.some((note) => note.id === removed.id)
+                            ? next
+                            : { ...next, data: { ...data, notes: [...data.notes, removed] } };
+                    });
+                }
+                throw error;
+            }
+        },
+        [chatData.notes, chatKey, token],
+    );
     const navigateChatAnchor = useCallback(
         (anchor: ChatAnchor) => {
             window.location.hash = selectionLinkHash(window.location.hash, anchor);
@@ -1164,6 +1226,63 @@ export function App({ store, session, token }: AppProps) {
         },
         [session, view],
     );
+    const navigateToNote = useCallback(
+        (note: AgentNote) => {
+            session.expandNote(note.id);
+            navigateChatAnchor(note.anchor);
+            noteFocusRequestId.current += 1;
+            setNoteFocusRequest({ id: noteFocusRequestId.current, noteId: note.id });
+        },
+        [navigateChatAnchor, session],
+    );
+    useEffect(() => {
+        if (noteFocusRequest === null || (view !== 'route' && view !== 'diff')) {
+            return;
+        }
+
+        let observer: MutationObserver | null = null;
+        let frame: number | null = null;
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        const stop = (): void => {
+            observer?.disconnect();
+            observer = null;
+            if (frame !== null) {
+                cancelAnimationFrame(frame);
+                frame = null;
+            }
+            if (timeout !== null) {
+                clearTimeout(timeout);
+                timeout = null;
+            }
+        };
+        const reveal = (): boolean => {
+            const root =
+                view === 'route'
+                    ? document.querySelector<HTMLElement>('#view-route')
+                    : document.querySelector<HTMLElement>('.full-diff');
+            const note = root === null ? null : findAgentNote(root, noteFocusRequest.noteId);
+            if (note === null) {
+                return false;
+            }
+            note.scrollIntoView({ block: 'center' });
+            flashAgentNote(note);
+            stop();
+            return true;
+        };
+
+        frame = requestAnimationFrame(() => {
+            frame = null;
+            if (reveal()) {
+                return;
+            }
+            observer = new MutationObserver(() => {
+                reveal();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            timeout = setTimeout(stop, NOTE_FOCUS_SEARCH_MS);
+        });
+        return stop;
+    }, [noteFocusRequest, view]);
 
     const selectView = useCallback(
         (next: ViewId) => {
@@ -1283,6 +1402,9 @@ export function App({ store, session, token }: AppProps) {
                     onAskSelection={openChatForSelection}
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
+                    notes={chatData.notes}
+                    onOpenNoteInChat={openNoteInChat}
+                    onDeleteNote={deleteNote}
                     selectionNavigationRequest={chatAnchorNavigationRequest}
                     paletteNavigation={paletteNavigation}
                     onFilterChangeHandler={setDiffFilterHandler}
@@ -1315,6 +1437,9 @@ export function App({ store, session, token }: AppProps) {
                     onAskSelection={openChatForSelection}
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
+                    notes={chatData.notes}
+                    onOpenNoteInChat={openNoteInChat}
+                    onDeleteNote={deleteNote}
                     selectionNavigationRequest={chatAnchorNavigationRequest}
                     agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
@@ -1397,6 +1522,7 @@ export function App({ store, session, token }: AppProps) {
                             onCancel={cancelChat}
                             onRetry={retryChat}
                             onNavigate={navigateChatAnchor}
+                            onNavigateToNote={navigateToNote}
                         />
                     </>
                 ) : null}
@@ -1473,9 +1599,14 @@ function chatStateForKey(current: ChatState, key: string): ChatState {
     return current.key === key ? current : emptyChatState(key, true);
 }
 
-function mergeChatResponse(server: UiChatResponse, local: UiChatResponse | null): UiChatResponse {
+export function mergeChatResponse(
+    server: UiChatResponse,
+    local: UiChatResponse | null,
+    pendingNoteDeletions: ReadonlySet<number> = EMPTY_NOTE_DELETIONS,
+): UiChatResponse {
+    const notes = server.notes.filter((note) => !pendingNoteDeletions.has(note.id));
     if (local === null) {
-        return server;
+        return { ...server, notes };
     }
     const exchanges = new Map(server.exchanges.map((exchange) => [exchange.id, exchange]));
     for (const exchange of local.exchanges) {
@@ -1484,7 +1615,11 @@ function mergeChatResponse(server: UiChatResponse, local: UiChatResponse | null)
             exchanges.set(exchange.id, exchange);
         }
     }
-    return { ...server, exchanges: [...exchanges.values()] };
+    return { ...server, notes, exchanges: [...exchanges.values()] };
+}
+
+export function withoutChatNote(data: UiChatResponse, noteId: number): UiChatResponse {
+    return { ...data, notes: data.notes.filter((note) => note.id !== noteId) };
 }
 
 function updateChatExchange(
@@ -1553,5 +1688,8 @@ function hostDisplayName(host: string): string {
 
 const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_TASKS: readonly UiTask[] = [];
+const EMPTY_NOTE_DELETIONS: ReadonlySet<number> = new Set();
+/** How long to wait for a note after navigation. The virtualizer and route take time to render cards. */
+const NOTE_FOCUS_SEARCH_MS = 3000;
 /** How often to recalculate "Still working". The threshold is coarse, so second-level precision is unnecessary. */
 const LONG_GENERATION_TICK = 5000;

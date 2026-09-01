@@ -4,8 +4,9 @@
  * on the route (README §2). `lineKey` prints the line key. This module only reads it.
  */
 
-/** Class for highlighting a line after navigation. `diff-view.css` defines the animation. */
+/** Highlight classes after navigation. Line and note styles define the animations. */
 const ROW_FLASH = 'diff-row--palette-target';
+const NOTE_FLASH = 'agent-note--target';
 
 /**
  * Card line by its side's number: changed (`a{n}` / `d{n}`), otherwise unchanged,
@@ -23,14 +24,28 @@ export function findLineRow(card: ParentNode, side: 'old' | 'new', line: number)
 
 /** Line flash: removes the class when the animation ends so another visit restarts it. */
 export function flashRow(row: HTMLElement): void {
-    row.classList.remove(ROW_FLASH);
-    // Restart the animation: without a forced reflow, revisiting the same line shows nothing.
-    void row.offsetWidth;
-    row.classList.add(ROW_FLASH);
-    row.addEventListener(
+    flash(row, ROW_FLASH);
+}
+
+export function findAgentNote(root: ParentNode, noteId: number | string): HTMLElement | null {
+    return root.querySelector<HTMLElement>(`[data-note="${String(noteId)}"]`);
+}
+
+/** Highlights an expanded note after navigation from chat. */
+export function flashAgentNote(note: HTMLElement): void {
+    flash(note, NOTE_FLASH);
+    note.focus({ preventScroll: true });
+}
+
+function flash(element: HTMLElement, className: string): void {
+    element.classList.remove(className);
+    // Restart the animation: without a forced reflow, another visit to the same target does nothing.
+    void element.offsetWidth;
+    element.classList.add(className);
+    element.addEventListener(
         'animationend',
         () => {
-            row.classList.remove(ROW_FLASH);
+            element.classList.remove(className);
         },
         { once: true },
     );

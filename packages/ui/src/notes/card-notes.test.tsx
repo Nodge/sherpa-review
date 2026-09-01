@@ -1,0 +1,143 @@
+// @vitest-environment jsdom
+import type { AgentNote, FileDiff } from '@sherpa/protocol';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { parseFileDiff } from '../diff/parse.js';
+import { createSessionStore } from '../session/session-store.js';
+import { useCardNotes } from './card-notes.tsx';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const FILE: FileDiff = {
+    fileId: 'file-1',
+    path: 'src/cache.ts',
+    oldPath: null,
+    changeType: 'modify',
+    binary: false,
+    additions: 3,
+    deletions: 1,
+    generated: false,
+    viewed: false,
+    blameUrl: null,
+    patch: [
+        '@@ -40,3 +40,5 @@',
+        ' const cached = readCache(key);',
+        '-return cached;',
+        '+if (cached !== null) {',
+        '+    return cached;',
+        '+}',
+        ' return load(key);',
+        '',
+    ].join('\n'),
+};
+const MODEL = parseFileDiff(FILE);
+
+function note(id: number, start = 41, end = 43, text = 'First line\n\nSecond line'): AgentNote {
+    return {
+        id,
+        exchangeId: id,
+        anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start, end },
+        text,
+        commit: 'abcdef1',
+        createdAt: `2026-09-01T10:0${String(id)}:00.000Z`,
+    };
+}
+
+const cleanups: (() => void)[] = [];
+afterEach(() => {
+    for (const cleanup of cleanups.splice(0)) {
+        cleanup();
+    }
+});
+
+function mount(initialNotes: readonly AgentNote[]) {
+    const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+
+    function State({ notes }: { readonly notes: readonly AgentNote[] }) {
+        const layout = useCardNotes({
+            model: MODEL,
+            rowsShown: true,
+            notes,
+            placement: 'nearest',
+            session,
+            actions: { onOpenInChat: () => undefined, onDelete: () => Promise.resolve() },
+        });
+        return <>{layout.renderAfterLine('new', 43)}</>;
+    }
+
+    const render = (notes: readonly AgentNote[]): void => {
+        act(() => {
+            root.render(<State notes={notes} />);
+        });
+    };
+    render(initialNotes);
+    cleanups.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+    return { host, session, render };
+}
+
+describe('note card', () => {
+    it('shows a single-line preview and expands markdown with three actions', () => {
+        const { host } = mount([note(1)]);
+
+        expect(host.textContent).toContain('◆Agent note·First line·3 lines');
+        act(() => {
+            host.querySelector<HTMLButtonElement>('[data-note="1"]')?.click();
+        });
+
+        expect(host.textContent).toContain('Agent note · asked at lines 41–43');
+        expect(host.textContent).toContain('model answer · never published to the PR');
+        const actions = [...host.querySelectorAll<HTMLButtonElement>('.agent-note__actions button')].map(
+            (button) => button.textContent,
+        );
+        expect(actions).toEqual(['Open in the chat', 'Collapse', 'Delete']);
+        expect(host.textContent).not.toContain('Turn into a comment draft');
+    });
+
+    it('initially shows four overlapping notes as one summary row', () => {
+        const notes = [note(1), note(2, 42, 43), note(3, 43, 43), note(4, 41, 43)];
+        const { host } = mount(notes);
+
+        const summary = host.querySelector<HTMLButtonElement>('.agent-note-stack-summary');
+        expect(summary?.textContent).toContain('4 notes here');
+        expect(host.querySelectorAll('[data-note]')).toHaveLength(0);
+
+        act(() => {
+            summary?.click();
+        });
+        expect(host.querySelectorAll('[data-note]')).toHaveLength(4);
+    });
+
+    it('collapses expanded stack notes and preserves expansion when the notes change', () => {
+        const notes = [note(1), note(2, 42, 43), note(3, 43, 43), note(4, 41, 43), note(5, 42, 43)];
+        const { host, render, session } = mount(notes);
+
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.agent-note-stack-summary')?.click();
+        });
+        act(() => {
+            host.querySelector<HTMLButtonElement>('[data-note="1"]')?.click();
+        });
+        expect(host.querySelectorAll('[data-note]')).toHaveLength(5);
+        expect(session.getSnapshot().notesExpanded).toContain('1');
+
+        render(notes.filter((item) => item.id !== 2));
+        expect(host.querySelectorAll('[data-note]')).toHaveLength(4);
+
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.agent-note-stack__collapse')?.click();
+        });
+        expect(host.querySelectorAll('[data-note]')).toHaveLength(0);
+        expect(host.querySelector('.agent-note-stack-summary')?.textContent).toContain('4 notes here');
+        expect(session.getSnapshot().notesExpanded).not.toContain('1');
+    });
+});

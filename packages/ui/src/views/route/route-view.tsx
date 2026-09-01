@@ -1,4 +1,5 @@
 import type {
+    AgentNote,
     ChatAnchor,
     FileContent,
     FileDiff,
@@ -66,6 +67,7 @@ import {
     entryUnfilled,
     filterOtherView,
     lazyCards,
+    notesForGroup,
     otherMatchesFilter,
     stopMatchesFilter,
     stopSeenRanges,
@@ -132,6 +134,9 @@ export interface RouteViewProps {
     readonly onAskSelection: (anchor: ChatAnchor) => void;
     readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly notes?: readonly AgentNote[];
+    readonly onOpenNoteInChat?: (note: AgentNote) => void;
+    readonly onDeleteNote?: (noteId: number) => Promise<void>;
     readonly selectionNavigationRequest?: number;
     /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
     readonly agentStopped?: boolean;
@@ -163,6 +168,9 @@ export function RouteView({
     onAskSelection,
     isSelectionPending,
     onSelectionAnchorChange,
+    notes = EMPTY_NOTES,
+    onOpenNoteInChat = EMPTY_OPEN_NOTE,
+    onDeleteNote = EMPTY_DELETE_NOTE,
     selectionNavigationRequest = 0,
     agentStopped = false,
     navigation = null,
@@ -282,6 +290,9 @@ export function RouteView({
             onAskSelection={onAskSelection}
             isSelectionPending={isSelectionPending}
             onSelectionAnchorChange={onSelectionAnchorChange}
+            notes={notes}
+            onOpenNoteInChat={onOpenNoteInChat}
+            onDeleteNote={onDeleteNote}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
@@ -325,6 +336,9 @@ export interface RouteWorkspaceProps {
     readonly onAskSelection?: (anchor: ChatAnchor) => void;
     readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    readonly notes?: readonly AgentNote[];
+    readonly onOpenNoteInChat?: (note: AgentNote) => void;
+    readonly onDeleteNote?: (noteId: number) => Promise<void>;
     readonly onUnderExplained?: (value: boolean) => void;
     readonly onFillStop?: (planIndex: number) => void;
     readonly onRouteSummary?: (summary: RouteSummary) => void;
@@ -354,6 +368,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onAskSelection = EMPTY_ASK_SELECTION,
         isSelectionPending = NO_SELECTION_PENDING,
         onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
+        notes = EMPTY_NOTES,
+        onOpenNoteInChat = EMPTY_OPEN_NOTE,
+        onDeleteNote = EMPTY_DELETE_NOTE,
         onUnderExplained,
         onFillStop,
         onRouteSummary,
@@ -380,6 +397,22 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         () => createThreadActions(threadStore, threadTransport, resolveThread),
         [resolveThread, threadStore, threadTransport],
     );
+    const noteActions = useMemo(
+        () => ({ onOpenInChat: onOpenNoteInChat, onDelete: onDeleteNote }),
+        [onDeleteNote, onOpenNoteInChat],
+    );
+    const notesByFile = useMemo(() => {
+        const grouped = new Map<string, AgentNote[]>();
+        for (const note of notes) {
+            const bucket = grouped.get(note.anchor.fileId);
+            if (bucket === undefined) {
+                grouped.set(note.anchor.fileId, [note]);
+            } else {
+                bucket.push(note);
+            }
+        }
+        return grouped;
+    }, [notes]);
 
     const initialStopViewed = props.initialStopViewed;
     const createdStopProgress = useMemo(
@@ -1438,6 +1471,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     }}
                     showWhitespace={diffSnapshot.whitespaceShown.has(group.fileId)}
                     selection={diffSnapshot.selection?.fileId === group.fileId ? diffSnapshot.selection : null}
+                    session={session}
+                    notes={notesForGroup(group, notesByFile)}
+                    noteActions={noteActions}
                     threads={visibleThreads(group)}
                     composers={composersForGroup(group, composersSnapshot.byFile)}
                     threadStore={threadStore}
@@ -1464,9 +1500,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             actions,
             composersSnapshot.byFile,
             diffSnapshot,
+            noteActions,
+            notesByFile,
             openedCollapsed,
             parseErrors,
             pr.capabilities.fileContent,
+            session,
             store,
             threadActions,
             threadNow,
@@ -1967,6 +2006,9 @@ const useAnchorEffect = typeof document === 'undefined' ? useEffect : useLayoutE
 
 /** Thread focus is needed only by the full diff reply shortcut, which the route does not have. */
 const NOOP_THREAD = (): void => undefined;
+const EMPTY_NOTES: readonly AgentNote[] = [];
+const EMPTY_OPEN_NOTE = (): void => undefined;
+const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('note deletion is unavailable'));
 const EMPTY_EXPANSION: FileExpansion = new Map();
 
 const FLASH_MS = 900;

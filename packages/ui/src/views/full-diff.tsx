@@ -1,4 +1,5 @@
 import type {
+    AgentNote,
     ChatAnchor,
     FileContent,
     FileDiff,
@@ -96,6 +97,9 @@ export interface FullDiffViewProps {
     readonly onAskSelection: (anchor: ChatAnchor) => void;
     readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly notes?: readonly AgentNote[];
+    readonly onOpenNoteInChat?: (note: AgentNote) => void;
+    readonly onDeleteNote?: (noteId: number) => Promise<void>;
     readonly selectionNavigationRequest?: number;
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
@@ -128,6 +132,9 @@ export function FullDiffView({
     onAskSelection,
     isSelectionPending,
     onSelectionAnchorChange,
+    notes = EMPTY_NOTES,
+    onOpenNoteInChat = EMPTY_OPEN_NOTE,
+    onDeleteNote = EMPTY_DELETE_NOTE,
     selectionNavigationRequest = 0,
     paletteNavigation = null,
     onPaletteActiveFileChange,
@@ -239,6 +246,9 @@ export function FullDiffView({
             onAskSelection={onAskSelection}
             isSelectionPending={isSelectionPending}
             onSelectionAnchorChange={onSelectionAnchorChange}
+            notes={notes}
+            onOpenNoteInChat={onOpenNoteInChat}
+            onDeleteNote={onDeleteNote}
             routeSnapshot={routeSnapshot}
             onJumpToStop={onJumpToStop}
             smallPr={smallPr}
@@ -277,6 +287,9 @@ export interface DiffWorkspaceProps {
     readonly onAskSelection?: (anchor: ChatAnchor) => void;
     readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    readonly notes?: readonly AgentNote[];
+    readonly onOpenNoteInChat?: (note: AgentNote) => void;
+    readonly onDeleteNote?: (noteId: number) => Promise<void>;
     /** Ready route in reader margins (README §10). null leaves Full diff as it is without a route. */
     readonly routeSnapshot?: RouteSnapshot | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
@@ -316,6 +329,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onAskSelection = EMPTY_ASK_SELECTION,
         isSelectionPending = NO_SELECTION_PENDING,
         onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
+        notes = EMPTY_NOTES,
+        onOpenNoteInChat = EMPTY_OPEN_NOTE,
+        onDeleteNote = EMPTY_DELETE_NOTE,
         routeSnapshot = null,
         onJumpToStop,
         paletteNavigation = null,
@@ -368,6 +384,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const threadActions = useMemo<ThreadActions>(
         () => createThreadActions(threadStore, threadTransport, resolveThread),
         [resolveThread, threadStore, threadTransport],
+    );
+    const noteActions = useMemo(
+        () => ({ onOpenInChat: onOpenNoteInChat, onDelete: onDeleteNote }),
+        [onDeleteNote, onOpenNoteInChat],
     );
     const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
@@ -1060,6 +1080,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         parse={parse}
                         loadContent={loadContent}
                         onViewed={markViewed}
+                        session={session}
+                        notes={notes}
+                        noteActions={noteActions}
                         threadStore={threadStore}
                         threadActions={threadActions}
                         threadVisible={threadVisible}
@@ -1173,6 +1196,9 @@ export function FullDiffToolbar({
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_NOTES: readonly AgentNote[] = [];
+const EMPTY_OPEN_NOTE = (): void => undefined;
+const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('note deletion is unavailable'));
 const EMPTY_FILE_IDS: ReadonlySet<string> = new Set();
 const EMPTY_EXPANSION: FileExpansion = new Map();
 

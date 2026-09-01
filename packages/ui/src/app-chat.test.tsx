@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { fixtureData } from '@sherpa/fixtures';
-import type { ChatExchange, UiChatResponse, UiState } from '@sherpa/protocol';
+import type { AgentNote, ChatExchange, UiChatResponse, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App } from './app.tsx';
+import { App, mergeChatResponse, openNoteInChatRequest, withoutChatNote } from './app.tsx';
 import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
@@ -14,6 +14,20 @@ import type { Store, StoreSnapshot } from './store.js';
 
 const DATA = fixtureData('medium');
 const EMPTY_CHAT: UiChatResponse = { exchanges: [], notes: [], chatRevision: 1 };
+const NOTE: AgentNote = {
+    id: 31,
+    exchangeId: 7,
+    anchor: {
+        fileId: 'file-1',
+        path: 'src/cache.ts',
+        side: 'new',
+        start: 41,
+        end: 43,
+    },
+    text: 'Agent answer',
+    commit: 'abcdef1',
+    createdAt: '2026-09-01T10:01:00.000Z',
+};
 
 function exchange(id: number, question: string, overrides: Partial<ChatExchange> = {}): ChatExchange {
     return {
@@ -184,6 +198,27 @@ function mountApp(options: {
 
     return { host, chatGetCount: () => chatGetCount, pushChatRevision, settle };
 }
+
+describe('note and chat integration in App', () => {
+    it('opens the panel and builds a target for the linked exchange', () => {
+        const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
+
+        const request = openNoteInChatRequest(session, NOTE, 9);
+
+        expect(session.getSnapshot().chatOpen).toBe(true);
+        expect(request).toEqual({ id: 9, target: { kind: 'exchange', exchangeId: NOTE.exchangeId } });
+    });
+
+    it('does not restore an optimistically deleted note from a stale GET after another revision', () => {
+        const local = { exchanges: [exchange(7, 'Question', { status: 'done', answer: 'Answer' })], notes: [NOTE], chatRevision: 1 };
+        const optimistic = withoutChatNote(local, NOTE.id);
+        const staleServer = { ...local, chatRevision: 2 };
+        const pendingDeletions = new Set([NOTE.id]);
+
+        expect(optimistic.notes).toEqual([]);
+        expect(mergeChatResponse(staleServer, optimistic, pendingDeletions).notes).toEqual([]);
+    });
+});
 
 describe('reloading chat history in App', () => {
     it('makes a new GET after the SSE revision increases and ignores an older concurrent response', async () => {

@@ -239,6 +239,10 @@ export async function retryReviewChat(
     ).outcome;
 }
 
+export async function deleteReviewChatNote(token: string, noteId: number): Promise<void> {
+    await post(UI_ENDPOINTS.reviewChatNoteDelete, token, { noteId }, uiReviewWriteAckSchema);
+}
+
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {
     return post(
         UI_ENDPOINTS.openInEditor,

@@ -1,4 +1,4 @@
-import type { FileContent, FileDiff, Thread } from '@sherpa/protocol';
+import type { AgentNote, FileContent, FileDiff, Thread } from '@sherpa/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ReactNode, Ref } from 'react';
 import {
@@ -14,10 +14,13 @@ import {
 } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { CardNoteActions } from '../notes/card-notes.tsx';
+import { useCardNotes } from '../notes/card-notes.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import { readStateOf as computeReadState } from '../progress/read-state.js';
 import type { AnchorSpan } from '../route/anchor-clip.js';
 import type { RouteMarginFile, RouteMarginModel } from '../route/margin-model.js';
+import type { SessionStore } from '../session/session-store.js';
 import { RouteBadge, useMarginStrips } from '../route/route-margin.tsx';
 import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
@@ -90,6 +93,9 @@ export interface DiffFileListProps {
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     /** Viewed mark. The view owns the optimistic write, the list only calls it. */
     readonly onViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
+    readonly session: SessionStore;
+    readonly notes?: readonly AgentNote[];
+    readonly noteActions?: CardNoteActions;
     readonly threadStore?: ThreadStore | undefined;
     readonly threadActions?: ThreadActions | undefined;
     readonly threadVisible?: ((thread: Thread) => boolean) | undefined;
@@ -129,6 +135,9 @@ export function DiffFileList({
     parse,
     loadContent,
     onViewed,
+    session,
+    notes = EMPTY_NOTES,
+    noteActions = EMPTY_NOTE_ACTIONS,
     threadStore = EMPTY_THREAD_STORE,
     threadActions = EMPTY_THREAD_ACTIONS,
     threadVisible = HIDE_THREAD,
@@ -149,6 +158,18 @@ export function DiffFileList({
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
     const composersSnapshot = useSyncExternalStore(threadStore.subscribeComposers, threadStore.getComposersSnapshot);
+    const notesByFile = useMemo(() => {
+        const grouped = new Map<string, AgentNote[]>();
+        for (const note of notes) {
+            const bucket = grouped.get(note.anchor.fileId);
+            if (bucket === undefined) {
+                grouped.set(note.anchor.fileId, [note]);
+            } else {
+                bucket.push(note);
+            }
+        }
+        return grouped;
+    }, [notes]);
     const threadNowRef = useRef(providedThreadNow ?? Date.now());
     const threadNow = providedThreadNow ?? threadNowRef.current;
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -537,6 +558,9 @@ export function DiffFileList({
                             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
                             keptInView={file.fileId === keptFileId}
                             selection={snapshot.selection?.fileId === file.fileId ? snapshot.selection : null}
+                            session={session}
+                            notes={notesByFile.get(file.fileId) ?? EMPTY_NOTES}
+                            noteActions={noteActions}
                             threads={threadSnapshot.byFile.get(file.fileId) ?? EMPTY_THREADS}
                             keptThreadIds={threadSnapshot.keptByFile.get(file.fileId) ?? EMPTY_THREAD_IDS}
                             composers={composersSnapshot.byFile.get(file.fileId) ?? EMPTY_COMPOSERS}
@@ -559,6 +583,11 @@ export function DiffFileList({
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_NOTES: readonly AgentNote[] = [];
+const EMPTY_NOTE_ACTIONS: CardNoteActions = {
+    onOpenInChat: () => undefined,
+    onDelete: () => Promise.reject(new Error('note deletion is unavailable')),
+};
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();
 const EMPTY_EXPANSION: FileExpansion = new Map();
 const EMPTY_COMPOSERS: readonly ComposerSnapshot[] = [];
@@ -582,6 +611,9 @@ const VirtualFileCard = memo(function VirtualFileCard({
     showWhitespace,
     keptInView,
     selection,
+    session,
+    notes,
+    noteActions,
     threads,
     keptThreadIds,
     composers,
@@ -613,6 +645,9 @@ const VirtualFileCard = memo(function VirtualFileCard({
     showWhitespace: boolean;
     keptInView: boolean;
     selection: LineSelection | null;
+    session: SessionStore;
+    notes: readonly AgentNote[];
+    noteActions: CardNoteActions;
     threads: readonly Thread[];
     keptThreadIds: ReadonlySet<string>;
     composers: readonly ComposerSnapshot[];
@@ -651,27 +686,43 @@ const VirtualFileCard = memo(function VirtualFileCard({
         now: threadNow,
         onFocusThread,
     });
+    const { notesUnderHeader, renderAfterLine: renderNotes } = useCardNotes({
+        model: shownModel,
+        rowsShown: canRenderRows,
+        notes,
+        placement: 'nearest',
+        session,
+        actions: noteActions,
+    });
     const { underHeader: stripsUnderHeader, renderAfterLine: renderStrip } = useMarginStrips({
         model: shownModel,
         rowsShown: canRenderRows,
         ranges: margin?.uncovered ?? EMPTY_SPANS,
     });
-    // Threads and hatching share the space below a line: a thread concerns the line, a strip covers a range.
+    const underHeader = threadsUnderHeader === null && notesUnderHeader === null ? null : (
+        <>
+            {threadsUnderHeader}
+            {notesUnderHeader}
+        </>
+    );
+    // Threads, notes and hatching share the slot below a line, in the same order in both views.
     const renderAfterLine = useCallback(
         (side: 'old' | 'new', line: number): ReactNode => {
             const threads = renderThreads(side, line);
+            const noteRows = renderNotes(side, line);
             const strip = renderStrip(side, line);
-            if (threads === null && strip === null) {
+            if (threads === null && noteRows === null && strip === null) {
                 return null;
             }
             return (
                 <>
                     {threads}
+                    {noteRows}
                     {strip}
                 </>
             );
         },
-        [renderStrip, renderThreads],
+        [renderNotes, renderStrip, renderThreads],
     );
 
     return (
@@ -715,7 +766,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                     )
                 }
                 routeStrips={stripsUnderHeader}
-                threadsUnderHeader={threadsUnderHeader}
+                threadsUnderHeader={underHeader}
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 actions={actions}
