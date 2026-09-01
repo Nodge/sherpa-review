@@ -24,6 +24,7 @@ import { M2F_T28_STATES } from './m2f-t28-states.tsx';
 import { M2F_T24_STATES } from './m2f-t24-states.tsx';
 import { M2F_T25_STATES } from './m2f-t25-states.tsx';
 import { M2F_T43_STATES } from './m2f-t43-states.tsx';
+import { M3_T5_STATES } from './m3-t5-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -146,6 +147,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...DIFF_STATES.map((state) => ({
         id: state.id,
         group: 'Diff',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M3_T5_STATES.map((state) => ({
+        id: state.id,
+        group: 'Selection popover',
         title: state.title,
         render: state.render,
     })),

@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { fixtureData } from '@sherpa/fixtures';
+import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
+import { findLineRow } from '../diff-view/line-target.js';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { createSessionStore } from '../session/session-store.js';
 import { createThreadStore } from '../threads/store.js';
@@ -25,6 +27,16 @@ const FILE = (() => {
     }
     return file;
 })();
+const NAV_FILE: FileDiff = {
+    ...FILE,
+    fileId: 'navigation-context',
+    path: 'src/navigation-context.ts',
+    additions: 1,
+    deletions: 1,
+    patch: ['@@ -10,2 +10,2 @@', '-old value', '+new value', ' tail'].join('\n'),
+};
+const NAV_LINES = Array.from({ length: 20 }, (_, index) => `line-${String(index + 1)}`);
+const NAV_CONTENT: FileContent = { oldText: NAV_LINES.join('\n'), newText: NAV_LINES.join('\n') };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,6 +76,7 @@ for (const [name, value] of [
 ] as const) {
     Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: () => value });
 }
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
 
 const mounted: (() => void)[] = [];
 
@@ -73,13 +86,18 @@ afterEach(() => {
     }
 });
 
-function mount() {
+function mount(options: {
+    readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number };
+    readonly loadContent?: (fileId: string) => Promise<FileContent | null>;
+    readonly file?: FileDiff;
+} = {}) {
     const host = document.createElement('div');
     document.body.append(host);
-    const files = [FILE];
+    const file = options.file ?? FILE;
+    const files = [file];
     const store = createDiffViewStore({ files, storage: null });
-    store.setModel(FILE.fileId, parseFileDiff(toParseRequest(FILE)));
-    const threadStore = createThreadStore([], new Set([FILE.fileId]));
+    store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
+    const threadStore = createThreadStore([], new Set([file.fileId]));
     const session = createSessionStore({
         initial: { view: 'diff', filter: 'all', threadsShow: { people: true, bots: true, resolved: false } },
     });
@@ -97,8 +115,9 @@ function mount() {
                 collapsedStorage={null}
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
-                loadContent={() => Promise.resolve(null)}
+                loadContent={options.loadContent ?? (() => Promise.resolve(null))}
                 onSetViewed={() => Promise.resolve(0)}
+                initialSelectionTarget={options.initialSelectionTarget ?? null}
             />,
         );
     });
@@ -108,7 +127,18 @@ function mount() {
         });
         host.remove();
     });
-    return { host, store, threadStore };
+    return {
+        host,
+        store,
+        threadStore,
+        settle: async () => {
+            for (let step = 0; step < 8; step += 1) {
+                await act(async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+                });
+            }
+        },
+    };
 }
 
 function pencil(host: HTMLElement, line: number): HTMLButtonElement {
@@ -154,5 +184,30 @@ describe('comment from a full diff line', () => {
             size: 1,
         });
         expect(store.getSnapshot().selection).toBeNull();
+    });
+});
+
+describe('navigation to a hidden line in the full diff', () => {
+    it('expands context before looking for the line in the DOM', async () => {
+        const raw = parseFileDiff(toParseRequest(NAV_FILE));
+        if (raw.content.kind !== 'text') {
+            throw new Error('the test needs a text model');
+        }
+        const gap = raw.content.blocks.find((block) => block.kind === 'gap');
+        if (gap?.kind !== 'gap') {
+            throw new Error('the test needs hidden context');
+        }
+        const target = gap.newStart;
+        const view = mount({
+            file: NAV_FILE,
+            initialSelectionTarget: { fileId: NAV_FILE.fileId, side: 'new', start: target },
+            loadContent: () => Promise.resolve(NAV_CONTENT),
+        });
+
+        expect(findLineRow(view.host, 'new', target)).toBeNull();
+        await view.settle();
+
+        expect(view.store.getSnapshot().expansion.get(NAV_FILE.fileId)?.size).toBeGreaterThan(0);
+        expect(findLineRow(view.host, 'new', target)).not.toBeNull();
     });
 });

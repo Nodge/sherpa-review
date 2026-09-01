@@ -1,6 +1,8 @@
+import type { FileContent } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
+import { expandFileContext, expandGap, gapKeyOf } from '../diff-view/expand.js';
 import { commentPosition } from './full-diff.tsx';
 
 const MODEL = parseFileDiff({
@@ -55,6 +57,31 @@ describe('line comment anchor', () => {
             side: 'new',
             line: 121,
             size: 3,
+        });
+    });
+
+    it('uses expanded context instead of the raw file model', () => {
+        if (MODEL.content.kind !== 'text') {
+            throw new Error('the test needs a text model');
+        }
+        const gap = MODEL.content.blocks.find((block) => block.kind === 'gap' && block.edge === 'leading');
+        if (gap?.kind !== 'gap') {
+            throw new Error('the test needs a leading gap');
+        }
+        const lines = Array.from({ length: 140 }, (_, index) => `line-${String(index + 1)}`);
+        const content: FileContent = { oldText: lines.join('\n'), newText: lines.join('\n') };
+        const expanded = expandFileContext(MODEL, content, expandGap(new Map(), gapKeyOf(gap), 'up', 2));
+        const expandedSelection = { fileId: 'f1', anchor: 'c98:98', focus: 'c99:99' };
+
+        expect(commentPosition(expandedSelection, MODEL, 'f1', 'new', 98)).toEqual({
+            side: 'new',
+            line: 98,
+            size: 1,
+        });
+        expect(commentPosition(expandedSelection, expanded, 'f1', 'new', 98)).toEqual({
+            side: 'new',
+            line: 98,
+            size: 2,
         });
     });
 

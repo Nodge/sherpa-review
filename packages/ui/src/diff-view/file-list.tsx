@@ -26,10 +26,9 @@ import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
 import type { ContextExpandRequest, ContextExpandResult } from './context-expansion.js';
 import { expandContext } from './context-expansion.js';
 import type { FileExpansion } from './expand.js';
-import { expandFileContext } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
-import { COLLAPSE_THRESHOLD, FileCard } from './file-card.tsx';
+import { COLLAPSE_THRESHOLD, FileCard, shownFileModel } from './file-card.tsx';
 import type { DiffMode, DiffViewStore, FileCollapseReason } from './store.js';
 import { fileCollapseReason } from './store.js';
 import { useSelectionLifecycle } from './use-selection.js';
@@ -485,12 +484,12 @@ export function DiffFileList({
             onToggleCollapse: store.toggleFileCollapse,
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
-            onSelectStart: (fileId, key, extend) => {
+            onSelectStart: (fileId, key, side, extend) => {
                 store.beginSelection();
                 if (extend) {
-                    store.extendSelection(fileId, key);
+                    store.extendSelection(fileId, key, side);
                 } else {
-                    store.startSelection(fileId, key);
+                    store.startSelection(fileId, key, side);
                 }
             },
             onSelectExtend: store.extendSelection,
@@ -628,7 +627,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     actions: FileCardActions;
 }) {
     const shownModel = useMemo(
-        () => (model === null ? null : expandFileContext(model, content ?? null, expansion)),
+        () => shownFileModel(model, content ?? null, expansion),
         [content, expansion, model],
     );
     const visibleThreads = useMemo(
@@ -692,6 +691,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 content={content}
                 contentAvailable={contentAvailable}
                 expansion={expansion}
+                shownModel={shownModel}
                 read={read}
                 collapseReason={collapseReason}
                 onToggleCollapse={() => {

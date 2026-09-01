@@ -259,11 +259,11 @@ function galleryActions(store: DiffViewStore): FileCardActions {
         },
         onOpenFile: store.openFile,
         onShowWhitespace: store.showWhitespace,
-        onSelectStart: (fileId, key, extend) => {
+        onSelectStart: (fileId, key, side, extend) => {
             if (extend) {
-                store.extendSelection(fileId, key);
+                store.extendSelection(fileId, key, side);
             } else {
-                store.startSelection(fileId, key);
+                store.startSelection(fileId, key, side);
             }
         },
         onSelectExtend: store.extendSelection,

@@ -1,4 +1,6 @@
 import type {
+    ChatAnchor,
+    ChatExchange,
     FileContent,
     FileDiff,
     PrDiff,
@@ -14,6 +16,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
+    askReviewChat,
     deleteReviewDraft,
     fetchFileContent,
     saveReviewDraft,
@@ -21,6 +24,7 @@ import {
     updateReviewDraft,
 } from '../../api.js';
 import { PrHeader } from '../../components/pr-header.tsx';
+import { SelectionPopover } from '../../components/selection-popover.tsx';
 import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
@@ -30,11 +34,12 @@ import { expandContext } from '../../diff-view/context-expansion.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { flashRow } from '../../diff-view/line-target.js';
-import type { DiffViewStore } from '../../diff-view/store.js';
+import type { DiffViewSnapshot, DiffViewStore } from '../../diff-view/store.js';
 import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
+import { readSelectionLink } from '../../selection-link.js';
 import {
     ALL_FILTER_ID,
     buildFileFilters,
@@ -94,7 +99,7 @@ import {
     targetScrollTop,
 } from './scroll.js';
 import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, StopSkeleton, ViewedSummary } from './stop-card.tsx';
-import { StopFileCard } from './stop-file-card.tsx';
+import { StopFileCard, stopFileShownModel } from './stop-file-card.tsx';
 import { TestDigest } from './test-digest.tsx';
 import { useOnScreen } from './use-on-screen.js';
 import './route.css';
@@ -125,6 +130,7 @@ export interface RouteViewProps {
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
+    readonly agentConnected: boolean;
     /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
     readonly agentStopped?: boolean;
     /** Palette navigation increments `id`, and the view finishes scrolling to the stop. */
@@ -151,6 +157,7 @@ export function RouteView({
     store,
     threadStore,
     snapshot,
+    agentConnected,
     agentStopped = false,
     navigation = null,
     onUnderExplained,
@@ -191,6 +198,7 @@ export function RouteView({
     // Two sources of stop navigation: the palette and the `stop` fragment parameter (a link
     // copied from the stop header). One counter lets the view distinguish jumps by increasing id.
     const [target, setTarget] = useState<{ id: number; stopId: string } | null>(null);
+    const [selectionTarget, setSelectionTarget] = useState(() => readSelectionLink(window.location.hash));
     const targetId = useRef(0);
     const jumpTo = useCallback((stopId: string) => {
         targetId.current += 1;
@@ -199,6 +207,7 @@ export function RouteView({
     const fragmentStop = useRef<string | null>(null);
     useEffect(() => {
         const read = (): void => {
+            setSelectionTarget(readSelectionLink(window.location.hash));
             const stopId = readFragmentParam(window.location.hash, 'stop');
             if (stopId === null || stopId === fragmentStop.current) {
                 return;
@@ -220,6 +229,10 @@ export function RouteView({
         paletteJump.current = navigation.id;
         jumpTo(navigation.stopId);
     }, [jumpTo, navigation]);
+    const askSelection = useCallback(
+        (question: string, anchor: ChatAnchor) => askReviewChat(token, question, anchor),
+        [token],
+    );
 
     if (
         diffError !== null ||
@@ -258,6 +271,9 @@ export function RouteView({
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
             navigation={target}
+            initialSelectionTarget={selectionTarget}
+            agentConnected={agentConnected}
+            onAskSelection={askSelection}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
@@ -295,6 +311,9 @@ export interface RouteWorkspaceProps {
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
+    readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
+    readonly agentConnected?: boolean;
+    readonly onAskSelection?: (question: string, anchor: ChatAnchor) => Promise<ChatExchange>;
     readonly onUnderExplained?: (value: boolean) => void;
     readonly onFillStop?: (planIndex: number) => void;
     readonly onRouteSummary?: (summary: RouteSummary) => void;
@@ -318,6 +337,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onSetStopViewed = EMPTY_SET_STOP_VIEWED,
         progressLoaded = true,
         navigation = null,
+        initialSelectionTarget = null,
+        agentConnected = false,
+        onAskSelection = EMPTY_ASK_SELECTION,
         onUnderExplained,
         onFillStop,
         onRouteSummary,
@@ -501,11 +523,27 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const retryFailed = useCallback(() => {
         retryParse([...failedFiles]);
     }, [failedFiles, retryParse]);
+    const expand = useCallback(
+        (fileId: string, request: ContextExpandRequest): Promise<ContextExpandResult> =>
+            expandContext({
+                store,
+                fileId,
+                request,
+                contentAvailable: pr.capabilities.fileContent,
+                loadContent,
+            }),
+        [loadContent, pr.capabilities.fileContent, store],
+    );
 
     // Cards start line selection, and the window ends it. Same hook as in the full diff.
     useSelectionLifecycle(store);
 
     const containerRef = useRef<HTMLElement | null>(null);
+    const [popoverHost, setPopoverHost] = useState<HTMLElement | null>(null);
+    const setContainer = useCallback((element: HTMLElement | null) => {
+        containerRef.current = element;
+        setPopoverHost(element);
+    }, []);
     /** The top stop in the viewport and its offset from the container edge anchor a preset change. */
     const topStopRef = useRef<{ stopId: string; offset: number } | null>(null);
     const settling = useRef(0);
@@ -601,6 +639,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             fileId: string | null,
             line: number | null = null,
             side: 'old' | 'new' | null = null,
+            highlight = true,
         ) => {
             stopJump();
             const container = containerRef.current;
@@ -640,7 +679,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 }
                 const target = jumpTarget(container, stopId, fileId, line, side);
                 if (target !== null) {
-                    if (run.reached === 'none') {
+                    if (run.reached === 'none' && highlight) {
                         setFlashStopId(stopId);
                         run.timers.push(
                             setTimeout(() => {
@@ -654,7 +693,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         target.step === 'row' ||
                         (target.step === 'card' && line === null) ||
                         (target.step === 'section' && fileId === null);
-                    if (target.step === 'row') {
+                    if (target.step === 'row' && highlight) {
                         flashRow(target.element);
                     }
                     if (done) {
@@ -757,6 +796,63 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         },
         [model.entries, requestJump, revealTarget],
     );
+    const openedSelectionTarget = useRef<string | null>(null);
+    useEffect(() => {
+        if (initialSelectionTarget === null) {
+            openedSelectionTarget.current = null;
+            return;
+        }
+        const key = `${initialSelectionTarget.fileId}:${initialSelectionTarget.side}:${String(initialSelectionTarget.start)}`;
+        if (openedSelectionTarget.current === key) {
+            return;
+        }
+        let cancelled = false;
+        const open = async (): Promise<void> => {
+            let target = routeEntryForLine(
+                model.entries,
+                initialSelectionTarget.fileId,
+                initialSelectionTarget.side,
+                initialSelectionTarget.start,
+            );
+            if (target === null) {
+                await expand(initialSelectionTarget.fileId, { kind: 'file' });
+                if (cancelled) {
+                    return;
+                }
+                target = routeEntryForShownLine(
+                    model.entries,
+                    initialSelectionTarget.fileId,
+                    initialSelectionTarget.side,
+                    initialSelectionTarget.start,
+                    store.getSnapshot(),
+                    openedCollapsed,
+                );
+            }
+            if (target === null || cancelled) {
+                return;
+            }
+            openedSelectionTarget.current = key;
+            revealTarget(target.entry, initialSelectionTarget.fileId);
+            if (target.collapsedAnchor) {
+                setOpenedCollapsed((previous) =>
+                    new Set(previous).add(`${target.entry.view.stop.id}\u0000${initialSelectionTarget.fileId}`),
+                );
+            }
+            store.openFile(initialSelectionTarget.fileId);
+            store.showWhitespace(initialSelectionTarget.fileId);
+            requestJump(
+                target.entry.view.stop.id,
+                initialSelectionTarget.fileId,
+                initialSelectionTarget.start,
+                initialSelectionTarget.side,
+                false,
+            );
+        };
+        void open();
+        return () => {
+            cancelled = true;
+        };
+    }, [expand, initialSelectionTarget, model.entries, openedCollapsed, requestJump, revealTarget, store]);
 
     // Our scroll adjustment does not count as a reviewer gesture while anchor correction is running: the browser
     // dispatches scroll events in the next task, so a timer closes the window.
@@ -1187,19 +1283,28 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         return map;
     }, [threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible]);
 
-    const expand = useCallback(
-        (fileId: string, request: ContextExpandRequest): Promise<ContextExpandResult> =>
-            expandContext({
-                store,
-                fileId,
-                request,
-                contentAvailable: pr.capabilities.fileContent,
-                loadContent,
-            }),
-        [loadContent, pr.capabilities.fileContent, store],
-    );
-
     const [focusedLine, setFocusedLine] = useState<{ fileId: string; side: 'old' | 'new'; line: number } | null>(null);
+    const [selectionCard, setSelectionCard] = useState<{ readonly stopId: string; readonly group: RouteFileGroup } | null>(
+        null,
+    );
+    useEffect(() => {
+        if (diffSnapshot.selection === null) {
+            setSelectionCard(null);
+        }
+    }, [diffSnapshot.selection]);
+    const selectedShownModel = useMemo(() => {
+        if (selectionCard === null || diffSnapshot.selection?.fileId !== selectionCard.group.fileId) {
+            return null;
+        }
+        const key = `${selectionCard.stopId}\u0000${selectionCard.group.fileId}`;
+        return stopFileShownModel(
+            selectionCard.group,
+            diffSnapshot.models.get(selectionCard.group.fileId) ?? null,
+            diffSnapshot.content.get(selectionCard.group.fileId) ?? null,
+            diffSnapshot.expansion.get(selectionCard.group.fileId) ?? EMPTY_EXPANSION,
+            openedCollapsed.has(key),
+        );
+    }, [diffSnapshot, openedCollapsed, selectionCard]);
     const commentLine = useCallback(
         (fileId: string, side: 'old' | 'new', line: number) => {
             const file = diff.files.find((candidate) => candidate.fileId === fileId);
@@ -1208,7 +1313,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
             const position = commentPosition(
                 diffSnapshot.selection,
-                diffSnapshot.models.get(fileId) ?? null,
+                selectedShownModel ?? diffSnapshot.models.get(fileId) ?? null,
                 fileId,
                 side,
                 line,
@@ -1219,7 +1324,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             // would keep the line pencil visible and mix it into the next comment.
             store.clearSelection();
         },
-        [diff.files, diffSnapshot.models, diffSnapshot.selection, pr.capabilities.commentIssues, store, threadStore],
+        [
+            diff.files,
+            diffSnapshot.models,
+            diffSnapshot.selection,
+            pr.capabilities.commentIssues,
+            selectedShownModel,
+            store,
+            threadStore,
+        ],
     );
     useShortcut({
         id: 'thread.commentLine',
@@ -1242,12 +1355,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             },
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
-            onSelectStart: (fileId, key, extend) => {
+            onSelectStart: (fileId, key, side, extend) => {
                 store.beginSelection();
                 if (extend) {
-                    store.extendSelection(fileId, key);
+                    store.extendSelection(fileId, key, side);
                 } else {
-                    store.startSelection(fileId, key);
+                    store.startSelection(fileId, key, side);
                 }
             },
             onSelectExtend: store.extendSelection,
@@ -1266,6 +1379,20 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         (stopId: string, group: RouteFileGroup) => {
             const key = `${stopId}\u0000${group.fileId}`;
             const collapseReason = fileCollapseReason(diffSnapshot, group.file);
+            const shownModel = stopFileShownModel(
+                group,
+                diffSnapshot.models.get(group.fileId) ?? null,
+                diffSnapshot.content.get(group.fileId) ?? null,
+                diffSnapshot.expansion.get(group.fileId) ?? EMPTY_EXPANSION,
+                openedCollapsed.has(key),
+            );
+            const cardActions: FileCardActions = {
+                ...actions,
+                onSelectStart: (fileId, lineKey, side, extend) => {
+                    setSelectionCard({ stopId, group });
+                    actions.onSelectStart(fileId, lineKey, side, extend);
+                },
+            };
             return (
                 <StopFileCard
                     key={group.fileId}
@@ -1276,6 +1403,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     content={diffSnapshot.content.get(group.fileId)}
                     contentAvailable={pr.capabilities.fileContent}
                     expansion={diffSnapshot.expansion.get(group.fileId) ?? EMPTY_EXPANSION}
+                    shownModel={shownModel}
                     read={
                         diffSnapshot.readState.get(group.fileId) ??
                         readStateOf({ file: group.file, record: null })
@@ -1293,7 +1421,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     threadActions={threadActions}
                     threadNow={threadNow}
                     onFocusThread={NOOP_THREAD}
-                    actions={actions}
+                    actions={cardActions}
                     collapsedOpen={openedCollapsed.has(key)}
                     onToggleCollapsed={() => {
                         setOpenedCollapsed((previous) => {
@@ -1327,12 +1455,20 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const outsideThreads = threadSnapshot.outside.filter(
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
     );
+    const selectedFile =
+        diffSnapshot.selection === null
+            ? null
+            : (diff.files.find((file) => file.fileId === diffSnapshot.selection?.fileId) ?? null);
+    const selectedModel =
+        selectedFile === null
+            ? null
+            : (selectedShownModel ?? diffSnapshot.models.get(selectedFile.fileId) ?? null);
 
     return (
         <main
-            className="route"
+            className="route selection-popover-host"
             id="view-route"
-            ref={containerRef}
+            ref={setContainer}
             onScroll={handleScroll}
             style={
                 toolbarHeight === null
@@ -1481,6 +1617,23 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 {/* Threads outside the diff are the same as in the full diff. They share one list per PR. */}
                 <OutsideThreads threads={outsideThreads} store={threadStore} actions={threadActions} now={threadNow} />
             </div>
+
+            {diffSnapshot.selection === null || selectedFile === null || selectedModel === null ? null : (
+                <SelectionPopover
+                    key={`${diffSnapshot.selection.fileId}:${diffSnapshot.selection.side ?? ''}:${diffSnapshot.selection.anchor}:${diffSnapshot.selection.focus}`}
+                    host={popoverHost}
+                    file={selectedFile}
+                    model={selectedModel}
+                    selection={diffSnapshot.selection}
+                    dragging={diffSnapshot.selectionDragging}
+                    agentConnected={agentConnected}
+                    onAsk={onAskSelection}
+                    onComment={(side, line) => {
+                        commentLine(selectedFile.fileId, side, line);
+                    }}
+                    onClear={store.clearSelection}
+                />
+            )}
 
             <span className="visually-hidden" role="status" aria-live="polite">
                 {announcement}
@@ -1828,8 +1981,94 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
     update: () => Promise.reject(new Error('draft writing is unavailable in this state')),
     delete: () => Promise.reject(new Error('draft writing is unavailable in this state')),
 };
+function routeEntryForShownLine(
+    entries: readonly RouteEntry[],
+    fileId: string,
+    side: 'old' | 'new',
+    line: number,
+    snapshot: DiffViewSnapshot,
+    openedCollapsed: ReadonlySet<string>,
+): { readonly entry: RouteEntry; readonly collapsedAnchor: boolean } | null {
+    for (const entry of entries) {
+        const groups = entry.kind === 'stop' ? entry.view.files : entry.view.files.map((file) => uncoveredAsGroup(file));
+        for (const group of groups) {
+            if (group.fileId !== fileId) {
+                continue;
+            }
+            const key = `${entry.view.stop.id}\u0000${fileId}`;
+            const shown = stopFileShownModel(
+                group,
+                snapshot.models.get(fileId) ?? null,
+                snapshot.content.get(fileId) ?? null,
+                snapshot.expansion.get(fileId) ?? EMPTY_EXPANSION,
+                openedCollapsed.has(key),
+            );
+            if (modelHasLine(shown, side, line)) {
+                return { entry, collapsedAnchor: false };
+            }
+            if (entry.kind === 'stop' && !openedCollapsed.has(key) && group.collapsedAnchors.length > 0) {
+                const opened = stopFileShownModel(
+                    group,
+                    snapshot.models.get(fileId) ?? null,
+                    snapshot.content.get(fileId) ?? null,
+                    snapshot.expansion.get(fileId) ?? EMPTY_EXPANSION,
+                    true,
+                );
+                if (modelHasLine(opened, side, line)) {
+                    return { entry, collapsedAnchor: true };
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function modelHasLine(model: DiffFileModel | null, side: 'old' | 'new', line: number): boolean {
+    if (model?.content.kind !== 'text') {
+        return false;
+    }
+    return model.content.blocks.some(
+        (block) =>
+            block.kind === 'hunk' &&
+            block.lines.some((candidate) => (side === 'old' ? candidate.oldLine : candidate.newLine) === line),
+    );
+}
+
+function routeEntryForLine(
+    entries: readonly RouteEntry[],
+    fileId: string,
+    side: 'old' | 'new',
+    line: number,
+): { readonly entry: RouteEntry; readonly collapsedAnchor: boolean } | null {
+    for (const entry of entries) {
+        const group = entry.view.files.find((file) => file.fileId === fileId);
+        if (group === undefined) {
+            continue;
+        }
+        if (group.anchors.some((anchor) => anchor.side === side && line >= anchor.start && line <= anchor.end)) {
+            return { entry, collapsedAnchor: false };
+        }
+        if (side === 'old' ? group.contextLines.old.has(line) : group.contextLines.new.has(line)) {
+            return { entry, collapsedAnchor: false };
+        }
+        if (entry.kind === 'stop') {
+            const stopGroup = entry.view.files.find((file) => file.fileId === fileId);
+            if (
+                stopGroup?.collapsedAnchors.some(
+                    (anchor) => anchor.side === side && line >= anchor.start && line <= anchor.end,
+                ) === true
+            ) {
+                return { entry, collapsedAnchor: true };
+            }
+        }
+    }
+    return null;
+}
+
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
+const EMPTY_ASK_SELECTION = (): Promise<ChatExchange> =>
+    Promise.reject(new Error('asking the agent is unavailable in this state'));
 const EMPTY_SET_STOP_VIEWED = (): Promise<number> =>
     Promise.reject(new Error('stop marking is unavailable in this state'));
 const EMPTY_FAILURES: ReadonlyMap<string, boolean> = new Map();

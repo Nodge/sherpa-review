@@ -3,10 +3,9 @@ import { useCallback, useMemo } from 'react';
 
 import type { DiffFileModel } from '../../diff/model.js';
 import type { FileCardActions } from '../../diff-view/file-card.tsx';
-import { FileCard } from '../../diff-view/file-card.tsx';
+import { FileCard, shownFileModel } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
-import { expandFileContext } from '../../diff-view/expand.js';
 import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
@@ -34,6 +33,7 @@ export interface StopFileCardProps {
     readonly content: FileContent | null | undefined;
     readonly contentAvailable: boolean;
     readonly expansion: FileExpansion;
+    readonly shownModel: DiffFileModel | null;
     readonly read: FileReadState;
     readonly collapseReason: FileCollapseReason | null;
     readonly onToggleCollapse: () => void;
@@ -51,6 +51,23 @@ export interface StopFileCardProps {
     readonly selection: LineSelection | null;
 }
 
+/** The exact model the stop card passes to diff rows. */
+export function stopFileShownModel(
+    group: RouteFileGroup,
+    model: DiffFileModel | null,
+    content: FileContent | null,
+    expansion: FileExpansion,
+    collapsedOpen: boolean,
+): DiffFileModel | null {
+    const anchors = anchorSpans(collapsedOpen ? [...group.anchors, ...group.collapsedAnchors] : group.anchors);
+    return shownFileModel(
+        model,
+        content,
+        expansion,
+        (source) => clipModelToAnchors(source, anchors, ANCHOR_CONTEXT, expansion).model,
+    );
+}
+
 export function StopFileCard({
     group,
     model,
@@ -59,6 +76,7 @@ export function StopFileCard({
     content,
     contentAvailable,
     expansion,
+    shownModel,
     read,
     collapseReason,
     onToggleCollapse,
@@ -82,21 +100,15 @@ export function StopFileCard({
         (source: DiffFileModel) => clipModelToAnchors(source, anchors, ANCHOR_CONTEXT, expansion).model,
         [anchors, expansion],
     );
-    // Exactly the model the card will render (`FileCard`: context expansion, then slice):
-    // thread placement uses it, and the two models must never diverge.
-    const shown = useMemo(
-        () => (model === null ? null : clip(expandFileContext(model, content ?? null, expansion))),
-        [clip, content, expansion, model],
-    );
     // Same condition as the full diff card: notices (binary, "whitespace only")
     // replace lines, so placing threads on them would make the threads disappear.
     const rowsShown =
         collapseReason === null &&
         parseError === null &&
-        shown?.content.kind === 'text' &&
-        (!shown.whitespaceOnly || showWhitespace);
+        shownModel?.content.kind === 'text' &&
+        (!shownModel.whitespaceOnly || showWhitespace);
     const { threadsUnderHeader, renderAfterLine, focusedThreadRange } = useCardThreads({
-        model: shown,
+        model: shownModel,
         rowsShown,
         placement: 'exact',
         threads,
@@ -119,6 +131,7 @@ export function StopFileCard({
                 contentAvailable={contentAvailable}
                 expansion={expansion}
                 transform={clip}
+                shownModel={shownModel}
                 counts={{ additions: group.additions, deletions: group.deletions }}
                 read={read}
                 collapseReason={collapseReason}

@@ -18,7 +18,7 @@ import {
     remainingHiddenLines,
 } from './expand.js';
 import type { LineKey, LineRange, LineSelection } from './selection.js';
-import { parseLineKey } from './selection.js';
+import { lineSide, parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
 
 /**
@@ -54,8 +54,8 @@ export interface FileCardActions {
     readonly onToggleCollapse?: ((fileId: string) => void) | undefined;
     readonly onOpenFile: (fileId: string) => void;
     readonly onShowWhitespace: (fileId: string) => void;
-    readonly onSelectStart: (fileId: string, key: LineKey, extend: boolean) => void;
-    readonly onSelectExtend: (fileId: string, key: LineKey) => void;
+    readonly onSelectStart: (fileId: string, key: LineKey, side: 'old' | 'new', extend: boolean) => void;
+    readonly onSelectExtend: (fileId: string, key: LineKey, side: 'old' | 'new') => void;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
@@ -100,6 +100,8 @@ export interface FileCardProps {
      * runs on the full model, and the slice is computed from it.
      */
     readonly transform?: (model: DiffFileModel) => DiffFileModel;
+    /** Precomputed render model for consumers that need it outside the card. */
+    readonly shownModel?: DiffFileModel | null;
     /** Header counters override file totals. On the route, the card shows counts for its stop. */
     readonly counts?: { readonly additions: number; readonly deletions: number };
     readonly selection: LineSelection | null;
@@ -111,6 +113,20 @@ export interface FileCardProps {
     readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly actions: FileCardActions;
+}
+
+/** The exact model `FileCard` passes to the diff rows. */
+export function shownFileModel(
+    model: DiffFileModel | null,
+    content: FileContent | null,
+    expansion: FileExpansion,
+    transform?: (model: DiffFileModel) => DiffFileModel,
+): DiffFileModel | null {
+    if (model === null) {
+        return null;
+    }
+    const expanded = expandFileContext(model, content, expansion);
+    return transform === undefined ? expanded : transform(expanded);
 }
 
 export const FileCard = memo(function FileCard(props: FileCardProps) {
@@ -132,6 +148,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         initialHint = null,
         initialGapError = false,
         transform,
+        shownModel,
         counts,
         selection,
         routeBadge = null,
@@ -145,13 +162,10 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     const [announcement, setAnnouncement] = useState('');
 
     // Model with context already expanded. Expansion is a pure function of the original model.
-    const shown = useMemo(() => {
-        if (model === null) {
-            return null;
-        }
-        const expanded = expandFileContext(model, content ?? null, expansion);
-        return transform === undefined ? expanded : transform(expanded);
-    }, [model, content, expansion, transform]);
+    const shown = useMemo(
+        () => (shownModel === undefined ? shownFileModel(model, content ?? null, expansion, transform) : shownModel),
+        [content, expansion, model, shownModel, transform],
+    );
 
     const changed =
         counts === undefined
@@ -168,14 +182,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         actions.onShowWhitespace(file.fileId);
     }, [actions, file.fileId]);
     const onSelectStart = useCallback(
-        (key: LineKey, extend: boolean) => {
-            actions.onSelectStart(file.fileId, key, extend);
+        (key: LineKey, side: 'old' | 'new', extend: boolean) => {
+            actions.onSelectStart(file.fileId, key, side, extend);
         },
         [actions, file.fileId],
     );
     const onSelectExtend = useCallback(
-        (key: LineKey) => {
-            actions.onSelectExtend(file.fileId, key);
+        (key: LineKey, side: 'old' | 'new') => {
+            actions.onSelectExtend(file.fileId, key, side);
         },
         [actions, file.fileId],
     );
@@ -532,8 +546,8 @@ interface BodyProps {
     readonly focusedThreadRange: LineRange | null;
     readonly showWhitespace: boolean;
     readonly onShowWhitespace: () => void;
-    readonly onSelectStart: (key: LineKey, extend: boolean) => void;
-    readonly onSelectExtend: (key: LineKey) => void;
+    readonly onSelectStart: (key: LineKey, side: 'old' | 'new', extend: boolean) => void;
+    readonly onSelectExtend: (key: LineKey, side: 'old' | 'new') => void;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
@@ -576,23 +590,28 @@ function Body(props: BodyProps) {
                 if (target.closest('.diff-row__comment') !== null) {
                     return;
                 }
-                const key = parseLineKey(target.closest('[data-key]')?.getAttribute('data-key'));
+                const keyed = target.closest<HTMLElement>('[data-key]');
+                const key = parseLineKey(keyed?.getAttribute('data-key'));
                 if (key === null) {
                     return;
                 }
                 if (target.closest('.diff-row__code') !== null && !event.shiftKey) {
                     return;
                 }
+                const side = keyed?.dataset.side === 'old' || keyed?.dataset.side === 'new' ? keyed.dataset.side : lineSide(key);
                 event.preventDefault();
-                props.onSelectStart(key, event.shiftKey);
+                props.onSelectStart(key, side, event.shiftKey);
             }}
             onMouseOver={(event) => {
                 if (event.buttons !== 1) {
                     return;
                 }
-                const key = parseLineKey((event.target as HTMLElement).closest('[data-key]')?.getAttribute('data-key'));
+                const keyed = (event.target as HTMLElement).closest<HTMLElement>('[data-key]');
+                const key = parseLineKey(keyed?.getAttribute('data-key'));
                 if (key !== null) {
-                    props.onSelectExtend(key);
+                    const side =
+                        keyed?.dataset.side === 'old' || keyed?.dataset.side === 'new' ? keyed.dataset.side : lineSide(key);
+                    props.onSelectExtend(key, side);
                 }
             }}
         >

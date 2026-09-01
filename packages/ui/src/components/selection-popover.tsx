@@ -1,0 +1,437 @@
+import type { ChatAnchor, ChatExchange } from '@sherpa/protocol';
+import type { CSSProperties, KeyboardEvent } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+import type { DiffFileModel } from '../diff/model.js';
+import type { LineSelection } from '../diff-view/selection.js';
+import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
+import { selectionLinkHash } from '../selection-link.js';
+import { formatCount, plural } from '../text.js';
+import './selection-popover.css';
+
+const POPOVER_GAP = 8;
+const POPOVER_MARGIN = 8;
+const SCROLL_CLOSE_DISTANCE = 200;
+
+export interface SelectionPopoverProps {
+    readonly host: HTMLElement | null;
+    readonly file: { readonly fileId: string; readonly path: string };
+    readonly model: DiffFileModel;
+    readonly selection: LineSelection;
+    readonly dragging: boolean;
+    readonly agentConnected: boolean;
+    readonly onAsk: (question: string, anchor: ChatAnchor) => Promise<ChatExchange>;
+    readonly onComment: (side: 'old' | 'new', line: number) => void;
+    readonly onClear: () => void;
+    /** The gallery renders states without DOM measurements or a server. */
+    readonly gallery?: { readonly mode: 'rest' | 'question' | 'sent'; readonly position: { left: number; top: number } };
+}
+
+export interface SelectionPopoverPositionInput {
+    readonly host: { readonly top: number; readonly left: number; readonly width: number; readonly scrollTop: number; readonly scrollLeft: number };
+    readonly selection: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number };
+    readonly popover: { readonly width: number; readonly height: number };
+    readonly viewportHeight: number;
+    readonly viewportTop?: number;
+    readonly viewportBottom?: number;
+    readonly gap?: number;
+    readonly margin?: number;
+}
+
+export interface SelectionPopoverPosition {
+    readonly left: number;
+    readonly top: number;
+    readonly placement: 'above' | 'below';
+}
+
+/** Absolute node coordinates inside the scroll container. The gap to the lines never exceeds 60px. */
+export function calculateSelectionPopoverPosition(input: SelectionPopoverPositionInput): SelectionPopoverPosition {
+    const gap = Math.min(input.gap ?? POPOVER_GAP, 60);
+    const margin = input.margin ?? POPOVER_MARGIN;
+    const viewportTop = (input.viewportTop ?? 0) + margin;
+    const viewportBottom = (input.viewportBottom ?? input.viewportHeight) - margin;
+    const belowFits = input.selection.bottom + gap + input.popover.height <= viewportBottom;
+    const preferredTop = belowFits
+        ? input.selection.bottom + gap
+        : input.selection.top - gap - input.popover.height;
+    const viewportPopoverTop = Math.min(
+        Math.max(preferredTop, viewportTop),
+        Math.max(viewportTop, viewportBottom - input.popover.height),
+    );
+    const centered =
+        (input.selection.left + input.selection.right) / 2 - input.host.left + input.host.scrollLeft - input.popover.width / 2;
+    const minLeft = input.host.scrollLeft + margin;
+    const maxLeft = Math.max(minLeft, input.host.scrollLeft + input.host.width - input.popover.width - margin);
+    return {
+        left: Math.min(Math.max(centered, minLeft), maxLeft),
+        top: viewportPopoverTop - input.host.top + input.host.scrollTop,
+        placement: belowFits ? 'below' : 'above',
+    };
+}
+
+export function selectionScrolledPast(openingTop: number, currentTop: number, limit = SCROLL_CLOSE_DISTANCE): boolean {
+    return Math.abs(currentTop - openingTop) > limit;
+}
+
+export function selectionAskDisabled(agentConnected: boolean): boolean {
+    return !agentConnected;
+}
+
+export function chatAnchorFromSelection(
+    file: { readonly fileId: string; readonly path: string },
+    model: DiffFileModel,
+    selection: LineSelection,
+): ChatAnchor | null {
+    if (selection.fileId !== file.fileId) {
+        return null;
+    }
+    const side = selectionSide(selection);
+    const range = selectedLineRange(model, selection, side);
+    return range === null
+        ? null
+        : {
+              fileId: file.fileId,
+              path: file.path,
+              side,
+              start: range.line,
+              end: range.line + range.size - 1,
+          };
+}
+
+export function SelectionPopover(props: SelectionPopoverProps) {
+    const { file, model, selection, dragging, agentConnected, onAsk, onComment, onClear, gallery } = props;
+    const anchor = chatAnchorFromSelection(file, model, selection);
+    const selectedKeys = useMemo(() => selectedLines(model, selection), [model, selection]);
+    const count = selectedKeys.size;
+    const [mode, setMode] = useState<'rest' | 'question' | 'sent'>(gallery?.mode ?? 'rest');
+    const [question, setQuestion] = useState('');
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [position, setPosition] = useState<SelectionPopoverPosition | null>(
+        gallery === undefined ? null : { ...gallery.position, placement: 'below' },
+    );
+    const popoverRef = useRef<HTMLDivElement | null>(null);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const openingTop = useRef<number | null>(null);
+    const rowsCache = useRef<SelectionRowsCache | null>(null);
+    const measureFrame = useRef<number | null>(null);
+    const scrollFrame = useRef<number | null>(null);
+
+    const selectionBounds = useCallback((): SelectionBounds | null => {
+        const host = props.host;
+        if (host === null) {
+            return null;
+        }
+        const cached = rowsCache.current;
+        const groups =
+            cached !== null &&
+            cached.host === host &&
+            cached.fileId === file.fileId &&
+            cached.keys === selectedKeys &&
+            cached.groups.every((group) => group.rows.every((row) => row.isConnected))
+                ? cached.groups
+                : findSelectionRows(host, file.fileId, selectedKeys);
+        rowsCache.current = { host, fileId: file.fileId, keys: selectedKeys, groups };
+        return boundsOfSelectionRows(groups);
+    }, [file.fileId, props.host, selectedKeys]);
+
+    const measure = useCallback((): SelectionBounds | null => {
+        const host = props.host;
+        const popover = popoverRef.current;
+        if (gallery !== undefined || host === null || popover === null) {
+            return null;
+        }
+        const bounds = selectionBounds();
+        if (bounds === null) {
+            return null;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
+        setPosition(
+            calculateSelectionPopoverPosition({
+                host: {
+                    top: hostRect.top,
+                    left: hostRect.left,
+                    width: host.clientWidth,
+                    scrollTop: host.scrollTop,
+                    scrollLeft: host.scrollLeft,
+                },
+                selection: bounds,
+                popover: { width: popoverRect.width, height: popoverRect.height },
+                viewportHeight: window.innerHeight,
+                ...popoverViewportBounds(host),
+            }),
+        );
+        openingTop.current ??= bounds.top;
+        return bounds;
+    }, [gallery, props.host, selectionBounds]);
+    const scheduleMeasure = useCallback(() => {
+        if (measureFrame.current !== null) {
+            return;
+        }
+        measureFrame.current = requestAnimationFrame(() => {
+            measureFrame.current = null;
+            measure();
+        });
+    }, [measure]);
+
+    useLayoutEffect(() => {
+        if (gallery !== undefined || dragging) {
+            return;
+        }
+        measure();
+        const popover = popoverRef.current;
+        const host = props.host;
+        if (popover === null || host === null) {
+            return;
+        }
+        const resize = new ResizeObserver(scheduleMeasure);
+        resize.observe(popover);
+        resize.observe(host);
+        window.addEventListener('resize', scheduleMeasure);
+        return () => {
+            resize.disconnect();
+            window.removeEventListener('resize', scheduleMeasure);
+            if (measureFrame.current !== null) {
+                cancelAnimationFrame(measureFrame.current);
+                measureFrame.current = null;
+            }
+        };
+    }, [dragging, gallery, measure, props.host, scheduleMeasure]);
+
+    useLayoutEffect(() => {
+        if (mode === 'question') {
+            inputRef.current?.focus();
+        }
+    }, [mode]);
+
+    useLayoutEffect(() => {
+        const host = props.host;
+        if (gallery !== undefined || dragging || host === null) {
+            return;
+        }
+        const closeAfterScroll = (): void => {
+            if (scrollFrame.current !== null) {
+                return;
+            }
+            scrollFrame.current = requestAnimationFrame(() => {
+                scrollFrame.current = null;
+                const bounds = selectionBounds();
+                if (bounds === null) {
+                    onClear();
+                    return;
+                }
+                openingTop.current ??= bounds.top;
+                if (selectionScrolledPast(openingTop.current, bounds.top)) {
+                    onClear();
+                }
+            });
+        };
+        window.addEventListener('scroll', closeAfterScroll, true);
+        return () => {
+            window.removeEventListener('scroll', closeAfterScroll, true);
+            if (scrollFrame.current !== null) {
+                cancelAnimationFrame(scrollFrame.current);
+                scrollFrame.current = null;
+            }
+        };
+    }, [dragging, gallery, onClear, props.host, selectionBounds]);
+
+    if (dragging || anchor === null || count === 0) {
+        return null;
+    }
+
+    const submit = (): void => {
+        const text = question.trim();
+        if (text === '' || pending) {
+            return;
+        }
+        setPending(true);
+        setError(null);
+        void onAsk(text, anchor).then(
+            () => {
+                setPending(false);
+                setMode('sent');
+            },
+            (reason: unknown) => {
+                setPending(false);
+                setError(reason instanceof Error ? reason.message : String(reason));
+            },
+        );
+    };
+    const copyLink = (): void => {
+        const clipboard = (navigator as unknown as { readonly clipboard?: Pick<Clipboard, 'writeText'> }).clipboard;
+        if (clipboard === undefined) {
+            setError('The clipboard is unavailable.');
+            return;
+        }
+        const url = new URL(window.location.href);
+        url.hash = selectionLinkHash(url.hash, anchor);
+        void clipboard.writeText(url.toString()).catch(() => {
+            setError('Could not copy the link.');
+        });
+    };
+    const style =
+        position === null
+            ? ({ left: 0, top: 0, visibility: 'hidden' } satisfies CSSProperties)
+            : ({ left: position.left, top: position.top } satisfies CSSProperties);
+
+    if (mode === 'sent') {
+        return (
+            <div className="selection-popover selection-popover--chip" ref={popoverRef} style={style} role="status">
+                asked · the answer will land here
+            </div>
+        );
+    }
+
+    const countLabel = `${formatCount(count)} ${plural(count, 'line selected', 'lines selected', 'lines selected')}`;
+    return (
+        <div className="selection-popover" ref={popoverRef} style={style} data-placement={position?.placement}>
+            <div className="selection-popover__row">
+                <span className="selection-popover__count">{countLabel}</span>
+                {mode === 'question' ? null : (
+                    <>
+                        <button
+                            type="button"
+                            className="selection-popover__button selection-popover__button--primary"
+                            disabled={selectionAskDisabled(agentConnected)}
+                            title={
+                                selectionAskDisabled(agentConnected)
+                                    ? 'Reconnect the agent to ask about a selection'
+                                    : undefined
+                            }
+                            onClick={() => {
+                                setError(null);
+                                setMode('question');
+                            }}
+                        >
+                            Ask the agent
+                        </button>
+                        <button
+                            type="button"
+                            className="selection-popover__button"
+                            onClick={() => {
+                                onComment(anchor.side, anchor.start);
+                            }}
+                        >
+                            Comment
+                        </button>
+                        <button type="button" className="selection-popover__button" onClick={copyLink}>
+                            Copy link
+                        </button>
+                    </>
+                )}
+            </div>
+            {mode === 'question' ? (
+                <div className="selection-popover__question">
+                    <input
+                        ref={inputRef}
+                        className="selection-popover__input"
+                        aria-label="Question to the agent about the selection"
+                        value={question}
+                        disabled={pending}
+                        onChange={(event) => {
+                            setQuestion(event.target.value);
+                        }}
+                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                            if (event.key === 'Escape') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setError(null);
+                                setMode('rest');
+                                return;
+                            }
+                            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                submit();
+                            }
+                        }}
+                    />
+                    <span className="selection-popover__hint">Enter — send</span>
+                </div>
+            ) : null}
+            {error === null ? null : (
+                <div className="selection-popover__error" role="alert">
+                    {error}
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface SelectionBounds {
+    readonly top: number;
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+}
+
+interface SelectionRowsGroup {
+    readonly rows: readonly HTMLElement[];
+}
+
+interface SelectionRowsCache {
+    readonly host: HTMLElement;
+    readonly fileId: string;
+    readonly keys: ReadonlySet<string>;
+    readonly groups: readonly SelectionRowsGroup[];
+}
+
+function findSelectionRows(host: HTMLElement, fileId: string, keys: ReadonlySet<string>): readonly SelectionRowsGroup[] {
+    const cards = host.querySelectorAll<HTMLElement>(`.file-card[data-file="${CSS.escape(fileId)}"]`);
+    const groups: SelectionRowsGroup[] = [];
+    for (const card of cards) {
+        const rows = new Set<HTMLElement>();
+        for (const key of keys) {
+            const cell = card.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
+            const row = cell?.closest<HTMLElement>('.diff-row') ?? null;
+            if (row !== null) {
+                rows.add(row);
+            }
+        }
+        if (rows.size > 0) {
+            groups.push({ rows: [...rows] });
+        }
+    }
+    return groups;
+}
+
+function boundsOfSelectionRows(groups: readonly SelectionRowsGroup[]): SelectionBounds | null {
+    let best: { readonly bounds: SelectionBounds; readonly visible: number } | null = null;
+    for (const group of groups) {
+        let top = Number.POSITIVE_INFINITY;
+        let bottom = Number.NEGATIVE_INFINITY;
+        let left = Number.POSITIVE_INFINITY;
+        let right = Number.NEGATIVE_INFINITY;
+        let visible = 0;
+        for (const row of group.rows) {
+            const rect = row.getBoundingClientRect();
+            top = Math.min(top, rect.top);
+            bottom = Math.max(bottom, rect.bottom);
+            left = Math.min(left, rect.left);
+            right = Math.max(right, rect.right);
+            if (rect.bottom > 0 && rect.top < window.innerHeight) {
+                visible += 1;
+            }
+        }
+        const bounds = { top, bottom, left, right };
+        if (best === null || visible > best.visible) {
+            best = { bounds, visible };
+        }
+    }
+    return best?.bounds ?? null;
+}
+
+function popoverViewportBounds(host: HTMLElement): { readonly viewportTop: number; readonly viewportBottom: number } {
+    const toolbar = host.querySelector<HTMLElement>('.full-diff__toolbar, .route-toolbar');
+    const toolbarRect = toolbar?.getBoundingClientRect() ?? null;
+    const actionBar = document.querySelector<HTMLElement>('.review-action-bar');
+    const actionBarRect = actionBar?.getBoundingClientRect() ?? null;
+    return {
+        viewportTop: toolbarRect !== null && toolbarRect.height > 0 && toolbarRect.bottom > 0 ? toolbarRect.bottom : 0,
+        viewportBottom:
+            actionBarRect !== null && actionBarRect.height > 0 && actionBarRect.top < window.innerHeight
+                ? actionBarRect.top
+                : window.innerHeight,
+    };
+}

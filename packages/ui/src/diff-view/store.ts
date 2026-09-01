@@ -80,8 +80,8 @@ export interface DiffViewStore {
     readonly openFile: (fileId: string) => void;
     readonly showWhitespace: (fileId: string) => void;
     readonly beginSelection: () => void;
-    readonly startSelection: (fileId: string, key: LineKey) => void;
-    readonly extendSelection: (fileId: string, key: LineKey) => void;
+    readonly startSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
+    readonly extendSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
     readonly finishSelection: () => void;
     readonly clearSelection: () => void;
 }
@@ -390,17 +390,26 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
         },
 
-        startSelection: (fileId, key) => {
-            update({ selection: { fileId, anchor: key, focus: key } });
+        startSelection: (fileId, key, side) => {
+            update({ selection: { fileId, ...(side === undefined ? {} : { side }), anchor: key, focus: key } });
         },
 
-        extendSelection: (fileId, key) => {
+        extendSelection: (fileId, key, side) => {
             const current = snapshot.selection;
-            const anchor = current !== null && current.fileId === fileId ? current.anchor : key;
-            if (current !== null && current.fileId === fileId && current.focus === key) {
+            const sameFile = current !== null && current.fileId === fileId;
+            const anchor = sameFile ? current.anchor : key;
+            const selectedSide = sameFile ? current.side : side;
+            if (sameFile && current.focus === key) {
                 return;
             }
-            update({ selection: { fileId, anchor, focus: key } });
+            update({
+                selection: {
+                    fileId,
+                    ...(selectedSide === undefined ? {} : { side: selectedSide }),
+                    anchor,
+                    focus: key,
+                },
+            });
         },
 
         finishSelection: () => {

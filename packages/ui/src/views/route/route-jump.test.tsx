@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
 import type { Lens, RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -7,12 +7,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
+import { expandAllGaps } from '../../diff-view/expand.js';
+import { findLineRow } from '../../diff-view/line-target.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
+import { buildRouteModel } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteWorkspace } from './route-view.tsx';
+import { stopFileShownModel } from './stop-file-card.tsx';
 
 /**
  * Live route clicks in jsdom: expanding test code, flashing the target line and moving
@@ -32,6 +36,7 @@ const SNAPSHOT: RouteSnapshot = (() => {
     return snapshot;
 })();
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
+const MODELS = new Map(DATA.diff.files.map((file) => [file.fileId, parseFileDiff(toParseRequest(file))]));
 
 // React 19 requires the environment to be declared explicitly, or every `act` logs a warning.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -127,6 +132,77 @@ function digestOutsideStopSnapshot(): RouteSnapshot {
     };
 }
 
+function hiddenExpandedRouteLine(): { readonly stopId: string; readonly fileId: string; readonly line: number } {
+    const route = buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models: MODELS });
+    for (const entry of route.entries) {
+        if (entry.kind !== 'stop') {
+            continue;
+        }
+        for (const group of entry.view.files) {
+            const raw = MODELS.get(group.fileId);
+            const content = fileContentOf(group.file);
+            if (raw === undefined || content === null) {
+                continue;
+            }
+            const base = stopFileShownModel(group, raw, content, new Map(), true);
+            const expanded = stopFileShownModel(group, raw, content, expandAllGaps(raw, new Map()), true);
+            if (expanded?.content.kind !== 'text') {
+                continue;
+            }
+            for (const block of expanded.content.blocks) {
+                if (block.kind !== 'hunk') {
+                    continue;
+                }
+                for (const candidate of block.lines) {
+                    const line = candidate.newLine;
+                    if (
+                        line !== null &&
+                        !hasModelLine(base, 'new', line) &&
+                        !routeOwnsLine(route.entries, group.fileId, 'new', line)
+                    ) {
+                        return { stopId: entry.view.stop.id, fileId: group.fileId, line };
+                    }
+                }
+            }
+        }
+    }
+    throw new Error('the fixture needs a line visible only after route context expansion');
+}
+
+function hasModelLine(model: ReturnType<typeof stopFileShownModel>, side: 'old' | 'new', line: number): boolean {
+    return (
+        model?.content.kind === 'text' &&
+        model.content.blocks.some(
+            (block) =>
+                block.kind === 'hunk' &&
+                block.lines.some((candidate) => (side === 'old' ? candidate.oldLine : candidate.newLine) === line),
+        )
+    );
+}
+
+function routeOwnsLine(
+    entries: ReturnType<typeof buildRouteModel>['entries'],
+    fileId: string,
+    side: 'old' | 'new',
+    line: number,
+): boolean {
+    return entries.some((entry) => {
+        const group = entry.view.files.find((file) => file.fileId === fileId);
+        if (group === undefined) {
+            return false;
+        }
+        const visible =
+            group.anchors.some((anchor) => anchor.side === side && line >= anchor.start && line <= anchor.end) ||
+            (side === 'old' ? group.contextLines.old.has(line) : group.contextLines.new.has(line));
+        const collapsed =
+            entry.kind === 'stop' &&
+            (entry.view.files.find((file) => file.fileId === fileId)?.collapsedAnchors.some(
+                (anchor) => anchor.side === side && line >= anchor.start && line <= anchor.end,
+            ) ?? false);
+        return visible || collapsed;
+    });
+}
+
 interface Mounted {
     readonly host: HTMLElement;
     readonly session: SessionStore;
@@ -154,6 +230,8 @@ function mount(
         extraLenses?: readonly Lens[];
         progress?: readonly UiFileProgress[];
         progressLoaded?: boolean;
+        selectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number };
+        fileContent?: boolean;
     } = {},
 ): Mounted {
     const host = document.createElement('div');
@@ -182,8 +260,12 @@ function mount(
                 progressLoaded={progressLoaded}
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
-                loadContent={() => Promise.resolve(null)}
+                loadContent={(fileId) => {
+                    const file = DATA.diff.files.find((candidate) => candidate.fileId === fileId);
+                    return Promise.resolve(options.fileContent && file !== undefined ? fileContentOf(file) : null);
+                }}
                 onSetViewed={() => Promise.resolve(0)}
+                initialSelectionTarget={options.selectionTarget ?? null}
                 onSetStopViewed={(stopId) => {
                     stopWrites.push(stopId);
                     return Promise.resolve(0);
@@ -343,6 +425,21 @@ describe('collapsing route file cards', () => {
         await view.settle();
 
         expect(card.querySelector('.file-card__collapsed--file')).toBeNull();
+    });
+});
+
+describe('jumping to a hidden route line', () => {
+    it('expands context and reaches the target with a bounded search across frames', async () => {
+        const target = hiddenExpandedRouteLine();
+        const view = mount({
+            selectionTarget: { fileId: target.fileId, side: 'new', start: target.line },
+            fileContent: true,
+        });
+
+        await view.settle();
+
+        expect(view.store.getSnapshot().expansion.get(target.fileId)?.size).toBeGreaterThan(0);
+        expect(findLineRow(stopSection(view.host, target.stopId), 'new', target.line)).not.toBeNull();
     });
 });
 

@@ -2,6 +2,10 @@ import { useEffect } from 'react';
 
 import type { DiffViewStore } from './store.js';
 
+export function shouldClearSelectionOnPointerDown(target: EventTarget | null): boolean {
+    return !(target instanceof Element) || target.closest('.diff-rows, .selection-popover') === null;
+}
+
 /**
  * Line selection lifecycle (SPEC §2.14): the card starts the drag, while
  * mouse release, Esc, and clicks outside diff lines.
@@ -17,8 +21,7 @@ export function useSelectionLifecycle(store: DiffViewStore): void {
             }
         };
         const onPointerDown = (event: MouseEvent): void => {
-            const target = event.target as HTMLElement | null;
-            if (target?.closest('.diff-rows') === null) {
+            if (shouldClearSelectionOnPointerDown(event.target)) {
                 store.clearSelection();
             }
         };

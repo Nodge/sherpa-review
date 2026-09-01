@@ -1,4 +1,6 @@
 import type {
+    ChatAnchor,
+    ChatExchange,
     Comment,
     CommentDraft,
     FileContent,
@@ -28,6 +30,7 @@ import {
     rpcErrorSchema,
     UI_ENDPOINTS,
     uiCancelResponseSchema,
+    uiChatAskResponseSchema,
     uiEnqueueResponseSchema,
     uiFeedbackResponseSchema,
     uiOpenInEditorResponseSchema,
@@ -189,6 +192,11 @@ export async function fillRouteStop(
         uiRouteFillStopResponseSchema,
     );
     return body.outcome;
+}
+
+/** Enqueues a question about the selection. Later exchange status arrives over chat SSE in T6. */
+export async function askReviewChat(token: string, text: string, anchor: ChatAnchor): Promise<ChatExchange> {
+    return (await post(UI_ENDPOINTS.reviewChatAsk, token, { text, anchor }, uiChatAskResponseSchema)).exchange;
 }
 
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {

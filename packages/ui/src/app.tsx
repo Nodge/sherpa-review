@@ -1061,6 +1061,7 @@ export function App({ store, session, token }: AppProps) {
                     progressWriter={progressWriter}
                     store={diffStore}
                     threadStore={threadStore}
+                    agentConnected={state.worker.kind === 'connected'}
                     paletteNavigation={paletteNavigation}
                     onFilterChangeHandler={setDiffFilterHandler}
                     onPaletteActiveFileChange={(fileId) => {
@@ -1088,6 +1089,7 @@ export function App({ store, session, token }: AppProps) {
                     store={diffStore}
                     threadStore={threadStore}
                     snapshot={routeViewSnapshot}
+                    agentConnected={state.worker.kind === 'connected'}
                     agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}

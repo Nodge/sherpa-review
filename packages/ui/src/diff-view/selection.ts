@@ -23,6 +23,8 @@ export interface LineRange {
 
 export interface LineSelection {
     readonly fileId: string;
+    /** Numbering side. Older saved fixtures without this field derive it from the line key. */
+    readonly side?: 'old' | 'new';
     /** Starting line (may be below the focus, since dragging works in either direction). */
     readonly anchor: LineKey;
     readonly focus: LineKey;
@@ -46,6 +48,16 @@ export function lineKey(line: DiffLine): LineKey | null {
 /** `null` means the attribute is not a line key (unrelated element under the cursor). */
 export function parseLineKey(value: string | null | undefined): LineKey | null {
     return value === null || value === undefined || value === '' ? null : value;
+}
+
+/** A unified row without `data-side` uses the side on which it has a line number. */
+export function lineSide(key: LineKey): 'old' | 'new' {
+    return key.startsWith('d') ? 'old' : 'new';
+}
+
+/** Selection numbering side, with compatibility for values without an explicit field. */
+export function selectionSide(selection: LineSelection): 'old' | 'new' {
+    return selection.side ?? lineSide(selection.anchor);
 }
 
 interface OrderedLine {
