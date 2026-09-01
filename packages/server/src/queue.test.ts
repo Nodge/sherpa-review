@@ -118,7 +118,26 @@ describe('queue with leases', () => {
 
             expect(retaken.task.id).toBe(task.id);
             expect(retaken.task.attempt).toBe(2);
-            expect(queue.getTask(task.id)?.workerId).toBe('w-2');
+            // Re-leasing clears the lease release reason. The task is live again, so the old `expired`
+            // must not survive re-leasing and confuse state reconciliation after a server restart.
+            expect(queue.getTask(task.id)).toMatchObject({
+                workerId: 'w-2',
+                lastLeaseReturnReason: null,
+            });
+        });
+
+        it('an expired lease remains a visible reconciliation reason until re-leased', () => {
+            const task = enqueue();
+            takeNext('w-1');
+
+            advanceSeconds(LEASE_TTL_SECONDS.background + 1);
+            queue.listTasks();
+
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'queued',
+                workerId: null,
+                lastLeaseReturnReason: 'expired',
+            });
         });
 
         it('exhausted attempts fail the task instead of issuing it again', () => {
@@ -195,7 +214,12 @@ describe('queue with leases', () => {
 
             queue.releaseLeasesOf('w-dead');
 
-            expect(queue.getTask(task.id)).toMatchObject({ status: 'queued', attempt: 2, workerId: null });
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'queued',
+                attempt: 2,
+                workerId: null,
+                lastLeaseReturnReason: 'displaced',
+            });
             expect(takeNext('w-new').task.id).toBe(task.id);
         });
 

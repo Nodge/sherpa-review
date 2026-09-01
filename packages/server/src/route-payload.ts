@@ -46,7 +46,7 @@ export interface RoutePayloadContext {
 }
 
 export interface RoutePayloadWriterOptions {
-    /** Payload directory inside the PR state directory. Generation subdirectories are created here. */
+    /** Isolated route directory. Each generation gets a subdirectory here. */
     readonly payloadDir: string;
     readonly budgetBytes?: number;
 }

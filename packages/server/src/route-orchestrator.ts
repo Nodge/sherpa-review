@@ -76,7 +76,7 @@ export interface RouteOrchestratorOptions {
     readonly registry: WorkerRegistry;
     /** The PR's review host. With `null`, this server has nowhere to get a route from. */
     readonly host: ReviewHost | null;
-    /** Generation task payload directory (`payloadDirOf`). */
+    /** Directory owned exclusively by `RoutePayloadWriter` (`routePayloadDirOf`). */
     readonly payloadDir: string;
     /**
      * Reading progress: a new generation clears previous stop marks and their seen ranges

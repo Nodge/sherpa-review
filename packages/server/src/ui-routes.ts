@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import type {
     PrMeta,
     UiCancelResponse,
+    UiChatEvent,
     UiFeedbackAvailability,
     UiEnqueueResponse,
     UiProgressEvent,
@@ -12,6 +13,7 @@ import type {
     UiTask,
 } from '@sherpa/protocol';
 import {
+    UI_CHAT_EVENT,
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
@@ -23,6 +25,7 @@ import {
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
+import type { ChatStore } from './chat-store.js';
 import { RpcFailure } from './errors.js';
 import type { RequestContext, Route, StreamContext } from './http.js';
 import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
@@ -59,6 +62,8 @@ export interface UiRoutesOptions {
     readonly progress: ProgressStore;
     /** Route state: its revision is sent over the channel in the same way as progress. */
     readonly route: RouteStore;
+    /** Chat history and notes: the event carries only a revision, data is reread through a separate endpoint. */
+    readonly chat: ChatStore;
     /** Reviewer presence is tracked only through live SSE connections on this channel. */
     readonly presence: UiPresence;
     /** Server shutdown: closes pending SSE connections so close() does not wait for them. */
@@ -189,6 +194,14 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         sendEvent(res, UI_ROUTE_EVENT, JSON.stringify(event));
     };
 
+    const pushChat = (revision: number): void => {
+        if (abort.signal.aborted || res.writableEnded || res.destroyed) {
+            return;
+        }
+        const event: UiChatEvent = { chatRevision: revision };
+        sendEvent(res, UI_CHAT_EVENT, JSON.stringify(event));
+    };
+
     const keepalive = setInterval(push, KEEPALIVE_INTERVAL_MS);
     keepalive.unref();
 
@@ -200,6 +213,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     let unsubscribeReview: (() => void) | null = null;
     let unsubscribeProgress: (() => void) | null = null;
     let unsubscribeRoute: (() => void) | null = null;
+    let unsubscribeChat: (() => void) | null = null;
 
     const stop = (): void => {
         clearInterval(keepalive);
@@ -209,6 +223,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         unsubscribeReview?.();
         unsubscribeProgress?.();
         unsubscribeRoute?.();
+        unsubscribeChat?.();
         disconnectPresence();
         abort.dispose();
         if (!res.writableEnded && !res.destroyed) {
@@ -238,6 +253,10 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     if (!res.writableEnded && !res.destroyed) {
         pushRoute(options.route.revision);
         unsubscribeRoute = options.route.subscribe(pushRoute);
+    }
+    if (!res.writableEnded && !res.destroyed) {
+        pushChat(options.chat.revision);
+        unsubscribeChat = options.chat.subscribe(pushChat);
     }
 }
 

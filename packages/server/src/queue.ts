@@ -24,6 +24,12 @@ export interface EnqueueInput {
     readonly resultSchemaFile?: string;
 }
 
+/** Enqueues inside an external transaction. Call the effect only after it commits. */
+export interface TransactionalEnqueue {
+    readonly record: TaskRecord;
+    readonly onCommitted: () => void;
+}
+
 /** A task issued to a worker, the contract pair from the `next` response. */
 export interface LeasedTask {
     readonly task: Task;
@@ -31,10 +37,13 @@ export interface LeasedTask {
 }
 
 /** A stored task, the contract fields plus server lifecycle fields. */
+export type LeaseReturnReason = 'expired' | 'displaced';
+
 export interface TaskRecord extends Task {
     readonly status: TaskStatus;
     readonly workerId: string | null;
     readonly leaseExpiresAt: string | null;
+    readonly lastLeaseReturnReason: LeaseReturnReason | null;
     readonly progressText: string | null;
     readonly result: string | null;
     readonly failReason: string | null;
@@ -99,6 +108,7 @@ interface TaskRow extends SqlRow {
     attempt: number;
     worker_id: string | null;
     lease_expires_at: string | null;
+    last_lease_return_reason: string | null;
     progress_text: string | null;
     result: string | null;
     fail_reason: string | null;
@@ -130,6 +140,7 @@ export class TaskQueue {
     /** What to do with an accepted result after the `complete` transaction commits. */
     private commitEffects: (() => void)[] = [];
 
+    private readonly txEnqueue: (input: EnqueueInput) => TransactionalEnqueue;
     private readonly txNext: (workerId: string) => Outcome<LeasedTask | null>;
     private readonly txComplete: (workerId: string, taskId: TaskId, result: string) => Outcome<TaskCompleteResponse>;
     private readonly txFail: (workerId: string, taskId: TaskId, reason: string) => Outcome<TaskAckResponse>;
@@ -143,6 +154,7 @@ export class TaskQueue {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
 
+        this.txEnqueue = transaction(this.db, (input: EnqueueInput) => this.enqueueInTransaction(input));
         this.txNext = transaction(this.db, (workerId: string) => this.nextInTransaction(workerId));
         this.txComplete = transaction(this.db, (workerId: string, taskId: TaskId, result: string) =>
             this.completeInTransaction(workerId, taskId, result),
@@ -183,6 +195,16 @@ export class TaskQueue {
     }
 
     enqueue(input: EnqueueInput): TaskRecord {
+        const enqueued = this.txEnqueue(input);
+        enqueued.onCommitted();
+        return enqueued.record;
+    }
+
+    /**
+     * Inserts a task inside an open transaction. Chat needs the exchange and its task to appear
+     * atomically. `onCommitted` wakes subscribers only after the outer transaction commits successfully.
+     */
+    enqueueInTransaction(input: EnqueueInput): TransactionalEnqueue {
         const nowIso = this.nowIso();
         const info = this.db
             .prepare(
@@ -200,11 +222,19 @@ export class TaskQueue {
                 nowIso,
                 nowIso,
             );
-
         const record = this.requireRecord(Number(info.lastInsertRowid));
-        this.markChanged();
-        this.flushChanges();
-        return record;
+        let announced = false;
+        return {
+            record,
+            onCommitted: () => {
+                if (announced) {
+                    return;
+                }
+                announced = true;
+                this.markChanged();
+                this.flushChanges();
+            },
+        };
     }
 
     /** Leases the next task. `null` means an empty queue (the endpoint turns this into long-poll). */
@@ -316,10 +346,12 @@ export class TaskQueue {
         const nowIso = this.nowIso();
         const expiresAt = new Date(this.now().getTime() + ttlSeconds * 1000).toISOString();
         // The acceptance rejection count belongs to the lease. A new lease gives the model all attempts again.
+        // Also clear the previous lease release reason. The task is live again, so the old `expired`/
+        // `displaced` must not survive re-leasing and confuse state reconciliation after restart.
         this.db
             .prepare(
                 `UPDATE tasks SET status = 'leased', worker_id = ?, lease_expires_at = ?, rejections = 0,
-                 updated_at = ? WHERE id = ?`,
+                 last_lease_return_reason = NULL, updated_at = ? WHERE id = ?`,
             )
             .run(workerId, expiresAt, nowIso, candidate.id);
         this.markChanged();
@@ -500,7 +532,7 @@ export class TaskQueue {
             .all(nowIso) as { id: number; attempt: number }[];
 
         for (const row of expired) {
-            this.requeueLease(row);
+            this.requeueLease(row, 'expired');
         }
     }
 
@@ -511,12 +543,12 @@ export class TaskQueue {
             .all(workerId) as { id: number; attempt: number }[];
 
         for (const row of held) {
-            this.requeueLease(row);
+            this.requeueLease(row, 'displaced');
         }
     }
 
     /** Requeues one leased task and increments the attempt. Exhausted attempts fail it. */
-    private requeueLease(row: { id: number; attempt: number }): void {
+    private requeueLease(row: { id: number; attempt: number }, reason: LeaseReturnReason): void {
         const nowIso = this.nowIso();
         this.markChanged();
 
@@ -525,9 +557,10 @@ export class TaskQueue {
             this.db
                 .prepare(
                     `UPDATE tasks SET status = 'failed', worker_id = NULL, lease_expires_at = NULL,
-                     fail_reason = ?, updated_at = ? WHERE id = ?`,
+                     last_lease_return_reason = ?, fail_reason = ?, updated_at = ? WHERE id = ?`,
                 )
                 .run(
+                    reason,
                     // Only the reviewer sees the failure reason in the UI, so the text is Russian.
                     `The worker took the task ${String(MAX_TASK_ATTEMPTS)} times without completing it. ` +
                         'attempts exhausted.',
@@ -540,9 +573,9 @@ export class TaskQueue {
         this.db
             .prepare(
                 `UPDATE tasks SET status = 'queued', attempt = ?, worker_id = NULL, lease_expires_at = NULL,
-                 updated_at = ? WHERE id = ?`,
+                 last_lease_return_reason = ?, updated_at = ? WHERE id = ?`,
             )
-            .run(attempt, nowIso, row.id);
+            .run(attempt, reason, nowIso, row.id);
     }
 
     private closeTask(
@@ -723,6 +756,7 @@ function toRecord(row: TaskRow): TaskRecord {
         status: row.status as TaskStatus,
         workerId: row.worker_id,
         leaseExpiresAt: row.lease_expires_at,
+        lastLeaseReturnReason: row.last_lease_return_reason as LeaseReturnReason | null,
         progressText: row.progress_text,
         result: row.result,
         failReason: row.fail_reason,

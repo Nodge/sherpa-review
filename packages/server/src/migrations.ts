@@ -139,6 +139,49 @@ export const MIGRATIONS: readonly Migration[] = [
             CREATE INDEX file_seen_ranges_stop ON file_seen_ranges (source_stop_id);
         `,
     },
+    {
+        // Chat exchanges and local agent notes (M3-T3). Anchors are JSON blobs: their
+        // canonical shape lives in `chatAnchorSchema`, which the store validates on reads and writes.
+        // `task_id` is the exchange's current attempt. A retry replaces it with a new task.
+        name: '008-chat',
+        sql: `
+            CREATE TABLE chat_exchanges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                anchor TEXT,
+                status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'done', 'failed', 'cancelled')),
+                answer TEXT,
+                progress_text TEXT,
+                error TEXT,
+                task_id INTEGER REFERENCES tasks (id) ON DELETE SET NULL,
+                head_commit TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE UNIQUE INDEX chat_exchanges_task ON chat_exchanges (task_id) WHERE task_id IS NOT NULL;
+
+            CREATE TABLE agent_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL REFERENCES chat_exchanges (id) ON DELETE CASCADE,
+                anchor TEXT NOT NULL,
+                text TEXT NOT NULL,
+                commit_hash TEXT,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE UNIQUE INDEX agent_notes_exchange ON agent_notes (exchange_id);
+        `,
+    },
+    {
+        // The attempt count grows both when a worker dies and when it is routinely preempted. The reason for the last
+        // lease return lets orchestrators distinguish these cases after a restart.
+        name: '009-task-lease-return-reason',
+        sql: `
+            ALTER TABLE tasks ADD COLUMN last_lease_return_reason TEXT
+                CHECK (last_lease_return_reason IN ('expired', 'displaced'));
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */
