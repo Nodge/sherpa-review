@@ -9,6 +9,8 @@ import type { FixtureData } from './types.js';
 export type { FixtureData } from './types.js';
 export { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, MEDIUM_TOTALS } from './medium.js';
 export { LARGE_FILE_COUNT, LONG_LINE_FILE_PATH, LONG_LINE_MARKER } from './large.js';
+export { buildChatFixtures, chatFixtures } from './chat.js';
+export type { ChatFixtures } from './chat.js';
 export { buildRouteFixtures, routeFixtures } from './route.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './route.js';
 

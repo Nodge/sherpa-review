@@ -24,6 +24,7 @@ import { M2F_T28_STATES } from './m2f-t28-states.tsx';
 import { M2F_T24_STATES } from './m2f-t24-states.tsx';
 import { M2F_T25_STATES } from './m2f-t25-states.tsx';
 import { M2F_T43_STATES } from './m2f-t43-states.tsx';
+import { M3_T2_STATES } from './m3-t2-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -167,6 +168,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ].map((state) => ({
         id: state.id,
         group: 'Route',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M3_T2_STATES.map((state) => ({
+        id: state.id,
+        group: 'Chat and notes',
         title: state.title,
         render: state.render,
     })),

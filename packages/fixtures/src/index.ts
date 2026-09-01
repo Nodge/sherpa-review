@@ -12,6 +12,9 @@ export {
     LONG_LINE_MARKER,
     MEDIUM_TOTALS,
 } from './data/index.js';
+/** Chat and local agent notes (M3): history for the gallery without a server. */
+export { chatFixtures } from './data/index.js';
+export type { ChatFixtures } from './data/index.js';
 /** Route (M2): generation states for the gallery and prepared model outputs for e2e. */
 export { routeFixtures } from './data/index.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './data/index.js';
