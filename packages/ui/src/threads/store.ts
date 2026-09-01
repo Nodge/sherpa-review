@@ -71,7 +71,8 @@ export interface ThreadStore {
     readonly getComposer: (key: string) => ComposerSnapshot | null;
     readonly setServerThreads: (threads: readonly Thread[]) => void;
     readonly addDraft: (draft: CommentDraft, comment: Comment) => void;
-    readonly updateDraft: (commentId: string, body: string) => void;
+    /** `issue` is set only if the edit changed it. Otherwise, the comment status stays as it is. */
+    readonly updateDraft: (commentId: string, body: string, issue?: boolean) => void;
     readonly deleteDraft: (commentId: string) => void;
     /** Keeps the publication guard active until a confirmed draft deletion completes. */
     readonly beginDraftDeletion: (commentId: string) => void;
@@ -245,12 +246,13 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
             drafts.set(comment.id, { draft, comment });
             publish();
         },
-        updateDraft: (commentId, body) => {
+        updateDraft: (commentId, body, issue) => {
+            const patch = { body, ...(issue === undefined ? {} : { issue }) };
             const optimistic = drafts.get(commentId);
             if (optimistic !== undefined) {
-                drafts.set(commentId, { ...optimistic, comment: { ...optimistic.comment, body } });
+                drafts.set(commentId, { ...optimistic, comment: { ...optimistic.comment, ...patch } });
             } else {
-                serverThreads = mapComments(serverThreads, commentId, (comment) => ({ ...comment, body }));
+                serverThreads = mapComments(serverThreads, commentId, (comment) => ({ ...comment, ...patch }));
             }
             publish();
         },

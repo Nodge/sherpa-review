@@ -69,7 +69,9 @@ export function createComposerController(options: ComposerControllerOptions): Co
     let reverting = false;
     let discardPromise: Promise<boolean> | null = null;
     let createdWhileDiscarding: { draft: CommentDraft; comment: Comment } | null = null;
-    let lastWrittenIssue: boolean | undefined;
+    // An existing draft opens for editing with the host's issue status, which is already written.
+    // Without tracking it, the first save would send the host the value it already has.
+    let lastWrittenIssue: boolean | undefined = options.store.getComposer(options.key)?.issue;
 
     const forget = (): void => {
         const byKey = controllers.get(options.store);
@@ -141,7 +143,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
                         lastWrittenIssue = issueUpdate;
                     }
                     if (!ignoreRequestResult()) {
-                        options.store.updateDraft(current.commentId, body);
+                        options.store.updateDraft(current.commentId, body, issueUpdate);
                         options.store.updateComposer(options.key, { originalText: body });
                     }
                 }

@@ -129,6 +129,8 @@ function lineDraft(): Thread {
         author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
         body: 'The window boundary must be checked before calculating remainingMs.',
         draft: true,
+        // The thread root carries the host issue status. Editing opens the toggle with that state.
+        issue: true,
         createdAt: '2026-08-31T11:42:00.000Z',
         editedAt: null,
         replies: [],

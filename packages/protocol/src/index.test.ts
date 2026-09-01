@@ -146,6 +146,7 @@ describe('review domain', () => {
         author,
         body: 'text',
         draft: false,
+        issue: null,
         createdAt: '2026-08-20T12:00:00.000Z',
         editedAt: null,
         replies,

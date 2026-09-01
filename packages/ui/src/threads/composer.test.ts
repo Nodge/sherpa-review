@@ -10,6 +10,7 @@ const CREATED: Comment = {
     author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
     body: 'first',
     draft: true,
+    issue: null,
     createdAt: '2026-08-24T10:00:00.000Z',
     editedAt: null,
     replies: [],

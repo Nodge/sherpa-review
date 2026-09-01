@@ -141,6 +141,12 @@ export interface Comment {
     /** Markdown as returned by the host. */
     body: string;
     draft: boolean;
+    /**
+     * Whether the comment opens an issue, the same flag set by `CommentDraft.issue`.
+     * `null` means no status: the host does not distinguish issues (`capabilities.commentIssues === false`),
+     * or this is a thread reply, or the comment was created outside Sherpa and has no status.
+     */
+    issue: boolean | null;
     createdAt: string;
     editedAt: string | null;
     replies: Comment[];
@@ -150,6 +156,7 @@ export const commentSchema: z.ZodType<Comment> = z.object({
     author: reviewUserSchema,
     body: z.string(),
     draft: z.boolean(),
+    issue: z.boolean().nullable(),
     createdAt: z.iso.datetime(),
     editedAt: z.iso.datetime().nullable(),
     get replies() {

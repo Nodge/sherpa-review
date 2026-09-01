@@ -77,6 +77,7 @@ function mountReply() {
             author: { login: 'reviewer', displayName: null, bot: false },
             body: 'root',
             draft: false,
+            issue: null,
             createdAt: '2026-08-24T10:00:00.000Z',
             editedAt: null,
             replies: [],
@@ -278,6 +279,7 @@ describe('comment composer', () => {
                 author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
                 body: 'ready draft',
                 draft: true,
+                issue: null,
                 createdAt: '2026-08-24T10:00:00.000Z',
                 editedAt: null,
                 replies: [],
@@ -422,5 +424,27 @@ describe('comment composer', () => {
             expect(store.getComposer('new:pr')?.text).toBe('[text](https://)');
         });
         expect(globalKeydown).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Recreating ProseMirror put the cursor at the start of the document, making typing run backwards.
+     * The editor node must survive composer text changes.
+     */
+    it('visual layout does not recreate the editor on every letter', async () => {
+        const { host, store } = mount('visual');
+        await act(async () => {
+            await vi.waitFor(() => {
+                expect(host.querySelector('.ProseMirror')).not.toBeNull();
+            });
+        });
+        const editor = host.querySelector('.ProseMirror');
+
+        for (const text of ['a', 'ab', 'abc']) {
+            act(() => {
+                store.updateComposer('new:pr', { text });
+            });
+        }
+
+        expect(host.querySelector('.ProseMirror')).toBe(editor);
     });
 });

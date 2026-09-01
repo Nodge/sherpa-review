@@ -1215,8 +1215,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             );
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
             openNewComposer(threadStore, key, { fileId, path: file.path, position }, pr.capabilities.commentIssues);
+            // The range moved into the composer, so the live selection is no longer needed. Leaving it
+            // would keep the line pencil visible and mix it into the next comment.
+            store.clearSelection();
         },
-        [diff.files, diffSnapshot.models, diffSnapshot.selection, pr.capabilities.commentIssues, threadStore],
+        [diff.files, diffSnapshot.models, diffSnapshot.selection, pr.capabilities.commentIssues, store, threadStore],
     );
     useShortcut({
         id: 'thread.commentLine',

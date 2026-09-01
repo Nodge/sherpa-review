@@ -18,12 +18,14 @@ export function openDraftEditor(store: ThreadStore, thread: Thread, comment: Com
     if (store.getComposer(key) !== null || replyComposer?.commentId === comment.id) {
         return;
     }
-    // `Comment` omits the current issue status: update without `issue` preserves it on the host.
+    // Issue status belongs to the thread root: replies have nothing to toggle, and hosts without issues return null.
+    const issue = comment.id === thread.root.id ? comment.issue : null;
     store.openComposer({
         key,
         threadId: thread.id,
         parentId: null,
         anchor: null,
+        ...(issue === null ? {} : { issue }),
         text: comment.body,
         originalText: comment.body,
         commentId: comment.id,

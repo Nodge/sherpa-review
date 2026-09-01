@@ -816,8 +816,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             const position = commentPosition(snapshot.selection, snapshot.models.get(fileId) ?? null, fileId, side, line);
             const key = `new:${fileId}:${position.side}:${String(position.line)}`;
             openNewComposer(threadStore, key, { fileId, path: file.path, position }, pr.capabilities.commentIssues);
+            // The range moved into the composer, so the live selection is no longer needed. Leaving it
+            // would keep the line pencil visible and mix it into the next comment.
+            store.clearSelection();
         },
-        [diff.files, pr.capabilities.commentIssues, snapshot.models, snapshot.selection, threadStore],
+        [diff.files, pr.capabilities.commentIssues, snapshot.models, snapshot.selection, store, threadStore],
     );
 
     useShortcut({

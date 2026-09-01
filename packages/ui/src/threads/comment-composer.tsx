@@ -113,10 +113,15 @@ export function CommentComposer({
         onCancel();
     }, [composer.key, composer.text, controller, onCancel, resolvedRestoreOnCancel, store]);
 
+    // A ref, not an effect dependency: `save`/`cancel` are recreated on every letter, and
+    // mounting ProseMirror on them would recreate the editor with the cursor at the start of the document.
+    const handlersRef = useRef({ save, cancel });
+
     useEffect(() => {
         currentTextRef.current = composer.text;
         disabledRef.current = disabled;
-    }, [composer.text, disabled]);
+        handlersRef.current = { save, cancel };
+    }, [cancel, composer.text, disabled, save]);
 
     useEffect(() => {
         if (layout !== 'visual' || visualHostRef.current === null) {
@@ -137,9 +142,11 @@ export function CommentComposer({
                 ariaLabel: inputLabel,
                 onChange: controller.input,
                 onSave: () => {
-                    void save();
+                    void handlersRef.current.save();
                 },
-                onCancel: cancel,
+                onCancel: () => {
+                    handlersRef.current.cancel();
+                },
             });
             visualRef.current = handle;
             setVisualReady(true);
@@ -150,7 +157,7 @@ export function CommentComposer({
             visualRef.current?.destroy();
             visualRef.current = null;
         };
-    }, [cancel, composer.key, controller, inputLabel, layout, save]);
+    }, [composer.key, controller, inputLabel, layout]);
 
     useEffect(() => {
         visualRef.current?.setMarkdown(composer.text);

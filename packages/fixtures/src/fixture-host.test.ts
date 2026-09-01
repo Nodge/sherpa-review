@@ -101,7 +101,7 @@ describe('FixtureHost', () => {
         const edge = makeFixtureHost('edge');
         const degraded = await edge.saveDraft({ body: 'ignored', parentId: null, anchor: null, issue: true });
         await edge.updateDraft(degraded.id, 'still ignored', false);
-        expect(edge.issueOf(degraded.id)).toBeUndefined();
+        expect(edge.issueOf(degraded.id)).toBeNull();
     });
 
     it('a reply to a comment in an existing thread joins its subtree', async () => {

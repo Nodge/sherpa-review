@@ -18,6 +18,7 @@ const DRAFT: Comment = {
     author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
     body: 'I will check one more edge case before Ship.',
     draft: true,
+    issue: null,
     createdAt: '2026-08-28T14:02:00.000Z',
     editedAt: null,
     replies: [],

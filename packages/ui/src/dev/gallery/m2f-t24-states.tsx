@@ -67,6 +67,7 @@ function thread(id: string, body: string, draft: boolean, createdAt: string): Th
             author: AUTHOR,
             body,
             draft,
+            issue: null,
             createdAt,
             editedAt: null,
             replies: [],

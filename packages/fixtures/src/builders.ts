@@ -26,6 +26,8 @@ export interface CommentSpec {
     createdAt: string;
     editedAt?: string;
     draft?: boolean;
+    /** No status by default, as with a comment created outside Sherpa. */
+    issue?: boolean;
     replies?: readonly Comment[];
 }
 
@@ -35,6 +37,7 @@ export function comment(spec: CommentSpec): Comment {
         author: spec.author,
         body: spec.body,
         draft: spec.draft ?? false,
+        issue: spec.issue ?? null,
         createdAt: spec.createdAt,
         editedAt: spec.editedAt ?? null,
         replies: [...(spec.replies ?? [])],
