@@ -259,3 +259,178 @@
     font-size: var(--font-size-scope);
     color: var(--text-dim-strong);
 }
+
+/* Draft M3-T2 states: real chat and note components replace this markup in T5–T7. */
+.gallery-chat-demo {
+    width: min(100%, 560px);
+    overflow: hidden;
+    border: 1px solid var(--border-standard);
+    border-radius: var(--radius-card);
+    background: var(--surface-panel);
+    color: var(--text-body);
+}
+
+.gallery-chat-demo__header,
+.gallery-chat-demo__body,
+.gallery-chat-demo__message,
+.gallery-chat-demo__note,
+.gallery-chat-demo__stack-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-chat-demo__header {
+    gap: 3px;
+    padding: var(--space-inner);
+    border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+.gallery-chat-demo__header strong {
+    color: var(--text-primary);
+}
+
+.gallery-chat-demo__header span,
+.gallery-chat-demo__meta,
+.gallery-chat-demo__stack-item span {
+    font-size: var(--font-size-meta);
+    color: var(--text-dim);
+}
+
+.gallery-chat-demo__body {
+    gap: var(--space-inner);
+    padding: var(--space-inner);
+}
+
+.gallery-chat-demo__body p {
+    margin: 0;
+}
+
+.gallery-chat-demo__body textarea {
+    box-sizing: border-box;
+    width: 100%;
+    resize: vertical;
+    padding: var(--space-inner-tight);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    background: var(--surface-input);
+    color: var(--text-primary-soft);
+    font: inherit;
+}
+
+.gallery-chat-demo__examples,
+.gallery-chat-demo__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-inner-tight);
+}
+
+.gallery-chat-demo button {
+    padding: 5px 8px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-button);
+    background: var(--surface-input);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.gallery-chat-demo__examples button {
+    width: 100%;
+    text-align: left;
+}
+
+.gallery-chat-demo__banner,
+.gallery-chat-demo__working,
+.gallery-chat-demo__in-flight {
+    padding: var(--space-inner-tight);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-button);
+    background: var(--accent-surface);
+    color: var(--accent-text);
+}
+
+.gallery-chat-demo__working {
+    display: flex;
+    gap: var(--space-inner-tight);
+}
+
+.gallery-chat-demo__message,
+.gallery-chat-demo__note,
+.gallery-chat-demo__stack-item {
+    gap: 6px;
+}
+
+.gallery-chat-demo__chip {
+    align-self: flex-start;
+    padding: 2px 6px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-key);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-muted);
+}
+
+.gallery-chat-demo__error,
+.gallery-chat-demo__notice {
+    padding: var(--space-inner-tight);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius-button);
+    background: var(--error-surface);
+    color: var(--error-text);
+}
+
+.gallery-chat-demo__notice {
+    border-color: var(--border-strong);
+    background: var(--surface-input);
+    color: var(--text-muted);
+}
+
+.gallery-chat-demo__note,
+.gallery-chat-demo__note-collapsed,
+.gallery-chat-demo__stack-title {
+    padding: var(--space-inner-tight);
+    border-top: 1px solid var(--accent-border);
+    background: var(--accent-surface);
+    color: var(--accent-text-soft);
+}
+
+.gallery-chat-demo__markdown {
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-control);
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.gallery-chat-demo__stack {
+    display: grid;
+    gap: 4px;
+}
+
+.gallery-chat-demo__stack-item {
+    padding: 7px 9px;
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-button);
+    background: var(--surface-panel);
+}
+
+.gallery-chat-demo__popover {
+    align-self: flex-start;
+    padding: var(--space-inner-tight);
+    border: 1px solid var(--border-raised-popover);
+    border-radius: var(--radius-card);
+    background: var(--surface-popover);
+    box-shadow: var(--shadow-popover);
+}
+
+.gallery-chat-demo__popover strong {
+    display: block;
+    margin-bottom: var(--space-inner-tight);
+}
+
+.gallery-chat-demo .gallery-chat-demo__primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+}

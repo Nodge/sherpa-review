@@ -8,6 +8,10 @@ interface GapGeometry {
     readonly counterLeft: number;
     readonly upWidth: number;
     readonly upHeight: number;
+    readonly gapHeight: number;
+    /** Counter top and bottom relative to the row top. Outside means the counter moved to another grid row. */
+    readonly counterTop: number;
+    readonly counterBottom: number;
 }
 
 for (const mode of ['unified', 'split'] as const) {
@@ -44,6 +48,10 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
     const initialHidden = Number(await gap.getAttribute('data-hidden'));
     const adjacent = await adjacentNewLine(gap, direction === 'up' ? 'previous' : 'next');
     const beforeGeometry = await gapGeometry(gap);
+    // The counter shares a grid row with the targets. In split mode its column is left of the down target,
+    // and auto-placement once dropped it into the second row, leaving clipped text outside the row.
+    expect(beforeGeometry.counterTop).toBeGreaterThanOrEqual(0);
+    expect(beforeGeometry.counterBottom).toBeLessThanOrEqual(beforeGeometry.gapHeight);
     const beforeScroll = await page.locator('.full-diff').evaluate((element) => element.scrollTop);
     const target = gap.locator(`button[data-direction="${direction}"]`);
 
@@ -155,6 +163,7 @@ async function gapGeometry(gap: Locator): Promise<GapGeometry> {
         if (up === null || down === null || counter === null) {
             throw new Error('Could not measure gap columns');
         }
+        const gapRect = element.getBoundingClientRect();
         const upRect = up.getBoundingClientRect();
         const downRect = down.getBoundingClientRect();
         const counterRect = counter.getBoundingClientRect();
@@ -164,6 +173,9 @@ async function gapGeometry(gap: Locator): Promise<GapGeometry> {
             counterLeft: counterRect.left,
             upWidth: upRect.width,
             upHeight: upRect.height,
+            gapHeight: gapRect.height,
+            counterTop: counterRect.top - gapRect.top,
+            counterBottom: counterRect.bottom - gapRect.top,
         };
     });
 }

@@ -4,6 +4,9 @@ import type { ServerManifest } from '@sherpa/protocol';
 import { LONG_POLL_DEFAULT_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
 
 import { createToken } from './auth.js';
+import { ChatOrchestrator } from './chat-orchestrator.js';
+import { createChatRoutes } from './chat-routes.js';
+import { ChatStore } from './chat-store.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { ServerAlreadyRunningError } from './errors.js';
@@ -24,12 +27,13 @@ import {
 } from './manifest.js';
 import {
     assertValidPrKey,
+    chatPayloadDirOf,
     databasePathFor,
     DEFAULT_SHERPA_DIR,
     ensurePrivateDir,
     manifestPathFor,
-    payloadDirOf,
     prStateDirOf,
+    routePayloadDirOf,
     serversDirOf,
     workerIdPathFor,
 } from './paths.js';
@@ -111,6 +115,8 @@ export interface SherpaServer {
     readonly workerRegistry: WorkerRegistry;
     /** This PR's route state machine, used by the `generate` endpoint, warmup and tests. */
     readonly route: RouteOrchestrator;
+    /** Question orchestration for this PR: chat endpoints and lifecycle tests. */
+    readonly chat: ChatOrchestrator;
     /** Removes the manifest and closes the port and storage. A repeated call is a no-op. */
     close: () => Promise<void>;
 }
@@ -222,11 +228,22 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             queue,
             registry: workerRegistry,
             host: reviewHost?.host ?? null,
-            payloadDir: payloadDirOf(sherpaDir, prKey),
+            payloadDir: routePayloadDirOf(sherpaDir, prKey),
             progress,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
-        queue.setResultAcceptor((task, result) => routeOrchestrator.acceptResult(task, result));
+        const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
+        const chatOrchestrator = new ChatOrchestrator({
+            store: chatStore,
+            route: routeStore,
+            queue,
+            host: reviewHost?.host ?? null,
+            payloadDir: chatPayloadDirOf(sherpaDir, prKey),
+        });
+        queue.setResultAcceptor(
+            (task, result) =>
+                routeOrchestrator.acceptResult(task, result) ?? chatOrchestrator.acceptResult(task, result),
+        );
 
         routes.push(
             ...createWorkerRoutes({
@@ -249,6 +266,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 feedback: feedbackAvailability(options.feedback?.env ?? process.env),
                 progress,
                 route: routeStore,
+                chat: chatStore,
                 presence: uiPresence,
                 shutdownSignal: shutdownController.signal,
             }),
@@ -267,6 +285,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ...options.feedback,
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
+            ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
         );
         markRoutesReady();
 
@@ -286,10 +305,13 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             progress,
             routeStore,
             routeOrchestrator,
+            chatStore,
+            chatOrchestrator,
         });
         // Warm up the route after building the handle, on its own timer. Server startup doesn't wait for `getDiff()`,
         // otherwise the "diff on screen in under two seconds" requirement (§7) would wait on the host's network call.
         routeOrchestrator.start();
+        chatOrchestrator.start();
         // PR metadata also loads in the background. The snapshot is served immediately, and metadata arrives over SSE.
         prMeta.start();
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
@@ -377,6 +399,8 @@ function createHandle(parts: {
     progress: ProgressStore;
     routeStore: RouteStore;
     routeOrchestrator: RouteOrchestrator;
+    chatStore: ChatStore;
+    chatOrchestrator: ChatOrchestrator;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -387,6 +411,7 @@ function createHandle(parts: {
         queue: parts.queue,
         workerRegistry: parts.workerRegistry,
         route: parts.routeOrchestrator,
+        chat: parts.chatOrchestrator,
         close: () => {
             closing ??= (async () => {
                 // Stop the idle timer first. Shutdown is already in progress, so there's no need to call it again.
@@ -407,6 +432,8 @@ function createHandle(parts: {
                 // wake up with the database already closed.
                 parts.routeOrchestrator.close();
                 parts.routeStore.close();
+                parts.chatOrchestrator.close();
+                parts.chatStore.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

@@ -340,6 +340,14 @@
     height: 24px;
 }
 
+/* The row is a single line. In split mode the counter sits in the column left of the "down" target, and forward-only
+   grid auto-placement would drop it onto a second line, beyond the row height. */
+.diff-gap__slot,
+.diff-gap__counter,
+.diff-gap__error-label {
+    grid-row: 1;
+}
+
 .diff-gap__slot--up {
     grid-column: 1;
 }
