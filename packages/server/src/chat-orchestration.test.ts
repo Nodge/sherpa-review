@@ -395,6 +395,63 @@ describe('chat and notes', () => {
         expect((await readChat(second)).exchanges[0]).toMatchObject({ status: 'running', error: null });
     });
 
+    it('restart with a chat lease: the same session submits the answer and a note appears', async () => {
+        const first = await start();
+        const exchange = await ask(first, 'Answer after the restart', ANCHOR);
+        const taskId = leaseChat(first);
+        expect((await readChat(first)).exchanges[0]).toMatchObject({ status: 'running' });
+        await first.close();
+
+        // A live lease survives startup: reconciliation does not fail a question that still has a worker.
+        const second = await start();
+        expect(second.queue.getTask(taskId)?.status).toBe('leased');
+        expect((await readChat(second)).exchanges[0]).toMatchObject({
+            id: exchange.id,
+            status: 'running',
+            error: null,
+        });
+
+        expect(complete(second, taskId).kind).toBe('accepted');
+        const done = await readChat(second);
+        expect(done.exchanges[0]).toMatchObject({ id: exchange.id, status: 'done', answer: ANSWER });
+        expect(done.notes).toEqual([
+            expect.objectContaining({ exchangeId: exchange.id, anchor: ANCHOR, text: ANSWER }),
+        ]);
+    });
+
+    it('restart with a chat lease: the session never returns, the lease expires, then failed and retry', async () => {
+        const first = await start();
+        const exchange = await ask(first, 'The session will not return after the restart');
+        const taskId = leaseChat(first);
+        await first.close();
+
+        const second = await start();
+        expect((await readChat(second)).exchanges[0]).toMatchObject({ status: 'running' });
+
+        clockOffsetMs = (LEASE_TTL_SECONDS.interactive + 1) * 1000;
+        // Reading the queue reaps the expired lease. Reconciliation learns about it through the same notification.
+        second.queue.listTasks();
+        const failed = await readChat(second);
+        expect(failed.exchanges[0]).toMatchObject({
+            id: exchange.id,
+            question: 'The session will not return after the restart',
+            status: 'failed',
+        });
+        expect(failed.exchanges[0]?.error).toContain('stopped responding');
+        expect(second.queue.getTask(taskId)?.status).toBe('cancelled');
+
+        const retry = await postJson(
+            second.port,
+            UI_ENDPOINTS.reviewChatRetry,
+            { exchangeId: exchange.id },
+            second.token,
+        );
+        expect(uiChatRetryResponseSchema.parse(await retry.json()).outcome).toBe('retried');
+        const retried = second.queue.listTasks().find((task) => task.type === 'chat' && task.status === 'queued');
+        expect(retried?.id).not.toBe(taskId);
+        expect((await readChat(second)).exchanges[0]).toMatchObject({ status: 'queued', error: null });
+    });
+
     it('task fail and lease expiry produce failed while preserving the question', async () => {
         const explicit = await start();
         await ask(explicit, 'Do not lose me');

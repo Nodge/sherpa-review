@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 
-import { asRawText, mediumRawResults, sectionFor, submit, takeTask } from './route-worker.js';
+import { asRawText, fillSections, mediumRawResults, sectionFor, submit, takeTask } from './route-worker.js';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
@@ -218,11 +218,7 @@ test('F1 failure: a broken plan fails generation, Retry finishes the route', asy
         const retried = await takeTask(worker, 'route.skeleton');
         expect(retried.taskId).not.toBe(0);
         await submit(worker, retried.taskId, raw.skeleton);
-
-        for (let filled = 0; filled < 6; filled += 1) {
-            const task = await takeTask(worker, 'route.section');
-            await submit(worker, task.taskId, sectionFor(task.planIndexes));
-        }
+        await fillSections(worker);
 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
             '860 changed lines · 96% explained · 32 lines not explained',

@@ -31,8 +31,14 @@ export interface RouteTask extends NextRun {
     readonly taskId: number;
 }
 
+/** Task types the server enqueues for the e2e session: route (M2) and chat question (M3). */
+export type TaskType = 'route.skeleton' | 'route.section' | 'chat';
+
+/** Number of route sections the server queues for the `medium` fixture, one per plan stop. */
+export const MEDIUM_SECTION_COUNT = 6;
+
 /** Take the next task and check that it has the expected type. */
-export async function takeTask(worker: FakeWorker, type: 'route.skeleton' | 'route.section'): Promise<RouteTask> {
+export async function takeTask(worker: FakeWorker, type: TaskType): Promise<RouteTask> {
     const run = await worker.next();
     expect(run.code, `worker next: ${run.stdout}${run.stderr}`).toBe(0);
     expect(run.type).toBe(type);
@@ -67,4 +73,33 @@ export async function submit(worker: FakeWorker, taskId: number, result: unknown
     expect(run.code, `task complete: ${run.stdout}${run.stderr}`).toBe(0);
     expect(run.stdout, 'the result must be accepted').not.toContain('was rejected');
     return run;
+}
+
+/**
+ * A chat answer is submitted as is. A `chat` task result is the answer's Markdown text, not route
+ * JSON (rpc-design §6, the answer arrives in full through one `complete`).
+ */
+export async function answerChat(worker: FakeWorker, taskId: number, answer: string): Promise<WorkerRun> {
+    const run = await worker.complete(taskId, answer);
+    expect(run.code, `task complete: ${run.stdout}${run.stderr}`).toBe(0);
+    expect(run.stdout, 'the answer must be accepted').not.toContain('was rejected');
+    return run;
+}
+
+/** Take and submit `count` fill tasks in sequence. Each submits exactly the stops it requests. */
+export async function fillSections(worker: FakeWorker, count = MEDIUM_SECTION_COUNT): Promise<void> {
+    for (let filled = 0; filled < count; filled += 1) {
+        const task = await takeTask(worker, 'route.section');
+        await submit(worker, task.taskId, sectionFor(task.planIndexes));
+    }
+}
+
+/**
+ * The whole route: the plan and all sections of the `medium` fixture. For tests that need the route ready,
+ * rather than step by step. F1 handles the same steps manually because it checks intermediate phases.
+ */
+export async function buildRoute(worker: FakeWorker): Promise<void> {
+    const skeleton = await takeTask(worker, 'route.skeleton');
+    await submit(worker, skeleton.taskId, mediumRawResults().skeleton);
+    await fillSections(worker);
 }
