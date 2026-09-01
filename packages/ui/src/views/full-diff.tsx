@@ -50,6 +50,7 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
+import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { readSelectionLink } from '../selection-link.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
@@ -385,9 +386,14 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         () => createThreadActions(threadStore, threadTransport, resolveThread),
         [resolveThread, threadStore, threadTransport],
     );
+    const turnNoteIntoDraft = useTurnNoteIntoDraft({
+        threadStore,
+        clearSelection: store.clearSelection,
+        commentIssues: pr.capabilities.commentIssues,
+    });
     const noteActions = useMemo(
-        () => ({ onOpenInChat: onOpenNoteInChat, onDelete: onDeleteNote }),
-        [onDeleteNote, onOpenNoteInChat],
+        () => ({ onOpenInChat: onOpenNoteInChat, onTurnIntoDraft: turnNoteIntoDraft, onDelete: onDeleteNote }),
+        [onDeleteNote, onOpenNoteInChat, turnNoteIntoDraft],
     );
     const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(

@@ -136,6 +136,7 @@ function NoteCardState({
         session,
         actions: {
             onOpenInChat: () => undefined,
+            onTurnIntoDraft: () => undefined,
             onDelete: () => Promise.reject(new Error('gallery does not delete notes')),
         },
     });

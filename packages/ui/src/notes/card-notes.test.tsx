@@ -52,7 +52,10 @@ afterEach(() => {
     }
 });
 
+const turnedIntoDraft: number[] = [];
+
 function mount(initialNotes: readonly AgentNote[]) {
+    turnedIntoDraft.length = 0;
     const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
     const host = document.createElement('div');
     document.body.append(host);
@@ -65,7 +68,13 @@ function mount(initialNotes: readonly AgentNote[]) {
             notes,
             placement: 'nearest',
             session,
-            actions: { onOpenInChat: () => undefined, onDelete: () => Promise.resolve() },
+            actions: {
+                onOpenInChat: () => undefined,
+                onTurnIntoDraft: (note) => {
+                    turnedIntoDraft.push(note.id);
+                },
+                onDelete: () => Promise.resolve(),
+            },
         });
         return <>{layout.renderAfterLine('new', 43)}</>;
     }
@@ -86,7 +95,7 @@ function mount(initialNotes: readonly AgentNote[]) {
 }
 
 describe('note card', () => {
-    it('shows a single-line preview and expands markdown with three actions', () => {
+    it('shows a one-line preview and expands markdown with four actions', () => {
         const { host } = mount([note(1)]);
 
         expect(host.textContent).toContain('◆Agent note·First line·3 lines');
@@ -99,8 +108,15 @@ describe('note card', () => {
         const actions = [...host.querySelectorAll<HTMLButtonElement>('.agent-note__actions button')].map(
             (button) => button.textContent,
         );
-        expect(actions).toEqual(['Open in the chat', 'Collapse', 'Delete']);
-        expect(host.textContent).not.toContain('Turn into a comment draft');
+        expect(actions).toEqual(['Open in the chat', 'Turn into a comment draft', 'Collapse', 'Delete']);
+
+        act(() => {
+            host.querySelectorAll<HTMLButtonElement>('.agent-note__actions button')[1]?.click();
+        });
+        expect(turnedIntoDraft).toEqual([1]);
+        // The note stays in place and unchanged after conversion.
+        expect(host.querySelectorAll('[data-note="1"]')).toHaveLength(1);
+        expect(host.textContent).toContain('model answer · never published to the PR');
     });
 
     it('initially shows four overlapping notes as one summary row', () => {

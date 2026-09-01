@@ -27,6 +27,7 @@ import { M2F_T43_STATES } from './m2f-t43-states.tsx';
 import { M3_T5_STATES } from './m3-t5-states.tsx';
 import { M3_T6_STATES } from './m3-t6-states.tsx';
 import { M3_T7_STATES } from './m3-t7-states.tsx';
+import { M3_T8_STATES } from './m3-t8-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -165,6 +166,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         render: state.render,
     })),
     ...M3_T7_STATES.map((state) => ({
+        id: state.id,
+        group: 'Agent notes',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M3_T8_STATES.map((state) => ({
         id: state.id,
         group: 'Agent notes',
         title: state.title,

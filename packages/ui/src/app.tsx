@@ -60,7 +60,7 @@ import {
     writeCollapsed as writeFileCollapsed,
 } from './diff-view/collapsed-storage.js';
 import { expandFileContext } from './diff-view/expand.js';
-import { findAgentNote, flashAgentNote } from './diff-view/line-target.js';
+import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
 import { createDiffViewStore } from './diff-view/store.js';
 import {
     ALL_FILTER_ID,
@@ -1240,22 +1240,7 @@ export function App({ store, session, token }: AppProps) {
             return;
         }
 
-        let observer: MutationObserver | null = null;
-        let frame: number | null = null;
-        let timeout: ReturnType<typeof setTimeout> | null = null;
-        const stop = (): void => {
-            observer?.disconnect();
-            observer = null;
-            if (frame !== null) {
-                cancelAnimationFrame(frame);
-                frame = null;
-            }
-            if (timeout !== null) {
-                clearTimeout(timeout);
-                timeout = null;
-            }
-        };
-        const reveal = (): boolean => {
+        return revealWhenReady(() => {
             const root =
                 view === 'route'
                     ? document.querySelector<HTMLElement>('#view-route')
@@ -1266,22 +1251,8 @@ export function App({ store, session, token }: AppProps) {
             }
             note.scrollIntoView({ block: 'center' });
             flashAgentNote(note);
-            stop();
             return true;
-        };
-
-        frame = requestAnimationFrame(() => {
-            frame = null;
-            if (reveal()) {
-                return;
-            }
-            observer = new MutationObserver(() => {
-                reveal();
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-            timeout = setTimeout(stop, NOTE_FOCUS_SEARCH_MS);
-        });
-        return stop;
+        }, NOTE_FOCUS_SEARCH_MS);
     }, [noteFocusRequest, view]);
 
     const selectView = useCallback(

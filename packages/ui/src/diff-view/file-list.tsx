@@ -586,6 +586,7 @@ const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_NOTE_ACTIONS: CardNoteActions = {
     onOpenInChat: () => undefined,
+    onTurnIntoDraft: () => undefined,
     onDelete: () => Promise.reject(new Error('note deletion is unavailable')),
 };
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();

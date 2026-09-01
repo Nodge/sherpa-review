@@ -13,6 +13,8 @@ import './notes.css';
 
 export interface CardNoteActions {
     readonly onOpenInChat: (note: AgentNote) => void;
+    /** New comment composer at the note anchor, prefilled with its quote (SPEC §2.16). */
+    readonly onTurnIntoDraft: (note: AgentNote) => void;
     readonly onDelete: (noteId: number) => Promise<void>;
 }
 
@@ -196,6 +198,14 @@ function AgentNoteView({
                     }}
                 >
                     Open in the chat
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        actions.onTurnIntoDraft(note);
+                    }}
+                >
+                    Turn into a comment draft
                 </button>
                 <button
                     type="button"

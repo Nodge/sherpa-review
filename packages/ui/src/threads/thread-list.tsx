@@ -539,13 +539,25 @@ export function openPrComposer(store: ThreadStore, commentIssues: boolean): void
     });
 }
 
+/**
+ * `initialText` seeds the composer text (a quote from an agent note). Seeding leaves an open composer
+ * with entered text alone, because that is the reviewer's work and must not be overwritten.
+ */
 export function openNewComposer(
     store: ThreadStore,
     key: string,
     anchor: FileAnchor,
     commentIssues: boolean,
+    initialText = '',
 ): void {
-    if (store.getComposer(key) !== null) {
+    const open = store.getComposer(key);
+    if (open !== null) {
+        // The composer key uses the first line without the range size. The pencil composer on
+        // line 148 and a note on 148–151 get the same key. When seeding, use the note anchor,
+        // or the draft will be saved to a range that does not match the quote.
+        if (initialText !== '' && open.text.trim() === '') {
+            store.updateComposer(key, { text: initialText, anchor });
+        }
         return;
     }
     store.openComposer({
@@ -554,7 +566,7 @@ export function openNewComposer(
         parentId: null,
         anchor,
         ...(commentIssues ? { issue: true } : {}),
-        text: '',
+        text: initialText,
         commentId: null,
         status: 'idle',
         saveUncertain: false,

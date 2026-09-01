@@ -190,7 +190,7 @@ export function CommentComposer({
     };
 
     return (
-        <div className="thread-composer">
+        <div className="thread-composer" data-composer-key={composer.key}>
             {resolvedWhileTyping ? <div className="thread-composer__notice">{notice}</div> : null}
             <div className="thread-composer__context">
                 <span>{contextLabel}</span>

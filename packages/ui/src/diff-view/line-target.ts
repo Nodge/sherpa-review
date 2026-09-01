@@ -1,7 +1,8 @@
 /**
- * Finds a diff line in the markup and highlights it after navigation. One implementation for 2
- * line jumps: from the command palette in the full diff and from a digest assertion anchor
- * on the route (README §2). `lineKey` prints the line key. This module only reads it.
+ * Finds and reveals a navigation target in the markup: diff line, agent note, composer.
+ * One implementation handles line navigation from the command palette in the full diff and from an
+ * assertion in the route digest (README §2). `lineKey` produces the line key. Here it is
+ * only read.
  */
 
 /** Highlight classes after navigation. Line and note styles define the animations. */
@@ -35,6 +36,60 @@ export function findAgentNote(root: ParentNode, noteId: number | string): HTMLEl
 export function flashAgentNote(note: HTMLElement): void {
     flash(note, NOTE_FLASH);
     note.focus({ preventScroll: true });
+}
+
+/** Composer by its opening key. `null` means its card is absent from the markup. */
+export function findComposer(root: ParentNode, key: string): HTMLElement | null {
+    return root.querySelector<HTMLElement>(`[data-composer-key="${CSS.escape(key)}"]`);
+}
+
+/** Focuses the composer field: textarea in Markdown mode, ProseMirror in visual mode. */
+export function focusComposerInput(composer: HTMLElement): void {
+    composer.querySelector<HTMLElement>('textarea, [contenteditable="true"]')?.focus({ preventScroll: true });
+}
+
+/**
+ * Reveals the target as soon as it appears in the markup: tries on the next frame, then on every
+ * document mutation while the node is absent, up to the timeout. `reveal` returns `false`
+ * while there is nothing to reveal. Returns a function to cancel the wait (for effect cleanup).
+ */
+export function revealWhenReady(reveal: () => boolean, timeoutMs: number): () => void {
+    let observer: MutationObserver | null = null;
+    let frame: number | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const stop = (): void => {
+        observer?.disconnect();
+        observer = null;
+        if (frame !== null) {
+            cancelAnimationFrame(frame);
+            frame = null;
+        }
+        if (timeout !== null) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
+    };
+    const attempt = (): boolean => {
+        if (!reveal()) {
+            return false;
+        }
+        stop();
+        return true;
+    };
+
+    frame = requestAnimationFrame(() => {
+        frame = null;
+        if (attempt()) {
+            return;
+        }
+        observer = new MutationObserver(() => {
+            attempt();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        timeout = setTimeout(stop, timeoutMs);
+    });
+    return stop;
 }
 
 function flash(element: HTMLElement, className: string): void {

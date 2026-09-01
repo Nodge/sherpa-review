@@ -47,6 +47,7 @@ import {
     selectFilter,
     zeroResultText,
 } from '../../filters/lens-filters.js';
+import { useTurnNoteIntoDraft } from '../../notes/use-note-draft.js';
 import { createProgressWriter } from '../../progress/progress-writer.js';
 import type { ProgressWriter } from '../../progress/progress-writer.js';
 import { readStateOf } from '../../progress/read-state.js';
@@ -397,9 +398,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         () => createThreadActions(threadStore, threadTransport, resolveThread),
         [resolveThread, threadStore, threadTransport],
     );
+    const turnNoteIntoDraft = useTurnNoteIntoDraft({
+        threadStore,
+        clearSelection: store.clearSelection,
+        commentIssues: pr.capabilities.commentIssues,
+    });
     const noteActions = useMemo(
-        () => ({ onOpenInChat: onOpenNoteInChat, onDelete: onDeleteNote }),
-        [onDeleteNote, onOpenNoteInChat],
+        () => ({ onOpenInChat: onOpenNoteInChat, onTurnIntoDraft: turnNoteIntoDraft, onDelete: onDeleteNote }),
+        [onDeleteNote, onOpenNoteInChat, turnNoteIntoDraft],
     );
     const notesByFile = useMemo(() => {
         const grouped = new Map<string, AgentNote[]>();

@@ -10,6 +10,7 @@ import type {
 } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { noteCommentPosition } from '../notes/note-draft.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { RoutePreset } from '../session/session-store.js';
 import type { ComposerSnapshot } from '../threads/store.js';
@@ -587,13 +588,7 @@ export function notesForGroup(
     byFile: ReadonlyMap<string, readonly AgentNote[]>,
 ): readonly AgentNote[] {
     const notes = byFile.get(group.fileId) ?? [];
-    return notes.filter((note) =>
-        groupOwnsPosition(group, {
-            side: note.anchor.side,
-            line: note.anchor.start,
-            size: note.anchor.end - note.anchor.start + 1,
-        }),
-    );
+    return notes.filter((note) => groupOwnsPosition(group, noteCommentPosition(note.anchor)));
 }
 
 /**
