@@ -16,7 +16,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { databasePathFor, payloadDirOf } from './paths.js';
+import { databasePathFor, routePayloadDirOf } from './paths.js';
 import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { MAX_SKELETON_TASKS } from './route-orchestrator.js';
@@ -229,7 +229,7 @@ describe('route orchestration', () => {
 
     it('task payloads are on disk with context and schema present when issued', async () => {
         const server = await startWithWorker();
-        const payloadDir = payloadDirOf(sherpaDir, MEDIUM_PR);
+        const payloadDir = routePayloadDirOf(sherpaDir, MEDIUM_PR);
 
         const skeleton = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
         expectPayloadOnDisk(skeleton, payloadDir);
@@ -243,7 +243,7 @@ describe('route orchestration', () => {
 
     it('restarting generation removes the previous payload', async () => {
         const server = await startWithWorker();
-        const payloadDir = payloadDirOf(sherpaDir, MEDIUM_PR);
+        const payloadDir = routePayloadDirOf(sherpaDir, MEDIUM_PR);
         const before = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
 
         // Failure and a new generation: nobody needs the old files anymore.
@@ -841,7 +841,7 @@ describe('route orchestration', () => {
             }
             expectPayloadOnDisk(
                 second.queue.getTask(routeTasks(second, 'route.section').at(-1) ?? 0),
-                payloadDirOf(sherpaDir, MEDIUM_PR),
+                routePayloadDirOf(sherpaDir, MEDIUM_PR),
             );
         });
 

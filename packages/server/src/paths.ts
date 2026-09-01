@@ -38,12 +38,19 @@ export function databasePathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'sherpa.db');
 }
 
-/**
- * Generation task payload directory: context Markdown files and result schemas
- * (rpc-design §4). Contains a subdirectory per route generation, with old ones cleaned up.
- */
+/** PR task payload root. Route and chat writers get separate subdirectories. */
 export function payloadDirOf(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'payload');
+}
+
+/** Route generation payload: one removable subdirectory per generation. */
+export function routePayloadDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(payloadDirOf(sherpaDir, prKey), 'route');
+}
+
+/** Chat question payload: a separate immutable subdirectory for each task. */
+export function chatPayloadDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(payloadDirOf(sherpaDir, prKey), 'chat');
 }
 
 /**
