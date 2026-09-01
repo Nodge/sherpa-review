@@ -17,6 +17,52 @@
     overflow: auto;
 }
 
+.app-workspace {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.app-workspace__content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.app-workspace__content > main {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.chat-panel-scrim {
+    display: none;
+}
+
+@media (max-width: 1279px) {
+    .chat-panel {
+        position: fixed;
+        top: 46px;
+        right: 0;
+        z-index: 55;
+    }
+
+    .chat-panel-scrim {
+        position: fixed;
+        inset: 46px 0 0;
+        z-index: 54;
+        display: block;
+        padding: 0;
+        border: 0;
+        background: var(--overlay-dialog);
+        cursor: pointer;
+    }
+}
+
 .message-screen {
     max-width: 720px;
     padding: 60px var(--space-page);

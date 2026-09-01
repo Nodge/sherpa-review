@@ -240,6 +240,7 @@ function mount(options: MountOptions = {}): Mounted {
         progressRevision: null,
         threadsRevision: 1,
         routeRevision: 1,
+        chatRevision: null,
     };
     const listeners = new Set<() => void>();
     const pushProgressEvent = (revision: number): void => {

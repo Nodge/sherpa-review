@@ -21,18 +21,6 @@ const FILE = {
 };
 const MODEL = parseFileDiff(FILE);
 const SELECTION = { fileId: FILE.fileId, side: 'new' as const, anchor: 'a11', focus: 'a12' };
-const EXCHANGE = {
-    id: 1,
-    question: 'Why?',
-    anchor: null,
-    status: 'queued' as const,
-    answer: null,
-    progressText: null,
-    error: null,
-    createdAt: '2026-09-01T10:00:00.000Z',
-    updatedAt: '2026-09-01T10:00:00.000Z',
-};
-
 const mounted: (() => void)[] = [];
 
 afterEach(() => {
@@ -98,7 +86,7 @@ describe('SelectionPopover DOM measurements', () => {
                     selection={SELECTION}
                     dragging={false}
                     agentConnected
-                    onAsk={() => Promise.resolve(EXCHANGE)}
+                    onAsk={() => undefined}
                     onComment={() => undefined}
                     onClear={() => undefined}
                 />,

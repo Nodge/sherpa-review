@@ -1,10 +1,12 @@
 import type { UiState } from '@sherpa/protocol';
 import {
+    UI_CHAT_EVENT,
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
     UI_ROUTE_EVENT,
     UI_STATE_EVENT,
+    uiChatEventSchema,
     uiProgressEventSchema,
     uiReviewEventSchema,
     uiRouteEventSchema,
@@ -40,6 +42,8 @@ export interface StoreSnapshot {
     readonly threadsRevision: number | null;
     /** Last route revision (M2). When it increases, the view rereads `review/route`. */
     readonly routeRevision: number | null;
+    /** Last chat and notes revision. When it increases, the application rereads `review/chat`. */
+    readonly chatRevision: number | null;
 }
 
 export interface Store {
@@ -56,6 +60,8 @@ export interface StreamHandlers {
     readonly onReview: (data: string) => void;
     /** `route` event: carries only the route revision. */
     readonly onRoute: (data: string) => void;
+    /** `chat` event: carries only the chat and notes revision. */
+    readonly onChat: (data: string) => void;
     /**
      * `recoverable: true` means the channel reconnects itself (the browser retries after a stream interruption).
      * `false` means the connection is permanently closed, so the store must retry.
@@ -90,6 +96,7 @@ export function createStore(options: StoreOptions): Store {
         progressRevision: null,
         threadsRevision: null,
         routeRevision: null,
+        chatRevision: null,
     };
     let closed = false;
 
@@ -149,6 +156,15 @@ export function createStore(options: StoreOptions): Store {
             const revision = parseRouteRevision(data);
             if (revision !== null && revision !== snapshot.routeRevision) {
                 update({ ...snapshot, routeRevision: revision });
+            }
+        },
+        onChat: (data) => {
+            if (closed || snapshot.connection === 'fatal') {
+                return;
+            }
+            const revision = parseChatRevision(data);
+            if (revision !== null && revision !== snapshot.chatRevision) {
+                update({ ...snapshot, chatRevision: revision });
             }
         },
         onError: (recoverable) => {
@@ -250,6 +266,19 @@ function parseRouteRevision(data: string): number | null {
     return parsed.success ? parsed.data.routeRevision : null;
 }
 
+/** `null` means the chat event failed the protocol schema. */
+function parseChatRevision(data: string): number | null {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(data);
+    } catch {
+        return null;
+    }
+
+    const parsed = uiChatEventSchema.safeParse(payload);
+    return parsed.success ? parsed.data.chatRevision : null;
+}
+
 function connectEventSource(url: string, handlers: StreamHandlers): StreamConnection {
     const source = new EventSource(url);
     // The event name is not in `EventSourceEventMap`, so the listener receives a base `Event`.
@@ -264,6 +293,9 @@ function connectEventSource(url: string, handlers: StreamHandlers): StreamConnec
     });
     source.addEventListener(UI_ROUTE_EVENT, (event) => {
         handlers.onRoute((event as MessageEvent<string>).data);
+    });
+    source.addEventListener(UI_CHAT_EVENT, (event) => {
+        handlers.onChat((event as MessageEvent<string>).data);
     });
     source.addEventListener('error', () => {
         // The browser retries an interrupted established stream, but not a failed

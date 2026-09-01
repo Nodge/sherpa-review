@@ -26,6 +26,8 @@ function topBar(pr: typeof PR | null): string {
             breadcrumb={breadcrumbFor('github-quillmart--quillmart--4821', pr)}
             agent={agentPillView({ kind: 'never' }, [])}
             reconnectCommand="/sherpa github-quillmart--quillmart--4821"
+            chatOpen={false}
+            onToggleChat={() => undefined}
             view="overview"
             onSelectView={() => undefined}
             onOpenSearch={() => undefined}
@@ -102,7 +104,7 @@ describe('agent pill popover', () => {
         expect(html).toContain('The AI areas stay read-only.');
     });
 
-    it('omits this wording when the agent is connected', () => {
+    it('connected agent has no reconnect popover or old chat placeholder', () => {
         const html = renderToStaticMarkup(
             <AgentPill
                 view={agentPillView(
@@ -122,6 +124,7 @@ describe('agent pill popover', () => {
         );
 
         expect(html).not.toContain('The reader works in full');
-        expect(html).toContain('Agent chat will appear here in M3.');
+        expect(html).not.toContain('Agent chat will appear here in M3.');
+        expect(html).not.toContain('agent-popover');
     });
 });

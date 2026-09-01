@@ -1,6 +1,5 @@
 import type {
     ChatAnchor,
-    ChatExchange,
     FileContent,
     FileDiff,
     PrDiff,
@@ -14,7 +13,6 @@ import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
-    askReviewChat,
     fetchFileContent,
     deleteReviewDraft,
     saveReviewDraft,
@@ -22,7 +20,7 @@ import {
     updateReviewDraft,
 } from '../api.js';
 import { PrHeader } from '../components/pr-header.tsx';
-import { SelectionPopover } from '../components/selection-popover.tsx';
+import { chatAnchorFromSelection, SelectionPopover } from '../components/selection-popover.tsx';
 import { ToolbarRightCluster } from '../components/toolbar-controls.tsx';
 import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
@@ -95,6 +93,10 @@ export interface FullDiffViewProps {
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
     readonly agentConnected: boolean;
+    readonly onAskSelection: (anchor: ChatAnchor) => void;
+    readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
+    readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly selectionNavigationRequest?: number;
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
@@ -123,6 +125,10 @@ export function FullDiffView({
     store,
     threadStore,
     agentConnected,
+    onAskSelection,
+    isSelectionPending,
+    onSelectionAnchorChange,
+    selectionNavigationRequest = 0,
     paletteNavigation = null,
     onPaletteActiveFileChange,
     onFilterChangeHandler,
@@ -180,11 +186,11 @@ export function FullDiffView({
             window.removeEventListener('hashchange', read);
         };
     }, []);
-    const askSelection = useCallback(
-        (question: string, anchor: ChatAnchor) => askReviewChat(token, question, anchor),
-        [token],
+    const requestedSelectionTarget = useMemo(
+        () =>
+            selectionNavigationRequest === 0 ? fragmentTarget.selection : readSelectionLink(window.location.hash),
+        [fragmentTarget.selection, selectionNavigationRequest],
     );
-
     if (
         diffError !== null ||
         lensesError !== null ||
@@ -225,11 +231,14 @@ export function FullDiffView({
             progressWriter={progressWriter}
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
-            initialFileId={fragmentTarget.selection?.fileId ?? fragmentTarget.fileId}
+            initialFileId={requestedSelectionTarget?.fileId ?? fragmentTarget.fileId}
             initialThreadId={fragmentTarget.threadId}
-            initialSelectionTarget={fragmentTarget.selection}
+            initialSelectionTarget={requestedSelectionTarget}
+            selectionNavigationRequest={selectionNavigationRequest}
             agentConnected={agentConnected}
-            onAskSelection={askSelection}
+            onAskSelection={onAskSelection}
+            isSelectionPending={isSelectionPending}
+            onSelectionAnchorChange={onSelectionAnchorChange}
             routeSnapshot={routeSnapshot}
             onJumpToStop={onJumpToStop}
             smallPr={smallPr}
@@ -263,8 +272,11 @@ export interface DiffWorkspaceProps {
     readonly initialFileId?: string | null;
     readonly initialThreadId?: string | null;
     readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
+    readonly selectionNavigationRequest?: number;
     readonly agentConnected?: boolean;
-    readonly onAskSelection?: (question: string, anchor: ChatAnchor) => Promise<ChatExchange>;
+    readonly onAskSelection?: (anchor: ChatAnchor) => void;
+    readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
+    readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
     /** Ready route in reader margins (README §10). null leaves Full diff as it is without a route. */
     readonly routeSnapshot?: RouteSnapshot | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
@@ -299,8 +311,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         initialFileId = null,
         initialThreadId = null,
         initialSelectionTarget = null,
+        selectionNavigationRequest = 0,
         agentConnected = false,
         onAskSelection = EMPTY_ASK_SELECTION,
+        isSelectionPending = NO_SELECTION_PENDING,
+        onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
         routeSnapshot = null,
         onJumpToStop,
         paletteNavigation = null,
@@ -809,13 +824,13 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             openedSelectionTarget.current = null;
             return;
         }
-        const key = `${initialSelectionTarget.fileId}:${initialSelectionTarget.side}:${String(initialSelectionTarget.start)}`;
+        const key = `${initialSelectionTarget.fileId}:${initialSelectionTarget.side}:${String(initialSelectionTarget.start)}:${String(selectionNavigationRequest)}`;
         if (openedSelectionTarget.current === key) {
             return;
         }
         openedSelectionTarget.current = key;
         void goToLine(initialSelectionTarget.fileId, initialSelectionTarget.side, initialSelectionTarget.start, false);
-    }, [goToLine, initialSelectionTarget]);
+    }, [goToLine, initialSelectionTarget, selectionNavigationRequest]);
 
     const handledPaletteNavigation = useRef<number | null>(null);
     useEffect(() => {
@@ -1081,7 +1096,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     selection={snapshot.selection}
                     dragging={snapshot.selectionDragging}
                     agentConnected={agentConnected}
+                    inFlight={isSelectionPending(chatAnchorFromSelection(selectedFile, selectedModel, snapshot.selection))}
                     onAsk={onAskSelection}
+                    onSelectionAnchorChange={onSelectionAnchorChange}
                     onComment={(side, line) => {
                         commentLine(selectedFile.fileId, side, line);
                     }}
@@ -1171,8 +1188,9 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
 };
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
-const EMPTY_ASK_SELECTION = (): Promise<ChatExchange> =>
-    Promise.reject(new Error('asking the agent is unavailable in this state'));
+const EMPTY_ASK_SELECTION = (): void => undefined;
+const NO_SELECTION_PENDING = (): boolean => false;
+const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 /** The full diff does not mark stops: it has no controls for that. */
 const NO_STOP_WRITES: StopWriterHooks = {
     read: () => null,

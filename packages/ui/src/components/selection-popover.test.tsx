@@ -29,18 +29,6 @@ const FILE = {
 };
 const MODEL = parseFileDiff(FILE);
 const SELECTION: LineSelection = { fileId: FILE.fileId, side: 'new', anchor: 'a11', focus: 'a12' };
-const EXCHANGE = {
-    id: 1,
-    question: 'Why are there two assignments here?',
-    anchor: null,
-    status: 'queued' as const,
-    answer: null,
-    progressText: null,
-    error: null,
-    createdAt: '2026-09-01T10:00:00.000Z',
-    updatedAt: '2026-09-01T10:00:00.000Z',
-};
-
 describe('Selection popover', () => {
     it('sits below the range and flips above it near the viewport bottom', () => {
         const base = {
@@ -127,7 +115,7 @@ describe('Selection popover', () => {
                     selection={selection}
                     dragging={false}
                     agentConnected
-                    onAsk={() => Promise.resolve(EXCHANGE)}
+                    onAsk={() => undefined}
                     onComment={() => undefined}
                     onClear={() => undefined}
                     gallery={{ mode: 'rest', position: { left: 20, top: 20 } }}
@@ -159,7 +147,7 @@ describe('Selection popover', () => {
                 selection={selection}
                 dragging={false}
                 agentConnected
-                onAsk={() => Promise.resolve(EXCHANGE)}
+                onAsk={() => undefined}
                 onComment={() => undefined}
                 onClear={() => undefined}
                 gallery={{ mode: 'rest', position: { left: 20, top: 20 } }}
@@ -168,6 +156,27 @@ describe('Selection popover', () => {
 
         expect(html).toContain('2 lines selected');
         expect(html).not.toContain('9 lines selected');
+    });
+
+    it('collapses the popover to a chip for a real non-terminal exchange with the same anchor', () => {
+        const html = renderToStaticMarkup(
+            <SelectionPopover
+                host={null}
+                file={FILE}
+                model={MODEL}
+                selection={SELECTION}
+                dragging={false}
+                agentConnected
+                inFlight
+                onAsk={() => undefined}
+                onComment={() => undefined}
+                onClear={() => undefined}
+                gallery={{ mode: 'sent', position: { left: 20, top: 20 } }}
+            />,
+        );
+
+        expect(html).toContain('asked · the answer will land here');
+        expect(html).not.toContain('Ask the agent');
     });
 
     it('blocks only the question when the agent is disconnected and sets the exact title', () => {
@@ -180,7 +189,7 @@ describe('Selection popover', () => {
                 selection={SELECTION}
                 dragging={false}
                 agentConnected={false}
-                onAsk={() => Promise.resolve(EXCHANGE)}
+                onAsk={() => undefined}
                 onComment={() => undefined}
                 onClear={() => undefined}
                 gallery={{ mode: 'rest', position: { left: 20, top: 20 } }}

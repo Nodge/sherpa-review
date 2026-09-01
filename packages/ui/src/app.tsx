@@ -1,6 +1,8 @@
 import type {
+    ChatAnchor,
     PrDiff,
     Thread,
+    UiChatResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
     UiRoutePhase,
@@ -13,7 +15,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import './app.css';
 import {
+    ApiError,
+    askReviewChat,
+    cancelReviewChat,
     cancelTask,
+    fetchReviewChat,
     fetchReviewDiff,
     fetchReviewLenses,
     fetchReviewProgress,
@@ -24,6 +30,7 @@ import {
     generateReviewRoute,
     mirrorViewedFiles,
     publishReview,
+    retryReviewChat,
     saveReviewDraft,
     sendFeedback,
     setFileViewed,
@@ -34,6 +41,8 @@ import { agentPillView } from './components/agent-pill-view.js';
 import { auditScopeBannerVisible, AuditScopeBanner } from './components/audit-banner.tsx';
 import type { BannerSource } from './components/banner-slot.tsx';
 import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
+import type { ChatScrollTarget } from './components/chat-panel.tsx';
+import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -62,6 +71,7 @@ import { updateFragment } from './fragment.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
+import { selectionLinkHash } from './selection-link.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
 import { createStopProgressStore } from './progress/stop-progress-store.js';
@@ -109,6 +119,19 @@ interface RouteActionFailure {
     readonly message: string;
 }
 
+interface ChatState {
+    readonly key: string;
+    readonly data: UiChatResponse | null;
+    readonly error: string | null;
+    readonly loading: boolean;
+}
+
+interface ChatComposerContext {
+    readonly key: string;
+    readonly anchor: ChatAnchor | null;
+    readonly latched: boolean;
+}
+
 interface ReviewState {
     readonly key: string;
     readonly diff: PrDiff | null;
@@ -130,7 +153,10 @@ interface ReviewState {
 
 export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const { view, filter: filterId, preset, paletteOpen } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const { view, filter: filterId, preset, paletteOpen, chatOpen } = useSyncExternalStore(
+        session.subscribe,
+        session.getSnapshot,
+    );
     const viewSelection = useSyncExternalStore(
         session.subscribeViewSelection,
         session.getViewSelectionSnapshot,
@@ -142,8 +168,27 @@ export function App({ store, session, token }: AppProps) {
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
+    const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
     const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
     const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
+    const [chatState, setChatState] = useState<ChatState>(() => emptyChatState(chatKey, reviewHost !== null));
+    const currentChat = chatState.key === chatKey ? chatState : emptyChatState(chatKey, reviewHost !== null);
+    const [chatComposerContext, setChatComposerContext] = useState<ChatComposerContext>(() => ({
+        key: chatKey,
+        anchor: null,
+        latched: false,
+    }));
+    const currentChatComposer =
+        chatComposerContext.key === chatKey
+            ? chatComposerContext
+            : { key: chatKey, anchor: null, latched: false } satisfies ChatComposerContext;
+    const [chatFocusRequest, setChatFocusRequest] = useState(0);
+    const [chatScrollRequest, setChatScrollRequest] = useState<{
+        readonly id: number;
+        readonly target: ChatScrollTarget;
+    } | null>(null);
+    const chatScrollRequestId = useRef(0);
+    const [chatAnchorNavigationRequest, setChatAnchorNavigationRequest] = useState(0);
     const currentDiff = currentReview.diff;
     const progressLoaded = currentReview.progress !== null;
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
@@ -586,6 +631,75 @@ export function App({ store, session, token }: AppProps) {
         };
     }, [reviewHost, reviewKey, reviewReady, routeRetryAttempt, snapshot.routeRevision, token]);
 
+    // Read chat history when the PR opens and refresh it only after the SSE revision increases.
+    const seenChat = useRef<{ key: string; revision: number | null; loaded: boolean }>({
+        key: chatKey,
+        revision: null,
+        loaded: false,
+    });
+    const [chatRetry, setChatRetry] = useState<{ key: string; attempt: number }>({ key: chatKey, attempt: 0 });
+    const chatRetryAttempt = chatRetry.key === chatKey ? chatRetry.attempt : 0;
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null) {
+            return;
+        }
+        if (seenChat.current.key !== chatKey) {
+            seenChat.current = { key: chatKey, revision: null, loaded: false };
+        }
+        const revision = snapshot.chatRevision;
+        if (seenChat.current.loaded && seenChat.current.revision === revision) {
+            return;
+        }
+
+        let alive = true;
+        let retry: ReturnType<typeof setTimeout> | null = null;
+        void fetchReviewChat(token).then(
+            (response) => {
+                if (!alive) {
+                    return;
+                }
+                seenChat.current = { key: chatKey, revision, loaded: true };
+                setChatState((current) => ({
+                    key: chatKey,
+                    data: mergeChatResponse(response, chatStateForKey(current, chatKey).data),
+                    error: null,
+                    loading: false,
+                }));
+                if (chatRetryAttempt !== 0) {
+                    setChatRetry({ key: chatKey, attempt: 0 });
+                }
+            },
+            (error: unknown) => {
+                if (!alive) {
+                    return;
+                }
+                if (error instanceof ApiError && error.status === 404) {
+                    seenChat.current = { key: chatKey, revision, loaded: true };
+                    setChatState({ key: chatKey, data: EMPTY_CHAT_RESPONSE, error: null, loading: false });
+                    return;
+                }
+                setChatState((current) => {
+                    const next = chatStateForKey(current, chatKey);
+                    return {
+                        ...next,
+                        // A background failure does not clear history already on screen.
+                        error: next.data === null ? errorMessage(error) : null,
+                        loading: false,
+                    };
+                });
+                retry = setTimeout(() => {
+                    setChatRetry({ key: chatKey, attempt: chatRetryAttempt + 1 });
+                }, Math.min(1000 * 2 ** chatRetryAttempt, 15_000));
+            },
+        );
+        return () => {
+            alive = false;
+            if (retry !== null) {
+                clearTimeout(retry);
+            }
+        };
+    }, [chatKey, chatRetryAttempt, reviewHost, reviewReady, snapshot.chatRevision, token]);
+
     const threadFileIds = useMemo(
         () => new Set(currentDiff?.files.map((file) => file.fileId) ?? []),
         [currentDiff],
@@ -951,6 +1065,106 @@ export function App({ store, session, token }: AppProps) {
         [session],
     );
 
+    const chatData = currentChat.data ?? EMPTY_CHAT_RESPONSE;
+    const isSelectionPending = useCallback(
+        (anchor: ChatAnchor | null): boolean =>
+            anchor !== null &&
+            chatData.exchanges.some(
+                (exchange) =>
+                    (exchange.status === 'queued' || exchange.status === 'running') &&
+                    sameChatAnchor(exchange.anchor, anchor),
+            ),
+        [chatData.exchanges],
+    );
+    const selectChatAnchor = useCallback(
+        (anchor: ChatAnchor | null) => {
+            setChatComposerContext((current) => {
+                const next = current.key === chatKey ? current : { key: chatKey, anchor: null, latched: false };
+                return next.latched ? next : { ...next, anchor };
+            });
+        },
+        [chatKey],
+    );
+    const openChatForSelection = useCallback(
+        (anchor: ChatAnchor) => {
+            setChatComposerContext({ key: chatKey, anchor, latched: true });
+            session.setChatOpen(true);
+            setChatFocusRequest((request) => request + 1);
+        },
+        [chatKey, session],
+    );
+    const closeChat = useCallback(() => {
+        setChatScrollRequest(null);
+        session.setChatOpen(false);
+    }, [session]);
+    const toggleChat = useCallback(
+        (target: ChatScrollTarget | null) => {
+            if (session.getSnapshot().chatOpen) {
+                closeChat();
+                return;
+            }
+            session.setChatOpen(true);
+            if (target === null) {
+                setChatScrollRequest(null);
+                return;
+            }
+            chatScrollRequestId.current += 1;
+            setChatScrollRequest({ id: chatScrollRequestId.current, target });
+        },
+        [closeChat, session],
+    );
+    const handleChatScrollRequest = useCallback((id: number) => {
+        setChatScrollRequest((current) => (current?.id === id ? null : current));
+    }, []);
+    const askChat = useCallback(
+        async (text: string, anchor?: ChatAnchor) => {
+            const exchange = await askReviewChat(token, text, anchor);
+            setChatState((current) => {
+                const next = chatStateForKey(current, chatKey);
+                const data = next.data ?? EMPTY_CHAT_RESPONSE;
+                return {
+                    key: chatKey,
+                    error: null,
+                    loading: false,
+                    data: {
+                        ...data,
+                        exchanges: [...data.exchanges.filter((candidate) => candidate.id !== exchange.id), exchange],
+                    },
+                };
+            });
+            return exchange;
+        },
+        [chatKey, token],
+    );
+    const cancelChat = useCallback(
+        async (exchangeId: number): Promise<void> => {
+            if ((await cancelReviewChat(token, exchangeId)) !== 'cancelled') {
+                return;
+            }
+            setChatState((current) => updateChatExchange(current, chatKey, exchangeId, 'cancelled'));
+        },
+        [chatKey, token],
+    );
+    const retryChat = useCallback(
+        async (exchangeId: number): Promise<void> => {
+            if ((await retryReviewChat(token, exchangeId)) !== 'retried') {
+                return;
+            }
+            setChatState((current) => updateChatExchange(current, chatKey, exchangeId, 'queued'));
+        },
+        [chatKey, token],
+    );
+    const navigateChatAnchor = useCallback(
+        (anchor: ChatAnchor) => {
+            window.location.hash = selectionLinkHash(window.location.hash, anchor);
+            setChatAnchorNavigationRequest((request) => request + 1);
+            if (view !== 'route' && view !== 'diff') {
+                session.setView('diff');
+            }
+        },
+        [session, view],
+    );
+
     const selectView = useCallback(
         (next: ViewId) => {
             session.setView(next);
@@ -1013,6 +1227,8 @@ export function App({ store, session, token }: AppProps) {
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
                 agent={agentPillView(state.worker, state.tasks)}
                 reconnectCommand={reconnectCommand(state.prKey)}
+                chatOpen={chatOpen}
+                onToggleChat={toggleChat}
                 view={view}
                 onSelectView={selectView}
                 onOpenSearch={() => {
@@ -1029,6 +1245,8 @@ export function App({ store, session, token }: AppProps) {
                 onSendFeedback={(request) => sendFeedback(token, request)}
             />
 
+            <div className="app-workspace">
+                <div className="app-workspace__content">
             {snapshot.connection === 'reconnecting' ? (
                 <div className="connection-banner">
                     <div className="connection-banner__title">Server unavailable, reconnecting…</div>
@@ -1062,6 +1280,10 @@ export function App({ store, session, token }: AppProps) {
                     store={diffStore}
                     threadStore={threadStore}
                     agentConnected={state.worker.kind === 'connected'}
+                    onAskSelection={openChatForSelection}
+                    isSelectionPending={isSelectionPending}
+                    onSelectionAnchorChange={selectChatAnchor}
+                    selectionNavigationRequest={chatAnchorNavigationRequest}
                     paletteNavigation={paletteNavigation}
                     onFilterChangeHandler={setDiffFilterHandler}
                     onPaletteActiveFileChange={(fileId) => {
@@ -1090,6 +1312,10 @@ export function App({ store, session, token }: AppProps) {
                     threadStore={threadStore}
                     snapshot={routeViewSnapshot}
                     agentConnected={state.worker.kind === 'connected'}
+                    onAskSelection={openChatForSelection}
+                    isSelectionPending={isSelectionPending}
+                    onSelectionAnchorChange={selectChatAnchor}
+                    selectionNavigationRequest={chatAnchorNavigationRequest}
                     agentStopped={routePhase === 'filling' && state.worker.kind === 'disconnected'}
                     navigation={routeNavigation}
                     onUnderExplained={setRouteUnderExplained}
@@ -1141,6 +1367,40 @@ export function App({ store, session, token }: AppProps) {
                     }}
                 />
             )}
+                </div>
+                {chatOpen ? (
+                    <>
+                        <button
+                            type="button"
+                            className="chat-panel-scrim"
+                            aria-label="Close chat"
+                            onClick={closeChat}
+                        />
+                        <ChatPanel
+                            prKey={state.prKey}
+                            worker={state.worker}
+                            tasks={state.tasks}
+                            exchanges={chatData.exchanges}
+                            notes={chatData.notes}
+                            loading={currentChat.loading}
+                            error={currentChat.error}
+                            reconnectCommand={reconnectCommand(state.prKey)}
+                            anchor={currentChatComposer.anchor}
+                            focusRequest={chatFocusRequest}
+                            scrollRequest={chatScrollRequest}
+                            onScrollRequestHandled={handleChatScrollRequest}
+                            onClose={closeChat}
+                            onRemoveAnchor={() => {
+                                setChatComposerContext({ key: chatKey, anchor: null, latched: false });
+                            }}
+                            onAsk={askChat}
+                            onCancel={cancelChat}
+                            onRetry={retryChat}
+                            onNavigate={navigateChatAnchor}
+                        />
+                    </>
+                ) : null}
+            </div>
 
             {routeViewSnapshot === null ? null : (
                 <>
@@ -1201,6 +1461,58 @@ export function MessageScreen({ title, children }: { title: string; children: Re
             {children}
         </main>
     );
+}
+
+const EMPTY_CHAT_RESPONSE: UiChatResponse = { exchanges: [], notes: [], chatRevision: 0 };
+
+function emptyChatState(key: string, loading: boolean): ChatState {
+    return { key, data: null, error: null, loading };
+}
+
+function chatStateForKey(current: ChatState, key: string): ChatState {
+    return current.key === key ? current : emptyChatState(key, true);
+}
+
+function mergeChatResponse(server: UiChatResponse, local: UiChatResponse | null): UiChatResponse {
+    if (local === null) {
+        return server;
+    }
+    const exchanges = new Map(server.exchanges.map((exchange) => [exchange.id, exchange]));
+    for (const exchange of local.exchanges) {
+        const fromServer = exchanges.get(exchange.id);
+        if (fromServer === undefined || Date.parse(exchange.updatedAt) > Date.parse(fromServer.updatedAt)) {
+            exchanges.set(exchange.id, exchange);
+        }
+    }
+    return { ...server, exchanges: [...exchanges.values()] };
+}
+
+function updateChatExchange(
+    current: ChatState,
+    key: string,
+    exchangeId: number,
+    status: UiChatResponse['exchanges'][number]['status'],
+): ChatState {
+    const next = chatStateForKey(current, key);
+    const data = next.data ?? EMPTY_CHAT_RESPONSE;
+    return {
+        ...next,
+        data: {
+            ...data,
+            exchanges: data.exchanges.map((exchange) =>
+                exchange.id === exchangeId
+                    ? {
+                          ...exchange,
+                          status,
+                          answer: status === 'done' ? exchange.answer : null,
+                          progressText: null,
+                          error: null,
+                          updatedAt: new Date().toISOString(),
+                      }
+                    : exchange,
+            ),
+        },
+    };
 }
 
 function emptyReviewState(key: string, loading: boolean): ReviewState {

@@ -50,6 +50,8 @@ interface Harness {
     readonly progress: (data: string) => void;
     /** `review` event: thread revision. */
     readonly review: (data: string) => void;
+    /** `chat` event: chat and notes revision. */
+    readonly chat: (data: string) => void;
     /** Channel interruption. `recoverable: false` means the connection is permanently closed. */
     readonly error: (recoverable?: boolean) => void;
     /** URL the store used to connect. */
@@ -91,6 +93,9 @@ function makeStore(): Harness {
         review: (data) => {
             handlers?.onReview(data);
         },
+        chat: (data) => {
+            handlers?.onChat(data);
+        },
         error: (recoverable = true) => {
             handlers?.onError(recoverable);
         },
@@ -117,6 +122,7 @@ describe('UI store', () => {
             progressRevision: null,
             threadsRevision: null,
             routeRevision: null,
+            chatRevision: null,
         });
     });
 
@@ -159,6 +165,19 @@ describe('UI store', () => {
         review(JSON.stringify({ threadsRevision: 7 }));
 
         expect(store.getSnapshot()).toMatchObject({ connection: 'online', threadsRevision: 7, state: STATE });
+    });
+
+    it('a chat event brings the revision and triggers a reread only when it changes', () => {
+        const { store, emit, chat } = makeStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        emit(JSON.stringify(STATE));
+
+        chat(JSON.stringify({ chatRevision: 4 }));
+        chat(JSON.stringify({ chatRevision: 4 }));
+
+        expect(store.getSnapshot()).toMatchObject({ connection: 'online', chatRevision: 4, state: STATE });
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 
     it('ignores a malformed progress event and keeps the channel alive', () => {

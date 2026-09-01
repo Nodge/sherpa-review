@@ -64,6 +64,15 @@ describe('agent pill', () => {
         expect(view.label).toBe('Agent working · 1 in queue');
     });
 
+    it('includes chat tasks in the total work and queue count', () => {
+        const view = agentPillView(CONNECTED, [
+            task({ id: 1, status: 'leased', type: 'chat' }),
+            task({ id: 2, status: 'queued', type: 'chat' }),
+        ]);
+
+        expect(view.label).toBe('Agent working · 2 in queue');
+    });
+
     it('shows the red state when the last task failed', () => {
         const view = agentPillView(
             CONNECTED,

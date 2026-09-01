@@ -76,6 +76,7 @@ function snapshot(state: UiState | null): StoreSnapshot {
         progressRevision: null,
         threadsRevision: null,
         routeRevision: null,
+        chatRevision: null,
     };
 }
 

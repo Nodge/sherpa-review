@@ -30,6 +30,7 @@ describe('session store', () => {
             preset: 'triage',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
+            chatOpen: false,
             stops: EMPTY_STOPS,
         });
     });
@@ -101,6 +102,7 @@ describe('session store', () => {
                     preset: 'triage',
                     threadsShow: DEFAULT_THREADS_SHOW,
                     paletteOpen: false,
+                    chatOpen: false,
                     stops: EMPTY_STOPS,
                 },
             ],
@@ -129,6 +131,7 @@ describe('session store', () => {
             preset: 'triage',
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
+            chatOpen: false,
             stops: EMPTY_STOPS,
         };
 
@@ -142,6 +145,17 @@ describe('session store', () => {
         store.setPaletteOpen(true);
 
         expect(store.getSnapshot()).toMatchObject({ view: 'diff', filter: 'all', paletteOpen: true });
+    });
+
+    it('keeps chat open state in the session without separate storage', () => {
+        const persist = vi.fn();
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' }, persist });
+
+        store.setChatOpen(true);
+        store.setChatOpen(true);
+
+        expect(store.getSnapshot().chatOpen).toBe(true);
+        expect(persist).toHaveBeenCalledTimes(1);
     });
 
     it('preserves previous expansion when clearing a stop mark but removes temporary expansion', () => {

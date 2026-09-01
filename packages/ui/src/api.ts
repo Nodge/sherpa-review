@@ -9,6 +9,9 @@ import type {
     PublishResult,
     Thread,
     UiCancelResponse,
+    UiChatCancelResponse,
+    UiChatResponse,
+    UiChatRetryResponse,
     UiEnqueueResponse,
     UiFeedbackRequest,
     UiFeedbackResponse,
@@ -31,6 +34,9 @@ import {
     UI_ENDPOINTS,
     uiCancelResponseSchema,
     uiChatAskResponseSchema,
+    uiChatCancelResponseSchema,
+    uiChatResponseSchema,
+    uiChatRetryResponseSchema,
     uiEnqueueResponseSchema,
     uiFeedbackResponseSchema,
     uiOpenInEditorResponseSchema,
@@ -56,7 +62,11 @@ import type { z } from 'zod';
  */
 
 /** An error the reviewer can see as is: the contract messages are already readable. */
-export class ApiError extends Error {}
+export class ApiError extends Error {
+    constructor(message: string, readonly status: number | null = null) {
+        super(message);
+    }
+}
 
 export async function enqueueEchoTask(token: string, text: string, priority?: PriorityClass): Promise<UiTask> {
     const body: UiEnqueueResponse = await post(
@@ -194,9 +204,39 @@ export async function fillRouteStop(
     return body.outcome;
 }
 
-/** Enqueues a question about the selection. Later exchange status arrives over chat SSE in T6. */
-export async function askReviewChat(token: string, text: string, anchor: ChatAnchor): Promise<ChatExchange> {
-    return (await post(UI_ENDPOINTS.reviewChatAsk, token, { text, anchor }, uiChatAskResponseSchema)).exchange;
+/** Full chat and note snapshot. Refetched when `chatRevision` increases. */
+export async function fetchReviewChat(token: string): Promise<UiChatResponse> {
+    return get(UI_ENDPOINTS.reviewChat, token, uiChatResponseSchema);
+}
+
+/** Enqueues a question about the selection or the whole PR. Shows the created exchange optimistically. */
+export async function askReviewChat(token: string, text: string, anchor?: ChatAnchor): Promise<ChatExchange> {
+    return (
+        await post(
+            UI_ENDPOINTS.reviewChatAsk,
+            token,
+            anchor === undefined ? { text } : { text, anchor },
+            uiChatAskResponseSchema,
+        )
+    ).exchange;
+}
+
+export async function cancelReviewChat(
+    token: string,
+    exchangeId: number,
+): Promise<UiChatCancelResponse['outcome']> {
+    return (
+        await post(UI_ENDPOINTS.reviewChatCancel, token, { exchangeId }, uiChatCancelResponseSchema)
+    ).outcome;
+}
+
+export async function retryReviewChat(
+    token: string,
+    exchangeId: number,
+): Promise<UiChatRetryResponse['outcome']> {
+    return (
+        await post(UI_ENDPOINTS.reviewChatRetry, token, { exchangeId }, uiChatRetryResponseSchema)
+    ).outcome;
 }
 
 export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {
@@ -240,7 +280,7 @@ async function post<T>(path: string, token: string, body: unknown, schema: z.Zod
 async function validate<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-        throw new ApiError(errorMessage(payload));
+        throw new ApiError(errorMessage(payload), response.status);
     }
 
     const parsed = schema.safeParse(payload);

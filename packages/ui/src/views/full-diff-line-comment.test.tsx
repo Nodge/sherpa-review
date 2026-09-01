@@ -3,7 +3,7 @@ import { fixtureData } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
@@ -76,7 +76,8 @@ for (const [name, value] of [
 ] as const) {
     Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: () => value });
 }
-Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+const scrollIntoView = vi.fn();
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
 
 const mounted: (() => void)[] = [];
 
@@ -84,6 +85,7 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
+    scrollIntoView.mockClear();
 });
 
 function mount(options: {
@@ -102,7 +104,8 @@ function mount(options: {
         initial: { view: 'diff', filter: 'all', threadsShow: { people: true, bots: true, resolved: false } },
     });
     const root = createRoot(host);
-    act(() => {
+    let selectionNavigationRequest = 0;
+    const render = (): void => {
         root.render(
             <DiffWorkspace
                 pr={DATA.pr}
@@ -118,9 +121,11 @@ function mount(options: {
                 loadContent={options.loadContent ?? (() => Promise.resolve(null))}
                 onSetViewed={() => Promise.resolve(0)}
                 initialSelectionTarget={options.initialSelectionTarget ?? null}
+                selectionNavigationRequest={selectionNavigationRequest}
             />,
         );
-    });
+    };
+    act(render);
     mounted.push(() => {
         act(() => {
             root.unmount();
@@ -131,6 +136,10 @@ function mount(options: {
         host,
         store,
         threadStore,
+        repeatSelectionNavigation: () => {
+            selectionNavigationRequest += 1;
+            act(render);
+        },
         settle: async () => {
             for (let step = 0; step < 8; step += 1) {
                 await act(async () => {
@@ -187,7 +196,20 @@ describe('comment from a full diff line', () => {
     });
 });
 
-describe('navigation to a hidden line in the full diff', () => {
+describe('full diff line navigation', () => {
+    it('navigates to the same anchor again when the request counter changes', async () => {
+        const view = mount({
+            initialSelectionTarget: { fileId: FILE.fileId, side: 'new', start: 6 },
+        });
+        await view.settle();
+        scrollIntoView.mockClear();
+
+        view.repeatSelectionNavigation();
+        await view.settle();
+
+        expect(scrollIntoView).toHaveBeenCalled();
+    });
+
     it('expands context before looking for the line in the DOM', async () => {
         const raw = parseFileDiff(toParseRequest(NAV_FILE));
         if (raw.content.kind !== 'text') {

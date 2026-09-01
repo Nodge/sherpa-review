@@ -69,6 +69,8 @@ export interface SessionState {
     readonly threadsShow: ThreadsShow;
     /** The command palette is open over the current view. */
     readonly paletteOpen: boolean;
+    /** Chat is open in the third column, only for the current tab session. */
+    readonly chatOpen: boolean;
     readonly stops: StopsState;
 }
 
@@ -89,6 +91,7 @@ export interface SessionStore {
     readonly setPreset: (preset: RoutePreset) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
+    readonly setChatOpen: (open: boolean) => void;
     /** Normal stop expansion (low-tier stops are collapsed by default). */
     readonly setStopExpanded: (stopId: string, expanded: boolean) => void;
     /** Expansion of a viewed stop from its summary row. */
@@ -105,9 +108,10 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'stops' | 'preset'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'stops' | 'preset'> & {
         readonly threadsShow?: ThreadsShow;
         readonly paletteOpen?: boolean;
+        readonly chatOpen?: boolean;
         readonly stops?: StopsState;
         readonly preset?: RoutePreset;
     };
@@ -129,6 +133,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         ...options.initial,
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
         paletteOpen: options.initial.paletteOpen ?? false,
+        chatOpen: options.initial.chatOpen ?? false,
         stops: options.initial.stops ?? EMPTY_STOPS,
         preset: options.initial.preset ?? DEFAULT_PRESET,
     };
@@ -203,6 +208,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setPaletteOpen: (paletteOpen) => {
             if (paletteOpen !== state.paletteOpen) {
                 update({ ...state, paletteOpen });
+            }
+        },
+        setChatOpen: (chatOpen) => {
+            if (chatOpen !== state.chatOpen) {
+                update({ ...state, chatOpen });
             }
         },
 

@@ -1,6 +1,5 @@
 import type {
     ChatAnchor,
-    ChatExchange,
     FileContent,
     FileDiff,
     PrDiff,
@@ -16,7 +15,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
-    askReviewChat,
     deleteReviewDraft,
     fetchFileContent,
     saveReviewDraft,
@@ -24,7 +22,7 @@ import {
     updateReviewDraft,
 } from '../../api.js';
 import { PrHeader } from '../../components/pr-header.tsx';
-import { SelectionPopover } from '../../components/selection-popover.tsx';
+import { chatAnchorFromSelection, SelectionPopover } from '../../components/selection-popover.tsx';
 import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
 import type { DiffFileModel } from '../../diff/model.js';
@@ -131,6 +129,10 @@ export interface RouteViewProps {
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
     readonly agentConnected: boolean;
+    readonly onAskSelection: (anchor: ChatAnchor) => void;
+    readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
+    readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly selectionNavigationRequest?: number;
     /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
     readonly agentStopped?: boolean;
     /** Palette navigation increments `id`, and the view finishes scrolling to the stop. */
@@ -158,6 +160,10 @@ export function RouteView({
     threadStore,
     snapshot,
     agentConnected,
+    onAskSelection,
+    isSelectionPending,
+    onSelectionAnchorChange,
+    selectionNavigationRequest = 0,
     agentStopped = false,
     navigation = null,
     onUnderExplained,
@@ -221,6 +227,10 @@ export function RouteView({
             window.removeEventListener('hashchange', read);
         };
     }, [jumpTo]);
+    const requestedSelectionTarget = useMemo(
+        () => (selectionNavigationRequest === 0 ? selectionTarget : readSelectionLink(window.location.hash)),
+        [selectionNavigationRequest, selectionTarget],
+    );
     const paletteJump = useRef<number | null>(null);
     useEffect(() => {
         if (navigation === null || paletteJump.current === navigation.id) {
@@ -229,11 +239,6 @@ export function RouteView({
         paletteJump.current = navigation.id;
         jumpTo(navigation.stopId);
     }, [jumpTo, navigation]);
-    const askSelection = useCallback(
-        (question: string, anchor: ChatAnchor) => askReviewChat(token, question, anchor),
-        [token],
-    );
-
     if (
         diffError !== null ||
         lensesError !== null ||
@@ -271,9 +276,12 @@ export function RouteView({
             threadTransport={threadTransport}
             onResolveThread={resolveThread}
             navigation={target}
-            initialSelectionTarget={selectionTarget}
+            initialSelectionTarget={requestedSelectionTarget}
+            selectionNavigationRequest={selectionNavigationRequest}
             agentConnected={agentConnected}
-            onAskSelection={askSelection}
+            onAskSelection={onAskSelection}
+            isSelectionPending={isSelectionPending}
+            onSelectionAnchorChange={onSelectionAnchorChange}
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
@@ -312,8 +320,11 @@ export interface RouteWorkspaceProps {
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
+    readonly selectionNavigationRequest?: number;
     readonly agentConnected?: boolean;
-    readonly onAskSelection?: (question: string, anchor: ChatAnchor) => Promise<ChatExchange>;
+    readonly onAskSelection?: (anchor: ChatAnchor) => void;
+    readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
+    readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
     readonly onUnderExplained?: (value: boolean) => void;
     readonly onFillStop?: (planIndex: number) => void;
     readonly onRouteSummary?: (summary: RouteSummary) => void;
@@ -338,8 +349,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         progressLoaded = true,
         navigation = null,
         initialSelectionTarget = null,
+        selectionNavigationRequest = 0,
         agentConnected = false,
         onAskSelection = EMPTY_ASK_SELECTION,
+        isSelectionPending = NO_SELECTION_PENDING,
+        onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
         onUnderExplained,
         onFillStop,
         onRouteSummary,
@@ -802,7 +816,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             openedSelectionTarget.current = null;
             return;
         }
-        const key = `${initialSelectionTarget.fileId}:${initialSelectionTarget.side}:${String(initialSelectionTarget.start)}`;
+        const key = `${initialSelectionTarget.fileId}:${initialSelectionTarget.side}:${String(initialSelectionTarget.start)}:${String(selectionNavigationRequest)}`;
         if (openedSelectionTarget.current === key) {
             return;
         }
@@ -852,7 +866,16 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         return () => {
             cancelled = true;
         };
-    }, [expand, initialSelectionTarget, model.entries, openedCollapsed, requestJump, revealTarget, store]);
+    }, [
+        expand,
+        initialSelectionTarget,
+        model.entries,
+        openedCollapsed,
+        requestJump,
+        revealTarget,
+        selectionNavigationRequest,
+        store,
+    ]);
 
     // Our scroll adjustment does not count as a reviewer gesture while anchor correction is running: the browser
     // dispatches scroll events in the next task, so a timer closes the window.
@@ -1627,7 +1650,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     selection={diffSnapshot.selection}
                     dragging={diffSnapshot.selectionDragging}
                     agentConnected={agentConnected}
+                    inFlight={isSelectionPending(chatAnchorFromSelection(selectedFile, selectedModel, diffSnapshot.selection))}
                     onAsk={onAskSelection}
+                    onSelectionAnchorChange={onSelectionAnchorChange}
                     onComment={(side, line) => {
                         commentLine(selectedFile.fileId, side, line);
                     }}
@@ -2067,8 +2092,9 @@ function routeEntryForLine(
 
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
-const EMPTY_ASK_SELECTION = (): Promise<ChatExchange> =>
-    Promise.reject(new Error('asking the agent is unavailable in this state'));
+const EMPTY_ASK_SELECTION = (): void => undefined;
+const NO_SELECTION_PENDING = (): boolean => false;
+const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 const EMPTY_SET_STOP_VIEWED = (): Promise<number> =>
     Promise.reject(new Error('stop marking is unavailable in this state'));
 const EMPTY_FAILURES: ReadonlyMap<string, boolean> = new Map();

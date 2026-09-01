@@ -1,5 +1,5 @@
-import type { ChatAnchor, ChatExchange } from '@sherpa/protocol';
-import type { CSSProperties, KeyboardEvent } from 'react';
+import type { ChatAnchor } from '@sherpa/protocol';
+import type { CSSProperties } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
@@ -20,11 +20,13 @@ export interface SelectionPopoverProps {
     readonly selection: LineSelection;
     readonly dragging: boolean;
     readonly agentConnected: boolean;
-    readonly onAsk: (question: string, anchor: ChatAnchor) => Promise<ChatExchange>;
+    readonly inFlight?: boolean;
+    readonly onAsk: (anchor: ChatAnchor) => void;
+    readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
     readonly onComment: (side: 'old' | 'new', line: number) => void;
     readonly onClear: () => void;
     /** The gallery renders states without DOM measurements or a server. */
-    readonly gallery?: { readonly mode: 'rest' | 'question' | 'sent'; readonly position: { left: number; top: number } };
+    readonly gallery?: { readonly mode: 'rest' | 'sent'; readonly position: { left: number; top: number } };
 }
 
 export interface SelectionPopoverPositionInput {
@@ -99,23 +101,38 @@ export function chatAnchorFromSelection(
 }
 
 export function SelectionPopover(props: SelectionPopoverProps) {
-    const { file, model, selection, dragging, agentConnected, onAsk, onComment, onClear, gallery } = props;
-    const anchor = chatAnchorFromSelection(file, model, selection);
+    const {
+        file,
+        model,
+        selection,
+        dragging,
+        agentConnected,
+        inFlight = false,
+        onAsk,
+        onSelectionAnchorChange,
+        onComment,
+        onClear,
+        gallery,
+    } = props;
+    const anchor = useMemo(() => chatAnchorFromSelection(file, model, selection), [file, model, selection]);
     const selectedKeys = useMemo(() => selectedLines(model, selection), [model, selection]);
     const count = selectedKeys.size;
-    const [mode, setMode] = useState<'rest' | 'question' | 'sent'>(gallery?.mode ?? 'rest');
-    const [question, setQuestion] = useState('');
-    const [pending, setPending] = useState(false);
+    const mode = gallery?.mode ?? (inFlight ? 'sent' : 'rest');
     const [error, setError] = useState<string | null>(null);
     const [position, setPosition] = useState<SelectionPopoverPosition | null>(
         gallery === undefined ? null : { ...gallery.position, placement: 'below' },
     );
     const popoverRef = useRef<HTMLDivElement | null>(null);
-    const inputRef = useRef<HTMLInputElement | null>(null);
     const openingTop = useRef<number | null>(null);
     const rowsCache = useRef<SelectionRowsCache | null>(null);
     const measureFrame = useRef<number | null>(null);
     const scrollFrame = useRef<number | null>(null);
+    useLayoutEffect(() => {
+        onSelectionAnchorChange?.(anchor);
+        return () => {
+            onSelectionAnchorChange?.(null);
+        };
+    }, [anchor, onSelectionAnchorChange]);
 
     const selectionBounds = useCallback((): SelectionBounds | null => {
         const host = props.host;
@@ -200,12 +217,6 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     }, [dragging, gallery, measure, props.host, scheduleMeasure]);
 
     useLayoutEffect(() => {
-        if (mode === 'question') {
-            inputRef.current?.focus();
-        }
-    }, [mode]);
-
-    useLayoutEffect(() => {
         const host = props.host;
         if (gallery !== undefined || dragging || host === null) {
             return;
@@ -241,24 +252,6 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         return null;
     }
 
-    const submit = (): void => {
-        const text = question.trim();
-        if (text === '' || pending) {
-            return;
-        }
-        setPending(true);
-        setError(null);
-        void onAsk(text, anchor).then(
-            () => {
-                setPending(false);
-                setMode('sent');
-            },
-            (reason: unknown) => {
-                setPending(false);
-                setError(reason instanceof Error ? reason.message : String(reason));
-            },
-        );
-    };
     const copyLink = (): void => {
         const clipboard = (navigator as unknown as { readonly clipboard?: Pick<Clipboard, 'writeText'> }).clipboard;
         if (clipboard === undefined) {
@@ -289,67 +282,35 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         <div className="selection-popover" ref={popoverRef} style={style} data-placement={position?.placement}>
             <div className="selection-popover__row">
                 <span className="selection-popover__count">{countLabel}</span>
-                {mode === 'question' ? null : (
-                    <>
-                        <button
-                            type="button"
-                            className="selection-popover__button selection-popover__button--primary"
-                            disabled={selectionAskDisabled(agentConnected)}
-                            title={
-                                selectionAskDisabled(agentConnected)
-                                    ? 'Reconnect the agent to ask about a selection'
-                                    : undefined
-                            }
-                            onClick={() => {
-                                setError(null);
-                                setMode('question');
-                            }}
-                        >
-                            Ask the agent
-                        </button>
-                        <button
-                            type="button"
-                            className="selection-popover__button"
-                            onClick={() => {
-                                onComment(anchor.side, anchor.start);
-                            }}
-                        >
-                            Comment
-                        </button>
-                        <button type="button" className="selection-popover__button" onClick={copyLink}>
-                            Copy link
-                        </button>
-                    </>
-                )}
+                <button
+                    type="button"
+                    className="selection-popover__button selection-popover__button--primary"
+                    disabled={selectionAskDisabled(agentConnected)}
+                    title={
+                        selectionAskDisabled(agentConnected)
+                            ? 'Reconnect the agent to ask about a selection'
+                            : undefined
+                    }
+                    onClick={() => {
+                        setError(null);
+                        onAsk(anchor);
+                    }}
+                >
+                    Ask the agent
+                </button>
+                <button
+                    type="button"
+                    className="selection-popover__button"
+                    onClick={() => {
+                        onComment(anchor.side, anchor.start);
+                    }}
+                >
+                    Comment
+                </button>
+                <button type="button" className="selection-popover__button" onClick={copyLink}>
+                    Copy link
+                </button>
             </div>
-            {mode === 'question' ? (
-                <div className="selection-popover__question">
-                    <input
-                        ref={inputRef}
-                        className="selection-popover__input"
-                        aria-label="Question to the agent about the selection"
-                        value={question}
-                        disabled={pending}
-                        onChange={(event) => {
-                            setQuestion(event.target.value);
-                        }}
-                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setError(null);
-                                setMode('rest');
-                                return;
-                            }
-                            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                                event.preventDefault();
-                                submit();
-                            }
-                        }}
-                    />
-                    <span className="selection-popover__hint">Enter — send</span>
-                </div>
-            ) : null}
             {error === null ? null : (
                 <div className="selection-popover__error" role="alert">
                     {error}

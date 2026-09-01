@@ -87,6 +87,8 @@ const EXPECTED: Record<string, string> = {
     '--pr-comments-published-chip-text': '#8a90a0',
     '--comment-edit-chip-text': '#9ea8ff',
     '--pr-comments-body-text': '#c3c8d1',
+    // README §4: chat answer body `#c2c7d0`.
+    '--chat-body-text': '#c2c7d0',
     '--pr-comments-delete-button-text': '#f2c4c0',
     '--pr-comments-note-icon': '#8a7550',
 
