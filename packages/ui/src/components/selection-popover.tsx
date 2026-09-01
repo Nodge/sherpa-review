@@ -7,6 +7,7 @@ import type { LineSelection } from '../diff-view/selection.js';
 import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
 import { selectionLinkHash } from '../selection-link.js';
 import { formatCount, plural } from '../text.js';
+import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
 import './selection-popover.css';
 
 const POPOVER_GAP = 8;
@@ -286,11 +287,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                     type="button"
                     className="selection-popover__button selection-popover__button--primary"
                     disabled={selectionAskDisabled(agentConnected)}
-                    title={
-                        selectionAskDisabled(agentConnected)
-                            ? 'Reconnect the agent to ask about a selection'
-                            : undefined
-                    }
+                    title={selectionAskDisabled(agentConnected) ? ASK_SELECTION_DISABLED_TITLE : undefined}
                     onClick={() => {
                         setError(null);
                         onAsk(anchor);

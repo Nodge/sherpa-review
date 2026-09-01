@@ -28,6 +28,7 @@ import { M3_T5_STATES } from './m3-t5-states.tsx';
 import { M3_T6_STATES } from './m3-t6-states.tsx';
 import { M3_T7_STATES } from './m3-t7-states.tsx';
 import { M3_T8_STATES } from './m3-t8-states.tsx';
+import { M3_T9_DIFF_STATES, M3_T9_ROUTE_STATES } from './m3-t9-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -177,7 +178,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    ...FULL_DIFF_STATES.map((state) => ({
+    ...[...FULL_DIFF_STATES, ...M3_T9_DIFF_STATES].map((state) => ({
         id: state.id,
         group: 'Full diff',
         title: state.title,
@@ -192,6 +193,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         ...M2_T11_STATES,
         ...M2F_T28_STATES,
         ...M2F_T43_STATES,
+        ...M3_T9_ROUTE_STATES,
     ].map((state) => ({
         id: state.id,
         group: 'Route',

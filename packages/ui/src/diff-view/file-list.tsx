@@ -21,6 +21,7 @@ import { readStateOf as computeReadState } from '../progress/read-state.js';
 import type { AnchorSpan } from '../route/anchor-clip.js';
 import type { RouteMarginFile, RouteMarginModel } from '../route/margin-model.js';
 import type { SessionStore } from '../session/session-store.js';
+import type { MarginStripActions } from '../route/route-margin.tsx';
 import { RouteBadge, useMarginStrips } from '../route/route-margin.tsx';
 import { useCardThreads } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
@@ -107,6 +108,8 @@ export interface DiffFileListProps {
     readonly outsideThreads?: ReactNode;
     /** Route in card margins (README §10). null means no route and no margins. */
     readonly routeMargin?: RouteMarginModel | null;
+    /** Hatched strip action (README §10). Without it, the strip remains a label. */
+    readonly marginActions?: MarginStripActions | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
@@ -148,6 +151,7 @@ export function DiffFileList({
     threadNow: providedThreadNow,
     outsideThreads = null,
     routeMargin = null,
+    marginActions = null,
     onJumpToStop,
     initialFileId = null,
     keptFileId = null,
@@ -570,6 +574,7 @@ export function DiffFileList({
                             threadNow={threadNow}
                             onFocusThread={onFocusThread}
                             margin={routeMargin?.files.get(file.fileId) ?? null}
+                            marginActions={marginActions}
                             otherStopId={routeMargin?.otherStopId ?? null}
                             onJumpToStop={onJumpToStop}
                             actions={actions}
@@ -624,6 +629,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     threadNow,
     onFocusThread,
     margin,
+    marginActions,
     otherStopId,
     onJumpToStop,
     actions,
@@ -658,6 +664,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     threadNow: number;
     onFocusThread: (threadId: string | null) => void;
     margin: RouteMarginFile | null;
+    marginActions: MarginStripActions | null;
     otherStopId: string | null;
     onJumpToStop: ((stopId: string) => void) | undefined;
     actions: FileCardActions;
@@ -699,6 +706,8 @@ const VirtualFileCard = memo(function VirtualFileCard({
         model: shownModel,
         rowsShown: canRenderRows,
         ranges: margin?.uncovered ?? EMPTY_SPANS,
+        file,
+        actions: marginActions,
     });
     const underHeader = threadsUnderHeader === null && notesUnderHeader === null ? null : (
         <>

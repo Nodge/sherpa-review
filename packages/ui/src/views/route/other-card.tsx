@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../../components/chat-prompts.js';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
@@ -34,6 +35,14 @@ export interface OtherCardProps {
     /** Files that failed to parse. Their uncovered lines are absent from the count. */
     readonly failedFiles?: number;
     readonly onRetryFailed?: () => void;
+    /**
+     * "Ask the agent to place them" (README §2): a question listing the ranges is placed
+     * in chat. The button leaves the route unchanged, regeneration is separate (SPEC §4.3).
+     * undefined means no entry point (chat is unavailable).
+     */
+    readonly onAskToPlace?: () => void;
+    /** Agent disconnected: the chat entry point is disabled, as in the popover (SPEC §2.15). */
+    readonly agentConnected?: boolean;
     /** Card kept on screen despite the filter (SPEC §2.7). */
     readonly keptInView?: boolean;
     /**
@@ -60,6 +69,8 @@ export function OtherCard({
     filling = false,
     failedFiles = 0,
     onRetryFailed,
+    onAskToPlace,
+    agentConnected = false,
     keptInView = false,
     viewed = false,
     onViewed,
@@ -149,7 +160,21 @@ export function OtherCard({
                                     ? 'Collapse uncovered ranges'
                                     : `Open ${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`}
                         </button>
+                        {onAskToPlace === undefined ? null : (
+                            <button
+                                type="button"
+                                className="route-other__action route-other__action--secondary"
+                                disabled={pending || filling || !agentConnected}
+                                title={askToPlaceTitle({ pending, filling, agentConnected })}
+                                onClick={onAskToPlace}
+                            >
+                                Ask the agent to place them
+                            </button>
+                        )}
                     </div>
+                    {onAskToPlace === undefined ? null : (
+                        <p className="route-other__honest">{ASK_ANSWER_IN_CHAT_NOTE}</p>
+                    )}
                     {failedFiles === 0 ? null : (
                         <p className="route-other__failed" role="status">
                             {formatCount(failedFiles)} {plural(failedFiles, 'file', 'files', 'files')} failed
@@ -166,6 +191,28 @@ export function OtherCard({
             </div>
         </section>
     );
+}
+
+/**
+ * Why the "place" button is unavailable. An unfinished range count takes priority over agent status:
+ * until the counts are final, there is nothing to list in the question.
+ */
+function askToPlaceTitle({
+    pending,
+    filling,
+    agentConnected,
+}: {
+    pending: boolean;
+    filling: boolean;
+    agentConnected: boolean;
+}): string {
+    if (filling) {
+        return 'Waiting for the route to fill';
+    }
+    if (pending) {
+        return 'Counting uncovered lines…';
+    }
+    return agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE;
 }
 
 /** SPEC §4.3 banner: the plan explains less than half the diff. */

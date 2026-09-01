@@ -1,6 +1,8 @@
+import type { ChatAnchor } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 
+import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../components/chat-prompts.js';
 import type { DiffFileModel } from '../diff/model.js';
 import { modelHasPosition } from '../threads/card-threads.tsx';
 import type { AnchorSpan } from './anchor-clip.js';
@@ -77,12 +79,27 @@ export interface MarginStrips {
     readonly renderAfterLine: (side: 'old' | 'new', line: number) => ReactNode;
 }
 
+/**
+ * The "ask the agent to place the range" action in the hatched strip (README §10).
+ * This sends a chat question without regenerating or changing the route.
+ */
+export interface MarginStripActions {
+    /** A disconnected agent disables the entry point, as in the popover (SPEC §2.15). */
+    readonly agentConnected: boolean;
+    /** A question about this range is queued or running. An "asked" chip replaces the button. */
+    readonly isPending: (anchor: ChatAnchor) => boolean;
+    readonly onAskToPlace: (anchor: ChatAnchor) => void;
+}
+
 export interface MarginStripsInput {
     /** The model actually rendered in the card. */
     readonly model: DiffFileModel | null;
     /** Diff lines are rendered. A collapsed card cannot place a strip below a line. */
     readonly rowsShown: boolean;
     readonly ranges: readonly AnchorSpan[];
+    /** The file containing the ranges. Without it, the question has no anchor and the strip remains a label. */
+    readonly file?: { readonly fileId: string; readonly path: string } | null;
+    readonly actions?: MarginStripActions | null;
 }
 
 /**
@@ -90,7 +107,13 @@ export interface MarginStripsInput {
  * is not rendered (card collapsed by size, "whitespace only", patch failed to parse) does not disappear
  * silently: these ranges are grouped into one summary below the header (brief principle 3).
  */
-export function useMarginStrips({ model, rowsShown, ranges }: MarginStripsInput): MarginStrips {
+export function useMarginStrips({
+    model,
+    rowsShown,
+    ranges,
+    file = null,
+    actions = null,
+}: MarginStripsInput): MarginStrips {
     const layout = useMemo(() => {
         const byLine = new Map<string, AnchorSpan>();
         const orphans: AnchorSpan[] = [];
@@ -107,11 +130,21 @@ export function useMarginStrips({ model, rowsShown, ranges }: MarginStripsInput)
     const renderAfterLine = useCallback(
         (side: 'old' | 'new', line: number): ReactNode => {
             const span = layout.byLine.get(lineKey(side, line));
-            return span === undefined ? null : <RouteStrip text={marginStripText(span)} />;
+            if (span === undefined) {
+                return null;
+            }
+            const anchor = file === null ? null : { fileId: file.fileId, path: file.path, ...span };
+            return (
+                <RouteStrip
+                    text={marginStripText(span)}
+                    {...(anchor === null || actions === null ? {} : { anchor, actions })}
+                />
+            );
         },
-        [layout.byLine],
+        [actions, file, layout.byLine],
     );
 
+    // The header summary combines multiple ranges, but a question has one anchor, so there is no button here.
     // References stay stable. The card is memoized, and a new node on each render would defeat memo.
     const underHeader = useMemo(
         () => (layout.orphans.length === 0 ? null : <RouteStrip text={marginStripSummary(layout.orphans)} />),
@@ -121,10 +154,35 @@ export function useMarginStrips({ model, rowsShown, ranges }: MarginStripsInput)
     return useMemo(() => ({ underHeader, renderAfterLine }), [renderAfterLine, underHeader]);
 }
 
-function RouteStrip({ text }: { text: string }) {
+function RouteStrip({
+    text,
+    anchor,
+    actions,
+}: {
+    readonly text: string;
+    readonly anchor?: ChatAnchor;
+    readonly actions?: MarginStripActions;
+}) {
     return (
         <div className="route-strip">
             <span className="route-strip__text">{text}</span>
+            {anchor === undefined || actions === undefined ? null : actions.isPending(anchor) ? (
+                <span className="route-strip__chip" role="status">
+                    asked · the answer will land here
+                </span>
+            ) : (
+                <button
+                    type="button"
+                    className="route-strip__action"
+                    disabled={!actions.agentConnected}
+                    title={actions.agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE}
+                    onClick={() => {
+                        actions.onAskToPlace(anchor);
+                    }}
+                >
+                    Ask the agent to place
+                </button>
+            )}
         </div>
     );
 }

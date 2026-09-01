@@ -868,8 +868,31 @@
     cursor: pointer;
 }
 
-.route-other__action:hover {
+.route-other__action:hover:not(:disabled) {
     background: var(--hover-selected);
+}
+
+.route-other__action:disabled {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
+}
+
+/* The second card action is secondary (README §2): same geometry, without the fill. */
+.route-other__action--secondary {
+    border-color: var(--border-control);
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.route-other__action--secondary:hover:not(:disabled) {
+    background: var(--surface-raised);
+}
+
+/* The label says before the click that "place ranges" composes a question, not a regeneration request. */
+.route-other__honest {
+    margin: 8px 0 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted);
 }
 
 /* Failed parsing: lines from these files are excluded from the uncovered count, with retry beside them. */

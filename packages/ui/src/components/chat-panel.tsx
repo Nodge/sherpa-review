@@ -1,9 +1,10 @@
 import type { AgentNote, ChatAnchor, ChatExchange, UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { KeyboardEvent, RefObject } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { breadcrumbFromPrKey } from '../pr-key.js';
 import { Markdown } from '../markdown/markdown.tsx';
+import { CHAT_EXAMPLE_QUESTIONS } from './chat-prompts.js';
 import { CommandBox } from './command-box.tsx';
 import './chat-panel.css';
 
@@ -21,6 +22,11 @@ export interface ChatPanelProps {
     readonly reconnectCommand: string;
     readonly anchor: ChatAnchor | null;
     readonly focusRequest: number;
+    /**
+     * Prefill the composer (README §2, §10). The question stays unsent while the reviewer reads, edits and
+     * sends it. A request with a new `id` takes effect even with the same text.
+     */
+    readonly prefillRequest?: { readonly id: number; readonly text: string } | null;
     readonly scrollRequest: { readonly id: number; readonly target: ChatScrollTarget } | null;
     readonly onScrollRequestHandled: (id: number) => void;
     readonly onClose: () => void;
@@ -108,6 +114,7 @@ export function ChatPanel(props: ChatPanelProps) {
         error,
         anchor,
         focusRequest,
+        prefillRequest = null,
         scrollRequest,
         onScrollRequestHandled,
         onClose,
@@ -139,14 +146,58 @@ export function ChatPanel(props: ChatPanelProps) {
     const queueRef = useRef<HTMLDivElement | null>(null);
     const errorRef = useRef<HTMLDivElement | null>(null);
     const handledScrollRequest = useRef<number | null>(null);
-    const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const [composerError, setComposerError] = useState<string | null>(null);
     const [clock, setClock] = useState(() => props.now ?? Date.now());
+    /**
+     * Derive composer text from the prefill and subsequent edits. `handled` records which
+     * request has already been applied, so the same request does not overwrite typed text, while a new request
+     * with the same text takes effect.
+     */
+    const [composer, setComposer] = useState<{ readonly handled: number; readonly text: string }>({
+        handled: 0,
+        text: '',
+    });
+    const text =
+        prefillRequest !== null && prefillRequest.id !== composer.handled ? prefillRequest.text : composer.text;
+    const handledPrefill = prefillRequest?.id ?? composer.handled;
+    const setText = (value: string): void => {
+        setComposer({ handled: handledPrefill, text: value });
+    };
+    // Move the caret to the end of the prefilled text. React restores the focused input's selection
+    // after commit and would otherwise move it back to the start.
+    const focusComposerEnd = useCallback(() => {
+        const textarea = textareaRef.current;
+        if (textarea === null) {
+            return;
+        }
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }, []);
 
     useEffect(() => {
         textareaRef.current?.focus();
     }, [focusRequest]);
+
+    // The app request text is visible in this render already because it is derived from the request itself.
+    const appliedPrefill = useRef(0);
+    useEffect(() => {
+        if (prefillRequest === null || prefillRequest.id === appliedPrefill.current) {
+            return;
+        }
+        appliedPrefill.current = prefillRequest.id;
+        focusComposerEnd();
+    }, [focusComposerEnd, prefillRequest]);
+
+    // The handler prefills the example, so its text reaches the DOM only in the next render.
+    const exampleCaret = useRef(false);
+    useEffect(() => {
+        if (!exampleCaret.current) {
+            return;
+        }
+        exampleCaret.current = false;
+        focusComposerEnd();
+    });
 
     useEffect(() => {
         if (scrollRequest !== null) {
@@ -259,7 +310,14 @@ export function ChatPanel(props: ChatPanelProps) {
                             Could not load the chat history: {error}. Retrying…
                         </p>
                     )}
-                    {!loading && error === null && activity === 'empty' ? <EmptyChat /> : null}
+                    {!loading && error === null && activity === 'empty' ? (
+                        <EmptyChat
+                            onPick={(question) => {
+                                exampleCaret.current = true;
+                                setText(question);
+                            }}
+                        />
+                    ) : null}
                     {feed.map(({ exchange, note }) => (
                         <ChatExchangeView
                             key={exchange.id}
@@ -477,14 +535,29 @@ function ChatExchangeView({
     );
 }
 
-function EmptyChat() {
+/**
+ * Empty state (SPEC §2.18). Examples are clickable: a click prefills the composer with the question and
+ * sends nothing. The `empty` state only occurs with a connected agent, so
+ * it never offers a clickable action while the agent is disconnected.
+ */
+function EmptyChat({ onPick }: { readonly onPick: (question: string) => void }) {
     return (
         <div className="chat-panel__empty">
             <p>Ask about the PR or select lines and ask about them</p>
             <ul>
-                <li>What are the riskiest changes here?</li>
-                <li>What should I check by hand before shipping?</li>
-                <li>Are there edge cases missed in this diff?</li>
+                {CHAT_EXAMPLE_QUESTIONS.map((question) => (
+                    <li key={question}>
+                        <button
+                            type="button"
+                            className="chat-panel__example"
+                            onClick={() => {
+                                onPick(question);
+                            }}
+                        >
+                            {question}
+                        </button>
+                    </li>
+                ))}
             </ul>
         </div>
     );

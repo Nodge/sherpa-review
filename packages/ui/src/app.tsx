@@ -198,6 +198,11 @@ export function App({ store, session, token }: AppProps) {
             ? chatComposerContext
             : { key: chatKey, anchor: null, latched: false } satisfies ChatComposerContext;
     const [chatFocusRequest, setChatFocusRequest] = useState(0);
+    // Prefill the composer: a request with a new id takes effect even when its text is unchanged.
+    const [chatPrefillRequest, setChatPrefillRequest] = useState<{ readonly id: number; readonly text: string } | null>(
+        null,
+    );
+    const chatPrefillRequestId = useRef(0);
     const [chatScrollRequest, setChatScrollRequest] = useState<ChatScrollRequest | null>(null);
     const chatScrollRequestId = useRef(0);
     const [chatAnchorNavigationRequest, setChatAnchorNavigationRequest] = useState(0);
@@ -1105,16 +1110,47 @@ export function App({ store, session, token }: AppProps) {
         },
         [chatKey],
     );
-    const openChatForSelection = useCallback(
-        (anchor: ChatAnchor) => {
-            setChatComposerContext({ key: chatKey, anchor, latched: true });
+    /**
+     * Shared chat entry point: save the anchor and prefill the question without sending it. The reviewer presses ⏎
+     * (README §2, §10). Without text, this simply opens the panel for the selection.
+     */
+    const openChatWithQuestion = useCallback(
+        (text: string | null, anchor: ChatAnchor | null) => {
+            setChatComposerContext({ key: chatKey, anchor, latched: anchor !== null });
             session.setChatOpen(true);
+            if (text !== null) {
+                chatPrefillRequestId.current += 1;
+                setChatPrefillRequest({ id: chatPrefillRequestId.current, text });
+            }
             setChatFocusRequest((request) => request + 1);
         },
         [chatKey, session],
     );
+    const openChatForSelection = useCallback(
+        (anchor: ChatAnchor) => {
+            openChatWithQuestion(null, anchor);
+        },
+        [openChatWithQuestion],
+    );
+    /** "Other" on the Route: many ranges, but one question anchor, so the ranges are listed in the text. */
+    const composeRouteQuestion = useCallback(
+        (text: string) => {
+            openChatWithQuestion(text, null);
+        },
+        [openChatWithQuestion],
+    );
+    /** Full diff hatch band: the anchor matches its exact range. */
+    const composeDiffQuestion = useCallback(
+        (text: string, anchor?: ChatAnchor) => {
+            openChatWithQuestion(text, anchor ?? null);
+        },
+        [openChatWithQuestion],
+    );
     const closeChat = useCallback(() => {
         setChatScrollRequest(null);
+        // The prefill lasts only while the panel is open. Otherwise reopening chat would overwrite
+        // the composer with a question the reviewer has already seen.
+        setChatPrefillRequest(null);
         session.setChatOpen(false);
     }, [session]);
     const toggleChat = useCallback(
@@ -1373,6 +1409,7 @@ export function App({ store, session, token }: AppProps) {
                     onAskSelection={openChatForSelection}
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
+                    onComposeQuestion={composeDiffQuestion}
                     notes={chatData.notes}
                     onOpenNoteInChat={openNoteInChat}
                     onDeleteNote={deleteNote}
@@ -1408,6 +1445,7 @@ export function App({ store, session, token }: AppProps) {
                     onAskSelection={openChatForSelection}
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
+                    onComposeQuestion={composeRouteQuestion}
                     notes={chatData.notes}
                     onOpenNoteInChat={openNoteInChat}
                     onDeleteNote={deleteNote}
@@ -1483,6 +1521,7 @@ export function App({ store, session, token }: AppProps) {
                             reconnectCommand={reconnectCommand(state.prKey)}
                             anchor={currentChatComposer.anchor}
                             focusRequest={chatFocusRequest}
+                            prefillRequest={chatPrefillRequest}
                             scrollRequest={chatScrollRequest}
                             onScrollRequestHandled={handleChatScrollRequest}
                             onClose={closeChat}

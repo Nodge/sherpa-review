@@ -22,6 +22,8 @@ import {
     setReviewThreadResolved,
     updateReviewDraft,
 } from '../../api.js';
+import type { QuestionRange } from '../../components/chat-prompts.js';
+import { placeRangesQuestion } from '../../components/chat-prompts.js';
 import { PrHeader } from '../../components/pr-header.tsx';
 import { chatAnchorFromSelection, SelectionPopover } from '../../components/selection-popover.tsx';
 import type { DiffClient } from '../../diff/client.js';
@@ -135,6 +137,11 @@ export interface RouteViewProps {
     readonly onAskSelection: (anchor: ChatAnchor) => void;
     readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    /**
+     * Prefill the chat composer (README §2): "Other" asks the agent to place
+     * uncovered ranges. The question stays unsent so the reviewer can read it and send it.
+     */
+    readonly onComposeQuestion?: (text: string) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -169,6 +176,7 @@ export function RouteView({
     onAskSelection,
     isSelectionPending,
     onSelectionAnchorChange,
+    onComposeQuestion,
     notes = EMPTY_NOTES,
     onOpenNoteInChat = EMPTY_OPEN_NOTE,
     onDeleteNote = EMPTY_DELETE_NOTE,
@@ -291,6 +299,7 @@ export function RouteView({
             onAskSelection={onAskSelection}
             isSelectionPending={isSelectionPending}
             onSelectionAnchorChange={onSelectionAnchorChange}
+            {...(onComposeQuestion === undefined ? {} : { onComposeQuestion })}
             notes={notes}
             onOpenNoteInChat={onOpenNoteInChat}
             onDeleteNote={onDeleteNote}
@@ -337,6 +346,8 @@ export interface RouteWorkspaceProps {
     readonly onAskSelection?: (anchor: ChatAnchor) => void;
     readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    /** See `RouteViewProps.onComposeQuestion`. Without it, Other has no button to place ranges. */
+    readonly onComposeQuestion?: (text: string) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -369,6 +380,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onAskSelection = EMPTY_ASK_SELECTION,
         isSelectionPending = NO_SELECTION_PENDING,
         onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
+        onComposeQuestion,
         notes = EMPTY_NOTES,
         onOpenNoteInChat = EMPTY_OPEN_NOTE,
         onDeleteNote = EMPTY_DELETE_NOTE,
@@ -1664,6 +1676,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             filling={filling}
                             failedFiles={model.totals.failedFiles}
                             onRetryFailed={retryFailed}
+                            agentConnected={agentConnected}
+                            {...(onComposeQuestion === undefined ? {} : { onComposeQuestion })}
                             opened={otherOpen}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
@@ -1918,6 +1932,8 @@ function OtherSection({
     filling,
     failedFiles,
     onRetryFailed,
+    agentConnected,
+    onComposeQuestion,
     opened,
     fileIds,
     keptInView,
@@ -1938,6 +1954,9 @@ function OtherSection({
     filling: boolean;
     failedFiles: number;
     onRetryFailed: () => void;
+    agentConnected: boolean;
+    /** Without it, the card has no chat entry point. A button leading nowhere would mislead. */
+    onComposeQuestion?: (text: string) => void;
     opened: boolean;
     /** null means show all uncovered ranges (no filter or the card is kept in view). */
     fileIds: ReadonlySet<string> | null;
@@ -1954,6 +1973,17 @@ function OtherSection({
     // and show only the subset that passes the filter.
     const filtered = useMemo(() => filterOtherView(view, fileIds), [fileIds, view]);
     const groups = useMemo(() => filtered.files.map((file) => uncoveredAsGroup(file)), [filtered.files]);
+    // The question lists exactly what the reviewer sees: the filter narrows the card, so it must not
+    // promise the agent ranges that are absent from the screen.
+    const askToPlace = useMemo(
+        () =>
+            onComposeQuestion === undefined
+                ? undefined
+                : () => {
+                      onComposeQuestion(placeRangesQuestion(otherQuestionRanges(filtered)));
+                  },
+        [filtered, onComposeQuestion],
+    );
 
     return (
         <div data-stop={view.stop.id}>
@@ -1965,6 +1995,8 @@ function OtherSection({
                 filling={filling}
                 failedFiles={failedFiles}
                 onRetryFailed={onRetryFailed}
+                agentConnected={agentConnected}
+                {...(askToPlace === undefined ? {} : { onAskToPlace: askToPlace })}
                 keptInView={keptInView}
                 viewed={viewed}
                 marked={marked}
@@ -1976,6 +2008,18 @@ function OtherSection({
                 diff={groups.map((group) => renderCard(view.stop.id, group))}
             />
         </div>
+    );
+}
+
+/** Other's uncovered ranges for the question text, in the view's file and anchor order. */
+function otherQuestionRanges(view: RouteOtherView): readonly QuestionRange[] {
+    return view.files.flatMap((file) =>
+        file.anchors.map((anchor) => ({
+            path: file.path,
+            side: anchor.side,
+            start: anchor.start,
+            end: anchor.end,
+        })),
     );
 }
 

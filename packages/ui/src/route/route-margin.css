@@ -59,3 +59,35 @@ button.route-badge:hover {
     font-size: var(--font-size-gutter);
     color: var(--text-muted);
 }
+
+/*
+ * The strip action (README §10) is an accent link at the right edge, with no button box, keeping
+ * the strip as tall as its text line.
+ */
+.route-strip__action,
+.route-strip__chip {
+    margin-left: auto;
+    font-size: var(--font-size-control);
+    white-space: nowrap;
+}
+
+.route-strip__action {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-hover);
+    cursor: pointer;
+}
+
+.route-strip__action:hover:not(:disabled) {
+    color: var(--accent-hover-strong);
+}
+
+.route-strip__action:disabled {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
+}
+
+.route-strip__chip {
+    color: var(--accent-text);
+}

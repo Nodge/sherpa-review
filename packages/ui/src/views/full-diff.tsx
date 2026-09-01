@@ -20,6 +20,7 @@ import {
     setReviewThreadResolved,
     updateReviewDraft,
 } from '../api.js';
+import { placeRangeQuestion } from '../components/chat-prompts.js';
 import { PrHeader } from '../components/pr-header.tsx';
 import { chatAnchorFromSelection, SelectionPopover } from '../components/selection-popover.tsx';
 import { ToolbarRightCluster } from '../components/toolbar-controls.tsx';
@@ -56,6 +57,7 @@ import { readSelectionLink } from '../selection-link.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
+import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
@@ -98,6 +100,11 @@ export interface FullDiffViewProps {
     readonly onAskSelection: (anchor: ChatAnchor) => void;
     readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    /**
+     * Prefill the chat composer (README §10): the hatched strip asks about its own
+     * range. The question stays unsent so the reviewer can read it and send it.
+     */
+    readonly onComposeQuestion?: (text: string, anchor?: ChatAnchor) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -133,6 +140,7 @@ export function FullDiffView({
     onAskSelection,
     isSelectionPending,
     onSelectionAnchorChange,
+    onComposeQuestion,
     notes = EMPTY_NOTES,
     onOpenNoteInChat = EMPTY_OPEN_NOTE,
     onDeleteNote = EMPTY_DELETE_NOTE,
@@ -247,6 +255,7 @@ export function FullDiffView({
             onAskSelection={onAskSelection}
             isSelectionPending={isSelectionPending}
             onSelectionAnchorChange={onSelectionAnchorChange}
+            {...(onComposeQuestion === undefined ? {} : { onComposeQuestion })}
             notes={notes}
             onOpenNoteInChat={onOpenNoteInChat}
             onDeleteNote={onDeleteNote}
@@ -288,6 +297,8 @@ export interface DiffWorkspaceProps {
     readonly onAskSelection?: (anchor: ChatAnchor) => void;
     readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
     readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    /** See `FullDiffViewProps.onComposeQuestion`. Without it, the strip has no "place" button. */
+    readonly onComposeQuestion?: (text: string, anchor?: ChatAnchor) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -330,6 +341,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onAskSelection = EMPTY_ASK_SELECTION,
         isSelectionPending = NO_SELECTION_PENDING,
         onSelectionAnchorChange = NO_SELECTION_ANCHOR_CHANGE,
+        onComposeQuestion,
         notes = EMPTY_NOTES,
         onOpenNoteInChat = EMPTY_OPEN_NOTE,
         onDeleteNote = EMPTY_DELETE_NOTE,
@@ -729,6 +741,21 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                   }),
         [diff.files, failedParse, routeSnapshot, snapshot.models],
     );
+    // Strip entry point (README §10): a question anchored to exactly this range. While that question
+    // is in flight, the strip shows a chip using the same flag as the selection popover.
+    const marginActions = useMemo<MarginStripActions | null>(
+        () =>
+            onComposeQuestion === undefined
+                ? null
+                : {
+                      agentConnected,
+                      isPending: isSelectionPending,
+                      onAskToPlace: (anchor) => {
+                          onComposeQuestion(placeRangeQuestion(anchor), anchor);
+                      },
+                  },
+        [agentConnected, isSelectionPending, onComposeQuestion],
+    );
 
     const [focusedLine, setFocusedLine] = useState<{
         fileId: string;
@@ -1112,6 +1139,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         onTopFileChange={setTopFileId}
                         onScroll={onScroll}
                         routeMargin={routeMargin}
+                        marginActions={marginActions}
                         onJumpToStop={onJumpToStop}
                     />
                 </div>

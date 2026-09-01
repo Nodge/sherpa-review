@@ -431,3 +431,94 @@ describe('chat panel composer', () => {
         expect(host.querySelector<HTMLInputElement>('.command-box__command')?.value).toBe('/sherpa fixture-medium');
     });
 });
+
+describe('prefilling a question in the composer', () => {
+    it('sets the request text without sending it', () => {
+        const onAsk = vi.fn(() => Promise.resolve(exchange(99, 'queued')));
+        const { host } = mountPanel({ prefillRequest: { id: 1, text: 'Place these ranges' }, onAsk });
+
+        const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+        expect(textarea?.value).toBe('Place these ranges');
+        expect(textarea?.selectionStart).toBe('Place these ranges'.length);
+        expect(onAsk).not.toHaveBeenCalled();
+    });
+
+    it('applies a repeated request with the same text again after an edit', () => {
+        const { host, render } = mountPanel({ prefillRequest: { id: 1, text: 'Place these ranges' } });
+        const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+        if (textarea === null) {
+            throw new Error('no question field');
+        }
+
+        act(() => {
+            setTextareaValue(textarea, 'my edit');
+        });
+        expect(textarea.value).toBe('my edit');
+
+        render({ prefillRequest: { id: 2, text: 'Place these ranges' } });
+        expect(textarea.value).toBe('Place these ranges');
+    });
+
+    it('does not overwrite typed text again for the same request', () => {
+        const { host, render } = mountPanel({ prefillRequest: { id: 1, text: 'Place these ranges' } });
+        const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+        if (textarea === null) {
+            throw new Error('no question field');
+        }
+
+        act(() => {
+            setTextareaValue(textarea, 'my edit');
+        });
+        render({ focusRequest: 1 });
+
+        expect(textarea.value).toBe('my edit');
+    });
+
+    it('does not clear typed text when the request is removed', () => {
+        const { host, render } = mountPanel({ prefillRequest: { id: 7, text: 'Question' } });
+        const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+        if (textarea === null) {
+            throw new Error('no question field');
+        }
+
+        act(() => {
+            setTextareaValue(textarea, 'Question with clarification');
+        });
+        render({ prefillRequest: null });
+
+        expect(textarea.value).toBe('Question with clarification');
+    });
+});
+
+describe('sample questions in the empty state', () => {
+    it('prefills the composer on click without sending anything', () => {
+        const onAsk = vi.fn(() => Promise.resolve(exchange(99, 'queued')));
+        const { host } = mountPanel({ onAsk });
+
+        const example = host.querySelector<HTMLButtonElement>('.chat-panel__example');
+        expect(example?.textContent).toBe('What are the riskiest changes here?');
+        act(() => {
+            example?.click();
+        });
+
+        const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+        expect(textarea?.value).toBe('What are the riskiest changes here?');
+        expect(textarea?.selectionStart).toBe('What are the riskiest changes here?'.length);
+        expect(onAsk).not.toHaveBeenCalled();
+    });
+
+    it('shows no examples when the agent is disconnected so the panel offers no unavailable action', () => {
+        const { host } = mountPanel({ worker: { kind: 'never' } });
+
+        expect(host.querySelector('.chat-panel__example')).toBeNull();
+        expect(host.textContent).toContain('Agent disconnected. New questions are unavailable.');
+    });
+});
+
+/** Set a controlled input through the native setter, otherwise React will not see the input. */
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string): void {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- invoke the prototype setter through call
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    setter?.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
