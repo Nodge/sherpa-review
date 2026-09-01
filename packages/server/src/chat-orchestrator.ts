@@ -82,8 +82,8 @@ export class ChatOrchestrator {
             return 'noop';
         }
 
-        if (stored.taskId !== null) {
-            this.queue.cancel(stored.taskId);
+        if (stored.exchange.taskId !== null) {
+            this.queue.cancel(stored.exchange.taskId);
         }
         this.store.cancelExchange(exchangeId);
         return 'cancelled';
@@ -121,7 +121,7 @@ export class ChatOrchestrator {
 
         const stored = this.store.exchangeForTask(task.id);
         if (
-            stored?.taskId !== task.id ||
+            stored?.exchange.taskId !== task.id ||
             (stored.exchange.status !== 'queued' && stored.exchange.status !== 'running')
         ) {
             return {
@@ -173,9 +173,7 @@ export class ChatOrchestrator {
         const tasks = this.queue.listTasks();
         const byId = new Map(tasks.map((task) => [task.id, task]));
         const boundTaskIds = new Set(
-            this.store
-                .openExchanges()
-                .flatMap((stored) => (stored.taskId === null ? [] : [stored.taskId])),
+            this.store.openExchanges().flatMap(({ exchange }) => (exchange.taskId === null ? [] : [exchange.taskId])),
         );
 
         for (const task of tasks) {
@@ -186,7 +184,8 @@ export class ChatOrchestrator {
         }
 
         for (const stored of this.store.openExchanges()) {
-            this.reconcileExchange(stored, stored.taskId === null ? null : (byId.get(stored.taskId) ?? null));
+            const taskId = stored.exchange.taskId;
+            this.reconcileExchange(stored, taskId === null ? null : (byId.get(taskId) ?? null));
         }
     }
 

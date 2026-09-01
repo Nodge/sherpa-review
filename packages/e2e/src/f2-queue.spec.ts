@@ -16,7 +16,8 @@ import { expect, test } from './sherpa-fixture.js';
  * exactly one step in the queue. The worker sees it after submitting the current section, and the UI shows this
  * with a panel banner and queue length in the pill (rpc-design §5, README "Agent queue is honest").
  *
- * The second test covers cancellation in flight: a late `complete` does not revive the cancelled exchange, and "Retry"
+ * The second test cancels an exchange in flight. The exchange stops, but the UI says the worker still holds
+ * the cancelled task until it checks in. A late `complete` does not revive the exchange, and "Retry"
  * queues a new task.
  */
 
@@ -131,12 +132,14 @@ test('F2 queue: cancellation stops the exchange in flight, a late answer is a no
         const chat = await takeTask(worker, 'chat');
         await page.getByRole('button', { name: 'Stop', exact: true }).click();
 
-        // The "agent is still busy with the cancelled task" line cannot appear here: `cancel` closes
-        // the task as `cancelled` (`queue.ts`, `cancelInTransaction`), while `chat-panel.tsx` shows
-        // the line for a live chat lease, which no longer exists after cancellation. This test exposed the defect,
-        // fixed through a "cancelled while leased" flag in the snapshot, not in the panel (plan/M3-tasks.md, T10).
         await expect(page.locator('.chat-message--failed .chat-message__body')).toHaveText('Question cancelled.');
         await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+
+        // The task is cancelled, but the worker does not know yet. It still holds the lease (rpc-design §5).
+        await expect(page.locator('.chat-panel__cancelled-lease')).toHaveText(
+            'The agent is still busy with the cancelled task — it learns about the cancel on its next call',
+        );
+        await expect(pillLabel(page)).toHaveText('Agent working · 1 in queue');
         return chat;
     });
 
@@ -145,6 +148,9 @@ test('F2 queue: cancellation stops the exchange in flight, a late answer is a no
         expect(late.code, late.stderr).toBe(0);
         expect(late.stdout).toContain('has been cancelled');
 
+        // The worker checked in, the hold is released, and the agent is free again.
+        await expect(page.locator('.chat-panel__cancelled-lease')).toHaveCount(0);
+        await expect(pillLabel(page)).not.toHaveText(/Agent working/);
         await expect(page.locator('.chat-message--failed .chat-message__body')).toHaveText('Question cancelled.');
         await expect(page.getByText(LATE_ANSWER, { exact: true })).toHaveCount(0);
     });

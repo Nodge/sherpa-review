@@ -18,6 +18,7 @@ const STATE: UiState = {
             type: 'echo',
             priority: 'interactive',
             status: 'queued',
+            heldByWorker: false,
             attempt: 1,
             instructions: 'return text',
             progressText: null,

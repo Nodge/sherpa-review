@@ -121,6 +121,8 @@ function exchange(spec: ExchangeSpec): ChatExchange {
         question: spec.question,
         anchor: spec.anchor,
         status: spec.status,
+        // The fixture task snapshot contains no chat tasks, so no queue link is needed here.
+        taskId: null,
         answer: spec.answer ?? null,
         progressText: spec.progressText ?? null,
         error: spec.error ?? null,

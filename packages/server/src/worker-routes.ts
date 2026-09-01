@@ -220,6 +220,9 @@ async function pollForTask(
             options.registry.assertOwner(workerId);
 
             if (shouldFinishWorker(options)) {
+                // The session is about to end. Release its holds on cancelled tasks too,
+                // or the UI would show a dead worker as busy until TTL expires.
+                options.queue.releaseCancelledHoldsOf(workerId);
                 return { kind: 'done', message: 'The reviewer closed the tab. Work is finished.' };
             }
 

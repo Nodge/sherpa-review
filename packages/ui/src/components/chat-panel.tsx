@@ -75,15 +75,20 @@ export function chatActivityState(
     return exchanges.length === 0 ? 'empty' : 'idle';
 }
 
-/** The queue banner names route generation explicitly and uses generic text for any other busy task. */
+/**
+ * The queue banner names route generation explicitly and uses generic text for any other task. A task
+ * counts as busy while held: a cancelled task the worker is still running also comes before the question.
+ * A cancelled route task uses the generic text too: generation has stopped, and the route view
+ * shows cancelled stops, so "Generating the route" would contradict it.
+ */
 export function queueBannerText(tasks: readonly UiTask[]): string | null {
-    const current = tasks.find((task) => task.status === 'leased');
+    const current = tasks.find((task) => task.heldByWorker);
     if (current === undefined) {
         return null;
     }
-    return current.type === 'route.skeleton' || current.type === 'route.section'
-        ? 'Generating the route · your question is next'
-        : 'Agent busy · your question is next';
+    const generating =
+        current.status !== 'cancelled' && (current.type === 'route.skeleton' || current.type === 'route.section');
+    return generating ? 'Generating the route · your question is next' : 'Agent busy · your question is next';
 }
 
 export function sameChatAnchor(left: ChatAnchor | null, right: ChatAnchor | null): boolean {
@@ -137,10 +142,25 @@ export function ChatPanel(props: ChatPanelProps) {
     const failedExchangeId = [...feed]
         .reverse()
         .find(({ exchange }) => exchange.status === 'failed' || exchange.status === 'cancelled')?.exchange.id;
-    // `UiTask` does not expose `exchangeId`, so a live chat lease belongs to the last cancelled exchange.
-    const cancelledLeaseExchangeId = tasks.some((task) => task.type === 'chat' && task.status === 'leased')
-        ? [...feed].reverse().find(({ exchange }) => exchange.status === 'cancelled')?.exchange.id
-        : undefined;
+    // Show "still busy" only under its own exchange, whose task is cancelled but still held by the worker.
+    const cancelledLeaseExchangeIds = useMemo(
+        () =>
+            new Set(
+                exchanges
+                    .filter(
+                        (exchange) =>
+                            exchange.status === 'cancelled' &&
+                            tasks.some(
+                                (task) =>
+                                    task.id === exchange.taskId &&
+                                    task.status === 'cancelled' &&
+                                    task.heldByWorker,
+                            ),
+                    )
+                    .map((exchange) => exchange.id),
+            ),
+        [exchanges, tasks],
+    );
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const feedRef = useRef<HTMLDivElement | null>(null);
     const queueRef = useRef<HTMLDivElement | null>(null);
@@ -324,7 +344,7 @@ export function ChatPanel(props: ChatPanelProps) {
                             exchange={exchange}
                             note={note}
                             {...(exchange.id === failedExchangeId ? { errorRef } : {})}
-                            cancelledLease={exchange.id === cancelledLeaseExchangeId}
+                            cancelledLease={cancelledLeaseExchangeIds.has(exchange.id)}
                             onCancel={onCancel}
                             onRetry={onRetry}
                             onNavigate={onNavigate}

@@ -42,9 +42,9 @@ interface NoteRow extends SqlRow {
     created_at: string;
 }
 
+/** Exchange with server fields absent from the contract (`taskId` is already part of the exchange). */
 export interface StoredChatExchange {
     readonly exchange: ChatExchange;
-    readonly taskId: number | null;
     readonly headCommit: string | null;
 }
 
@@ -335,13 +335,14 @@ function toStoredExchange(row: ExchangeRow): StoredChatExchange {
         question: row.question,
         anchor: row.anchor === null ? null : parseAnchor(row.anchor),
         status: row.status,
+        taskId: row.task_id,
         answer: row.answer,
         progressText: row.progress_text,
         error: row.error,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     });
-    return { exchange, taskId: row.task_id, headCommit: row.head_commit };
+    return { exchange, headCommit: row.head_commit };
 }
 
 function toNote(row: NoteRow): AgentNote {

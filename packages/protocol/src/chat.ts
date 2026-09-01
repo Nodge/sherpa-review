@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { hostIdSchema } from './review.js';
+import { taskIdSchema } from './task.js';
 
 /**
  * Chat with the agent and agent notes (M3, brief F2). Domain schemas. Endpoints and SSE are in `ui.ts`.
@@ -48,6 +49,12 @@ export const chatExchangeSchema = z.object({
     /** null means a question about the whole PR (Ask AI), not a selection. */
     anchor: chatAnchorSchema.nullable(),
     status: chatExchangeStatusSchema,
+    /**
+     * Queue task answering the question (`retry` queues a new one, changing the id). The UI uses it
+     * to find the record in the snapshot's `tasks`: while it has `heldByWorker`, the agent is busy with this
+     * question, even if cancelled. null means an exchange without a task (the exchange outlived its loss).
+     */
+    taskId: taskIdSchema.nullable(),
     /** Markdown, only when `done`, otherwise null. No token streaming, it arrives in full (rpc-design §6). */
     answer: z.string().nullable(),
     /** Latest `task progress` line, only for `running`, otherwise null. */

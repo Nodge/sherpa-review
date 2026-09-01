@@ -65,6 +65,7 @@ function exchange(id: number, answer = `Answer ${String(id)}`): ChatExchange {
         question: `Question ${String(id)}`,
         anchor: null,
         status: 'done',
+        taskId: id,
         answer,
         progressText: null,
         error: null,

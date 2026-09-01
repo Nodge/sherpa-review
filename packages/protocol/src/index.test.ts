@@ -292,6 +292,7 @@ describe('chat and notes (M3)', () => {
         question: 'why is the cache invalidated before the write here?',
         anchor,
         status: 'done',
+        taskId: 42,
         answer: 'The order is preserved from the old implementation: …',
         progressText: null,
         error: null,
@@ -302,6 +303,7 @@ describe('chat and notes (M3)', () => {
     it('exchange: with and without an anchor (Ask AI about the PR), all lifecycle statuses', () => {
         expect(chatExchangeSchema.parse(exchange)).toEqual(exchange);
         expect(chatExchangeSchema.safeParse({ ...exchange, anchor: null }).success).toBe(true);
+        expect(chatExchangeSchema.safeParse({ ...exchange, taskId: null }).success).toBe(true);
         for (const status of ['queued', 'running', 'done', 'failed', 'cancelled']) {
             expect(chatExchangeSchema.safeParse({ ...exchange, status }).success).toBe(true);
         }

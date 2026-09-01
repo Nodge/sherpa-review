@@ -76,15 +76,15 @@ const AGENT_STATES = [
         title: 'working',
         worker: CONNECTED,
         tasks: [
-            { ...TASK, id: 1, status: 'leased' },
-            { ...TASK, id: 2, status: 'queued' },
+            { ...TASK, id: 1, status: 'leased', heldByWorker: true },
+            { ...TASK, id: 2, status: 'queued', heldByWorker: false },
         ],
     },
     {
         id: 'failed',
         title: 'last task failed',
         worker: CONNECTED,
-        tasks: [{ ...TASK, id: 1, status: 'failed' }],
+        tasks: [{ ...TASK, id: 1, status: 'failed', heldByWorker: false }],
     },
     {
         id: 'disconnected',

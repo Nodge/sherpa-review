@@ -284,6 +284,7 @@ function toUiTask(record: TaskRecord): UiTask {
         type: record.type,
         priority: record.priority,
         status: record.status,
+        heldByWorker: record.status === 'leased' || (record.status === 'cancelled' && record.workerId !== null),
         attempt: record.attempt,
         instructions: record.instructions,
         progressText: record.progressText,

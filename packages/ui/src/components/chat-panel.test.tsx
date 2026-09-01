@@ -40,6 +40,7 @@ function exchange(id: number, status: ChatExchange['status'], overrides: Partial
         question: `Question ${String(id)}`,
         anchor: null,
         status,
+        taskId: id,
         answer: status === 'done' ? 'Answer from the **agent**.' : null,
         progressText: status === 'running' ? 'Reading related calls' : null,
         error: status === 'failed' ? 'The model returned no answer.' : null,
@@ -49,12 +50,18 @@ function exchange(id: number, status: ChatExchange['status'], overrides: Partial
     };
 }
 
-function task(id: number, type: UiTask['type'], status: UiTask['status']): UiTask {
+function task(
+    id: number,
+    type: UiTask['type'],
+    status: UiTask['status'],
+    heldByWorker = status === 'leased',
+): UiTask {
     return {
         id,
         type,
         priority: 'interactive',
         status,
+        heldByWorker,
         attempt: 1,
         instructions: 'task',
         progressText: null,
@@ -154,6 +161,14 @@ describe('chat panel model', () => {
         );
         expect(queueBannerText([task(1, 'echo', 'leased')])).toBe('Agent busy · your question is next');
         expect(queueBannerText([task(1, 'chat', 'leased')])).toBe('Agent busy · your question is next');
+        expect(queueBannerText([task(1, 'chat', 'done')])).toBeNull();
+    });
+
+    it('does not present a held cancelled route task as ongoing generation', () => {
+        expect(queueBannerText([task(1, 'route.section', 'cancelled', true)])).toBe(
+            'Agent busy · your question is next',
+        );
+        expect(queueBannerText([task(1, 'route.section', 'cancelled', false)])).toBeNull();
     });
 
     it('compares anchors by range instead of object reference', () => {
@@ -207,9 +222,10 @@ describe('chat panel feed', () => {
         expect(host.textContent).toContain('Still working');
     });
 
-    it('links a live lease for a cancelled task to the cancelled exchange even when a queued one follows', () => {
+    it('places the held cancelled task message under its exchange and queues the new question behind it', () => {
         const { host } = mountPanel({
-            tasks: [task(10, 'chat', 'leased')],
+            // Exchange 1 is cancelled, but the worker still holds its task. Exchange 2 is waiting its turn.
+            tasks: [task(1, 'chat', 'cancelled', true)],
             exchanges: [exchange(1, 'cancelled'), exchange(2, 'queued')],
         });
 
@@ -220,6 +236,22 @@ describe('chat panel feed', () => {
         expect(host.querySelector('[data-exchange="2"]')?.textContent).not.toContain(
             'The agent is still busy with the cancelled task',
         );
+    });
+
+    it('does not show a message under a cancelled exchange for another active lease', () => {
+        const { host, render } = mountPanel({
+            // The worker has responded for task 1 and taken the task for another question.
+            tasks: [task(1, 'chat', 'cancelled', false), task(2, 'chat', 'leased')],
+            exchanges: [exchange(1, 'cancelled'), exchange(2, 'running')],
+        });
+
+        expect(host.textContent).not.toContain('The agent is still busy with the cancelled task');
+
+        // The lease ended while the exchange stayed cancelled. The message disappears even without an exchange change.
+        render({ tasks: [task(1, 'chat', 'cancelled', true)], exchanges: [exchange(1, 'cancelled')] });
+        expect(host.textContent).toContain('The agent is still busy with the cancelled task');
+        render({ tasks: [task(1, 'chat', 'cancelled', false)], exchanges: [exchange(1, 'cancelled')] });
+        expect(host.textContent).not.toContain('The agent is still busy with the cancelled task');
     });
 
     it('shows history loading and errors instead of a false empty chat', () => {

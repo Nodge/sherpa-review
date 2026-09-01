@@ -15,9 +15,12 @@ export interface AgentPillView {
     readonly title: string;
 }
 
-/** A task in progress or waiting in the queue is work the agent still has to do. */
+/**
+ * A running or queued task is work the agent still needs to do. A cancelled task
+ * still held by the worker counts too, since the worker remains busy until it responds.
+ */
 function isPending(task: UiTask): boolean {
-    return task.status === 'queued' || task.status === 'leased';
+    return task.status === 'queued' || task.heldByWorker;
 }
 
 /**

@@ -46,6 +46,7 @@ function task(overrides: Partial<UiTask> & Pick<UiTask, 'id'>): UiTask {
         type: 'route.skeleton',
         priority: 'background',
         status: 'queued',
+        heldByWorker: overrides.status === 'leased',
         attempt: 1,
         instructions: 'build the skeleton',
         progressText: null,
@@ -167,6 +168,8 @@ describe('long generation', () => {
             task({ id: 2, status: 'leased', type: 'route.section' }),
             task({ id: 3, status: 'done' }),
             task({ id: 4, status: 'queued', type: 'echo', priority: 'interactive' }),
+            // The worker is still running the cancelled section, but generation is no longer active or blocked.
+            task({ id: 5, status: 'cancelled', type: 'route.section', heldByWorker: true }),
         ];
 
         expect(openRouteTasks(tasks).map((item) => item.id)).toEqual([1, 2]);

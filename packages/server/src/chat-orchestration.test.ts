@@ -2,7 +2,7 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { ChatAnchor, TaskCompleteResponse, UiChatResponse } from '@sherpa/protocol';
+import type { ChatAnchor, TaskCompleteResponse, UiChatResponse, UiState } from '@sherpa/protocol';
 import {
     LEASE_TTL_SECONDS,
     RESULT_MAX_BYTES,
@@ -13,6 +13,7 @@ import {
     uiChatEventSchema,
     uiChatResponseSchema,
     uiChatRetryResponseSchema,
+    uiStateSchema,
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -68,6 +69,12 @@ describe('chat and notes', () => {
         });
         servers.push(server);
         return server;
+    }
+
+    async function readState(server: SherpaServer): Promise<UiState> {
+        const response = await get(server.port, UI_ENDPOINTS.state, server.token);
+        expect(response.status).toBe(200);
+        return uiStateSchema.parse(await response.json());
     }
 
     async function readChat(server: SherpaServer): Promise<UiChatResponse> {
@@ -186,7 +193,7 @@ describe('chat and notes', () => {
         expect((await readChat(server)).exchanges.find((item) => item.id === exchange.id)?.status).toBe('running');
     });
 
-    it('cancel formally closes the lease, repeated complete is a no-op, next does not return it', async () => {
+    it('cancel formally closes the lease, the worker holds it until a late complete', async () => {
         const server = await start();
         const exchange = await ask(server);
         const taskId = leaseChat(server);
@@ -198,10 +205,54 @@ describe('chat and notes', () => {
             server.token,
         );
         expect(uiChatCancelResponseSchema.parse(await response.json()).outcome).toBe('cancelled');
-        expect(server.queue.getTask(taskId)?.status).toBe('cancelled');
-        expect(server.queue.next(WORKER)).toBeNull();
+        expect((await readState(server)).tasks).toMatchObject([
+            { id: taskId, status: 'cancelled', heldByWorker: true },
+        ]);
+        expect((await readChat(server)).exchanges[0]).toMatchObject({
+            status: 'cancelled',
+            answer: null,
+            taskId,
+        });
+
         expect(complete(server, taskId).kind).toBe('noop');
-        expect((await readChat(server)).exchanges[0]).toMatchObject({ status: 'cancelled', answer: null });
+        expect((await readState(server)).tasks).toMatchObject([
+            { id: taskId, status: 'cancelled', heldByWorker: false },
+        ]);
+    });
+
+    it('next from the same worker releases the cancelled task and issues the next question', async () => {
+        const server = await start();
+        const first = await ask(server, 'First question');
+        const cancelledTask = leaseChat(server);
+        await postJson(server.port, UI_ENDPOINTS.reviewChatCancel, { exchangeId: first.id }, server.token);
+
+        await ask(server, 'Second question');
+        const nextTask = server.queue.next(WORKER);
+
+        expect(nextTask?.task.id).not.toBe(cancelledTask);
+        expect((await readState(server)).tasks).toMatchObject([
+            { id: cancelledTask, status: 'cancelled', heldByWorker: false },
+            { id: nextTask?.task.id, status: 'leased', heldByWorker: true },
+        ]);
+    });
+
+    it('retry assigns a new task to a cancelled question\'s exchange', async () => {
+        const server = await start();
+        const exchange = await ask(server);
+        const firstTask = leaseChat(server);
+        await postJson(server.port, UI_ENDPOINTS.reviewChatCancel, { exchangeId: exchange.id }, server.token);
+
+        const retry = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewChatRetry,
+            { exchangeId: exchange.id },
+            server.token,
+        );
+        expect(uiChatRetryResponseSchema.parse(await retry.json()).outcome).toBe('retried');
+
+        const retried = (await readChat(server)).exchanges[0];
+        expect(retried).toMatchObject({ id: exchange.id, status: 'queued' });
+        expect(retried?.taskId).not.toBe(firstTask);
     });
 
     it('allows retry from failed and cancelled, preserving the question and anchor', async () => {

@@ -36,6 +36,12 @@ export const uiTaskSchema = z.object({
     type: taskTypeSchema,
     priority: priorityClassSchema,
     status: taskStatusSchema,
+    /**
+     * The worker holds the task: `leased`, or `cancelled` if the worker has not learned of the cancellation
+     * (it learns this on the next CLI call, rpc-design §5). While true, the agent is busy with this task,
+     * even if nobody needs its result anymore. The UI does not present the session as idle.
+     */
+    heldByWorker: z.boolean(),
     attempt: z.number().int().min(1),
     /** Task prompt, shown by the UI as "what was requested". */
     instructions: z.string(),

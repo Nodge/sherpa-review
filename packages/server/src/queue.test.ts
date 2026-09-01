@@ -452,10 +452,98 @@ describe('queue with leases', () => {
             takeNext('w-1');
 
             expect(queue.cancel(task.id)).toBe('cancelled');
+            // The hold remains. The worker is still running the cancelled task and does not know it yet.
+            expect(queue.getTask(task.id)).toMatchObject({ status: 'cancelled', workerId: 'w-1' });
+            expect(queue.getTask(task.id)?.leaseExpiresAt).not.toBeNull();
+            expect(queue.next('w-2')).toBeNull();
 
             const response = queue.complete('w-1', task.id, 'did it anyway');
             expect(response).toEqual({ kind: 'noop', message: expect.stringContaining('cancelled') as unknown });
-            expect(queue.getTask(task.id)).toMatchObject({ status: 'cancelled', result: null });
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'cancelled',
+                result: null,
+                workerId: null,
+                leaseExpiresAt: null,
+            });
+        });
+
+        it.each([
+            ['fail', (id: number): unknown => queue.fail('w-1', id, 'could not do it')],
+            ['progress', (id: number): unknown => queue.progress('w-1', id, 'still writing')],
+        ])('%s from the holder also clears the hold and returns noop', (_name, call) => {
+            const task = enqueue();
+            takeNext('w-1');
+            queue.cancel(task.id);
+
+            expect(call(task.id)).toEqual({
+                kind: 'noop',
+                message: expect.stringContaining('has been cancelled') as unknown,
+            });
+            expect(queue.getTask(task.id)).toMatchObject({ workerId: null, leaseExpiresAt: null });
+        });
+
+        it('`next` from the same worker clears the hold because it has moved on', () => {
+            const cancelled = enqueue({ instructions: 'first' });
+            takeNext('w-1');
+            queue.cancel(cancelled.id);
+            const next = enqueue({ instructions: 'second' });
+
+            expect(takeNext('w-1').task.id).toBe(next.id);
+            expect(queue.getTask(cancelled.id)).toMatchObject({
+                status: 'cancelled',
+                workerId: null,
+                leaseExpiresAt: null,
+            });
+        });
+
+        it('an expired hold is cleared without requeuing or incrementing the attempt', () => {
+            const task = enqueue();
+            takeNext('w-1');
+            queue.cancel(task.id);
+
+            advanceSeconds(LEASE_TTL_SECONDS.background + 1);
+
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'cancelled',
+                attempt: 1,
+                workerId: null,
+                leaseExpiresAt: null,
+                lastLeaseReturnReason: null,
+            });
+        });
+
+        it('displacing the worker clears its hold on a cancelled task', () => {
+            const task = enqueue();
+            takeNext('w-1');
+            queue.cancel(task.id);
+
+            queue.releaseLeasesOf('w-1');
+
+            expect(queue.getTask(task.id)).toMatchObject({
+                status: 'cancelled',
+                attempt: 1,
+                workerId: null,
+                leaseExpiresAt: null,
+            });
+        });
+
+        it('holding a cancelled task counts as a busy worker', () => {
+            const task = enqueue();
+            const lease = takeNext('w-1');
+            queue.cancel(task.id);
+
+            expect(queue.leaseExpiryOf('w-1')).toBe(lease.lease.expiresAt);
+
+            queue.complete('w-1', task.id, 'too late');
+            expect(queue.leaseExpiryOf('w-1')).toBeNull();
+        });
+
+        it('cancelling a queued task creates no holder', () => {
+            const task = enqueue();
+
+            queue.cancel(task.id);
+
+            expect(queue.getTask(task.id)).toMatchObject({ workerId: null, leaseExpiresAt: null });
         });
 
         it('repeated cancellation and closed tasks return noop, unknown tasks return unknown_task', () => {

@@ -147,6 +147,7 @@ export class TaskQueue {
     private readonly txProgress: (workerId: string, taskId: TaskId, text: string) => Outcome<TaskAckResponse>;
     private readonly txCancel: (taskId: TaskId) => Outcome<CancelOutcome>;
     private readonly txReleaseLeasesOf: (workerId: string) => void;
+    private readonly txReleaseCancelledHoldsOf: (workerId: string) => void;
     private readonly txListTasks: () => TaskRecord[];
     private readonly txGetTask: (taskId: TaskId) => TaskRecord | null;
 
@@ -168,6 +169,9 @@ export class TaskQueue {
         this.txCancel = transaction(this.db, (taskId: TaskId) => this.cancelInTransaction(taskId));
         this.txReleaseLeasesOf = transaction(this.db, (workerId: string) => {
             this.releaseLeasesInTransaction(workerId);
+        });
+        this.txReleaseCancelledHoldsOf = transaction(this.db, (workerId: string) => {
+            this.releaseCancelledHoldsInTransaction(workerId);
         });
         this.txListTasks = transaction(this.db, () => {
             this.expireLeases();
@@ -270,7 +274,8 @@ export class TaskQueue {
 
     /**
      * Cancellation from the UI. A leased task is marked cancelled. The session cannot be interrupted,
-     * the worker learns on its next call for this task (receives `noop`).
+     * so the worker learns on its next call for this task (it gets `noop`). Until then,
+     * the hold remains, with `worker_id`/`lease_expires_at` on the cancelled task.
      */
     cancel(taskId: TaskId): CancelOutcome {
         return this.settle(this.txCancel(taskId));
@@ -280,10 +285,21 @@ export class TaskQueue {
      * Immediately releases leases of a displaced worker when a new session takes its slot
      * (rpc-design §7): the slot is no longer its own, so there is no reason to wait for natural TTL expiry. Otherwise after
      * reconnect the task would sit for up to ten minutes. Semantics match expiry:
-     * increment the attempt, fail the task when attempts run out.
+     * increment the attempt count, and fail the task when attempts run out. For cancelled tasks,
+     * simply release the hold: there is nothing to return to the queue.
      */
     releaseLeasesOf(workerId: string): void {
         this.txReleaseLeasesOf(workerId);
+        this.flushChanges();
+    }
+
+    /**
+     * The worker leaves without asking for new work (a `done` response to `next`). It is no longer
+     * running cancelled tasks, so clear the hold here. Otherwise it stays until TTL expiry, and the UI
+     * shows "agent working" for a session that no longer exists.
+     */
+    releaseCancelledHoldsOf(workerId: string): void {
+        this.txReleaseCancelledHoldsOf(workerId);
         this.flushChanges();
     }
 
@@ -293,12 +309,15 @@ export class TaskQueue {
      * both whether it is working now and when work ends. Otherwise there is no time to use
      * for the worker death timer. Pure read with no side effects. Frequent calls must not move the queue,
      * so expired leases are not requeued here.
+     *
+     * Does not filter by status. A hold on a cancelled task also keeps the worker busy,
+     * so it must not appear disconnected.
      */
     leaseExpiryOf(workerId: string): string | null {
         const row = this.db
             .prepare(
                 `SELECT MAX(lease_expires_at) AS expires_at FROM tasks
-                 WHERE status = 'leased' AND worker_id = ? AND lease_expires_at IS NOT NULL`,
+                 WHERE worker_id = ? AND lease_expires_at IS NOT NULL`,
             )
             .get(workerId) as { expires_at: string | null } | undefined;
         return row?.expires_at ?? null;
@@ -322,6 +341,8 @@ export class TaskQueue {
 
     private nextInTransaction(workerId: string): Outcome<LeasedTask | null> {
         this.expireLeases();
+        // The worker has come for new work, so it is no longer running cancelled tasks.
+        this.releaseCancelledHoldsInTransaction(workerId);
 
         // Idempotency. Return this worker's live lease unchanged so it finishes what it started.
         const held = this.db
@@ -488,6 +509,17 @@ export class TaskQueue {
             return ok('noop');
         }
 
+        if (row.status === 'leased') {
+            // The session cannot be interrupted. The task is closed, but its holder does not know yet
+            // (rpc-design §5). `worker_id`/`lease_expires_at` remain so the UI can show
+            // that the agent is still busy with the cancelled task.
+            this.db
+                .prepare("UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE id = ?")
+                .run(this.nowIso(), taskId);
+            this.markChanged();
+            return ok('cancelled');
+        }
+
         this.closeTask(taskId, 'cancelled', {});
         return ok('cancelled');
     }
@@ -504,6 +536,10 @@ export class TaskQueue {
             return fail(unknownTask(taskId));
         }
         if (isClosed(row)) {
+            // The holder of the cancelled task called back and learned of cancellation from `noop`.
+            if (row.worker_id === workerId) {
+                this.releaseHold(taskId);
+            }
             return ok(null);
         }
         if (row.status !== 'leased' || row.worker_id !== workerId) {
@@ -520,18 +556,24 @@ export class TaskQueue {
 
     /**
      * Requeues tasks with expired leases (a worker died silently) and increments the attempt.
-     * exhausted attempts mean a task failure visible in the UI.
+     * Exhausted attempts fail the task visibly in the UI. Cancelled tasks have nothing to requeue.
+     * An expired hold only means the holder no longer counts as busy.
      */
     private expireLeases(): void {
         const nowIso = this.nowIso();
         const expired = this.db
             .prepare(
-                `SELECT id, attempt FROM tasks
-                 WHERE status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?`,
+                `SELECT id, attempt, status FROM tasks
+                 WHERE status IN ('leased', 'cancelled')
+                   AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?`,
             )
-            .all(nowIso) as { id: number; attempt: number }[];
+            .all(nowIso) as { id: number; attempt: number; status: string }[];
 
         for (const row of expired) {
+            if (row.status === 'cancelled') {
+                this.releaseHold(row.id);
+                continue;
+            }
             this.requeueLease(row, 'expired');
         }
     }
@@ -545,6 +587,26 @@ export class TaskQueue {
         for (const row of held) {
             this.requeueLease(row, 'displaced');
         }
+        this.releaseCancelledHoldsInTransaction(workerId);
+    }
+
+    /** Clears all holds on this worker's cancelled tasks. It no longer runs them. */
+    private releaseCancelledHoldsInTransaction(workerId: string): void {
+        const held = this.db
+            .prepare("SELECT id FROM tasks WHERE status = 'cancelled' AND worker_id = ?")
+            .all(workerId) as { id: number }[];
+
+        for (const row of held) {
+            this.releaseHold(row.id);
+        }
+    }
+
+    /** Clears a hold on a closed task without changing its status or attempt. */
+    private releaseHold(taskId: TaskId): void {
+        this.db
+            .prepare('UPDATE tasks SET worker_id = NULL, lease_expires_at = NULL, updated_at = ? WHERE id = ?')
+            .run(this.nowIso(), taskId);
+        this.markChanged();
     }
 
     /** Requeues one leased task and increments the attempt. Exhausted attempts fail it. */

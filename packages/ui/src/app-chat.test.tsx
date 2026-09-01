@@ -35,6 +35,7 @@ function exchange(id: number, question: string, overrides: Partial<ChatExchange>
         question,
         anchor: null,
         status: 'queued',
+        taskId: id,
         answer: null,
         progressText: null,
         error: null,

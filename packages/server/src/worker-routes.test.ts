@@ -538,6 +538,32 @@ describe('worker endpoints', () => {
             expect(finished.kind).toBe('done');
         });
 
+        it('releases a cancelled task on done so a departed session does not appear busy', async () => {
+            const server = await startWithShortUiGrace();
+            const closeUi = await openUi(server);
+            const taskId = enqueueEcho(server);
+            const issued = workerNextResponseSchema.parse(
+                await (await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token)).json(),
+            );
+            expect(issued).toMatchObject({ kind: 'task', task: { id: taskId } });
+
+            expect(server.queue.cancel(taskId)).toBe('cancelled');
+            expect(server.queue.getTask(taskId)).toMatchObject({ status: 'cancelled', workerId: BASE.workerId });
+
+            await closeUi();
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const finished = workerNextResponseSchema.parse(
+                await (await postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token)).json(),
+            );
+
+            expect(finished.kind).toBe('done');
+            expect(server.queue.getTask(taskId)).toMatchObject({
+                status: 'cancelled',
+                workerId: null,
+                leaseExpiresAt: null,
+            });
+        });
+
         it('returns a task immediately when it is enqueued during the wait', async () => {
             const server = await start(30);
 

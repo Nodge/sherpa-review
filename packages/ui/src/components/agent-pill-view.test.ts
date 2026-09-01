@@ -16,6 +16,7 @@ function task(overrides: Partial<UiTask> & Pick<UiTask, 'id' | 'status'>): UiTas
     return {
         type: 'echo',
         priority: 'interactive',
+        heldByWorker: overrides.status === 'leased',
         attempt: 1,
         instructions: 'echo',
         progressText: null,
@@ -71,6 +72,17 @@ describe('agent pill', () => {
         ]);
 
         expect(view.label).toBe('Agent working · 2 in queue');
+    });
+
+    it('counts a cancelled task as work while the worker holds it', () => {
+        const held = task({ id: 1, status: 'cancelled', type: 'chat', heldByWorker: true });
+
+        expect(agentPillView(CONNECTED, [held])).toMatchObject({
+            tone: 'working',
+            label: 'Agent working · 1 in queue',
+        });
+        // The worker has responded. The task is no longer held, and there is no work left.
+        expect(agentPillView(CONNECTED, [{ ...held, heldByWorker: false }]).tone).toBe('connected');
     });
 
     it('shows the red state when the last task failed', () => {
