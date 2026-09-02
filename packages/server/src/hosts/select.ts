@@ -1,6 +1,6 @@
 import type { FixtureName } from '@sherpa/fixtures';
 import { FIXTURE_NAMES, makeFixtureHost } from '@sherpa/fixtures';
-import type { ReviewHost } from '@sherpa/protocol';
+import type { Iteration, ReviewHost } from '@sherpa/protocol';
 
 
 
@@ -19,6 +19,12 @@ export interface SelectedHost {
     readonly host: ReviewHost;
     /** Optional host-specific whoami for automatic feedback context. */
     readonly currentUser?: () => string | null | Promise<string | null>;
+    /**
+     * Fixture host only: development "push" (`UI_DEV_ENDPOINTS.fixtureAdvanceIteration`).
+     * This access does not extend beyond the development route registration point. Shared server code
+     * knows nothing about fixtures.
+     */
+    readonly advanceIteration?: () => Iteration;
 }
 
 export type ReviewHostFactory = (prKey: string) => SelectedHost | null;
@@ -42,7 +48,8 @@ export function selectReviewHost(prKey: string): SelectedHost | null {
         if (!isFixtureName(raw)) {
             return null;
         }
-        return { name: 'fixture', host: makeFixtureHost(raw) };
+        const host = makeFixtureHost(raw);
+        return { name: 'fixture', host, advanceIteration: () => host.advanceIteration() };
     }
 
     return null;

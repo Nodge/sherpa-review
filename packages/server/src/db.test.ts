@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase, readSchemaVersion } from './db.js';
 import { MIGRATIONS } from './migrations.js';
 import { databasePathFor } from './paths.js';
+import { RouteStore } from './route-store.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
@@ -75,6 +76,86 @@ describe('storage', () => {
                 harness: 'claude-code',
                 model: null,
             });
+        } finally {
+            after.close();
+        }
+    });
+
+    // The dogfooding database keeps its route when migrating to multiple snapshots (M4-T3).
+    it('moves the snapshot from route_state to route_snapshots during the iteration migration', () => {
+        const file = `${sherpaDir}/route-snapshot.db`;
+        const snapshot = {
+            snapshotId: 'snap-legacy',
+            commit: 'head-legacy',
+            diffId: 'iter-legacy',
+            createdAt: '2026-08-25T10:00:00.000Z',
+            provenance: { harness: 'claude-code', model: 'opus' },
+            summary: 'route before iterations',
+            stops: [],
+            tourOrder: [],
+            contentHash: 'abcdef123456',
+        };
+
+        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        before
+            .prepare(
+                `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
+                 VALUES (1, 'ready', 0, ?, '[]', '2026-08-25T10:00:00.000Z')`,
+            )
+            .run(JSON.stringify(snapshot));
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT * FROM route_snapshots').all()).toEqual([
+                {
+                    snapshot_id: 'snap-legacy',
+                    diff_id: 'iter-legacy',
+                    created_at: '2026-08-25T10:00:00.000Z',
+                    previous_snapshot_id: null,
+                    snapshot_json: JSON.stringify(snapshot),
+                    content_hash: 'abcdef123456',
+                },
+            ]);
+            expect(after.prepare('SELECT phase, current_snapshot_id FROM route_state').get()).toMatchObject({
+                phase: 'ready',
+                current_snapshot_id: 'snap-legacy',
+            });
+            // The snapshot blob is gone from `route_state` entirely. `route_snapshots` is the source of truth.
+            const columns = after.prepare('PRAGMA table_info(route_state)').all() as { name: string }[];
+            expect(columns.map((column) => column.name)).not.toContain('snapshot');
+
+            const store = new RouteStore({ db: after });
+            expect(store.current()?.snapshotId).toBe('snap-legacy');
+            expect(store.listSnapshots()).toHaveLength(1);
+        } finally {
+            after.close();
+        }
+    });
+
+    // Manual database edits must not crash server startup during migration.
+    it('handles a corrupt snapshot blob during the iteration migration', () => {
+        const file = `${sherpaDir}/route-broken.db`;
+
+        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        before
+            .prepare(
+                `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
+                 VALUES (1, 'ready', 0, 'this is not json', '[]', '2026-08-25T10:00:00.000Z')`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT COUNT(*) AS count FROM route_snapshots').get()).toMatchObject({ count: 0 });
+            expect(after.prepare('SELECT current_snapshot_id FROM route_state').get()).toMatchObject({
+                current_snapshot_id: null,
+            });
+            // The blob was not moved, so there is no route. `ready` without a snapshot would falsely tell the UI a route is ready.
+            const store = new RouteStore({ db: after });
+            expect(store.read().phase).toBe('none');
+            expect(store.current()).toBeNull();
         } finally {
             after.close();
         }

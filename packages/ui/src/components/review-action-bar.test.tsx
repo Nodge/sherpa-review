@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Thread, UiSettings, Verdict } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -19,7 +19,7 @@ import {
 } from './review-action-bar.tsx';
 import { ReviewComplete } from './review-complete.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const DRAFT_THREADS = withDraft(DATA.threads);
 const TRANSPORT = {

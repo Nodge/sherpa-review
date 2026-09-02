@@ -65,7 +65,7 @@ Principles:
 - **Each task is self-contained**: the session may have died and reconnected, so the task does not rely on session memory. The payload has all the required context. Session memory is a bonus (cached understanding of the PR), not a contract.
 - **The result schema is part of the task**: for structured tasks (route, section, test digest), the payload contains a JSON schema path, and the model is told that the submitted result will be validated.
 
-Task types in v1: `route.skeleton` (section titles + intent), `route.section` (one complete section: overview, anchors, display directives, test digest), `chat` (a question with selection context), `regenerate.*` (the same after a new push, with a "what changed" diff in context).
+v1 task types: `route.skeleton` (section headings + intent), `route.section` (one complete section: overview, anchors, display directives, test digest), `chat` (question with selection context). Regeneration after a new push uses the same `route.*` types with extra context (previous route, "what changed" interdiff, threads on affected ranges). There are no separate `regenerate.*` types (decision M4-T1), and the section result gets a "why this stop changed" field.
 
 ## 5. Queue
 

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type {
     ChatAnchor,
     ChatExchange,
@@ -5,15 +8,21 @@ import type {
     PrDiff,
     PrMeta,
     ReviewHost,
+    UiChatAskAnchor,
     UiChatCancelResponse,
     UiChatRetryResponse,
 } from '@sherpa/protocol';
 
-import { buildChatPayload, materializeChatPayload } from './chat-payload.js';
+import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
-import type { TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
+import { RpcFailure } from './errors.js';
+import type { IterationStore } from './iteration-store.js';
+import { rememberIterationDiff } from './iteration-store.js';
+import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
+import type { SharedPayloadStore } from './shared-payload.js';
+import { holdsPayload } from './shared-payload.js';
 
 export interface ChatOrchestratorOptions {
     readonly store: ChatStore;
@@ -21,6 +30,10 @@ export interface ChatOrchestratorOptions {
     readonly queue: TaskQueue;
     readonly host: ReviewHost | null;
     readonly payloadDir: string;
+    /** Local storage for iteration patches. `null` means nowhere to save the diff (tests without a database). */
+    readonly iterations?: IterationStore | null;
+    /** Shared question context: guide, PR diff and file contents at stable paths. */
+    readonly shared: SharedPayloadStore;
 }
 
 /**
@@ -33,6 +46,13 @@ export class ChatOrchestrator {
     private readonly queue: TaskQueue;
     private readonly host: ReviewHost | null;
     private readonly payloadDir: string;
+    private readonly iterations: IterationStore | null;
+    private readonly shared: SharedPayloadStore;
+    /**
+     * Directories for questions whose tasks have not been enqueued: an await between writing the payload and enqueueing
+     * lets cleanup run, which uses queued tasks and would delete the new directory.
+     */
+    private readonly reservedDirs = new Set<string>();
 
     private unsubscribeQueue: (() => void) | null = null;
     private closed = false;
@@ -45,6 +65,8 @@ export class ChatOrchestrator {
         this.queue = options.queue;
         this.host = options.host;
         this.payloadDir = options.payloadDir;
+        this.iterations = options.iterations ?? null;
+        this.shared = options.shared;
     }
 
     start(): void {
@@ -59,21 +81,19 @@ export class ChatOrchestrator {
         this.unsubscribeQueue?.();
     }
 
-    async ask(question: string, anchor: ChatAnchor | null): Promise<ChatExchange> {
-        const context = await this.loadPrContext(anchor);
-        const input = await materializeChatPayload(
-            this.payloadDir,
-            buildChatPayload({
-                question,
-                anchor,
-                pr: context.pr,
-                diff: context.diff,
-                fileContent: context.fileContent,
-                route: this.route.read(),
-                history: this.store.read().exchanges,
-            }),
-        );
-        return this.store.ask(question, anchor, context.headCommit, () => this.queue.enqueueInTransaction(input));
+    async ask(question: string, requested: UiChatAskAnchor | null): Promise<ChatExchange> {
+        const context = await this.loadPrContext(requested);
+        const anchor = resolveAskAnchor(requested, context.diff);
+        const taskDir = questionDirIn(this.payloadDir);
+        this.reservedDirs.add(taskDir);
+        try {
+            const input = await this.materialize(taskDir, question, anchor, context);
+            return this.store.ask(question, anchor, context.headCommit, () =>
+                this.queue.enqueueInTransaction(input),
+            );
+        } finally {
+            this.reservedDirs.delete(taskDir);
+        }
     }
 
     cancel(exchangeId: number): UiChatCancelResponse['outcome'] {
@@ -96,11 +116,36 @@ export class ChatOrchestrator {
         }
 
         const context = await this.loadPrContext(stored.exchange.anchor);
-        const input = await materializeChatPayload(
-            this.payloadDir,
+        const taskDir = questionDirIn(this.payloadDir);
+        this.reservedDirs.add(taskDir);
+        try {
+            const input = await this.materialize(
+                taskDir,
+                stored.exchange.question,
+                stored.exchange.anchor,
+                context,
+            );
+            return this.store.retry(exchangeId, context.headCommit, () => this.queue.enqueueInTransaction(input))
+                ? 'retried'
+                : 'noop';
+        } finally {
+            this.reservedDirs.delete(taskDir);
+        }
+    }
+
+    /** Question-specific files go in the question directory, unchanged files use a shared path (`shared-payload.ts`). */
+    private materialize(
+        taskDir: string,
+        question: string,
+        anchor: ChatAnchor | null,
+        context: PrContext,
+    ): Promise<EnqueueInput> {
+        return materializeChatPayload(
+            taskDir,
+            this.shared,
             buildChatPayload({
-                question: stored.exchange.question,
-                anchor: stored.exchange.anchor,
+                question,
+                anchor,
                 pr: context.pr,
                 diff: context.diff,
                 fileContent: context.fileContent,
@@ -108,9 +153,6 @@ export class ChatOrchestrator {
                 history: this.store.read().exchanges,
             }),
         );
-        return this.store.retry(exchangeId, context.headCommit, () => this.queue.enqueueInTransaction(input))
-            ? 'retried'
-            : 'noop';
     }
 
     /** Other task types return `null`: the composite result handler in `server.ts` continues dispatching. */
@@ -187,6 +229,45 @@ export class ChatOrchestrator {
             const taskId = stored.exchange.taskId;
             this.reconcileExchange(stored, taskId === null ? null : (byId.get(taskId) ?? null));
         }
+
+        this.sweepQuestionDirs(tasks);
+    }
+
+    /**
+     * A question directory lives exactly as long as its task: a task that is closed and held by no worker
+     * no longer reads its context. The first reconciliation runs at server startup, so it also
+     * removes directories whose tasks did not survive the restart.
+     *
+     * The task list is read before this reconciliation's changes: a stale entry keeps the directory for an extra pass,
+     * which is the safe side to err on. The context of a live task must never be deleted.
+     */
+    private sweepQuestionDirs(tasks: readonly TaskRecord[]): void {
+        let entries: string[];
+        try {
+            entries = fs.readdirSync(this.payloadDir);
+        } catch {
+            return;
+        }
+
+        const keep = new Set(this.reservedDirs);
+        for (const task of tasks) {
+            if (!holdsPayload(task)) {
+                continue;
+            }
+            for (const file of task.contextFiles) {
+                const dir = questionDirOf(this.payloadDir, file);
+                if (dir !== null) {
+                    keep.add(dir);
+                }
+            }
+        }
+
+        for (const entry of entries) {
+            const dir = path.join(this.payloadDir, entry);
+            if (!keep.has(dir)) {
+                fs.rmSync(dir, { recursive: true, force: true });
+            }
+        }
     }
 
     private reconcileExchange(stored: StoredChatExchange, task: TaskRecord | null): void {
@@ -239,12 +320,7 @@ export class ChatOrchestrator {
         }
     }
 
-    private async loadPrContext(anchor: ChatAnchor | null): Promise<{
-        pr: PrMeta | null;
-        diff: PrDiff | null;
-        fileContent: FileContent | null;
-        headCommit: string | null;
-    }> {
+    private async loadPrContext(anchor: { fileId: string } | null): Promise<PrContext> {
         const host = this.host;
         if (host === null) {
             return { pr: null, diff: null, fileContent: null, headCommit: null };
@@ -267,8 +343,34 @@ export class ChatOrchestrator {
                       () => null,
                   ),
         ]);
+        if (this.iterations !== null && diff !== null) {
+            // Store the active iteration diff used to build the question context.
+            void rememberIterationDiff(this.iterations, host, diff);
+        }
         return { pr, diff, fileContent, headCommit: diff?.headCommit ?? null };
     }
+}
+
+/** A UI anchor without `diffId` refers to the active iteration. Its id comes from the loaded diff. */
+function resolveAskAnchor(anchor: UiChatAskAnchor | null, diff: PrDiff | null): ChatAnchor | null {
+    if (anchor === null) {
+        return null;
+    }
+    if (anchor.diffId !== undefined) {
+        return { ...anchor, diffId: anchor.diffId };
+    }
+    if (diff === null) {
+        throw new RpcFailure('bad_request', 'Question anchor has no diffId and there is no active iteration: the host is unavailable.');
+    }
+    return { ...anchor, diffId: diff.diffId };
+}
+
+/** What the host supplied for this question. Failure of any part narrows the context without cancelling the question. */
+interface PrContext {
+    readonly pr: PrMeta | null;
+    readonly diff: PrDiff | null;
+    readonly fileContent: FileContent | null;
+    readonly headCommit: string | null;
 }
 
 function chatResultErrors(result: string): string[] {
@@ -276,6 +378,16 @@ function chatResultErrors(result: string): string[] {
         return ['The chat answer is empty. Return a non-empty Markdown answer.'];
     }
     return voiceErrors('answer', result);
+}
+
+/** Question directory that owns the path. `null` means the path is outside question directories (a shared file). */
+function questionDirOf(payloadDir: string, file: string): string | null {
+    const relative = path.relative(payloadDir, file);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+        return null;
+    }
+    const [name] = relative.split(path.sep);
+    return name === undefined || name === '' ? null : path.join(payloadDir, name);
 }
 
 function chatFailure(task: TaskRecord): string {

@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { useMemo, useState } from 'react';
 
@@ -21,7 +21,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * exists (SPEC §2.5).
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {

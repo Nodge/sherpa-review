@@ -7,9 +7,10 @@ import { generateJsonSchemas } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { RoutePayloadContext } from './route-payload.js';
-import { CONTEXT_BUDGET_BYTES, RoutePayloadWriter, sectionContext, skeletonContext } from './route-payload.js';
+import { CONTEXT_BUDGET_BYTES, prDiffContext, RoutePayloadWriter, sectionPlanContext } from './route-payload.js';
 import { indexDiff } from './route/diff-index.js';
 import { mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
+import { SharedPayloadStore } from './shared-payload.js';
 
 /**
  * Payload for route generation tasks (M2-T5) on the `medium` fixture diff: 18 files, 862
@@ -28,7 +29,7 @@ const META: PrMeta = {
     statusLabel: 'Awaiting review',
     checks: null,
     updatedAt: '2026-08-20T10:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true },
+    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
 };
 
 /** Builder context: fixture diff plus PR metadata. */
@@ -43,7 +44,7 @@ function intents(): Map<number, string> {
 
 /** Full context size without truncation, the baseline for budget tests. */
 function fullSize(): number {
-    return Buffer.byteLength(skeletonContext(context(), CONTEXT_BUDGET_BYTES), 'utf8');
+    return Buffer.byteLength(prDiffContext(context(), CONTEXT_BUDGET_BYTES), 'utf8');
 }
 
 /** Patch line with a gutter: `old new | line`. */
@@ -81,10 +82,10 @@ function omittedPaths(text: string): string[] {
     return [...text.matchAll(/^### File \d+\. `([^`]+)` .*\n\npatch omitted/gm)].map((match) => match[1] ?? '');
 }
 
-describe('skeleton task context', () => {
+describe('shared diff context', () => {
     it('includes PR metadata, the full file list and every complete patch', () => {
         const diff = mediumDiff();
-        const text = skeletonContext(context(diff), CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES);
 
         expect(text).toContain('- Title: Order editing window');
         expect(text).toContain('- Author: alice (Alice Ingram)');
@@ -104,7 +105,7 @@ describe('skeleton task context', () => {
 
     it('prints patch line numbers for both sides, matching those accepted by the validator', () => {
         const diff = mediumDiff();
-        const text = skeletonContext(context(diff), CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext(context(diff), CONTEXT_BUDGET_BYTES);
         const index = indexDiff(diff);
 
         expect(text).toContain('`old new | line`');
@@ -139,7 +140,7 @@ describe('skeleton task context', () => {
     });
 
     it('builds context without PR metadata when the host does not provide it', () => {
-        const text = skeletonContext({ diff: mediumDiff(), meta: null }, CONTEXT_BUDGET_BYTES);
+        const text = prDiffContext({ diff: mediumDiff(), meta: null }, CONTEXT_BUDGET_BYTES);
 
         expect(text).toContain('no pull request metadata');
         expect(text).toContain('- Volume: 18 files');
@@ -149,7 +150,7 @@ describe('skeleton task context', () => {
     it('truncates to fit the budget while keeping the complete file list', () => {
         const budget = 12_000;
         const diff = mediumDiff();
-        const text = skeletonContext(context(diff), budget);
+        const text = prDiffContext(context(diff), budget);
 
         expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(budget);
         expect(omittedPaths(text).length).toBeGreaterThan(0);
@@ -160,7 +161,7 @@ describe('skeleton task context', () => {
     });
 
     it('names the file, size and obligation to place its ranges in the truncation marker', () => {
-        const text = skeletonContext(context(), 12_000);
+        const text = prDiffContext(context(), 12_000);
         const lock = mediumDiff().files.find((file) => file.path === 'pnpm-lock.yaml');
 
         expect(omittedPaths(text)).toContain('pnpm-lock.yaml');
@@ -172,7 +173,7 @@ describe('skeleton task context', () => {
 
     it('truncates generated files first because the team does not require their review', () => {
         // Set the budget 1 byte below full context to truncate exactly 1 file, the largest generated file.
-        const text = skeletonContext(context(), fullSize() - 1);
+        const text = prDiffContext(context(), fullSize() - 1);
 
         expect(omittedPaths(text)).toEqual(['pnpm-lock.yaml']);
     });
@@ -181,32 +182,32 @@ describe('skeleton task context', () => {
         const diff = mediumDiff();
         const generated = diff.files.filter((file) => file.generated).map((file) => file.path);
         // Shrink the budget byte by byte until all generated patches are cut. The largest goes next.
-        let text = skeletonContext(context(diff), fullSize() - 1);
+        let text = prDiffContext(context(diff), fullSize() - 1);
         while (omittedPaths(text).length <= generated.length) {
-            text = skeletonContext(context(diff), Buffer.byteLength(text, 'utf8') - 1);
+            text = prDiffContext(context(diff), Buffer.byteLength(text, 'utf8') - 1);
         }
 
         const omitted = omittedPaths(text);
         expect(omitted).toEqual(expect.arrayContaining(generated));
-        // The fixture's largest non-generated patch is the edit window test (4.5 KB).
-        expect(omitted).toContain('services/orders/src/domain/__tests__/edit-window.test.ts');
+        // Tests are protected, so the largest remaining file is the edit window documentation.
+        expect(omitted).toContain('services/orders/docs/edit-window.md');
         expect(omitted).toHaveLength(generated.length + 1);
     });
 
     it('keeps the file list but no patches when the budget is below the non-truncatable part', () => {
         const diff = mediumDiff();
-        const text = skeletonContext(context(diff), 10);
+        const text = prDiffContext(context(diff), 10);
 
         expect(omittedPaths(text)).toHaveLength(diff.files.length);
         expect(text).toContain('| `pnpm-lock.yaml` |');
     });
 });
 
-describe('section task context', () => {
+describe('section task plan', () => {
     const stops = mediumReadySnapshot().stops;
 
     it('includes the full plan with target stops distinguished and intents preserved', () => {
-        const text = sectionContext(context(), [3], stops, intents(), CONTEXT_BUDGET_BYTES);
+        const text = sectionPlanContext([3], stops, intents());
 
         expect(text).toContain('# Route plan (fixed by the server)');
         for (const stop of stops) {
@@ -222,8 +223,19 @@ describe('section task context', () => {
         expect(text).toContain('synthetic, filled by the server');
     });
 
+    it('omits the diff from the plan because it is shared at its own path', () => {
+        const text = sectionPlanContext([3], stops, intents());
+
+        expect(text).not.toContain('## Patches');
+        expect(text).not.toContain('| file # | file | change | +/- | notes |');
+        expect(text).not.toMatch(/^ *(\d+|\.) +(\d+|\.) \| /m);
+        for (const file of mediumDiff().files) {
+            expect(text).not.toContain(`\`${file.path}\``);
+        }
+    });
+
     it('targets every stop in a multi-stop batch and treats the rest as neighbors', () => {
-        const text = sectionContext(context(), [1, 2], stops, intents(), CONTEXT_BUDGET_BYTES);
+        const text = sectionPlanContext([1, 2], stops, intents());
 
         expect(text).toContain('### Stop 1 —');
         expect(text).toContain('### Stop 2 —');
@@ -232,8 +244,7 @@ describe('section task context', () => {
     });
 
     it('prints stop numbers as schema numbers, not two-digit file numbers', () => {
-        const text = sectionContext(context(), [3], stops, intents(), CONTEXT_BUDGET_BYTES);
-        const plan = text.slice(0, text.indexOf('# Pull request'));
+        const plan = sectionPlanContext([3], stops, intents());
 
         // `planIndex` is z.number(), so the schema rejects "03" in the model JSON.
         expect(plan).not.toMatch(/^\| 0\d \|/m);
@@ -241,20 +252,20 @@ describe('section task context', () => {
         expect(plan).toContain('`"planIndex": 3`');
         // Only files retain two-digit numbering, and the columns have different names.
         expect(plan).toContain('| stop # | tier | title | |');
-        expect(text).toContain('| file # | file | change | +/- | notes |');
+        expect(prDiffContext(context(), CONTEXT_BUDGET_BYTES)).toContain('| file # | file | change | +/- | notes |');
     });
+});
 
+describe('single truncation policy for the shared diff', () => {
     it('cuts test files last because the digest needs their lines for anchors', () => {
         // The budget fits the mandatory part and tests, but not the full diff.
         const budget = 20_000;
-        const text = sectionContext(context(), [4], stops, intents(), budget);
+        const text = prDiffContext(context(), budget);
         const omitted = omittedPaths(text);
 
         expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(budget);
         expect(omitted.length).toBeGreaterThan(0);
         expect(omitted.filter((file) => file.includes('__tests__'))).toEqual([]);
-        // The same skeleton budget does not protect tests. This is a payload difference, not a coincidence.
-        expect(omittedPaths(skeletonContext(context(), budget)).some((file) => file.includes('__tests__'))).toBe(true);
     });
 
     it('test protection overrides the generated flag: a snapshot test outlasts a regular file', () => {
@@ -264,9 +275,9 @@ describe('section task context', () => {
             file.path.includes('__tests__') ? { ...file, generated: true } : file,
         );
         const marked = { ...diff, files: generatedTest };
-        const budget = Buffer.byteLength(sectionContext(context(marked), [4], stops, intents(), 1e9), 'utf8') - 1;
+        const budget = Buffer.byteLength(prDiffContext(context(marked), 1e9), 'utf8') - 1;
 
-        const omitted = omittedPaths(sectionContext(context(marked), [4], stops, intents(), budget));
+        const omitted = omittedPaths(prDiffContext(context(marked), budget));
 
         expect(omitted.filter((file) => file.includes('__tests__'))).toEqual([]);
         expect(omitted).toEqual(['pnpm-lock.yaml']);
@@ -274,21 +285,30 @@ describe('section task context', () => {
 });
 
 describe('writing payload to disk', () => {
+    let root: string;
     let payloadDir: string;
+    let sharedDir: string;
 
     beforeEach(async () => {
-        payloadDir = path.join(await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-payload-')), 'payload');
+        root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-payload-'));
+        payloadDir = path.join(root, 'payload', 'route');
+        sharedDir = path.join(root, 'payload', 'shared');
     });
 
     afterEach(async () => {
-        await fs.promises.rm(path.dirname(payloadDir), { recursive: true, force: true });
+        await fs.promises.rm(root, { recursive: true, force: true });
     });
 
-    function writer(): RoutePayloadWriter {
-        return new RoutePayloadWriter({ payloadDir });
+    function writer(budgetBytes?: number): RoutePayloadWriter {
+        const shared = new SharedPayloadStore(sharedDir, () => []);
+        return new RoutePayloadWriter({
+            payloadDir,
+            shared,
+            ...(budgetBytes === undefined ? {} : { budgetBytes }),
+        });
     }
 
-    it('the skeleton task has its guide, context and schema on disk', () => {
+    it('gives the skeleton task shared guide and diff paths and its own schema', () => {
         const input = writer().skeletonTask(context());
 
         expect(input.type).toBe('route.skeleton');
@@ -300,9 +320,16 @@ describe('writing payload to disk', () => {
         }
 
         const [guide, pr] = input.contextFiles;
+        expect(guide).toMatch(/shared[/\\]guides[/\\]skeleton-guide-[0-9a-f]{8}\.md$/);
+        expect(pr?.startsWith(sharedDir)).toBe(true);
+        expect(path.basename(pr ?? '')).toBe('pr-diff.md');
         expect(fs.readFileSync(guide ?? '', 'utf8')).toContain('# Task: plan the review route');
         expect(fs.readFileSync(pr ?? '', 'utf8')).toContain('## Changed files (18, complete list)');
         expect(input.instructions).toContain('Plan the review route');
+        // The skeleton has no context of its own. The generation directory holds only the result schema.
+        expect(fs.readdirSync(path.dirname(input.resultSchemaFile ?? ''))).toEqual([
+            'route-skeleton-result.schema.json',
+        ]);
     });
 
     it('uses the same result schema JSON as generateJsonSchemas', () => {
@@ -316,49 +343,69 @@ describe('writing payload to disk', () => {
         expect(readSchema(sections.resultSchemaFile)).toEqual(schemas.routeSectionResult);
     });
 
-    it('the section task puts target numbers in instructions and the plan in context', () => {
+    it('puts target numbers in section instructions and the plan in its own file without patches', () => {
         const input = writer().sectionTask(context(), [3, 4], mediumReadySnapshot().stops, intents());
 
         expect(input.type).toBe('route.section');
         expect(input.instructions).toContain('3, 4');
-        expect(input.contextFiles[1]).toContain('section-03-04-context.md');
-        expect(fs.readFileSync(input.contextFiles[1] ?? '', 'utf8')).toContain('# Route plan');
+        expect(input.contextFiles).toHaveLength(3);
+        const plan = input.contextFiles[2] ?? '';
+        expect(plan.startsWith(payloadDir)).toBe(true);
+        expect(path.basename(plan)).toBe('section-03-04-plan.md');
+        const text = fs.readFileSync(plan, 'utf8');
+        expect(text).toContain('# Route plan');
+        expect(text).not.toContain('## Patches');
+    });
+
+    it('makes the skeleton and sections read the same shared diff', () => {
+        const builder = writer();
+        const skeleton = builder.skeletonTask(context());
+        const first = builder.sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
+        const second = builder.sectionTask(context(), [2], mediumReadySnapshot().stops, intents());
+
+        expect(first.contextFiles[1]).toBe(skeleton.contextFiles[1]);
+        expect(second.contextFiles[1]).toBe(skeleton.contextFiles[1]);
+        expect(first.contextFiles[0]).toBe(second.contextFiles[0]);
+        expect(fs.readdirSync(path.dirname(skeleton.contextFiles[1] ?? ''))).toEqual(['pr-diff.md']);
     });
 
     it('truncates context on disk to the builder budget', () => {
-        const small = new RoutePayloadWriter({ payloadDir, budgetBytes: 12_000 });
-        const input = small.skeletonTask(context());
+        const input = writer(12_000).skeletonTask(context());
         const text = fs.readFileSync(input.contextFiles[1] ?? '', 'utf8');
 
         expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(12_000);
         expect(text).toContain('patch omitted');
     });
 
-    it('a new generation clears the previous subdirectory', () => {
+    it('clears the previous subdirectory on new generation and keeps the shared diff', () => {
         const builder = writer();
-        const first = builder.skeletonTask(context());
+        const first = builder.sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
         builder.beginGeneration();
-        const second = builder.skeletonTask(context());
+        const second = builder.sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
 
-        expect(fs.existsSync(first.contextFiles[0] ?? '')).toBe(false);
-        expect(fs.existsSync(second.contextFiles[0] ?? '')).toBe(true);
+        expect(fs.existsSync(first.contextFiles[2] ?? '')).toBe(false);
+        expect(fs.existsSync(second.contextFiles[2] ?? '')).toBe(true);
+        expect(fs.existsSync(first.contextFiles[1] ?? '')).toBe(true);
         expect(fs.readdirSync(payloadDir)).toHaveLength(1);
     });
 
     it('reuses the existing generation directory with a new builder instead of clearing it', () => {
         // Server restart. The generation is the same, and its tasks and their context files are still live.
-        const before = writer().skeletonTask(context());
-        const after = writer().sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
+        const before = writer().sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
+        const after = writer().sectionTask(context(), [2], mediumReadySnapshot().stops, intents());
 
-        expect(fs.existsSync(before.contextFiles[0] ?? '')).toBe(true);
-        expect(path.dirname(after.contextFiles[0] ?? '')).toBe(path.dirname(before.contextFiles[0] ?? ''));
+        expect(fs.existsSync(before.contextFiles[2] ?? '')).toBe(true);
+        expect(path.dirname(after.contextFiles[2] ?? '')).toBe(path.dirname(before.contextFiles[2] ?? ''));
         expect(fs.readdirSync(payloadDir)).toHaveLength(1);
     });
 
     it('keeps payload directories private, following the convention for other PR state', () => {
-        const input = writer().skeletonTask(context());
+        const input = writer().sectionTask(context(), [1], mediumReadySnapshot().stops, intents());
 
         expect(fs.statSync(payloadDir).mode & 0o777).toBe(0o700);
-        expect(fs.statSync(path.dirname(input.contextFiles[0] ?? '')).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(path.dirname(input.contextFiles[2] ?? '')).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(sharedDir).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(path.dirname(input.contextFiles[1] ?? '')).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(input.contextFiles[1] ?? '').mode & 0o777).toBe(0o600);
     });
 });

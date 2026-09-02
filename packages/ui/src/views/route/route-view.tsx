@@ -1,6 +1,5 @@
 import type {
     AgentNote,
-    ChatAnchor,
     FileContent,
     FileDiff,
     PrDiff,
@@ -8,6 +7,7 @@ import type {
     RouteSnapshot,
     RouteTier,
     Thread,
+    UiChatAskAnchor,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
     UiStopSeenRange,
@@ -134,9 +134,9 @@ export interface RouteViewProps {
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
     readonly agentConnected: boolean;
-    readonly onAskSelection: (anchor: ChatAnchor) => void;
-    readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
-    readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly onAskSelection: (anchor: UiChatAskAnchor) => void;
+    readonly isSelectionPending: (anchor: UiChatAskAnchor | null) => boolean;
+    readonly onSelectionAnchorChange: (anchor: UiChatAskAnchor | null) => void;
     /**
      * Prefill the chat composer (README §2): "Other" asks the agent to place
      * uncovered ranges. The question stays unsent so the reviewer can read it and send it.
@@ -343,9 +343,9 @@ export interface RouteWorkspaceProps {
     readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
     readonly selectionNavigationRequest?: number;
     readonly agentConnected?: boolean;
-    readonly onAskSelection?: (anchor: ChatAnchor) => void;
-    readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
-    readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    readonly onAskSelection?: (anchor: UiChatAskAnchor) => void;
+    readonly isSelectionPending?: (anchor: UiChatAskAnchor | null) => boolean;
+    readonly onSelectionAnchorChange?: (anchor: UiChatAskAnchor | null) => void;
     /** See `RouteViewProps.onComposeQuestion`. Without it, Other has no button to place ranges. */
     readonly onComposeQuestion?: (text: string) => void;
     readonly notes?: readonly AgentNote[];
@@ -1764,12 +1764,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 <SelectionPopover
                     key={`${diffSnapshot.selection.fileId}:${diffSnapshot.selection.side ?? ''}:${diffSnapshot.selection.anchor}:${diffSnapshot.selection.focus}`}
                     host={popoverHost}
+                    diffId={diff.diffId}
                     file={selectedFile}
                     model={selectedModel}
                     selection={diffSnapshot.selection}
                     dragging={diffSnapshot.selectionDragging}
                     agentConnected={agentConnected}
-                    inFlight={isSelectionPending(chatAnchorFromSelection(selectedFile, selectedModel, diffSnapshot.selection))}
+                    inFlight={isSelectionPending(
+                        chatAnchorFromSelection(selectedFile, selectedModel, diffSnapshot.selection, diff.diffId),
+                    )}
                     onAsk={onAskSelection}
                     onSelectionAnchorChange={onSelectionAnchorChange}
                     onComment={(side, line) => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
-import type { AgentNote } from '@sherpa/protocol';
+import { fixtureIteration } from '@sherpa/fixtures';
+import type { AgentNote, ChatAnchor } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,7 @@ import { DiffWorkspace } from './full-diff.tsx';
  * keeps the note in place, and scrolls the open composer into view and focuses it.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE = (() => {
     const file = DATA.diff.files.find((candidate) => candidate.path === 'services/orders/src/domain/edit-window.ts');
     if (file === undefined) {
@@ -28,12 +28,14 @@ const FILE = (() => {
     }
     return file;
 })();
+const NOTE_ANCHOR: ChatAnchor = { diffId: DATA.diff.diffId, fileId: FILE.fileId, path: FILE.path, side: 'new', start: 6, end: 8 };
 const NOTE: AgentNote = {
     id: 7,
     exchangeId: 70,
-    anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start: 6, end: 8 },
+    anchor: NOTE_ANCHOR,
     text: 'First line of the answer.\n\nSecond line of the answer.\n',
-    commit: 'abcdef1',
+    lostAnchor: false,
+    origin: { commit: 'abcdef1', anchor: NOTE_ANCHOR },
     createdAt: '2026-09-01T10:00:00.000Z',
 };
 const COMPOSER_KEY = `new:${FILE.fileId}:new:6`;

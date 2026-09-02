@@ -8,14 +8,17 @@ import { generateJsonSchemas } from '@sherpa/protocol';
 import type { EnqueueInput } from './queue.js';
 import { SECTION_GUIDE, sectionInstructions, SKELETON_GUIDE, skeletonInstructions } from './route-prompts.js';
 import { walkPatch } from './route/diff-index.js';
+import type { SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf } from './shared-payload.js';
 
 /**
  * Route generation task payloads (rpc-design §4): large context goes in files, instructions in
  * stdout, and the result schema as part of the task.
  *
  * Each task is self-contained. The agent session may have died and reconnected, so the payload
- * carries everything needed: the guide, PR diff and (for sections) the route plan. The text is English for the
- * model. The model writes result text in Russian.
+ * includes everything needed: the guide, PR diff and (for sections) route plan. The unchanged part (guide and
+ * diff) lives at a stable path in the shared directory (`shared-payload.ts`). The generation directory holds
+ * only its own data. Text is English because the model reads it. The model writes result text in Russian.
  *
  * Priority is background. Route generation takes minutes and must not run ahead of work the reviewer
  * is waiting for on screen (rpc-design §5).
@@ -48,6 +51,8 @@ export interface RoutePayloadContext {
 export interface RoutePayloadWriterOptions {
     /** Isolated route directory. Each generation gets a subdirectory here. */
     readonly payloadDir: string;
+    /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
+    readonly shared: SharedPayloadStore;
     readonly budgetBytes?: number;
 }
 
@@ -57,11 +62,13 @@ export interface RoutePayloadWriterOptions {
  */
 export class RoutePayloadWriter {
     private readonly payloadDir: string;
+    private readonly shared: SharedPayloadStore;
     private readonly budgetBytes: number;
     private generationDir: string | null = null;
 
     constructor(options: RoutePayloadWriterOptions) {
         this.payloadDir = options.payloadDir;
+        this.shared = options.shared;
         this.budgetBytes = options.budgetBytes ?? CONTEXT_BUDGET_BYTES;
     }
 
@@ -72,13 +79,12 @@ export class RoutePayloadWriter {
 
     /** The `route.skeleton` task returns the summary, stop plan and Full tour order in one result. */
     skeletonTask(context: RoutePayloadContext): EnqueueInput {
-        const guide = this.writeFile('skeleton-guide.md', SKELETON_GUIDE);
-        const pr = this.writeFile('skeleton-context.md', skeletonContext(context, this.budgetBytes));
         return {
             type: 'route.skeleton',
             priority: 'background',
             instructions: skeletonInstructions(),
-            contextFiles: [guide, pr],
+            // The skeleton has no context of its own. Both the guide and diff use shared paths.
+            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), this.prDiff(context)],
             resultSchemaFile: this.writeSchema('skeleton'),
         };
     }
@@ -94,16 +100,20 @@ export class RoutePayloadWriter {
         stops: readonly RouteStop[],
         intents: ReadonlyMap<number, string>,
     ): EnqueueInput {
-        const guide = this.writeFile('section-guide.md', SECTION_GUIDE);
-        const name = `section-${planIndexes.map(pad2).join('-')}-context.md`;
-        const pr = this.writeFile(name, sectionContext(context, planIndexes, stops, intents, this.budgetBytes));
+        const name = `section-${planIndexes.map(pad2).join('-')}-plan.md`;
+        const plan = this.writeFile(name, sectionPlanContext(planIndexes, stops, intents));
         return {
             type: 'route.section',
             priority: 'background',
             instructions: sectionInstructions(planIndexes),
-            contextFiles: [guide, pr],
+            contextFiles: [this.shared.guide('section-guide', SECTION_GUIDE), this.prDiff(context), plan],
             resultSchemaFile: this.writeSchema('section'),
         };
+    }
+
+    /** Shared PR diff keyed by the commit pair. The skeleton, sections and PR chat question use the same one. */
+    private prDiff(context: RoutePayloadContext): string {
+        return this.shared.prDiff(diffKeyOf(context.diff), prDiffContext(context, this.budgetBytes));
     }
 
     /** A fresh generation subdirectory. Old contents are removed because their tasks were just cancelled. */
@@ -185,32 +195,26 @@ export class RoutePayloadWriter {
     }
 }
 
-/** Skeleton task context file: PR header, full file list and patches within budget. */
-export function skeletonContext(context: RoutePayloadContext, budgetBytes: number): string {
-    return prContext(context, budgetBytes, { protectTests: false, prefix: null });
+/**
+ * Shared diff context file with the PR header, full file list and patches within budget. All tasks share it.
+ * The skeleton, sections and PR-wide chat questions read it, so they share a truncation policy
+ * based on section needs: tests are trimmed last, since the digest must anchor to their actual lines.
+ */
+export function prDiffContext(context: RoutePayloadContext, budgetBytes: number): string {
+    return prContext(context, budgetBytes);
 }
 
 /**
- * Section task context file: the whole route plan with target stops marked, followed by
- * the same diff. A stop has no anchors until it is filled, so the model decides which files
- * belong to it. There is no basis for trimming the diff to "the stop's files".
+ * A section task's own file with the full route plan, target stops marked and their intents.
+ * The diff is shared and absent here. Stops have no anchors until filled, so the model decides
+ * which files belong to a stop. There is no basis for trimming the diff to "the stop's files".
  */
-export function sectionContext(
-    context: RoutePayloadContext,
+export function sectionPlanContext(
     planIndexes: readonly number[],
     stops: readonly RouteStop[],
     intents: ReadonlyMap<number, string>,
-    budgetBytes: number,
 ): string {
-    const prefix = planBlock(planIndexes, stops, intents);
-    // Tests are trimmed last: the digest must anchor to real lines in test files.
-    return prContext(context, budgetBytes, { protectTests: true, prefix });
-}
-
-interface ContextOptions {
-    readonly protectTests: boolean;
-    /** Block before the diff (the route plan for sections). */
-    readonly prefix: string | null;
+    return `${planBlock(planIndexes, stops, intents)}\n`;
 }
 
 /**
@@ -236,7 +240,7 @@ const PATCHES_HEADING = [
  * output file, including block separators. Otherwise "no more than N bytes" stops being
  * true exactly when it matters (requirements §3.5).
  */
-function prContext(context: RoutePayloadContext, budgetBytes: number, options: ContextOptions): string {
+function prContext(context: RoutePayloadContext, budgetBytes: number): string {
     const { diff, meta } = context;
     const head = [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n');
     const sections = diff.files.map((file, index) => ({
@@ -246,7 +250,7 @@ function prContext(context: RoutePayloadContext, budgetBytes: number, options: C
         omitted: patchBlock(file, index, true),
     }));
 
-    const fixed = [...(options.prefix === null ? [] : [options.prefix]), head, PATCHES_HEADING];
+    const fixed = [head, PATCHES_HEADING];
     const blockCount = fixed.length + sections.length;
     // `join('\n\n')` and the trailing newline also take bytes in the file.
     let size =
@@ -256,7 +260,7 @@ function prContext(context: RoutePayloadContext, budgetBytes: number, options: C
         1;
 
     const kept = new Set(sections.map((section) => section.index));
-    for (const section of dropOrder(sections, options.protectTests)) {
+    for (const section of dropOrder(sections)) {
         if (size <= budgetBytes) {
             break;
         }
@@ -275,12 +279,12 @@ function prContext(context: RoutePayloadContext, budgetBytes: number, options: C
 
 /**
  * Truncation order. Generated files go first (the team does not require their review),
- * tests in section payloads go last. Within each group, the largest patch goes first: it
- * frees budget with the fewest files lost. The path breaks ties deterministically.
+ * tests last. Within each group, trim the largest patch first to free up budget
+ * while losing as few files as possible. The path breaks ties deterministically.
  */
-function dropOrder<T extends { file: FileDiff; full: string }>(sections: readonly T[], protectTests: boolean): T[] {
+function dropOrder<T extends { file: FileDiff; full: string }>(sections: readonly T[]): T[] {
     return [...sections].sort((left, right) => {
-        const rank = protectionRank(left.file, protectTests) - protectionRank(right.file, protectTests);
+        const rank = protectionRank(left.file) - protectionRank(right.file);
         if (rank !== 0) {
             return rank;
         }
@@ -294,8 +298,8 @@ function dropOrder<T extends { file: FileDiff; full: string }>(sections: readonl
  * the host correctly marks snapshot tests as generated, but the digest still needs their lines for
  * `testPath`/`testLine`.
  */
-function protectionRank(file: FileDiff, protectTests: boolean): number {
-    if (protectTests && isTestPath(file.path)) {
+function protectionRank(file: FileDiff): number {
+    if (isTestPath(file.path)) {
         return 2;
     }
     return file.generated ? 0 : 1;
@@ -456,7 +460,8 @@ function planBlock(
         '',
         'The plan is already accepted and its numbers are stable: `planIndex` is the number printed',
         'here, written as a plain JSON number (stop 3 is `"planIndex": 3`, never `"03"`). Do not confuse',
-        'these stop numbers with the `file #` column of the changed files list below.',
+        'these stop numbers with the `file #` column of the changed files list, which lives in the shared',
+        'pull request file of this task.',
         'Fill in the stops marked as your target and no others.',
         '',
         '| stop # | tier | title | |',

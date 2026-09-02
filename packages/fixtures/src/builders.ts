@@ -1,5 +1,6 @@
-import type { Comment, FileAnchor, HostId, Lens, LensZone, ReviewUser, Thread } from '@sherpa/protocol';
+import type { Comment, FileAnchor, HostId, Lens, LensZone, PrDiff, ReviewUser, Thread, ThreadPin } from '@sherpa/protocol';
 
+import type { FixtureIteration } from './data/types.js';
 import { makeFileId } from './patch.js';
 
 /**
@@ -51,6 +52,8 @@ export interface ThreadSpec {
     resolved?: boolean;
     resolvedBy?: string;
     outdated?: boolean;
+    /** Iteration of the original anchor. PR threads have no pin. */
+    pinnedTo?: ThreadPin;
     root: Comment;
 }
 
@@ -61,6 +64,7 @@ export function thread(spec: ThreadSpec): Thread {
         resolved: spec.resolved ?? false,
         resolvedBy: spec.resolvedBy ?? null,
         outdated: spec.outdated ?? false,
+        pinnedTo: spec.pinnedTo ?? null,
         root: spec.root,
     };
 }
@@ -96,4 +100,24 @@ export function lens(spec: LensSpec): Lens {
         note: spec.note ?? null,
         zones: spec.zones?.map((zone) => ({ ...zone, paths: [...zone.paths] })) ?? null,
     };
+}
+
+/**
+ * Single-iteration fixture: it has no previous iterations, so the host rejects slices.
+ * `createdAt` is when the iteration appeared on the host (usually `pr.updatedAt`).
+ */
+export function singleIteration(diff: PrDiff, threads: Thread[], createdAt: string): FixtureIteration[] {
+    return [
+        {
+            iteration: {
+                diffId: diff.diffId,
+                baseCommit: diff.baseCommit,
+                headCommit: diff.headCommit,
+                createdAt,
+            },
+            diff,
+            threads,
+            replaces: null,
+        },
+    ];
 }

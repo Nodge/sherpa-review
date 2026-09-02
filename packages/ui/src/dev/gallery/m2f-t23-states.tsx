@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Comment, Thread } from '@sherpa/protocol';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 
@@ -9,7 +9,7 @@ import { ThreadList } from '../../threads/thread-list.tsx';
 import type { ComposerSnapshot } from '../../threads/store.js';
 import { createThreadStore } from '../../threads/store.js';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const THREAD = firstThread();
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const SAVED_AT = Date.parse('2026-08-28T14:02:00');

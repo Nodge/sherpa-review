@@ -55,6 +55,7 @@ function entry(stopId: string, groups: readonly RouteFileGroup[]): RouteEntry {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        change: null,
     };
     return {
         kind: 'stop',

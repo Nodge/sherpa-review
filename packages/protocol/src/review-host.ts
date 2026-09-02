@@ -1,4 +1,16 @@
-import type { CommentDraft, Comment, FileContent, HostId, Lens, PrDiff, PrMeta, PublishResult, Thread, Verdict } from './review.js';
+import type {
+    CommentDraft,
+    Comment,
+    FileContent,
+    HostId,
+    Iteration,
+    Lens,
+    PrDiff,
+    PrMeta,
+    PublishResult,
+    Thread,
+    Verdict,
+} from './review.js';
 
 /**
  * Host adapter interface (requirements §1/C4, brief §4a). One abstraction, implemented by:
@@ -10,11 +22,27 @@ export interface ReviewHost {
     getPr(): Promise<PrMeta>;
 
     /**
-     * Iteration diff. With no arguments, returns the host's active iteration. Explicit base/head request
-     * an arbitrary slice (M4, stacked/base selection). The adapter may reject
-     * an unsupported combination with a clear error.
+     * PR iterations in order of appearance, with exactly one active iteration, always last. Statuses are
+     * only `active`/`previous`: the adapter never returns `gone` (see `iterationStatusSchema`).
+     * Without `capabilities.iterations`, the list contains one active iteration.
      */
-    getDiff(opts?: { base?: string; head?: string }): Promise<PrDiff>;
+    listIterations(): Promise<Iteration[]>;
+
+    /**
+     * Iteration diff. Without arguments, the host's active iteration. `{base, head}` gives a slice
+     * between 2 listed iterations (interdiff: what changed from `base` to `head`),
+     * with their `diffId` values as arguments. A slice with an unknown iteration or without
+     * `capabilities.iterations` is rejected with a clear error. The slice's file paths are
+     * a subset of the union of both iterations' paths.
+     */
+    getDiff(slice?: { base: HostId; head: HostId }): Promise<PrDiff>;
+
+    /**
+     * Iteration subscription: the callback receives the full list on every change
+     * (new push, force-push) and once immediately after subscribing. Transport and
+     * guarantees match `watchThreads` (polling, convergence without reactivity).
+     */
+    watchIterations(onChange: (iterations: Iteration[]) => void): () => void;
 
     /** One-time thread read: current state without a subscription. */
     getThreads(): Promise<Thread[]>;

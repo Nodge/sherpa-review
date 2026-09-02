@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Comment, Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -18,7 +18,7 @@ import { openReply, ThreadList } from './thread-list.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');
 

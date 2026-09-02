@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -19,7 +19,7 @@ import { DiffWorkspace } from './full-diff.tsx';
  * receives the previous range.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE = (() => {
     const file = DATA.diff.files.find((candidate) => candidate.path === 'services/orders/src/domain/edit-window.ts');
     if (file === undefined) {

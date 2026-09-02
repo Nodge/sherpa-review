@@ -22,6 +22,7 @@ const THREAD: Thread = {
     resolved: false,
     resolvedBy: null,
     outdated: false,
+    pinnedTo: null,
     root: { ...CREATED, id: 'root-1', draft: false },
 };
 

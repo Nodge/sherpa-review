@@ -60,6 +60,8 @@ export {
     releaseStaleManifest,
     removeOwnManifest,
 } from './manifest.js';
+export type { IterationStoreOptions, StoredIteration } from './iteration-store.js';
+export { IterationStore, rememberIterationDiff } from './iteration-store.js';
 export type { Migration } from './migrations.js';
 export { MIGRATIONS, SCHEMA_VERSION_KEY } from './migrations.js';
 export {

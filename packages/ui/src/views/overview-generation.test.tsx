@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { UiRouteState } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { ViewFrame } from './view-frames.tsx';
  * Summary card shows and whether a generation card appears in the right rail.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 
 function state(name: 'medium' | 'small', phase: 'none' | 'reading' | 'filling' | 'ready' | 'failed'): UiRouteState {

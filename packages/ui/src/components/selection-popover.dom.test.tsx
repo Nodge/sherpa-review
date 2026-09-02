@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseFileDiff } from '../diff/parse.js';
 import { SelectionPopover } from './selection-popover.tsx';
 
+const DIFF_ID = 'iter-1';
 const FILE = {
     fileId: 'f1',
     path: 'src/cache.ts',
@@ -81,6 +82,7 @@ describe('SelectionPopover DOM measurements', () => {
             root.render(
                 <SelectionPopover
                     host={host}
+                    diffId={DIFF_ID}
                     file={FILE}
                     model={MODEL}
                     selection={SELECTION}

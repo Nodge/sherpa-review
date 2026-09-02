@@ -57,6 +57,9 @@ describe('skill package build', () => {
         expect(skill).toContain('bin/sherpa.mjs worker next --pr');
         expect(skill).toContain('--model');
         expect(skill).toContain('DONE');
+        // Shared task context rule: a path under `shared/` is read once per session.
+        expect(skill).toContain('`shared/`');
+        expect(skill).toContain('once per session');
     });
 
     /**

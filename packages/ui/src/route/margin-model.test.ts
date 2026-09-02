@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -25,7 +25,7 @@ import {
  * this test catches it before anyone has to spot it in a screenshot.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
     if (snapshot === null) {

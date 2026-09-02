@@ -1,5 +1,5 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { ChatAnchor, RouteSnapshot } from '@sherpa/protocol';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
+import type { RouteSnapshot, UiChatAskAnchor } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
@@ -18,7 +18,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * in the `chat-empty` state (M3-T6): the panel renders them itself.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 function readySnapshot(): RouteSnapshot {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
@@ -93,8 +93,8 @@ function StripState({ actions }: { readonly actions: MarginStripActions }) {
     return <div className="gallery__viewport">{strips.renderAfterLine(STRIP_SPAN.side, STRIP_SPAN.end)}</div>;
 }
 
-const NOT_PENDING = (_anchor: ChatAnchor): boolean => false;
-const PENDING = (_anchor: ChatAnchor): boolean => true;
+const NOT_PENDING = (_anchor: UiChatAskAnchor): boolean => false;
+const PENDING = (_anchor: UiChatAskAnchor): boolean => true;
 
 export const M3_T9_ROUTE_STATES: readonly RouteGalleryState[] = [
     {

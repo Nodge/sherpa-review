@@ -1,10 +1,10 @@
-import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
+import type { FileDiff, HostId, LensZone, Thread, ThreadPin } from '@sherpa/protocol';
 
 import { anchor, bot, comment, human, lens, thread } from '../builders.js';
 import { lockLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff, totalChanges } from '../patch.js';
-import type { FixtureData } from './types.js';
+import type { FixtureData, FixtureInterdiff, FixtureIteration } from './types.js';
 
 /**
  * Main fixture: PR from the design handoff, "Enforce the 30-minute edit window for scheduled
@@ -21,7 +21,33 @@ const HEAD_COMMIT = '9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316';
 export const MEDIUM_TOTALS = { files: 18, additions: 806, deletions: 56 } as const;
 
 /** Iteration for the route in `route-medium.ts`: anchors and the snapshot must reference it. */
-export { DIFF_ID as MEDIUM_DIFF_ID, HEAD_COMMIT as MEDIUM_HEAD_COMMIT };
+export { BASE_COMMIT as MEDIUM_BASE_COMMIT, DIFF_ID as MEDIUM_DIFF_ID, HEAD_COMMIT as MEDIUM_HEAD_COMMIT };
+
+/**
+ * The second iteration is a normal push on top of the first (README §9: "the PR is now on a71d4e2").
+ * The third is a force-push on top of the second, which makes the host stop listing the second.
+ * The base stays put: there is no rebase in this scenario.
+ */
+const DIFF_ID_V2 = '182961';
+const HEAD_COMMIT_V2 = 'a71d4e2f83b6c05194ad7e2f6b8c3109d4e5a72b';
+const DIFF_ID_V3 = '183044';
+const HEAD_COMMIT_V3 = 'c4f9b17e5a2d08361bf4e7c9a05d2836f1b7e409';
+
+export { DIFF_ID_V2 as MEDIUM_DIFF_ID_V2, DIFF_ID_V3 as MEDIUM_DIFF_ID_V3 };
+export { HEAD_COMMIT_V2 as MEDIUM_HEAD_COMMIT_V2, HEAD_COMMIT_V3 as MEDIUM_HEAD_COMMIT_V3 };
+
+const CREATED_AT_V1 = '2026-08-19T16:42:00.000Z';
+const CREATED_AT_V2 = '2026-08-21T11:05:00.000Z';
+const CREATED_AT_V3 = '2026-08-21T15:20:00.000Z';
+
+/** First-iteration thread pin: it does not move with the anchor (SPEC §4.5 "pinned to 9f3c1ab"). */
+const V1_PIN: ThreadPin = { diffId: DIFF_ID, commit: HEAD_COMMIT };
+
+/** File removed from the PR with the second push: the author moved the payment changes to a separate PR. */
+const DEPARTED_PATH = 'services/orders/src/payments/card-token.ts';
+
+/** File introduced in the second iteration. */
+const ADDED_PATH_V2 = 'services/orders/src/api/rejection-status.ts';
 
 const REVIEWER = human('alice', 'Alice Ingram');
 const AUTHOR = human('avery', 'Avery Vance');
@@ -1034,7 +1060,7 @@ const HAND_WRITTEN: readonly FileSpec[] = [
  * The lockfile brings the PR up to the declared `+806 −56`: a real `pnpm-lock.yaml` in such a PR
  * does contain hundreds of generated lines, and the header counts must match the handoff.
  */
-function lockfile(diffId: string, rest: readonly FileDiff[]): FileDiff {
+function lockCounts(rest: readonly FileDiff[]): { additions: number; deletions: number } {
     const written = totalChanges(rest);
     const additions = MEDIUM_TOTALS.additions - written.additions;
     const deletions = MEDIUM_TOTALS.deletions - written.deletions;
@@ -1043,8 +1069,15 @@ function lockfile(diffId: string, rest: readonly FileDiff[]): FileDiff {
             `medium fixture exceeds its declared size: hand-written +${String(written.additions)} −${String(written.deletions)}`,
         );
     }
+    return { additions, deletions };
+}
 
-    return makeFileDiff(diffId, {
+/**
+ * Lockfile hunk: counters set the line numbers, and the generator offset sets the content.
+ * Rebuilding the lockfile in the next iteration changes the offset and keeps the line numbers.
+ */
+function lockSpec(counts: { additions: number; deletions: number }, addedOffset: number): FileSpec {
+    return {
         path: 'pnpm-lock.yaml',
         changeType: 'modify',
         generated: true,
@@ -1055,25 +1088,506 @@ function lockfile(diffId: string, rest: readonly FileDiff[]): FileDiff {
                 section: 'packages:',
                 lines: [
                     ' packages:',
-                    ...lockLines('-', deletions, 3),
-                    ...lockLines('+', additions, 41),
+                    ...lockLines('-', counts.deletions, 3),
+                    ...lockLines('+', counts.additions, addedOffset),
                 ],
             },
         ],
-    });
+    };
 }
+
+/** Lockfile generator offsets by iteration: identical line numbers, entirely different content. */
+const LOCK_OFFSET_V1 = 41;
+const LOCK_OFFSET_V2 = 137;
+
+/** Lockfile counts come from the first iteration: later pushes rebuild it without making it longer. */
+const LOCK_COUNTS = lockCounts(HAND_WRITTEN.map((spec) => makeFileDiff(DIFF_ID, spec)));
 
 function files(): FileDiff[] {
     const written = HAND_WRITTEN.map((spec) => makeFileDiff(DIFF_ID, spec));
-    return [...written, lockfile(DIFF_ID, written)];
+    return [...written, makeFileDiff(DIFF_ID, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V1))];
+}
+
+/*
+ * Second push (README §9). It touches files in 3 stops of the v1 route: `edit-policy.ts` (stop 02),
+ * `handlers.ts` with the new `rejection-status.ts` and removed `card-token.ts` (stop 03), and
+ * the rebuilt lockfile (stop 06, no lines of the previous block remain, hence `new`).
+ * Each edit addresses a comment in the first-iteration threads.
+ */
+
+/** `default` in `switch` to address the linter comment, plus rejection reasons in a separate constant. */
+const EDIT_POLICY_V2: FileSpec = {
+    path: 'services/orders/src/domain/policies/edit-policy.ts',
+    blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/policies/edit-policy.ts',
+    changeType: 'modify',
+    hunks: [
+        {
+            oldStart: 1,
+            newStart: 1,
+            lines: [
+                ' import { Order } from "../order";',
+                '-import { isWithinHours } from "../../infra/time";',
+                '+import { EditWindow, EditWindowInput, describeState } from "../edit-window";',
+                ' ',
+                ' export interface EditDecision {',
+                '     readonly allowed: boolean;',
+                '-    readonly reason?: string;',
+                '+    readonly reason: EditRejection | null;',
+                ' }',
+                '+',
+                '+export const EDIT_REJECTIONS = ["edit-window-closed", "already-dispatched", "not-scheduled"] as const;',
+                '+',
+                '+export type EditRejection = (typeof EDIT_REJECTIONS)[number];',
+            ],
+        },
+        {
+            oldStart: 24,
+            newStart: 28,
+            section: 'export class EditPolicy',
+            lines: [
+                ' export class EditPolicy {',
+                '-    constructor(private readonly windowHours: number) {}',
+                '+    constructor(private readonly window: EditWindow) {}',
+                ' ',
+                '     decide(order: Order): EditDecision {',
+                '-        if (!order.slot) {',
+                '-            return { allowed: false, reason: "no slot" };',
+                '-        }',
+                '-        if (isWithinHours(order.checkoutAt, this.windowHours)) {',
+                '-            return { allowed: true };',
+                '-        }',
+                '-        return { allowed: false };',
+                '+        const input: EditWindowInput = { order, slot: order.slot };',
+                '+        const state = this.window.state(input);',
+                '+',
+                '+        switch (state.kind) {',
+                '+            case "open":',
+                '+                return { allowed: true, reason: null };',
+                '+            case "closed":',
+                '+                return {',
+                '+                    allowed: false,',
+                '+                    reason: state.cause === "dispatch" ? "already-dispatched" : "edit-window-closed",',
+                '+                };',
+                '+            case "not-applicable":',
+                '+                return { allowed: false, reason: "not-scheduled" };',
+                '+            default: {',
+                '+                const unreachable: never = state;',
+                '+                throw new Error(`unexpected state: ${String(unreachable)}`);',
+                '+            }',
+                '+        }',
+                '     }',
+                '+',
+                '+    remainingMs(order: Order): number {',
+                '+        return this.window.remainingMs({ order, slot: order.slot });',
+                '+    }',
+                '+',
+                '+    /**',
+                '+     * Explanation for the customer-facing screen. The API never returns it — it maps the',
+                '+     * rejection code instead, so that the wording can change without an API version bump.',
+                '+     */',
+                '+    explain(order: Order): string {',
+                '+        return describeState(this.window.state({ order, slot: order.slot }));',
+                '+    }',
+                ' }',
+            ],
+        },
+    ],
+};
+
+/** A separate function builds the rejection body: `remainingMs` is sent only for a closed window. */
+const HANDLERS_V2: FileSpec = {
+    path: 'services/orders/src/api/handlers.ts',
+    changeType: 'modify',
+    hunks: [
+        {
+            oldStart: 1,
+            newStart: 1,
+            lines: [
+                ' import { Request, Response } from "../infra/http";',
+                '-import { EditPolicy } from "../domain/policies/edit-policy";',
+                '+import { EditPolicy, EditRejection } from "../domain/policies/edit-policy";',
+                '+import { rejectionBody } from "./rejection-status";',
+                '+import { recordEdit, recordEditWindow } from "../payments/pci-audit";',
+                '+import { editWindowSchema } from "./schemas";',
+                ' ',
+                ' const REJECTION_STATUS: Record<EditRejection, number> = {',
+                '-    "no slot": 400,',
+                '+    "edit-window-closed": 409,',
+                '+    "already-dispatched": 409,',
+                '+    "not-scheduled": 400,',
+                ' };',
+            ],
+        },
+        {
+            oldStart: 41,
+            newStart: 46,
+            section: 'export async function patchOrder',
+            lines: [
+                ' export async function patchOrder(req: Request, res: Response): Promise<void> {',
+                '-    const order = await orders.load(req.params.orderId);',
+                '-    const decision = policy.decide(order);',
+                '-    if (!decision.allowed) {',
+                '-        res.status(400).json({ error: decision.reason });',
+                '+    const body = editWindowSchema.parse(req.body);',
+                '+    const order = await orders.load(req.params.orderId);',
+                '+    const decision = policy.decide(order);',
+                '+',
+                '+    if (!decision.allowed && decision.reason !== null) {',
+                '+        res.status(REJECTION_STATUS[decision.reason]).json(rejectionBody(decision.reason, policy, order));',
+                '         return;',
+                '     }',
+                ' ',
+                '-    await orders.apply(order, req.body);',
+                '+    await orders.apply(order, body);',
+                '+    recordEdit(order, req.user.login);',
+                '     res.status(204).end();',
+                ' }',
+            ],
+        },
+        {
+            oldStart: 68,
+            newStart: 76,
+            section: 'export async function getEditWindow',
+            lines: [
+                ' export async function getEditWindow(req: Request, res: Response): Promise<void> {',
+                '     const order = await orders.load(req.params.orderId);',
+                '-    res.json({ editable: order.editable === true });',
+                '+    const decision = policy.decide(order);',
+                '+',
+                '+    res.json({',
+                '+        editable: decision.allowed,',
+                '+        reason: decision.reason,',
+                '+        remainingMs: policy.remainingMs(order),',
+                '+        explanation: policy.explain(order),',
+                '+    });',
+                '+',
+                '+    if (!decision.allowed) {',
+                '+        recordEditWindow(order, 0);',
+                '+    }',
+                ' }',
+            ],
+        },
+    ],
+};
+
+/** New file in the second iteration. */
+const REJECTION_STATUS_V2: FileSpec = {
+    path: ADDED_PATH_V2,
+    changeType: 'add',
+    hunks: [
+        {
+            oldStart: 0,
+            newStart: 1,
+            lines: [
+                '+import { Order } from "../domain/order";',
+                '+import { EditPolicy, EditRejection } from "../domain/policies/edit-policy";',
+                '+',
+                '+/** Body of a rejected edit; `remainingMs` is present only while the window is still counting. */',
+                '+export interface RejectionBody {',
+                '+    readonly error: EditRejection;',
+                '+    readonly remainingMs?: number;',
+                '+}',
+                '+',
+                '+/**',
+                '+ * The remaining time is reported for `edit-window-closed` only: for the other two rejections it',
+                '+ * is always 0 and reads like a bug on the client.',
+                '+ */',
+                '+export function rejectionBody(reason: EditRejection, policy: EditPolicy, order: Order): RejectionBody {',
+                '+    if (reason !== "edit-window-closed") {',
+                '+        return { error: reason };',
+                '+    }',
+                '+    return { error: reason, remainingMs: policy.remainingMs(order) };',
+                '+}',
+            ],
+        },
+    ],
+};
+
+/** Third-iteration force-push: one README line added to the second-iteration content. */
+const README_V3: FileSpec = {
+    path: 'services/orders/README.md',
+    changeType: 'modify',
+    hunks: [
+        {
+            oldStart: 22,
+            newStart: 22,
+            section: '## Domain',
+            lines: [
+                ' ## Domain',
+                ' ',
+                ' - `order.ts` — the aggregate root.',
+                '-- `policies/edit-policy.ts` — whether an order may still be edited (see the config key',
+                '-  `checkout.edit_window_hours`).',
+                '+- `edit-window.ts` — the 30-minute editing window, see [docs](docs/edit-window.md).',
+                '+- `policies/edit-policy.ts` — whether an order may still be edited.',
+                '+- `infra/clock.ts` — the injectable time source used by the window.',
+            ],
+        },
+        {
+            oldStart: 40,
+            newStart: 41,
+            section: '## Testing',
+            lines: [
+                ' ## Testing',
+                ' ',
+                '-Unit tests only; the domain layer has no I/O.',
+                '+Unit tests only; the domain layer has no I/O. Anything that needs the current time takes a',
+                '+`Clock` — use `FrozenClock` in tests and never `Date.now()` in `domain/`.',
+                '+',
+                '+```sh',
+                '+pnpm test services/orders',
+                '+pnpm test services/orders -- --grep "edit window"',
+                '+pnpm test services/orders -- --grep "rejection"',
+                '+```',
+                '+',
+                '+The edit-window contract tests run as a separate CI job so that a failure points at the',
+                '+window rather than at the whole checkout suite.',
+            ],
+        },
+    ],
+};
+
+function replaceSpecs(base: readonly FileSpec[], replacements: readonly FileSpec[]): FileSpec[] {
+    const byPath = new Map(replacements.map((spec) => [spec.path, spec] as const));
+    return base.map((spec) => byPath.get(spec.path) ?? spec);
+}
+
+/** Iteration files after the push: edits over the first, minus the removed file, plus the new file and lockfile. */
+function filesAfterPush(diffId: HostId, replacements: readonly FileSpec[]): FileDiff[] {
+    const specs = [
+        ...replaceSpecs(
+            HAND_WRITTEN.filter((spec) => spec.path !== DEPARTED_PATH),
+            replacements,
+        ),
+        REJECTION_STATUS_V2,
+    ];
+    const written = specs.map((spec) => makeFileDiff(diffId, spec));
+    return [...written, makeFileDiff(diffId, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V2))];
+}
+
+/**
+ * Slice between iterations: `diffId` is the head iteration, `baseCommit` is its base, and slice files have their own `fileId`
+ * (`prDiffSchema` contract), derived from the iteration pair rather than one iteration.
+ */
+function slice(
+    base: { diffId: HostId; headCommit: string },
+    head: { diffId: HostId; headCommit: string },
+    specs: readonly FileSpec[],
+): FixtureInterdiff {
+    const key = `${base.diffId}..${head.diffId}`;
+    return {
+        base: base.diffId,
+        head: head.diffId,
+        diff: {
+            diffId: head.diffId,
+            baseCommit: base.headCommit,
+            headCommit: head.headCommit,
+            files: specs.map((spec) => makeFileDiff(key, spec)),
+        },
+    };
+}
+
+/**
+ * Hunks of the slice from the first iteration to the second. Left-side numbers are file lines in the first iteration,
+ * right-side numbers are lines in the second. Every changed right-side line falls inside a second-iteration hunk
+ * (checked by the guard test in `iterations.test.ts`).
+ */
+const SLICE_V1_V2: readonly FileSpec[] = [
+    {
+        path: 'services/orders/src/domain/policies/edit-policy.ts',
+        changeType: 'modify',
+        hunks: [
+            {
+                oldStart: 8,
+                newStart: 8,
+                lines: [
+                    ' ',
+                    '-export type EditRejection = "edit-window-closed" | "already-dispatched" | "not-scheduled";',
+                    '+export const EDIT_REJECTIONS = ["edit-window-closed", "already-dispatched", "not-scheduled"] as const;',
+                    '+',
+                    '+export type EditRejection = (typeof EDIT_REJECTIONS)[number];',
+                ],
+            },
+            {
+                oldStart: 42,
+                newStart: 44,
+                section: 'export class EditPolicy',
+                lines: [
+                    '                 return { allowed: false, reason: "not-scheduled" };',
+                    '+            default: {',
+                    '+                const unreachable: never = state;',
+                    '+                throw new Error(`unexpected state: ${String(unreachable)}`);',
+                    '+            }',
+                    '         }',
+                ],
+            },
+        ],
+    },
+    {
+        path: 'services/orders/src/api/handlers.ts',
+        changeType: 'modify',
+        hunks: [
+            {
+                oldStart: 2,
+                newStart: 2,
+                lines: [
+                    ' import { EditPolicy, EditRejection } from "../domain/policies/edit-policy";',
+                    '+import { rejectionBody } from "./rejection-status";',
+                    ' import { recordEdit, recordEditWindow } from "../payments/pci-audit";',
+                ],
+            },
+            {
+                oldStart: 50,
+                newStart: 51,
+                section: 'export async function patchOrder',
+                lines: [
+                    '     if (!decision.allowed && decision.reason !== null) {',
+                    '-        res.status(REJECTION_STATUS[decision.reason]).json({',
+                    '-            error: decision.reason,',
+                    '-            remainingMs: policy.remainingMs(order),',
+                    '-        });',
+                    '+        res.status(REJECTION_STATUS[decision.reason]).json(rejectionBody(decision.reason, policy, order));',
+                    '         return;',
+                ],
+            },
+        ],
+    },
+    REJECTION_STATUS_V2,
+    {
+        // The payment change moved to a separate PR, so the slice restores the file to its base state.
+        path: DEPARTED_PATH,
+        changeType: 'modify',
+        hunks: [
+            {
+                oldStart: 44,
+                newStart: 44,
+                section: 'export function reauthorize',
+                lines: [
+                    ' export function reauthorize(order: Order, token: CardToken): Promise<AuthResult> {',
+                    '-    log.info(`reauthorize ${order.id} ${mask(token.pan)}`);',
+                    '-',
+                    '-    if (token.expiresAt < order.checkoutAt) {',
+                    '-        return Promise.resolve({ ok: false, reason: "token-expired" });',
+                    '-    }',
+                    '+    log.info(`reauthorize ${order.id} ${token.pan}`);',
+                    ' ',
+                    '-    return psp.authorize({ amount: order.total, token: token.id });',
+                    '+    return psp.authorize({ amount: order.total, pan: token.pan });',
+                    ' }',
+                    '-',
+                    '-function mask(pan: string): string {',
+                    '-    return `**** **** **** ${pan.slice(-4)}`;',
+                    '-}',
+                ],
+            },
+        ],
+    },
+    {
+        path: 'pnpm-lock.yaml',
+        changeType: 'modify',
+        generated: true,
+        hunks: [
+            {
+                oldStart: 14,
+                newStart: 14,
+                section: 'packages:',
+                lines: [
+                    ' packages:',
+                    ...lockLines('-', LOCK_COUNTS.additions, LOCK_OFFSET_V1),
+                    ...lockLines('+', LOCK_COUNTS.additions, LOCK_OFFSET_V2),
+                ],
+            },
+        ],
+    },
+];
+
+/** Force-push on top of the second iteration touches only README. All other content is the same. */
+const SLICE_V2_V3: readonly FileSpec[] = [
+    {
+        path: 'services/orders/README.md',
+        changeType: 'modify',
+        hunks: [
+            {
+                oldStart: 48,
+                newStart: 48,
+                section: '## Testing',
+                lines: [
+                    ' pnpm test services/orders -- --grep "edit window"',
+                    '+pnpm test services/orders -- --grep "rejection"',
+                ],
+            },
+        ],
+    },
+];
+
+/** Slice from the first iteration to the third: second-push content plus the force-push edit. */
+const SLICE_V1_V3: readonly FileSpec[] = [...SLICE_V1_V2, ...SLICE_V2_V3];
+
+function iterations(): FixtureIteration[] {
+    return [
+        {
+            iteration: {
+                diffId: DIFF_ID,
+                baseCommit: BASE_COMMIT,
+                headCommit: HEAD_COMMIT,
+                createdAt: CREATED_AT_V1,
+            },
+            diff: { diffId: DIFF_ID, baseCommit: BASE_COMMIT, headCommit: HEAD_COMMIT, files: files() },
+            threads: threads(DIFF_ID),
+            replaces: null,
+        },
+        {
+            iteration: {
+                diffId: DIFF_ID_V2,
+                baseCommit: BASE_COMMIT,
+                headCommit: HEAD_COMMIT_V2,
+                createdAt: CREATED_AT_V2,
+            },
+            diff: {
+                diffId: DIFF_ID_V2,
+                baseCommit: BASE_COMMIT,
+                headCommit: HEAD_COMMIT_V2,
+                files: filesAfterPush(DIFF_ID_V2, [EDIT_POLICY_V2, HANDLERS_V2]),
+            },
+            threads: threads(DIFF_ID_V2, true),
+            replaces: null,
+        },
+        {
+            iteration: {
+                diffId: DIFF_ID_V3,
+                baseCommit: BASE_COMMIT,
+                headCommit: HEAD_COMMIT_V3,
+                createdAt: CREATED_AT_V3,
+            },
+            diff: {
+                diffId: DIFF_ID_V3,
+                baseCommit: BASE_COMMIT,
+                headCommit: HEAD_COMMIT_V3,
+                files: filesAfterPush(DIFF_ID_V3, [EDIT_POLICY_V2, HANDLERS_V2, README_V3]),
+            },
+            threads: threads(DIFF_ID_V3, true),
+            // Force-push: the second iteration disappears from the host list, and the server marks it `gone`.
+            replaces: DIFF_ID_V2,
+        },
+    ];
+}
+
+function interdiffs(): FixtureInterdiff[] {
+    const v1 = { diffId: DIFF_ID, headCommit: HEAD_COMMIT };
+    const v2 = { diffId: DIFF_ID_V2, headCommit: HEAD_COMMIT_V2 };
+    const v3 = { diffId: DIFF_ID_V3, headCommit: HEAD_COMMIT_V3 };
+    return [slice(v1, v2, SLICE_V1_V2), slice(v2, v3, SLICE_V2_V3), slice(v1, v3, SLICE_V1_V3)];
 }
 
 /**
  * Threads: 4 human (including resolved, outdated, and a deep branching chain),
  * 2 bot threads and one PR-level thread. Ids follow the host convention: inline ids are positive,
  * PR-level ids are negative (M1-T1 spike). Code must not assume `id > 0`.
+ *
+ * `second` contains the same threads as seen after the push: anchors are reanchored to its files,
+ * `pinnedTo` stays on v1, and threads on changed ranges are marked `outdated`.
  */
-function threads(): Thread[] {
+function threads(diffId: HostId, second = false): Thread[] {
     const deepChain = comment({
         id: '4820113',
         author: KAI,
@@ -1136,13 +1650,28 @@ function threads(): Thread[] {
         ],
     });
 
+    // The author's reply arrives with the push: it addresses iris's comment with a completed fix.
+    const authorFollowUp = comment({
+        id: '4820288',
+        author: AUTHOR,
+        body: 'Done in this push: `remainingMs` is only returned for `edit-window-closed`, the body is built by `api/rejection-status.ts`.',
+        createdAt: '2026-08-21T10:58:00.000Z',
+    });
+
     return [
         thread({
-            anchor: anchor(DIFF_ID, 'services/orders/src/domain/edit-window.ts', { side: 'new', line: 24 }),
+            anchor: anchor(diffId, 'services/orders/src/domain/edit-window.ts', { side: 'new', line: 24 }),
+            pinnedTo: V1_PIN,
             root: deepChain,
         }),
         thread({
-            anchor: anchor(DIFF_ID, 'services/orders/src/api/handlers.ts', { side: 'new', line: 48, size: 4 }),
+            // The push touched range 48–51 of the first iteration: the anchor moves to the nearest
+            // surviving line, and the thread is marked outdated (SPEC §2.17).
+            anchor: second
+                ? anchor(diffId, 'services/orders/src/api/handlers.ts', { side: 'new', line: 49 })
+                : anchor(diffId, 'services/orders/src/api/handlers.ts', { side: 'new', line: 48, size: 4 }),
+            outdated: second,
+            pinnedTo: V1_PIN,
             root: comment({
                 id: '4820242',
                 author: IRIS,
@@ -1154,12 +1683,14 @@ function threads(): Thread[] {
                         author: AUTHOR,
                         body: 'Right, I will only add the field for `edit-window-closed`.',
                         createdAt: '2026-08-18T12:19:00.000Z',
+                        replies: second ? [authorFollowUp] : [],
                     }),
                 ],
             }),
         }),
         thread({
-            anchor: anchor(DIFF_ID, 'services/orders/src/infra/logging.ts', { side: 'new', line: 34 }),
+            anchor: anchor(diffId, 'services/orders/src/infra/logging.ts', { side: 'new', line: 34 }),
+            pinnedTo: V1_PIN,
             resolved: true,
             resolvedBy: AUTHOR.login,
             root: comment({
@@ -1178,7 +1709,8 @@ function threads(): Thread[] {
             }),
         }),
         thread({
-            anchor: anchor(DIFF_ID, 'services/orders/src/domain/order.ts', { side: 'old', line: 38 }),
+            anchor: anchor(diffId, 'services/orders/src/domain/order.ts', { side: 'old', line: 38 }),
+            pinnedTo: V1_PIN,
             outdated: true,
             root: comment({
                 id: '4820096',
@@ -1188,7 +1720,11 @@ function threads(): Thread[] {
             }),
         }),
         thread({
+            // The file left the PR with the second push, so the anchor stays on the first-iteration file.
+            // The UI groups these threads under "on files no longer present" (SPEC §2.17).
             anchor: anchor(DIFF_ID, 'services/orders/src/payments/card-token.ts', { side: 'new', line: 45 }),
+            outdated: second,
+            pinnedTo: V1_PIN,
             root: comment({
                 id: '4820260',
                 author: AI_REVIEW,
@@ -1210,7 +1746,13 @@ function threads(): Thread[] {
             }),
         }),
         thread({
-            anchor: anchor(DIFF_ID, 'services/orders/src/domain/policies/edit-policy.ts', { side: 'new', line: 33 }),
+            // Unchanged line: the second push added declarations above it, shifting the anchor by two
+            // lines. `pinnedTo` still points to the first-iteration commit.
+            anchor: anchor(diffId, 'services/orders/src/domain/policies/edit-policy.ts', {
+                side: 'new',
+                line: second ? 35 : 33,
+            }),
+            pinnedTo: V1_PIN,
             root: comment({
                 id: '4820263',
                 author: LINT_BOT,
@@ -1319,16 +1861,12 @@ export function makeMediumFixture(): FixtureData {
             state: 'open',
             statusLabel: 'review_in_progress',
             checks: 'passed',
-            updatedAt: '2026-08-19T16:42:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
+            updatedAt: CREATED_AT_V1,
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: true },
         },
-        diff: {
-            diffId: DIFF_ID,
-            baseCommit: BASE_COMMIT,
-            headCommit: HEAD_COMMIT,
-            files: files(),
-        },
-        threads: threads(),
+        iterations: iterations(),
+        interdiffs: interdiffs(),
+        // Lenses describe the first iteration. The host would recalculate ownership and PCI after the push.
         ownership: lens({ id: 'mine', label: 'My files', paths: MY_FILES, zones: OWNERSHIP_ZONES }),
         extraLenses: [lens({ id: 'pci', label: 'PCI DSS', paths: PCI_FILES })],
         currentUser: REVIEWER,

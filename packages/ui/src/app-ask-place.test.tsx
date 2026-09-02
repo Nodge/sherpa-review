@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
@@ -20,7 +20,7 @@ import type { Store, StoreSnapshot } from './store.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = (() => {
     const state = routeFixtures('medium')?.states.ready ?? null;
     if (state?.snapshot == null) {
@@ -150,6 +150,7 @@ function mountApp(
         reviewHost: 'fixture',
         pr: DATA.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        iterations: [],
     };
     const snapshot: StoreSnapshot = {
         connection: 'online',

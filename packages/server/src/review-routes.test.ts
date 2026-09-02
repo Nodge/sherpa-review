@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
 import type { UiState } from '@sherpa/protocol';
@@ -27,6 +28,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { selectReviewHost } from './hosts/select.js';
+import { databasePathFor } from './paths.js';
 import type { EditorOptions } from './review-routes.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
@@ -36,6 +38,12 @@ import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-su
  * Server review endpoints and the SSE event for thread changes (M1-T10), using a fixture host:
  * prKey `fixture-medium` selects it through the same mechanism as a hosted review key.
  */
+
+interface IterationRow {
+    diff_id: string;
+    status: string;
+    diff_json: string;
+}
 
 const FIXTURE_PR = 'fixture-medium';
 const UNKNOWN_PR = 'github-777';
@@ -99,6 +107,31 @@ describe('server review endpoints', () => {
         expect(threads.threads).toEqual(await expected.getThreads());
         expect(lenses.ownership).toEqual(await expected.ownershipLens());
         expect(lenses.extra).toEqual(await expected.extraLenses());
+    });
+
+    it('the active iteration diff is stored in local patch storage', async () => {
+        const server = await start(FIXTURE_PR);
+        const expected = await makeFixtureHost('medium').getDiff();
+
+        await (await get(server.port, UI_ENDPOINTS.reviewDiff, server.token)).json();
+
+        // The write does not block the endpoint response, so wait for it (M4-T3).
+        const db = new DatabaseSync(databasePathFor(sherpaDir, FIXTURE_PR), { readOnly: true });
+        try {
+            const query = db.prepare('SELECT diff_id, status, diff_json FROM iterations');
+            let row: IterationRow | undefined;
+            const deadline = Date.now() + 2000;
+            while (row === undefined && Date.now() < deadline) {
+                row = query.get() as IterationRow | undefined;
+                await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+
+            expect(row?.diff_id).toBe(expected.diffId);
+            expect(row?.status).toBe('active');
+            expect(JSON.parse(row?.diff_json ?? 'null')).toEqual(expected);
+        } finally {
+            db.close();
+        }
     });
 
     it('includes the host name in UI state', async () => {

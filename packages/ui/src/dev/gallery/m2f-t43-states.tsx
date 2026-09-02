@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -15,7 +15,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * with `status: 'failed'` and a supplied `onFillStop`, and until now appeared only in a component test.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-31T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {

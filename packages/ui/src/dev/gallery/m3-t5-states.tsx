@@ -4,6 +4,7 @@ import { SelectionPopover } from '../../components/selection-popover.tsx';
 import { parseFileDiff } from '../../diff/parse.js';
 import type { LineSelection } from '../../diff-view/selection.js';
 
+const DIFF_ID = 'gallery-iteration';
 const FILE: FileDiff = {
     fileId: 'gallery-selection-file',
     path: 'src/review/cache.ts',
@@ -43,6 +44,7 @@ function PopoverState({ mode, connected }: { mode: 'rest' | 'sent'; connected: b
             </div>
             <SelectionPopover
                 host={null}
+                diffId={DIFF_ID}
                 file={FILE}
                 model={MODEL}
                 selection={SELECTION}

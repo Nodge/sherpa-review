@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
@@ -16,7 +16,7 @@ import {
 
 describe('thread model', () => {
     it('flattens a branching tree, counts the subtree and limits indentation', () => {
-        const deep = fixtureData('medium').threads[0];
+        const deep = fixtureIteration('medium').threads[0];
         if (deep === undefined) {
             throw new Error('fixture has no deep thread');
         }
@@ -29,7 +29,7 @@ describe('thread model', () => {
     });
 
     it('keeps only PR-level bots and unknown files in outside', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const known = new Set(data.diff.files.slice(0, 2).map((file) => file.fileId));
 
         const grouped = groupThreads(data.threads, known);
@@ -39,7 +39,7 @@ describe('thread model', () => {
     });
 
     it('separates human PR-level comments from bots and missing files, including a draft', () => {
-        const source = fixtureData('medium').threads[0];
+        const source = fixtureIteration('medium').threads[0];
         if (source === undefined) {
             throw new Error('fixture has no thread');
         }
@@ -80,7 +80,7 @@ describe('thread model', () => {
     });
 
     it('places a range thread under the last line using the line + size convention', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const source = data.threads.find((candidate) => candidate.anchor?.position !== null && candidate.anchor !== null);
         if (source?.anchor === null || source?.anchor === undefined) {
             throw new Error('fixture has no line-anchored thread');
@@ -110,7 +110,7 @@ describe('thread model', () => {
     });
 
     it('pulls an anchor in hidden context to the nearest visible line', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const thread = data.threads.find((candidate) => candidate.anchor?.position !== null && candidate.anchor !== null);
         if (thread?.anchor === null || thread?.anchor === undefined) {
             throw new Error('fixture has no line-anchored thread');
@@ -129,7 +129,7 @@ describe('thread model', () => {
     });
 
     it('returns fallback when the required side is missing from the model', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const thread = data.threads.find((candidate) => candidate.anchor?.position !== null && candidate.anchor !== null);
         if (thread?.anchor === null || thread?.anchor === undefined) {
             throw new Error('fixture has no line-anchored thread');
@@ -168,7 +168,7 @@ describe('thread model', () => {
     });
 
     it('counts three non-overlapping sources and filters them', () => {
-        const threads = fixtureData('medium').threads;
+        const threads = fixtureIteration('medium').threads;
         const counts = countThreadSources(threads);
 
         expect(counts).toEqual({ people: 4, bots: 2, resolved: 1 });

@@ -1,4 +1,4 @@
-import type { ChatAnchor } from '@sherpa/protocol';
+import type { UiChatAskAnchor } from '@sherpa/protocol';
 
 import { readFragmentParam, updateFragment } from './fragment.js';
 
@@ -22,7 +22,7 @@ export function readSelectionLink(hash: string): SelectionLinkTarget | null {
 }
 
 /** Adds a range, preserves the selected view and removes conflicting navigation targets. */
-export function selectionLinkHash(hash: string, anchor: ChatAnchor): string {
+export function selectionLinkHash(hash: string, anchor: UiChatAskAnchor): string {
     return updateFragment(hash, {
         file: anchor.fileId,
         side: anchor.side,

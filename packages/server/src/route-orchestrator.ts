@@ -11,10 +11,13 @@ import type {
 } from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
+import type { IterationStore } from './iteration-store.js';
+import { rememberIterationDiff } from './iteration-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import { RoutePayloadWriter } from './route-payload.js';
 import type { RouteStopStatusUpdate, RouteStore, RouteTaskBinding } from './route-store.js';
 import { validateSection, validateSkeleton } from './route/index.js';
+import type { SharedPayloadStore } from './shared-payload.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 /**
@@ -75,11 +78,15 @@ export interface RouteOrchestratorOptions {
     readonly host: ReviewHost | null;
     /** Directory owned exclusively by `RoutePayloadWriter` (`routePayloadDirOf`). */
     readonly payloadDir: string;
+    /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
+    readonly shared: SharedPayloadStore;
     /**
      * Reading progress: a new generation clears previous stop marks and their seen ranges
      * when the new plan is accepted (progress carryover is M4). `null` means nothing to clear (tests).
      */
     readonly progress?: StopProgressReset | null;
+    /** Local storage for iteration patches. `null` means there is nowhere to save the generation diff (tests without a DB). */
+    readonly iterations?: IterationStore | null;
     readonly config?: Partial<RouteConfig>;
     /** Warmup delay after startup. Tests call warmup explicitly (`warmup`). */
     readonly warmupDelayMs?: number;
@@ -92,6 +99,7 @@ export class RouteOrchestrator {
     private readonly host: ReviewHost | null;
     private readonly payload: RoutePayloadWriter;
     private readonly progress: StopProgressReset | null;
+    private readonly iterations: IterationStore | null;
     private readonly config: RouteConfig;
     private readonly warmupDelayMs: number;
 
@@ -117,8 +125,9 @@ export class RouteOrchestrator {
         this.queue = options.queue;
         this.registry = options.registry;
         this.host = options.host;
-        this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir });
+        this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir, shared: options.shared });
         this.progress = options.progress ?? null;
+        this.iterations = options.iterations ?? null;
         this.config = resolveConfig(options.config);
         this.warmupDelayMs = options.warmupDelayMs ?? WARMUP_DELAY_MS;
     }
@@ -292,12 +301,20 @@ export class RouteOrchestrator {
             kind: 'accepted',
             onCommitted: () => {
                 const progress = this.progress;
+                const current = this.store.read().snapshot;
                 const clearStopProgress =
-                    this.store.read().snapshot === null || progress === null
+                    current === null || progress === null
                         ? undefined
                         : () => progress.clearStopProgressInTransaction();
                 this.store.acceptSkeleton(
-                    { skeleton, diff, provenance, snapshotId: randomUUID() },
+                    {
+                        skeleton,
+                        diff,
+                        provenance,
+                        snapshotId: randomUUID(),
+                        // M4-T6 carries progress and `carried` over from this snapshot.
+                        previousSnapshotId: current?.snapshotId ?? null,
+                    },
                     clearStopProgress,
                 );
                 this.reconcile();
@@ -630,6 +647,11 @@ export class RouteOrchestrator {
                     ),
                 ]);
                 this.meta = meta;
+                // The patch of the iteration used to build the route must survive the next push:
+                // it is needed to read the old snapshot (brief §4a).
+                if (this.iterations !== null) {
+                    void rememberIterationDiff(this.iterations, host, diff);
+                }
                 return diff;
             } catch (error) {
                 // A failure must not persist for the whole process: the next call tries again.

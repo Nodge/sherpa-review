@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -29,6 +29,7 @@ import { M3_T6_STATES } from './m3-t6-states.tsx';
 import { M3_T7_STATES } from './m3-t7-states.tsx';
 import { M3_T8_STATES } from './m3-t8-states.tsx';
 import { M3_T9_DIFF_STATES, M3_T9_ROUTE_STATES } from './m3-t9-states.tsx';
+import { M4_T2_STATES } from './m4-t2-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -46,7 +47,7 @@ export interface GalleryState {
     readonly render: () => ReactNode;
 }
 
-const MEDIUM = fixtureData('medium');
+const MEDIUM = fixtureIteration('medium');
 
 const CONNECTED = {
     kind: 'connected',
@@ -197,6 +198,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ].map((state) => ({
         id: state.id,
         group: 'Route',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M4_T2_STATES.map((state) => ({
+        id: state.id,
+        group: 'Iterations',
         title: state.title,
         render: state.render,
     })),

@@ -1,5 +1,4 @@
 import type {
-    ChatAnchor,
     ChatExchange,
     Comment,
     CommentDraft,
@@ -9,6 +8,7 @@ import type {
     PublishResult,
     Thread,
     UiCancelResponse,
+    UiChatAskAnchor,
     UiChatCancelResponse,
     UiChatResponse,
     UiChatRetryResponse,
@@ -213,7 +213,7 @@ export async function fetchReviewChat(token: string): Promise<UiChatResponse> {
 }
 
 /** Enqueues a question about the selection or the whole PR. Shows the created exchange optimistically. */
-export async function askReviewChat(token: string, text: string, anchor?: ChatAnchor): Promise<ChatExchange> {
+export async function askReviewChat(token: string, text: string, anchor?: UiChatAskAnchor): Promise<ChatExchange> {
     return (
         await post(
             UI_ENDPOINTS.reviewChatAsk,

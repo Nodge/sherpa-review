@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Comment } from '@sherpa/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,7 @@ const DRAFT: Comment = {
 
 describe('thread store', () => {
     it('applies resolve and my draft over a fresh snapshot', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
         const thread = data.threads.find((candidate) => !candidate.resolved);
         if (thread === undefined) {
@@ -34,7 +34,7 @@ describe('thread store', () => {
     });
 
     it('does not duplicate a draft when it arrives from the server with the same id', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
         const parent = data.threads[0];
         if (parent === undefined) {
@@ -144,7 +144,7 @@ describe('thread store', () => {
     });
 
     it('clears a temporary resolve rollback on a server snapshot even if the value differs', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const thread = data.threads.find((candidate) => !candidate.resolved);
         if (thread === undefined) {
             throw new Error('no open thread');
@@ -165,7 +165,7 @@ describe('thread store', () => {
     it('the undo window survives without a React component and closes after 5s', () => {
         vi.useFakeTimers();
         try {
-            const data = fixtureData('medium');
+            const data = fixtureIteration('medium');
             const thread = data.threads.find((candidate) => candidate.anchor !== null);
             if (thread === undefined) {
                 throw new Error('no file thread');
@@ -185,7 +185,7 @@ describe('thread store', () => {
     });
 
     it('stores kept-in-view separately by file', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const thread = data.threads.find((candidate) => candidate.anchor !== null);
         if (thread?.anchor === null || thread === undefined) {
             throw new Error('no file thread');

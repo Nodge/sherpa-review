@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Comment, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
@@ -15,7 +15,7 @@ import { openDraftEditor } from '../../threads/draft-editor.tsx';
 import { createThreadStore } from '../../threads/store.js';
 import { openNewComposer } from '../../threads/thread-list.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE = fileForGallery();
 const MODEL = parseFileDiff(toParseRequest(FILE));
 const POSITION = { side: 'new' as const, line: 48, size: 1 };
@@ -141,6 +141,7 @@ function lineDraft(): Thread {
         resolved: false,
         resolvedBy: null,
         outdated: false,
+        pinnedTo: null,
         anchor: { fileId: FILE.fileId, path: FILE.path, position: POSITION },
     };
 }

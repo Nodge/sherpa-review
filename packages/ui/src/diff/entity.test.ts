@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel, DiffHunk } from './model.js';
@@ -23,7 +23,7 @@ function modelOf(path: string, lines: readonly string[]): DiffFileModel {
 }
 
 function fixtureHunks(path: string): DiffHunk[] {
-    const file = fixtureData('medium').diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration('medium').diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`file ${path} not found in medium fixture`);
     }

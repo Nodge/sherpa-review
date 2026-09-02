@@ -1,6 +1,6 @@
-import type { FileDiff, LensZone } from '@sherpa/protocol';
+import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 
-import { anchor, comment, human, lens, thread } from '../builders.js';
+import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
 import { tsLines } from '../content.js';
 import { makeFileDiff } from '../patch.js';
 import type { FixtureData } from './types.js';
@@ -13,6 +13,7 @@ import type { FixtureData } from './types.js';
 
 const PR_ID = '5310';
 const DIFF_ID = '201877';
+const UPDATED_AT = '2026-08-19T11:02:00.000Z';
 const MODULES = 16;
 const FILES_PER_MODULE = 4;
 export const LARGE_FILE_COUNT = MODULES * FILES_PER_MODULE;
@@ -83,7 +84,7 @@ function fileAt(index: number): FileDiff {
     });
 }
 
-function threads(): FixtureData['threads'] {
+function threads(): Thread[] {
     const reviewer = human('alice', 'Alice Ingram');
     const author = human('victor', 'Victor Tran');
 
@@ -158,16 +159,20 @@ export function makeLargeFixture(): FixtureData {
             state: 'open',
             statusLabel: 'review_in_progress',
             checks: 'failed',
-            updatedAt: '2026-08-19T11:02:00.000Z',
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
+            updatedAt: UPDATED_AT,
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
         },
-        diff: {
-            diffId: DIFF_ID,
-            baseCommit: '77a1c4e8b0d3529f6e1a8c4b2d70f3915ae6c8d4',
-            headCommit: 'e51b3d7092c4a6f8b1d05e37c9a24608bd173902',
-            files,
-        },
-        threads: threads(),
+        iterations: singleIteration(
+            {
+                diffId: DIFF_ID,
+                baseCommit: '77a1c4e8b0d3529f6e1a8c4b2d70f3915ae6c8d4',
+                headCommit: 'e51b3d7092c4a6f8b1d05e37c9a24608bd173902',
+                files,
+            },
+            threads(),
+            UPDATED_AT,
+        ),
+        interdiffs: [],
         ownership: lens({
             id: 'mine',
             label: 'My files',

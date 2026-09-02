@@ -8,6 +8,7 @@ import {
     commentSchema,
     fileContentSchema,
     hostIdSchema,
+    iterationSchema,
     lensSchema,
     prDiffSchema,
     prMetaSchema,
@@ -15,7 +16,7 @@ import {
     threadSchema,
     verdictSchema,
 } from './review.js';
-import { routeSnapshotSchema } from './route.js';
+import { routeProvenanceSchema, routeSnapshotSchema } from './route.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 
 /**
@@ -87,6 +88,12 @@ export const uiStateSchema = z.object({
     pr: prMetaSchema.nullable(),
     /** Feedback channel availability (M2F-T19): depends only on issue channel credentials in the environment. */
     feedback: uiFeedbackAvailabilitySchema,
+    /**
+     * PR iterations (M4): the host's list plus `gone` entries from local storage, in order
+     * of appearance. Empty if there is no host or the list has not loaded yet. A new push arrives in this same
+     * snapshot over SSE `state`, with no separate event.
+     */
+    iterations: z.array(iterationSchema),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -119,6 +126,28 @@ export type UiCancelResponse = z.infer<typeof uiCancelResponseSchema>;
  * The `UI_REVIEW_EVENT` event signals changes, and the UI refetches the relevant endpoint.
  * PR metadata is the exception. It is small and lives in `uiStateSchema.pr`.
  */
+/**
+ * Diff selection (M4). No parameters means the host's active iteration. `diffId` selects a saved
+ * iteration (including `gone`: the patch is local, brief §4a). `base`+`head` selects a slice between
+ * two iterations ("what is new" in the reader). Only the UI knows which iteration the tab is viewing
+ * (selection in the URL fragment). The server is not queried about the "current view".
+ */
+export const uiReviewDiffRequestSchema = z
+    .object({
+        diffId: hostIdSchema.optional(),
+        base: hostIdSchema.optional(),
+        head: hostIdSchema.optional(),
+    })
+    .refine(
+        (query) => (query.base === undefined) === (query.head === undefined),
+        'base and head must be specified together',
+    )
+    .refine(
+        (query) => query.diffId === undefined || query.base === undefined,
+        'diffId and a base/head slice are mutually exclusive',
+    );
+export type UiReviewDiffRequest = z.infer<typeof uiReviewDiffRequestSchema>;
+
 export const uiReviewDiffResponseSchema = z.object({ diff: prDiffSchema });
 export type UiReviewDiffResponse = z.infer<typeof uiReviewDiffResponseSchema>;
 
@@ -181,27 +210,76 @@ export const uiRouteFailureSchema = z.object({
 });
 export type UiRouteFailure = z.infer<typeof uiRouteFailureSchema>;
 
+/**
+ * "Route is stale" (brief §9, README §9): the host's active iteration has advanced past the iteration
+ * of the current snapshot. The UI stays on the snapshot's iteration (anchors do not drift). The stale banner
+ * offers to rebuild the route or open the new diff without it. There is no automatic regeneration.
+ */
+export const uiRouteStaleSchema = z.object({
+    /** Snapshot commit and iteration compared with the active host iteration. */
+    routeCommit: z.string().min(1),
+    prCommit: z.string().min(1),
+    prDiffId: hostIdSchema,
+    /** Number of iterations since the snapshot's iteration (a force-push counts as one). */
+    newIterations: z.number().int().min(1),
+    /** Current snapshot stops whose anchors the interdiff touches ("stops 02, 03 and 07 are affected"). */
+    affectedStopIds: z.array(z.string().min(1)),
+});
+export type UiRouteStale = z.infer<typeof uiRouteStaleSchema>;
+
 export const uiRouteStateSchema = z.object({
     phase: uiRoutePhaseSchema,
     /** PR below the route threshold (requirements §3.6): no generation task, UI opens on Full diff with a note. */
     smallPr: z.boolean(),
     /**
-     * Exists once the skeleton is accepted. Partial in `filling` (see `stops[].status`).
-     * During regeneration from `ready` (M2F-T28), the old snapshot lives until the new skeleton is accepted:
-     * `reading` with a non-null snapshot means "building a new one, the old one is readable", replaced atomically
-     * at acceptance.
+     * Current snapshot, present since skeleton acceptance, partial in `filling`
+     * (see `stops[].status`). During regeneration from `ready` (M2F-T28), the old snapshot stays
+     * until the new skeleton is accepted. `reading` with a non-null snapshot means "building a new one,
+     * the old one is readable". Replacement is atomic upon acceptance. Previous snapshots are served
+     * by `reviewRoute?snapshot=`, the list by `reviewSnapshots`.
      */
     snapshot: routeSnapshotSchema.nullable(),
     /** Only in the `failed` phase. Regeneration failure can coexist with an old snapshot, which remains readable. */
     failure: uiRouteFailureSchema.nullable(),
+    /** null if there is no snapshot or it was built on the active iteration. */
+    stale: uiRouteStaleSchema.nullable(),
 });
 export type UiRouteState = z.infer<typeof uiRouteStateSchema>;
+
+/** Without `snapshot`, current route state. With it, the previous snapshot in `snapshot`, with its phase at the time. */
+export const uiReviewRouteRequestSchema = z.object({ snapshot: z.string().min(1).optional() });
+export type UiReviewRouteRequest = z.infer<typeof uiReviewRouteRequestSchema>;
 
 export const uiReviewRouteResponseSchema = z.object({
     route: uiRouteStateSchema,
     routeRevision: z.number().int().min(0),
 });
 export type UiReviewRouteResponse = z.infer<typeof uiReviewRouteResponseSchema>;
+
+/**
+ * PR snapshot list (snapshot picker in the pill, "Snapshots" card in Overview, README §6).
+ * `current` is the current snapshot (exactly one if any exist). `stale` is a previous snapshot whose iteration
+ * is still in the PR. `gone` means the snapshot's iteration left the PR (force-push), and the snapshot is readable from
+ * the locally saved diff. Previous snapshots are read-only.
+ */
+export const uiSnapshotStatusSchema = z.enum(['current', 'stale', 'gone']);
+export type UiSnapshotStatus = z.infer<typeof uiSnapshotStatusSchema>;
+
+export const uiSnapshotSummarySchema = z.object({
+    snapshotId: z.string().min(1),
+    diffId: hostIdSchema,
+    commit: z.string().min(1),
+    baseCommit: z.string().min(1),
+    createdAt: z.iso.datetime(),
+    provenance: routeProvenanceSchema,
+    previousSnapshotId: z.string().nullable(),
+    status: uiSnapshotStatusSchema,
+});
+export type UiSnapshotSummary = z.infer<typeof uiSnapshotSummarySchema>;
+
+/** In order of appearance, current last. */
+export const uiReviewSnapshotsResponseSchema = z.object({ snapshots: z.array(uiSnapshotSummarySchema) });
+export type UiReviewSnapshotsResponse = z.infer<typeof uiReviewSnapshotsResponseSchema>;
 
 /**
  * Start/restart route generation (Retry from Generation failed, "regenerate"
@@ -251,10 +329,14 @@ export const uiChatResponseSchema = z.object({
 });
 export type UiChatResponse = z.infer<typeof uiChatResponseSchema>;
 
+/** UI question anchor. Without `diffId`, the server uses the active iteration. */
+export const uiChatAskAnchorSchema = chatAnchorSchema.extend({ diffId: hostIdSchema.optional() });
+export type UiChatAskAnchor = z.infer<typeof uiChatAskAnchorSchema>;
+
 export const uiChatAskRequestSchema = z.object({
     text: z.string().min(1).max(4000),
     /** If absent, the question concerns the entire PR (Ask AI). */
-    anchor: chatAnchorSchema.optional(),
+    anchor: uiChatAskAnchorSchema.optional(),
 });
 export type UiChatAskRequest = z.infer<typeof uiChatAskRequestSchema>;
 
@@ -387,6 +469,14 @@ export const uiStopProgressSchema = z.object({
     viewed: z.boolean(),
 });
 export type UiStopProgress = z.infer<typeof uiStopProgressSchema>;
+
+/**
+ * Which iteration's progress to read (M4): without `diffId`, the active iteration. With it, a saved
+ * iteration as is (an old snapshot shows its own progress, which cannot be edited).
+ * Progress write endpoints accept only the active iteration.
+ */
+export const uiReviewProgressRequestSchema = z.object({ diffId: hostIdSchema.optional() });
+export type UiReviewProgressRequest = z.infer<typeof uiReviewProgressRequestSchema>;
 
 export const uiReviewProgressResponseSchema = z.object({
     files: z.array(uiFileProgressSchema),
@@ -558,7 +648,7 @@ export const UI_ENDPOINTS = {
     cancel: '/api/ui/tasks/cancel',
     /** GET, SSE: `state` (`uiStateSchema`), `review`, `progress`, `route`, `chat` events (revisions). */
     events: '/api/ui/events',
-    /** GET → `uiReviewDiffResponseSchema` (active host iteration). */
+    /** GET `?diffId=` | `?base=&head=` (`uiReviewDiffRequestSchema`) → `uiReviewDiffResponseSchema`. Without parameters, the active iteration. */
     reviewDiff: '/api/ui/review/diff',
     /** GET → `uiReviewThreadsResponseSchema`. */
     reviewThreads: '/api/ui/review/threads',
@@ -566,7 +656,7 @@ export const UI_ENDPOINTS = {
     reviewLenses: '/api/ui/review/lenses',
     /** GET `?fileId=` (`uiReviewFileContentRequestSchema`) → `uiReviewFileContentResponseSchema`. */
     reviewFileContent: '/api/ui/review/file-content',
-    /** GET → `uiReviewProgressResponseSchema`. Also available without a review host, since progress is local. */
+    /** GET `?diffId=` (`uiReviewProgressRequestSchema`) → `uiReviewProgressResponseSchema`. Available without a review host too, progress is local. */
     reviewProgress: '/api/ui/review/progress',
     /** POST `uiSetFileViewedRequestSchema` → `uiSetFileViewedResponseSchema`. */
     reviewFileViewed: '/api/ui/review/file-viewed',
@@ -584,8 +674,10 @@ export const UI_ENDPOINTS = {
     reviewThreadResolved: '/api/ui/review/thread-resolved',
     /** POST `uiPublishRequestSchema` → `uiPublishResponseSchema`. */
     reviewPublish: '/api/ui/review/publish',
-    /** GET → `uiReviewRouteResponseSchema`. */
+    /** GET `?snapshot=` (`uiReviewRouteRequestSchema`) → `uiReviewRouteResponseSchema`. */
     reviewRoute: '/api/ui/review/route',
+    /** GET → `uiReviewSnapshotsResponseSchema`. */
+    reviewSnapshots: '/api/ui/review/snapshots',
     /** POST without a body → `uiRouteGenerateResponseSchema`. */
     reviewRouteGenerate: '/api/ui/review/route/generate',
     /** POST `uiRouteFillStopRequestSchema` → `uiRouteFillStopResponseSchema`. */
@@ -606,6 +698,15 @@ export const UI_ENDPOINTS = {
     feedback: '/api/ui/feedback',
     /** GET → `uiSettingsResponseSchema`, PATCH `uiSettingsPatchSchema` → `uiSettingsResponseSchema`. Available without a review host too. */
     settings: '/api/ui/settings',
+} as const;
+
+/**
+ * Server dev endpoints: exist only for PRs on the fixture host (prKey `fixture-*`),
+ * no route is registered for other PRs. Same bearer token as UI endpoints.
+ */
+export const UI_DEV_ENDPOINTS = {
+    /** POST without a body → `uiReviewWriteAckSchema`: the fixture "receives a push", the next declared iteration becomes active. */
+    fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
 } as const;
 
 /** SSE event name for a state snapshot. */

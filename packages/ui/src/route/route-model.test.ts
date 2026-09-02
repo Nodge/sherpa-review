@@ -1,5 +1,5 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
-import type { AgentNote, FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
+import type { AgentNote, ChatAnchor, FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffFileModel } from '../diff/model.js';
@@ -31,7 +31,7 @@ import {
  * (decision log, 2026-08-26).
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = routeFixtures('medium')?.states.ready ?? null;
 if (READY?.snapshot == null) {
     throw new Error('medium fixture needs a ready route snapshot');
@@ -425,20 +425,25 @@ describe('route model', () => {
         if (group === undefined || anchor === undefined) {
             throw new Error('stop s01 must have an anchor');
         }
-        const at = (id: number, line: number): AgentNote => ({
-            id,
-            exchangeId: id,
-            anchor: {
+        const at = (id: number, line: number): AgentNote => {
+            const noteAnchor: ChatAnchor = {
+                diffId: DATA.diff.diffId,
                 fileId: group.fileId,
                 path: group.path,
                 side: anchor.side,
                 start: line,
                 end: line,
-            },
-            text: 'Agent answer',
-            commit: 'abcdef1',
-            createdAt: '2026-09-01T10:00:00.000Z',
-        });
+            };
+            return {
+                id,
+                exchangeId: id,
+                anchor: noteAnchor,
+                text: 'Agent answer',
+                lostAnchor: false,
+                origin: { commit: 'abcdef1', anchor: noteAnchor },
+                createdAt: '2026-09-01T10:00:00.000Z',
+            };
+        };
         const context = at(1, anchor.end + 1);
         const far = at(2, anchor.end + 100);
 

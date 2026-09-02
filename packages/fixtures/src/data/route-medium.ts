@@ -10,7 +10,7 @@ import type {
 } from '@sherpa/protocol';
 
 import { hashHex, makeFileId } from '../patch.js';
-import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
+import { MEDIUM_BASE_COMMIT, MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
 
 /**
  * Route for the `medium` fixture, the same "Enforce the 30-minute edit window…" PR (README §1–2).
@@ -33,11 +33,11 @@ import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
  * so a file with small edits has many anchors (one per contiguous edit).
  */
 
-const SNAPSHOT_ID = 'route-medium-9f3c1ab';
+export const SNAPSHOT_ID = 'route-medium-9f3c1ab';
 const CREATED_AT = '2026-08-20T09:04:12.000Z';
 
 /** File paths in the `medium` diff referenced by anchors. */
-const P = {
+export const P = {
     window: 'services/orders/src/domain/edit-window.ts',
     clock: 'services/orders/src/infra/clock.ts',
     policy: 'services/orders/src/domain/policies/edit-policy.ts',
@@ -86,7 +86,7 @@ function claim(
  * With `dropped: true`, the validator drops it because the anchor points outside the diff. The snapshot
  * excludes that assertion and counts it only in `droppedClaims` (SPEC §4.3).
  */
-interface DigestEntry {
+export interface DigestEntry {
     kind: RouteTestClaimKind;
     text: string;
     test: { path: string; line: number } | null;
@@ -97,7 +97,7 @@ interface DigestEntry {
  * A stop in the model plan: the skeleton fields (title, tier, intent) plus section content.
  * `intent` is a draft description for filling tasks. The UI does not show it.
  */
-interface StopSpec {
+export interface StopSpec {
     id: string;
     planIndex: number;
     tier: 'high' | 'medium' | 'low';
@@ -110,6 +110,13 @@ interface StopSpec {
     digest: DigestEntry[];
     validationNotes: string[];
 }
+
+/** Payment assertion. The second iteration has its own text (`card-token.ts` left the PR). */
+export const UNCOVERED_PAYMENTS: DigestEntry = {
+    kind: 'uncovered',
+    text: 'PAN masking in the reauthorize log and the recordedAt field in PCI audit records are uncovered. The diff has no payment tests.',
+    test: null,
+};
 
 /**
  * Digest for stop 04: the model returned 14 assertions, and the validator accepted 12.
@@ -186,26 +193,22 @@ const DIGEST: DigestEntry[] = [
         text: 'The express-delivery wording ("Express delivery cannot be rescheduled") is untested. Only the closed-window case checks explain.',
         test: { path: P.window, line: 92 },
     },
-    {
-        kind: 'uncovered',
-        text: 'PAN masking in the reauthorize log and recordedAt in PCI audit records are uncovered. The diff has no payment tests.',
-        test: null,
-    },
+    UNCOVERED_PAYMENTS,
 ];
 
 /** Assertions accepted by the validator. Dropped assertions have anchors outside the diff. */
-function acceptedClaims(entries: readonly DigestEntry[]): RouteTestClaim[] {
+export function acceptedClaims(entries: readonly DigestEntry[]): RouteTestClaim[] {
     return entries
         .filter((entry) => entry.dropped !== true)
         .map((entry) => claim(entry.kind, entry.text, entry.test));
 }
 
-function droppedCount(entries: readonly DigestEntry[]): number {
+export function droppedCount(entries: readonly DigestEntry[]): number {
     return entries.filter((entry) => entry.dropped === true).length;
 }
 
 /** Stops created by the model. The server synthesizes "Other", so it is absent from the skeleton. */
-const MODEL_STOPS: StopSpec[] = [
+export const MODEL_STOPS: StopSpec[] = [
     {
         id: 's01',
         planIndex: 1,
@@ -358,20 +361,23 @@ const MODEL_STOPS: StopSpec[] = [
     },
 ];
 
-const SUMMARY = [
+/** Separate summary paragraphs. The second pass rebuilds only the one describing the contract. */
+export const SUMMARY_PARTS = [
     'The PR introduces a 30-minute edit window for scheduled delivery as a domain concept. It adds `EditWindow` and an injectable `Clock`. `EditPolicy` stops doing its own time calculations and returns a machine-readable rejection code, while the order model loses optional fields and the duplicate `editable` flag.',
     'The external contract grew: `patchOrder` validates the body against a schema and returns 409 or 400 with the remaining time and a human-readable explanation, while `getEditWindow` returns the full decision. PCI audit records gained the remaining time and recording timestamp, PAN is masked in the `reauthorize` log, and the generated PSP schema moved from `pan` to `token`.',
     'The rules are described in the new `docs/edit-window.md` along with the rollout order behind the `checkout_edit_window` flag. Window tests were written from scratch, and policy and endpoint tests were rewritten. The route leaves out the `CODEOWNERS` ownership rules, generated `ci.yml` and the tail of the generated PSP schema.',
-].join('\n\n');
+];
+
+export const SUMMARY = SUMMARY_PARTS.join('\n\n');
 
 /**
  * Full tour order: entry point (API boundary and rules) → definitions (window, policy)
  * → consequences (README, dependencies) → verification (test digest), with "Other" last.
  */
-const TOUR_ORDER = ['s03', 's01', 's02', 's05', 's06', 's04', 'other'];
+export const TOUR_ORDER = ['s03', 's01', 's02', 's05', 's06', 's04', 'other'];
 
 /** Synthetic "Other": the server sets the title, and the UI computes content from uncovered ranges. */
-function otherStop(): RouteStop {
+export function otherStop(): RouteStop {
     return {
         id: 'other',
         planIndex: MODEL_STOPS.length + 1,
@@ -385,10 +391,12 @@ function otherStop(): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        // Classify stops after a push in M4-T7.
+        change: null,
     };
 }
 
-function filledStop(spec: StopSpec): RouteStop {
+export function filledStop(spec: StopSpec): RouteStop {
     return {
         id: spec.id,
         planIndex: spec.planIndex,
@@ -402,6 +410,7 @@ function filledStop(spec: StopSpec): RouteStop {
         droppedClaims: droppedCount(spec.digest),
         validationNotes: spec.validationNotes,
         provenance: null,
+        change: null,
     };
 }
 
@@ -420,11 +429,12 @@ function plannedStop(spec: StopSpec, status: 'queued' | 'filling'): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        change: null,
     };
 }
 
 /** Canonical JSON: keys are sorted alphabetically so the fingerprint ignores field order in literals. */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
     if (Array.isArray(value)) {
         return `[${value.map(canonical).join(',')}]`;
     }
@@ -441,9 +451,13 @@ function snapshot(stops: RouteStop[], hashed: boolean): RouteSnapshot {
     const base: RouteSnapshot = {
         snapshotId: SNAPSHOT_ID,
         commit: MEDIUM_HEAD_COMMIT,
+        baseCommit: MEDIUM_BASE_COMMIT,
         diffId: MEDIUM_DIFF_ID,
         createdAt: CREATED_AT,
         provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+        // Second pass through snapshots in M4-T6.
+        previousSnapshotId: null,
+        carried: null,
         summary: SUMMARY,
         stops,
         tourOrder: TOUR_ORDER,
@@ -500,15 +514,17 @@ const FAILED_RAW_OUTPUT = `{
 
 /** Route states for the `medium` fixture gallery: one per `uiRoutePhaseSchema` phase. */
 export function makeMediumRouteStates(): Record<'none' | 'reading' | 'filling' | 'ready' | 'failed', UiRouteState> {
+    // Route staleness is handled in M4-T4.
     return {
-        none: { phase: 'none', smallPr: false, snapshot: null, failure: null },
-        reading: { phase: 'reading', smallPr: false, snapshot: null, failure: null },
-        filling: { phase: 'filling', smallPr: false, snapshot: fillingSnapshot(), failure: null },
-        ready: { phase: 'ready', smallPr: false, snapshot: readySnapshot(), failure: null },
+        none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null },
+        reading: { phase: 'reading', smallPr: false, snapshot: null, failure: null, stale: null },
+        filling: { phase: 'filling', smallPr: false, snapshot: fillingSnapshot(), failure: null, stale: null },
+        ready: { phase: 'ready', smallPr: false, snapshot: readySnapshot(), failure: null, stale: null },
         failed: {
             phase: 'failed',
             smallPr: false,
             snapshot: null,
+            stale: null,
             failure: {
                 message:
                     'Generation stopped at validation: 2 stops reference services/orders/src/domain/order-state.ts, which is not in this diff.',
@@ -535,7 +551,7 @@ export function makeMediumSkeletonResult(): RouteSkeletonResult {
 }
 
 /** The model returns anchors by `path`. The validator resolves `fileId` against the active iteration. */
-function rawAnchors(spec: StopSpec): RouteSectionResult['stops'][number]['anchors'] {
+export function rawAnchors(spec: StopSpec): RouteSectionResult['stops'][number]['anchors'] {
     return spec.anchors.map(({ path, side, start, end, collapsed }) =>
         collapsed ? { path, side, start, end, collapsed } : { path, side, start, end },
     );
@@ -545,7 +561,7 @@ function rawAnchors(spec: StopSpec): RouteSectionResult['stops'][number]['anchor
  * The full digest as returned by the model, including assertions the validator will drop.
  * The snapshot must compute `droppedClaims` from these, instead of hardcoding it.
  */
-function rawClaims(entries: readonly DigestEntry[]): NonNullable<RouteSectionResult['stops'][number]['tests']> {
+export function rawClaims(entries: readonly DigestEntry[]): NonNullable<RouteSectionResult['stops'][number]['tests']> {
     // For `uncovered`, `testPath` contains a code anchor. This assertion has no test anchor.
     return entries.map((entry) =>
         entry.test === null

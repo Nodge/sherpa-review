@@ -1,4 +1,6 @@
-import { anchor, comment, human, lens, thread } from '../builders.js';
+import type { Thread } from '@sherpa/protocol';
+
+import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
 import { tsLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff } from '../patch.js';
@@ -15,6 +17,7 @@ import type { FixtureData } from './types.js';
 
 const PR_ID = '5122';
 const DIFF_ID = '196301';
+const UPDATED_AT = '2026-08-19T13:20:00.000Z';
 
 /** Count from the SPEC §2.13 example ("2,412 changed lines — open file"). */
 const HUGE_FILE_LINES = 2412;
@@ -152,6 +155,34 @@ export function makeEdgeFixture(): FixtureData {
     const reviewer = human('alice', 'Alice Ingram');
     const author = human('avery', 'Avery Vance');
 
+    const threads: Thread[] = [
+        thread({
+            // File comment: it has an anchor but no position.
+            anchor: anchor(DIFF_ID, 'services/orders/assets/edit-window-flow.png'),
+            root: comment({
+                id: '5120018',
+                author: reviewer,
+                body: 'The diagram still shows the old two-hour window.',
+                createdAt: '2026-08-19T13:05:00.000Z',
+            }),
+        }),
+        thread({
+            // Thread on a deleted file: the anchor is on the old side.
+            anchor: anchor(DIFF_ID, 'services/orders/src/legacy/edit-window-v1.ts', {
+                side: 'old',
+                line: 5,
+                size: 2,
+            }),
+            outdated: true,
+            root: comment({
+                id: '5120024',
+                author: author,
+                body: 'Deleting this also removes the last caller of `Date.now()` in the domain layer.',
+                createdAt: '2026-08-19T13:12:00.000Z',
+            }),
+        }),
+    ];
+
     return {
         pr: {
             id: PR_ID,
@@ -163,42 +194,20 @@ export function makeEdgeFixture(): FixtureData {
             state: 'open',
             statusLabel: 'needs_work',
             checks: null,
-            updatedAt: '2026-08-19T13:20:00.000Z',
-            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false },
+            updatedAt: UPDATED_AT,
+            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, iterations: false },
         },
-        diff: {
-            diffId: DIFF_ID,
-            baseCommit: '1d9f4b60c3a785e2f4b8d016c9a3e57b2048df61',
-            headCommit: 'ab3e7c015d924f6b8e0a1c73d5628f409b1ec7a2',
-            files: FILES.map((spec) => makeFileDiff(DIFF_ID, spec)),
-        },
-        threads: [
-            thread({
-                // File comment: has an anchor without a position.
-                anchor: anchor(DIFF_ID, 'services/orders/assets/edit-window-flow.png'),
-                root: comment({
-                    id: '5120018',
-                    author: reviewer,
-                    body: 'The diagram still shows the old two-hour window.',
-                    createdAt: '2026-08-19T13:05:00.000Z',
-                }),
-            }),
-            thread({
-                // Thread on a deleted file: anchor on the old side.
-                anchor: anchor(DIFF_ID, 'services/orders/src/legacy/edit-window-v1.ts', {
-                    side: 'old',
-                    line: 5,
-                    size: 2,
-                }),
-                outdated: true,
-                root: comment({
-                    id: '5120024',
-                    author: author,
-                    body: 'Deleting this also removes the last caller of `Date.now()` in the domain layer.',
-                    createdAt: '2026-08-19T13:12:00.000Z',
-                }),
-            }),
-        ],
+        iterations: singleIteration(
+            {
+                diffId: DIFF_ID,
+                baseCommit: '1d9f4b60c3a785e2f4b8d016c9a3e57b2048df61',
+                headCommit: 'ab3e7c015d924f6b8e0a1c73d5628f409b1ec7a2',
+                files: FILES.map((spec) => makeFileDiff(DIFF_ID, spec)),
+            },
+            threads,
+            UPDATED_AT,
+        ),
+        interdiffs: [],
         // Reviewer without an ownership zone: disable "My files" with an explanation (SPEC §4.2).
         ownership: lens({
             id: 'mine',

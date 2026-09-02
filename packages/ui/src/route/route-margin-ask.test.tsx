@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
-import type { ChatAnchor } from '@sherpa/protocol';
+import { fixtureIteration } from '@sherpa/fixtures';
+import type { UiChatAskAnchor } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +19,7 @@ import { useMarginStrips } from './route-margin.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE = (() => {
     const file = DATA.diff.files.find((candidate) => candidate.path.endsWith('.ts'));
     if (file === undefined) {
@@ -84,7 +84,7 @@ const NOT_PENDING = (): boolean => false;
 
 describe('hatched strip action', () => {
     it('passes an anchor covering exactly the strip range', () => {
-        const onAskToPlace = vi.fn<(anchor: ChatAnchor) => void>();
+        const onAskToPlace = vi.fn<(anchor: UiChatAskAnchor) => void>();
         const host = render({ agentConnected: true, isPending: NOT_PENDING, onAskToPlace });
 
         const button = host.querySelector<HTMLButtonElement>('.route-strip__action');

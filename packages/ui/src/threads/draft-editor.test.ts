@@ -18,7 +18,7 @@ function comment(id: string, issue: boolean | null): Comment {
 }
 
 function thread(root: Comment): Thread {
-    return { id: root.id, anchor: null, resolved: false, resolvedBy: null, outdated: false, root };
+    return { id: root.id, anchor: null, resolved: false, resolvedBy: null, outdated: false, pinnedTo: null, root };
 }
 
 describe('editing your own draft', () => {

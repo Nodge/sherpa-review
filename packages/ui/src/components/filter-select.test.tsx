@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Lens } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -10,7 +10,7 @@ import { FilterSelect } from './filter-select.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const EDGE = fixtureData('edge');
+const EDGE = fixtureIteration('edge');
 const FILES = EDGE.diff.files.filter((file) => !file.generated);
 const EMPTY_PCI: Lens = {
     id: 'pci',

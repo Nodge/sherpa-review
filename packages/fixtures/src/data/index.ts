@@ -1,13 +1,28 @@
-import { lensSchema, prDiffSchema, prMetaSchema, reviewUserSchema, threadSchema } from '@sherpa/protocol';
+import {
+    iterationSchema,
+    lensSchema,
+    prDiffSchema,
+    prMetaSchema,
+    reviewUserSchema,
+    threadSchema,
+} from '@sherpa/protocol';
 
 import { makeEdgeFixture } from './edge.js';
 import { makeLargeFixture } from './large.js';
 import { makeMediumFixture } from './medium.js';
 import { makeSmallFixture } from './small.js';
-import type { FixtureData } from './types.js';
+import type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView } from './types.js';
 
-export type { FixtureData } from './types.js';
-export { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, MEDIUM_TOTALS } from './medium.js';
+export type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView } from './types.js';
+export {
+    MEDIUM_DIFF_ID,
+    MEDIUM_DIFF_ID_V2,
+    MEDIUM_DIFF_ID_V3,
+    MEDIUM_HEAD_COMMIT,
+    MEDIUM_HEAD_COMMIT_V2,
+    MEDIUM_HEAD_COMMIT_V3,
+    MEDIUM_TOTALS,
+} from './medium.js';
 export { LARGE_FILE_COUNT, LONG_LINE_FILE_PATH, LONG_LINE_MARKER } from './large.js';
 export { buildChatFixtures, chatFixtures } from './chat.js';
 export type { ChatFixtures } from './chat.js';
@@ -25,15 +40,39 @@ const BUILDERS: Record<FixtureName, () => FixtureData> = {
     edge: makeEdgeFixture,
 };
 
+/** Iteration schema without status: the host computes status, so it is absent from the data. */
+const iterationMetaSchema = iterationSchema.omit({ status: true });
+
+function validateIteration(iteration: FixtureIteration): FixtureIteration {
+    return {
+        iteration: iterationMetaSchema.parse(iteration.iteration),
+        diff: prDiffSchema.parse(iteration.diff),
+        threads: iteration.threads.map((thread) => threadSchema.parse(thread)),
+        replaces: iteration.replaces,
+    };
+}
+
+function validateInterdiff(interdiff: FixtureInterdiff): FixtureInterdiff {
+    return {
+        base: interdiff.base,
+        head: interdiff.head,
+        diff: prDiffSchema.parse(interdiff.diff),
+    };
+}
+
 /**
  * The fixture passes through the same schemas as a real host response. Data errors must be caught
- * when building the fixture, rather than in a UI test three tasks later.
+ * while building the fixture, before a UI test three tasks later. Slices between iterations are also `PrDiff`,
+ * so the same schema validates them.
  */
 function validate(data: FixtureData): FixtureData {
+    if (data.iterations.length === 0) {
+        throw new Error('fixture has no iterations: the host has nothing to return');
+    }
     return {
         pr: prMetaSchema.parse(data.pr),
-        diff: prDiffSchema.parse(data.diff),
-        threads: data.threads.map((thread) => threadSchema.parse(thread)),
+        iterations: data.iterations.map(validateIteration),
+        interdiffs: data.interdiffs.map(validateInterdiff),
         ownership: data.ownership === null ? null : lensSchema.parse(data.ownership),
         extraLenses: data.extraLenses.map((lens) => lensSchema.parse(lens)),
         currentUser: reviewUserSchema.parse(data.currentUser),
@@ -64,4 +103,27 @@ export function fixtureData(name: FixtureName): FixtureData {
         built.set(name, data);
     }
     return structuredClone(data);
+}
+
+/**
+ * Flat fixture for one iteration: PR, its diff and threads alongside lenses. Used by consumers
+ * that do not need iterations: UI tests, the gallery, e2e. Defaults to the first iteration,
+ * the PR state before any push.
+ */
+export function fixtureIteration(name: FixtureName, index = 0): FixtureIterationView {
+    const data = fixtureData(name);
+    const iteration = data.iterations[index];
+    if (iteration === undefined) {
+        throw new Error(`fixture ${name} has no iteration at index ${String(index)}`);
+    }
+    return {
+        pr: data.pr,
+        iteration: iteration.iteration,
+        diff: iteration.diff,
+        threads: iteration.threads,
+        ownership: data.ownership,
+        extraLenses: data.extraLenses,
+        currentUser: data.currentUser,
+        mutationEpoch: data.mutationEpoch,
+    };
 }

@@ -3,12 +3,17 @@ import { agentNoteSchema, chatExchangeSchema } from '@sherpa/protocol';
 
 import { makeFileId } from '../patch.js';
 import type { FixtureName } from './index.js';
-import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
+import { MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2, MEDIUM_HEAD_COMMIT } from './medium.js';
 
 /** Chat history and local agent notes for the M3 gallery and end-to-end tests. */
 export interface ChatFixtures {
     exchanges: ChatExchange[];
     notes: AgentNote[];
+    /**
+     * The same notes after moving to the second iteration (SPEC §2.16): ranges in unchanged
+     * files moved through the interdiff, while the note on a changed range lost its anchor.
+     */
+    notesAfterPush: AgentNote[];
 }
 
 const P = {
@@ -79,6 +84,19 @@ const ANSWER_DISPATCH = [
     'If `dispatchedAt` is later than the deadline, the reason stays `deadline`. This preserves the first actual moment after which edits were forbidden.',
 ].join('\n');
 
+const ANSWER_EXPLAIN = [
+    'The `explain` method returns wording for the customer screen, not for the API.',
+    '',
+    '- The API returns a machine-readable rejection code and status.',
+    '- The text comes from `describeState` and can change without a contract version change.',
+    '',
+    '```ts',
+    'return describeState(this.window.state({ order, slot: order.slot }));',
+    '```',
+    '',
+    'This lets the wording change independently of the contract. Tests barely cover it.',
+].join('\n');
+
 const ANSWER_CATEGORY = [
     'The method starts with the default 30-minute window and chooses the shortest override among the order items.',
     '',
@@ -95,6 +113,7 @@ const ANSWER_CATEGORY = [
 
 function anchor(path: string, start: number, end: number): ChatAnchor {
     return {
+        diffId: MEDIUM_DIFF_ID,
         fileId: makeFileId(MEDIUM_DIFF_ID, path),
         path,
         side: 'new',
@@ -140,7 +159,8 @@ function note(id: number, source: ChatExchange, createdAt: string): AgentNote {
         exchangeId: source.id,
         anchor: source.anchor,
         text: source.answer,
-        commit: MEDIUM_HEAD_COMMIT,
+        lostAnchor: false,
+        origin: { commit: MEDIUM_HEAD_COMMIT, anchor: source.anchor },
         createdAt,
     };
 }
@@ -225,6 +245,15 @@ function makeMediumChatFixtures(): ChatFixtures {
             updatedAt: '2026-08-20T09:23:14.000Z',
         }),
         exchange({
+            id: 10,
+            question: 'Why does the policy need a separate `explain` if the API does not return it?',
+            anchor: anchor(P.editPolicy, 45, 56),
+            status: 'done',
+            answer: ANSWER_EXPLAIN,
+            createdAt: '2026-08-20T09:26:00.000Z',
+            updatedAt: '2026-08-20T09:26:11.000Z',
+        }),
+        exchange({
             id: 9,
             question: 'How is the window calculated for a mixed basket?',
             anchor: anchor(P.editWindow, 31, 43),
@@ -235,14 +264,51 @@ function makeMediumChatFixtures(): ChatFixtures {
         }),
     ];
 
+    // Notes 2–4 are on `edit-window.ts`, untouched by the second push, so they move.
+    // Note 5 shifts with the range in `edit-policy.ts`. Note 1 is on lines
+    // rewritten by the push, so it loses its anchor.
+    const notes = [
+        note(1, exchangeById(exchanges, 1), '2026-08-20T09:12:18.000Z'),
+        note(2, exchangeById(exchanges, 7), '2026-08-20T09:22:16.000Z'),
+        note(3, exchangeById(exchanges, 8), '2026-08-20T09:23:14.000Z'),
+        note(4, exchangeById(exchanges, 9), '2026-08-20T09:24:12.000Z'),
+        note(5, exchangeById(exchanges, 10), '2026-08-20T09:26:11.000Z'),
+    ];
+
+    return { exchanges, notes, notesAfterPush: notes.map(afterPush) };
+}
+
+/**
+ * Shift of a note range in the second iteration. `lost` means the push rewrote the lines,
+ * so the anchor could not be carried over.
+ */
+const NOTE_MIGRATION: Record<string, number | 'lost'> = {
+    [P.editWindow]: 0,
+    [P.editPolicy]: 6,
+    [P.handlers]: 'lost',
+};
+
+/**
+ * Note as seen in the second iteration. A lost `anchor` keeps its last valid value
+ * (`agentNoteSchema` contract), and `origin` never moves.
+ */
+function afterPush(source: AgentNote): AgentNote {
+    const shift = NOTE_MIGRATION[source.anchor.path];
+    if (shift === undefined) {
+        throw new Error(`no anchor carryover defined for the note on ${source.anchor.path}`);
+    }
+    if (shift === 'lost') {
+        return { ...source, lostAnchor: true };
+    }
     return {
-        exchanges,
-        notes: [
-            note(1, exchangeById(exchanges, 1), '2026-08-20T09:12:18.000Z'),
-            note(2, exchangeById(exchanges, 7), '2026-08-20T09:22:16.000Z'),
-            note(3, exchangeById(exchanges, 8), '2026-08-20T09:23:14.000Z'),
-            note(4, exchangeById(exchanges, 9), '2026-08-20T09:24:12.000Z'),
-        ],
+        ...source,
+        anchor: {
+            ...source.anchor,
+            diffId: MEDIUM_DIFF_ID_V2,
+            fileId: makeFileId(MEDIUM_DIFF_ID_V2, source.anchor.path),
+            start: source.anchor.start + shift,
+            end: source.anchor.end + shift,
+        },
     };
 }
 
@@ -254,6 +320,7 @@ function validate(fixtures: ChatFixtures): ChatFixtures {
     return {
         exchanges: fixtures.exchanges.map((item) => chatExchangeSchema.parse(item)),
         notes: fixtures.notes.map((item) => agentNoteSchema.parse(item)),
+        notesAfterPush: fixtures.notesAfterPush.map((item) => agentNoteSchema.parse(item)),
     };
 }
 

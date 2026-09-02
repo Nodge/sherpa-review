@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
-import type { AgentNote, ChatExchange, UiChatResponse, UiState } from '@sherpa/protocol';
+import { fixtureIteration } from '@sherpa/fixtures';
+import type { AgentNote, ChatAnchor, ChatExchange, UiChatResponse, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,20 +12,16 @@ import type { Store, StoreSnapshot } from './store.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const EMPTY_CHAT: UiChatResponse = { exchanges: [], notes: [], chatRevision: 1 };
+const NOTE_ANCHOR: ChatAnchor = { diffId: DATA.diff.diffId, fileId: 'file-1', path: 'src/cache.ts', side: 'new', start: 41, end: 43 };
 const NOTE: AgentNote = {
     id: 31,
     exchangeId: 7,
-    anchor: {
-        fileId: 'file-1',
-        path: 'src/cache.ts',
-        side: 'new',
-        start: 41,
-        end: 43,
-    },
+    anchor: NOTE_ANCHOR,
     text: 'Agent answer',
-    commit: 'abcdef1',
+    lostAnchor: false,
+    origin: { commit: 'abcdef1', anchor: NOTE_ANCHOR },
     createdAt: '2026-09-01T10:01:00.000Z',
 };
 
@@ -141,6 +137,7 @@ function mountApp(options: {
         reviewHost: 'fixture',
         pr: DATA.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        iterations: [],
     };
     let snapshot: StoreSnapshot = {
         connection: 'online',

@@ -1,5 +1,12 @@
-import type { Comment, ReviewHost, Thread } from '@sherpa/protocol';
-import { fileContentSchema, lensSchema, prDiffSchema, prMetaSchema, threadSchema } from '@sherpa/protocol';
+import type { Comment, Iteration, ReviewHost, Thread } from '@sherpa/protocol';
+import {
+    fileContentSchema,
+    iterationSchema,
+    lensSchema,
+    prDiffSchema,
+    prMetaSchema,
+    threadSchema,
+} from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -11,9 +18,15 @@ import { describe, expect, it } from 'vitest';
  * after every change, the two-stage draft model and verdict semantics (SPEC §4.5).
  */
 
-export interface ReviewHostContractOptions {
+export interface ReviewHostContractOptions<H extends ReviewHost> {
     /** Host supports writes (drafts, resolve, publication). Read-only mocks use `false`. */
     readonly writes?: boolean;
+    /**
+     * "Author pushed": advance the host to the next iteration (fixture uses
+     * `advanceIteration()`). Without this hook, skip iteration-change
+     * tests: a host with one iteration has nothing to test them on.
+     */
+    readonly advance?: (host: H) => void | Promise<void>;
 }
 
 interface ThreadFeed {
@@ -57,6 +70,27 @@ async function waitFreshSnapshot(
     what: string,
 ): Promise<void> {
     await waitUntil(() => feed.snapshots.length > seen && condition(), what);
+}
+
+interface IterationFeed {
+    readonly snapshots: Iteration[][];
+    readonly stop: () => void;
+}
+
+function subscribeIterations(host: ReviewHost): IterationFeed {
+    const snapshots: Iteration[][] = [];
+    const stop = host.watchIterations((iterations) => {
+        snapshots.push(iterations);
+    });
+    return { snapshots, stop };
+}
+
+function activeOf(iterations: readonly Iteration[]): Iteration {
+    const active = iterations.filter((iteration) => iteration.status === 'active');
+    if (active.length !== 1 || active[0] === undefined) {
+        throw new Error(`expected exactly one active iteration, got ${String(active.length)}`);
+    }
+    return active[0];
 }
 
 function lastSnapshot(feed: ThreadFeed): Thread[] {
@@ -123,12 +157,13 @@ function patchContextLines(patch: string): { line: number; text: string }[] {
     return found;
 }
 
-export function describeReviewHostContract(
+export function describeReviewHostContract<H extends ReviewHost>(
     name: string,
-    makeHost: () => ReviewHost,
-    options: ReviewHostContractOptions = {},
+    makeHost: () => H,
+    options: ReviewHostContractOptions<H> = {},
 ): void {
     const writes = options.writes ?? true;
+    const advance = options.advance;
 
     describe(`ReviewHost contract: ${name}`, () => {
         it('getPr returns a valid PR header', async () => {
@@ -187,6 +222,126 @@ export function describeReviewHostContract(
             expect(newLines.length).toBeGreaterThan(0);
             for (const context of patchContextLines(text.patch)) {
                 expect(newLines[context.line - 1], `${text.path}:${String(context.line)}`).toBe(context.text);
+            }
+        });
+
+        it('listIterations has exactly one active iteration, none gone, and nondecreasing timestamps', async () => {
+            const iterations = await makeHost().listIterations();
+
+            expect(iterations.length).toBeGreaterThan(0);
+            for (const iteration of iterations) {
+                expect(() => iterationSchema.parse(iteration)).not.toThrow();
+            }
+            // Only the server sets `gone`, by comparing the host list with its storage.
+            expect(iterations.filter((iteration) => iteration.status === 'gone')).toEqual([]);
+            expect(activeOf(iterations)).toBeDefined();
+
+            const created = iterations.map((iteration) => iteration.createdAt);
+            expect([...created].sort((left, right) => left.localeCompare(right))).toEqual(created);
+        });
+
+        it('slices between iterations agree with capabilities.iterations', async () => {
+            const host = makeHost();
+            const [pr, iterations] = await Promise.all([host.getPr(), host.listIterations()]);
+
+            if (!pr.capabilities.iterations) {
+                expect(iterations).toHaveLength(1);
+                const only = activeOf(iterations).diffId;
+                await expect(host.getDiff({ base: only, head: only })).rejects.toThrow();
+                return;
+            }
+            if (iterations.length < 2) {
+                return;
+            }
+
+            const head = activeOf(iterations);
+            const base = iterations.filter((iteration) => iteration.diffId !== head.diffId).at(-1);
+            if (base === undefined) {
+                throw new Error('list has no iteration other than the active one');
+            }
+
+            const slice = await host.getDiff({ base: base.diffId, head: head.diffId });
+            expect(() => prDiffSchema.parse(slice)).not.toThrow();
+            expect(slice.diffId).toBe(head.diffId);
+            const ids = new Set(slice.files.map((file) => file.fileId));
+            expect(ids.size).toBe(slice.files.length);
+        });
+
+        // Slice paths are checked here. There is no separate endpoint for the previous iteration diff,
+        // so the only way to learn its files through the interface is to read them before the "push".
+        it.runIf(advance !== undefined)('a slice between old and new iterations uses paths from their union', async () => {
+            const host = makeHost();
+            if (!(await host.getPr()).capabilities.iterations) {
+                return;
+            }
+
+            const before = await host.getDiff();
+            await advance?.(host);
+            const after = await host.getDiff();
+
+            const slice = await host.getDiff({ base: before.diffId, head: after.diffId });
+            expect(() => prDiffSchema.parse(slice)).not.toThrow();
+            expect(slice.diffId).toBe(after.diffId);
+
+            const union = new Set([...before.files, ...after.files].map((file) => file.path));
+            for (const file of slice.files) {
+                expect(union.has(file.path), `${file.path} is absent from both iterations`).toBe(true);
+            }
+        });
+
+        it('a slice with an unknown iteration is rejected instead of returning an empty diff', async () => {
+            const host = makeHost();
+            const head = activeOf(await host.listIterations()).diffId;
+            await expect(host.getDiff({ base: 'no-such-iteration', head })).rejects.toThrow();
+        });
+
+        it('watchIterations sends the initial list immediately', async () => {
+            const host = makeHost();
+            const feed = subscribeIterations(host);
+            await waitUntil(() => feed.snapshots.length > 0, 'initial iteration list');
+
+            const first = feed.snapshots[0] ?? [];
+            for (const iteration of first) {
+                expect(() => iterationSchema.parse(iteration)).not.toThrow();
+            }
+            expect(activeOf(first)).toBeDefined();
+            feed.stop();
+        });
+
+        it.runIf(advance !== undefined)('a push delivers a list with a different active iteration', async () => {
+            const host = makeHost();
+            const feed = subscribeIterations(host);
+            await waitUntil(() => feed.snapshots.length > 0, 'initial iteration list');
+            const before = activeOf(feed.snapshots[0] ?? []);
+
+            await advance?.(host);
+            await waitUntil(
+                () =>
+                    feed.snapshots.length > 1 &&
+                    activeOf(feed.snapshots.at(-1) ?? []).diffId !== before.diffId,
+                'iteration list with a new active iteration',
+            );
+
+            const after = activeOf(feed.snapshots.at(-1) ?? []);
+            expect(after.diffId).not.toBe(before.diffId);
+            expect(() => iterationSchema.parse(after)).not.toThrow();
+            feed.stop();
+        });
+
+        it.runIf(advance !== undefined)('after a push, the diff and threads belong to the new iteration', async () => {
+            const host = makeHost();
+            const before = await host.getDiff();
+
+            await advance?.(host);
+
+            const after = await host.getDiff();
+            expect(() => prDiffSchema.parse(after)).not.toThrow();
+            expect(after.diffId).not.toBe(before.diffId);
+            expect(after.diffId).toBe(activeOf(await host.listIterations()).diffId);
+
+            // Thread contents in the new iteration are up to the implementation. The contract promises their shape.
+            for (const thread of await host.getThreads()) {
+                expect(() => threadSchema.parse(thread)).not.toThrow();
             }
         });
 

@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -20,7 +20,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * the fixture, and a reduced snapshot would show 20% explained.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 /** The fixture digest stop. Full tour and Triage do not affect it. */
 const DIGEST_STOP = 's04';

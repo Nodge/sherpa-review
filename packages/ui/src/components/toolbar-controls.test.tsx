@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -8,7 +8,7 @@ import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { DEFAULT_THREADS_SHOW } from '../session/session-store.js';
 import { ToolbarRightCluster } from './toolbar-controls.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 describe('right-hand toolbar controls', () => {
     it('fixes the shared contents and order for the route and full diff', () => {

@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { FileDiff, Lens } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -156,7 +156,7 @@ describe('buildFileFilters', () => {
     });
 
     it('large: empty unavailable PCI is hidden while nonempty ownership and generated remain', () => {
-        const data = fixtureData('large');
+        const data = fixtureIteration('large');
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,
@@ -168,7 +168,7 @@ describe('buildFileFilters', () => {
     });
 
     it('edge: ownership without a zone stays disabled with the host reason', () => {
-        const data = fixtureData('edge');
+        const data = fixtureIteration('edge');
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,
@@ -184,7 +184,7 @@ describe('buildFileFilters', () => {
     });
 
     it('medium: both host lenses and generated form the complete list', () => {
-        const data = fixtureData('medium');
+        const data = fixtureIteration('medium');
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,

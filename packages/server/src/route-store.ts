@@ -18,8 +18,14 @@ import { applyFilling } from './route/index.js';
 /** Route change listener consumed by the UI SSE channel (`UI_ROUTE_EVENT`). */
 export type RouteListener = (revision: number) => void;
 
-/** The only row in the table: a PR has one snapshot in M2. */
+/** The only `route_state` row. A PR has one generation state and many snapshots. */
 const SLOT_ID = 1;
+
+/**
+ * Fallback for `baseCommit` in a snapshot written before M4 when its iteration is not yet stored:
+ * It cannot support comparisons, but an unrelated commit would be worse than "unknown".
+ */
+const UNKNOWN_BASE_COMMIT = 'unknown';
 
 /** Content hash length in hex characters, displayed in the snapshot selector ("snapshot 3f2a… · current"). */
 const CONTENT_HASH_LENGTH = 12;
@@ -48,15 +54,22 @@ export interface AcceptedSkeletonInput {
     readonly diff: PrDiff;
     readonly provenance: RouteProvenance;
     readonly snapshotId: string;
+    /** Snapshot that was current at acceptance. null means this is the first route generation. */
+    readonly previousSnapshotId: string | null;
 }
 
 interface RouteStateRow extends SqlRow {
     phase: string;
     small_pr: number | null;
-    snapshot: string | null;
+    current_snapshot_id: string | null;
     failure_message: string | null;
     failure_raw_output: string | null;
     intents: string;
+}
+
+interface RouteSnapshotRow extends SqlRow {
+    snapshot_id: string;
+    snapshot_json: string;
 }
 
 interface RouteTaskRow extends SqlRow {
@@ -65,7 +78,8 @@ interface RouteTaskRow extends SqlRow {
     plan_indexes: string;
 }
 
-const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null };
+// M4-T4 computes stale.
+const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null };
 
 /**
  * PR route state (M2-T4): generation phase, snapshot and failure reason, the source of truth for the UI.
@@ -118,6 +132,33 @@ export class RouteStore {
         return structuredClone(this.state);
     }
 
+    /** Current PR snapshot. null means no route now (generation never started, was reset or failed). */
+    current(): RouteSnapshot | null {
+        return this.state.snapshot === null ? null : structuredClone(this.state.snapshot);
+    }
+
+    /**
+     * All PR snapshots in creation order. History is never cleared because an old snapshot is
+     * the only way to read a previous iteration's route (brief F3, M4 "Stage boundaries").
+     * A corrupt row is skipped with a warning, leaving the rest of history readable.
+     */
+    listSnapshots(): RouteSnapshot[] {
+        const rows = this.db
+            .prepare('SELECT snapshot_id, snapshot_json FROM route_snapshots ORDER BY created_at, rowid')
+            .all() as RouteSnapshotRow[];
+        return rows.flatMap((row) => {
+            const snapshot = this.parseSnapshotRow(row);
+            return snapshot === null ? [] : [snapshot];
+        });
+    }
+
+    getSnapshot(snapshotId: string): RouteSnapshot | null {
+        const row = this.db
+            .prepare('SELECT snapshot_id, snapshot_json FROM route_snapshots WHERE snapshot_id = ?')
+            .get(snapshotId) as RouteSnapshotRow | undefined;
+        return row === undefined ? null : this.parseSnapshotRow(row);
+    }
+
     /**
      * Draft stop intents from the accepted skeleton. The snapshot contract excludes them,
      * but the section scheduler needs them to build the prompt (T5).
@@ -131,14 +172,21 @@ export class RouteStore {
         this.commit({ ...this.state, phase: 'reading', failure: null }, new Map());
     }
 
-    /** Skeleton accepted: commit the new snapshot and clear previous stop progress together. */
+    /**
+     * Skeleton accepted: commit the new snapshot and clear previous stop progress together.
+     * Adds a row to `route_snapshots` without changing or deleting previous rows.
+     */
     acceptSkeleton(input: AcceptedSkeletonInput, clearStopProgress?: () => () => void): void {
         const snapshot: RouteSnapshot = {
             snapshotId: input.snapshotId,
             commit: input.diff.headCommit,
+            baseCommit: input.diff.baseCommit,
             diffId: input.diff.diffId,
             createdAt: this.now().toISOString(),
             provenance: input.provenance,
+            previousSnapshotId: input.previousSnapshotId,
+            // M4-T6 computes the progress carryover result.
+            carried: null,
             summary: input.skeleton.summary,
             stops: input.skeleton.stops,
             tourOrder: input.skeleton.tourOrder,
@@ -351,14 +399,42 @@ export class RouteStore {
         afterCommit?.();
     }
 
+    /**
+     * The current snapshot has its own row in `route_snapshots` (keyed by id), while `route_state`
+     * holds only a reference to it. PR snapshot history is never overwritten.
+     */
     private writeInTransaction(state: UiRouteState, intents: ReadonlyMap<number, string>): void {
+        const snapshot = state.snapshot === null ? null : routeSnapshotSchema.parse(state.snapshot);
+        if (snapshot !== null) {
+            this.db
+                .prepare(
+                    `INSERT INTO route_snapshots (
+                        snapshot_id, diff_id, created_at, previous_snapshot_id, snapshot_json, content_hash
+                     ) VALUES (?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(snapshot_id) DO UPDATE SET
+                        diff_id = excluded.diff_id, created_at = excluded.created_at,
+                        previous_snapshot_id = excluded.previous_snapshot_id,
+                        snapshot_json = excluded.snapshot_json, content_hash = excluded.content_hash`,
+                )
+                .run(
+                    snapshot.snapshotId,
+                    snapshot.diffId,
+                    snapshot.createdAt,
+                    snapshot.previousSnapshotId,
+                    JSON.stringify(snapshot),
+                    snapshot.contentHash,
+                );
+        }
+
         this.db
             .prepare(
                 `INSERT INTO route_state (
-                    id, phase, small_pr, snapshot, failure_message, failure_raw_output, intents, updated_at
+                    id, phase, small_pr, current_snapshot_id, failure_message, failure_raw_output,
+                    intents, updated_at
                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT(id) DO UPDATE SET
-                    phase = excluded.phase, small_pr = excluded.small_pr, snapshot = excluded.snapshot,
+                    phase = excluded.phase, small_pr = excluded.small_pr,
+                    current_snapshot_id = excluded.current_snapshot_id,
                     failure_message = excluded.failure_message,
                     failure_raw_output = excluded.failure_raw_output,
                     intents = excluded.intents, updated_at = excluded.updated_at`,
@@ -367,12 +443,42 @@ export class RouteStore {
                 SLOT_ID,
                 state.phase,
                 state.smallPr ? 1 : 0,
-                state.snapshot === null ? null : JSON.stringify(routeSnapshotSchema.parse(state.snapshot)),
+                snapshot?.snapshotId ?? null,
                 state.failure?.message ?? null,
                 state.failure?.rawOutput ?? null,
                 JSON.stringify([...intents]),
                 this.now().toISOString(),
             );
+    }
+
+    /**
+     * Read a snapshot from a storage row. Snapshots written before M4 (without `baseCommit`, `previousSnapshotId`,
+     * `carried`, `stops[].change`) get defaults. Otherwise the schema would reject
+     * the whole snapshot, silently turning a route used for dogfooding into "no route".
+     * A corrupt row produces a warning and `null`, leaving the rest of history readable.
+     */
+    private parseSnapshotRow(row: RouteSnapshotRow): RouteSnapshot | null {
+        try {
+            return routeSnapshotSchema.parse(
+                withSnapshotDefaults(JSON.parse(row.snapshot_json) as unknown, (diffId) =>
+                    this.baseCommitOf(diffId),
+                ),
+            );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            process.stderr.write(
+                `sherpa-server: stored route snapshot ${row.snapshot_id} is corrupt (${message}), skipped\n`,
+            );
+            return null;
+        }
+    }
+
+    /** Iteration's review base from local patch storage. null means the iteration is absent. */
+    private baseCommitOf(diffId: string): string | null {
+        const row = this.db.prepare('SELECT base_commit FROM iterations WHERE diff_id = ?').get(diffId) as
+            | { base_commit: string }
+            | undefined;
+        return row?.base_commit ?? null;
     }
 
     /**
@@ -390,7 +496,12 @@ export class RouteStore {
 
         try {
             const snapshot =
-                row.snapshot === null ? null : routeSnapshotSchema.parse(JSON.parse(row.snapshot) as unknown);
+                row.current_snapshot_id === null ? null : this.getSnapshot(row.current_snapshot_id);
+            if (row.current_snapshot_id !== null && snapshot === null) {
+                // The current snapshot row is missing or unreadable. A phase without a snapshot would falsely tell
+                // the UI that a route is ready when none exists.
+                throw new Error(`snapshot ${row.current_snapshot_id} is unreadable`);
+            }
             const state = uiRouteStateSchema.parse({
                 phase: row.phase,
                 smallPr: row.small_pr === 1,
@@ -399,6 +510,8 @@ export class RouteStore {
                     row.failure_message === null
                         ? null
                         : { message: row.failure_message, rawOutput: row.failure_raw_output },
+                // M4-T4 computes stale.
+                stale: null,
             });
             return { state, intents: parseIntents(row.intents) };
         } catch (error) {
@@ -449,6 +562,42 @@ export function contentHashOf(snapshot: RouteSnapshot): string {
         })),
     });
     return createHash('sha256').update(payload).digest('hex').slice(0, CONTENT_HASH_LENGTH);
+}
+
+/**
+ * Fields absent from pre-M4 snapshots. `baseCommit` comes from the locally stored iteration
+ * (it may not have been written yet, in which case it is "unknown"). The rest default to null because there is no basis for carrying over progress
+ * or computing `change` from a snapshot built without these data.
+ */
+function withSnapshotDefaults(raw: unknown, baseCommitOf: (diffId: string) => string | null): unknown {
+    if (typeof raw !== 'object' || raw === null) {
+        return raw;
+    }
+
+    const snapshot = raw as Record<string, unknown>;
+    const diffId = snapshot.diffId;
+    const stops = snapshot.stops;
+    return {
+        ...snapshot,
+        baseCommit:
+            snapshot.baseCommit ??
+            (typeof diffId === 'string' ? baseCommitOf(diffId) : null) ??
+            UNKNOWN_BASE_COMMIT,
+        previousSnapshotId: snapshot.previousSnapshotId ?? null,
+        carried: snapshot.carried ?? null,
+        // Return non-arrays as is. A default would turn a corrupt row into a valid empty
+        // route, but the schema must reject it.
+        stops: Array.isArray(stops)
+            ? (stops as unknown[]).map((stop) =>
+                  typeof stop === 'object' && stop !== null
+                      ? {
+                            ...(stop as Record<string, unknown>),
+                            change: (stop as Record<string, unknown>).change ?? null,
+                        }
+                      : stop,
+              )
+            : stops,
+    };
 }
 
 function withNote(stop: RouteStop, note: string | undefined): string[] {

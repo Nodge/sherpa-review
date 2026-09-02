@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,7 @@ import { FullDiffToolbar } from './full-diff.tsx';
 
 /** The toolbar reports its height to the view, which uses it for all full diff sticky offsets. */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
