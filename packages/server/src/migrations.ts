@@ -271,6 +271,93 @@ export const MIGRATIONS: readonly Migration[] = [
             DELETE FROM route_tasks;
         `,
     },
+    {
+        // Reading progress gains an iteration dimension (M4-T6, planning decision 4). File marks and
+        // seen ranges are keyed by iteration, stop marks by snapshot. After a push, progress
+        // in the previous iteration must stay readable, and stops in the new snapshot receive their
+        // marks through carryover. `progress_carries` records completed carryovers. Recalculating would restore
+        // a mark the reviewer had already cleared.
+        //
+        // SQLite cannot change a PK, so tables are recreated with a copy (as in `010`).
+        // Rows from the dogfooding database move to the active iteration or, if absent, the current
+        // snapshot's iteration, or, if that is absent too, `unknown` (`LEGACY_DIFF_ID`). Such a server has no host,
+        // and this is its only "iteration". Stop marks without a snapshot have no meaning
+        // and are deleted.
+        name: '012-progress-iterations',
+        sql: `
+            CREATE TABLE file_progress_next (
+                diff_id TEXT NOT NULL,
+                file_id TEXT NOT NULL,
+                viewed INTEGER NOT NULL CHECK (viewed IN (0, 1)),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (diff_id, file_id)
+            );
+
+            INSERT INTO file_progress_next (diff_id, file_id, viewed, updated_at)
+            SELECT COALESCE(
+                       (SELECT diff_id FROM iterations WHERE status = 'active' LIMIT 1),
+                       (SELECT s.diff_id FROM route_snapshots s
+                          JOIN route_state r ON r.current_snapshot_id = s.snapshot_id LIMIT 1),
+                       'unknown'
+                   ),
+                   file_id, viewed, updated_at
+              FROM file_progress;
+
+            DROP TABLE file_progress;
+            ALTER TABLE file_progress_next RENAME TO file_progress;
+
+            CREATE TABLE file_seen_ranges_next (
+                diff_id TEXT NOT NULL,
+                file_id TEXT NOT NULL,
+                side TEXT NOT NULL CHECK (side IN ('old', 'new')),
+                start_line INTEGER NOT NULL CHECK (start_line >= 1),
+                end_line INTEGER NOT NULL CHECK (end_line >= start_line),
+                source_stop_id TEXT,
+                carried_from TEXT
+            );
+
+            INSERT INTO file_seen_ranges_next (
+                diff_id, file_id, side, start_line, end_line, source_stop_id, carried_from
+            )
+            SELECT COALESCE(
+                       (SELECT diff_id FROM iterations WHERE status = 'active' LIMIT 1),
+                       (SELECT s.diff_id FROM route_snapshots s
+                          JOIN route_state r ON r.current_snapshot_id = s.snapshot_id LIMIT 1),
+                       'unknown'
+                   ),
+                   file_id, side, start_line, end_line, source_stop_id, NULL
+              FROM file_seen_ranges;
+
+            DROP TABLE file_seen_ranges;
+            ALTER TABLE file_seen_ranges_next RENAME TO file_seen_ranges;
+
+            CREATE INDEX file_seen_ranges_file ON file_seen_ranges (diff_id, file_id);
+            CREATE INDEX file_seen_ranges_stop ON file_seen_ranges (source_stop_id);
+
+            CREATE TABLE stop_progress_next (
+                snapshot_id TEXT NOT NULL,
+                stop_id TEXT NOT NULL,
+                viewed INTEGER NOT NULL CHECK (viewed IN (0, 1)),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (snapshot_id, stop_id)
+            );
+
+            INSERT INTO stop_progress_next (snapshot_id, stop_id, viewed, updated_at)
+            SELECT (SELECT current_snapshot_id FROM route_state), stop_id, viewed, updated_at
+              FROM stop_progress
+             WHERE (SELECT current_snapshot_id FROM route_state) IS NOT NULL;
+
+            DROP TABLE stop_progress;
+            ALTER TABLE stop_progress_next RENAME TO stop_progress;
+
+            CREATE TABLE progress_carries (
+                from_diff_id TEXT NOT NULL,
+                to_diff_id TEXT NOT NULL,
+                carried_at TEXT NOT NULL,
+                PRIMARY KEY (from_diff_id, to_diff_id)
+            );
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

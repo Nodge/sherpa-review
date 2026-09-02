@@ -1,13 +1,45 @@
 import path from 'node:path';
 
+import type { FileDiff, PrDiff, RouteAnchor } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
+import type { StoredIteration } from './iteration-store.js';
+import type { IterationMap } from './iterations/index.js';
+import { buildIterationMap, identityMap } from './iterations/index.js';
 import { ProgressStore } from './progress-store.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
-/** Reading progress (T8): persisting explicit marks, revision and change subscription. */
+/**
+ * Reading progress (T8) by iteration (M4-T6): persists explicit marks, carries ranges
+ * and file marks over to a new iteration, marks stops in a new snapshot.
+ */
+
+const V1 = 'iter-1';
+const V2 = 'iter-2';
+const BASE = 'base-a1b2c3';
+const CLOCK = 'services/orders/src/infra/clock.ts';
+const ORDER = 'services/orders/src/domain/order.ts';
+const HEADERS = ['--- a/x.ts', '+++ b/x.ts'];
+
+/** Changes to lines 12–13 of `CLOCK` in the interdiff: one deleted, two added (delta +1). */
+const CLOCK_PATCH = [
+    ...HEADERS,
+    '@@ -10,6 +10,7 @@',
+    ' ctx10',
+    ' ctx11',
+    '-del12',
+    '+add12',
+    '+add13',
+    ' ctx13',
+    ' ctx14',
+    ' ctx15',
+].join('\n');
+
+/** Iteration patch: lines 1–5 added, which the reviewer marks as viewed in tests. */
+const ADDED_LINES = [...HEADERS, '@@ -1,0 +1,5 @@', '+one', '+two', '+three', '+four', '+five'].join('\n');
+
 describe('reading progress store', () => {
     let sherpaDir: string;
     let file: string;
@@ -31,49 +63,66 @@ describe('reading progress store', () => {
         return db;
     }
 
+    function insertRange(db: SherpaDatabase, diffId: string, fileId: string, start: number, end: number): void {
+        db.prepare(
+            `INSERT INTO file_seen_ranges (diff_id, file_id, side, start_line, end_line)
+             VALUES (?, ?, 'new', ?, ?)`,
+        ).run(diffId, fileId, start, end);
+    }
+
     it('starts with no records and revision zero', () => {
         const store = new ProgressStore({ db: open() });
 
-        expect(store.read()).toEqual([]);
+        expect(store.read(V1)).toEqual([]);
         expect(store.revision).toBe(0);
     });
 
     it('writes and clears a mark and preserves it across database reopen', () => {
         const store = new ProgressStore({ db: open() });
 
-        store.setFileViewed('file-1', true);
-        store.setFileViewed('file-2', false);
+        store.setFileViewed(V1, 'file-1', true);
+        store.setFileViewed(V1, 'file-2', false);
 
-        expect(store.read()).toEqual([
+        expect(store.read(V1)).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [] },
             { fileId: 'file-2', viewed: false, seenRanges: [] },
         ]);
 
         // A new server process: the revision starts over, while records remain.
         const restarted = new ProgressStore({ db: open() });
-        expect(restarted.read()).toEqual([
+        expect(restarted.read(V1)).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [] },
             { fileId: 'file-2', viewed: false, seenRanges: [] },
         ]);
         expect(restarted.revision).toBe(0);
     });
 
+    it('keeps progress from one iteration invisible to another', () => {
+        const store = new ProgressStore({ db: open() });
+
+        store.setFileViewed(V1, 'file-1', true);
+        insertRange(open(), V1, 'file-9', 1, 2);
+
+        expect(store.read(V2)).toEqual([]);
+        expect(store.read(V1)).toHaveLength(2);
+    });
+
     it('overwrites the value when marking again instead of adding rows', () => {
         const store = new ProgressStore({ db: open() });
 
-        store.setFileViewed('file-1', true);
-        store.setFileViewed('file-1', false);
+        store.setFileViewed(V1, 'file-1', true);
+        store.setFileViewed(V1, 'file-1', false);
 
-        expect(store.read()).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
+        expect(store.read(V1)).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
     });
 
     it('increments the revision on each change and leaves it unchanged on an idempotent write', () => {
         const store = new ProgressStore({ db: open() });
 
-        expect(store.setFileViewed('file-1', true)).toBe(1);
-        expect(store.setFileViewed('file-1', false)).toBe(2);
+        expect(store.setFileViewed(V1, 'file-1', true)).toBe(1);
+        expect(store.setFileViewed(V1, 'file-1', false)).toBe(2);
         // Nothing changed, so there is nothing to notify other tabs about.
-        expect(store.setFileViewed('file-1', false)).toBe(2);
+        expect(store.setFileViewed(V1, 'file-1', false)).toBe(2);
         expect(store.revision).toBe(2);
     });
 
@@ -84,34 +133,26 @@ describe('reading progress store', () => {
             seen.push(revision);
         });
 
-        store.setFileViewed('file-1', true);
-        store.setFileViewed('file-1', true);
-        store.setFileViewed('file-2', true);
+        store.setFileViewed(V1, 'file-1', true);
+        store.setFileViewed(V1, 'file-1', true);
+        store.setFileViewed(V1, 'file-2', true);
         stop();
-        store.setFileViewed('file-3', true);
+        store.setFileViewed(V1, 'file-3', true);
 
         expect(seen).toEqual([1, 2]);
     });
 
     it('reads seen ranges with marks and leaves a file with only ranges unpinned', () => {
         const db = open();
-        // No range writes in M1. M2 stops will write them. Read tests use direct inserts.
-        db.prepare('INSERT INTO file_seen_ranges (file_id, side, start_line, end_line) VALUES (?, ?, ?, ?)').run(
-            'file-1',
-            'new',
-            10,
-            20,
-        );
-        db.prepare('INSERT INTO file_seen_ranges (file_id, side, start_line, end_line) VALUES (?, ?, ?, ?)').run(
-            'file-2',
-            'old',
-            1,
-            3,
-        );
+        insertRange(db, V1, 'file-1', 10, 20);
+        db.prepare(
+            `INSERT INTO file_seen_ranges (diff_id, file_id, side, start_line, end_line)
+             VALUES (?, ?, 'old', ?, ?)`,
+        ).run(V1, 'file-2', 1, 3);
         const store = new ProgressStore({ db });
-        store.setFileViewed('file-1', true);
+        store.setFileViewed(V1, 'file-1', true);
 
-        expect(store.read()).toEqual([
+        expect(store.read(V1)).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [{ side: 'new', start: 10, end: 20 }] },
             { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'old', start: 1, end: 3 }] },
         ]);
@@ -121,15 +162,17 @@ describe('reading progress store', () => {
         const store = new ProgressStore({ db: open() });
 
         expect(
-            store.setStopViewed('s01', true, [
+            store.setStopViewed('snap-1', V1, 's01', true, [
                 { fileId: 'file-1', side: 'new', start: 10, end: 14 },
                 { fileId: 'file-2', side: 'old', start: 3, end: 3 },
             ]),
         ).toBe(1);
 
         const restarted = new ProgressStore({ db: open() });
-        expect(restarted.readStops()).toEqual([{ stopId: 's01', viewed: true }]);
-        expect(restarted.read()).toEqual([
+        expect(restarted.readStops('snap-1')).toEqual([{ stopId: 's01', viewed: true }]);
+        // Marks for another snapshot belong to another route.
+        expect(restarted.readStops('snap-2')).toEqual([]);
+        expect(restarted.read(V1)).toEqual([
             { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
             { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'old', start: 3, end: 3 }] },
         ]);
@@ -142,85 +185,71 @@ describe('reading progress store', () => {
             { fileId: 'file-1', side: 'old' as const, start: 2, end: 4 },
         ];
 
-        expect(store.setStopViewed('s01', true, ranges)).toBe(1);
+        expect(store.setStopViewed('snap-1', V1, 's01', true, ranges)).toBe(1);
         // Order and duplicates in the request do not change the store.
-        expect(store.setStopViewed('s01', true, [...ranges].reverse())).toBe(1);
-        expect(store.setStopViewed('s01', true, [...ranges, ...ranges])).toBe(1);
+        expect(store.setStopViewed('snap-1', V1, 's01', true, [...ranges].reverse())).toBe(1);
+        expect(store.setStopViewed('snap-1', V1, 's01', true, [...ranges, ...ranges])).toBe(1);
         // A different set does change it.
-        expect(store.setStopViewed('s01', true, ranges.slice(0, 1))).toBe(2);
+        expect(store.setStopViewed('snap-1', V1, 's01', true, ranges.slice(0, 1))).toBe(2);
     });
 
     it('clears a mark by deleting only that stop\'s ranges', () => {
         const store = new ProgressStore({ db: open() });
-        store.setStopViewed('s01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
-        store.setStopViewed('s02', true, [{ fileId: 'file-1', side: 'new', start: 40, end: 41 }]);
-        store.setFileViewed('file-1', true);
+        store.setStopViewed('snap-1', V1, 's01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
+        store.setStopViewed('snap-1', V1, 's02', true, [{ fileId: 'file-1', side: 'new', start: 40, end: 41 }]);
+        store.setFileViewed(V1, 'file-1', true, 'snap-1');
 
-        store.setStopViewed('s01', false, []);
+        store.setStopViewed('snap-1', V1, 's01', false, []);
 
-        expect(store.readStops()).toEqual([
+        expect(store.readStops('snap-1')).toEqual([
             { stopId: 's01', viewed: false },
             { stopId: 's02', viewed: true },
         ]);
         // The manual file mark and neighbouring stop ranges remain.
-        expect(store.read()).toEqual([
+        expect(store.read(V1)).toEqual([
             { fileId: 'file-1', viewed: true, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
         ]);
     });
 
     it('clears affected stops and all their ranges in one revision when clearing a file', () => {
         const store = new ProgressStore({ db: open() });
-        store.setStopViewed('s01', true, [
+        store.setStopViewed('snap-1', V1, 's01', true, [
             { fileId: 'file-1', side: 'new', start: 10, end: 14 },
             { fileId: 'file-2', side: 'old', start: 3, end: 5 },
         ]);
-        store.setStopViewed('s02', true, [
+        store.setStopViewed('snap-1', V1, 's02', true, [
             { fileId: 'file-1', side: 'old', start: 20, end: 21 },
             { fileId: 'file-3', side: 'new', start: 7, end: 9 },
         ]);
         const before = store.revision;
 
-        expect(store.setFileViewed('file-1', false)).toBe(before + 1);
-        expect(store.readStops()).toEqual([
+        expect(store.setFileViewed(V1, 'file-1', false, 'snap-1')).toBe(before + 1);
+        expect(store.readStops('snap-1')).toEqual([
             { stopId: 's01', viewed: false },
             { stopId: 's02', viewed: false },
         ]);
-        expect(store.read()).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
+        expect(store.read(V1)).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
         // Repeating changes nothing: no linking ranges remain and the file flag is unchanged.
-        expect(store.setFileViewed('file-1', false)).toBe(before + 1);
+        expect(store.setFileViewed(V1, 'file-1', false, 'snap-1')).toBe(before + 1);
+    });
+
+    it('also deletes carried ranges with no source stop when clearing a file', () => {
+        const db = open();
+        insertRange(db, V1, 'file-1', 10, 14);
+        const store = new ProgressStore({ db });
+
+        expect(store.setFileViewed(V1, 'file-1', false, 'snap-1')).toBe(1);
+
+        expect(store.read(V1)).toEqual([{ fileId: 'file-1', viewed: false, seenRanges: [] }]);
     });
 
     it('clears a file with no linked stops using the previous file-write behaviour', () => {
         const store = new ProgressStore({ db: open() });
 
-        expect(store.setFileViewed('standalone', false)).toBe(1);
-        expect(store.readStops()).toEqual([]);
-        expect(store.read()).toEqual([{ fileId: 'standalone', viewed: false, seenRanges: [] }]);
-        expect(store.setFileViewed('standalone', false)).toBe(1);
-    });
-
-    it('clearing stop progress removes its ranges and preserves file marks', () => {
-        const db = open();
-        db.prepare('INSERT INTO file_seen_ranges (file_id, side, start_line, end_line) VALUES (?, ?, ?, ?)').run(
-            'file-9',
-            'new',
-            1,
-            2,
-        );
-        const store = new ProgressStore({ db });
-        store.setStopViewed('s01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
-        store.setFileViewed('file-1', true);
-
-        const revision = store.clearStopProgress();
-
-        expect(store.readStops()).toEqual([]);
-        expect(store.read()).toEqual([
-            { fileId: 'file-1', viewed: true, seenRanges: [] },
-            // A range not belonging to a stop survives cleanup.
-            { fileId: 'file-9', viewed: null, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
-        ]);
-        // Nothing to clear, so the revision stays the same.
-        expect(store.clearStopProgress()).toBe(revision);
+        expect(store.setFileViewed(V1, 'standalone', false, 'snap-1')).toBe(1);
+        expect(store.readStops('snap-1')).toEqual([]);
+        expect(store.read(V1)).toEqual([{ fileId: 'standalone', viewed: false, seenRanges: [] }]);
+        expect(store.setFileViewed(V1, 'standalone', false, 'snap-1')).toBe(1);
     });
 
     it('does not notify subscribers after close', () => {
@@ -231,8 +260,367 @@ describe('reading progress store', () => {
         });
 
         store.close();
-        store.setFileViewed('file-1', true);
+        store.setFileViewed(V1, 'file-1', true);
 
         expect(calls).toBe(0);
     });
+
+    describe('carrying ranges over to a new iteration', () => {
+        /** A range marked in v1 as seen by v2 after carryover. */
+        function carried(
+            store: ProgressStore,
+            map: IterationMap,
+            marked: { start: number; end: number; side?: 'old' | 'new' },
+        ): { side: string; start: number; end: number }[] {
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: marked.side ?? 'new', start: marked.start, end: marked.end },
+            ]);
+            store.carryRanges(V1, V2, map);
+            return store.read(V2).flatMap((progress) => progress.seenRanges);
+        }
+
+        it('carries a range entirely before the edit over unchanged', () => {
+            const store = storeWith(open(), twoIterations());
+
+            expect(carried(store, clockMap(), { start: 1, end: 5 })).toEqual([
+                { side: 'new', start: 1, end: 5 },
+            ]);
+        });
+
+        it('carries a range after the edit over with an offset', () => {
+            const store = storeWith(open(), twoIterations());
+
+            expect(carried(store, clockMap(), { start: 20, end: 25 })).toEqual([
+                { side: 'new', start: 21, end: 26 },
+            ]);
+        });
+
+        it('carries only the untouched part of a range overlapping an edit', () => {
+            const store = storeWith(open(), twoIterations());
+
+            expect(carried(store, clockMap(), { start: 5, end: 15 })).toEqual([
+                { side: 'new', start: 5, end: 11 },
+                { side: 'new', start: 14, end: 16 },
+            ]);
+        });
+
+        it('carries nothing over for a file absent from the new iteration', () => {
+            const store = storeWith(
+                open(),
+                iterations({
+                    [V1]: diffOf(V1, [CLOCK, ORDER]),
+                    [V2]: diffOf(V2, [ORDER]),
+                }),
+            );
+
+            expect(carried(store, identityMap(), { start: 1, end: 5 })).toEqual([]);
+        });
+
+        it('does not inherit progress for a renamed file', () => {
+            const store = storeWith(
+                open(),
+                iterations({
+                    [V1]: diffOf(V1, [CLOCK]),
+                    [V2]: diffOf(V2, ['services/orders/src/infra/time.ts']),
+                }),
+            );
+            const map = buildIterationMap({
+                interdiff: interdiffOf([
+                    fileDiff({
+                        path: 'services/orders/src/infra/time.ts',
+                        oldPath: CLOCK,
+                        changeType: 'move',
+                    }),
+                ]),
+                fromBaseCommit: BASE,
+                toBaseCommit: BASE,
+            });
+
+            expect(carried(store, map, { start: 1, end: 5 })).toEqual([]);
+        });
+
+        it('carries over the new side but not the old side when the base changes', () => {
+            const db = open();
+            const store = storeWith(db, twoIterations());
+            const map = buildIterationMap({ interdiff: null, fromBaseCommit: BASE, toBaseCommit: 'base-other' });
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'old', start: 1, end: 3 },
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 3 },
+            ]);
+
+            store.carryRanges(V1, V2, map);
+
+            expect(store.read(V2).flatMap((progress) => progress.seenRanges)).toEqual([
+                { side: 'new', start: 1, end: 3 },
+            ]);
+        });
+
+        it('carries file pins over only for unchanged files and always carries unpinning over', () => {
+            const store = storeWith(open(), twoIterations());
+            store.setFileViewed(V1, fileIdOf(V1, CLOCK), true);
+            store.setFileViewed(V1, fileIdOf(V1, ORDER), true);
+
+            store.carryRanges(V1, V2, clockMap());
+
+            // The interdiff touches `CLOCK`, so its pin is lost. `ORDER` is untouched.
+            expect(store.read(V2)).toEqual([{ fileId: fileIdOf(V2, ORDER), viewed: true, seenRanges: [] }]);
+
+            store.setFileViewed(V1, fileIdOf(V1, CLOCK), false);
+            store.carryRanges(V1, 'iter-3', clockMap());
+            expect(store.read('iter-3')).toContainEqual({
+                fileId: fileIdOf('iter-3', CLOCK),
+                viewed: false,
+                seenRanges: [],
+            });
+        });
+
+        it('does not restore a reviewer-cleared mark when repeating carryover for a pair', () => {
+            const store = storeWith(open(), twoIterations());
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+
+            const first = store.carryRanges(V1, V2, identityMap());
+            expect(first).toMatchObject({ ranges: 1, skipped: false });
+
+            // The reviewer cleared the mark in the new iteration.
+            store.setFileViewed(V2, fileIdOf(V2, CLOCK), false, 'snap-2');
+            expect(store.carryRanges(V1, V2, identityMap())).toEqual({ ranges: 0, files: 0, skipped: true });
+            expect(store.read(V2)).toEqual([{ fileId: fileIdOf(V2, CLOCK), viewed: false, seenRanges: [] }]);
+        });
+
+        it('carryover without a stored iteration patch does not complete and is retried', () => {
+            const store = storeWith(open(), iterations({ [V1]: diffOf(V1, [CLOCK]) }));
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+
+            expect(store.carryRanges(V1, V2, identityMap())).toEqual({ ranges: 0, files: 0, skipped: true });
+
+            // The patch has arrived, so the same call carries progress over.
+            const ready = storeWith(open(), twoIterations());
+            expect(ready.carryRanges(V1, V2, identityMap())).toMatchObject({ ranges: 1, skipped: false });
+        });
+    });
+
+    describe('adopting legacy progress', () => {
+        it('moves records without an iteration to the active one, keeping its values on conflict', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            store.setFileViewed('unknown', 'file-1', true);
+            store.setFileViewed('unknown', 'file-2', true);
+            insertRange(db, 'unknown', 'file-1', 10, 14);
+            insertRange(db, V1, 'file-1', 10, 14);
+            store.setFileViewed(V1, 'file-1', false);
+
+            store.adoptLegacy(V1);
+
+            expect(store.read('unknown')).toEqual([]);
+            expect(store.read(V1)).toEqual([
+                // Adoption does not override a decision already made in the active iteration.
+                { fileId: 'file-1', viewed: false, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+                { fileId: 'file-2', viewed: true, seenRanges: [] },
+            ]);
+            // Repeating changes nothing.
+            const revision = store.revision;
+            store.adoptLegacy(V1);
+            expect(store.revision).toBe(revision);
+        });
+    });
+
+    describe('carryover source iteration', () => {
+        it('uses the latest iteration with progress other than the active one', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            rememberIteration(db, V1, '2026-09-01T10:00:00.000Z');
+            rememberIteration(db, V2, '2026-09-02T10:00:00.000Z');
+            rememberIteration(db, 'iter-3', '2026-09-03T10:00:00.000Z');
+
+            expect(store.latestDiffIdWithProgress('iter-3')).toBeNull();
+
+            store.setFileViewed(V1, 'file-1', true);
+            expect(store.latestDiffIdWithProgress('iter-3')).toBe(V1);
+
+            insertRange(db, V2, 'file-2', 1, 2);
+            expect(store.latestDiffIdWithProgress('iter-3')).toBe(V2);
+            expect(store.latestDiffIdWithProgress(V2)).toBe(V1);
+        });
+
+        it('also accepts a force-pushed-away iteration and skips a rejected one for the next', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            rememberIteration(db, V1, '2026-09-01T10:00:00.000Z');
+            rememberIteration(db, V2, '2026-09-02T10:00:00.000Z', 'gone');
+            rememberIteration(db, 'iter-3', '2026-09-03T10:00:00.000Z');
+            store.setFileViewed(V1, 'file-1', true);
+            insertRange(db, V2, 'file-2', 1, 2);
+
+            // The missing iteration has the latest progress: not every host can produce a slice against it,
+            // but source selection does not decide that.
+            expect(store.latestDiffIdWithProgress('iter-3')).toBe(V2);
+            expect(store.latestDiffIdWithProgress('iter-3', [V2])).toBe(V1);
+            expect(store.latestDiffIdWithProgress('iter-3', [V1, V2])).toBeNull();
+        });
+    });
+
+    describe('carrying stop marks over to a new snapshot', () => {
+        const anchors: RouteAnchor[] = [
+            { fileId: fileIdOf(V1, CLOCK), path: CLOCK, side: 'new', start: 1, end: 5, collapsed: false },
+        ];
+
+        function diffWithAddedLines(): PrDiff {
+            return interdiffOf([fileDiff({ path: CLOCK, patch: ADDED_LINES, fileId: fileIdOf(V1, CLOCK) })], V1);
+        }
+
+        it('marks a stop covered by ranges as viewed and assigns it its ranges', () => {
+            const store = new ProgressStore({ db: open() });
+            insertRange(open(), V1, fileIdOf(V1, CLOCK), 1, 5);
+
+            const carried = store.carryStopsInTransaction({
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [{ id: 's01', anchors }],
+                diff: diffWithAddedLines(),
+            });
+            carried.afterCommit();
+
+            expect(carried.kept).toBe(1);
+            expect(store.readStops('snap-2')).toEqual([{ stopId: 's01', viewed: true }]);
+            // The range now belongs to the stop, with no duplicate.
+            expect(store.read(V1)).toEqual([
+                { fileId: fileIdOf(V1, CLOCK), viewed: null, seenRanges: [{ side: 'new', start: 1, end: 5 }] },
+            ]);
+        });
+
+        it('does not carry a half-covered stop over or a stop without anchors', () => {
+            const store = new ProgressStore({ db: open() });
+            insertRange(open(), V1, fileIdOf(V1, CLOCK), 1, 3);
+
+            const carried = store.carryStopsInTransaction({
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [
+                    { id: 's01', anchors },
+                    { id: 'other', anchors: [] },
+                ],
+                diff: diffWithAddedLines(),
+            });
+
+            expect(carried.kept).toBe(0);
+            expect(store.readStops('snap-2')).toEqual([]);
+        });
+
+        it('lets a file pin cover the entire stop without overriding the reviewer\'s decision', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            store.setFileViewed(V1, fileIdOf(V1, CLOCK), true);
+            store.setStopViewed('snap-2', V1, 's01', false, []);
+
+            const carried = store.carryStopsInTransaction({
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [
+                    { id: 's01', anchors },
+                    { id: 's02', anchors },
+                ],
+                diff: diffWithAddedLines(),
+            });
+
+            expect(carried.kept).toBe(1);
+            expect(store.readStops('snap-2')).toEqual([
+                { stopId: 's01', viewed: false },
+                { stopId: 's02', viewed: true },
+            ]);
+        });
+    });
 });
+
+/** Fixture `fileId` changes with each iteration. Only the path is stable. */
+function fileIdOf(diffId: string, filePath: string): string {
+    return `${diffId}:${filePath}`;
+}
+
+function fileDiff(overrides: Partial<FileDiff> & Pick<FileDiff, 'path'>): FileDiff {
+    return {
+        fileId: `file:${overrides.path}`,
+        oldPath: null,
+        changeType: 'modify',
+        binary: false,
+        generated: false,
+        additions: 0,
+        deletions: 0,
+        patch: null,
+        viewed: null,
+        blameUrl: null,
+        ...overrides,
+    };
+}
+
+function interdiffOf(files: readonly FileDiff[], diffId = 'interdiff'): PrDiff {
+    return { diffId, baseCommit: BASE, headCommit: 'head-b', files: [...files] };
+}
+
+/** Iteration patch: the same paths with distinct `fileId` values, as in the fixtures. */
+function diffOf(diffId: string, paths: readonly string[]): PrDiff {
+    return {
+        diffId,
+        baseCommit: BASE,
+        headCommit: `head-${diffId}`,
+        files: paths.map((filePath) => fileDiff({ path: filePath, fileId: fileIdOf(diffId, filePath) })),
+    };
+}
+
+/** Iteration patch store as used by carryover: `get` is enough. */
+function iterations(diffs: Record<string, PrDiff>): { get: (diffId: string) => StoredIteration | null } {
+    return {
+        get: (diffId) => {
+            const diff = diffs[diffId];
+            return diff === undefined
+                ? null
+                : {
+                      diff,
+                      iteration: {
+                          diffId,
+                          baseCommit: diff.baseCommit,
+                          headCommit: diff.headCommit,
+                          createdAt: '2026-09-02T10:00:00.000Z',
+                          status: 'active',
+                      },
+                  };
+        },
+    };
+}
+
+function twoIterations(): { get: (diffId: string) => StoredIteration | null } {
+    return iterations({
+        [V1]: diffOf(V1, [CLOCK, ORDER]),
+        [V2]: diffOf(V2, [CLOCK, ORDER]),
+        'iter-3': diffOf('iter-3', [CLOCK, ORDER]),
+    });
+}
+
+function storeWith(db: SherpaDatabase, store: { get: (diffId: string) => StoredIteration | null }): ProgressStore {
+    return new ProgressStore({ db, iterations: store, log: () => undefined });
+}
+
+/** A map whose interdiff edits lines 12–13 of `CLOCK`. */
+function clockMap(): IterationMap {
+    return buildIterationMap({
+        interdiff: interdiffOf([fileDiff({ path: CLOCK, patch: CLOCK_PATCH })]),
+        fromBaseCommit: BASE,
+        toBaseCommit: BASE,
+    });
+}
+
+/** Stored iteration row: `latestDiffIdWithProgress` gets its order from here. */
+function rememberIteration(
+    db: SherpaDatabase,
+    diffId: string,
+    createdAt: string,
+    status: 'previous' | 'gone' = 'previous',
+): void {
+    db.prepare(
+        `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
+         VALUES (?, ?, ?, ?, ?, '{}', ?)`,
+    ).run(diffId, BASE, `head-${diffId}`, createdAt, status, createdAt);
+}

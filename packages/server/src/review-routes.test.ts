@@ -29,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { selectReviewHost } from './hosts/select.js';
 import { databasePathFor } from './paths.js';
+import { asRawText, mediumRawResults } from './route/fixture-support.js';
 import type { EditorOptions } from './review-routes.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
@@ -682,6 +683,26 @@ describe('server review endpoints', () => {
             return postJson(server.port, UI_ENDPOINTS.reviewStopViewed, { stopId, viewed, ranges }, server.token);
         }
 
+        /**
+         * Completed fixture route: stop marks are keyed by snapshot (M4-T6),
+         * so there is nowhere to write them without a route.
+         */
+        async function completeRoute(server: SherpaServer): Promise<void> {
+            server.workerRegistry.register('w-progress', 'claude-code', 'opus-5');
+            await server.route.warmup();
+            const raw = mediumRawResults();
+            const next = (type: string): number =>
+                server.queue.listTasks().find((task) => task.type === type && task.status === 'queued')?.id ?? 0;
+            const skeleton = next('route.skeleton');
+            server.queue.next('w-progress');
+            server.queue.complete('w-progress', skeleton, asRawText(raw.skeleton));
+            for (const section of raw.sections) {
+                const taskId = next('route.section');
+                server.queue.next('w-progress');
+                server.queue.complete('w-progress', taskId, asRawText(section));
+            }
+        }
+
         async function mirrorViewed(
             server: SherpaServer,
             entries: readonly { fileId: string; viewed: boolean }[],
@@ -695,8 +716,21 @@ describe('server review endpoints', () => {
             expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
         });
 
-        it('marking a stop writes its ranges and works without a review host', async () => {
+        it('a stop mark without a route is not written because there is no snapshot to attach it to', async () => {
             const server = await start(UNKNOWN_PR);
+
+            const written = await setStopViewed(server, 's01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+            ]);
+
+            expect(written.status).toBe(200);
+            expect(uiSetStopViewedResponseSchema.parse(await written.json()).progressRevision).toBe(0);
+            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
+        });
+
+        it('marking a stop writes its ranges', async () => {
+            const server = await start(FIXTURE_PR);
+            await completeRoute(server);
 
             const written = await setStopViewed(server, 's01', true, [
                 { fileId: 'file-1', side: 'new', start: 10, end: 14 },
@@ -716,7 +750,8 @@ describe('server review endpoints', () => {
         });
 
         it('clearing a mark removes its stop ranges and leaves other stops unchanged', async () => {
-            const server = await start(UNKNOWN_PR);
+            const server = await start(FIXTURE_PR);
+            await completeRoute(server);
             await setStopViewed(server, 's01', true, [{ fileId: 'file-1', side: 'new', start: 10, end: 14 }]);
             await setStopViewed(server, 's02', true, [{ fileId: 'file-1', side: 'new', start: 40, end: 41 }]);
 
@@ -735,6 +770,7 @@ describe('server review endpoints', () => {
 
         it('a stop mark survives a server restart', async () => {
             const first = await start(FIXTURE_PR);
+            await completeRoute(first);
             await setStopViewed(first, 's01', true, [{ fileId: 'file-1', side: 'new', start: 5, end: 9 }]);
             await first.close();
             servers.splice(servers.indexOf(first), 1);
@@ -749,7 +785,8 @@ describe('server review endpoints', () => {
         });
 
         it('marking a stop again with the same set does not advance the SSE revision', async () => {
-            const server = await start(UNKNOWN_PR);
+            const server = await start(FIXTURE_PR);
+            await completeRoute(server);
             const stream = await openEvents(server);
             const ranges = [
                 { fileId: 'file-1', side: 'new' as const, start: 10, end: 14 },

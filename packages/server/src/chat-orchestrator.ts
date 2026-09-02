@@ -15,11 +15,11 @@ import type {
 
 import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
-import { LEGACY_DIFF_ID } from './chat-store.js';
 import { RpcFailure } from './errors.js';
 import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
+import { LEGACY_DIFF_ID } from './iterations/index.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';

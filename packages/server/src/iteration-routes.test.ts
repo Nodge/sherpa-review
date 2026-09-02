@@ -1,4 +1,5 @@
 import fsSync from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 
 import { fixtureData, makeFixtureHost } from '@sherpa/fixtures';
 import type { Iteration, PrDiff, RouteSectionResult, UiReviewRouteResponse, UiState } from '@sherpa/protocol';
@@ -18,6 +19,8 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { databasePathFor } from './paths.js';
+import { requiredSeenRanges } from './progress-store.js';
 import { asRawText, mediumRawResults } from './route/fixture-support.js';
 import type { TaskRecord } from './queue.js';
 import type { SherpaServer } from './server.js';
@@ -25,8 +28,9 @@ import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Iteration endpoints (M4-T4) on the fixture host: list in the UI snapshot, route `stale`, snapshot
- * history, per-iteration diff and slice between iterations. The `advance-iteration` dev endpoint simulates a "push".
+ * Iteration endpoints (M4-T4) and progress carryover (M4-T6) on the fixture host: iteration list
+ * in the UI snapshot, route `stale` state, snapshot history, per-iteration diff and slices between iterations,
+ * mark carryover after a push. The `advance-iteration` dev endpoint simulates a "push".
  */
 
 const PR = 'fixture-medium';
@@ -277,14 +281,19 @@ describe('iterations in UI endpoints', () => {
         expect(sliceCalls).toBe(before);
     });
 
-    it('previous iteration progress is empty: M4-T6 adds the iteration dimension to its tables', async () => {
+    it('reads previous iteration progress by its diffId and keeps it on that iteration', async () => {
         const server = await start();
         await completeRoute(server);
         const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
         await postJson(
             server.port,
             UI_ENDPOINTS.reviewStopViewed,
-            { snapshotId, stopId: 's01', viewed: true, ranges: [] },
+            {
+                snapshotId,
+                stopId: 's01',
+                viewed: true,
+                ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }],
+            },
             server.token,
         );
         const stream = await openState(server);
@@ -292,12 +301,17 @@ describe('iterations in UI endpoints', () => {
         await advance(server);
         await nextState(stream);
 
-        const active = await readProgress(server, `?diffId=${V2.diffId}`);
+        // The route stayed on the previous iteration, with its snapshot and marks.
         const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.stops).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(past.files).toEqual([
+            { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 3, end: 7 }] },
+        ]);
 
-        expect(active.stops).toEqual([{ stopId: 's01', viewed: true }]);
-        expect(past.stops).toEqual([]);
-        expect(past.progressRevision).toBe(active.progressRevision);
+        // The new iteration has no snapshot yet, so it shows no stop marks.
+        const active = await readProgress(server, `?diffId=${V2.diffId}`);
+        expect(active.stops).toEqual([]);
+        expect(active.progressRevision).toBe(past.progressRevision);
     });
 
     async function readProgress(server: SherpaServer, query = '') {
@@ -527,6 +541,255 @@ describe('generation and questions on their own iteration', () => {
 
         expect(response.status).toBe(400);
         expect(rpcErrorSchema.parse(await response.json()).error.message).toContain('not saved');
+    });
+});
+
+describe('progress carryover between iterations', () => {
+    let sherpaDir: string;
+    let servers: SherpaServer[];
+    let streams: SseStream[];
+    let databases: DatabaseSync[];
+    /** Slices the server requested from the host: show which iteration progress was carried over from. */
+    let slices: string[];
+
+    beforeEach(async () => {
+        sherpaDir = await makeTempSherpaDir();
+        servers = [];
+        streams = [];
+        databases = [];
+        slices = [];
+    });
+
+    afterEach(async () => {
+        for (const stream of streams) {
+            stream.close();
+        }
+        for (const db of databases) {
+            db.close();
+        }
+        for (const server of servers) {
+            await server.close();
+        }
+        await removeTempSherpaDir(sherpaDir);
+    });
+
+    /** Server with an open SSE channel: without it, the iteration feed and carryover do not start. */
+    async function start(): Promise<{ server: SherpaServer; stream: SseStream }> {
+        const host = makeFixtureHost('medium');
+        const getDiff = host.getDiff.bind(host);
+        host.getDiff = (slice) => {
+            if (slice !== undefined) {
+                slices.push(`${slice.base}→${slice.head}`);
+            }
+            return getDiff(slice);
+        };
+        const server = await startServer({
+            prKey: PR,
+            sherpaDir,
+            longPollSeconds: 0.3,
+            reviewHostFactory: () => ({
+                name: 'fixture',
+                host,
+                advanceIteration: () => host.advanceIteration(),
+            }),
+        });
+        servers.push(server);
+        const stream = await openSse(
+            `http://127.0.0.1:${String(server.port)}${UI_ENDPOINTS.events}?token=${server.token}`,
+        );
+        streams.push(stream);
+        await nextState(stream);
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        await server.route.warmup();
+        return { server, stream };
+    }
+
+    function db(): DatabaseSync {
+        const opened = new DatabaseSync(databasePathFor(sherpaDir, PR), { readOnly: true });
+        databases.push(opened);
+        return opened;
+    }
+
+    function completeTask(server: SherpaServer, taskId: number, result: unknown): void {
+        const leased = server.queue.next(WORKER);
+        expect(leased?.task.id).toBe(taskId);
+        server.queue.complete(WORKER, taskId, typeof result === 'string' ? result : asRawText(result));
+    }
+
+    function queued(server: SherpaServer, type: 'route.skeleton' | 'route.section'): number[] {
+        return server.queue
+            .listTasks()
+            .filter((task) => task.type === type && task.status === 'queued')
+            .map((task) => task.id);
+    }
+
+    /** Full generation pass on the current iteration. */
+    async function completeRoute(server: SherpaServer): Promise<string> {
+        const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
+        completeTask(server, skeleton, mediumRawResults().skeleton);
+        for (const [position, taskId] of queued(server, 'route.section').entries()) {
+            const section = mediumRawResults().sections.find(
+                (entry) => entry.stops[0]?.planIndex === position + 1,
+            );
+            completeTask(server, taskId, section);
+        }
+        const route = uiReviewRouteResponseSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.reviewRoute, server.token)).json(),
+        ).route;
+        expect(route.phase).toBe('ready');
+        return route.snapshot?.snapshotId ?? '';
+    }
+
+    async function readRouteSnapshot(server: SherpaServer) {
+        const response = await get(server.port, UI_ENDPOINTS.reviewRoute, server.token);
+        return uiReviewRouteResponseSchema.parse(await response.json()).route.snapshot;
+    }
+
+    /** Marks a stop using exactly the ranges the UI would compute from the iteration diff. */
+    async function markStop(server: SherpaServer, stopId: string, diff: PrDiff): Promise<void> {
+        const snapshot = await readRouteSnapshot(server);
+        const stop = snapshot?.stops.find((candidate) => candidate.id === stopId);
+        if (snapshot === null || stop === undefined) {
+            throw new Error(`snapshot has no stop ${stopId}`);
+        }
+        const response = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopViewed,
+            {
+                snapshotId: snapshot.snapshotId,
+                stopId,
+                viewed: true,
+                ranges: requiredSeenRanges(stop.anchors, diff),
+            },
+            server.token,
+        );
+        expect(response.status).toBe(200);
+    }
+
+    async function advance(server: SherpaServer, stream: SseStream): Promise<void> {
+        const response = await postJson(server.port, UI_DEV_ENDPOINTS.fixtureAdvanceIteration, {}, server.token);
+        expect(response.status).toBe(200);
+        await nextState(stream);
+    }
+
+    /** Carryover runs asynchronously from the host list: wait for a record in the carryover log. */
+    async function waitForCarry(from: string, to: string): Promise<void> {
+        const reader = db();
+        await expect
+            .poll(() =>
+                (
+                    reader
+                        .prepare('SELECT from_diff_id, to_diff_id FROM progress_carries')
+                        .all() as { from_diff_id: string; to_diff_id: string }[]
+                ).map((row) => `${row.from_diff_id}→${row.to_diff_id}`),
+            )
+            .toContain(`${from}→${to}`);
+    }
+
+    function seenRanges(diffId: string): { file_id: string; carried_from: string | null }[] {
+        return db()
+            .prepare(
+                'SELECT file_id, side, start_line, end_line, source_stop_id, carried_from ' +
+                    'FROM file_seen_ranges WHERE diff_id = ? ORDER BY rowid',
+            )
+            .all(diffId) as { file_id: string; carried_from: string | null }[];
+    }
+
+    async function readProgress(server: SherpaServer, query = '') {
+        const response = await get(server.port, `${UI_ENDPOINTS.reviewProgress}${query}`, server.token);
+        expect(response.status).toBe(200);
+        return uiReviewProgressResponseSchema.parse(await response.json());
+    }
+
+    it('a push carries ranges over to the new iteration once, by file path', async () => {
+        const { server, stream } = await start();
+        await completeRoute(server);
+        const v1Diff = fixtureData('medium').iterations[0]?.diff;
+        if (v1Diff === undefined) {
+            throw new Error('medium fixture has no first iteration');
+        }
+        for (const stopId of ['s01', 's02', 's04', 's05']) {
+            await markStop(server, stopId, v1Diff);
+        }
+        const beforeCount = seenRanges(V1.diffId).length;
+
+        await advance(server, stream);
+        await waitForCarry(V1.diffId, V2.diffId);
+
+        const carried = seenRanges(V2.diffId);
+        expect(carried.length).toBeGreaterThan(0);
+        // Carried pieces record the source iteration and are not tied to a stop.
+        expect(carried.every((row) => row.carried_from === V1.diffId)).toBe(true);
+        // The new iteration has its own `fileId`: matching used the file path.
+        const v1Files = new Set(seenRanges(V1.diffId).map((row) => row.file_id));
+        expect(carried.some((row) => v1Files.has(row.file_id))).toBe(false);
+        expect(seenRanges(V1.diffId)).toHaveLength(beforeCount);
+
+        // A repeated host list does not double the carryover.
+        const again = seenRanges(V2.diffId).length;
+        await server.route.warmup();
+        await expect.poll(() => seenRanges(V2.diffId).length).toBe(again);
+        expect(db().prepare('SELECT COUNT(*) AS count FROM progress_carries').get()).toMatchObject({ count: 1 });
+    });
+
+    it('a rebuild after a push keeps untouched stops marked as viewed', async () => {
+        const { server, stream } = await start();
+        const first = await completeRoute(server);
+        const v1Diff = fixtureData('medium').iterations[0]?.diff;
+        if (v1Diff === undefined) {
+            throw new Error('medium fixture has no first iteration');
+        }
+        // The push touches s02 but leaves the other 3 intact (medium fixture v1→v2).
+        for (const stopId of ['s01', 's02', 's04', 's05']) {
+            await markStop(server, stopId, v1Diff);
+        }
+
+        await advance(server, stream);
+        await waitForCarry(V1.diffId, V2.diffId);
+        expect(await server.route.generate()).toBe('started');
+        const second = await completeRoute(server);
+
+        const snapshot = await readRouteSnapshot(server);
+        expect(snapshot?.diffId).toBe(V2.diffId);
+        expect(snapshot?.previousSnapshotId).toBe(first);
+        expect(snapshot?.carried).toEqual({ kept: 3, total: 7 });
+        expect(second).not.toBe(first);
+
+        const active = await readProgress(server);
+        expect(active.stops).toEqual([
+            { stopId: 's01', viewed: true },
+            { stopId: 's04', viewed: true },
+            { stopId: 's05', viewed: true },
+        ]);
+        // Previous iteration progress stayed with that iteration.
+        const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.stops.map((stop) => stop.stopId)).toEqual(['s01', 's02', 's04', 's05']);
+    });
+
+    it('a force-push carries progress over from the latest iteration and marks the missing one gone', async () => {
+        const { server, stream } = await start();
+        await completeRoute(server);
+        const v1Diff = fixtureData('medium').iterations[0]?.diff;
+        if (v1Diff === undefined) {
+            throw new Error('medium fixture has no first iteration');
+        }
+        await markStop(server, 's01', v1Diff);
+
+        await advance(server, stream);
+        await waitForCarry(V1.diffId, V2.diffId);
+        await advance(server, stream);
+        // Select the source by progress recency, not iteration status: first request the
+        // slice from v2, removed by the force-push. The fixture host cannot compute it (the iteration is absent from the list),
+        // so carryover falls back to the next candidate with progress.
+        await waitForCarry(V1.diffId, V3.diffId);
+        expect(slices).toContain(`${V2.diffId}→${V3.diffId}`);
+
+        expect(seenRanges(V3.diffId).length).toBeGreaterThan(0);
+        expect(seenRanges(V3.diffId).every((row) => row.carried_from === V1.diffId)).toBe(true);
+        const state = uiStateSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
+        );
+        expect(state.iterations.find((iteration) => iteration.diffId === V2.diffId)?.status).toBe('gone');
     });
 });
 

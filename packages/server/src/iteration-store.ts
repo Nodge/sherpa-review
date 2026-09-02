@@ -161,6 +161,14 @@ export class IterationStore {
         return diff;
     }
 
+    /**
+     * Cached slice without a host call: generation result acceptance is synchronous and must not
+     * use the network. If it was not fetched in advance, there is nothing to carry over.
+     */
+    peekInterdiff(base: HostId, head: HostId): PrDiff | null {
+        return this.readInterdiff(base, head);
+    }
+
     private readInterdiff(base: HostId, head: HostId): PrDiff | null {
         const row = this.db
             .prepare('SELECT diff_json FROM interdiffs WHERE base_id = ? AND head_id = ?')

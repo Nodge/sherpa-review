@@ -1,8 +1,16 @@
-import type { HostId, Iteration, ReviewHost, RouteSnapshot, UiRouteStale, UiRouteState } from '@sherpa/protocol';
+import type {
+    HostId,
+    Iteration,
+    ReviewHost,
+    RouteSnapshot,
+    UiRouteStale,
+    UiRouteState,
+} from '@sherpa/protocol';
 
 import type { IterationStore } from './iteration-store.js';
 import type { IterationMap } from './iterations/index.js';
 import { affectedStops, buildIterationMap } from './iterations/index.js';
+import type { ProgressStore } from './progress-store.js';
 import type { RouteStore } from './route-store.js';
 
 /**
@@ -32,14 +40,23 @@ export interface IterationFeedOptions {
     readonly iterations: IterationStore;
     /** Current snapshot: used to compute `stale`. Changing it recalculates affected stops. */
     readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    /** Reading progress: a push carries it to the new iteration (M4-T6). `null` means nothing to carry over. */
+    readonly progress?: ProgressCarrier | null;
     /** Where to log host refusals. Defaults to stderr. */
     readonly log?: (message: string) => void;
 }
+
+/** The part of `ProgressStore` the feed needs: legacy adoption and carryover to the active iteration. */
+export type ProgressCarrier = Pick<
+    ProgressStore,
+    'adoptLegacy' | 'latestDiffIdWithProgress' | 'carryRanges'
+>;
 
 export class IterationFeed {
     private readonly host: ReviewHost | null;
     private readonly store: IterationStore;
     private readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    private readonly progress: ProgressCarrier | null;
     private readonly log: (message: string) => void;
     private readonly listeners = new Set<(revision: number) => void>();
     /** Running affected-stop calculations, to avoid starting the same one twice. */
@@ -49,19 +66,27 @@ export class IterationFeed {
     /** Map of the latest iteration pair, computed once and read on every snapshot change. */
     private map: { pair: string; built: Promise<IterationMap> } | null = null;
 
+    /** Progress carryovers in flight: no need for a second one for the same pair. */
+    private readonly carrying = new Set<string>();
+    /** Carryover sources whose slices the host refused, keyed by the target iteration. */
+    private readonly refusedCarry = new Map<HostId, Set<HostId>>();
+
     private list: Iteration[] = [];
     private affected: AffectedStops | null = null;
     private revisionValue = 0;
     private unwatch: (() => void) | null = null;
     private unsubscribeRoute: (() => void) | null = null;
-    /** Iteration whose patch is loading: concurrent requests for the same patch are unnecessary. */
-    private loadingDiffOf: HostId | null = null;
+    /** In-flight active iteration patch load, to avoid duplicate concurrent requests. */
+    private loadingDiff: { diffId: HostId; done: Promise<void> } | null = null;
+    /** In-flight one-off list request, shared by all `resolveActive` calls. */
+    private resolving: Promise<void> | null = null;
     private closed = false;
 
     constructor(options: IterationFeedOptions) {
         this.host = options.host;
         this.store = options.iterations;
         this.route = options.route;
+        this.progress = options.progress ?? null;
         this.log =
             options.log ??
             ((message: string): void => {
@@ -82,6 +107,33 @@ export class IterationFeed {
     active(): Iteration | null {
         const active = this.list.find((iteration) => iteration.status === 'active');
         return active === undefined ? null : { ...active };
+    }
+
+    /**
+     * Active iteration on demand: write endpoints need it even without an open SSE channel.
+     * Returns it immediately if known, otherwise asks the host for the list once for all
+     * waiters. Without a host, returns `null`: the server can only write to `LEGACY_DIFF_ID`.
+     */
+    async resolveActive(): Promise<Iteration | null> {
+        const host = this.host;
+        const known = this.active();
+        if (host === null || known !== null || this.closed) {
+            return known;
+        }
+
+        this.resolving ??= host
+            .listIterations()
+            .then((iterations) => {
+                this.onIterations(iterations);
+            })
+            .catch((error: unknown) => {
+                this.log(`could not fetch iteration list: ${messageOf(error)}`);
+            })
+            .finally(() => {
+                this.resolving = null;
+            });
+        await this.resolving;
+        return this.active();
     }
 
     /**
@@ -160,7 +212,16 @@ export class IterationFeed {
         }
 
         this.list = merged;
-        this.rememberActiveDiff();
+        const active = this.active();
+        if (active !== null) {
+            // Progress carryover waits for the new iteration patch: `fileId` cannot be matched without it.
+            void this.rememberActiveDiff(active)
+                .then(() => this.carryProgress(active))
+                .catch((error: unknown) => {
+                    // Carryover writes to the database: failure must not crash the process with an unhandled rejection.
+                    this.log(`could not carry over progress to ${active.diffId}: ${messageOf(error)}`);
+                });
+        }
         this.refreshAffected();
         this.notify();
     }
@@ -169,20 +230,16 @@ export class IterationFeed {
      * The active iteration patch must be stored locally: after the next push, a snapshot
      * built on it can only be read from that patch (brief §4a).
      */
-    private rememberActiveDiff(): void {
+    private rememberActiveDiff(active: Iteration): Promise<void> {
         const host = this.host;
-        const active = this.active();
-        if (
-            host === null ||
-            active === null ||
-            this.loadingDiffOf === active.diffId ||
-            this.store.get(active.diffId) !== null
-        ) {
-            return;
+        if (host === null || this.store.get(active.diffId) !== null) {
+            return Promise.resolve();
+        }
+        if (this.loadingDiff?.diffId === active.diffId) {
+            return this.loadingDiff.done;
         }
 
-        this.loadingDiffOf = active.diffId;
-        void host
+        const done = host
             .getDiff()
             .then((diff) => {
                 // The author may have pushed again while the patch was loading: it can no longer be stored
@@ -196,10 +253,93 @@ export class IterationFeed {
                 this.log(`patch for iteration ${active.diffId} not saved: ${messageOf(error)}`);
             })
             .finally(() => {
-                if (this.loadingDiffOf === active.diffId) {
-                    this.loadingDiffOf = null;
+                if (this.loadingDiff?.diffId === active.diffId) {
+                    this.loadingDiff = null;
                 }
             });
+        this.loadingDiff = { diffId: active.diffId, done };
+        return done;
+    }
+
+    /**
+     * Progress moves to the active iteration (planning decision 4a): first adopt
+     * records without an iteration, then carry over ranges and file marks from the latest
+     * iteration that has any.
+     *
+     * Each pair is carried over once and for all (`progress_carries`), so repeated host lists
+     * create no duplicates.
+     */
+    private async carryProgress(active: Iteration): Promise<void> {
+        const progress = this.progress;
+        const host = this.host;
+        if (progress === null || host === null || this.closed) {
+            return;
+        }
+
+        progress.adoptLegacy(active.diffId);
+        const refused = this.refusedSourcesFor(active.diffId);
+        for (;;) {
+            const from = progress.latestDiffIdWithProgress(active.diffId, [...refused]);
+            if (from === null) {
+                return;
+            }
+
+            const pair = `${from} ${active.diffId}`;
+            if (this.carrying.has(pair)) {
+                return;
+            }
+            this.carrying.add(pair);
+            try {
+                const interdiff = await this.store
+                    .getInterdiff(from, active.diffId, () =>
+                        host.getDiff({ base: from, head: active.diffId }),
+                    )
+                    .catch((error: unknown) => {
+                        // The host cannot compute a slice against this iteration (usually removed by a
+                        // force-push). Try the next candidate, otherwise carryover would stay blocked
+                        // on an unreachable source while earlier iterations also have progress.
+                        this.log(`slice ${from}→${active.diffId} unavailable: ${messageOf(error)}`);
+                        refused.add(from);
+                        return null;
+                    });
+                if (interdiff === null) {
+                    continue;
+                }
+                if (!this.stillActive(active.diffId)) {
+                    // The author pushed again while the slice was being computed: carry over to the new active iteration.
+                    return;
+                }
+
+                const fromBaseCommit =
+                    this.list.find((iteration) => iteration.diffId === from)?.baseCommit ??
+                    this.store.get(from)?.iteration.baseCommit ??
+                    active.baseCommit;
+                progress.carryRanges(
+                    from,
+                    active.diffId,
+                    buildIterationMap({ interdiff, fromBaseCommit, toBaseCommit: active.baseCommit }),
+                );
+                return;
+            } finally {
+                this.carrying.delete(pair);
+            }
+        }
+    }
+
+    /** The iteration is still active and the feed is alive: the network result is still needed. */
+    private stillActive(diffId: HostId): boolean {
+        return !this.closed && this.active()?.diffId === diffId;
+    }
+
+    /** Sources for which the host has already refused a slice against this active iteration. */
+    private refusedSourcesFor(toDiffId: HostId): Set<HostId> {
+        const known = this.refusedCarry.get(toDiffId);
+        if (known !== undefined) {
+            return known;
+        }
+        const empty = new Set<HostId>();
+        this.refusedCarry.set(toDiffId, empty);
+        return empty;
     }
 
     /**
