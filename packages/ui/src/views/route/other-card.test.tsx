@@ -74,6 +74,7 @@ const OTHER_VIEW: RouteOtherView = {
         droppedClaims: 0,
         status: 'ready',
         provenance: null,
+        change: null,
     },
     planLabel: '07',
     files: [],

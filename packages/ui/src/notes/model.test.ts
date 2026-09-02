@@ -1,4 +1,4 @@
-import type { AgentNote, FileDiff } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
@@ -39,12 +39,14 @@ function note(
     createdAt: string,
     overrides: Partial<AgentNote> = {},
 ): AgentNote {
+    const anchor: ChatAnchor = { diffId: 'iter-1', fileId: FILE.fileId, path: FILE.path, side: 'new', start, end };
     return {
         id,
         exchangeId: id,
-        anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start, end },
+        anchor,
         text: `Note ${String(id)}`,
-        commit: 'abcdef1',
+        lostAnchor: false,
+        origin: { commit: 'abcdef1', anchor },
         createdAt,
         ...overrides,
     };

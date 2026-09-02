@@ -11,6 +11,7 @@ const CONNECTED: WorkerStatus = {
     lastSeenAt: '2026-09-01T10:00:00.000Z',
 };
 const ANCHOR: ChatAnchor = {
+    diffId: 'gallery-iteration',
     fileId: 'gallery-chat-file',
     path: 'src/review/cache.ts',
     side: 'new',
@@ -67,7 +68,8 @@ const NOTE: AgentNote = {
     exchangeId: 1,
     anchor: ANCHOR,
     text: 'The check separates cache hits from loading.',
-    commit: 'abcdef1',
+    lostAnchor: false,
+    origin: { commit: 'abcdef1', anchor: ANCHOR },
     createdAt: '2026-09-01T10:01:00.000Z',
 };
 

@@ -74,6 +74,22 @@ export const routeProvenanceSchema = z.object({
 export type RouteProvenance = z.infer<typeof routeProvenanceSchema>;
 
 /**
+ * A stop's classification relative to the previous snapshot (README §1 `changed`/`new` badges,
+ * "why this stop changed" block). The server computes it deterministically from the interdiff between
+ * the snapshots' iterations. `new` means all anchored lines were touched or the file was added,
+ * `changed` means some were touched. The model only explains (`reason`), it does not choose the classification.
+ * `threadIds` are threads on the affected ranges that the model named as the reason.
+ * The validator keeps only existing threads.
+ */
+export const routeStopChangeSchema = z.object({
+    kind: z.enum(['new', 'changed']),
+    /** "Why this stop changed" in the model's words (Russian). null means the model gave no explanation. */
+    reason: z.string().nullable(),
+    threadIds: z.array(hostIdSchema),
+});
+export type RouteStopChange = z.infer<typeof routeStopChangeSchema>;
+
+/**
  * A route stop. The skeleton fixes the plan (id, planIndex, tier, title),
  * and filling does not change it: numbers stay fixed by the plan (SPEC §8 item 4). Filters
  * and promoting "Other" reorder rendering but leave the numbers unchanged.
@@ -102,22 +118,39 @@ export const routeStopSchema = z.object({
     validationNotes: z.array(z.string()),
     /** Section provenance if it differs from the snapshot (agent changed mid-generation, SPEC §4.4). */
     provenance: routeProvenanceSchema.nullable(),
+    /** null if the push did not affect the stop or this is the first snapshot (nothing to compare). */
+    change: routeStopChangeSchema.nullable(),
 });
 export type RouteStop = z.infer<typeof routeStopSchema>;
 
 /**
+ * Progress carryover result from the previous snapshot (second-pass banner, README §9):
+ * how many marked stops from the previous route remain marked in the new one.
+ */
+export const routeCarriedSchema = z.object({
+    kept: z.number().int().min(0),
+    total: z.number().int().min(0),
+});
+export type RouteCarried = z.infer<typeof routeCarriedSchema>;
+
+/**
  * A route snapshot appears when the skeleton is accepted and grows
  * as sections are submitted. It becomes immutable in the `ready` phase
- * (`contentHash` is computed then too). Snapshot versioning belongs to M4.
- * M2 has one snapshot, shown statically as `current` in the selector.
+ * (`contentHash` is computed then too). A PR has many snapshots, one for
+ * each generation or regeneration. The server stores all of them, with one current snapshot.
  */
 export const routeSnapshotSchema = z.object({
     snapshotId: z.string().min(1),
     /** Reviewed commit (the diff's headCommit) and iteration for which the route was built. */
     commit: z.string().min(1),
+    baseCommit: z.string().min(1),
     diffId: hostIdSchema,
     createdAt: z.iso.datetime(),
     provenance: routeProvenanceSchema,
+    /** The snapshot from which progress was carried over and against which `stops[].change` was computed. null for the first. */
+    previousSnapshotId: z.string().nullable(),
+    /** Progress carryover result. null if there was no source to carry over from. */
+    carried: routeCarriedSchema.nullable(),
     /** PR summary. Arrives in full with the skeleton: the loop has no token streaming (rpc-design §6). */
     summary: z.string(),
     /** Triage order, with synthetic "Other" last. */
@@ -159,7 +192,12 @@ export type RouteSkeletonResult = z.infer<typeof routeSkeletonResultSchema>;
 /**
  * The `route.section` task result fills one or more planned stops
  * (section batching is a server concern, not a protocol concern). Anchors use `path`.
- * The validator resolves them to `fileId` against the active iteration.
+ * The validator resolves them to `fileId` against the snapshot's iteration.
+ *
+ * After a push, the same task receives the previous route and interdiff as context.
+ * `changeReason`/`changeThreadIds` explain "why this stop changed" for stops
+ * the server classified as `new`/`changed` (`RouteStop.change`). For other
+ * stops, the validator drops these fields, along with unknown thread ids.
  */
 export const routeSectionResultSchema = z.object({
     stops: z
@@ -168,6 +206,8 @@ export const routeSectionResultSchema = z.object({
                 planIndex: z.number().int().positive(),
                 paragraph: z.string().min(1).max(4000),
                 bridge: z.string().min(1).max(1000).optional(),
+                changeReason: z.string().min(1).max(1000).optional(),
+                changeThreadIds: z.array(hostIdSchema).max(20).optional(),
                 anchors: z
                     .array(
                         z.object({

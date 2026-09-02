@@ -1,4 +1,4 @@
-import type { AgentNote, FileDiff } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
@@ -43,12 +43,14 @@ const MARKDOWN_NOTE = [
 ].join('\n');
 
 function note(id: number, start: number, end: number, createdAt: string, text = MARKDOWN_NOTE): AgentNote {
+    const anchor: ChatAnchor = { diffId: 'gallery-iteration', fileId: FILE.fileId, path: FILE.path, side: 'new', start, end };
     return {
         id,
         exchangeId: 100 + id,
-        anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start, end },
+        anchor,
         text,
-        commit: 'abcdef1',
+        lostAnchor: false,
+        origin: { commit: 'abcdef1', anchor },
         createdAt,
     };
 }

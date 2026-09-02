@@ -10,7 +10,7 @@ import type {
 } from '@sherpa/protocol';
 
 import { hashHex, makeFileId } from '../patch.js';
-import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
+import { MEDIUM_BASE_COMMIT, MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
 
 /**
  * Route for the `medium` fixture, the same "Enforce the 30-minute edit window…" PR (README §1–2).
@@ -385,6 +385,8 @@ function otherStop(): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        // Classify stops after a push in M4-T7.
+        change: null,
     };
 }
 
@@ -402,6 +404,7 @@ function filledStop(spec: StopSpec): RouteStop {
         droppedClaims: droppedCount(spec.digest),
         validationNotes: spec.validationNotes,
         provenance: null,
+        change: null,
     };
 }
 
@@ -420,6 +423,7 @@ function plannedStop(spec: StopSpec, status: 'queued' | 'filling'): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        change: null,
     };
 }
 
@@ -441,9 +445,13 @@ function snapshot(stops: RouteStop[], hashed: boolean): RouteSnapshot {
     const base: RouteSnapshot = {
         snapshotId: SNAPSHOT_ID,
         commit: MEDIUM_HEAD_COMMIT,
+        baseCommit: MEDIUM_BASE_COMMIT,
         diffId: MEDIUM_DIFF_ID,
         createdAt: CREATED_AT,
         provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+        // Second pass through snapshots in M4-T6.
+        previousSnapshotId: null,
+        carried: null,
         summary: SUMMARY,
         stops,
         tourOrder: TOUR_ORDER,
@@ -500,15 +508,17 @@ const FAILED_RAW_OUTPUT = `{
 
 /** Route states for the `medium` fixture gallery: one per `uiRoutePhaseSchema` phase. */
 export function makeMediumRouteStates(): Record<'none' | 'reading' | 'filling' | 'ready' | 'failed', UiRouteState> {
+    // Route staleness is handled in M4-T4.
     return {
-        none: { phase: 'none', smallPr: false, snapshot: null, failure: null },
-        reading: { phase: 'reading', smallPr: false, snapshot: null, failure: null },
-        filling: { phase: 'filling', smallPr: false, snapshot: fillingSnapshot(), failure: null },
-        ready: { phase: 'ready', smallPr: false, snapshot: readySnapshot(), failure: null },
+        none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null },
+        reading: { phase: 'reading', smallPr: false, snapshot: null, failure: null, stale: null },
+        filling: { phase: 'filling', smallPr: false, snapshot: fillingSnapshot(), failure: null, stale: null },
+        ready: { phase: 'ready', smallPr: false, snapshot: readySnapshot(), failure: null, stale: null },
         failed: {
             phase: 'failed',
             smallPr: false,
             snapshot: null,
+            stale: null,
             failure: {
                 message:
                     'Generation stopped at validation: 2 stops reference services/orders/src/domain/order-state.ts, which is not in this diff.',

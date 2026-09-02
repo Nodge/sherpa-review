@@ -1,4 +1,4 @@
-import type { AgentNote } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
@@ -26,12 +26,14 @@ const MODEL = parseFileDiff({
 });
 
 function note(text: string, start = 41, end = 43, side: 'old' | 'new' = 'new'): AgentNote {
+    const anchor: ChatAnchor = { diffId: 'iter-1', fileId: 'f1', path: 'app.ts', side, start, end };
     return {
         id: 1,
         exchangeId: 1,
-        anchor: { fileId: 'f1', path: 'app.ts', side, start, end },
+        anchor,
         text,
-        commit: 'abcdef1',
+        lostAnchor: false,
+        origin: { commit: 'abcdef1', anchor },
         createdAt: '2026-09-01T10:00:00.000Z',
     };
 }

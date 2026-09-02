@@ -176,10 +176,31 @@ describe('FixtureHost', () => {
         expect(host.setFileViewed).toBeUndefined();
     });
 
-    it('rejects an arbitrary diff slice with a clear error', async () => {
+    it('rejects a slice between iterations with a clear error and returns the active iteration', async () => {
         const host = makeFixtureHost('medium');
-        await expect(host.getDiff({ base: 'deadbeef' })).rejects.toThrow(/one iteration/);
-        await expect(host.getDiff({ base: fixtureData('medium').diff.baseCommit })).resolves.toBeDefined();
+        const diffId = fixtureData('medium').diff.diffId;
+        await expect(host.getDiff({ base: diffId, head: diffId })).rejects.toThrow(/one iteration/);
+        await expect(host.getDiff()).resolves.toBeDefined();
+    });
+
+    it('lists one active fixture iteration matching the diff', async () => {
+        const host = makeFixtureHost('medium');
+        const diff = fixtureData('medium').diff;
+        const iterations = await host.listIterations();
+        expect(iterations).toEqual([
+            {
+                diffId: diff.diffId,
+                baseCommit: diff.baseCommit,
+                headCommit: diff.headCommit,
+                createdAt: fixtureData('medium').pr.updatedAt,
+                status: 'active',
+            },
+        ]);
+
+        const seen: unknown[] = [];
+        const stop = host.watchIterations((list) => seen.push(list));
+        stop();
+        expect(seen).toEqual([iterations]);
     });
 
     it('thread resolution is attributed to the current fixture user', async () => {

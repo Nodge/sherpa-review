@@ -61,6 +61,8 @@ export function thread(spec: ThreadSpec): Thread {
         resolved: spec.resolved ?? false,
         resolvedBy: spec.resolvedBy ?? null,
         outdated: spec.outdated ?? false,
+        // Pin to the anchor's iteration in M4-T3.
+        pinnedTo: null,
         root: spec.root,
     };
 }

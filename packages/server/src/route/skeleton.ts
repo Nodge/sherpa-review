@@ -53,6 +53,8 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        // Classify stops after a push in M4-T7.
+        change: null,
     }));
 
     return {
@@ -84,6 +86,7 @@ function otherStop(planIndex: number): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
+        change: null,
     };
 }
 

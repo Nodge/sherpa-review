@@ -274,6 +274,8 @@ function buildState(options: UiRoutesOptions): UiState {
         reviewHost: options.reviewHost,
         pr: options.prMeta.get(),
         feedback: options.feedback,
+        // M4-T4 populates the iteration list.
+        iterations: [],
     };
 }
 

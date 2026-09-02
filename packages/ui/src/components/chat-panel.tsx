@@ -1,4 +1,4 @@
-import type { AgentNote, ChatAnchor, ChatExchange, UiTask, WorkerStatus } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, ChatExchange, UiChatAskAnchor, UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -20,7 +20,7 @@ export interface ChatPanelProps {
     readonly loading: boolean;
     readonly error: string | null;
     readonly reconnectCommand: string;
-    readonly anchor: ChatAnchor | null;
+    readonly anchor: UiChatAskAnchor | null;
     readonly focusRequest: number;
     /**
      * Prefill the composer (README §2, §10). The question stays unsent while the reviewer reads, edits and
@@ -31,7 +31,7 @@ export interface ChatPanelProps {
     readonly onScrollRequestHandled: (id: number) => void;
     readonly onClose: () => void;
     readonly onRemoveAnchor: () => void;
-    readonly onAsk: (text: string, anchor?: ChatAnchor) => Promise<ChatExchange>;
+    readonly onAsk: (text: string, anchor?: UiChatAskAnchor) => Promise<ChatExchange>;
     readonly onCancel: (exchangeId: number) => Promise<void>;
     readonly onRetry: (exchangeId: number) => Promise<void>;
     readonly onNavigate: (anchor: ChatAnchor) => void;
@@ -91,7 +91,7 @@ export function queueBannerText(tasks: readonly UiTask[]): string | null {
     return generating ? 'Generating the route · your question is next' : 'Agent busy · your question is next';
 }
 
-export function sameChatAnchor(left: ChatAnchor | null, right: ChatAnchor | null): boolean {
+export function sameChatAnchor(left: UiChatAskAnchor | null, right: UiChatAskAnchor | null): boolean {
     return (
         left?.fileId === right?.fileId &&
         left?.side === right?.side &&
@@ -100,12 +100,12 @@ export function sameChatAnchor(left: ChatAnchor | null, right: ChatAnchor | null
     );
 }
 
-export function chatAnchorLabel(anchor: ChatAnchor): string {
+export function chatAnchorLabel(anchor: UiChatAskAnchor): string {
     const basename = anchor.path.split('/').at(-1) ?? anchor.path;
     return `${basename}:${String(anchor.start)}–${String(anchor.end)}`;
 }
 
-function chatAnchorTitle(anchor: ChatAnchor): string {
+function chatAnchorTitle(anchor: UiChatAskAnchor): string {
     return `${anchor.path}:${String(anchor.start)}–${String(anchor.end)}`;
 }
 

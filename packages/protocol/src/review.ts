@@ -32,6 +32,13 @@ export const hostCapabilitiesSchema = z.object({
     fileContent: z.boolean(),
     /** The host distinguishes "comment opens an issue / needs no reply" (`CommentDraft.issue`). Without it, the UI hides the control. */
     commentIssues: z.boolean(),
+    /**
+     * The host lists previous iterations and returns slices between them (`listIterations` has more than
+     * one entry, `getDiff({base, head})`). Without this, `listIterations` contains only
+     * the active iteration, slices are rejected, and the server cannot carry over progress or classify stops
+     * after a push. The UI only shows "route is stale".
+     */
+    iterations: z.boolean(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -103,7 +110,12 @@ export const fileContentSchema = z.object({
 });
 export type FileContent = z.infer<typeof fileContentSchema>;
 
-/** Full PR diff: one host iteration. */
+/**
+ * The entire PR diff, either one host iteration or a slice between two iterations
+ * (`getDiff({base, head})`, interdiff). A slice's `diffId` is the `head` iteration id,
+ * and `baseCommit` is the reviewed commit of the `base` iteration. Slice file `fileId` values
+ * are opaque, just as in iterations, and differ from the `fileId` values in the iterations themselves.
+ */
 export const prDiffSchema = z.object({
     /** Opaque iteration id for snapshot provenance and new comment anchors. */
     diffId: hostIdSchema,
@@ -113,6 +125,29 @@ export const prDiffSchema = z.object({
     files: z.array(fileDiffSchema),
 });
 export type PrDiff = z.infer<typeof prDiffSchema>;
+
+/**
+ * Iteration status. `active` is the one under review now (exactly one). `previous` means
+ * the host still lists it. `gone` means the host no longer lists it (a force-push on GitHub),
+ * but the server retains its locally saved diff (brief §4a). Only the server sets
+ * `gone`, by comparing the host's list with its own storage. The adapter returns only what it sees.
+ */
+export const iterationStatusSchema = z.enum(['active', 'previous', 'gone']);
+export type IterationStatus = z.infer<typeof iterationStatusSchema>;
+
+/**
+ * A PR iteration is the unit of review time: one push by the author is one
+ * iteration. Route snapshots, reading progress and note anchors are tied to `diffId`.
+ */
+export const iterationSchema = z.object({
+    diffId: hostIdSchema,
+    baseCommit: z.string().min(1),
+    /** The iteration's reviewed commit, the same as `PrDiff.headCommit`. */
+    headCommit: z.string().min(1),
+    createdAt: z.iso.datetime(),
+    status: iterationStatusSchema,
+});
+export type Iteration = z.infer<typeof iterationSchema>;
 
 /** Position in a file diff: side + line + span (size ≥ 1, may be a range). */
 export const anchorPositionSchema = z.object({
@@ -166,9 +201,22 @@ export const commentSchema: z.ZodType<Comment> = z.object({
 });
 
 /**
+ * A thread's pin to the commit where it was written (SPEC §4.5 "pinned to 9f3c1ab"): the iteration
+ * of the original anchor reported by the host. The UI neither stores
+ * nor computes its own pin. A `pinnedTo.diffId` different from the active iteration gives "view at the
+ * old commit". The rest is handled by `outdated` and the rebound `anchor`.
+ */
+export const threadPinSchema = z.object({
+    diffId: hostIdSchema,
+    commit: z.string().min(1),
+});
+export type ThreadPin = z.infer<typeof threadPinSchema>;
+
+/**
  * A thread contains the root comment and thread-level state.
  * `anchor: null` means a PR discussion. The adapter computes `outdated`
- * (from the difference between iteration lists when the host has no such field).
+ * (from the difference between iteration lists if the host has no such field). `pinnedTo: null` means
+ * a PR discussion or that the host does not know the anchor's iteration.
  */
 export const threadSchema = z.object({
     id: hostIdSchema,
@@ -176,6 +224,7 @@ export const threadSchema = z.object({
     resolved: z.boolean(),
     resolvedBy: z.string().nullable(),
     outdated: z.boolean(),
+    pinnedTo: threadPinSchema.nullable(),
     root: commentSchema,
 });
 export type Thread = z.infer<typeof threadSchema>;

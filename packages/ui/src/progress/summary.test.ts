@@ -37,6 +37,7 @@ function threads(): Thread[] {
             resolved: false,
             resolvedBy: null,
             outdated: false,
+        pinnedTo: null,
             root: comment('root', true, [comment('reply', true, [comment('deep', false)])]),
         },
     ];

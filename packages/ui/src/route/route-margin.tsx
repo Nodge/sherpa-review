@@ -1,4 +1,4 @@
-import type { ChatAnchor } from '@sherpa/protocol';
+import type { UiChatAskAnchor } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 
@@ -87,8 +87,8 @@ export interface MarginStripActions {
     /** A disconnected agent disables the entry point, as in the popover (SPEC §2.15). */
     readonly agentConnected: boolean;
     /** A question about this range is queued or running. An "asked" chip replaces the button. */
-    readonly isPending: (anchor: ChatAnchor) => boolean;
-    readonly onAskToPlace: (anchor: ChatAnchor) => void;
+    readonly isPending: (anchor: UiChatAskAnchor) => boolean;
+    readonly onAskToPlace: (anchor: UiChatAskAnchor) => void;
 }
 
 export interface MarginStripsInput {
@@ -160,7 +160,7 @@ function RouteStrip({
     actions,
 }: {
     readonly text: string;
-    readonly anchor?: ChatAnchor;
+    readonly anchor?: UiChatAskAnchor;
     readonly actions?: MarginStripActions;
 }) {
     return (

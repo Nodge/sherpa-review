@@ -195,7 +195,7 @@ function mount(options: MountOptions = {}): Mounted {
             case UI_ENDPOINTS.reviewRoute:
                 return Promise.resolve(
                     json({
-                        route: { phase: 'ready', smallPr: false, snapshot: SNAPSHOT, failure: null },
+                        route: { phase: 'ready', smallPr: false, snapshot: SNAPSHOT, failure: null, stale: null },
                         routeRevision: 1,
                     }),
                 );
@@ -235,6 +235,7 @@ function mount(options: MountOptions = {}): Mounted {
             reviewHost: 'fixture',
             pr: DATA.pr,
             feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+            iterations: [],
         },
         error: null,
         progressRevision: null,

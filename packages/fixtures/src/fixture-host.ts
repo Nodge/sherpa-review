@@ -3,6 +3,7 @@ import type {
     CommentDraft,
     FileContent,
     HostId,
+    Iteration,
     Lens,
     PrDiff,
     PrMeta,
@@ -139,22 +140,28 @@ export class FixtureHost implements ReviewHost {
         return Promise.resolve(structuredClone(this.data.pr));
     }
 
+    /** Multiple fixture iterations are added in M4-T2. */
+    listIterations(): Promise<Iteration[]> {
+        return Promise.resolve([this.activeIteration()]);
+    }
+
     /**
-     * The fixture holds one iteration, so it rejects arbitrary slices with an explicit error,
-     * as the contract permits for adapters without slice support.
+     * The fixture holds one iteration, so it rejects a slice with an explicit error, as the
+     * contract allows for an adapter that cannot provide a slice.
      */
-    getDiff(opts?: { base?: string; head?: string }): Promise<PrDiff> {
-        const base = opts?.base;
-        const head = opts?.head;
-        const wantsOther =
-            (base !== undefined && base !== this.data.diff.baseCommit) ||
-            (head !== undefined && head !== this.data.diff.headCommit);
-        if (wantsOther) {
-            return Promise.reject(
-                new Error('the fixture host holds one iteration: arbitrary base/head are not supported'),
-            );
+    getDiff(slice?: { base: HostId; head: HostId }): Promise<PrDiff> {
+        if (slice !== undefined) {
+            return Promise.reject(new Error('the fixture host holds one iteration: slices are not supported'));
         }
         return Promise.resolve(structuredClone(this.data.diff));
+    }
+
+    /** Fixture iteration changes are added in M4-T2. For now the list is fixed, so the subscriber receives it once. */
+    watchIterations(onChange: (iterations: Iteration[]) => void): () => void {
+        onChange([this.activeIteration()]);
+        return () => {
+            // Nothing to unsubscribe from: the fixture does not change iterations.
+        };
     }
 
     getThreads(): Promise<Thread[]> {
@@ -194,6 +201,10 @@ export class FixtureHost implements ReviewHost {
             resolved: false,
             resolvedBy: null,
             outdated: false,
+            pinnedTo:
+                parsed.anchor === null
+                    ? null
+                    : { diffId: this.data.diff.diffId, commit: this.data.diff.headCommit },
             root,
         });
         this.emit();
@@ -304,6 +315,16 @@ export class FixtureHost implements ReviewHost {
     /** Comment issue status. `undefined` means the host has no such comment. */
     issueOf(commentId: HostId): boolean | null | undefined {
         return locate(this.data.threads, commentId)?.comment.issue;
+    }
+
+    private activeIteration(): Iteration {
+        return {
+            diffId: this.data.diff.diffId,
+            baseCommit: this.data.diff.baseCommit,
+            headCommit: this.data.diff.headCommit,
+            createdAt: this.data.pr.updatedAt,
+            status: 'active',
+        };
     }
 
     /** An unknown file is a host error. A known file without content (binary) returns null. */

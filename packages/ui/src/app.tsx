@@ -3,6 +3,7 @@ import type {
     ChatAnchor,
     PrDiff,
     Thread,
+    UiChatAskAnchor,
     UiChatResponse,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
@@ -142,7 +143,7 @@ export function openNoteInChatRequest(session: SessionStore, note: AgentNote, id
 
 interface ChatComposerContext {
     readonly key: string;
-    readonly anchor: ChatAnchor | null;
+    readonly anchor: UiChatAskAnchor | null;
     readonly latched: boolean;
 }
 
@@ -1092,7 +1093,7 @@ export function App({ store, session, token }: AppProps) {
 
     const chatData = currentChat.data ?? EMPTY_CHAT_RESPONSE;
     const isSelectionPending = useCallback(
-        (anchor: ChatAnchor | null): boolean =>
+        (anchor: UiChatAskAnchor | null): boolean =>
             anchor !== null &&
             chatData.exchanges.some(
                 (exchange) =>
@@ -1102,7 +1103,7 @@ export function App({ store, session, token }: AppProps) {
         [chatData.exchanges],
     );
     const selectChatAnchor = useCallback(
-        (anchor: ChatAnchor | null) => {
+        (anchor: UiChatAskAnchor | null) => {
             setChatComposerContext((current) => {
                 const next = current.key === chatKey ? current : { key: chatKey, anchor: null, latched: false };
                 return next.latched ? next : { ...next, anchor };
@@ -1115,7 +1116,7 @@ export function App({ store, session, token }: AppProps) {
      * (README §2, §10). Without text, this simply opens the panel for the selection.
      */
     const openChatWithQuestion = useCallback(
-        (text: string | null, anchor: ChatAnchor | null) => {
+        (text: string | null, anchor: UiChatAskAnchor | null) => {
             setChatComposerContext({ key: chatKey, anchor, latched: anchor !== null });
             session.setChatOpen(true);
             if (text !== null) {
@@ -1127,7 +1128,7 @@ export function App({ store, session, token }: AppProps) {
         [chatKey, session],
     );
     const openChatForSelection = useCallback(
-        (anchor: ChatAnchor) => {
+        (anchor: UiChatAskAnchor) => {
             openChatWithQuestion(null, anchor);
         },
         [openChatWithQuestion],
@@ -1141,7 +1142,7 @@ export function App({ store, session, token }: AppProps) {
     );
     /** Full diff hatch band: the anchor matches its exact range. */
     const composeDiffQuestion = useCallback(
-        (text: string, anchor?: ChatAnchor) => {
+        (text: string, anchor?: UiChatAskAnchor) => {
             openChatWithQuestion(text, anchor ?? null);
         },
         [openChatWithQuestion],
@@ -1180,7 +1181,7 @@ export function App({ store, session, token }: AppProps) {
         [session],
     );
     const askChat = useCallback(
-        async (text: string, anchor?: ChatAnchor) => {
+        async (text: string, anchor?: UiChatAskAnchor) => {
             const exchange = await askReviewChat(token, text, anchor);
             setChatState((current) => {
                 const next = chatStateForKey(current, chatKey);

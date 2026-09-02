@@ -95,6 +95,7 @@ const ANSWER_CATEGORY = [
 
 function anchor(path: string, start: number, end: number): ChatAnchor {
     return {
+        diffId: MEDIUM_DIFF_ID,
         fileId: makeFileId(MEDIUM_DIFF_ID, path),
         path,
         side: 'new',
@@ -140,7 +141,9 @@ function note(id: number, source: ChatExchange, createdAt: string): AgentNote {
         exchangeId: source.id,
         anchor: source.anchor,
         text: source.answer,
-        commit: MEDIUM_HEAD_COMMIT,
+        // Carry anchors over to the new iteration in M4-T11.
+        lostAnchor: false,
+        origin: { commit: MEDIUM_HEAD_COMMIT, anchor: source.anchor },
         createdAt,
     };
 }

@@ -14,11 +14,13 @@ import { taskIdSchema } from './task.js';
 
 /**
  * Question and note anchor: a line range on one side of a diff file (shaped like a
- * route stop anchor). `path` duplicates `fileId` for the chip label
- * ("order_service.py:148–151") and for when the file leaves the diff (M4):
- * the label survives a failed resolution.
+ * route stop anchor) in a specific iteration. `path` duplicates `fileId` for the chip
+ * label ("order_service.py:148–151") and for when the file leaves the diff:
+ * the label survives failed resolution. `diffId` is the iteration where the selection was made:
+ * the server builds question context from its saved diff, even if it is no longer active.
  */
 export const chatAnchorSchema = z.object({
+    diffId: hostIdSchema,
     fileId: hostIdSchema,
     path: z.string().min(1),
     side: z.enum(['old', 'new']),
@@ -76,17 +78,30 @@ export type ChatExchange = z.infer<typeof chatExchangeSchema>;
 export const agentNoteIdSchema = z.number().int().positive();
 export type AgentNoteId = z.infer<typeof agentNoteIdSchema>;
 
+/**
+ * Original note anchor, where it was pinned on creation. Does not change:
+ * when migrating to a new iteration, `AgentNote.anchor` moves and `origin` stays.
+ * `commit` is that iteration's reviewed commit. null means the server could not determine it.
+ */
+export const agentNoteOriginSchema = z.object({
+    commit: z.string().nullable(),
+    anchor: chatAnchorSchema,
+});
+export type AgentNoteOrigin = z.infer<typeof agentNoteOriginSchema>;
+
 export const agentNoteSchema = z.object({
     id: agentNoteIdSchema,
     exchangeId: chatExchangeIdSchema,
+    /** Current anchor: after a push, the server carries it to the active iteration using the interdiff. */
     anchor: chatAnchorSchema,
     /** Markdown copy of the accepted answer. */
     text: z.string().min(1),
     /**
-     * Diff head commit at creation time, to prepare for anchor migration after a new
-     * push (M4). Not interpreted in M3. null means the server could not determine the commit.
+     * A push touched the note's range and its anchor could not be carried over (SPEC §2.16). The note
+     * leaves the code and stays marked in chat. `anchor` keeps the last successful value.
      */
-    commit: z.string().nullable(),
+    lostAnchor: z.boolean(),
+    origin: agentNoteOriginSchema,
     createdAt: z.iso.datetime(),
 });
 export type AgentNote = z.infer<typeof agentNoteSchema>;

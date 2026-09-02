@@ -400,6 +400,8 @@ function mergeThreads(
                     resolved: false,
                     resolvedBy: null,
                     outdated: false,
+                    // The thread pin arrives from the host on the next read in M4-T3.
+                    pinnedTo: null,
                     root: comment,
                 },
             ];

@@ -141,6 +141,7 @@ function lineDraft(): Thread {
         resolved: false,
         resolvedBy: null,
         outdated: false,
+        pinnedTo: null,
         anchor: { fileId: FILE.fileId, path: FILE.path, position: POSITION },
     };
 }
