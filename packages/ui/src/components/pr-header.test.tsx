@@ -1,11 +1,11 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { PrHeader } from './pr-header.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const PCI: FileFilter = {
     id: 'pci',
     label: 'PCI DSS files',

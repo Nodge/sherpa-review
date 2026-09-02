@@ -8,6 +8,12 @@ import {
     makeMediumSkeletonResult,
     makeMediumRouteStates,
 } from './route-medium.js';
+import {
+    makeMediumBrokenResultsV2,
+    makeMediumSecondPassState,
+    makeMediumSectionResultsV2,
+    makeMediumSkeletonResultV2,
+} from './route-medium-v2.js';
 
 /**
  * Fixture route data: generation states for the gallery and raw model outputs
@@ -39,6 +45,10 @@ export interface RouteFixtures {
     states: Partial<Record<UiRoutePhase, UiRouteState>>;
     /** null means the fixture has no prepared model outputs (the gallery does not need them). */
     rawResults: RouteRawResults | null;
+    /** Model outputs for the second iteration: the same stops plus "why this stop changed". */
+    rawResultsV2: RouteRawResults | null;
+    /** Ready route for the second pass (README §9). null means the fixture has no second iteration. */
+    secondPass: UiRouteState | null;
 }
 
 /**
@@ -79,20 +89,32 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
             sections: makeMediumSectionResults(),
             broken: makeMediumBrokenResults(),
         },
+        rawResultsV2: {
+            skeleton: makeMediumSkeletonResultV2(),
+            sections: makeMediumSectionResultsV2(),
+            broken: makeMediumBrokenResultsV2(),
+        },
+        secondPass: makeMediumSecondPassState(),
     }),
     // PR below the route threshold: no generation task is enqueued (requirements §3.6).
     small: () => ({
         states: { none: { phase: 'none', smallPr: true, snapshot: null, failure: null, stale: null } },
         rawResults: null,
+        rawResultsV2: null,
+        secondPass: null,
     }),
     edge: () => ({
         states: { failed: edgeFailedState() },
         rawResults: null,
+        rawResultsV2: null,
+        secondPass: null,
     }),
     // No route: `large` is used in UI virtualization tests, and no one has run generation for it.
     large: () => ({
         states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
         rawResults: null,
+        rawResultsV2: null,
+        secondPass: null,
     }),
 };
 
@@ -110,18 +132,23 @@ function validate(fixtures: RouteFixtures): RouteFixtures {
         states[phase] = parsed;
     }
 
-    const raw = fixtures.rawResults;
     return {
         states,
-        rawResults:
-            raw === null
-                ? null
-                : {
-                      skeleton: routeSkeletonResultSchema.parse(raw.skeleton),
-                      sections: raw.sections.map((section) => routeSectionResultSchema.parse(section)),
-                      broken: raw.broken,
-                  },
+        rawResults: validateRaw(fixtures.rawResults),
+        rawResultsV2: validateRaw(fixtures.rawResultsV2),
+        secondPass: fixtures.secondPass === null ? null : uiRouteStateSchema.parse(fixtures.secondPass),
     };
+}
+
+/** Invalid outputs skip `parse` because they are invalid on purpose. */
+function validateRaw(raw: RouteRawResults | null): RouteRawResults | null {
+    return raw === null
+        ? null
+        : {
+              skeleton: routeSkeletonResultSchema.parse(raw.skeleton),
+              sections: raw.sections.map((section) => routeSectionResultSchema.parse(section)),
+              broken: raw.broken,
+          };
 }
 
 const built = new Map<FixtureName, RouteFixtures | null>();

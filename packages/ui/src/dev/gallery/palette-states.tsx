@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
 
@@ -16,7 +16,7 @@ export interface PaletteGalleryState {
     readonly render: () => ReactNode;
 }
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 export const PALETTE_STATES: readonly PaletteGalleryState[] = [
     {

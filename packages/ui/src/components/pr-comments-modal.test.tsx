@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,7 +12,7 @@ import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 const HUMAN = { login: 'alice', displayName: 'Alice Ingram', bot: false } as const;
 const BOT = { login: 'ai-review-bot', displayName: 'AI Review', bot: true } as const;

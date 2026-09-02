@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Thread } from '@sherpa/protocol';
 import { useEffect, useState } from 'react';
 
@@ -6,7 +6,7 @@ import { PrCommentsModal } from '../../components/pr-comments-modal.tsx';
 import type { ComposerTransport } from '../../threads/composer.js';
 import { createThreadStore } from '../../threads/store.js';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 const AUTHOR = { login: 'alice', displayName: 'Alice Ingram', bot: false } as const;

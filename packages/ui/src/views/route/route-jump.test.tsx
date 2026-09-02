@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { Lens, RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -27,7 +27,7 @@ import { stopFileShownModel } from './stop-file-card.tsx';
  * whether the right stop or line flashes. Check the lens and folds through stores and markup.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
     if (snapshot === null) {

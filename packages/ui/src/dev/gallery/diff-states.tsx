@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, LONG_LINE_FILE_PATH } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, LONG_LINE_FILE_PATH } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -51,7 +51,7 @@ interface CardStateProps {
 const EMPTY_EXPANSION: FileExpansion = new Map();
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
-    const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration(fixture).diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`fixture ${fixture} has no file ${path}`);
     }
@@ -96,7 +96,7 @@ function CardState({
     hint,
     gapError = false,
 }: CardStateProps) {
-    const data = useMemo(() => fixtureData(fixture), [fixture]);
+    const data = useMemo(() => fixtureIteration(fixture), [fixture]);
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
     const contentAvailable = data.pr.capabilities.fileContent;
 
@@ -176,7 +176,7 @@ function CardState({
 
 /** Virtualized list on the large fixture: 64 files, parsed as you scroll. */
 function ListState({ fixture }: { fixture: FixtureName }) {
-    const data = useMemo(() => fixtureData(fixture), [fixture]);
+    const data = useMemo(() => fixtureIteration(fixture), [fixture]);
     const store = useMemo(() => createDiffViewStore({ files: data.diff.files, storage: null }), [data]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);

@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
-import type { FixtureData } from '@sherpa/fixtures';
-import { fixtureData } from '@sherpa/fixtures';
+import type { FixtureIterationView } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 
 import { answerChat, buildRoute, takeTask } from './route-worker.js';
 import type { SherpaServerHandle } from './sherpa-fixture.js';
@@ -40,7 +40,7 @@ const ANSWER_ITEMS = [
 ];
 const DRAFT_TAIL = 'E2E F2: this cannot be merged without a test for crossing midnight.';
 /** The fixture's "me": the author of drafts the reviewer saves and publishes. */
-const ME = fixtureData('medium').currentUser.login;
+const ME = fixtureIteration('medium').currentUser.login;
 
 test('F2: selection → agent question → answer and note → draft → request changes', async ({
     page,
@@ -203,7 +203,7 @@ async function expectNoteAtLines(page: Page): Promise<void> {
     );
 }
 
-type HostThread = FixtureData['threads'][number];
+type HostThread = FixtureIterationView['threads'][number];
 type HostComment = HostThread['root'];
 
 /**

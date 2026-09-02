@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { UiRouteState } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -26,7 +26,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * No endpoints, a frozen clock. Opening a state always gives the same frame.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function routeState(name: 'medium' | 'small', phase: 'reading' | 'filling' | 'failed' | 'none'): UiRouteState {
@@ -118,7 +118,7 @@ function RouteFillingState({ agentStopped = false }: { agentStopped?: boolean })
 
 /** A small PR: the same `small` fixture in full, from the header note to the empty route tab. */
 function SmallPrDiffState() {
-    const data = useMemo(() => fixtureData('small'), []);
+    const data = useMemo(() => fixtureIteration('small'), []);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const store = useMemo(() => {
         const created = createDiffViewStore({ files: data.diff.files, storage: null });

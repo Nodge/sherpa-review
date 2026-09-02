@@ -1,7 +1,7 @@
-import type { RouteSnapshot, RouteStop, RouteTier } from '@sherpa/protocol';
+import type { PrDiff, RouteSnapshot, RouteStop, RouteTier } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { buildRouteFixtures, fixtureData, routeFixtures } from './data/index.js';
+import { buildRouteFixtures, fixtureData, fixtureIteration, routeFixtures } from './data/index.js';
 
 /**
  * Checks route fixtures against the diff, not themselves: coverage is recalculated
@@ -25,9 +25,9 @@ interface ChangedFile {
 }
 
 /** Changed diff lines: the same definition as SPEC §2.4 coverage math (added + removed). */
-function changedLines(name: 'medium'): Map<string, ChangedFile> {
+function changedLines(diff: PrDiff): Map<string, ChangedFile> {
     const files = new Map<string, ChangedFile>();
-    for (const file of fixtureData(name).diff.files) {
+    for (const file of diff.files) {
         if (file.patch === null) {
             continue;
         }
@@ -73,7 +73,7 @@ function totalChangedLines(files: Map<string, ChangedFile>): number {
 
 /** Diff file paths: the validator drops assertion anchors pointing outside this set. */
 function diffPaths(): Set<string> {
-    return new Set(fixtureData('medium').diff.files.map((file) => file.path));
+    return new Set(fixtureIteration('medium').diff.files.map((file) => file.path));
 }
 
 function mediumSnapshot(): RouteSnapshot {
@@ -142,7 +142,7 @@ function coverageByTier(snapshot: RouteSnapshot, files: Map<string, ChangedFile>
 }
 
 describe('medium fixture route', () => {
-    const files = changedLines('medium');
+    const files = changedLines(fixtureIteration('medium').diff);
     const snapshot = mediumSnapshot();
     const coverage = coverageByTier(snapshot, files);
 
@@ -204,8 +204,8 @@ describe('medium fixture route', () => {
         }
         expect(snapshot.contentHash).toMatch(/^[0-9a-f]{16}$/);
         expect(snapshot.provenance).toEqual({ harness: 'claude-code', model: 'claude-opus-5' });
-        expect(snapshot.commit).toBe(fixtureData('medium').diff.headCommit);
-        expect(snapshot.diffId).toBe(fixtureData('medium').diff.diffId);
+        expect(snapshot.commit).toBe(fixtureIteration('medium').diff.headCommit);
+        expect(snapshot.diffId).toBe(fixtureIteration('medium').diff.diffId);
         expect(snapshot.summary.split('\n\n').length).toBeGreaterThanOrEqual(2);
     });
 
@@ -400,15 +400,96 @@ describe('raw model outputs', () => {
         expect(broken?.sectionUnknownFile.stops[0]?.anchors[0]?.path).toBe(
             'services/orders/src/domain/order-state.ts',
         );
-        expect(fixtureData('medium').diff.files.some((file) => file.path.endsWith('order-state.ts'))).toBe(false);
+        expect(fixtureIteration('medium').diff.files.some((file) => file.path.endsWith('order-state.ts'))).toBe(false);
 
         const outside = broken?.sectionRangeOutsideChanges.stops[0]?.anchors[0];
-        const readme = changedLines('medium').get('services/orders/README.md');
+        const readme = changedLines(fixtureIteration('medium').diff).get('services/orders/README.md');
         expect(outside?.path).toBe('services/orders/README.md');
         expect(readme?.new.has(outside?.start ?? 0)).toBe(false);
 
         const tour = broken?.skeletonTourOrderNotPermutation.tourOrder ?? [];
         expect(new Set(tour).size).toBeLessThan(tour.length);
+    });
+});
+
+describe('second-pass route', () => {
+    const snapshot = routeFixtures('medium')?.secondPass?.snapshot;
+    if (snapshot === undefined || snapshot === null) {
+        throw new Error('medium fixture has no second-pass route');
+    }
+    const second = fixtureData('medium').iterations[1];
+    if (second === undefined) {
+        throw new Error('medium fixture has no second iteration');
+    }
+    const files = changedLines(second.diff);
+
+    it('uses the second iteration and records which snapshot carried progress over', () => {
+        expect(snapshot.diffId).toBe(second.diff.diffId);
+        expect(snapshot.commit).toBe(second.diff.headCommit);
+        expect(snapshot.previousSnapshotId).toBe(mediumSnapshot().snapshotId);
+        expect(snapshot.carried).toEqual({ kept: 4, total: 7 });
+        expect(snapshot.contentHash).toMatch(/^[0-9a-f]{16}$/);
+    });
+
+    it('marks three stops as changed and leaves the others unchanged', () => {
+        const changed = snapshot.stops.filter((stop) => stop.change !== null);
+        expect(changed.map((stop) => stop.id)).toEqual(['s02', 's03', 's06']);
+        expect(changed.map((stop) => stop.change?.kind)).toEqual(['changed', 'changed', 'new']);
+        // Progress carryover must match the number of untouched stops.
+        expect(snapshot.stops.length - changed.length).toBe(snapshot.carried?.kept);
+        for (const stop of changed) {
+            expect(stop.change?.reason ?? '').toMatch(/\p{L}/u);
+        }
+    });
+
+    it('links to a thread in the second iteration', () => {
+        const threadIds = snapshot.stops.flatMap((stop) => stop.change?.threadIds ?? []);
+        expect(threadIds.length).toBe(1);
+        const known = new Set(second.threads.map((thread) => thread.id));
+        for (const id of threadIds) {
+            expect(known.has(id), `thread ${id} not found in the second iteration`).toBe(true);
+        }
+    });
+
+    it('resolves anchors against the second iteration and places them only on changed lines', () => {
+        for (const stop of snapshot.stops) {
+            for (const anchor of stop.anchors) {
+                const file = files.get(anchor.path);
+                expect(file, `anchor of stop ${stop.id} points outside the second iteration: ${anchor.path}`).toBeDefined();
+                expect(anchor.fileId).toBe(file?.fileId);
+                const changed = anchor.side === 'old' ? file?.old : file?.new;
+                for (let line = anchor.start; line <= anchor.end; line += 1) {
+                    expect(
+                        changed?.has(line),
+                        `anchor of stop ${stop.id} covers an unchanged line ${anchor.path}:${anchor.side}:${String(line)}`,
+                    ).toBe(true);
+                }
+            }
+        }
+    });
+
+    it('rebuilds the summary and digest for the second iteration', () => {
+        // Second-pass texts must match its diff: `card-token.ts` has left the PR,
+        // so the model has no basis to claim "PAN masking is uncovered".
+        expect(snapshot.summary).not.toBe(mediumSnapshot().summary);
+        expect(snapshot.summary).toContain('rejection-status.ts');
+        expect(routeFixtures('medium')?.rawResultsV2?.skeleton.summary).toBe(snapshot.summary);
+
+        const claims = snapshot.stops.flatMap((stop) => stop.tests.map((claim) => claim.text));
+        expect(claims.some((text) => text.includes('recordedAt'))).toBe(true);
+        expect(claims.some((text) => text.includes('PAN masking'))).toBe(false);
+    });
+
+    it('explains exactly the touched stops in second-pass sections', () => {
+        const sections = routeFixtures('medium')?.rawResultsV2?.sections ?? [];
+        const withReason = sections.flatMap((section) =>
+            section.stops.filter((stop) => stop.changeReason !== undefined).map((stop) => stop.planIndex),
+        );
+        expect(withReason).toEqual([2, 3, 6]);
+        const withThreads = sections.flatMap((section) =>
+            section.stops.filter((stop) => stop.changeThreadIds !== undefined).map((stop) => stop.planIndex),
+        );
+        expect(withThreads).toEqual([3]);
     });
 });
 

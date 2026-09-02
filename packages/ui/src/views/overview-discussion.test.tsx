@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -10,7 +10,7 @@ import { ViewFrame } from './view-frames.tsx';
  * The Overview discussion card is a summary, not a feed: threads outside the diff are collapsed (dogfooding #5).
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const THREADS = withOutsideBot();
 

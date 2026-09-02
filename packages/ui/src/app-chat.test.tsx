@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { AgentNote, ChatAnchor, ChatExchange, UiChatResponse, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
@@ -12,7 +12,7 @@ import type { Store, StoreSnapshot } from './store.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const EMPTY_CHAT: UiChatResponse = { exchanges: [], notes: [], chatRevision: 1 };
 const NOTE_ANCHOR: ChatAnchor = { diffId: DATA.diff.diffId, fileId: 'file-1', path: 'src/cache.ts', side: 'new', start: 41, end: 43 };
 const NOTE: AgentNote = {

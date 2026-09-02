@@ -9,6 +9,7 @@ import { createChatRoutes } from './chat-routes.js';
 import { ChatStore } from './chat-store.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
+import { createDevRoutes } from './dev-routes.js';
 import { ServerAlreadyRunningError } from './errors.js';
 import type { FeedbackIntegrationOptions } from './feedback-routes.js';
 import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
@@ -217,6 +218,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         // Reading progress is local and exists on every server, including those without a review host.
         const progress = new ProgressStore(options.now === undefined ? { db } : { db, now: options.now });
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
+        const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
         const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
         // The snapshot includes PR metadata, and `buildState` is synchronous. The network `getPr()` call uses a cache.
@@ -286,6 +288,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
+            // Dev endpoints exist only for the fixture host. Other hosts don't have these routes.
+            ...(advanceIteration === undefined ? [] : createDevRoutes({ advanceIteration })),
         );
         markRoutesReady();
 

@@ -1,5 +1,5 @@
 import type { FixtureName } from '@sherpa/fixtures';
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import type { CharRange, DiffFileModel, DiffHunk, DiffLine } from './model.js';
@@ -19,7 +19,7 @@ function lines(model: DiffFileModel): DiffLine[] {
 }
 
 function parseFixtureFile(fixture: FixtureName, path: string): DiffFileModel {
-    const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration(fixture).diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`no file ${path} in fixture ${fixture}`);
     }

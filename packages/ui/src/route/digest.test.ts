@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, RouteStop } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -13,7 +13,7 @@ import { buildRouteModel, stopSeenRanges } from './route-model.js';
  * with its fixture misrepresents the test contract.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
     if (snapshot === null) {

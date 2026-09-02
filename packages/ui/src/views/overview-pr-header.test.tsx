@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Lens, PrChecks, PrMeta } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { ViewFrame } from './view-frames.tsx';
  * in the metadata row, author with time, branches and check status.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');
 

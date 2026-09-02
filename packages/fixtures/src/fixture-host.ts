@@ -14,7 +14,7 @@ import type {
 } from '@sherpa/protocol';
 import { commentDraftSchema, verdictSchema } from '@sherpa/protocol';
 
-import type { FixtureData, FixtureName } from './data/index.js';
+import type { FixtureData, FixtureIteration, FixtureName } from './data/index.js';
 import { fixtureData } from './data/index.js';
 import { fileContentOf } from './file-content.js';
 
@@ -108,6 +108,10 @@ export class FixtureHost implements ReviewHost {
     private readonly data: FixtureData;
     private readonly failPublishFor: ReadonlySet<HostId>;
     private readonly watchers = new Set<(threads: Thread[]) => void>();
+    private readonly iterationWatchers = new Set<(iterations: Iteration[]) => void>();
+
+    /** Active-iteration pointer. `advanceIteration` moves it forward by one. */
+    private active = 0;
 
     /** Next mutation number, used for timestamps and ids of new drafts. */
     private mutations = 0;
@@ -126,7 +130,9 @@ export class FixtureHost implements ReviewHost {
         this.failPublishFor = new Set(options.failPublishFor ?? []);
         // Fixture data usually leaves issue status unset. The contract invariant is enforced here so
         // every comment in every data file does not need manual annotation.
-        normalizeIssues(this.data.threads, this.issueOfNewComment());
+        for (const iteration of this.data.iterations) {
+            normalizeIssues(iteration.threads, this.issueOfNewComment());
+        }
 
         if (this.data.pr.capabilities.fileViewedSync) {
             this.setFileViewed = (fileId, viewed) => this.applyFileViewed(fileId, viewed);
@@ -140,28 +146,63 @@ export class FixtureHost implements ReviewHost {
         return Promise.resolve(structuredClone(this.data.pr));
     }
 
-    /** Multiple fixture iterations are added in M4-T2. */
+    /** Iterations up to and including the active one. Iterations rewritten by force-push are never listed. */
     listIterations(): Promise<Iteration[]> {
-        return Promise.resolve([this.activeIteration()]);
+        return Promise.resolve(this.iterationsSnapshot());
     }
 
     /**
-     * The fixture holds one iteration, so it rejects a slice with an explicit error, as the
-     * contract allows for an adapter that cannot provide a slice.
+     * The active iteration's diff, or with `slice`, a fixture-declared slice between two
+     * listed iterations. Anything absent from the data is rejected with a clear error.
+     * Silently returning the wrong iteration's diff is worse than refusing.
      */
     getDiff(slice?: { base: HostId; head: HostId }): Promise<PrDiff> {
-        if (slice !== undefined) {
-            return Promise.reject(new Error('the fixture host holds one iteration: slices are not supported'));
+        if (slice === undefined) {
+            return Promise.resolve(structuredClone(this.activeData().diff));
         }
-        return Promise.resolve(structuredClone(this.data.diff));
+        if (!this.data.pr.capabilities.iterations) {
+            return Promise.reject(new Error('host does not support slices between iterations (capabilities.iterations)'));
+        }
+
+        const listed = new Set(this.listed().map((iteration) => iteration.iteration.diffId));
+        for (const diffId of [slice.base, slice.head]) {
+            if (!listed.has(diffId)) {
+                return Promise.reject(new Error(`iteration ${diffId} is unknown to the host`));
+            }
+        }
+
+        const found = this.data.interdiffs.find(
+            (interdiff) => interdiff.base === slice.base && interdiff.head === slice.head,
+        );
+        if (found === undefined) {
+            return Promise.reject(new Error(`slice ${slice.base}→${slice.head} is absent from the fixture`));
+        }
+        return Promise.resolve(structuredClone(found.diff));
     }
 
-    /** Fixture iteration changes are added in M4-T2. For now the list is fixed, so the subscriber receives it once. */
+    /** Subscribe to iterations: a snapshot immediately and after each `advanceIteration`. */
     watchIterations(onChange: (iterations: Iteration[]) => void): () => void {
-        onChange([this.activeIteration()]);
+        this.iterationWatchers.add(onChange);
+        onChange(this.iterationsSnapshot());
         return () => {
-            // Nothing to unsubscribe from: the fixture does not change iterations.
+            this.iterationWatchers.delete(onChange);
         };
+    }
+
+    /**
+     * Fixture "push": the next declared iteration becomes active. Used by the server's development endpoint
+     * and the second-pass gallery. At the last iteration there is nowhere further to go.
+     */
+    advanceIteration(): Iteration {
+        if (this.active + 1 >= this.data.iterations.length) {
+            throw new Error('no more iterations: end of fixture');
+        }
+        this.active += 1;
+        for (const watcher of this.iterationWatchers) {
+            watcher(this.iterationsSnapshot());
+        }
+        this.emit();
+        return this.activeIteration();
     }
 
     getThreads(): Promise<Thread[]> {
@@ -181,7 +222,7 @@ export class FixtureHost implements ReviewHost {
         const createdAt = this.nextTimestamp();
 
         if (parsed.parentId !== null) {
-            const found = locate(this.data.threads, parsed.parentId);
+            const found = locate(this.activeData().threads, parsed.parentId);
             if (found === null) {
                 return Promise.reject(new Error(`parent comment ${parsed.parentId} not found`));
             }
@@ -195,7 +236,7 @@ export class FixtureHost implements ReviewHost {
         if (this.data.pr.capabilities.commentIssues && parsed.issue !== undefined) {
             root.issue = parsed.issue;
         }
-        this.data.threads.push({
+        this.activeData().threads.push({
             id: root.id,
             anchor: parsed.anchor,
             resolved: false,
@@ -204,7 +245,10 @@ export class FixtureHost implements ReviewHost {
             pinnedTo:
                 parsed.anchor === null
                     ? null
-                    : { diffId: this.data.diff.diffId, commit: this.data.diff.headCommit },
+                    : {
+                          diffId: this.activeData().diff.diffId,
+                          commit: this.activeData().diff.headCommit,
+                      },
             root,
         });
         this.emit();
@@ -212,7 +256,7 @@ export class FixtureHost implements ReviewHost {
     }
 
     updateDraft(commentId: HostId, body: string, issue?: boolean): Promise<void> {
-        const found = locate(this.data.threads, commentId);
+        const found = locate(this.activeData().threads, commentId);
         if (found === null) {
             return Promise.reject(new Error(`comment ${commentId} not found`));
         }
@@ -230,7 +274,7 @@ export class FixtureHost implements ReviewHost {
 
     /** Physically deletes the draft, matching the review host, instead of marking it deleted. */
     deleteDraft(commentId: HostId): Promise<void> {
-        const found = locate(this.data.threads, commentId);
+        const found = locate(this.activeData().threads, commentId);
         if (found === null) {
             return Promise.reject(new Error(`comment ${commentId} not found`));
         }
@@ -243,7 +287,8 @@ export class FixtureHost implements ReviewHost {
         }
 
         if (found.parent === null) {
-            this.data.threads = this.data.threads.filter((thread) => thread !== found.thread);
+            const active = this.activeData();
+            active.threads = active.threads.filter((thread) => thread !== found.thread);
         } else {
             found.parent.replies = found.parent.replies.filter((reply) => reply !== found.comment);
         }
@@ -252,7 +297,7 @@ export class FixtureHost implements ReviewHost {
     }
 
     setThreadResolved(threadId: HostId, resolved: boolean): Promise<void> {
-        const thread = this.data.threads.find((candidate) => candidate.id === threadId);
+        const thread = this.activeData().threads.find((candidate) => candidate.id === threadId);
         if (thread === undefined) {
             return Promise.reject(new Error(`thread ${threadId} not found`));
         }
@@ -273,7 +318,7 @@ export class FixtureHost implements ReviewHost {
         }
 
         const drafts: Comment[] = [];
-        for (const thread of this.data.threads) {
+        for (const thread of this.activeData().threads) {
             collectDrafts(thread.root, drafts);
         }
 
@@ -314,22 +359,48 @@ export class FixtureHost implements ReviewHost {
 
     /** Comment issue status. `undefined` means the host has no such comment. */
     issueOf(commentId: HostId): boolean | null | undefined {
-        return locate(this.data.threads, commentId)?.comment.issue;
+        return locate(this.activeData().threads, commentId)?.comment.issue;
+    }
+
+    /** Active iteration data. The pointer is always within the array, since fixtures are never empty. */
+    private activeData(): FixtureIteration {
+        const iteration = this.data.iterations[this.active];
+        if (iteration === undefined) {
+            throw new Error(`iteration pointer ${String(this.active)} is outside the fixture`);
+        }
+        return iteration;
+    }
+
+    /**
+     * Iterations the host currently lists: all up to and including the active one, except
+     * those rewritten by a force-push. The host no longer sees them, and the server sets `gone`.
+     */
+    private listed(): FixtureIteration[] {
+        const seen = this.data.iterations.slice(0, this.active + 1);
+        const replaced = new Set(seen.map((iteration) => iteration.replaces).filter((id) => id !== null));
+        return seen.filter((iteration) => !replaced.has(iteration.iteration.diffId));
+    }
+
+    private iterationsSnapshot(): Iteration[] {
+        const activeId = this.activeData().iteration.diffId;
+        return this.listed().map((iteration) => ({
+            ...structuredClone(iteration.iteration),
+            status: iteration.iteration.diffId === activeId ? ('active' as const) : ('previous' as const),
+        }));
     }
 
     private activeIteration(): Iteration {
-        return {
-            diffId: this.data.diff.diffId,
-            baseCommit: this.data.diff.baseCommit,
-            headCommit: this.data.diff.headCommit,
-            createdAt: this.data.pr.updatedAt,
-            status: 'active',
-        };
+        const activeId = this.activeData().iteration.diffId;
+        const found = this.iterationsSnapshot().find((iteration) => iteration.diffId === activeId);
+        if (found === undefined) {
+            throw new Error('active iteration is missing from the list, which should never happen');
+        }
+        return found;
     }
 
     /** An unknown file is a host error. A known file without content (binary) returns null. */
     private loadFileContent(fileId: HostId): Promise<FileContent | null> {
-        const file = this.data.diff.files.find((candidate) => candidate.fileId === fileId);
+        const file = this.activeData().diff.files.find((candidate) => candidate.fileId === fileId);
         if (file === undefined) {
             return Promise.reject(new Error(`file ${fileId} not found in the diff`));
         }
@@ -337,7 +408,7 @@ export class FixtureHost implements ReviewHost {
     }
 
     private applyFileViewed(fileId: HostId, viewed: boolean): Promise<void> {
-        const file = this.data.diff.files.find((candidate) => candidate.fileId === fileId);
+        const file = this.activeData().diff.files.find((candidate) => candidate.fileId === fileId);
         if (file === undefined) {
             return Promise.reject(new Error(`file ${fileId} not found in the diff`));
         }
@@ -372,7 +443,7 @@ export class FixtureHost implements ReviewHost {
     }
 
     private threadsSnapshot(): Thread[] {
-        return structuredClone(this.data.threads);
+        return structuredClone(this.activeData().threads);
     }
 
     private emit(): void {

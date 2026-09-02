@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Lens, PrMeta, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -14,7 +14,7 @@ import { createSessionStore } from '../../session/session-store.js';
 import { RouteActionErrorBanner } from '../../views/route/generation-card.tsx';
 import { ViewFrame } from '../../views/view-frames.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const PR_KEY = 'fixture-medium';
 const DISCONNECTED = {
     kind: 'disconnected',

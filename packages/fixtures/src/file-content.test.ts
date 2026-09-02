@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FIXTURE_NAMES, fixtureData } from './data/index.js';
+import { FIXTURE_NAMES, fixtureIteration } from './data/index.js';
 import { fileContentOf } from './file-content.js';
 
 /**
@@ -54,7 +54,7 @@ function lineAt(text: string, line: number): string | undefined {
 
 describe('file content from a patch', () => {
     for (const name of FIXTURE_NAMES) {
-        const data = fixtureData(name);
+        const data = fixtureIteration(name);
 
         it(`${name}: patch context lines have their correct numbers in both versions`, () => {
             for (const file of data.diff.files) {
@@ -93,7 +93,7 @@ describe('file content from a patch', () => {
         });
 
         it(`${name}: the result is deterministic`, () => {
-            const again = fixtureData(name);
+            const again = fixtureIteration(name);
             expect(data.diff.files.map((file) => fileContentOf(file))).toEqual(
                 again.diff.files.map((file) => fileContentOf(file)),
             );
@@ -101,7 +101,7 @@ describe('file content from a patch', () => {
     }
 
     it('modification: the tail after the last hunk exists and matches in both versions', () => {
-        const file = fixtureData('medium').diff.files.find(
+        const file = fixtureIteration('medium').diff.files.find(
             (candidate) => candidate.path === 'services/orders/src/domain/order.ts',
         );
         if (file === undefined) {
@@ -118,7 +118,7 @@ describe('file content from a patch', () => {
     });
 
     it('added file: text comes entirely from the patch, with no appended tail', () => {
-        const file = fixtureData('medium').diff.files.find(
+        const file = fixtureIteration('medium').diff.files.find(
             (candidate) => candidate.path === 'services/orders/src/domain/edit-window.ts',
         );
         if (file === undefined) {

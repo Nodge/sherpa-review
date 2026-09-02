@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, UiChatAskAnchor } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../../diff/model.js';
@@ -18,7 +18,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * in the `chat-empty` state (M3-T6): the panel renders them itself.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 function readySnapshot(): RouteSnapshot {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
