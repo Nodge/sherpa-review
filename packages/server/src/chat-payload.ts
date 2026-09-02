@@ -16,10 +16,13 @@ import type {
 
 import { CHAT_GUIDE, chatInstructions } from './chat-prompts.js';
 import type { EnqueueInput } from './queue.js';
+import { CONTEXT_BUDGET_BYTES, prDiffContext } from './route-payload.js';
 import type { PatchLine } from './route/diff-index.js';
 import { walkPatch } from './route/diff-index.js';
+import type { FileSide, SharedPayloadStore } from './shared-payload.js';
+import { diffKeyOf } from './shared-payload.js';
 
-/** Total file budget for one chat payload. */
+/** Total file budget for the question directory. Shared files have their own budget. */
 export const CHAT_PAYLOAD_BUDGET_BYTES = 320 * 1024;
 /** Recent completed exchanges sufficient to follow the conversation. */
 export const CHAT_HISTORY_EXCHANGES = 8;
@@ -42,7 +45,10 @@ export interface ChatPayloadContext {
 }
 
 export interface ChatPayloadOptions {
+    /** File budget for the question directory. */
     readonly budgetBytes?: number;
+    /** Shared file budget (PR diff, file text), separate from task files. */
+    readonly sharedBudgetBytes?: number;
 }
 
 export interface ChatPayloadFile {
@@ -50,8 +56,23 @@ export interface ChatPayloadFile {
     readonly content: string;
 }
 
+/** Immutable question context, written to stable paths under `shared/` instead of copied per task. */
+export type SharedChatContext =
+    | { readonly kind: 'guide'; readonly name: string; readonly content: string }
+    | { readonly kind: 'pr-diff'; readonly diffKey: string; readonly content: string }
+    | {
+          readonly kind: 'file';
+          readonly diffKey: string;
+          readonly fileId: string;
+          readonly side: FileSide;
+          readonly content: string;
+      };
+
 export interface ChatPayload {
     readonly instructions: string;
+    /** Shared task files, listed first in `contextFiles`. */
+    readonly shared: readonly SharedChatContext[];
+    /** Files in the question directory. */
     readonly files: readonly ChatPayloadFile[];
 }
 
@@ -62,27 +83,49 @@ interface PayloadFileSpec {
     readonly render: (maxBytes: number) => string;
 }
 
-/** Builds a self-contained set of question files within the total budget. */
+/**
+ * Builds self-contained question context, using shared paths for immutable data and files in the
+ * question directory for question-specific data under a total budget.
+ */
 export function buildChatPayload(context: ChatPayloadContext, options: ChatPayloadOptions = {}): ChatPayload {
     const budgetBytes = options.budgetBytes ?? CHAT_PAYLOAD_BUDGET_BYTES;
-    const specs =
-        context.anchor === null ? prPayloadSpecs(context) : anchoredPayloadSpecs(context, context.anchor);
+    const sharedBudgetBytes = options.sharedBudgetBytes ?? CONTEXT_BUDGET_BYTES;
+    const guide: SharedChatContext = { kind: 'guide', name: 'chat-guide', content: CHAT_GUIDE };
+
+    if (context.anchor === null) {
+        const diff = sharedPrDiff(context, sharedBudgetBytes);
+        return {
+            instructions: chatInstructions(),
+            shared: diff === null ? [guide] : [guide, diff],
+            files: fitOwnFiles(prPayloadSpecs(context), budgetBytes),
+        };
+    }
+
+    const file = sharedAnchorFile(context, context.anchor, sharedBudgetBytes);
     return {
         instructions: chatInstructions(),
-        files: fitPayloadFiles(specs, budgetBytes).sort((left, right) => left.order - right.order),
+        shared: file === null ? [guide] : [guide, file],
+        files: fitOwnFiles(anchoredPayloadSpecs(context, context.anchor, file === null), budgetBytes),
     };
 }
 
-/** Materializes a separate question directory: retry does not overwrite the previous task payload. */
-export async function materializeChatPayload(payloadDir: string, payload: ChatPayload): Promise<EnqueueInput> {
-    await fs.mkdir(payloadDir, { recursive: true, mode: DIR_MODE });
-    await fs.chmod(payloadDir, DIR_MODE);
+/** Directory path for the next question. Retries cannot overwrite an earlier task payload. */
+export function questionDirIn(payloadDir: string): string {
+    return path.join(payloadDir, randomUUID());
+}
 
-    const taskDir = path.join(payloadDir, randomUUID());
-    await fs.mkdir(taskDir, { mode: DIR_MODE });
+/** Materializes the question directory and its shared context. Shared files come first in the task. */
+export async function materializeChatPayload(
+    taskDir: string,
+    shared: SharedPayloadStore,
+    payload: ChatPayload,
+): Promise<EnqueueInput> {
+    const contextFiles = payload.shared.map((entry) => writeShared(shared, entry));
+
+    await fs.mkdir(taskDir, { recursive: true, mode: DIR_MODE });
+    await fs.chmod(path.dirname(taskDir), DIR_MODE);
     await fs.chmod(taskDir, DIR_MODE);
 
-    const contextFiles: string[] = [];
     for (const file of payload.files) {
         const filePath = path.join(taskDir, file.name);
         await fs.writeFile(filePath, file.content, { encoding: 'utf8', mode: FILE_MODE });
@@ -97,7 +140,62 @@ export async function materializeChatPayload(payloadDir: string, payload: ChatPa
     };
 }
 
-function anchoredPayloadSpecs(context: ChatPayloadContext, anchor: ChatAnchor): PayloadFileSpec[] {
+function writeShared(store: SharedPayloadStore, entry: SharedChatContext): string {
+    switch (entry.kind) {
+        case 'guide':
+            return store.guide(entry.name, entry.content);
+        case 'pr-diff':
+            return store.prDiff(entry.diffKey, entry.content);
+        case 'file':
+            return store.fileSide(entry.diffKey, entry.fileId, entry.side, entry.content);
+    }
+}
+
+/** The diff for a question about the whole PR is the same shared file read by route tasks. */
+function sharedPrDiff(context: ChatPayloadContext, budgetBytes: number): SharedChatContext | null {
+    const diff = context.diff;
+    if (diff === null) {
+        return null;
+    }
+    return {
+        kind: 'pr-diff',
+        diffKey: diffKeyOf(diff),
+        content: prDiffContext({ diff, meta: context.pr }, budgetBytes),
+    };
+}
+
+/**
+ * Shares the surrounding file by path, so two questions about one file share a path. A file over
+ * budget is not shared. Its slice is centred on the anchor and lives in the question directory.
+ */
+function sharedAnchorFile(
+    context: ChatPayloadContext,
+    anchor: ChatAnchor,
+    budgetBytes: number,
+): SharedChatContext | null {
+    const text = anchor.side === 'old' ? context.fileContent?.oldText : context.fileContent?.newText;
+    if (context.diff === null || text === null || text === undefined) {
+        return null;
+    }
+
+    const content = fullFileContext(anchor.path, anchor.side, text);
+    if (byteLength(content) > budgetBytes) {
+        return null;
+    }
+    return { kind: 'file', diffKey: diffKeyOf(context.diff), fileId: anchor.fileId, side: anchor.side, content };
+}
+
+function fitOwnFiles(specs: readonly PayloadFileSpec[], budgetBytes: number): ChatPayloadFile[] {
+    return fitPayloadFiles(specs, budgetBytes)
+        .sort((left, right) => left.order - right.order)
+        .map(({ name, content }) => ({ name, content }));
+}
+
+function anchoredPayloadSpecs(
+    context: ChatPayloadContext,
+    anchor: ChatAnchor,
+    ownFileContext: boolean,
+): PayloadFileSpec[] {
     const file = fileOf(context.diff, anchor);
     const selection = selectedPatchContext(anchor, file);
     const route = anchoredRouteContext(anchor, context.route.snapshot);
@@ -108,32 +206,29 @@ function anchoredPayloadSpecs(context: ChatPayloadContext, anchor: ChatAnchor): 
     );
 
     return [
-        fixedSpec('chat-guide.md', 0, CHAT_GUIDE),
-        fixedSpec('question.md', 1, questionContext(context.question, anchor, context.pr)),
-        flexibleSpec('selection.patch.md', 2, selection),
-        flexibleSpec('route-context.md', 4, route),
-        flexibleSpec('history.md', 5, history),
-        {
-            name: 'file-context.md',
-            order: 3,
-            minimum: fileMinimum,
-            render: (maxBytes) => surroundingFileContext(anchor, context.fileContent, maxBytes),
-        },
+        fixedSpec('question.md', 0, questionContext(context.question, anchor, context.pr, context.diff !== null)),
+        flexibleSpec('selection.patch.md', 1, selection),
+        flexibleSpec('route-context.md', 3, route),
+        flexibleSpec('history.md', 4, history),
+        ...(ownFileContext
+            ? [
+                  {
+                      name: 'file-context.md',
+                      order: 2,
+                      minimum: fileMinimum,
+                      render: (maxBytes: number): string =>
+                          surroundingFileContext(anchor, context.fileContent, maxBytes),
+                  },
+              ]
+            : []),
     ];
 }
 
 function prPayloadSpecs(context: ChatPayloadContext): PayloadFileSpec[] {
-    const prMinimum = unavailableBlock('Pull request context', 'This context did not fit in the chat payload budget.');
     return [
-        fixedSpec('chat-guide.md', 0, CHAT_GUIDE),
-        fixedSpec('question.md', 1, questionContext(context.question, null, context.pr)),
-        {
-            name: 'pr-context.md',
-            order: 2,
-            minimum: prMinimum,
-            render: (maxBytes) => prLevelContext(context.pr, context.diff, context.route.snapshot, maxBytes),
-        },
-        flexibleSpec('history.md', 3, historyContext(context.history)),
+        fixedSpec('question.md', 0, questionContext(context.question, null, context.pr, context.diff !== null)),
+        flexibleSpec('route-context.md', 1, prRouteContext(context.route.snapshot)),
+        flexibleSpec('history.md', 2, historyContext(context.history)),
     ];
 }
 
@@ -176,7 +271,12 @@ function fitPayloadFiles(
     return files;
 }
 
-function questionContext(question: string, anchor: ChatAnchor | null, pr: PrMeta | null): string {
+function questionContext(
+    question: string,
+    anchor: ChatAnchor | null,
+    pr: PrMeta | null,
+    diffAvailable: boolean,
+): string {
     const scope =
         anchor === null
             ? 'Whole pull request.'
@@ -185,7 +285,9 @@ function questionContext(question: string, anchor: ChatAnchor | null, pr: PrMeta
         pr === null
             ? ['Pull request metadata is unavailable.']
             : [`Pull request: ${pr.title}`, `URL: ${pr.url}`];
-    return ['# Reviewer question', '', question, '', `Scope: ${scope}`, ...prLines, ''].join('\n');
+    // Name the missing diff here, since this task has no shared file containing it.
+    const diffLines = diffAvailable ? [] : ['[UNAVAILABLE: the host could not provide the active diff.]'];
+    return ['# Reviewer question', '', question, '', `Scope: ${scope}`, ...prLines, ...diffLines, ''].join('\n');
 }
 
 /** Patch for the selected range. The same `walkPatch` numbers lines and validates route anchors. */
@@ -286,20 +388,30 @@ function gutterCell(value: number | null): string {
     return (value === null ? NO_LINE : String(value)).padStart(GUTTER_WIDTH, ' ');
 }
 
-/** Full file on the requested side, centered on the anchor. Adds both markers when truncated. */
+/** Full text of one file side with a `line | content` gutter, shared by all questions about this file. */
+export function fullFileContext(filePath: string, side: FileSide, text: string): string {
+    return `${fileHeading(filePath, side)}${numberedFileLines(text).join('\n')}\n`;
+}
+
+function fileHeading(filePath: string, side: FileSide): string {
+    return ['# Surrounding file', '', `File: ${filePath}`, `Side: ${side}`, 'Gutter: `line | content`.', ''].join(
+        '\n',
+    );
+}
+
+function numberedFileLines(text: string): string[] {
+    const rawLines = text.split('\n');
+    const width = Math.max(1, String(rawLines.length).length);
+    return rawLines.map((line, index) => `${String(index + 1).padStart(width, ' ')} | ${line}`);
+}
+
+/** The same file, centred on the anchor and truncated. This slice lives in the question directory. */
 export function surroundingFileContext(
     anchor: ChatAnchor,
     content: FileContent | null,
     budgetBytes: number,
 ): string {
-    const heading = [
-        '# Surrounding file',
-        '',
-        `File: ${anchor.path}`,
-        `Side: ${anchor.side}`,
-        'Gutter: `line | content`.',
-        '',
-    ].join('\n');
+    const heading = fileHeading(anchor.path, anchor.side);
     if (content === null) {
         return fitText(
             `${heading}[UNAVAILABLE: the host could not provide full contents of the selected file.]\n`,
@@ -317,9 +429,7 @@ export function surroundingFileContext(
         );
     }
 
-    const rawLines = text.split('\n');
-    const width = Math.max(1, String(rawLines.length).length);
-    const lines = rawLines.map((line, index) => `${String(index + 1).padStart(width, ' ')} | ${line}`);
+    const lines = numberedFileLines(text);
     const full = `${heading}${lines.join('\n')}\n`;
     if (byteLength(full) <= budgetBytes) {
         return full;
@@ -431,94 +541,23 @@ function stopBlock(stop: RouteStop, anchor: ChatAnchor): string {
     ].join('\n');
 }
 
-const PR_PATCHES_HEADING = [
-    '## Patches',
-    '',
-    'Every patch line uses the `old new | line` gutter. `.` means that side has no line.',
-].join('\n');
-
-/** Whole-PR question context: header and plan are protected, patches use the remaining budget. */
-function prLevelContext(
-    pr: PrMeta | null,
-    diff: PrDiff | null,
-    snapshot: RouteSnapshot | null,
-    budgetBytes: number,
-): string {
-    const meta =
-        pr === null
-            ? ['# Pull request', '', '[UNAVAILABLE: pull request metadata is not available.]']
-            : [
-                  '# Pull request',
-                  '',
-                  `Title: ${pr.title}`,
-                  `URL: ${pr.url}`,
-                  `Branches: ${pr.fromBranch} -> ${pr.toBranch}`,
-                  `State: ${pr.state} (${pr.statusLabel})`,
-              ];
-    const route =
-        snapshot === null
-            ? ['## Route summary and plan', '', '[UNAVAILABLE: no route snapshot is available.]']
-            : [
-                  '## Route summary and plan',
-                  '',
-                  snapshot.summary || '[UNAVAILABLE: the route summary is empty.]',
-                  '',
-                  ...routePlan(snapshot),
-              ];
-    const files =
-        diff === null
-            ? ['## Changed files', '', '[UNAVAILABLE: the host could not provide the active diff.]']
-            : [
-                  `## Changed files (${String(diff.files.length)})`,
-                  '',
-                  ...diff.files.map(
-                      (file) =>
-                          `- \`${file.path}\` — ${file.changeType}, +${String(file.additions)} / -${String(file.deletions)}` +
-                          `${file.generated ? '; generated, no review required' : ''}${file.binary ? '; binary' : ''}`,
-                  ),
-              ];
-    const head = [...meta, '', ...route, '', ...files].join('\n');
-    if (diff === null) {
-        return fitText(
-            `${head}\n`,
-            budgetBytes,
-            unavailableBlock('Pull request context', 'The active diff is unavailable.'),
-        );
+/** Context for a question about the whole PR: summary and route plan. The diff is a shared file. */
+function prRouteContext(snapshot: RouteSnapshot | null): string {
+    if (snapshot === null) {
+        return unavailableBlock('Route context', 'No route snapshot is available for this pull request.');
     }
-
-    const sections = diff.files.map((file, index) => ({
-        file,
-        index,
-        full: prPatchBlock(file, index, false),
-        omitted: prPatchBlock(file, index, true),
-    }));
-    const fixed = [head, PR_PATCHES_HEADING];
-    const blockCount = fixed.length + sections.length;
-    let size =
-        fixed.reduce((total, block) => total + byteLength(block), 0) +
-        sections.reduce((total, section) => total + byteLength(section.full), 0) +
-        2 * (blockCount - 1) +
-        1;
-    const kept = new Set(sections.map((section) => section.index));
-    for (const section of prPatchDropOrder(sections)) {
-        if (size <= budgetBytes) {
-            break;
-        }
-        const saved = byteLength(section.full) - byteLength(section.omitted);
-        if (saved <= 0) {
-            continue;
-        }
-        kept.delete(section.index);
-        size -= saved;
-    }
-
-    const patches = sections.map((section) => (kept.has(section.index) ? section.full : section.omitted));
-    const result = `${[...fixed, ...patches].join('\n\n')}\n`;
-    return fitText(
-        result,
-        budgetBytes,
-        unavailableBlock('Pull request context', 'This context did not fit in the chat payload budget.'),
-    );
+    return [
+        '# Route context',
+        '',
+        '## Pull request summary',
+        '',
+        snapshot.summary || '[UNAVAILABLE: the route summary is empty.]',
+        '',
+        '## Route summary and plan',
+        '',
+        ...routePlan(snapshot),
+        '',
+    ].join('\n');
 }
 
 function routePlan(snapshot: RouteSnapshot): string[] {
@@ -543,49 +582,6 @@ function routePlan(snapshot: RouteSnapshot): string[] {
             return `- ${String(index + 1)}. ${stop === undefined ? id : `${String(stop.planIndex)}. ${stop.title}`}`;
         }),
     ];
-}
-
-function prPatchBlock(file: FileDiff, index: number, omit: boolean): string {
-    const stats = `+${String(file.additions)} / -${String(file.deletions)}`;
-    const header = `### File ${String(index + 1)}. \`${file.path}\` — ${file.changeType}, ${stats}`;
-    if (file.patch === null) {
-        const reason = file.binary ? 'binary file' : 'the host gave no textual patch';
-        return `${header}\n\n[UNAVAILABLE: no patch — ${reason}.]`;
-    }
-    if (omit) {
-        const lines = file.additions + file.deletions;
-        return `${header}\n\n[TRUNCATED: patch omitted — ${String(lines)} changed lines; use the stats and changed-file list.]`;
-    }
-
-    const body = numberedPatch(file.patch);
-    const fence = '`'.repeat(fenceLength(body));
-    return `${header}\n\n${fence}text\n${body}\n${fence}`;
-}
-
-function numberedPatch(patch: string): string {
-    const lines = [...walkPatch(patch)];
-    const last = lines.at(-1);
-    if (last?.raw === '' && last.old === null && last.new === null) {
-        lines.pop();
-    }
-    return lines.map(formatPatchLine).join('\n');
-}
-
-function fenceLength(text: string): number {
-    const runs = text.match(/`+/g) ?? [];
-    const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
-    return Math.max(3, longest + 1);
-}
-
-function prPatchDropOrder<T extends { file: FileDiff; full: string }>(sections: readonly T[]): T[] {
-    return [...sections].sort((left, right) => {
-        const generated = Number(right.file.generated) - Number(left.file.generated);
-        if (generated !== 0) {
-            return generated;
-        }
-        const size = byteLength(right.full) - byteLength(left.full);
-        return size !== 0 ? size : left.file.path.localeCompare(right.file.path);
-    });
 }
 
 function historyContext(history: readonly ChatExchange[]): string {

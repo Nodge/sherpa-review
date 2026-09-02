@@ -32,18 +32,22 @@ Write in Russian. Keep identifiers, paths and API names exactly as they appear i
 
 ## Context files
 
+Paths under a \`shared/\` directory hold what does not change between tasks — this guide, the diff of
+the pull request, full contents of a file. Read each of them once per session and reuse what you
+already read. The other paths belong to this question alone and are always new.
+
 The reviewer question is always present. For a question about selected lines, the payload may also
 contain:
 
 - the selected patch range with an \`old new | line\` gutter;
-- surrounding contents of the selected file;
+- contents of the selected file, whole (shared path) or centred on the selection;
 - the route summary and stops whose anchors overlap the selection;
 - recent completed chat exchanges.
 
-For a pull-request-level question, the payload instead carries the route summary and plan, the
-changed-file list and patches from the whole pull request. Files can contain explicit
-\`[TRUNCATED: ...]\` or unavailable markers. Treat them as hard limits of the evidence, not as permission
-to fill gaps from memory.
+For a pull-request-level question, the payload instead carries the route summary and plan and the
+shared diff of the whole pull request: the changed-file list and the patches. Files can contain
+explicit \`[TRUNCATED: ...]\` or unavailable markers. Treat them as hard limits of the evidence, not as
+permission to fill gaps from memory.
 
 ## Result
 
@@ -65,8 +69,9 @@ concrete reason. Do not install validators or packages in the reviewer's environ
 export function chatInstructions(): string {
     return [
         'Answer the reviewer’s exact question in Russian Markdown.',
-        'The paths below share one per-attempt payload directory: read chat-guide.md first, then every',
-        'context file; unavailable or truncated markers are evidence limits, so do not guess past them.',
+        'Read the guide first, then every context file; paths under `shared/` do not change between tasks,',
+        'so read each of them once per session, while the rest are new.',
+        'Unavailable or truncated markers are evidence limits, so do not guess past them.',
         'Save one non-empty Markdown file, not JSON, and submit it with the task complete command printed below.',
     ].join(' ');
 }

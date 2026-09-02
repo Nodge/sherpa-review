@@ -7,9 +7,9 @@ import { bannedPhrases } from './route/voice.js';
 /**
  * never submits the finished result (dogfooding incident from 2026-08-28).
  */
-describe('route task instructions', () => {
-    const instructions = [skeletonInstructions(), sectionInstructions([2, 3])];
+const instructions = [skeletonInstructions(), sectionInstructions([2, 3])];
 
+describe('route task instructions', () => {
     it('say the server checks the schema and forbid self-validation that installs packages', () => {
         for (const text of instructions) {
             expect(text).toContain('checked by the server');
@@ -27,6 +27,13 @@ describe('route guides', () => {
             expect(guide).toContain('Never end the task silently');
             expect(guide).toContain('sherpa task fail <id> --reason <text>');
             expect(guide).toContain('do\nnot install validators or packages');
+        }
+    });
+
+    it('shared context files under `shared/` are read once per session', () => {
+        for (const text of [...instructions, SKELETON_GUIDE, SECTION_GUIDE]) {
+            expect(text).toContain('shared/');
+            expect(text).toContain('once');
         }
     });
 

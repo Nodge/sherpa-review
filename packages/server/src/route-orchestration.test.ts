@@ -16,7 +16,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { databasePathFor, routePayloadDirOf } from './paths.js';
+import { databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { DEFAULT_ROUTE_CONFIG, isSmallPr, MAX_SKELETON_TASKS } from './route-orchestrator.js';
@@ -230,13 +230,17 @@ describe('route orchestration', () => {
     it('task payloads are on disk with context and schema present when issued', async () => {
         const server = await startWithWorker();
         const payloadDir = routePayloadDirOf(sherpaDir, MEDIUM_PR);
+        const sharedDir = sharedPayloadDirOf(sherpaDir, MEDIUM_PR);
 
         const skeleton = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
-        expectPayloadOnDisk(skeleton, payloadDir);
+        expectPayloadOnDisk(skeleton, payloadDir, sharedDir);
 
         completeTask(server, skeleton?.id ?? 0, mediumRawResults().skeleton);
         const section = server.queue.getTask(routeTasks(server, 'route.section')[0] ?? 0);
-        expectPayloadOnDisk(section, payloadDir);
+        expectPayloadOnDisk(section, payloadDir, sharedDir);
+        // The skeleton and sections share the same diff path, not a copy per task.
+        expect(section?.contextFiles[1]).toBe(skeleton?.contextFiles[1]);
+        expect(fsSync.readFileSync(section?.contextFiles[2] ?? '', 'utf8')).not.toContain('## Patches');
         // Both tasks belong to one generation and live in the same subdirectory.
         expect(fsSync.readdirSync(payloadDir)).toHaveLength(1);
     });
@@ -244,6 +248,7 @@ describe('route orchestration', () => {
     it('restarting generation removes the previous payload', async () => {
         const server = await startWithWorker();
         const payloadDir = routePayloadDirOf(sherpaDir, MEDIUM_PR);
+        const sharedDir = sharedPayloadDirOf(sherpaDir, MEDIUM_PR);
         const before = server.queue.getTask(routeTasks(server, 'route.skeleton')[0] ?? 0);
 
         // Failure and a new generation: nobody needs the old files anymore.
@@ -252,9 +257,15 @@ describe('route orchestration', () => {
         expect((await readRoute(server)).route.phase).toBe('failed');
         expect(await server.route.generate()).toBe('started');
 
-        expect(fsSync.existsSync(before?.contextFiles[0] ?? '')).toBe(false);
+        // The previous generation directory is gone. The key's shared diff survives it, since the generation does not own it.
+        expect(fsSync.existsSync(before?.resultSchemaFile ?? '')).toBe(false);
+        expect(fsSync.existsSync(before?.contextFiles[1] ?? '')).toBe(true);
         expect(fsSync.readdirSync(payloadDir)).toHaveLength(1);
-        expectPayloadOnDisk(server.queue.getTask(routeTasks(server, 'route.skeleton').at(-1) ?? 0), payloadDir);
+        expectPayloadOnDisk(
+            server.queue.getTask(routeTasks(server, 'route.skeleton').at(-1) ?? 0),
+            payloadDir,
+            sharedDir,
+        );
     });
 
     it('invalid skeleton: three rejections preserve the lease, and phase failed prevents a fourth', async () => {
@@ -878,6 +889,7 @@ describe('route orchestration', () => {
             expectPayloadOnDisk(
                 second.queue.getTask(routeTasks(second, 'route.section').at(-1) ?? 0),
                 routePayloadDirOf(sherpaDir, MEDIUM_PR),
+                sharedPayloadDirOf(sherpaDir, MEDIUM_PR),
             );
         });
 
@@ -1071,13 +1083,19 @@ function parseSseEvent(raw: string): SseEvent {
     return { event, data: data.join('\n') };
 }
 
-/** Task payload is on disk: context and schema are in this PR's generation directory. */
-function expectPayloadOnDisk(task: TaskRecord | null, payloadDir: string): void {
+/**
+ * The task payload is on disk: immutable context at the shared path, task-specific files and schema in this PR's
+ * generation directory.
+ */
+function expectPayloadOnDisk(task: TaskRecord | null, payloadDir: string, sharedDir: string): void {
     expect(task?.contextFiles.length).toBeGreaterThan(0);
     for (const file of task?.contextFiles ?? []) {
-        expect(file.startsWith(payloadDir)).toBe(true);
+        expect(file.startsWith(payloadDir) || file.startsWith(sharedDir)).toBe(true);
         expect(fsSync.readFileSync(file, 'utf8').length).toBeGreaterThan(0);
     }
+    // The guide and diff use shared paths. The generation directory holds only its own files.
+    expect(task?.contextFiles.filter((file) => file.startsWith(sharedDir))).toHaveLength(2);
     expect(task?.resultSchemaFile).toBeDefined();
+    expect(task?.resultSchemaFile?.startsWith(payloadDir)).toBe(true);
     expect(JSON.parse(fsSync.readFileSync(task?.resultSchemaFile ?? '', 'utf8'))).toMatchObject({ type: 'object' });
 }
