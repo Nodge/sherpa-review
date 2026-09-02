@@ -5,7 +5,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFileModel } from '../diff/model.js';
 import type { LineSelection } from '../diff-view/selection.js';
 import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
-import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { selectionLinkHash } from '../selection-link.js';
 import { formatCount, plural } from '../text.js';
 import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
@@ -26,6 +26,11 @@ export interface SelectionPopoverProps {
     readonly agentConnected: boolean;
     readonly inFlight?: boolean;
     readonly onAsk: (anchor: ChatAnchor) => void;
+    /**
+     * Explains why asking about the selection is disabled for a reason unrelated to the agent (in an interdiff
+     * `fileId` belongs to a different namespace, so there is nowhere to attach the question anchor).
+     */
+    readonly askDisabledReason?: string | null;
     readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
     readonly onComment: (side: 'old' | 'new', line: number) => void;
     readonly onClear: () => void;
@@ -116,6 +121,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         agentConnected,
         inFlight = false,
         onAsk,
+        askDisabledReason = null,
         onSelectionAnchorChange,
         onComment,
         onClear,
@@ -131,6 +137,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     const [error, setError] = useState<string | null>(null);
     // Asking the agent works in a previous iteration, commenting does not (M4 boundaries).
     const readOnly = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     const [position, setPosition] = useState<SelectionPopoverPosition | null>(
         gallery === undefined ? null : { ...gallery.position, placement: 'below' },
     );
@@ -290,6 +297,8 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     }
 
     const countLabel = `${formatCount(count)} ${plural(count, 'line selected', 'lines selected', 'lines selected')}`;
+    const askDisabled = askDisabledReason !== null || selectionAskDisabled(agentConnected);
+    const askTitle = askDisabledReason ?? (selectionAskDisabled(agentConnected) ? ASK_SELECTION_DISABLED_TITLE : undefined);
     return (
         <div className="selection-popover" ref={popoverRef} style={style} data-placement={position?.placement}>
             <div className="selection-popover__row">
@@ -297,8 +306,8 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 <button
                     type="button"
                     className="selection-popover__button selection-popover__button--primary"
-                    disabled={selectionAskDisabled(agentConnected)}
-                    title={selectionAskDisabled(agentConnected) ? ASK_SELECTION_DISABLED_TITLE : undefined}
+                    disabled={askDisabled}
+                    title={askTitle}
                     onClick={() => {
                         setError(null);
                         onAsk(anchor);
@@ -310,7 +319,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                     type="button"
                     className="selection-popover__button"
                     disabled={readOnly}
-                    title={readOnly ? READ_ONLY_REASON : undefined}
+                    title={readOnly ? readOnlyReason : undefined}
                     onClick={() => {
                         onComment(anchor.side, anchor.start);
                     }}

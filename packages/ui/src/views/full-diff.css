@@ -27,10 +27,19 @@
     min-height: calc(var(--full-diff-viewport-height) - var(--full-diff-toolbar-height));
 }
 
-.full-diff__body > .file-panel {
+.full-diff__body > .file-panel,
+.full-diff__panel-placeholder {
     position: sticky;
     top: var(--full-diff-toolbar-height);
     height: calc(var(--full-diff-viewport-height) - var(--full-diff-toolbar-height));
+}
+
+/* File panel space in a status frame keeps the card column in the same place as when data is present. */
+.full-diff__panel-placeholder {
+    flex: none;
+    width: 290px;
+    border-right: 1px solid var(--border-standard);
+    background: var(--surface-panel);
 }
 
 .full-diff__main {
@@ -94,9 +103,64 @@
 
 .full-diff__status {
     margin: 0;
-    padding: var(--space-page);
+    padding: 0 var(--space-page);
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
+}
+
+.full-diff__status-actions {
+    padding: var(--space-control) var(--space-page) var(--space-page);
+}
+
+/*
+ * File list skeleton (SPEC §3): 3 cards with the height of a collapsed file card,
+ * a 41px header and a 30px summary row, so loading the diff does not shift the layout.
+ */
+.full-diff__skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-card);
+    padding: 0 var(--space-page);
+}
+
+.full-diff__skeleton-note {
+    margin: 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
+.diff-skeleton-card {
+    height: 73px;
+    overflow: hidden;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    background: var(--surface-diff-card);
+}
+
+.diff-skeleton-card__head {
+    height: 41px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-card-header);
+}
+
+.diff-skeleton-card__row {
+    height: 9px;
+    margin: 10px 13px;
+    width: 61%;
+    border-radius: var(--radius-mark);
+    background: var(--tier-low);
+    animation: diff-skeleton-pulse var(--motion-shimmer) ease-in-out infinite;
+}
+
+@keyframes diff-skeleton-pulse {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
 }
 
 /*

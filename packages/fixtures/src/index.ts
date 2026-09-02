@@ -7,6 +7,7 @@ export type { FixtureHostOptions } from './fixture-host.js';
 export {
     FIXTURE_NAMES,
     fixtureData,
+    fixtureInterdiff,
     fixtureIteration,
     LARGE_FILE_COUNT,
     LONG_LINE_FILE_PATH,

@@ -9,7 +9,7 @@ import {
     updateReviewDraft,
 } from '../api.js';
 import { CommandBox } from '../components/command-box.tsx';
-import { PrHeader } from '../components/pr-header.tsx';
+import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
 import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
@@ -24,7 +24,7 @@ import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
 import { Markdown } from '../markdown/markdown.tsx';
 import { provenanceLine, summaryParagraphs } from '../route/generation.js';
-import { formatCount, plural } from '../text.js';
+import { formatCount, plural, shortCommit } from '../text.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
 import { discussionStats, ownershipSummary } from './overview-model.js';
@@ -123,19 +123,62 @@ export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDi
  * The selected iteration has no route (M4-T9). The tab explains this and sends the reviewer
  * to the reader. The route cannot be rebuilt here, as generation targets the active iteration.
  */
-export function IterationWithoutRoute({ commit, onReadDiff }: { commit: string | null; onReadDiff: () => void }) {
+export function IterationWithoutRoute({
+    commit,
+    slice = null,
+    onReadDiff,
+}: {
+    commit: string | null;
+    /** The tab is viewing a slice between iterations (M4-T12): it never has a route. */
+    slice?: { readonly baseCommit: string; readonly headCommit: string } | null;
+    onReadDiff: () => void;
+}) {
     return (
         <main className="route-empty" id="view-route">
             <section className="invitation-card">
                 <div className="invitation-card__eyebrow">Route</div>
-                <h1 className="invitation-card__title">No route for this iteration</h1>
+                <h1 className="invitation-card__title">
+                    {slice === null ? 'No route for this iteration' : 'No route for a slice'}
+                </h1>
                 <p className="invitation-card__text">
-                    {commit === null
-                        ? 'The route is built for the active iteration. This one is read-only.'
-                        : `The route is built for the active iteration. Iteration ${commit.slice(0, 7)} is read-only.`}
+                    {slice !== null
+                        ? 'No route is built for an inter-iteration slice. It shows what is new without AI.'
+                        : commit === null
+                          ? 'The route is built for the active iteration. This one is read-only.'
+                          : `The route is built for the active iteration. Iteration ${commit.slice(0, 7)} is read-only.`}
                 </p>
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    Read the full diff
+                    {slice === null ? 'Read the full diff' : 'To the full diff'}
+                </button>
+            </section>
+        </main>
+    );
+}
+
+/**
+ * Overview in a slice between iterations (M4-T12): ownership zones, threads, and progress are calculated using
+ * the iteration's `fileId`. The slice uses a different namespace, so this data
+ * is never requested for it. Show an explanation and a way out instead of misleading empty cards.
+ */
+export function SliceWithoutOverview({
+    slice,
+    onReadDiff,
+}: {
+    slice: { readonly baseCommit: string; readonly headCommit: string };
+    onReadDiff: () => void;
+}) {
+    return (
+        <main className="route-empty" id="view-overview">
+            <section className="invitation-card">
+                <div className="invitation-card__eyebrow">Overview</div>
+                <h1 className="invitation-card__title">No overview for a slice</h1>
+                <p className="invitation-card__text">
+                    Ownership zones, discussions, and reading progress are calculated for the active iteration. Slice{' '}
+                    {shortCommit(slice.baseCommit)} → {shortCommit(slice.headCommit)} only shows what is new in the
+                    code.
+                </p>
+                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                    To the full diff
                 </button>
             </section>
         </main>
@@ -267,7 +310,7 @@ export function OverviewView({
                 <PrHeader
                     variant="overview"
                     pr={pr}
-                    counts={diff === null ? null : diffCounts(diff)}
+                    counts={diff === null ? null : prHeaderCounts(diff)}
                     pci={pci}
                     now={now}
                     {...(headerAside === undefined ? {} : { aside: headerAside })}
@@ -322,17 +365,6 @@ export function OverviewView({
             </div>
         </main>
     );
-}
-
-/** Diff totals for the Overview header metadata row, the same numbers as in other view headers. */
-function diffCounts(diff: PrDiff): { additions: number; deletions: number; files: number } {
-    let additions = 0;
-    let deletions = 0;
-    for (const file of diff.files) {
-        additions += file.additions;
-        deletions += file.deletions;
-    }
-    return { additions, deletions, files: diff.files.length };
 }
 
 /**

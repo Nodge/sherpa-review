@@ -1,9 +1,9 @@
 import type { Iteration, RouteSnapshot, UiRouteState, UiSnapshotSummary } from '@sherpa/protocol';
 
 /**
- * What the tab is viewing (M4-T9): the current PR state, a previous route snapshot, or an iteration
- * without a route. Selection is client-side and lives in the URL fragment. The server is not asked
- * about the "current view" (`uiReviewDiffRequestSchema` contract).
+ * What the tab displays (M4-T9): current PR state, a previous route snapshot, an iteration
+ * without a route, or a slice between 2 iterations (M4-T12). The selection lives on the client in the
+ * URL fragment. The server is not asked for the "current view" (`uiReviewDiffRequestSchema` contract).
  *
  * Resolving the selection is a pure function: it takes the snapshot list, iterations, current route
  * and what App already knows about the active iteration. It returns endpoint parameters, read-only mode
@@ -13,24 +13,54 @@ import type { Iteration, RouteSnapshot, UiRouteState, UiSnapshotSummary } from '
 export type Viewing =
     | { readonly kind: 'current' }
     | { readonly kind: 'snapshot'; readonly snapshotId: string }
-    | { readonly kind: 'diff'; readonly diffId: string };
+    | { readonly kind: 'diff'; readonly diffId: string }
+    /** Slice between iterations: `base` is a saved iteration, `head` is always active. */
+    | { readonly kind: 'slice'; readonly base: string; readonly head: string };
 
 export const VIEWING_CURRENT: Viewing = { kind: 'current' };
 
-/** With both URL parameters, `snapshot` takes priority (task breakdown decision: they are mutually exclusive). */
-export function parseViewing(snapshotId: string | null, diffId: string | null): Viewing {
+/** Slice diff endpoint parameters, also kept in the URL fragment by the UI. */
+export interface ViewingSlice {
+    readonly base: string;
+    readonly head: string;
+}
+
+/**
+ * With several URL parameters, `snapshot` takes precedence over a slice, and a slice over `diff` (task breakdown
+ * M4-T9: selections are mutually exclusive). A slice missing either half is ignored entirely.
+ */
+export function parseViewing(
+    snapshotId: string | null,
+    diffId: string | null,
+    base: string | null = null,
+    head: string | null = null,
+): Viewing {
     if (snapshotId !== null && snapshotId !== '') {
         return { kind: 'snapshot', snapshotId };
+    }
+    if (base !== null && base !== '' && head !== null && head !== '') {
+        return { kind: 'slice', base, head };
     }
     return diffId !== null && diffId !== '' ? { kind: 'diff', diffId } : VIEWING_CURRENT;
 }
 
+export interface ViewingFragment {
+    readonly snapshot: string | null;
+    readonly diff: string | null;
+    readonly base: string | null;
+    readonly head: string | null;
+}
+
 /** What to write to the fragment: `current` stays out of the URL. */
-export function viewingFragment(viewing: Viewing): { readonly snapshot: string | null; readonly diff: string | null } {
+export function viewingFragment(viewing: Viewing): ViewingFragment {
+    const empty: ViewingFragment = { snapshot: null, diff: null, base: null, head: null };
     if (viewing.kind === 'snapshot') {
-        return { snapshot: viewing.snapshotId, diff: null };
+        return { ...empty, snapshot: viewing.snapshotId };
     }
-    return viewing.kind === 'diff' ? { snapshot: null, diff: viewing.diffId } : { snapshot: null, diff: null };
+    if (viewing.kind === 'diff') {
+        return { ...empty, diff: viewing.diffId };
+    }
+    return viewing.kind === 'slice' ? { ...empty, base: viewing.base, head: viewing.head } : empty;
 }
 
 /**
@@ -41,7 +71,7 @@ export function viewingFragmentPatch(
     viewing: Viewing,
     previous: Viewing,
 ): Readonly<Record<string, string | null>> {
-    const fragment = viewingFragment(viewing);
+    const fragment: Readonly<Record<string, string | null>> = { ...viewingFragment(viewing) };
     if (sameViewing(viewing, previous)) {
         return fragment;
     }
@@ -58,17 +88,24 @@ export function sameViewing(left: Viewing, right: Viewing): boolean {
     if (left.kind === 'diff' && right.kind === 'diff') {
         return left.diffId === right.diffId;
     }
+    if (left.kind === 'slice' && right.kind === 'slice') {
+        return left.base === right.base && left.head === right.head;
+    }
     return true;
 }
 
-/** Pill label: `current` / `stale` / `commit no longer in the PR` / `no route`. */
-export type ViewingStatus = 'current' | 'stale' | 'gone' | 'noRoute';
+/** Pill label: `current` / `stale` / `commit no longer in the PR` / `no route` / `slice`. */
+export type ViewingStatus = 'current' | 'stale' | 'gone' | 'noRoute' | 'slice';
 
-export interface ViewingLabel {
-    readonly kind: 'snapshot' | 'diff';
-    readonly commit: string;
-    readonly status: ViewingStatus;
-}
+export type ViewingLabel =
+    | { readonly kind: 'snapshot' | 'diff'; readonly commit: string; readonly status: ViewingStatus }
+    /** A slice has 2 sides: `commit` is the active iteration, `baseCommit` is the starting point. */
+    | {
+          readonly kind: 'slice';
+          readonly commit: string;
+          readonly baseCommit: string;
+          readonly status: 'slice';
+      };
 
 export interface ResolvedViewing {
     /** Normalized selection: an unknown id becomes `current`. */
@@ -88,6 +125,8 @@ export interface ResolvedViewing {
     readonly pending: boolean;
     /** The "Route" tab shows an iteration without a route. */
     readonly routeless: boolean;
+    /** The tab shows a slice, loaded through the `base`/`head` endpoint, with no progress or lenses. */
+    readonly slice: ViewingSlice | null;
 }
 
 export interface ViewingInput {
@@ -119,6 +158,7 @@ const CURRENT_BASE = {
     unknown: false,
     pending: false,
     routeless: false,
+    slice: null,
 } as const;
 
 export function resolveViewing(input: ViewingInput): ResolvedViewing {
@@ -139,6 +179,9 @@ export function resolveViewing(input: ViewingInput): ResolvedViewing {
     }
 
     const active = activeIterationDiffId(input);
+    if (input.viewing.kind === 'slice') {
+        return resolveSlice(input.viewing, input, active, current);
+    }
     if (input.viewing.kind === 'snapshot') {
         const { snapshotId } = input.viewing;
         const summary = input.snapshots.find((candidate) => candidate.snapshotId === snapshotId) ?? null;
@@ -160,6 +203,7 @@ export function resolveViewing(input: ViewingInput): ResolvedViewing {
             unknown: false,
             pending: false,
             routeless: false,
+            slice: null,
         };
     }
 
@@ -188,6 +232,40 @@ export function resolveViewing(input: ViewingInput): ResolvedViewing {
         unknown: false,
         pending: false,
         routeless: !onRoute,
+        slice: null,
+    };
+}
+
+/**
+ * Slice between iterations: `base` is a saved iteration from the list, `head` is always active.
+ * Any other URL combination is invalid (a force-push rewrote the iteration, or the URL came from another
+ * tab). Like an unknown snapshot, the selection is cleared and the tab returns to the active iteration.
+ */
+function resolveSlice(
+    viewing: { readonly kind: 'slice'; readonly base: string; readonly head: string },
+    input: ViewingInput,
+    active: string | null,
+    current: ResolvedViewing,
+): ResolvedViewing {
+    const { base, head } = viewing;
+    const baseIteration = input.iterations.find((candidate) => candidate.diffId === base) ?? null;
+    const headCommit = commitOfDiff(head, input);
+    if (baseIteration === null || headCommit === null || base === head || active === null || head !== active) {
+        return { ...current, unknown: true };
+    }
+    return {
+        viewing,
+        diffId: head,
+        snapshotId: null,
+        readOnly: true,
+        gone: false,
+        label: { kind: 'slice', commit: headCommit, baseCommit: baseIteration.headCommit, status: 'slice' },
+        createdAt: baseIteration.createdAt,
+        unknown: false,
+        pending: false,
+        // No route is built for a slice. It is "what is new" without AI (brief, principle 1).
+        routeless: true,
+        slice: { base, head },
     };
 }
 
@@ -257,9 +335,12 @@ export function fallbackSnapshots(snapshot: RouteSnapshot | null): readonly UiSn
     ];
 }
 
-/** Picker row: one per snapshot and one per iteration without a snapshot. */
+/**
+ * Picker row: one per snapshot, one per iteration without a snapshot, and one per slice
+ * from a saved iteration to the active one.
+ */
 export interface PickerRow {
-    readonly kind: 'snapshot' | 'diff';
+    readonly kind: 'snapshot' | 'diff' | 'slice';
     /** `snapshotId` or `diffId`, used for the selection and `data-*` in e2e. */
     readonly id: string;
     readonly diffId: string;
@@ -269,6 +350,8 @@ export interface PickerRow {
     readonly model: string | null;
     readonly harness: string | null;
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
+    /** Slice head (active iteration commit). Null for other rows. */
+    readonly toCommit: string | null;
     readonly viewing: Viewing;
 }
 
@@ -277,11 +360,18 @@ export interface PickerRowsInput {
     readonly iterations: readonly Iteration[];
     /** Active PR iteration from App facts, independent of what the tab is viewing. */
     readonly activeIteration: { readonly diffId: string; readonly commit: string } | null;
+    /**
+     * The host supports iterations (`pr.capabilities.iterations`). Otherwise the slice endpoint returns 400,
+     * leaving no slices to offer.
+     */
+    readonly interdiff?: boolean;
 }
 
 export interface PickerRows {
     readonly snapshots: readonly PickerRow[];
     readonly iterations: readonly PickerRow[];
+    /** "Show changes since iteration…": a slice from each qualifying iteration to the active one. */
+    readonly slices: readonly PickerRow[];
 }
 
 /**
@@ -301,6 +391,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             model: summary.provenance.model,
             harness: summary.provenance.harness,
             status: summary.status,
+            toCommit: null,
             viewing: { kind: 'snapshot', snapshotId: summary.snapshotId },
         }),
     );
@@ -323,6 +414,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
                         : iteration.status === 'gone'
                           ? 'gone'
                           : 'previousIteration',
+                toCommit: null,
                 viewing: { kind: 'diff', diffId: iteration.diffId },
             }),
         )
@@ -339,9 +431,46 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             model: null,
             harness: null,
             status: 'activeIteration',
+            toCommit: null,
             viewing: { kind: 'diff', diffId: active.diffId },
         });
     }
 
-    return { snapshots, iterations };
+    return { snapshots, iterations, slices: sliceRows(input) };
+}
+
+/**
+ * Slices worth offering: from each saved iteration to the active one. The active iteration
+ * is not compared with itself, and a gone (`gone`) one is never offered. The review host returns
+ * 400 for it because the commit is no longer in the PR.
+ */
+function sliceRows(input: PickerRowsInput): readonly PickerRow[] {
+    const listed = input.iterations.find((iteration) => iteration.status === 'active') ?? null;
+    const active =
+        listed === null ? input.activeIteration : { diffId: listed.diffId, commit: listed.headCommit };
+    if (input.interdiff !== true || active === null) {
+        return [];
+    }
+    return input.iterations
+        .filter(
+            (iteration) =>
+                iteration.diffId !== active.diffId &&
+                iteration.status !== 'active' &&
+                iteration.status !== 'gone',
+        )
+        .map(
+            (iteration): PickerRow => ({
+                kind: 'slice',
+                id: iteration.diffId,
+                diffId: iteration.diffId,
+                commit: iteration.headCommit,
+                createdAt: iteration.createdAt,
+                model: null,
+                harness: null,
+                status: 'slice',
+                toCommit: active.commit,
+                viewing: { kind: 'slice', base: iteration.diffId, head: active.diffId },
+            }),
+        )
+        .reverse();
 }

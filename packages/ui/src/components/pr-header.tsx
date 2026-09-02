@@ -1,4 +1,4 @@
-import type { PrChecks, PrMeta } from '@sherpa/protocol';
+import type { FileDiff, PrChecks, PrMeta } from '@sherpa/protocol';
 import type { ReactNode, Ref } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
@@ -20,13 +20,18 @@ import './pr-header.css';
  * variant has no separate bottom row.
  */
 
+/** Diff totals for header metadata. `null` means the diff has not arrived yet (skeleton, empty frame). */
+export interface PrHeaderCounts {
+    readonly additions: number;
+    readonly deletions: number;
+    readonly files: number;
+}
+
 export interface PrHeaderDefaultProps {
     readonly variant?: 'default';
     readonly ref?: Ref<HTMLElement>;
     readonly pr: PrMeta;
-    readonly additions: number;
-    readonly deletions: number;
-    readonly files: number;
+    readonly counts: PrHeaderCounts | null;
     /** Audit scope lens for the shortcut chip, visible only when `available && count > 0`. */
     readonly pci: FileFilter | null;
     readonly pciActive: boolean;
@@ -40,7 +45,7 @@ export interface PrHeaderOverviewProps {
     readonly ref?: Ref<HTMLElement>;
     readonly pr: PrMeta;
     /** Diff counters. null means the diff has not arrived yet and the metadata row only has the PR number. */
-    readonly counts: { readonly additions: number; readonly deletions: number; readonly files: number } | null;
+    readonly counts: PrHeaderCounts | null;
     /**
      * Audit scope lens. This chip is only a marker. The filter shortcut lives in Full diff.
      * The marker has no counter or disabled state, so show it only when the lens
@@ -56,31 +61,36 @@ export interface PrHeaderOverviewProps {
 
 export type PrHeaderProps = PrHeaderDefaultProps | PrHeaderOverviewProps;
 
+/** Diff totals for the metadata row. The same numbers appear in every view. */
+export function prHeaderCounts(diff: { readonly files: readonly FileDiff[] }): PrHeaderCounts {
+    let additions = 0;
+    let deletions = 0;
+    for (const file of diff.files) {
+        additions += file.additions;
+        deletions += file.deletions;
+    }
+    return { additions, deletions, files: diff.files.length };
+}
+
 export function PrHeader(props: PrHeaderProps) {
     return props.variant === 'overview' ? <OverviewHeader {...props} /> : <DefaultHeader {...props} />;
 }
 
-function DefaultHeader({
-    ref,
-    pr,
-    additions,
-    deletions,
-    files,
-    pci,
-    pciActive,
-    onTogglePci,
-    aside = null,
-}: PrHeaderDefaultProps) {
+function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = null }: PrHeaderDefaultProps) {
     return (
         <header className="pr-header" ref={ref}>
             <div className="pr-header__meta">
-                <span className="pr-header__add">+{formatCount(additions)}</span>
-                <span className="pr-header__del">−{formatCount(deletions)}</span>
-                <Separator />
-                <span>
-                    {formatCount(files)} {plural(files, 'file', 'files', 'files')}
-                </span>
-                <Separator />
+                {counts === null ? null : (
+                    <>
+                        <span className="pr-header__add">+{formatCount(counts.additions)}</span>
+                        <span className="pr-header__del">−{formatCount(counts.deletions)}</span>
+                        <Separator />
+                        <span>
+                            {formatCount(counts.files)} {plural(counts.files, 'file', 'files', 'files')}
+                        </span>
+                        <Separator />
+                    </>
+                )}
                 <span className="pr-header__branches">
                     {pr.toBranch} ← {pr.fromBranch}
                 </span>

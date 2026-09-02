@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
-import { useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useThreadPinContext } from '../iterations/thread-pin.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
@@ -229,11 +229,13 @@ export function ReviewActionBar({
     const draggingSelection = diffSnapshot.selectionDragging;
     // Publishing changes the PR, so it is available only in the active iteration (M4 boundaries).
     const readOnlyIteration = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     const retryDisabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
         readOnlyIteration,
+        readOnlyReason,
     });
     const disabledReason = publishDisabledReason({
         connection,
@@ -241,6 +243,7 @@ export function ReviewActionBar({
         publishing: publishing !== null,
         failure: failure !== null,
         readOnlyIteration,
+        readOnlyReason,
     });
     const disabled = disabledReason !== null;
 

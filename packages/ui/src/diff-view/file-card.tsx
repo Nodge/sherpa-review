@@ -72,6 +72,8 @@ export interface FileCardProps {
     readonly content: FileContent | null | undefined;
     /** The host can supply file contents (`capabilities.fileContent`). */
     readonly contentAvailable: boolean;
+    /** Reason for unavailable content. Defaults to a host without `fileContent`. */
+    readonly noContentReason?: string | undefined;
     readonly expansion: FileExpansion;
     /** File reading progress (SPEC §2.12): box state and tooltip counts. */
     readonly read: FileReadState;
@@ -137,6 +139,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         mode,
         content,
         contentAvailable,
+        noContentReason,
         expansion,
         read,
         collapseReason = null,
@@ -274,6 +277,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     model={shown}
                     content={content}
                     contentAvailable={contentAvailable}
+                    noContentReason={noContentReason}
                     onExpand={(gapKeys) => {
                         run(
                             actions
@@ -469,11 +473,13 @@ function ExpandButton({
     model,
     content,
     contentAvailable,
+    noContentReason,
     onExpand,
 }: {
     model: DiffFileModel | null;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
+    noContentReason: string | undefined;
     onExpand: (gapKeys: readonly string[]) => void;
 }) {
     const gapKeys =
@@ -484,7 +490,7 @@ function ExpandButton({
     // but it cannot claim the whole file is on screen either.
     const hiddenChanged = model === null ? 0 : remainingHiddenChanged(model);
     const disabledReason = !contentAvailable
-        ? 'the host does not provide file contents — there is nothing to expand from'
+        ? (noContentReason ?? 'the host does not provide file contents, so context cannot be expanded')
         : model === null
           ? 'the diff is still being parsed'
           : content === null

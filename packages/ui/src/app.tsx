@@ -71,7 +71,7 @@ import {
     PCI_FILTER_ID,
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
-import { ReadOnlyIterationProvider } from './iterations/read-only.tsx';
+import { ReadOnlyIterationProvider, SLICE_READ_ONLY_REASON } from './iterations/read-only.tsx';
 import { ThreadPinProvider } from './iterations/thread-pin.tsx';
 import type { ThreadPinContextValue } from './iterations/thread-pin.tsx';
 import { SnapshotPill } from './iterations/snapshot-picker.tsx';
@@ -132,7 +132,7 @@ import { RegenerateBanner } from './views/route/other-card.tsx';
 import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views/route/route-commands.tsx';
 import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
 import { RouteView } from './views/route/route-view.tsx';
-import { IterationWithoutRoute, ViewFrame } from './views/view-frames.tsx';
+import { IterationWithoutRoute, SliceWithoutOverview, ViewFrame } from './views/view-frames.tsx';
 
 /** The main page reads server and session stores through `useSyncExternalStore`. */
 export interface AppProps {
@@ -299,8 +299,20 @@ export function App({ store, session, token }: AppProps) {
     const viewSnapshotId = resolved.snapshotId;
     const viewPending = resolved.pending;
     const readOnly = resolved.readOnly;
-    const viewKey = `${reviewKey}\u0000${viewDiffId ?? ''}\u0000${viewSnapshotId ?? ''}`;
-    const currentReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
+    /** The tab shows a slice between iterations (M4-T12). The diff loads through the `base`/`head` endpoint. */
+    const sliceBase = resolved.slice?.base ?? null;
+    const sliceHead = resolved.slice?.head ?? null;
+    const viewKey = `${reviewKey}\u0000${viewDiffId ?? ''}\u0000${viewSnapshotId ?? ''}\u0000${sliceBase ?? ''}`;
+    const storedReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
+    /**
+     * Tab data. A slice has no progress, lenses or threads. Its `fileId` values belong to a separate
+     * namespace, and iteration endpoints do not apply to it (M4-T1 decision). Use empty placeholders
+     * instead, or Full diff would wait for data that will never arrive.
+     */
+    const currentReview = useMemo(
+        () => (sliceBase === null ? storedReview : sliceReviewState(storedReview)),
+        [sliceBase, storedReview],
+    );
     // The URL selection is absent from both the list and current state. Show the current state.
     useEffect(() => {
         if (resolved.unknown) {
@@ -334,6 +346,8 @@ export function App({ store, session, token }: AppProps) {
     const currentDiff = currentReview.diff;
     const progressLoaded = currentReview.progress !== null;
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
+    /** The host provides slices between iterations. Otherwise hide this picker section (M4-T4). */
+    const interdiffAvailable = state?.pr?.capabilities.iterations === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const settings = useUiSettingsStore();
@@ -546,7 +560,9 @@ export function App({ store, session, token }: AppProps) {
             return;
         }
         let alive = true;
-        void fetchReviewDiff(token, viewDiffId).then(
+        const selection =
+            sliceBase === null || sliceHead === null ? { diffId: viewDiffId } : { base: sliceBase, head: sliceHead };
+        void fetchReviewDiff(token, selection).then(
             (diff) => {
                 if (!alive) {
                     return;
@@ -584,11 +600,14 @@ export function App({ store, session, token }: AppProps) {
         return () => {
             alive = false;
         };
-    }, [reviewHost, reviewKey, reviewReady, token, viewDiffId, viewKey, viewPending]);
+    }, [reviewHost, reviewKey, reviewReady, sliceBase, sliceHead, token, viewDiffId, viewKey, viewPending]);
 
     // Overview and Full diff filters need lenses, but load them independently of the raw diff.
+    // A slice has no lenses. Ownership and audit scope use iteration files, while a slice has its own `fileId` values.
+    // Until the selection from the URL resolves, lenses wait alongside the diff. Otherwise a slice
+    // opened by URL would fetch them needlessly.
     useEffect(() => {
-        if (!reviewReady || reviewHost === null) {
+        if (!reviewReady || reviewHost === null || sliceBase !== null || viewPending) {
             return;
         }
         let alive = true;
@@ -619,7 +638,7 @@ export function App({ store, session, token }: AppProps) {
         };
         // Include `viewKey` in dependencies for a fresh closure. A response that lags behind a selection change
         // must not overwrite the key of an already loaded diff.
-    }, [reviewHost, reviewKey, reviewReady, token, viewKey]);
+    }, [reviewHost, reviewKey, reviewReady, sliceBase, token, viewKey, viewPending]);
 
     // App owns one ProgressWriter. Server snapshots go through its merge,
     // and its own write event does not trigger an extra refresh unless there is a revision gap.
@@ -629,7 +648,15 @@ export function App({ store, session, token }: AppProps) {
     });
     const progressRetryAttempt = progressRetry.key === reviewKey ? progressRetry.attempt : 0;
     useEffect(() => {
-        if (!reviewReady || reviewHost === null || diffStore === null || progressWriter === null || viewPending) {
+        if (
+            !reviewReady ||
+            reviewHost === null ||
+            diffStore === null ||
+            progressWriter === null ||
+            viewPending ||
+            // Progress uses iteration `fileId` values. A slice has its own values, with no marks for them.
+            sliceBase !== null
+        ) {
             return;
         }
         const initial = currentReview.progress === null;
@@ -693,6 +720,7 @@ export function App({ store, session, token }: AppProps) {
         reviewHost,
         reviewKey,
         reviewReady,
+        sliceBase,
         snapshot.progressRevision,
         stopProgress,
         token,
@@ -1027,18 +1055,24 @@ export function App({ store, session, token }: AppProps) {
         [activeDiffId, currentDiff],
     );
     const serverThreads = currentReview.threads ?? EMPTY_THREADS;
+    /**
+     * Thread store key: a slice shares its `diffId` with the active iteration, so it needs its own key.
+     * Otherwise its empty thread list would overwrite the active iteration's threads and open composers.
+     */
+    const threadStoreKey =
+        sliceBase === null ? (currentDiff?.diffId ?? null) : `${sliceBase}..${sliceHead ?? ''}`;
     const threadStore = useMemo<ThreadStore | null>(
         () =>
-            currentDiff === null || state === null
+            currentDiff === null || state === null || threadStoreKey === null
                 ? null
                 : persistentThreadStore(
                       state.prKey,
-                      currentDiff.diffId,
+                      threadStoreKey,
                       serverThreads,
                       threadFileIds,
                       threadIterationLayout,
                   ),
-        [currentDiff, serverThreads, state, threadFileIds, threadIterationLayout],
+        [currentDiff, serverThreads, state, threadFileIds, threadIterationLayout, threadStoreKey],
     );
     // A push turns the open iteration from active to previous. Keep the same store (it holds
     // open composers), and change only placement.
@@ -1329,8 +1363,9 @@ export function App({ store, session, token }: AppProps) {
                     facts.diffId === null || facts.commit === null
                         ? null
                         : { diffId: facts.diffId, commit: facts.commit },
+                interdiff: interdiffAvailable,
             }),
-        [facts.commit, facts.diffId, iterations, snapshots],
+        [facts.commit, facts.diffId, interdiffAvailable, iterations, snapshots],
     );
     const selectViewing = session.setViewing;
     /** Navigation from the stale banner: an active iteration without a route is not read-only. */
@@ -1341,6 +1376,18 @@ export function App({ store, session, token }: AppProps) {
         },
         [session],
     );
+    /** Slice commits for Full diff screens: both the empty slice and the error name both sides. */
+    const sliceCommits = useMemo(
+        () =>
+            resolved.label?.kind === 'slice'
+                ? { baseCommit: resolved.label.baseCommit, headCommit: resolved.label.commit }
+                : null,
+        [resolved.label],
+    );
+    /** Leave the slice: return the tab to the active iteration and its route. */
+    const backToActiveIteration = useCallback(() => {
+        session.setViewing(VIEWING_CURRENT);
+    }, [session]);
     const snapshotPill =
         resolved.label === null ? null : (
             <SnapshotPill
@@ -1538,8 +1585,14 @@ export function App({ store, session, token }: AppProps) {
         [session],
     );
 
-    /** Code shows notes for this iteration, using its anchors and excluding lost anchors (M4-T11). */
-    const notesInCode = useMemo(() => notesForIteration(chatData.notes, notesDiffId), [chatData.notes, notesDiffId]);
+    /**
+     * Code shows notes for this iteration, using its anchors and excluding lost anchors (M4-T11).
+     * A slice has no code notes. Their anchors use iteration `fileId` values, while a slice has its own.
+     */
+    const notesInCode = useMemo(
+        () => (sliceBase === null ? notesForIteration(chatData.notes, notesDiffId) : EMPTY_NOTES),
+        [chatData.notes, notesDiffId, sliceBase],
+    );
     const isSelectionPending = useCallback(
         (anchor: UiChatAskAnchor | null): boolean =>
             anchor !== null &&
@@ -1812,7 +1865,10 @@ export function App({ store, session, token }: AppProps) {
     });
 
     return (
-        <ReadOnlyIterationProvider readOnly={readOnly}>
+        <ReadOnlyIterationProvider
+            readOnly={readOnly}
+            {...(sliceBase === null ? {} : { reason: SLICE_READ_ONLY_REASON })}
+        >
             <ThreadPinProvider value={threadPin}>
             <TopBar
                 version={UI_VERSION}
@@ -1891,10 +1947,20 @@ export function App({ store, session, token }: AppProps) {
                     onJumpToStop={jumpToStop}
                     smallPr={route?.smallPr === true}
                     headerAside={snapshotPill}
+                    slice={sliceCommits}
+                    onActiveIteration={backToActiveIteration}
+                />
+            ) : view === 'overview' && sliceCommits !== null ? (
+                <SliceWithoutOverview
+                    slice={sliceCommits}
+                    onReadDiff={() => {
+                        session.setView('diff');
+                    }}
                 />
             ) : view === 'route' && resolved.routeless ? (
                 <IterationWithoutRoute
                     commit={resolved.label?.commit ?? null}
+                    slice={sliceCommits}
                     onReadDiff={() => {
                         session.setView('diff');
                     }}
@@ -2139,6 +2205,28 @@ function updateChatExchange(
     };
 }
 
+const EMPTY_SLICE_LENSES: UiReviewLensesResponse = { ownership: null, extra: [] };
+const EMPTY_SLICE_PROGRESS: UiReviewProgressResponse = { files: [], stops: [], progressRevision: 0 };
+
+/**
+ * Tab state in a slice: lenses, progress and threads are replaced with empty values. Their endpoints
+ * are never called because this data refers to iteration `fileId` values that a slice does not have.
+ */
+function sliceReviewState(current: ReviewState): ReviewState {
+    return {
+        ...current,
+        lenses: EMPTY_SLICE_LENSES,
+        lensesError: null,
+        lensesLoading: false,
+        progress: EMPTY_SLICE_PROGRESS,
+        progressError: null,
+        progressLoading: false,
+        threads: EMPTY_THREADS,
+        threadsError: null,
+        threadsLoading: false,
+    };
+}
+
 function emptyReviewState(key: string, viewKey: string, loading: boolean): ReviewState {
     return {
         key,
@@ -2216,6 +2304,7 @@ function emptyActiveFacts(key: string): ActiveFacts {
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_ITERATIONS: readonly Iteration[] = [];
 const EMPTY_TASKS: readonly UiTask[] = [];
 const EMPTY_NOTE_DELETIONS: ReadonlySet<number> = new Set();

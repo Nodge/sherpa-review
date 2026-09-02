@@ -7,7 +7,7 @@ import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
-import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
@@ -386,6 +386,7 @@ function FileRow({
     onToggleViewed: (fileId: string) => void;
 }) {
     const readOnly = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
@@ -397,7 +398,7 @@ function FileRow({
                 aria-hidden="true"
                 tabIndex={-1}
                 disabled={readOnly}
-                title={readOnly ? READ_ONLY_REASON : row.read.tooltip}
+                title={readOnly ? readOnlyReason : row.read.tooltip}
                 onMouseDown={(event) => {
                     event.preventDefault();
                 }}

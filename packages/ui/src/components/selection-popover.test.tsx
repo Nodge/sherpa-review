@@ -208,4 +208,26 @@ describe('Selection popover', () => {
         expect(html).toContain('Comment');
         expect(html).toContain('Copy link');
     });
+
+    it('gives a custom disabled reason priority over a connected agent and explains it in the title', () => {
+        const html = renderToStaticMarkup(
+            <SelectionPopover
+                host={null}
+                diffId={DIFF_ID}
+                file={FILE}
+                model={MODEL}
+                selection={SELECTION}
+                dragging={false}
+                agentConnected
+                askDisabledReason="a question cannot be anchored to a file in a slice"
+                onAsk={() => undefined}
+                onComment={() => undefined}
+                onClear={() => undefined}
+                gallery={{ mode: 'rest', position: { left: 20, top: 20 } }}
+            />,
+        );
+
+        expect(html).toContain('title="a question cannot be anchored to a file in a slice"');
+        expect(html).not.toContain('title="Reconnect the agent to ask about a selection"');
+    });
 });

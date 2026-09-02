@@ -201,6 +201,28 @@ export interface ReadOnlyIterationBannerProps {
  * The date uses the same relative time format as other timestamps in the UI.
  */
 export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent }: ReadOnlyIterationBannerProps) {
+    if (label.kind === 'slice') {
+        return (
+            <div className="iteration-banner" role="status" aria-label="Read-only">
+                <div className="iteration-banner__body">
+                    <div className="iteration-banner__line">
+                        You are looking at the slice between iterations{' '}
+                        <code className="iteration-banner__commit" title={label.baseCommit}>
+                            {shortCommit(label.baseCommit)}
+                        </code>{' '}
+                        →{' '}
+                        <code className="iteration-banner__commit" title={label.commit}>
+                            {shortCommit(label.commit)}
+                        </code>{' '}
+                        · read-only
+                    </div>
+                </div>
+                <button type="button" className="iteration-banner__action" onClick={onCurrent}>
+                    To the active iteration
+                </button>
+            </div>
+        );
+    }
     const what = label.kind === 'snapshot' ? 'snapshot' : 'the previous iteration';
     return (
         <div className="iteration-banner" role="status" aria-label="Read-only">

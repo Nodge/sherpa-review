@@ -24,7 +24,7 @@ import {
 } from '../../api.js';
 import type { QuestionRange } from '../../components/chat-prompts.js';
 import { placeRangesQuestion } from '../../components/chat-prompts.js';
-import { PrHeader } from '../../components/pr-header.tsx';
+import { PrHeader, prHeaderCounts } from '../../components/pr-header.tsx';
 import { chatAnchorFromSelection, SelectionPopover } from '../../components/selection-popover.tsx';
 import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
@@ -1693,9 +1693,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         >
             <PrHeader
                 pr={pr}
-                additions={sum(diff.files, 'additions')}
-                deletions={sum(diff.files, 'deletions')}
-                files={diff.files.length}
+                counts={prHeaderCounts(diff)}
                 pci={pci?.available === true ? pci : null}
                 pciActive={filter.id === PCI_FILTER_ID}
                 onTogglePci={() => {
@@ -2227,10 +2225,6 @@ export function nextCardInStop(container: HTMLElement, stopId: string, fileId: s
     const rest = cards.slice(index + 1);
     const next = rest.find((card) => card.querySelector('.file-card__collapsed--file') === null) ?? rest[0];
     return next?.dataset.file ?? null;
-}
-
-function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {
-    return files.reduce((total, file) => total + file[key], 0);
 }
 
 /**

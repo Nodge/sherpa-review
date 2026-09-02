@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { FileFilter } from '../filters/lens-filters.js';
-import { PrHeader } from './pr-header.tsx';
+import { PrHeader, prHeaderCounts } from './pr-header.tsx';
 
 const DATA = fixtureIteration('medium');
 const PCI: FileFilter = {
@@ -20,9 +20,7 @@ function render(pci: FileFilter | null): string {
     return renderToStaticMarkup(
         <PrHeader
             pr={DATA.pr}
-            additions={sum('additions')}
-            deletions={sum('deletions')}
-            files={DATA.diff.files.length}
+            counts={prHeaderCounts(DATA.diff)}
             pci={pci}
             pciActive={false}
             onTogglePci={() => undefined}
@@ -38,7 +36,3 @@ describe('standard PR header', () => {
         expect(render(null)).not.toContain('pr-header__pci');
     });
 });
-
-function sum(key: 'additions' | 'deletions'): number {
-    return DATA.diff.files.reduce((total, file) => total + file[key], 0);
-}

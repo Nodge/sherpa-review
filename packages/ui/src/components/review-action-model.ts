@@ -14,6 +14,8 @@ export interface PublishGuardInput {
     readonly failure?: boolean;
     /** The tab is viewing a previous iteration. Only the active one can be shipped (M4 boundaries). */
     readonly readOnlyIteration?: boolean;
+    /** Read-only reason from context. Defaults to the active-iteration message. */
+    readonly readOnlyReason?: string;
 }
 
 export interface FailedPublicationComment {
@@ -32,7 +34,7 @@ export interface PublicationFailure {
 /** The disabled-verdict reason is shared by buttons, shortcuts and the palette. */
 export function publishDisabledReason(input: PublishGuardInput): string | null {
     if (input.readOnlyIteration === true) {
-        return READ_ONLY_REASON;
+        return input.readOnlyReason ?? READ_ONLY_REASON;
     }
     if (input.publishing) {
         return 'publishing…';

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
-import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import { shortCommit } from '../text.js';
 import { composerControllerFor } from './composer.js';
@@ -83,6 +83,7 @@ export function CommentComposer({
     // Drafts from a previous iteration are visible but cannot be edited (M4 boundaries). The composer can
     // be closed because closing is not a write.
     const readOnly = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     const disabled = composer.status === 'discarding';
     const editingDisabled = disabled || readOnly;
     const markdownRef = useRef<HTMLTextAreaElement>(null);
@@ -91,7 +92,7 @@ export function CommentComposer({
     const currentTextRef = useRef(composer.text);
     const disabledRef = useRef(editingDisabled);
     const saveDisabledReason = readOnly
-        ? READ_ONLY_REASON
+        ? readOnlyReason
         : disabled
         ? 'The draft is being deleted.'
         : ambiguousFirstSave
@@ -376,6 +377,7 @@ function ComposerStatus({
     readOnly: boolean;
     onRetry: () => Promise<boolean>;
 }) {
+    const readOnlyReason = useReadOnlyReason();
     if (composer.status === 'discarding') {
         return <span className="thread-composer__status">deleting…</span>;
     }
@@ -386,7 +388,7 @@ function ComposerStatus({
                 <button
                     type="button"
                     disabled={readOnly}
-                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
+                    {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
                 >
                     retry anyway
@@ -401,7 +403,7 @@ function ComposerStatus({
                 <button
                     type="button"
                     disabled={readOnly}
-                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
+                    {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
                 >
                     retry

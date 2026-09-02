@@ -1,5 +1,5 @@
 import { Icon } from '../icons/icon.tsx';
-import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import './viewed-toggle.css';
 
 /**
@@ -27,8 +27,9 @@ export interface ViewedToggleProps {
 export function ViewedToggle({ viewed, className, disabled = false, title, onToggle }: ViewedToggleProps) {
     // Marks live in the active iteration: the control is visible but cannot be pressed in a previous one.
     const readOnly = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     const effectiveDisabled = readOnly || disabled;
-    const effectiveTitle = readOnly ? READ_ONLY_REASON : title;
+    const effectiveTitle = readOnly ? readOnlyReason : title;
     return (
         <button
             type="button"

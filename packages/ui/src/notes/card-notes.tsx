@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
-import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import { isNoteExpanded, isNoteStackExpanded } from '../session/session-store.js';
@@ -157,6 +157,7 @@ function AgentNoteView({
     const [deleting, setDeleting] = useState(false);
     // A note is always readable. Creating a comment draft from it requires the active iteration.
     const readOnly = useReadOnlyIteration();
+    const readOnlyReason = useReadOnlyReason();
     const [error, setError] = useState<string | null>(null);
 
     if (!expanded) {
@@ -205,7 +206,7 @@ function AgentNoteView({
                 <button
                     type="button"
                     disabled={readOnly || note.lostAnchor}
-                    title={draftReason(note, readOnly)}
+                    title={draftReason(note, readOnly, readOnlyReason)}
                     onClick={() => {
                         actions.onTurnIntoDraft(note);
                     }}
@@ -245,11 +246,11 @@ function AgentNoteView({
 }
 
 /** Why a comment draft is unavailable: a lost anchor takes precedence over read-only mode because it is irreversible. */
-function draftReason(note: AgentNote, readOnly: boolean): string | undefined {
+function draftReason(note: AgentNote, readOnly: boolean, readOnlyReason: string): string | undefined {
     if (note.lostAnchor) {
         return NOTE_LOST_DRAFT_REASON;
     }
-    return readOnly ? READ_ONLY_REASON : undefined;
+    return readOnly ? readOnlyReason : undefined;
 }
 
 function firstTextLine(text: string): string {

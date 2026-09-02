@@ -21,7 +21,8 @@ import {
     updateReviewDraft,
 } from '../api.js';
 import { placeRangeQuestion } from '../components/chat-prompts.js';
-import { PrHeader } from '../components/pr-header.tsx';
+import type { PrHeaderCounts } from '../components/pr-header.tsx';
+import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { chatAnchorFromSelection, SelectionPopover } from '../components/selection-popover.tsx';
 import { ToolbarRightCluster } from '../components/toolbar-controls.tsx';
 import type { DiffClient } from '../diff/client.js';
@@ -55,6 +56,7 @@ import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
+import { shortCommit } from '../text.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
@@ -122,6 +124,17 @@ export interface FullDiffViewProps {
     readonly smallPr?: boolean;
     /** Right edge of the PR header: the snapshot picker from App (README §1). */
     readonly headerAside?: ReactNode;
+    /** The tab is viewing a slice between iterations (M4-T12): the commits on its sides. */
+    readonly slice?: SliceCommits | null;
+    /** Exit the slice: an empty slice or endpoint error returns to the active iteration. */
+    readonly onActiveIteration?: () => void;
+    /** Skeleton delay (SPEC §3: nothing for the first 200 ms). Zero shows it immediately in the gallery. */
+    readonly skeletonDelayMs?: number;
+}
+
+export interface SliceCommits {
+    readonly baseCommit: string;
+    readonly headCommit: string;
 }
 
 export function FullDiffView({
@@ -154,6 +167,9 @@ export function FullDiffView({
     onJumpToStop,
     smallPr = false,
     headerAside,
+    slice = null,
+    onActiveIteration,
+    skeletonDelayMs = SKELETON_DELAY_MS,
 }: FullDiffViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
@@ -210,10 +226,39 @@ export function FullDiffView({
             selectionNavigationRequest === 0 ? fragmentTarget.selection : readSelectionLink(window.location.hash),
         [fragmentTarget.selection, selectionNavigationRequest],
     );
+    const failure = diffError ?? lensesError ?? (progress === null ? progressError : null);
+    // The view chrome stays the same in every frame. The PR header with its pill and panel remain while content
+    // loads or fails (SPEC §3: incoming data does not shift the layout).
+    const frame = { pr, counts: diff === null ? null : prHeaderCounts(diff), headerAside };
+    if (failure !== null) {
+        return (
+            <StatusFrame {...frame}>
+                <p className="full-diff__status">{failure}</p>
+                {slice === null || onActiveIteration === undefined ? null : (
+                    <ActiveIterationAction onActiveIteration={onActiveIteration} />
+                )}
+            </StatusFrame>
+        );
+    }
+    // An empty slice gets its own screen instead of an empty file list: there are no changes between iterations.
+    if (slice !== null && diff !== null && diff.files.length === 0) {
+        return (
+            <StatusFrame {...frame}>
+                <div className="full-diff__zero">
+                    <p className="full-diff__zero-text">
+                        Between iterations {shortCommit(slice.baseCommit)} → {shortCommit(slice.headCommit)}, there are
+                        no changes
+                    </p>
+                    {onActiveIteration === undefined ? null : (
+                        <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
+                            To the active iteration
+                        </button>
+                    )}
+                </div>
+            </StatusFrame>
+        );
+    }
     if (
-        diffError !== null ||
-        lensesError !== null ||
-        (progress === null && progressError !== null) ||
         pr === null ||
         diff === null ||
         lenses === null ||
@@ -223,12 +268,9 @@ export function FullDiffView({
         threadStore === null
     ) {
         return (
-            <main className="full-diff full-diff--status">
-                <div className="full-diff__toolbar">
-                    <h1 className="full-diff__title">Full diff</h1>
-                </div>
-                <p className="full-diff__status">{diffError ?? lensesError ?? progressError ?? 'Loading the diff…'}</p>
-            </main>
+            <StatusFrame {...frame}>
+                <DiffSkeleton delayMs={skeletonDelayMs} note={slice === null ? null : SLICE_LOADING_NOTE} />
+            </StatusFrame>
         );
     }
 
@@ -266,9 +308,114 @@ export function FullDiffView({
             onJumpToStop={onJumpToStop}
             smallPr={smallPr}
             {...(headerAside === undefined ? {} : { headerAside })}
+            slice={slice}
         />
     );
 }
+
+/** Skeleton delay: nothing flashes during the first 200 ms (SPEC §3). */
+const SKELETON_DELAY_MS = 200;
+
+/**
+ * The host calculates the slice (2.8–3.7 s on the review host), so text explains the wait. The host
+ * is unnamed here: the UI does not distinguish hosts, and the name only lives in App state.
+ */
+const SLICE_LOADING_NOTE = 'the host is calculating the slice between iterations, which takes longer than usual';
+
+/**
+ * Status frame layout: the PR header with its `aside` (the slice pill and picker stay in place
+ * throughout the wait), the same toolbar and the same file panel and card column as
+ * the loaded view. No counters until the diff arrives, so the metadata row omits them.
+ */
+function StatusFrame({
+    pr,
+    counts,
+    headerAside,
+    children,
+}: {
+    pr: PrMeta | null;
+    counts: PrHeaderCounts | null;
+    headerAside?: ReactNode;
+    children: ReactNode;
+}) {
+    return (
+        <main className="full-diff full-diff--status">
+            {pr === null ? null : (
+                <PrHeader
+                    pr={pr}
+                    counts={counts}
+                    pci={null}
+                    pciActive={false}
+                    onTogglePci={NO_PCI_TOGGLE}
+                    aside={headerAside}
+                />
+            )}
+            <div className="full-diff__toolbar">
+                <h1 className="full-diff__title">Full diff</h1>
+            </div>
+            <div className="full-diff__body">
+                <div className="full-diff__panel-placeholder" aria-hidden="true" />
+                <div className="full-diff__main">{children}</div>
+            </div>
+        </main>
+    );
+}
+
+/** No PCI chip in the status frame, since lenses have not loaded yet. */
+const NO_PCI_TOGGLE = (): void => undefined;
+
+function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () => void }) {
+    return (
+        <div className="full-diff__status-actions">
+            <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
+                To the active iteration
+            </button>
+        </div>
+    );
+}
+
+/**
+ * File list skeleton (SPEC §3: "per-file skeleton cards, 3 visible"). The first 200 ms show
+ * nothing so a fast response does not flash. Each card has the height of a collapsed file card,
+ * so incoming data does not shift the layout.
+ */
+function DiffSkeleton({ delayMs, note }: { delayMs: number; note: string | null }) {
+    const [shown, setShown] = useState(delayMs <= 0);
+    useEffect(() => {
+        if (delayMs <= 0) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            setShown(true);
+        }, delayMs);
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [delayMs]);
+
+    if (!shown) {
+        return null;
+    }
+    return (
+        <div className="full-diff__skeleton" role="status" aria-label="Diff is loading">
+            {note === null ? null : <p className="full-diff__skeleton-note">{note}</p>}
+            {SKELETON_CARDS.map((card) => (
+                <div key={card} className="diff-skeleton-card" aria-hidden="true">
+                    <div className="diff-skeleton-card__head" />
+                    <div className="diff-skeleton-card__row" />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+const SKELETON_CARDS = [0, 1, 2] as const;
+
+/** "Expand file" in a slice: head contents cannot be linked to its `fileId` (M4-T12 scope). */
+const SLICE_NO_CONTENT_REASON = 'file contents are unavailable in a slice';
+
+/** "Ask agent" in a slice: the question would anchor to a `fileId` absent from the iteration. */
+const SLICE_NO_ASK_REASON = 'a question cannot attach to a file in a slice. Ask in the active iteration';
 
 export interface DiffWorkspaceProps {
     readonly pr: PrMeta;
@@ -313,6 +460,11 @@ export interface DiffWorkspaceProps {
     readonly smallPr?: boolean;
     /** Right edge of the PR header: the snapshot picker from App (README §1). */
     readonly headerAside?: ReactNode;
+    /**
+     * The tab is viewing a slice between iterations (M4-T12): its `fileId` values belong to another
+     * namespace, so file contents are not requested from the host.
+     */
+    readonly slice?: SliceCommits | null;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
     readonly threadNow?: number;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
@@ -357,7 +509,14 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onPaletteActiveFileChange,
         onFilterChangeHandler,
         outsideThreadsOpen = false,
+        slice = null,
     } = props;
+    /** File contents are requested by iteration `fileId`: slice IDs belong to another namespace. */
+    const contentAvailable = pr.capabilities.fileContent && slice === null;
+    // For the same reason, asking the agent is disabled in a slice: the question would anchor to a `fileId` absent
+    // from the active iteration, and the answer note would lose its file. The selection also stays out of
+    // the chat composer because there is no way to anchor it there.
+    const selectionAnchorChange = slice === null ? onSelectionAnchorChange : NO_SELECTION_ANCHOR_CHANGE;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // Card collapse state comes from the PR state on the server. Capture it once so
     // a late endpoint response does not recreate the store while the reviewer is reading.
@@ -906,7 +1065,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     store,
                     fileId,
                     request: { kind: 'file' },
-                    contentAvailable: pr.capabilities.fileContent,
+                    contentAvailable,
                     loadContent,
                 }).then(() => {
                     if (navigationId === lineNavigationId.current) {
@@ -923,7 +1082,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             timeout = setTimeout(stop, LINE_NAVIGATION_SEARCH_MS);
             expandHiddenContext();
         },
-        [loadContent, pr.capabilities.fileContent, store],
+        [contentAvailable, loadContent, store],
     );
     const openedSelectionTarget = useRef<string | null>(null);
     useEffect(() => {
@@ -1083,9 +1242,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             <PrHeader
                 ref={setScrollMarginElement}
                 pr={pr}
-                additions={sum(diff.files, 'additions')}
-                deletions={sum(diff.files, 'deletions')}
-                files={diff.files.length}
+                counts={prHeaderCounts(diff)}
                 pci={pci?.available === true ? pci : null}
                 pciActive={filter.id === PCI_FILTER_ID}
                 onTogglePci={() => {
@@ -1162,7 +1319,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         scrollPaddingStart={toolbarHeight ?? 0}
                         files={shown}
                         store={store}
-                        contentAvailable={pr.capabilities.fileContent}
+                        contentAvailable={contentAvailable}
+                        noContentReason={slice === null ? undefined : SLICE_NO_CONTENT_REASON}
                         parse={parse}
                         loadContent={loadContent}
                         onViewed={markViewed}
@@ -1213,7 +1371,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         chatAnchorFromSelection(selectedFile, selectedModel, snapshot.selection, diff.diffId),
                     )}
                     onAsk={onAskSelection}
-                    onSelectionAnchorChange={onSelectionAnchorChange}
+                    askDisabledReason={slice === null ? null : SLICE_NO_ASK_REASON}
+                    onSelectionAnchorChange={selectionAnchorChange}
                     onComment={(side, line) => {
                         commentLine(selectedFile.fileId, side, line);
                     }}
@@ -1358,10 +1517,6 @@ export function commentPosition(
         return { side, line, size: 1 };
     }
     return { side, ...range };
-}
-
-function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {
-    return files.reduce((total, file) => total + file[key], 0);
 }
 
 /**

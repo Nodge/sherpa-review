@@ -91,9 +91,20 @@ export async function cancelTask(token: string, taskId: number): Promise<UiCance
     return body.outcome;
 }
 
-/** Active iteration diff, or a saved iteration with `diffId` (snapshot picker, M4). */
-export async function fetchReviewDiff(token: string, diffId?: string | null): Promise<PrDiff> {
-    return (await get(withQuery(UI_ENDPOINTS.reviewDiff, { diffId }), token, uiReviewDiffResponseSchema)).diff;
+/**
+ * Diff selection for the endpoint: absent selects the active iteration, `diffId` selects a saved iteration
+ * (snapshot picker, M4-T9), `base`/`head` selects a slice between iterations (M4-T12).
+ */
+export type ReviewDiffSelection = { readonly diffId: string | null } | { readonly base: string; readonly head: string };
+
+export async function fetchReviewDiff(token: string, selection?: ReviewDiffSelection | null): Promise<PrDiff> {
+    const query =
+        selection == null
+            ? {}
+            : 'diffId' in selection
+              ? { diffId: selection.diffId }
+              : { base: selection.base, head: selection.head };
+    return (await get(withQuery(UI_ENDPOINTS.reviewDiff, query), token, uiReviewDiffResponseSchema)).diff;
 }
 
 /** File filter lenses: ownership is separate from extra lenses (README §Filters). */

@@ -93,6 +93,8 @@ export interface DiffFileListProps {
     readonly store: DiffViewStore;
     /** The host can supply file contents (`capabilities.fileContent`). */
     readonly contentAvailable: boolean;
+    /** Why contents are missing: an inter-iteration slice has none, even without a host (M4-T12). */
+    readonly noContentReason?: string | undefined;
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
@@ -144,6 +146,7 @@ export function DiffFileList({
     files,
     store,
     contentAvailable,
+    noContentReason,
     parse,
     loadContent,
     onViewed,
@@ -572,6 +575,7 @@ export function DiffFileList({
                             collapseReason={collapseReasons.get(file.fileId) ?? null}
                             content={snapshot.content.get(file.fileId)}
                             contentAvailable={contentAvailable}
+                            noContentReason={noContentReason}
                             expansion={snapshot.expansion.get(file.fileId) ?? EMPTY_EXPANSION}
                             read={readStateOf(snapshot, file)}
                             opened={snapshot.opened.has(file.fileId)}
@@ -627,6 +631,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     collapseReason,
     content,
     contentAvailable,
+    noContentReason,
     expansion,
     read,
     opened,
@@ -662,6 +667,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     collapseReason: FileCollapseReason | null;
     content: FileContent | null | undefined;
     contentAvailable: boolean;
+    noContentReason: string | undefined;
     expansion: FileExpansion;
     read: FileReadState;
     opened: boolean;
@@ -767,6 +773,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 mode={mode}
                 content={content}
                 contentAvailable={contentAvailable}
+                noContentReason={noContentReason}
                 expansion={expansion}
                 shownModel={shownModel}
                 read={read}

@@ -1,3 +1,4 @@
+import type { PrDiff } from '@sherpa/protocol';
 import {
     iterationSchema,
     lensSchema,
@@ -103,6 +104,26 @@ export function fixtureData(name: FixtureName): FixtureData {
         built.set(name, data);
     }
     return structuredClone(data);
+}
+
+/**
+ * Slice between two fixture iterations (interdiff), the same `PrDiff` the host returns for
+ * `getDiff({base, head})`. Indexes are iteration positions in the fixture list.
+ */
+export function fixtureInterdiff(name: FixtureName, baseIndex: number, headIndex: number): PrDiff {
+    const data = fixtureData(name);
+    const base = data.iterations[baseIndex];
+    const head = data.iterations[headIndex];
+    if (base === undefined || head === undefined) {
+        throw new Error(`fixture ${name} has no iterations at indexes ${String(baseIndex)} and ${String(headIndex)}`);
+    }
+    const found = data.interdiffs.find(
+        (interdiff) => interdiff.base === base.iteration.diffId && interdiff.head === head.iteration.diffId,
+    );
+    if (found === undefined) {
+        throw new Error(`fixture ${name} has no slice ${base.iteration.diffId}→${head.iteration.diffId}`);
+    }
+    return found.diff;
 }
 
 /**

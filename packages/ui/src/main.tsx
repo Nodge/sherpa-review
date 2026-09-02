@@ -73,10 +73,13 @@ if (token === null) {
     });
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
-    // What the tab is viewing: `snapshot=` takes priority over `diff=`, "current" is omitted from the URL (M4-T9).
+    // What the tab is viewing: `snapshot=` takes precedence over the `base=&head=` slice, which takes precedence over `diff=`,
+    // "current" is not written to the URL (M4-T9, M4-T12).
     let persistedViewing: Viewing = parseViewing(
         readFragmentParam(window.location.hash, 'snapshot'),
         readFragmentParam(window.location.hash, 'diff'),
+        readFragmentParam(window.location.hash, 'base'),
+        readFragmentParam(window.location.hash, 'head'),
     );
     const session = createSessionStore({
         // A view from the URL is the reviewer's choice: a small PR will not override it (SPEC §4.1).
