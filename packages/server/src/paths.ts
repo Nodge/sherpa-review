@@ -20,6 +20,14 @@ export function assertValidPrKey(prKey: string): string {
     return prKey;
 }
 
+/**
+ * Global UI settings (M3-T16): one file per user, next to `servers/` and `prs/`.
+ * Shared across PRs: each PR server listens on a random port, leaving browser `localStorage` empty each time.
+ */
+export function settingsPathFor(sherpaDir: string): string {
+    return path.join(sherpaDir, 'settings.json');
+}
+
 /** Discovery manifest directory (rpc-design §8). */
 export function serversDirOf(sherpaDir: string): string {
     return path.join(sherpaDir, 'servers');

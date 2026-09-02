@@ -59,6 +59,7 @@ import type { ProgressWriter, StopWriterHooks } from '../progress/progress-write
 import { buildRouteMargin } from '../route/margin-model.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
+import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
@@ -359,14 +360,20 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
 
     const initialProgress = props.progress;
+    const settings = useUiSettingsStore();
     const createdStore = useMemo(
         () =>
             createDiffViewStore({
                 files: diff.files,
                 ...(initialProgress === undefined ? {} : { progress: initialProgress.files }),
                 collapsed: initialCollapsed,
+                // Only the gallery and tests use a private store here, but they still take the mode from settings.
+                diffMode: settings.getSnapshot().diffMode,
+                onDiffModeChange: (mode) => {
+                    settings.update({ diffMode: mode });
+                },
             }),
-        [diff, initialCollapsed, initialProgress],
+        [diff, initialCollapsed, initialProgress, settings],
     );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);

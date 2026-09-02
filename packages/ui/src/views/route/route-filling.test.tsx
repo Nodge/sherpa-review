@@ -34,7 +34,7 @@ const READY: RouteSnapshot = (() => {
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 
 function render(options: { snapshot?: RouteSnapshot; agentStopped?: boolean } = {}): string {
-    const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
+    const store = createDiffViewStore({ files: DATA.diff.files });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

@@ -71,7 +71,7 @@ function mount(onHeight: (value: number) => void): void {
     act(() => {
         root.render(
             <RouteToolbar
-                store={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+                store={createDiffViewStore({ files: DATA.diff.files })}
                 preset="triage"
                 onPreset={() => undefined}
                 filters={filters}

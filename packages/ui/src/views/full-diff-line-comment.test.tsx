@@ -97,7 +97,7 @@ function mount(options: {
     document.body.append(host);
     const file = options.file ?? FILE;
     const files = [file];
-    const store = createDiffViewStore({ files, storage: null });
+    const store = createDiffViewStore({ files });
     store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     const threadStore = createThreadStore([], new Set([file.fileId]));
     const session = createSessionStore({

@@ -69,7 +69,7 @@ function RouteFillingState({ agentStopped = false }: { agentStopped?: boolean })
     }
     const session = useMemo(() => createSessionStore({ initial: { view: 'route', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
@@ -121,7 +121,7 @@ function SmallPrDiffState() {
     const data = useMemo(() => fixtureData('small'), []);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: data.diff.files, storage: null });
+        const created = createDiffViewStore({ files: data.diff.files });
         for (const file of data.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

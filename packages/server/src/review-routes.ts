@@ -280,7 +280,7 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
 }
 
 /** Request body under the contract schema. `what` appears in the rejection message as "request for what". */
-async function readRequest<T>(ctx: RequestContext, schema: z.ZodType<T>, what: string): Promise<T> {
+export async function readRequest<T>(ctx: RequestContext, schema: z.ZodType<T>, what: string): Promise<T> {
     const parsed = schema.safeParse(await readJsonBody(ctx.req));
     if (!parsed.success) {
         throw new RpcFailure(

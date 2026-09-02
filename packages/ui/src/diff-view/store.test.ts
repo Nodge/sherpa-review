@@ -4,6 +4,7 @@ import type { DiffFileModel } from '../diff/model.js';
 import { describe, expect, it } from 'vitest';
 
 import { FILE_EXPANSION_KEY } from './expand.js';
+import type { DiffMode } from './store.js';
 import { createDiffViewStore, fileCollapseReason, SPLIT_MIN_WIDTH } from './store.js';
 
 /** Diff view state: mode, width, marks, context expansion, and selection. */
@@ -49,23 +50,11 @@ function modelWithGap(fileId: string): DiffFileModel {
     };
 }
 
-function memoryStorage(initial?: string): Pick<Storage, 'getItem' | 'setItem'> & { value: string | null } {
-    return {
-        value: initial ?? null,
-        getItem(): string | null {
-            return this.value;
-        },
-        setItem(_key: string, next: string): void {
-            this.value = next;
-        },
-    };
-}
 
 describe('diff view store', () => {
     it('derives read-state from the file itself when no progress records exist', () => {
         const store = createDiffViewStore({
             files: [file('a', true), file('b', false), file('c', null), generated('d')],
-            storage: null,
         });
 
         const { readState } = store.getSnapshot();
@@ -76,7 +65,7 @@ describe('diff view store', () => {
 
     it('keeps manual collapse and expansion in a separate persisted layer', () => {
         const target = file('a');
-        const store = createDiffViewStore({ files: [target], storage: null });
+        const store = createDiffViewStore({ files: [target] });
 
         expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
         store.toggleFileCollapse('a');
@@ -92,7 +81,6 @@ describe('diff view store', () => {
         const target = file('a');
         const store = createDiffViewStore({
             files: [target],
-            storage: null,
             collapsed: new Map([['a', false]]),
         });
 
@@ -113,7 +101,6 @@ describe('diff view store', () => {
         const store = createDiffViewStore({
             files: [target],
             progress: [{ fileId: 'a', viewed: false, seenRanges: [{ side: 'new', start: 1, end: 4 }] }],
-            storage: null,
         });
 
         expect(store.getSnapshot().readState.get('a')?.state).toBe('read');
@@ -126,7 +113,7 @@ describe('diff view store', () => {
 
     it('handles the generated-file default separately: manual expansion survives un-pin and returns to default', () => {
         const target = generated('d');
-        const store = createDiffViewStore({ files: [target], storage: null });
+        const store = createDiffViewStore({ files: [target] });
 
         expect(fileCollapseReason(store.getSnapshot(), target)).toBe('generated');
         store.toggleFileCollapse('d');
@@ -149,7 +136,6 @@ describe('diff view store', () => {
         const target = generated('d');
         const store = createDiffViewStore({
             files: [target],
-            storage: null,
             collapsed: new Map([['d', true]]),
         });
 
@@ -162,7 +148,7 @@ describe('diff view store', () => {
 
     it('keeps collapse for >2000 lines as a separate layer over the file formula', () => {
         const target = { ...file('big'), additions: 2001 };
-        const store = createDiffViewStore({ files: [target], storage: null });
+        const store = createDiffViewStore({ files: [target] });
 
         store.markViewed('big', true);
         expect(fileCollapseReason(store.getSnapshot(), target)).toBe('viewed');
@@ -176,7 +162,7 @@ describe('diff view store', () => {
     });
 
     it('server progress overrides defaults: a cleared generated-file mark survives loading', () => {
-        const store = createDiffViewStore({ files: [generated('d'), file('a')], storage: null });
+        const store = createDiffViewStore({ files: [generated('d'), file('a')] });
 
         store.setProgress([
             { fileId: 'd', viewed: false, seenRanges: [] },
@@ -191,14 +177,13 @@ describe('diff view store', () => {
         const store = createDiffViewStore({
             files: [generated('d')],
             progress: [{ fileId: 'd', viewed: false, seenRanges: [] }],
-            storage: null,
         });
 
         expect(store.getSnapshot().readState.get('d')?.state).toBe('unread');
     });
 
     it('sets an optimistic mark and rolls back to the previous record', () => {
-        const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const store = createDiffViewStore({ files: [file('a')] });
 
         store.markViewed('a', true);
         expect(store.getSnapshot().readState.get('a')?.state).toBe('read');
@@ -219,7 +204,6 @@ describe('diff view store', () => {
         const store = createDiffViewStore({
             files: [file('a')],
             progress: [{ fileId: 'a', viewed: false, seenRanges: ranges }],
-            storage: null,
         });
 
         store.markViewed('a', true);
@@ -231,7 +215,7 @@ describe('diff view store', () => {
     });
 
     it('preserves read-state object identity for other files when marking', () => {
-        const store = createDiffViewStore({ files: [file('a'), file('b')], storage: null });
+        const store = createDiffViewStore({ files: [file('a'), file('b')] });
         const before = store.getSnapshot().readState.get('b');
 
         store.markViewed('a', true);
@@ -239,18 +223,29 @@ describe('diff view store', () => {
         expect(store.getSnapshot().readState.get('b')).toBe(before);
     });
 
-    it('persists the diff mode and restores it from storage', () => {
-        const storage = memoryStorage();
-        const store = createDiffViewStore({ files: [], storage });
-        expect(store.getSnapshot().diffMode).toBe('unified');
+    it('starts with the mode from settings and reports mode changes externally', () => {
+        const changes: DiffMode[] = [];
+        const store = createDiffViewStore({
+            files: [],
+            diffMode: 'split',
+            onDiffModeChange: (mode) => changes.push(mode),
+        });
+        expect(store.getSnapshot().diffMode).toBe('split');
 
-        store.setDiffMode('split');
-        expect(storage.value).toBe('split');
-        expect(createDiffViewStore({ files: [], storage }).getSnapshot().diffMode).toBe('split');
+        store.setDiffMode('unified');
+        expect(store.getSnapshot().diffMode).toBe('unified');
+        // Repeating the same mode sends nothing: no PATCH is needed without a change.
+        store.setDiffMode('unified');
+
+        expect(changes).toEqual(['unified']);
+    });
+
+    it('starts in unified mode without an explicit mode', () => {
+        expect(createDiffViewStore({ files: [] }).getSnapshot().diffMode).toBe('unified');
     });
 
     it('split is unavailable at narrow widths, while the user\'s choice is preserved', () => {
-        const store = createDiffViewStore({ files: [], storage: null });
+        const store = createDiffViewStore({ files: [] });
         store.setDiffMode('split');
 
         store.setAvailableWidth(SPLIT_MIN_WIDTH - 1);
@@ -265,7 +260,7 @@ describe('diff view store', () => {
     });
 
     it('stores expansion by gap control and direction, full expansion sets all', () => {
-        const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const store = createDiffViewStore({ files: [file('a')] });
         const key = 'leading:1:1:40';
 
         store.expandGap('a', key, 'up');
@@ -280,7 +275,7 @@ describe('diff view store', () => {
     });
 
     it('extends selection in both directions and clears it', () => {
-        const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const store = createDiffViewStore({ files: [file('a')] });
 
         store.beginSelection();
         store.startSelection('a', 'c40:42');
@@ -301,7 +296,7 @@ describe('diff view store', () => {
     });
 
     it('remembers whitespace-only line expansion outside FileCard', () => {
-        const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const store = createDiffViewStore({ files: [file('a')] });
 
         store.showWhitespace('a');
         store.showWhitespace('a');
@@ -310,7 +305,7 @@ describe('diff view store', () => {
     });
 
     it('notifies subscribers on every change and only on a change', () => {
-        const store = createDiffViewStore({ files: [file('a')], storage: null });
+        const store = createDiffViewStore({ files: [file('a')] });
         let calls = 0;
         const stop = store.subscribe(() => {
             calls += 1;

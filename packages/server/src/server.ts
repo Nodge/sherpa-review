@@ -47,6 +47,8 @@ import type { RouteConfig } from './route-orchestrator.js';
 import { RouteOrchestrator } from './route-orchestrator.js';
 import { createRouteRoutes } from './route-routes.js';
 import { RouteStore } from './route-store.js';
+import { createSettingsRoutes } from './settings-routes.js';
+import { SettingsStore } from './settings-store.js';
 import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
@@ -284,6 +286,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
                 ...options.feedback,
             }),
+            // Settings are global. The endpoint depends on neither the review host nor this PR's state.
+            ...createSettingsRoutes({ settings: new SettingsStore(sherpaDir) }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
         );

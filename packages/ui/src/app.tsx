@@ -90,6 +90,7 @@ import type { ReportedRouteSummary, RouteSummary } from './route/route-summary.j
 import { routeFactsForSnapshot } from './route/route-summary.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
+import { useUiSettingsStore } from './settings/context.tsx';
 import type { Store } from './store.js';
 import { attachComposerBeforeUnload } from './threads/before-unload.js';
 import type { ComposerTransport } from './threads/composer.js';
@@ -214,6 +215,7 @@ export function App({ store, session, token }: AppProps) {
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const collapsedStorage = useMemo(() => globalCollapsedStorage(), []);
+    const settings = useUiSettingsStore();
     const diffStore = useMemo(
         () =>
             currentDiff === null || prKey === null
@@ -221,9 +223,25 @@ export function App({ store, session, token }: AppProps) {
                 : createDiffViewStore({
                       files: currentDiff.files,
                       collapsed: readFileCollapsed(collapsedStorage, prKey),
+                      // Diff mode is global. It comes from the server and is written back there.
+                      diffMode: settings.getSnapshot().diffMode,
+                      onDiffModeChange: (mode) => {
+                          settings.update({ diffMode: mode });
+                      },
                   }),
-        [collapsedStorage, currentDiff, prKey],
+        [collapsedStorage, currentDiff, prKey, settings],
     );
+    // Apply settings that arrived after store creation or changed in another view.
+    useEffect(() => {
+        if (diffStore === null) {
+            return;
+        }
+        const sync = (): void => {
+            diffStore.setDiffMode(settings.getSnapshot().diffMode);
+        };
+        sync();
+        return settings.subscribe(sync);
+    }, [diffStore, settings]);
     useEffect(() => {
         if (diffStore === null || prKey === null) {
             return;

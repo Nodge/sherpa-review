@@ -24,6 +24,8 @@ import type {
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
     UiSetStopViewedResponse,
+    UiSettings,
+    UiSettingsPatch,
     UiStopSeenRange,
     UiTask,
     UiViewedMirrorRequest,
@@ -53,6 +55,7 @@ import {
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
+    uiSettingsResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -257,6 +260,19 @@ export async function sendFeedback(token: string, request: UiFeedbackRequest): P
     return post(UI_ENDPOINTS.feedback, token, request, uiFeedbackResponseSchema);
 }
 
+/**
+ * Global UI settings live in `~/.sherpa/settings.json`, not `localStorage`, because
+ * each PR server listens on its own port, so browser storage does not carry over to the next PR.
+ */
+export async function fetchUiSettings(token: string): Promise<UiSettings> {
+    return (await get(UI_ENDPOINTS.settings, token, uiSettingsResponseSchema)).settings;
+}
+
+/** Changes the named fields. Returns the full set after the server merges them. */
+export async function patchUiSettings(token: string, settings: UiSettingsPatch): Promise<UiSettings> {
+    return (await patch(UI_ENDPOINTS.settings, token, settings, uiSettingsResponseSchema)).settings;
+}
+
 async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promise<T> {
     let response: Response;
     try {
@@ -272,6 +288,20 @@ async function post<T>(path: string, token: string, body: unknown, schema: z.Zod
     try {
         response = await fetch(path, {
             method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+        });
+    } catch {
+        throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
+    }
+    return validate(response, schema);
+}
+
+async function patch<T>(path: string, token: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+    let response: Response;
+    try {
+        response = await fetch(path, {
+            method: 'PATCH',
             headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
             body: JSON.stringify(body),
         });

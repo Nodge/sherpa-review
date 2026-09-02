@@ -20,7 +20,7 @@ function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): str
     });
     return renderToStaticMarkup(
         <RouteToolbar
-            store={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+            store={createDiffViewStore({ files: DATA.diff.files })}
             preset={options.preset ?? 'triage'}
             onPreset={() => undefined}
             presetDisabled={options.disabled ?? false}

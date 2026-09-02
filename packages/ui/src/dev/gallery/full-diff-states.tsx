@@ -75,7 +75,7 @@ function WorkspaceState({
     }, [data.diff.files, prepareThreads, shownThreads]);
 
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: data.diff.files, storage: null });
+        const created = createDiffViewStore({ files: data.diff.files });
         if (preloadModels) {
             for (const file of data.diff.files) {
                 created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));

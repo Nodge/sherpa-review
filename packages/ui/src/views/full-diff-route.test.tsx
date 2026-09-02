@@ -113,7 +113,7 @@ function mount(
             : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true));
     // `ownStore`: the view creates its own store from the diff. This checks background parsing instead of
     // models placed in the store in advance.
-    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles, storage: null });
+    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles });
     for (const file of store === null ? [] : initialFiles) {
         store?.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

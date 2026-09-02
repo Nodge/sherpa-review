@@ -253,7 +253,7 @@ function mount(
 ): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
-    const store = createDiffViewStore({ files: DATA.diff.files, progress: options.progress ?? [], storage: null });
+    const store = createDiffViewStore({ files: DATA.diff.files, progress: options.progress ?? [] });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

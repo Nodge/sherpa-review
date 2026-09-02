@@ -22,8 +22,6 @@ export type FileCollapseReason = 'viewed' | 'manual' | 'generated';
 /** Side by side is unavailable below this width (SPEC §2.6). */
 export const SPLIT_MIN_WIDTH = 1100;
 
-const DIFF_MODE_KEY = 'sherpa.diffMode';
-
 export interface DiffViewSnapshot {
     /** User choice: preserved on narrow screens while rendering switches to unified mode. */
     readonly diffMode: DiffMode;
@@ -91,19 +89,12 @@ export interface DiffViewStoreOptions {
     readonly files: readonly FileDiff[];
     /** Initial server progress. Without it, only defaults apply. */
     readonly progress?: readonly UiFileProgress[];
-    /** Storage for the mode choice. Tests and the gallery replace it. */
-    readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+    /** Initial diff mode from global settings (`~/.sherpa/settings.json`). */
+    readonly diffMode?: DiffMode;
+    /** Reviewer mode change: the view handles persistence, the store makes no network calls. */
+    readonly onDiffModeChange?: (mode: DiffMode) => void;
     /** Explicit manual collapse choices already read from per-PR storage. */
     readonly collapsed?: ReadonlyMap<string, boolean>;
-}
-
-function readDiffMode(storage: DiffViewStoreOptions['storage']): DiffMode {
-    try {
-        return storage?.getItem(DIFF_MODE_KEY) === 'split' ? 'split' : 'unified';
-    } catch {
-        // Browser policy may block localStorage. That must not crash the view.
-        return 'unified';
-    }
 }
 
 type FileCollapseSnapshot = Pick<
@@ -128,9 +119,8 @@ export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDif
 }
 
 export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStore {
-    const storage = options.storage === undefined ? globalStorage() : options.storage;
     const listeners = new Set<() => void>();
-    const diffMode = readDiffMode(storage);
+    const diffMode = options.diffMode ?? 'unified';
     const filesById = new Map(options.files.map((file) => [file.fileId, file]));
 
     /**
@@ -248,12 +238,8 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             if (mode === snapshot.diffMode) {
                 return;
             }
-            try {
-                storage?.setItem(DIFF_MODE_KEY, mode);
-            } catch {
-                // Saving failed, but the mode still applies to the current session.
-            }
             update({ diffMode: mode });
+            options.onDiffModeChange?.(mode);
         },
 
         setAvailableWidth: (width) => {
@@ -424,15 +410,4 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
         },
     };
-}
-
-/** `localStorage` may be absent (SSR, tests). The mode then does not survive a reload. */
-function globalStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
-    try {
-        // Node (tests, worker) has no `localStorage`, despite what lib.dom promises.
-        const storage: unknown = globalThis.localStorage;
-        return storage == null ? null : (storage as Pick<Storage, 'getItem' | 'setItem'>);
-    } catch {
-        return null;
-    }
 }

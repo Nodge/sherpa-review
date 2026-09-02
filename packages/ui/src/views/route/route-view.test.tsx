@@ -56,7 +56,6 @@ function render(
 ): string {
     const store = createDiffViewStore({
         files: DATA.diff.files,
-        storage: null,
         ...(options.progress === undefined ? {} : { progress: options.progress }),
         ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
     });

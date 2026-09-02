@@ -103,7 +103,6 @@ function CardState({
     const store = useMemo(() => {
         const created = createDiffViewStore({
             files: [file],
-            storage: null,
             ...(collapsed === undefined ? {} : { collapsed: new Map([[file.fileId, collapsed]]) }),
         });
         const model = parseFileDiff(toParseRequest(file));
@@ -177,7 +176,7 @@ function CardState({
 /** Virtualized list on the large fixture: 64 files, parsed as you scroll. */
 function ListState({ fixture }: { fixture: FixtureName }) {
     const data = useMemo(() => fixtureData(fixture), [fixture]);
-    const store = useMemo(() => createDiffViewStore({ files: data.diff.files, storage: null }), [data]);
+    const store = useMemo(() => createDiffViewStore({ files: data.diff.files }), [data]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
@@ -209,7 +208,7 @@ function ListState({ fixture }: { fixture: FixtureName }) {
 /** Parse failure: the first "worker" attempt fails, retrying with the button succeeds. */
 function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string }) {
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
-    const store = useMemo(() => createDiffViewStore({ files: [file], storage: null }), [file]);
+    const store = useMemo(() => createDiffViewStore({ files: [file] }), [file]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const failed = useRef(new Set<string>());
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
