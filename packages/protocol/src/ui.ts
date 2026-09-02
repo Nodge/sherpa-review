@@ -435,6 +435,33 @@ export const uiSettingsPatchSchema = z.object(uiSettingsFields).partial();
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>;
 
 /**
+ * UI state for one PR (M3-T18): tree directories and diff cards collapsed by the reviewer, recent
+ * command palette entries. Lives in the server's per-PR SQLite for the same reason as global settings:
+ * the tab origin changes with the port, so `localStorage` does not survive a restart. Maps store only
+ * explicit reviewer choices. A missing key means "default", not `false`. The order of
+ * `paletteRecent` is newest first. The UI limits the display, the server only stores it.
+ */
+const uiPrStateFields = {
+    treeCollapsed: z.record(z.string(), z.boolean()),
+    diffCollapsed: z.record(z.string(), z.boolean()),
+    paletteRecent: z.array(z.string()).max(64),
+};
+
+export const uiPrStateSchema = z.object({
+    treeCollapsed: uiPrStateFields.treeCollapsed.default({}),
+    diffCollapsed: uiPrStateFields.diffCollapsed.default({}),
+    paletteRecent: uiPrStateFields.paletteRecent.default([]),
+});
+export type UiPrState = z.infer<typeof uiPrStateSchema>;
+
+export const uiPrStateResponseSchema = z.object({ prState: uiPrStateSchema });
+export type UiPrStateResponse = z.infer<typeof uiPrStateResponseSchema>;
+
+/** Partial update: each named field is replaced in full (not merged by key), other fields stay unchanged. */
+export const uiPrStatePatchSchema = z.object(uiPrStateFields).partial();
+export type UiPrStatePatch = z.infer<typeof uiPrStatePatchSchema>;
+
+/**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
  * viewport. `viewed` has 3 values (M2F-T40): `true` is a manual mark that pins `read`
  * permanently. `false` explicitly clears the mark (unpins the generated default or undoes a manual
@@ -698,6 +725,8 @@ export const UI_ENDPOINTS = {
     feedback: '/api/ui/feedback',
     /** GET → `uiSettingsResponseSchema`, PATCH `uiSettingsPatchSchema` → `uiSettingsResponseSchema`. Available without a review host too. */
     settings: '/api/ui/settings',
+    /** GET → `uiPrStateResponseSchema`, PATCH `uiPrStatePatchSchema` → `uiPrStateResponseSchema`. Available without a review host too. */
+    prState: '/api/ui/pr-state',
 } as const;
 
 /**
