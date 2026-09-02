@@ -6,7 +6,15 @@ import type { FileDiff, PrDiff, PrMeta, RouteStop } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 
 import type { EnqueueInput } from './queue.js';
+import type { RegenerationContextFiles } from './route-prompts.js';
 import { SECTION_GUIDE, sectionInstructions, SKELETON_GUIDE, skeletonInstructions } from './route-prompts.js';
+import type { RouteRegenerationContext } from './route-regeneration.js';
+import {
+    PREVIOUS_ROUTE_FILE,
+    previousRouteContext,
+    THREADS_SINCE_FILE,
+    threadsSinceContext,
+} from './route-regeneration.js';
 import { walkPatch } from './route/diff-index.js';
 import type { SharedPayloadStore } from './shared-payload.js';
 import { diffKeyOf } from './shared-payload.js';
@@ -37,6 +45,24 @@ import { diffKeyOf } from './shared-payload.js';
  */
 export const CONTEXT_BUDGET_BYTES = 320 * 1024;
 
+/**
+ * Regeneration context budgets (M4-T7). Counted separately from the PR diff so the interdiff cannot
+ * displace patches used by sections for anchors. The previous route is the cheapest to lose,
+ * because it only helps preserve stop numbers. 128 KB fits any ordinary push in full, and 64 KB fits
+ * a route with about 10 stops and 10 threads with replies.
+ */
+export const REGENERATION_BUDGETS: RegenerationBudgets = {
+    interdiff: 128 * 1024,
+    previousRoute: 64 * 1024,
+    threadsSince: 64 * 1024,
+};
+
+export interface RegenerationBudgets {
+    readonly interdiff: number;
+    readonly previousRoute: number;
+    readonly threadsSince: number;
+}
+
 /** Payload directories have the same 0700 permissions as the rest of the PR state (requirements §6). */
 const DIR_MODE = 0o700;
 /** The payload has no secrets, but outsiders have no reason to read it either. */
@@ -46,6 +72,8 @@ const FILE_MODE = 0o600;
 export interface RoutePayloadContext {
     readonly diff: PrDiff;
     readonly meta: PrMeta | null;
+    /** Previous pass for a route rebuilt after a push. null means the first generation. */
+    readonly regeneration?: RouteRegenerationContext | null;
 }
 
 export interface RoutePayloadWriterOptions {
@@ -54,6 +82,8 @@ export interface RoutePayloadWriterOptions {
     /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
     readonly shared: SharedPayloadStore;
     readonly budgetBytes?: number;
+    /** Regeneration file limits, defaulting to `REGENERATION_BUDGETS`. */
+    readonly regenerationBudgets?: Partial<RegenerationBudgets>;
 }
 
 /**
@@ -64,27 +94,41 @@ export class RoutePayloadWriter {
     private readonly payloadDir: string;
     private readonly shared: SharedPayloadStore;
     private readonly budgetBytes: number;
+    private readonly regenerationBudgets: RegenerationBudgets;
     private generationDir: string | null = null;
 
     constructor(options: RoutePayloadWriterOptions) {
         this.payloadDir = options.payloadDir;
         this.shared = options.shared;
         this.budgetBytes = options.budgetBytes ?? CONTEXT_BUDGET_BYTES;
+        this.regenerationBudgets = { ...REGENERATION_BUDGETS, ...options.regenerationBudgets };
     }
 
-    /** A new generation gets a fresh subdirectory. Previous ones are removed. */
-    beginGeneration(): void {
+    /**
+     * Start a new generation with a fresh subdirectory and remove previous ones. Write regeneration context
+     * once here, shared by the skeleton and all sections of the generation.
+     */
+    beginGeneration(regeneration: RouteRegenerationContext | null = null): void {
         this.startGeneration();
+        if (regeneration === null) {
+            return;
+        }
+        const budgets = this.regenerationBudgets;
+        this.writeFile(PREVIOUS_ROUTE_FILE, previousRouteContext(regeneration, budgets.previousRoute));
+        this.writeFile(THREADS_SINCE_FILE, threadsSinceContext(regeneration, budgets.threadsSince));
     }
 
     /** The `route.skeleton` task returns the summary, stop plan and Full tour order in one result. */
     skeletonTask(context: RoutePayloadContext): EnqueueInput {
+        // Write the PR diff first. It starts collecting shared keys, then the slice adds to that collection.
+        const prDiff = this.prDiff(context);
+        const regeneration = this.regenerationFiles(context);
         return {
             type: 'route.skeleton',
             priority: 'background',
-            instructions: skeletonInstructions(),
+            instructions: skeletonInstructions(regeneration.present),
             // The skeleton has no context of its own. Both the guide and diff use shared paths.
-            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), this.prDiff(context)],
+            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), prDiff, ...regeneration.files],
             resultSchemaFile: this.writeSchema('skeleton'),
         };
     }
@@ -102,13 +146,55 @@ export class RoutePayloadWriter {
     ): EnqueueInput {
         const name = `section-${planIndexes.map(pad2).join('-')}-plan.md`;
         const plan = this.writeFile(name, sectionPlanContext(planIndexes, stops, intents));
+        const prDiff = this.prDiff(context);
+        const regeneration = this.regenerationFiles(context);
         return {
             type: 'route.section',
             priority: 'background',
-            instructions: sectionInstructions(planIndexes),
-            contextFiles: [this.shared.guide('section-guide', SECTION_GUIDE), this.prDiff(context), plan],
+            instructions: sectionInstructions(planIndexes, regeneration.present),
+            contextFiles: [
+                this.shared.guide('section-guide', SECTION_GUIDE),
+                prDiff,
+                ...regeneration.files,
+                plan,
+            ],
             resultSchemaFile: this.writeSchema('section'),
         };
+    }
+
+    /**
+     * Task regeneration context. The slice is written to the shared directory (idempotently), while
+     * `beginGeneration` has already placed the previous route and discussion in the generation directory.
+     * After a server restart, generation context is lost and files are read from disk as they are.
+     */
+    private regenerationFiles(context: RoutePayloadContext): {
+        files: string[];
+        present: RegenerationContextFiles;
+    } {
+        const interdiff = context.regeneration?.interdiff ?? null;
+        const interdiffFile =
+            interdiff === null
+                ? null
+                : this.shared.interdiff(
+                      diffKeyOf(interdiff),
+                      interdiffContext(interdiff, this.regenerationBudgets.interdiff),
+                  );
+        const previousRoute = this.existingFile(PREVIOUS_ROUTE_FILE);
+        const threadsSince = this.existingFile(THREADS_SINCE_FILE);
+        return {
+            files: [interdiffFile, previousRoute, threadsSince].filter((file): file is string => file !== null),
+            present: {
+                interdiff: interdiffFile !== null,
+                previousRoute: previousRoute !== null,
+                threadsSince: threadsSince !== null,
+            },
+        };
+    }
+
+    /** A file in the generation directory, if present. After a restart, the previous process wrote it. */
+    private existingFile(name: string): string | null {
+        const file = path.join(this.currentDir(), name);
+        return fs.existsSync(file) ? file : null;
     }
 
     /** Shared PR diff keyed by the commit pair. The skeleton, sections and PR chat question use the same one. */
@@ -205,6 +291,51 @@ export function prDiffContext(context: RoutePayloadContext, budgetBytes: number)
 }
 
 /**
+ * The slice between iterations for regeneration tasks uses the same patches and line-number gutter, but
+ * its old side is the head of the previous route's iteration, and its new side is the head of this generation's iteration.
+ * It has its own budget. The interdiff must not displace the PR diff used for anchors.
+ */
+export function interdiffContext(interdiff: PrDiff, budgetBytes: number): string {
+    return patchedContext(interdiff, interdiffHead(interdiff), budgetBytes, INTERDIFF_PATCHES_HEADING);
+}
+
+/** Slice header explaining which patches these are, which commits they compare and how to read them. */
+function interdiffHead(interdiff: PrDiff): string {
+    const additions = interdiff.files.reduce((total, file) => total + file.additions, 0);
+    const deletions = interdiff.files.reduce((total, file) => total + file.deletions, 0);
+    const rows = interdiff.files.map((file, index) =>
+        row([
+            fileNumber(index),
+            `\`${file.path}\``,
+            file.changeType,
+            `+${String(file.additions)} / -${String(file.deletions)}`,
+            fileNotes(file),
+        ]),
+    );
+    return [
+        `# Interdiff ${shortCommit(interdiff.baseCommit)} -> ${shortCommit(interdiff.headCommit)}`,
+        '',
+        'What the author pushed after the previous route was built. The old side of these patches is',
+        'the commit of the previous route, the new side is the commit this task works on. This is not',
+        'the diff of the pull request: it never replaces the file list you must cover.',
+        '',
+        `- Slice: ${interdiff.baseCommit} -> ${interdiff.headCommit}`,
+        `- Volume: ${String(interdiff.files.length)} files, +${String(additions)} / -${String(deletions)} lines`,
+        '',
+        '## Files the push touched',
+        '',
+        '| file # | file | change | +/- | notes |',
+        '|---|---|---|---|---|',
+        ...rows,
+    ].join('\n');
+}
+
+/** A commit in the same short form the UI displays. */
+function shortCommit(commit: string): string {
+    return commit.slice(0, 7);
+}
+
+/**
  * A section task's own file with the full route plan, target stops marked and their intents.
  * The diff is shared and absent here. Stops have no anchors until filled, so the model decides
  * which files belong to a stop. There is no basis for trimming the diff to "the stop's files".
@@ -222,17 +353,37 @@ export function sectionPlanContext(
  * Section anchors use absolute line numbers. The model must not compute them from hunk headers
  * because an offset of a couple of lines causes acceptance to reject the anchor.
  */
-const PATCHES_HEADING = [
-    '## Patches',
-    '',
+const GUTTER_EXPLAINED = [
     'Every patch line is printed with its line numbers in front of it: `old new | line`.',
     '`old` is the number on the old side of the file, `new` on the new side, `.` means the line does',
     'not exist on that side. Added (`+`) lines are numbered on the new side only, deleted (`-`) lines',
     'on the old side only, unchanged context lines exist on both. Hunk headers (`@@`) carry no',
     'numbers of their own.',
+].join('\n');
+
+const PATCHES_HEADING = [
+    '## Patches',
+    '',
+    GUTTER_EXPLAINED,
     '',
     'Line anchors of a stop are validated against exactly these printed numbers: read them off the',
     'gutter, never count lines yourself.',
+].join('\n');
+
+/**
+ * Slice patch header. The gutter is the same, but it cannot be used for anchors. The slice's old side is
+ * the previous iteration's head, while `side: 'old'` resolves against the PR base. The new side also has a gap
+ * (a line a push restores to its base value is `+` in the slice but context in the PR diff).
+ */
+const INTERDIFF_PATCHES_HEADING = [
+    '## Patches of the push',
+    '',
+    GUTTER_EXPLAINED,
+    '',
+    'Never take line anchors from here. These numbers belong to the slice: its old side is the commit',
+    'of the previous route, not the base of the pull request, and its new side marks lines the push',
+    'moved, not lines the pull request changed. Anchors are read off the gutter of the pull request',
+    'diff and validated against it alone. This file tells you what moved, nothing more.',
 ].join('\n');
 
 /**
@@ -242,7 +393,19 @@ const PATCHES_HEADING = [
  */
 function prContext(context: RoutePayloadContext, budgetBytes: number): string {
     const { diff, meta } = context;
-    const head = [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n');
+    return patchedContext(diff, [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n'), budgetBytes);
+}
+
+/**
+ * Header and patches within a budget. Shared printer for the PR diff and slice between iterations. Their patch
+ * headers differ because the PR diff supports anchors and the slice does not.
+ */
+function patchedContext(
+    diff: PrDiff,
+    head: string,
+    budgetBytes: number,
+    patchesHeading: string = PATCHES_HEADING,
+): string {
     const sections = diff.files.map((file, index) => ({
         file,
         index,
@@ -250,7 +413,7 @@ function prContext(context: RoutePayloadContext, budgetBytes: number): string {
         omitted: patchBlock(file, index, true),
     }));
 
-    const fixed = [head, PATCHES_HEADING];
+    const fixed = [head, patchesHeading];
     const blockCount = fixed.length + sections.length;
     // `join('\n\n')` and the trailing newline also take bytes in the file.
     let size =

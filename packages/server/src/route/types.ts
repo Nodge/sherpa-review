@@ -1,4 +1,4 @@
-import type { RouteAnchor, RouteStop, RouteTestClaim } from '@sherpa/protocol';
+import type { RouteAnchor, RouteStop, RouteStopChange, RouteTestClaim } from '@sherpa/protocol';
 
 /**
  * Shared types for route result acceptance (M2-T3).
@@ -35,6 +35,8 @@ export interface RouteStopFilling {
     readonly tests: RouteTestClaim[];
     readonly droppedClaims: number;
     readonly validationNotes: string[];
+    /** Classification against the previous pass. null means the stop is unchanged or this is the first pass. */
+    readonly change: RouteStopChange | null;
 }
 
 /** Planned slot + content = complete snapshot stop. */
@@ -48,5 +50,6 @@ export function applyFilling(stop: RouteStop, filling: RouteStopFilling): RouteS
         tests: filling.tests,
         droppedClaims: filling.droppedClaims,
         validationNotes: filling.validationNotes,
+        change: filling.change,
     };
 }

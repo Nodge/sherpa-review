@@ -2,14 +2,24 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { PrDiff, PrMeta } from '@sherpa/protocol';
+import type { PrDiff, PrMeta, Thread } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { RoutePayloadContext } from './route-payload.js';
+import type { IterationMap } from './iterations/index.js';
+import { buildIterationMap, identityMap } from './iterations/index.js';
+import type { RegenerationBudgets, RoutePayloadContext } from './route-payload.js';
 import { CONTEXT_BUDGET_BYTES, prDiffContext, RoutePayloadWriter, sectionPlanContext } from './route-payload.js';
+import type { RouteRegenerationContext } from './route-regeneration.js';
 import { indexDiff } from './route/diff-index.js';
-import { mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
+import {
+    mediumDiff,
+    mediumDiffV2,
+    mediumInterdiffV1V2,
+    mediumRawResults,
+    mediumReadySnapshot,
+    mediumThreadsV2,
+} from './route/fixture-support.js';
 import { SharedPayloadStore } from './shared-payload.js';
 
 /**
@@ -408,4 +418,346 @@ describe('writing payload to disk', () => {
         expect(fs.statSync(path.dirname(input.contextFiles[1] ?? '')).mode & 0o777).toBe(0o700);
         expect(fs.statSync(input.contextFiles[1] ?? '').mode & 0o777).toBe(0o600);
     });
+});
+
+/**
+ * Regeneration context (M4-T7): the previous route, slice between iterations and discussion since then.
+ * Tested on 2 iterations of the `medium` fixture. The push touches `edit-policy.ts` and `handlers.ts`,
+ * removes `card-token.ts` and rebuilds the lockfile.
+ */
+describe('regeneration context after a push', () => {
+    let root: string;
+    let payloadDir: string;
+    let sharedDir: string;
+
+    beforeEach(async () => {
+        root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-regen-'));
+        payloadDir = path.join(root, 'payload', 'route');
+        sharedDir = path.join(root, 'payload', 'shared');
+    });
+
+    afterEach(async () => {
+        await fs.promises.rm(root, { recursive: true, force: true });
+    });
+
+    function writer(
+        budgets?: Partial<RegenerationBudgets>,
+        openContextFiles: () => string[] = () => [],
+    ): RoutePayloadWriter {
+        return new RoutePayloadWriter({
+            payloadDir,
+            shared: new SharedPayloadStore(sharedDir, openContextFiles),
+            ...(budgets === undefined ? {} : { regenerationBudgets: budgets }),
+        });
+    }
+
+    function map(): IterationMap {
+        return buildIterationMap({
+            interdiff: mediumInterdiffV1V2(),
+            fromBaseCommit: mediumDiff().baseCommit,
+            toBaseCommit: mediumDiffV2().baseCommit,
+        });
+    }
+
+    function regeneration(overrides: Partial<RouteRegenerationContext> = {}): RouteRegenerationContext {
+        return {
+            previous: mediumReadySnapshot(),
+            interdiff: mediumInterdiffV1V2(),
+            map: map(),
+            threads: mediumThreadsV2(),
+            ...overrides,
+        };
+    }
+
+    /** Task context for the second iteration. The diff is new, and regeneration starts from the previous snapshot. */
+    function contextV2(overrides: Partial<RouteRegenerationContext> = {}): RoutePayloadContext {
+        return { diff: mediumDiffV2(), meta: META, regeneration: regeneration(overrides) };
+    }
+
+    function read(file: string | undefined): string {
+        return fs.readFileSync(file ?? '', 'utf8');
+    }
+
+    it('includes the slice, previous route and discussion in that order for both skeleton and section', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration());
+        const skeleton = builder.skeletonTask(contextV2());
+        const section = builder.sectionTask(contextV2(), [2], mediumReadySnapshot().stops, intents());
+
+        expect(skeleton.contextFiles.map((file) => path.basename(file))).toEqual([
+            path.basename(skeleton.contextFiles[0] ?? ''),
+            'pr-diff.md',
+            'interdiff.md',
+            'previous-route.md',
+            'threads-since.md',
+        ]);
+        expect(section.contextFiles.map((file) => path.basename(file))).toEqual([
+            path.basename(section.contextFiles[0] ?? ''),
+            'pr-diff.md',
+            'interdiff.md',
+            'previous-route.md',
+            'threads-since.md',
+            'section-02-plan.md',
+        ]);
+        // Instructions list the context actually present. Without a previous route, these lines are absent.
+        expect(skeleton.instructions).toContain('previous-route.md');
+        expect(section.instructions).toContain('threads-since.md');
+    });
+
+    it('builds tasks as for the first generation when there is no previous snapshot', () => {
+        const builder = writer();
+        builder.beginGeneration();
+        const skeleton = builder.skeletonTask({ diff: mediumDiffV2(), meta: META });
+
+        expect(skeleton.contextFiles).toHaveLength(2);
+        expect(skeleton.instructions).not.toContain('previous-route.md');
+        expect(fs.existsSync(path.join(sharedDir, 'diff', interdiffKey(), 'interdiff.md'))).toBe(false);
+    });
+
+    it('stores the slice under the iteration heads key and prints it with the same gutter as the diff', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration());
+        const interdiff = builder.skeletonTask(contextV2()).contextFiles[2] ?? '';
+
+        expect(interdiff).toBe(path.join(sharedDir, 'diff', interdiffKey(), 'interdiff.md'));
+        const text = read(interdiff);
+        expect(text).toContain(
+            `# Interdiff ${mediumDiff().headCommit.slice(0, 7)} -> ${mediumDiffV2().headCommit.slice(0, 7)}`,
+        );
+        expect(text).toContain('`old new | line`');
+        expect(text).toContain('services/orders/src/api/handlers.ts');
+        // Files untouched by the push are absent from the slice, which differs from the PR diff.
+        expect(text).not.toContain('services/orders/src/domain/edit-window.ts');
+    });
+
+    it('forbids anchors in the slice patch header and permits them in the PR diff header', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration());
+        const files = builder.skeletonTask(contextV2()).contextFiles;
+        const prDiff = read(files[1]);
+        const interdiff = read(files[2]);
+
+        expect(prDiff).toContain('## Patches\n');
+        expect(prDiff).toContain('Line anchors of a stop are validated against exactly these printed numbers');
+        // The old side of the slice is the previous iteration head, not the PR base. It cannot promise anchor validation.
+        expect(interdiff).toContain('## Patches of the push');
+        expect(interdiff).toContain('Never take line anchors from here.');
+        expect(interdiff).not.toContain('are validated against exactly these printed numbers');
+    });
+
+    it('includes a header, summary and stop table with anchors and a touched marker in the previous route', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration());
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[3]);
+        const previous = mediumReadySnapshot();
+
+        expect(text).toContain(`- Built for commit: ${previous.commit}`);
+        expect(text).toContain(previous.summary.split('\n')[0] ?? '');
+        expect(text).toContain('| stop # | tier | title | anchors | touched by the push |');
+        expect(text).toContain('`services/orders/src/api/handlers.ts`:new:');
+        // Stop 03 is on `handlers.ts`, which the push touched. Stop 01 is on `edit-window.ts`, which it did not.
+        expect(tableRow(text, 3)).toContain('| yes |');
+        expect(tableRow(text, 1)).toContain('| no |');
+        expect(text).toContain(`### Stop 1 — ${previous.stops[0]?.tier ?? ''}`);
+    });
+
+    it('drops paragraphs from the end to fit the previous route budget and keeps the table and summary', () => {
+        const builder = writer({ previousRoute: 9000 });
+        builder.beginGeneration(regeneration());
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[3]);
+
+        expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(9000);
+        expect(text).toContain('## Summary of the previous route');
+        // The table goes last because it is the plan to preserve.
+        expect(tableRow(text, 6)).not.toBe('');
+        expect(text).toContain('### Stop 1 —');
+        expect(text).not.toContain('### Stop 6 —');
+        expect(text).toContain('the remaining stop texts of the previous route were omitted');
+    });
+
+    it('includes a new reply on an old thread in discussion and excludes unrelated and old comments', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration({ threads: filterCases() }));
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[4]);
+
+        // Author reply after the push on a thread in a touched file.
+        expect(text).toContain('[thread:4820242]');
+        expect(text).toContain('(new)');
+        // Include PR threads regardless of files.
+        expect(text).toContain('[thread:-38211]');
+        // A draft is not a discussion comment, so exclude a thread containing only a draft,
+        // even if the push removed its file. Also exclude a thread on an untouched file.
+        expect(text).not.toContain('[thread:4820260]');
+        expect(text).not.toContain('[thread:4820113]');
+        // Also exclude an old thread without new comments.
+        expect(text).not.toContain('[thread:4820109]');
+    });
+
+    it('keeps recent discussion threads within budget and drops old ones with a marker', () => {
+        const builder = writer({ threadsSince: 1200 });
+        builder.beginGeneration(regeneration({ threads: filterCases() }));
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[4]);
+
+        expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(1200);
+        expect(text).toContain('[thread:4820242]');
+        expect(text).toContain('older thread(s) omitted by the payload budget');
+    });
+
+    it('writes a file stating that no threads match instead of branching the instructions', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration({ threads: [] }));
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[4]);
+
+        expect(text).toContain('No new comments since the previous route.');
+    });
+
+    it('continues generation when the host returns no threads and states this in the file', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration({ threads: null }));
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[4]);
+
+        expect(text).toContain('[UNAVAILABLE: the host did not give the discussion of this pull request.]');
+    });
+
+    it('includes the previous route and discussion but no slice when the interdiff slice is unavailable', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration({ interdiff: null, map: null }));
+        const files = builder.skeletonTask(contextV2({ interdiff: null, map: null })).contextFiles;
+
+        expect(files.map((file) => path.basename(file))).toEqual([
+            path.basename(files[0] ?? ''),
+            'pr-diff.md',
+            'previous-route.md',
+            'threads-since.md',
+        ]);
+    });
+
+    it('without a slice, the previous route does not describe a push or print an affected column', () => {
+        const builder = writer();
+        const same = regeneration({ interdiff: null, map: identityMap() });
+        builder.beginGeneration(same);
+        const files = builder.skeletonTask(contextV2({ interdiff: null, map: identityMap() })).contextFiles;
+        const previous = read(files[2]);
+        const threads = read(files[3]);
+
+        expect(previous).toContain('The code has not moved since it was built');
+        expect(previous).toContain('| stop # | tier | title | anchors |');
+        // Omit the "touched by push" column. A column full of "no" would read as "do not touch anything".
+        expect(previous).not.toContain('touched by the push');
+        expect(previous).not.toContain('| no |');
+        expect(threads).toContain('The code has not moved');
+        expect(threads).not.toContain('the push');
+        expect(same.interdiff).toBeNull();
+    });
+
+    it('omits reviewer drafts from discussion because the author has not seen them', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration({ threads: withDraftReply() }));
+        const text = read(builder.skeletonTask(contextV2()).contextFiles[4]);
+
+        expect(text).toContain('[thread:4820242]');
+        expect(text).not.toContain('reviewer draft, unseen by the author');
+    });
+
+    it('reuses existing generation files with a new builder after a server restart', () => {
+        const before = writer();
+        before.beginGeneration(regeneration());
+        before.skeletonTask(contextV2());
+
+        // Generation context died with the process. The slice was restored from cache, and threads are absent.
+        const after = writer().sectionTask(
+            { diff: mediumDiffV2(), meta: META, regeneration: regeneration({ threads: null }) },
+            [2],
+            mediumReadySnapshot().stops,
+            intents(),
+        );
+
+        expect(after.contextFiles.map((file) => path.basename(file))).toEqual([
+            path.basename(after.contextFiles[0] ?? ''),
+            'pr-diff.md',
+            'interdiff.md',
+            'previous-route.md',
+            'threads-since.md',
+            'section-02-plan.md',
+        ]);
+        // Keep the discussion file written by the live generation, without rebuilding it.
+        expect(read(after.contextFiles[4])).toContain('[thread:4820242]');
+    });
+
+    it('preserves both the iteration diff and the slice from the same build during shared directory cleanup', () => {
+        const builder = writer();
+        builder.beginGeneration(regeneration());
+        const skeleton = builder.skeletonTask(contextV2());
+
+        expect(fs.existsSync(skeleton.contextFiles[1] ?? '')).toBe(true);
+        expect(fs.existsSync(skeleton.contextFiles[2] ?? '')).toBe(true);
+        expect(fs.readdirSync(path.join(sharedDir, 'diff')).sort()).toEqual(
+            [diffKey(mediumDiffV2()), interdiffKey()].sort(),
+        );
+    });
+
+    function diffKey(diff: PrDiff): string {
+        return `${diff.baseCommit}-${diff.headCommit}`;
+    }
+
+    /** The slice key is a pair of iteration heads (T1 decision). They share a base. */
+    function interdiffKey(): string {
+        return `${mediumDiff().headCommit}-${mediumDiffV2().headCommit}`;
+    }
+
+    /** Previous route table row by the stop plan number. */
+    function tableRow(text: string, planIndex: number): string {
+        return text.split('\n').find((line) => line.startsWith(`| ${String(planIndex)} | `)) ?? '';
+    }
+
+    /** A thread that passed the filter, with an unsent reviewer draft among its replies. */
+    function withDraftReply(): Thread[] {
+        return mediumThreadsV2().map((thread) =>
+            thread.id === '4820242'
+                ? {
+                      ...thread,
+                      root: {
+                          ...thread.root,
+                          replies: [
+                              ...thread.root.replies,
+                              {
+                                  ...thread.root,
+                                  id: 'draft-2',
+                                  draft: true,
+                                  createdAt: '2026-08-21T10:58:00.000Z',
+                                  body: 'reviewer draft, unseen by the author',
+                                  replies: [],
+                              },
+                          ],
+                      },
+                  }
+                : thread,
+        );
+    }
+
+    /**
+     * Threads for the "what is new" filter: an author reply after the push on a touched file (fixture
+     * 4820242), a recent comment on a file untouched by the push, a recent draft on a file
+     * removed by the push, and a recent PR thread.
+     */
+    function filterCases(): Thread[] {
+        const after = '2026-08-21T10:58:00.000Z';
+        return mediumThreadsV2().map((thread) => {
+            if (thread.anchor === null || thread.anchor.path === 'services/orders/src/domain/edit-window.ts') {
+                return { ...thread, root: { ...thread.root, createdAt: after } };
+            }
+            if (thread.id === '4820260') {
+                return {
+                    ...thread,
+                    root: {
+                        ...thread.root,
+                        replies: [
+                            { ...thread.root, id: 'draft-1', draft: true, createdAt: after, replies: [] },
+                        ],
+                    },
+                };
+            }
+            return thread;
+        });
+    }
 });

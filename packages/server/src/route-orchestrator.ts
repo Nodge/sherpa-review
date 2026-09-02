@@ -8,6 +8,7 @@ import type {
     ReviewHost,
     RouteProvenance,
     RouteSnapshot,
+    Thread,
     UiRouteFillStopResponse,
     UiRouteGenerateResponse,
     WorkerStatus,
@@ -20,6 +21,7 @@ import { buildIterationMap, identityMap } from './iterations/index.js';
 import type { ProgressStore } from './progress-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import { RoutePayloadWriter } from './route-payload.js';
+import type { RouteRegenerationContext } from './route-regeneration.js';
 import type {
     RouteStopStatusUpdate,
     RouteStore,
@@ -86,6 +88,10 @@ interface GenerationContext {
     readonly previousSnapshotId: string | null;
     /** Line mapping "previous snapshot iteration → generation iteration". null means there is no interdiff. */
     readonly map: IterationMap | null;
+    /** The same slice as patches, sent to the model in a context file (M4-T7). */
+    readonly interdiff: PrDiff | null;
+    /** PR threads at generation start. null means no previous snapshot, a host failure or a restart. */
+    readonly threads: readonly Thread[] | null;
 }
 
 export interface RouteOrchestratorOptions {
@@ -379,7 +385,11 @@ export class RouteOrchestrator {
             return this.deferUntilDiff();
         }
 
-        const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff);
+        const generation = this.acceptanceContext(diff, snapshot.previousSnapshotId);
+        const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff, {
+            map: generation.map,
+            knownThreadIds: new Set((generation.threads ?? []).map((thread) => thread.id)),
+        });
         if (!validation.ok) {
             return { kind: 'rejected', errors: validation.errors };
         }
@@ -631,7 +641,8 @@ export class RouteOrchestrator {
         this.store.clearBindings();
         this.store.beginSkeleton();
         // The previous generation payload is no longer needed. Its tasks were just cancelled.
-        this.payload.beginGeneration();
+        // Write regeneration context once here. The skeleton and all sections share it.
+        this.payload.beginGeneration(this.regenerationOf(context));
         this.startSkeletonTask();
     }
 
@@ -643,25 +654,34 @@ export class RouteOrchestrator {
     private async generationContextFor(diff: PrDiff): Promise<GenerationContext> {
         const previous = this.store.current();
         if (previous === null) {
-            return { diff, previousSnapshotId: null, map: null };
+            return { diff, previousSnapshotId: null, map: null, interdiff: null, threads: null };
         }
+
+        // Only regeneration needs threads. They explain why the author changed a stop. Fetch them
+        // alongside the slice. Generation waits for both, so sequential requests would add unnecessary latency.
+        const threads = this.loadThreads();
+        const base = async (): Promise<Pick<GenerationContext, 'diff' | 'previousSnapshotId' | 'threads'>> => ({
+            diff,
+            previousSnapshotId: previous.snapshotId,
+            threads: await threads,
+        });
         if (previous.diffId === diff.diffId) {
             // Regeneration within the same iteration: lines have not moved (planning decision 4).
-            return { diff, previousSnapshotId: previous.snapshotId, map: identityMap() };
+            return { ...(await base()), map: identityMap(), interdiff: null };
         }
 
         const host = this.host;
         const iterations = this.iterations;
         if (host === null || iterations === null) {
-            return { diff, previousSnapshotId: previous.snapshotId, map: null };
+            return { ...(await base()), map: null, interdiff: null };
         }
         try {
             const interdiff = await iterations.getInterdiff(previous.diffId, diff.diffId, () =>
                 host.getDiff({ base: previous.diffId, head: diff.diffId }),
             );
             return {
-                diff,
-                previousSnapshotId: previous.snapshotId,
+                ...(await base()),
+                interdiff,
                 map: buildIterationMap({
                     interdiff,
                     fromBaseCommit: previous.baseCommit,
@@ -672,7 +692,23 @@ export class RouteOrchestrator {
             process.stderr.write(
                 `sherpa-server: could not fetch slice ${previous.diffId}→${diff.diffId}: ${messageOf(error)}\n`,
             );
-            return { diff, previousSnapshotId: previous.snapshotId, map: null };
+            return { ...(await base()), map: null, interdiff: null };
+        }
+    }
+
+    /** PR threads for regeneration context. Host failure does not break generation, it just leaves the file absent. */
+    private async loadThreads(): Promise<Thread[] | null> {
+        const host = this.host;
+        if (host === null) {
+            return null;
+        }
+        try {
+            return await host.getThreads();
+        } catch (error) {
+            process.stderr.write(
+                `sherpa-server: could not fetch threads for regeneration context: ${messageOf(error)}\n`,
+            );
+            return null;
         }
     }
 
@@ -682,16 +718,26 @@ export class RouteOrchestrator {
      */
     private cachedContextFor(diff: PrDiff, previous: RouteSnapshot | null): GenerationContext {
         if (previous === null) {
-            return { diff, previousSnapshotId: null, map: null };
+            return { diff, previousSnapshotId: null, map: null, interdiff: null, threads: null };
         }
         if (previous.diffId === diff.diffId) {
-            return { diff, previousSnapshotId: previous.snapshotId, map: identityMap() };
+            return {
+                diff,
+                previousSnapshotId: previous.snapshotId,
+                map: identityMap(),
+                interdiff: null,
+                threads: null,
+            };
         }
 
         const interdiff = this.iterations?.peekInterdiff(previous.diffId, diff.diffId) ?? null;
         return {
             diff,
             previousSnapshotId: previous.snapshotId,
+            interdiff,
+            // Threads require network requests, so restored context omits them. Acceptance will remove
+            // any model references to them.
+            threads: null,
             map:
                 interdiff === null
                     ? null
@@ -700,6 +746,24 @@ export class RouteOrchestrator {
                           fromBaseCommit: previous.baseCommit,
                           toBaseCommit: diff.baseCommit,
                       }),
+        };
+    }
+
+    /**
+     * Regeneration context for the payload: the previous snapshot and everything the task uses to explain the push.
+     * null means there is no previous route, and the task is built as for the first generation.
+     */
+    private regenerationOf(context: GenerationContext | null): RouteRegenerationContext | null {
+        const previousId = context?.previousSnapshotId ?? null;
+        const previous = previousId === null ? null : this.store.getSnapshot(previousId);
+        if (context === null || previous === null) {
+            return null;
+        }
+        return {
+            previous,
+            interdiff: context.interdiff,
+            map: context.map,
+            threads: context.threads,
         };
     }
 
@@ -720,7 +784,11 @@ export class RouteOrchestrator {
             'skeleton',
             diff.diffId,
             [],
-            this.payload.skeletonTask({ diff, meta: this.meta }),
+            this.payload.skeletonTask({
+                diff,
+                meta: this.meta,
+                regeneration: this.regenerationOf(this.generation),
+            }),
         );
     }
 
@@ -741,7 +809,11 @@ export class RouteOrchestrator {
         }
 
         const intents = this.store.stopIntents();
-        const context = { diff, meta: this.meta };
+        const context = {
+            diff,
+            meta: this.meta,
+            regeneration: this.regenerationOf(this.acceptanceContext(diff, snapshot.previousSnapshotId)),
+        };
         const ordered = [...planIndexes].sort((left, right) => left - right);
         for (let from = 0; from < ordered.length; from += this.config.sectionBatchSize) {
             const batch = ordered.slice(from, from + this.config.sectionBatchSize);

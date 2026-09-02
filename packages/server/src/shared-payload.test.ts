@@ -85,6 +85,31 @@ describe('shared payload directory', () => {
         expect(fs.existsSync(held)).toBe(false);
     });
 
+    it('joins an inter-iteration slice to the diff build without starting a separate build', () => {
+        const diff = store.prDiff('base-head', 'iteration diff');
+        const slice = store.interdiff('headA-headB', 'inter-iteration slice');
+
+        expect(slice).toBe(path.join(sharedDir, 'diff', 'headA-headB', 'interdiff.md'));
+        // Both directories are alive. Tasks for this build haven't been queued yet, so no task holds them.
+        expect(fs.existsSync(diff)).toBe(true);
+        expect(fs.existsSync(slice)).toBe(true);
+
+        // A new iteration diff starts a new build and removes the previous directories.
+        store.prDiff('base-head2', 'diff after push');
+        expect(fs.existsSync(diff)).toBe(false);
+        expect(fs.existsSync(slice)).toBe(false);
+    });
+
+    it('preserves a slice during cleanup while an open task references it', () => {
+        store.prDiff('base-head', 'iteration diff');
+        const slice = store.interdiff('headA-headB', 'inter-iteration slice');
+        openContextFiles = [slice];
+
+        store.prDiff('base-head2', 'diff after push');
+
+        expect(fs.existsSync(slice)).toBe(true);
+    });
+
     it('preserves keys referenced by tasks during startup cleanup', () => {
         const kept = store.prDiff('base-head', 'needed diff');
         // Create a second key without key-change cleanup, as a previous process might have left it.

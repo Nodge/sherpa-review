@@ -1,7 +1,20 @@
+import { routeFixtures } from '@sherpa/fixtures';
 import type { RouteSectionResult, RouteStop } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './fixture-support.js';
+import type { IterationMap } from '../iterations/index.js';
+import { buildIterationMap, identityMap } from '../iterations/index.js';
+import {
+    asRawText,
+    mediumDiff,
+    mediumDiffV2,
+    mediumInterdiffV1V2,
+    mediumRawResults,
+    mediumRawResultsV2,
+    mediumReadySnapshot,
+    mediumThreadsV2,
+} from './fixture-support.js';
+import type { SectionRegenerationContext } from './section.js';
 import { otherStopTitle, validateSkeleton } from './skeleton.js';
 import { validateSkeleton } from './skeleton.js';
 import { applyFilling, type RouteStopFilling } from './types.js';
@@ -124,4 +137,173 @@ describe('route validator: end-to-end golden test on the medium fixture', () => 
         expect(anchors.map((anchor) => anchor.fileId)).toEqual([lockFile?.fileId, lockFile?.fileId]);
         expect(anchors.map((anchor) => anchor.collapsed)).toEqual([true, true]);
     });
+});
+
+/**
+ * Second pass on the same fixture: v2 plan and sections against the v1→v2 slice. The server
+ * classifies stops from anchors, and the model only explains. A mismatch with the fixture would mean
+ * the UI badge and snapshot data disagree.
+ */
+describe('route validator: second pass after a push', () => {
+    const knownThreadIds = new Set(mediumThreadsV2().map((thread) => thread.id));
+
+    function mapV1V2(): IterationMap {
+        return buildIterationMap({
+            interdiff: mediumInterdiffV1V2(),
+            fromBaseCommit: mediumDiff().baseCommit,
+            toBaseCommit: mediumDiffV2().baseCommit,
+        });
+    }
+
+    function planV2(): RouteStop[] {
+        const skeleton = validateSkeleton(asRawText(mediumRawResultsV2().skeleton));
+        if (!skeleton.ok) {
+            throw new Error(`second-pass skeleton rejected: ${skeleton.errors.join(' | ')}`);
+        }
+        return skeleton.value.stops;
+    }
+
+    function fillV2(
+        stops: RouteStop[],
+        section: RouteSectionResult,
+        allowed: readonly number[],
+        context: SectionRegenerationContext,
+    ): RouteStop[] {
+        const result = validateSection(asRawText(section), stops, allowed, mediumDiffV2(), context);
+        if (!result.ok) {
+            throw new Error(`second-pass section rejected: ${result.errors.join(' | ')}`);
+        }
+        return merge(stops, result.value);
+    }
+
+    function fillAll(context: SectionRegenerationContext): RouteStop[] {
+        let stops = planV2();
+        for (const section of mediumRawResultsV2().sections) {
+            const planIndex = section.stops[0]?.planIndex ?? 0;
+            stops = fillV2(stops, section, [planIndex], context);
+        }
+        return stops;
+    }
+
+    it('computes classification on the server and matches the second-pass fixture', () => {
+        const stops = fillAll({ map: mapV1V2(), knownThreadIds });
+        const expected = routeFixtures('medium')?.secondPass?.snapshot?.stops ?? [];
+
+        expect(stops.map((stop) => [stop.id, stop.change?.kind ?? null])).toEqual(
+            expected.map((stop) => [stop.id, stop.change?.kind ?? null]),
+        );
+        expect(stops.map((stop) => stop.change?.reason ?? null)).toEqual(
+            expected.map((stop) => stop.change?.reason ?? null),
+        );
+        expect(stops.find((stop) => stop.id === 's03')?.change?.threadIds).toEqual(['4820242']);
+        expect(stops.find((stop) => stop.id === 's01')?.change).toBeNull();
+    });
+
+    it('drops the reason on an untouched stop and adds a reviewer note', () => {
+        const section = withReason(sectionOfV2(1), 'The author rewrote this stop from scratch.');
+        const [filling] = accept(section, [1], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change).toBeNull();
+        expect(filling?.validationNotes).toContain(
+            'Change reason dropped: this stop did not move since the previous route.',
+        );
+    });
+
+    it('removes an unknown thread reference from text and excludes it from threadIds', () => {
+        const section = withReason(
+            sectionOfV2(2),
+            'The author addressed the linter comment [thread:999], the `default` branch was added.',
+        );
+        const [filling] = accept(section, [2], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change?.kind).toBe('changed');
+        expect(filling?.change?.reason).toBe('The author addressed the linter comment, the `default` branch was added.');
+        expect(filling?.change?.threadIds).toEqual([]);
+        expect(filling?.validationNotes).toContain('Link to unknown thread 999 removed.');
+    });
+
+    it('reduces a reason containing only a broken reference to null instead of an empty block', () => {
+        const section = withReason(sectionOfV2(2), '[thread:999]');
+        const [filling] = accept(section, [2], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change).toEqual({ kind: 'changed', reason: null, threadIds: [] });
+        expect(filling?.validationNotes).toContain('Link to unknown thread 999 removed.');
+    });
+
+    it('keeps references without a reason because they can lead the reviewer to a discussion on their own', () => {
+        const section = withThreadIds(withReason(sectionOfV2(3), null), ['4820242']);
+        const [filling] = accept(section, [3], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change).toEqual({ kind: 'changed', reason: null, threadIds: ['4820242'] });
+    });
+
+    it('adds a known reference in the reason text to threadIds and removes it from text', () => {
+        const section = withReason(sectionOfV2(3), 'The author reply explains the edit [thread:4820242].');
+        const [filling] = accept(section, [3], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change?.threadIds).toEqual(['4820242']);
+        // The UI shows threads in a separate row next to the reason, so prose does not need the literal token.
+        expect(filling?.change?.reason).toBe('The author reply explains the edit.');
+        expect(filling?.validationNotes).toEqual([]);
+    });
+
+    it('accepts a result without a reason for a classified stop because the reason is optional', () => {
+        const section = withReason(sectionOfV2(6), null);
+        const [filling] = accept(section, [6], { map: mapV1V2(), knownThreadIds });
+
+        expect(filling?.change).toEqual({ kind: 'new', reason: null, threadIds: [] });
+    });
+
+    it('drops reasons and skips classification when regenerating on the same iteration', () => {
+        const stops = fillAll({ map: identityMap(), knownThreadIds });
+
+        expect(stops.every((stop) => stop.change === null)).toBe(true);
+        expect(stops.find((stop) => stop.id === 's02')?.validationNotes).toContain(
+            'Change reason dropped: this stop did not move since the previous route.',
+        );
+    });
+
+    it('skips classification and ignores reasons without a previous snapshot', () => {
+        const stops = fillAll({ map: null, knownThreadIds: new Set() });
+
+        expect(stops.every((stop) => stop.change === null)).toBe(true);
+    });
+
+    /** A second-pass section by plan number. */
+    function sectionOfV2(planIndex: number): RouteSectionResult {
+        const section = mediumRawResultsV2().sections.find(
+            (candidate) => candidate.stops[0]?.planIndex === planIndex,
+        );
+        if (section === undefined) {
+            throw new Error(`the fixture has no second-pass section for stop ${String(planIndex)}`);
+        }
+        return section;
+    }
+
+    /** The same result with a replaced reason. `null` means no reason at all. */
+    function withReason(section: RouteSectionResult, reason: string | null): RouteSectionResult {
+        return {
+            stops: section.stops.map((stop) => {
+                const { changeReason: _dropped, changeThreadIds: _ids, ...rest } = stop;
+                return reason === null ? rest : { ...rest, changeReason: reason };
+            }),
+        };
+    }
+
+    /** The same result with an explicit thread list for every stop. */
+    function withThreadIds(section: RouteSectionResult, ids: readonly string[]): RouteSectionResult {
+        return { stops: section.stops.map((stop) => ({ ...stop, changeThreadIds: [...ids] })) };
+    }
+
+    function accept(
+        section: RouteSectionResult,
+        allowed: readonly number[],
+        context: SectionRegenerationContext,
+    ): RouteStopFilling[] {
+        const result = validateSection(asRawText(section), planV2(), allowed, mediumDiffV2(), context);
+        if (!result.ok) {
+            throw new Error(`section rejected: ${result.errors.join(' | ')}`);
+        }
+        return result.value;
+    }
 });

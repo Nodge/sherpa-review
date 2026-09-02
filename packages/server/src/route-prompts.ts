@@ -25,9 +25,10 @@ but never go looking for one. Most texts mention no bug at all; that is normal.
 
 ## Your context files
 
-Paths under a \`shared/\` directory hold what does not change between tasks — this guide and the diff
-of the pull request. Read each of them once per session and reuse what you already read. The other
-paths belong to this task alone and are always new.
+Paths under a \`shared/\` directory hold what does not change between tasks — this guide, the diff
+of the pull request and, on a rebuild after a push, the interdiff of that push. Read each of them
+once per session and reuse what you already read. The other paths belong to this task alone and
+are always new.
 
 ## Research budget — hard
 
@@ -135,6 +136,25 @@ A permutation of the plan numbers \`1..N\` (1 = the first element of \`stops\`) 
 narrative instead of a triage: entry point → definitions before their consumers → cause before
 consequence → verification last. Every number appears exactly once.
 
+## Rebuilding an existing route
+
+Some tasks carry \`previous-route.md\`: this pull request already had a route. What came with that
+file says why it is being rebuilt.
+
+**With \`interdiff.md\`** — the author has pushed since, and the interdiff is exactly what that push
+changed; \`threads-since.md\` is the discussion that came with it.
+
+- Keep the plan, its order and its titles wherever the code did not change. The stop numbers are
+  the progress of the reviewer: renumbering throws away what they had already read.
+- Rewrite only the stops the push actually touched; the previous route marks them for you.
+- Work that is genuinely new becomes a new stop — at the end, or where the story puts it.
+
+**Without \`interdiff.md\`** — the code has not moved: the route is being rebuilt on the same commit.
+A stop you keep keeps its number, and past that the previous route is context, not a text to copy.
+
+Either way you plan the current diff, not a diff of plans: the result is a full route, and nothing
+in it refers to the previous one.
+
 ## What you must not do
 
 - **Do not create a catch-all stop.** No "Everything else", no "Other", no "Remaining changes".
@@ -195,6 +215,22 @@ Rules the server enforces:
 - Cover the changed lines of every file your stops are about. Whatever no stop anchors ends up in
   the synthetic "Other" stop, which is honest but useless to the reviewer.
 
+## Why this stop changed
+
+Tasks that carry \`interdiff.md\` are a rebuild after a push. For a stop whose lines that push
+touched, add \`changeReason\`: 1 to 3 sentences in Russian — what the author changed and why, when
+\`threads-since.md\` shows the why. The server classifies the stop itself (\`new\` or \`changed\`)
+from your anchors; you never declare the kind, only the reason.
+
+- A reason on a stop the push did not touch is dropped by the server, and the reviewer sees a note
+  about it. When in doubt, write nothing: an invented motive is worse than silence.
+- Cite a discussion as \`[thread:<id>]\` with an id printed in \`threads-since.md\`, or list the ids
+  in \`changeThreadIds\`. The reviewer sees the threads as links next to the reason, and every token
+  is removed from your text — put it at the end of a sentence so the prose survives without it.
+  Ids the server does not know are dropped.
+- Without \`interdiff.md\` the code has not moved since the previous route: there are no reasons
+  to write at all.
+
 ## Behavioural test digest
 
 Test code is hidden from the reviewer by default: it is machine text, there is nothing to review
@@ -224,8 +260,68 @@ Do not phrase claims as test names, and do not invent tests that are not in the 
 
 ${COMMON_RESULT}`;
 
+/**
+ * Regeneration files included with the task. Instructions list the context actually present
+ * instead of describing files the task does not have.
+ */
+export interface RegenerationContextFiles {
+    readonly interdiff: boolean;
+    readonly previousRoute: boolean;
+    readonly threadsSince: boolean;
+}
+
+const NO_REGENERATION: RegenerationContextFiles = {
+    interdiff: false,
+    previousRoute: false,
+    threadsSince: false,
+};
+
+/**
+ * Regeneration context paragraph explaining which files accompany the diff and what to do with them.
+ * Empty for the first route generation.
+ */
+function regenerationLines(files: RegenerationContextFiles): string[] {
+    const named = [
+        ...(files.interdiff ? ['`interdiff.md` — what the push changed (also under `shared/`)'] : []),
+        ...(files.previousRoute ? ['`previous-route.md` — the route this pull request already had'] : []),
+        ...(files.threadsSince ? ['`threads-since.md` — the discussion since that route was built'] : []),
+    ];
+    if (named.length === 0) {
+        return [];
+    }
+    // Without a slice there was no push. Do not tell the model the author pushed or ask it to change affected stops.
+    return files.interdiff
+        ? [
+              '',
+              'This is a rebuild: the pull request already had a route and the author has pushed since. The',
+              `task also carries ${listPhrase(named)}. Keep what the push did not touch, change what it did.`,
+          ]
+        : [
+              '',
+              'This is a rebuild on the same commit: the pull request already had a route and the code has not',
+              `moved since. The task also carries ${listPhrase(named)}. A stop you keep keeps its number.`,
+          ];
+}
+
+/**
+ * Context files in the shared directory. The slice is only present for regeneration after a push. It must not be named
+ * in the first generation because the model would look for a file that does not exist.
+ */
+function sharedPhrase(files: RegenerationContextFiles): string {
+    return files.interdiff
+        ? 'The methodology, the pull request and the interdiff live under `shared/`'
+        : 'The methodology and the pull request live under `shared/`';
+}
+
+function listPhrase(items: readonly string[]): string {
+    if (items.length <= 1) {
+        return items.join('');
+    }
+    return `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`;
+}
+
 /** Short skeleton task instructions describing the task and where to find the rest. */
-export function skeletonInstructions(): string {
+export function skeletonInstructions(files: RegenerationContextFiles = NO_REGENERATION): string {
     return [
         'Plan the review route for this pull request: a summary, the stops in triage order, and the',
         'narrative order of the full tour.',
@@ -233,8 +329,9 @@ export function skeletonInstructions(): string {
         'The first context file is the methodology — read it first, it defines what a stop is, how to',
         'order the stops and how to write. The second one is the pull request itself: metadata, the',
         'complete list of changed files and their patches.',
+        ...regenerationLines(files),
         '',
-        'Both live under `shared/`: these paths are the same in every task of this session, so read each',
+        `${sharedPhrase(files)}: these paths are the same in every task of this session, so read each`,
         'of them once. Files in the task directory are always new.',
         '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
@@ -244,7 +341,10 @@ export function skeletonInstructions(): string {
 }
 
 /** Short section task instructions with target plan numbers here and details in the context files. */
-export function sectionInstructions(planIndexes: readonly number[]): string {
+export function sectionInstructions(
+    planIndexes: readonly number[],
+    files: RegenerationContextFiles = NO_REGENERATION,
+): string {
     const targets = planIndexes.map((index) => String(index)).join(', ');
     const plural = planIndexes.length === 1 ? 'this stop' : 'these stops';
     return [
@@ -252,11 +352,12 @@ export function sectionInstructions(planIndexes: readonly number[]): string {
         '',
         'The first context file is the methodology — read it first, it defines the prose, the anchors',
         'and the behavioural test digest. The second one is the pull request itself: metadata, the',
-        'complete list of changed files and their patches. The third carries the fixed route plan, with',
-        'your target stops marked and the intent written for each of them.',
+        'complete list of changed files and their patches. The last one carries the fixed route plan,',
+        'with your target stops marked and the intent written for each of them.',
+        ...regenerationLines(files),
         '',
-        'The first two live under `shared/`: these paths are the same in every task of this session, so',
-        'read each of them once. The plan belongs to this task alone and is always new.',
+        `${sharedPhrase(files)}: these paths are the same in every task of this`,
+        'session, so read each of them once. The plan belongs to this task alone and is always new.',
         '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
         'The schema is checked by the server on submit — do not validate the result yourself and do not',

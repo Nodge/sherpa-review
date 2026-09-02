@@ -20,6 +20,36 @@ describe('route task instructions', () => {
     });
 });
 
+describe('regeneration instructions', () => {
+    const files = { interdiff: true, previousRoute: true, threadsSince: true };
+
+    it('list the second-pass context that is actually present', () => {
+        for (const text of [skeletonInstructions(files), sectionInstructions([2], files)]) {
+            expect(text).toContain('interdiff.md');
+            expect(text).toContain('previous-route.md');
+            expect(text).toContain('threads-since.md');
+        }
+    });
+
+    it('the first generation has no second-pass context or slice references', () => {
+        for (const text of instructions) {
+            expect(text).not.toContain('previous-route.md');
+            expect(text).not.toContain('rebuild');
+            expect(text).not.toContain('interdiff');
+            expect(text).not.toContain('pushed since');
+        }
+    });
+
+    it('regeneration on the same iteration mentions no slice or push', () => {
+        const text = sectionInstructions([2], { ...files, interdiff: false });
+
+        expect(text).not.toContain('interdiff');
+        expect(text).not.toContain('pushed since');
+        expect(text).toContain('previous-route.md');
+        expect(text).toContain('the code has not\nmoved since');
+    });
+});
+
 describe('route guides', () => {
     it('validator rejection is part of the loop and silent non-submission is forbidden', () => {
         for (const guide of [SKELETON_GUIDE, SECTION_GUIDE]) {
@@ -35,6 +65,18 @@ describe('route guides', () => {
             expect(text).toContain('shared/');
             expect(text).toContain('once');
         }
+    });
+
+    it('both roles get second-pass instructions that preserve the plan and allow reasons only for affected stops', () => {
+        expect(SKELETON_GUIDE).toContain('## Rebuilding an existing route');
+        expect(SKELETON_GUIDE).toContain('Keep the plan, its order and its titles wherever the code did not change');
+        // Both cases are described: with and without a push. The instructions are shared across all tasks.
+        expect(SKELETON_GUIDE).toContain('**With `interdiff.md`**');
+        expect(SKELETON_GUIDE).toContain('**Without `interdiff.md`** — the code has not moved');
+        expect(SECTION_GUIDE).toContain('## Why this stop changed');
+        expect(SECTION_GUIDE).toContain('changeReason');
+        expect(SECTION_GUIDE).toContain('[thread:<id>]');
+        expect(SECTION_GUIDE).toContain('you never declare the kind, only the reason');
     });
 
     it('voice rules name banned filler phrases and state that the server rejects them', () => {

@@ -1,8 +1,16 @@
 import fsSync from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
+import type { RouteRawResults } from '@sherpa/fixtures';
 import { fixtureData, makeFixtureHost } from '@sherpa/fixtures';
-import type { Iteration, PrDiff, RouteSectionResult, UiReviewRouteResponse, UiState } from '@sherpa/protocol';
+import type {
+    Iteration,
+    PrDiff,
+    RouteSectionResult,
+    RouteStopChange,
+    UiReviewRouteResponse,
+    UiState,
+} from '@sherpa/protocol';
 import {
     rpcErrorSchema,
     UI_DEV_ENDPOINTS,
@@ -21,7 +29,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { databasePathFor } from './paths.js';
 import { requiredSeenRanges } from './progress-store.js';
-import { asRawText, mediumRawResults } from './route/fixture-support.js';
+import { asRawText, mediumRawResults, mediumRawResultsV2 } from './route/fixture-support.js';
 import type { TaskRecord } from './queue.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
@@ -790,6 +798,207 @@ describe('progress carryover between iterations', () => {
             await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
         );
         expect(state.iterations.find((iteration) => iteration.diffId === V2.diffId)?.status).toBe('gone');
+    });
+});
+
+/**
+ * Regeneration after a push (M4-T7): second-pass tasks carry the slice, previous route and
+ * discussion, while the server classifies stops and the model only explains them.
+ */
+describe('regeneration after a push: what changed context', () => {
+    let sherpaDir: string;
+    let servers: SherpaServer[];
+
+    beforeEach(async () => {
+        sherpaDir = await makeTempSherpaDir();
+        servers = [];
+    });
+
+    afterEach(async () => {
+        for (const server of servers) {
+            await server.close();
+        }
+        await removeTempSherpaDir(sherpaDir);
+    });
+
+    type FixtureHost = ReturnType<typeof makeFixtureHost>;
+
+    /** Server on a given host: a second server on the same host and state simulates a restart. */
+    async function start(host: FixtureHost): Promise<SherpaServer> {
+        const server = await startServer({
+            prKey: PR,
+            sherpaDir,
+            longPollSeconds: 0.3,
+            reviewHostFactory: () => ({
+                name: 'fixture',
+                host,
+                advanceIteration: () => host.advanceIteration(),
+            }),
+        });
+        servers.push(server);
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        await server.route.warmup();
+        return server;
+    }
+
+    function queued(server: SherpaServer, type: 'route.skeleton' | 'route.section'): number[] {
+        return server.queue
+            .listTasks()
+            .filter((task) => task.type === type && task.status === 'queued')
+            .map((task) => task.id);
+    }
+
+    function complete(server: SherpaServer, taskId: number, result: unknown): void {
+        const leased = server.queue.next(WORKER);
+        expect(leased?.task.id).toBe(taskId);
+        server.queue.complete(WORKER, taskId, asRawText(result));
+    }
+
+    /** Full generation pass using the given model outputs. */
+    async function completeRoute(server: SherpaServer, raw: RouteRawResults): Promise<void> {
+        const skeleton = queued(server, 'route.skeleton').at(-1);
+        if (skeleton !== undefined) {
+            complete(server, skeleton, raw.skeleton);
+        }
+        completeSections(server, raw);
+        expect((await readRoute(server)).phase).toBe('ready');
+    }
+
+    /** Sections are queued in plan order: a task position in the queue identifies its stop. */
+    function completeSections(server: SherpaServer, raw: RouteRawResults): void {
+        for (const taskId of queued(server, 'route.section')) {
+            const planIndex = server.route.stopsOfTask(taskId)?.[0] ?? 0;
+            const section = raw.sections.find((entry) => entry.stops[0]?.planIndex === planIndex);
+            if (section === undefined) {
+                throw new Error(`model outputs have no section for stop ${String(planIndex)}`);
+            }
+            complete(server, taskId, section);
+        }
+    }
+
+    async function readRoute(server: SherpaServer) {
+        const response = await get(server.port, UI_ENDPOINTS.reviewRoute, server.token);
+        expect(response.status).toBe(200);
+        return uiReviewRouteResponseSchema.parse(await response.json()).route;
+    }
+
+    async function advance(server: SherpaServer): Promise<void> {
+        const response = await postJson(server.port, UI_DEV_ENDPOINTS.fixtureAdvanceIteration, {}, server.token);
+        expect(response.status).toBe(200);
+    }
+
+    /** Task context file names without the guide: the guide is addressed by its content hash. */
+    function contextNames(server: SherpaServer, taskId: number): string[] {
+        const files = server.queue.getTask(taskId)?.contextFiles ?? [];
+        for (const file of files) {
+            expect(fsSync.existsSync(file)).toBe(true);
+        }
+        return files.slice(1).map((file) => file.split('/').at(-1) ?? '');
+    }
+
+    function changeOf(snapshot: { stops: { id: string; change: RouteStopChange | null }[] } | null) {
+        return (snapshot?.stops ?? []).map((stop) => [stop.id, stop.change?.kind ?? null]);
+    }
+
+    it('second pass: tasks carry the slice, previous route and discussion, stops receive classifications', async () => {
+        const host = makeFixtureHost('medium');
+        const server = await start(host);
+        await completeRoute(server, mediumRawResults());
+
+        await advance(server);
+        expect(await server.route.generate()).toBe('started');
+
+        const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
+        expect(contextNames(server, skeleton)).toEqual([
+            'pr-diff.md',
+            'interdiff.md',
+            'previous-route.md',
+            'threads-since.md',
+        ]);
+        complete(server, skeleton, mediumRawResultsV2().skeleton);
+        const section = queued(server, 'route.section')[0] ?? 0;
+        expect(contextNames(server, section).at(-1)).toBe('section-01-plan.md');
+        expect(contextNames(server, section)).toContain('interdiff.md');
+        completeSections(server, mediumRawResultsV2());
+
+        const snapshot = (await readRoute(server)).snapshot;
+        expect(snapshot?.diffId).toBe(V2.diffId);
+        expect(changeOf(snapshot)).toEqual([
+            ['s01', null],
+            ['s02', 'changed'],
+            ['s03', 'changed'],
+            ['s04', null],
+            ['s05', null],
+            ['s06', 'new'],
+            ['other', null],
+        ]);
+        const changed = snapshot?.stops.find((stop) => stop.id === 's03');
+        expect(changed?.change?.reason).toContain('api/rejection-status.ts');
+        expect(changed?.change?.threadIds).toEqual(['4820242']);
+    });
+
+    it('regeneration on the same iteration: no slice and no classification', async () => {
+        const host = makeFixtureHost('medium');
+        const server = await start(host);
+        await completeRoute(server, mediumRawResults());
+
+        expect(await server.route.generate()).toBe('started');
+        const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
+        expect(contextNames(server, skeleton)).toEqual(['pr-diff.md', 'previous-route.md', 'threads-since.md']);
+        complete(server, skeleton, mediumRawResults().skeleton);
+        completeSections(server, mediumRawResults());
+
+        const snapshot = (await readRoute(server)).snapshot;
+        expect(snapshot?.stops.every((stop) => stop.change === null)).toBe(true);
+    });
+
+    it('restart during the second pass: reads the map from the slice cache, threads are no longer available', async () => {
+        const host = makeFixtureHost('medium');
+        const first = await start(host);
+        await completeRoute(first, mediumRawResults());
+        await advance(first);
+        expect(await first.route.generate()).toBe('started');
+        complete(first, queued(first, 'route.skeleton').at(-1) ?? 0, mediumRawResultsV2().skeleton);
+        await first.close();
+
+        const second = await start(host);
+        completeSections(second, mediumRawResultsV2());
+
+        const snapshot = (await readRoute(second)).snapshot;
+        expect(changeOf(snapshot)).toEqual([
+            ['s01', null],
+            ['s02', 'changed'],
+            ['s03', 'changed'],
+            ['s04', null],
+            ['s05', null],
+            ['s06', 'new'],
+            ['other', null],
+        ]);
+        // Threads come from the network: restored context has none, so references to them are removed.
+        expect(snapshot?.stops.find((stop) => stop.id === 's03')?.change?.threadIds).toEqual([]);
+    });
+
+    it('a host refusal to return threads does not break generation: the file states that they are absent', async () => {
+        const host = makeFixtureHost('medium');
+        const server = await start(host);
+        await completeRoute(server, mediumRawResults());
+        host.getThreads = () => Promise.reject(new Error('host is down'));
+
+        await advance(server);
+        expect(await server.route.generate()).toBe('started');
+        const skeleton = queued(server, 'route.skeleton').at(-1) ?? 0;
+        const threadsFile = (server.queue.getTask(skeleton)?.contextFiles ?? []).at(-1) ?? '';
+        expect(fsSync.readFileSync(threadsFile, 'utf8')).toContain('[UNAVAILABLE:');
+
+        complete(server, skeleton, mediumRawResultsV2().skeleton);
+        completeSections(server, mediumRawResultsV2());
+
+        const snapshot = (await readRoute(server)).snapshot;
+        expect(snapshot?.stops.find((stop) => stop.id === 's02')?.change?.kind).toBe('changed');
+        // No known threads: the model thread reference is dropped with an annotation for the reviewer.
+        const cited = snapshot?.stops.find((stop) => stop.id === 's03');
+        expect(cited?.change?.threadIds).toEqual([]);
+        expect(cited?.validationNotes).toContain('Link to unknown thread 4820242 removed.');
     });
 });
 

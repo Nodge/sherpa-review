@@ -15,6 +15,8 @@ import type {
 } from '@sherpa/protocol';
 
 import { CHAT_GUIDE, chatInstructions } from './chat-prompts.js';
+import type { PayloadFileSpec } from './payload-budget.js';
+import { byteLength, fitPayloadFiles, fitText, truncateUtf8, unavailableBlock } from './payload-budget.js';
 import type { EnqueueInput } from './queue.js';
 import { CONTEXT_BUDGET_BYTES, prDiffContext } from './route-payload.js';
 import type { PatchLine } from './route/diff-index.js';
@@ -74,13 +76,6 @@ export interface ChatPayload {
     readonly shared: readonly SharedChatContext[];
     /** Files in the question directory. */
     readonly files: readonly ChatPayloadFile[];
-}
-
-interface PayloadFileSpec {
-    readonly name: string;
-    readonly order: number;
-    readonly minimum: string;
-    readonly render: (maxBytes: number) => string;
 }
 
 /**
@@ -240,35 +235,6 @@ function fixedSpec(name: string, order: number, content: string): PayloadFileSpe
 function flexibleSpec(name: string, order: number, content: string): PayloadFileSpec {
     const minimum = unavailableBlock(name, 'This context did not fit in the chat payload budget.');
     return { name, order, minimum, render: (maxBytes) => fitText(content, maxBytes, minimum) };
-}
-
-/**
- * Array order sets priority. `order` only sets the order of task paths. The remaining budget
- * always reserves a notice for files not yet built.
- */
-function fitPayloadFiles(
-    specs: readonly PayloadFileSpec[],
-    budgetBytes: number,
-): (ChatPayloadFile & { order: number })[] {
-    const budget = Math.max(0, budgetBytes);
-    const files: (ChatPayloadFile & { order: number })[] = [];
-    let used = 0;
-
-    for (let index = 0; index < specs.length; index += 1) {
-        const spec = specs[index];
-        if (spec === undefined) {
-            continue;
-        }
-        const reserve = specs
-            .slice(index + 1)
-            .reduce((total, next) => total + byteLength(next.minimum), 0);
-        const maxBytes = Math.max(0, budget - used - reserve);
-        const content = fitText(spec.render(maxBytes), maxBytes, spec.minimum);
-        used += byteLength(content);
-        files.push({ name: spec.name, content, order: spec.order });
-    }
-
-    return files;
 }
 
 function questionContext(
@@ -644,47 +610,3 @@ function fileOf(diff: PrDiff | null, anchor: ChatAnchor): FileDiff | null {
     );
 }
 
-function unavailableBlock(heading: string, reason: string): string {
-    return `# ${heading}\n\n[TRUNCATED: ${reason}]\n`;
-}
-
-function fitText(text: string, maxBytes: number, fallback: string): string {
-    const max = Math.max(0, maxBytes);
-    if (byteLength(text) <= max) {
-        return text;
-    }
-    if (byteLength(fallback) >= max) {
-        return truncateUtf8(fallback, max);
-    }
-    const marker = '\n\n[TRUNCATED: remaining content omitted by the 320 KB chat payload budget.]\n';
-    if (byteLength(marker) >= max) {
-        return truncateUtf8(fallback, max);
-    }
-    const prefix = truncateUtf8(text, max - byteLength(marker)).trimEnd();
-    return `${prefix}${marker}`;
-}
-
-function truncateUtf8(text: string, maxBytes: number): string {
-    if (maxBytes <= 0) {
-        return '';
-    }
-    let low = 0;
-    let high = text.length;
-    while (low < high) {
-        const middle = Math.ceil((low + high) / 2);
-        if (byteLength(text.slice(0, middle)) <= maxBytes) {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    let end = low;
-    if (end > 0 && /[\uD800-\uDBFF]/.test(text.charAt(end - 1))) {
-        end -= 1;
-    }
-    return text.slice(0, end);
-}
-
-function byteLength(text: string): number {
-    return Buffer.byteLength(text, 'utf8');
-}
