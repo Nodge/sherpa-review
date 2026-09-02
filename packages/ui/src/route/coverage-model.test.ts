@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -18,7 +18,7 @@ import { buildRouteModel, stopSeenRanges } from './route-model.js';
  * This test fails if the counts diverge.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = routeFixtures('medium')?.states.ready ?? null;
 if (READY?.snapshot == null) {
     throw new Error('medium fixture needs a ready route snapshot');

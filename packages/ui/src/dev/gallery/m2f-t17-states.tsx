@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -13,12 +13,12 @@ import {
 import { readStateOf } from '../../progress/read-state.js';
 import { FilePanel } from '../../tree/file-panel.tsx';
 
-const EDGE = fixtureData('edge');
+const EDGE = fixtureIteration('edge');
 const FILES = EDGE.diff.files.filter((file) => !file.generated);
 const FILTERS = buildFileFilters({
     files: FILES,
     ownership: EDGE.ownership,
-    extra: fixtureData('large').extraLenses,
+    extra: fixtureIteration('large').extraLenses,
 });
 const MINE = findFilter(FILTERS, MINE_FILTER_ID);
 const READ_STATE = new Map(FILES.map((file) => [file.fileId, readStateOf({ file, record: null })]));

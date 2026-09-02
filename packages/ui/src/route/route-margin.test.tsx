@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,7 @@ import { RouteBadge, useMarginStrips } from './route-margin.tsx';
 
 /** Route margin markup: both badge variants and hatching, including graceful fallback. */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 function modelOf(path: string): DiffFileModel {
     const file = DATA.diff.files.find((candidate) => candidate.path === path);

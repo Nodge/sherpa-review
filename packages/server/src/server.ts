@@ -9,6 +9,7 @@ import { createChatRoutes } from './chat-routes.js';
 import { ChatStore } from './chat-store.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
+import { createDevRoutes } from './dev-routes.js';
 import { ServerAlreadyRunningError } from './errors.js';
 import type { FeedbackIntegrationOptions } from './feedback-routes.js';
 import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
@@ -17,6 +18,7 @@ import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
 import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
+import { IterationStore } from './iteration-store.js';
 import {
     claimManifest,
     cleanStaleManifests,
@@ -48,6 +50,8 @@ import type { RouteConfig } from './route-orchestrator.js';
 import { RouteOrchestrator } from './route-orchestrator.js';
 import { createRouteRoutes } from './route-routes.js';
 import { RouteStore } from './route-store.js';
+import { createSettingsRoutes } from './settings-routes.js';
+import { SettingsStore } from './settings-store.js';
 import { holdsPayload, SharedPayloadStore } from './shared-payload.js';
 import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
@@ -219,12 +223,15 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         // Reading progress is local and exists on every server, including those without a review host.
         const progress = new ProgressStore(options.now === undefined ? { db } : { db, now: options.now });
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
+        const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
         const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
         // The snapshot includes PR metadata, and `buildState` is synchronous. The network `getPr()` call uses a cache.
         const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
+        // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
+        const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
         // Shared context survives restarts along with tasks. Cleanup at startup and on
         // key changes preserves diffs still referenced by an open or held task.
         const sharedPayload = new SharedPayloadStore(sharedPayloadDirOf(sherpaDir, prKey), () =>
@@ -239,6 +246,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             payloadDir: routePayloadDirOf(sherpaDir, prKey),
             shared: sharedPayload,
             progress,
+            iterations: iterationStore,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
         const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
@@ -248,6 +256,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             queue,
             host: reviewHost?.host ?? null,
             payloadDir: chatPayloadDirOf(sherpaDir, prKey),
+            iterations: iterationStore,
             shared: sharedPayload,
         });
         queue.setResultAcceptor(
@@ -286,6 +295,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 progress,
                 route: routeStore,
                 prMeta,
+                iterations: iterationStore,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
             ...createFeedbackRoutes({
@@ -294,8 +304,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
                 ...options.feedback,
             }),
+            // Settings are global. The endpoint depends on neither the review host nor this PR's state.
+            ...createSettingsRoutes({ settings: new SettingsStore(sherpaDir) }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
+            // Dev endpoints exist only for the fixture host. Other hosts don't have these routes.
+            ...(advanceIteration === undefined ? [] : createDevRoutes({ advanceIteration })),
         );
         markRoutesReady();
 

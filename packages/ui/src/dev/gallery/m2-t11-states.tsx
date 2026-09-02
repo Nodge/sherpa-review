@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -16,7 +16,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * for uncovered ranges. The second state is the same reader without a route, with no margins at all.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {
@@ -41,7 +41,7 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
     );
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: diff.files, storage: null });
+        const created = createDiffViewStore({ files: diff.files });
         for (const file of diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

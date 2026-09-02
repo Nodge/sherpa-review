@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -20,7 +20,7 @@ import { DiffWorkspace } from './full-diff.tsx';
  * to a stop. Without a route, the reader must stay the same as it was in M1.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
     if (snapshot === null) {
@@ -113,7 +113,7 @@ function mount(
             : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true));
     // `ownStore`: the view creates its own store from the diff. This checks background parsing instead of
     // models placed in the store in advance.
-    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles, storage: null });
+    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles });
     for (const file of store === null ? [] : initialFiles) {
         store?.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

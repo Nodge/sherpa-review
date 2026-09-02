@@ -404,6 +404,37 @@ export const uiFeedbackResponseSchema = z.object({
 export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
+ * Global UI settings (M3-T16): one user has one set of settings across all PRs (SPEC §2.8,
+ * README "Diff mode is global"). They live on the server in `~/.sherpa/settings.json`, not in the browser:
+ * since each PR server listens on a random port, with a new origin and empty `localStorage`.
+ * Every field has a default, so a missing or corrupt file falls back to defaults instead of an error.
+ * Per-PR state (collapsed directories, recent palette commands) does not belong here.
+ */
+const uiSettingsFields = {
+    diffMode: z.enum(['unified', 'split']),
+    shipMode: z.enum(['ship', 'sticky_ship']),
+    composerLayout: z.enum(['visual', 'markdown']),
+};
+
+export const uiSettingsSchema = z.object({
+    diffMode: uiSettingsFields.diffMode.default('unified'),
+    shipMode: uiSettingsFields.shipMode.default('ship'),
+    composerLayout: uiSettingsFields.composerLayout.default('visual'),
+});
+export type UiSettings = z.infer<typeof uiSettingsSchema>;
+
+export const uiSettingsResponseSchema = z.object({ settings: uiSettingsSchema });
+export type UiSettingsResponse = z.infer<typeof uiSettingsResponseSchema>;
+
+/**
+ * Partial update. The server rereads the file, merges the named fields and returns the result
+ * in full. Built from fields without defaults, since `.partial()` over `.default()` would insert
+ * a default for a missing key, making "leave the field alone" indistinguishable from "reset it".
+ */
+export const uiSettingsPatchSchema = z.object(uiSettingsFields).partial();
+export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>;
+
+/**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
  * viewport. `viewed` has 3 values (M2F-T40): `true` is a manual mark that pins `read`
  * permanently. `false` explicitly clears the mark (unpins the generated default or undoes a manual
@@ -665,6 +696,8 @@ export const UI_ENDPOINTS = {
     openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
     feedback: '/api/ui/feedback',
+    /** GET → `uiSettingsResponseSchema`, PATCH `uiSettingsPatchSchema` → `uiSettingsResponseSchema`. Available without a review host too. */
+    settings: '/api/ui/settings',
 } as const;
 
 /**

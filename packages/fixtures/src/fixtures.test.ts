@@ -1,7 +1,7 @@
 import type { Comment, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { buildFixture, FIXTURE_NAMES, fixtureData, LARGE_FILE_COUNT, MEDIUM_TOTALS } from './data/index.js';
+import { buildFixture, FIXTURE_NAMES, fixtureData, fixtureIteration, LARGE_FILE_COUNT, MEDIUM_TOTALS } from './data/index.js';
 import { totalChanges } from './patch.js';
 
 const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: .*)?$/;
@@ -120,22 +120,30 @@ describe('fixtures: shared invariants', () => {
                 // Two builds from scratch: comparing two accesses to the `fixtureData` cache would pass
                 // even with `Date.now()` inside the builder.
                 expect(JSON.stringify(buildFixture(name))).toBe(JSON.stringify(buildFixture(name)));
+                // The comparison must not be empty: iterations are included along with everything else.
+                expect(buildFixture(name).iterations.length).toBeGreaterThan(0);
             });
 
-            it('has valid unified diff patches with matching counts', () => {
-                const { files } = fixtureData(name).diff;
-                for (const file of files) {
-                    if (file.patch === null) {
-                        expect(file.binary || file.additions + file.deletions === 0).toBe(true);
-                        continue;
+            it('has valid unified diffs with matching counts in all iterations and slices', () => {
+                const data = fixtureData(name);
+                const diffs = [
+                    ...data.iterations.map((iteration) => iteration.diff),
+                    ...data.interdiffs.map((interdiff) => interdiff.diff),
+                ];
+                for (const diff of diffs) {
+                    for (const file of diff.files) {
+                        if (file.patch === null) {
+                            expect(file.binary || file.additions + file.deletions === 0).toBe(true);
+                            continue;
+                        }
+                        const counts = parsePatch(file.patch);
+                        expect(counts).toEqual({ additions: file.additions, deletions: file.deletions });
                     }
-                    const counts = parsePatch(file.patch);
-                    expect(counts).toEqual({ additions: file.additions, deletions: file.deletions });
                 }
             });
 
             it('anchors threads to files in this diff', () => {
-                const data = fixtureData(name);
+                const data = fixtureIteration(name);
                 const byId = new Map(data.diff.files.map((file) => [file.fileId, file] as const));
                 for (const thread of data.threads) {
                     if (thread.anchor === null) {
@@ -147,7 +155,7 @@ describe('fixtures: shared invariants', () => {
 
             it('has each ownership file in at most one zone', () => {
                 const seen = new Set<string>();
-                for (const zone of fixtureData(name).ownership?.zones ?? []) {
+                for (const zone of fixtureIteration(name).ownership?.zones ?? []) {
                     for (const path of zone.paths) {
                         expect(seen.has(path), `${path} is duplicated across zones`).toBe(false);
                         seen.add(path);
@@ -156,7 +164,7 @@ describe('fixtures: shared invariants', () => {
             });
 
             it('has no drafts in the source data', () => {
-                const drafts = fixtureData(name).threads.reduce(
+                const drafts = fixtureIteration(name).threads.reduce(
                     (total, thread) => total + countDrafts(thread.root),
                     0,
                 );
@@ -167,7 +175,7 @@ describe('fixtures: shared invariants', () => {
 });
 
 describe('medium fixture', () => {
-    const data = fixtureData('medium');
+    const data = fixtureIteration('medium');
 
     it('matches the handoff header: 18 files, +806 −56', () => {
         expect(data.diff.files.length).toBe(MEDIUM_TOTALS.files);
@@ -236,7 +244,7 @@ describe('medium fixture', () => {
 });
 
 describe('small fixture', () => {
-    const data = fixtureData('small');
+    const data = fixtureIteration('small');
 
     it('is below the route threshold (requirements §3.6)', () => {
         const totals = totalChanges(data.diff.files);
@@ -252,7 +260,7 @@ describe('small fixture', () => {
 });
 
 describe('large fixture', () => {
-    const data = fixtureData('large');
+    const data = fixtureIteration('large');
 
     it('supports virtualization tests: 60+ files and thousands of lines', () => {
         expect(data.diff.files.length).toBe(LARGE_FILE_COUNT);
@@ -263,7 +271,7 @@ describe('large fixture', () => {
 });
 
 describe('edge fixture', () => {
-    const data = fixtureData('edge');
+    const data = fixtureIteration('edge');
     const files = data.diff.files;
 
     it('includes the previous path for a rename', () => {

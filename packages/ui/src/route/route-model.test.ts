@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { AgentNote, ChatAnchor, FileDiff, RouteSnapshot, RouteStop, UiStopSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -33,7 +33,7 @@ import {
  * (decision log, 2026-08-26).
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = routeFixtures('medium')?.states.ready ?? null;
 if (READY?.snapshot == null) {
     throw new Error('medium fixture needs a ready route snapshot');

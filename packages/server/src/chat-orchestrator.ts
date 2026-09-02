@@ -16,6 +16,8 @@ import type {
 import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
 import { RpcFailure } from './errors.js';
+import type { IterationStore } from './iteration-store.js';
+import { rememberIterationDiff } from './iteration-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
@@ -28,6 +30,8 @@ export interface ChatOrchestratorOptions {
     readonly queue: TaskQueue;
     readonly host: ReviewHost | null;
     readonly payloadDir: string;
+    /** Local storage for iteration patches. `null` means nowhere to save the diff (tests without a database). */
+    readonly iterations?: IterationStore | null;
     /** Shared question context: guide, PR diff and file contents at stable paths. */
     readonly shared: SharedPayloadStore;
 }
@@ -42,6 +46,7 @@ export class ChatOrchestrator {
     private readonly queue: TaskQueue;
     private readonly host: ReviewHost | null;
     private readonly payloadDir: string;
+    private readonly iterations: IterationStore | null;
     private readonly shared: SharedPayloadStore;
     /**
      * Directories for questions whose tasks have not been enqueued: an await between writing the payload and enqueueing
@@ -60,6 +65,7 @@ export class ChatOrchestrator {
         this.queue = options.queue;
         this.host = options.host;
         this.payloadDir = options.payloadDir;
+        this.iterations = options.iterations ?? null;
         this.shared = options.shared;
     }
 
@@ -337,16 +343,12 @@ export class ChatOrchestrator {
                       () => null,
                   ),
         ]);
+        if (this.iterations !== null && diff !== null) {
+            // Store the active iteration diff used to build the question context.
+            void rememberIterationDiff(this.iterations, host, diff);
+        }
         return { pr, diff, fileContent, headCommit: diff?.headCommit ?? null };
     }
-}
-
-/** What the host supplied for this question. Failure of any part narrows the context without cancelling the question. */
-interface PrContext {
-    readonly pr: PrMeta | null;
-    readonly diff: PrDiff | null;
-    readonly fileContent: FileContent | null;
-    readonly headCommit: string | null;
 }
 
 /** A UI anchor without `diffId` refers to the active iteration. Its id comes from the loaded diff. */
@@ -361,6 +363,14 @@ function resolveAskAnchor(anchor: UiChatAskAnchor | null, diff: PrDiff | null): 
         throw new RpcFailure('bad_request', 'Question anchor has no diffId and there is no active iteration: the host is unavailable.');
     }
     return { ...anchor, diffId: diff.diffId };
+}
+
+/** What the host supplied for this question. Failure of any part narrows the context without cancelling the question. */
+interface PrContext {
+    readonly pr: PrMeta | null;
+    readonly diff: PrDiff | null;
+    readonly fileContent: FileContent | null;
+    readonly headCommit: string | null;
 }
 
 function chatResultErrors(result: string): string[] {

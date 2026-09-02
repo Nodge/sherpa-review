@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, LONG_LINE_FILE_PATH } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, LONG_LINE_FILE_PATH } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -51,7 +51,7 @@ interface CardStateProps {
 const EMPTY_EXPANSION: FileExpansion = new Map();
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
-    const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration(fixture).diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`fixture ${fixture} has no file ${path}`);
     }
@@ -96,14 +96,13 @@ function CardState({
     hint,
     gapError = false,
 }: CardStateProps) {
-    const data = useMemo(() => fixtureData(fixture), [fixture]);
+    const data = useMemo(() => fixtureIteration(fixture), [fixture]);
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
     const contentAvailable = data.pr.capabilities.fileContent;
 
     const store = useMemo(() => {
         const created = createDiffViewStore({
             files: [file],
-            storage: null,
             ...(collapsed === undefined ? {} : { collapsed: new Map([[file.fileId, collapsed]]) }),
         });
         const model = parseFileDiff(toParseRequest(file));
@@ -176,8 +175,8 @@ function CardState({
 
 /** Virtualized list on the large fixture: 64 files, parsed as you scroll. */
 function ListState({ fixture }: { fixture: FixtureName }) {
-    const data = useMemo(() => fixtureData(fixture), [fixture]);
-    const store = useMemo(() => createDiffViewStore({ files: data.diff.files, storage: null }), [data]);
+    const data = useMemo(() => fixtureIteration(fixture), [fixture]);
+    const store = useMemo(() => createDiffViewStore({ files: data.diff.files }), [data]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
 
@@ -209,7 +208,7 @@ function ListState({ fixture }: { fixture: FixtureName }) {
 /** Parse failure: the first "worker" attempt fails, retrying with the button succeeds. */
 function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string }) {
     const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
-    const store = useMemo(() => createDiffViewStore({ files: [file], storage: null }), [file]);
+    const store = useMemo(() => createDiffViewStore({ files: [file] }), [file]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const failed = useRef(new Set<string>());
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);

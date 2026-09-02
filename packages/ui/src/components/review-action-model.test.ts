@@ -1,13 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
     availableShipMode,
-    loadShipMode,
     partialPublicationFailure,
     publishConsequence,
     publishDisabledReason,
     requestPublicationFailure,
-    saveShipMode,
 } from './review-action-model.js';
 
 describe('floating bar model', () => {
@@ -27,19 +25,10 @@ describe('floating bar model', () => {
         expect(publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false })).toBeNull();
     });
 
-    it('persists the mode and falls back from sticky on a host without the capability', () => {
-        const values = new Map<string, string>();
-        const storage = {
-            getItem: (key: string) => values.get(key) ?? null,
-            setItem: (key: string, value: string) => {
-                values.set(key, value);
-            },
-        };
-
-        saveShipMode('sticky_ship', storage);
-        expect(loadShipMode(true, storage)).toBe('sticky_ship');
-        expect(loadShipMode(false, storage)).toBe('ship');
+    it('falls back from sticky on a host without the capability', () => {
+        expect(availableShipMode('sticky_ship', true)).toBe('sticky_ship');
         expect(availableShipMode('sticky_ship', false)).toBe('ship');
+        expect(availableShipMode('ship', true)).toBe('ship');
     });
 
     it('shows the exact command consequence with the draft count', () => {
@@ -74,10 +63,5 @@ describe('floating bar model', () => {
             failedCount: 3,
             message: 'server unavailable',
         });
-    });
-
-    it('keeps the mode working when storage is blocked', () => {
-        const storage = { getItem: vi.fn(() => { throw new Error('denied'); }) };
-        expect(loadShipMode(true, storage)).toBe('ship');
     });
 });

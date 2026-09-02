@@ -1,5 +1,5 @@
 import type { RouteRawResults } from '@sherpa/fixtures';
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { PrDiff, RouteSnapshot } from '@sherpa/protocol';
 
 /**
@@ -8,7 +8,7 @@ import type { PrDiff, RouteSnapshot } from '@sherpa/protocol';
  */
 
 export function mediumDiff(): PrDiff {
-    return fixtureData('medium').diff;
+    return fixtureIteration('medium').diff;
 }
 
 export function mediumRawResults(): RouteRawResults {

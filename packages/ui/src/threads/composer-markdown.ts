@@ -1,8 +1,6 @@
 export type ComposerLayout = 'visual' | 'markdown';
 export type ComposerTool = 'bold' | 'italic' | 'link' | 'code' | 'codeblock' | 'list';
 
-export const COMPOSER_LAYOUT_KEY = 'sherpa:composer-layout';
-
 export interface MarkdownEdit {
     readonly text: string;
     readonly selectionStart: number;
@@ -70,12 +68,4 @@ export function editMarkdown(
             };
         }
     }
-}
-
-export function readComposerLayout(storage: Pick<Storage, 'getItem'> | null): ComposerLayout {
-    return storage?.getItem(COMPOSER_LAYOUT_KEY) === 'markdown' ? 'markdown' : 'visual';
-}
-
-export function writeComposerLayout(storage: Pick<Storage, 'setItem'> | null, layout: ComposerLayout): void {
-    storage?.setItem(COMPOSER_LAYOUT_KEY, layout);
 }

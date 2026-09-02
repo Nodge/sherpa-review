@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, UiRouteFailure } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -14,7 +14,7 @@ import { GenerationFailedBanner, RouteRegeneratingBanner } from '../../views/rou
 import { RouteWorkspace } from '../../views/route/route-view.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-31T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {
@@ -36,7 +36,7 @@ function rebuildFailure(): UiRouteFailure {
 function RebuildState({ banner }: { banner: ReactNode }) {
     const session = useMemo(() => createSessionStore({ initial: { view: 'route', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

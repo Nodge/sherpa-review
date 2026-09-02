@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -26,7 +26,7 @@ import {
 
 /** Clipping by anchors must leave exactly the content the stop covers. */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = routeFixtures('medium')?.states.ready ?? null;
 
 function fileOf(path: string): FileDiff {
@@ -344,7 +344,7 @@ describe('clipping the model by anchors', () => {
     });
 
     it('returns non-text content unchanged because there is nothing to clip', () => {
-        const binary = fixtureData('edge').diff.files.find((file) => file.binary);
+        const binary = fixtureIteration('edge').diff.files.find((file) => file.binary);
         if (binary === undefined) {
             throw new Error('edge fixture must contain a binary file');
         }

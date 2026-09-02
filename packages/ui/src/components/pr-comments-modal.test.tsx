@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ComposerTransport } from '../threads/composer.js';
-import { COMPOSER_LAYOUT_KEY } from '../threads/composer-markdown.js';
+import { SettingsProvider } from '../settings/context.tsx';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import { PR_COMPOSER_KEY } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 const HUMAN = { login: 'alice', displayName: 'Alice Ingram', bot: false } as const;
 const BOT = { login: 'ai-review-bot', displayName: 'AI Review', bot: true } as const;
@@ -66,7 +67,6 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
-    localStorage.removeItem(COMPOSER_LAYOUT_KEY);
     document.body.style.overflow = '';
 });
 
@@ -263,7 +263,8 @@ function mountModal(
     transportOverrides: Partial<ComposerTransport> = {},
     onClose: () => void = () => undefined,
 ): { readonly store: ThreadStore } {
-    localStorage.setItem(COMPOSER_LAYOUT_KEY, 'markdown');
+    // Deterministic markdown layout, a plain textarea instead of ProseMirror.
+    const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
     const host = document.createElement('div');
     document.body.append(host);
     const store = createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId)));
@@ -276,13 +277,15 @@ function mountModal(
     const root = createRoot(host);
     act(() => {
         root.render(
-            <PrCommentsModal
-                pr={DATA.pr}
-                store={store}
-                transport={transport}
-                now={NOW}
-                onClose={onClose}
-            />,
+            <SettingsProvider store={settings}>
+                <PrCommentsModal
+                    pr={DATA.pr}
+                    store={store}
+                    transport={transport}
+                    now={NOW}
+                    onClose={onClose}
+                />
+            </SettingsProvider>,
         );
     });
     mounted.push(() => {

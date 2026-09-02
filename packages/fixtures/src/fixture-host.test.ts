@@ -1,7 +1,8 @@
 import type { Thread } from '@sherpa/protocol';
+import { prDiffSchema } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { fixtureData } from './data/index.js';
+import { fixtureIteration, MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2, MEDIUM_DIFF_ID_V3 } from './data/index.js';
 import { makeFixtureHost } from './fixture-host.js';
 
 // The shared `ReviewHost` contract suite runs on these same fixtures from the server package,
@@ -176,31 +177,97 @@ describe('FixtureHost', () => {
         expect(host.setFileViewed).toBeUndefined();
     });
 
-    it('rejects a slice between iterations with a clear error and returns the active iteration', async () => {
+    it('before a push the host lists one active iteration', async () => {
         const host = makeFixtureHost('medium');
-        const diffId = fixtureData('medium').diff.diffId;
-        await expect(host.getDiff({ base: diffId, head: diffId })).rejects.toThrow(/one iteration/);
-        await expect(host.getDiff()).resolves.toBeDefined();
-    });
+        const v1 = fixtureIteration('medium').diff;
 
-    it('lists one active fixture iteration matching the diff', async () => {
-        const host = makeFixtureHost('medium');
-        const diff = fixtureData('medium').diff;
-        const iterations = await host.listIterations();
-        expect(iterations).toEqual([
+        expect(await host.listIterations()).toEqual([
             {
-                diffId: diff.diffId,
-                baseCommit: diff.baseCommit,
-                headCommit: diff.headCommit,
-                createdAt: fixtureData('medium').pr.updatedAt,
+                diffId: v1.diffId,
+                baseCommit: v1.baseCommit,
+                headCommit: v1.headCommit,
+                createdAt: fixtureIteration('medium').iteration.createdAt,
                 status: 'active',
             },
         ]);
+        expect((await host.getDiff()).diffId).toBe(v1.diffId);
+    });
 
-        const seen: unknown[] = [];
-        const stop = host.watchIterations((list) => seen.push(list));
+    it('advanceIteration makes the next iteration active and the old one previous', async () => {
+        const host = makeFixtureHost('medium');
+
+        const advanced = host.advanceIteration();
+
+        expect(advanced.diffId).toBe(MEDIUM_DIFF_ID_V2);
+        expect(advanced.status).toBe('active');
+        expect(await host.listIterations()).toEqual([
+            expect.objectContaining({ diffId: MEDIUM_DIFF_ID, status: 'previous' }),
+            expect.objectContaining({ diffId: MEDIUM_DIFF_ID_V2, status: 'active' }),
+        ]);
+        expect((await host.getDiff()).diffId).toBe(MEDIUM_DIFF_ID_V2);
+    });
+
+    it('force-push removes the rewritten iteration from the list and stops at the end of the fixture', async () => {
+        const host = makeFixtureHost('medium');
+        host.advanceIteration();
+        host.advanceIteration();
+
+        expect((await host.listIterations()).map((iteration) => iteration.diffId)).toEqual([
+            MEDIUM_DIFF_ID,
+            MEDIUM_DIFF_ID_V3,
+        ]);
+        expect(() => host.advanceIteration()).toThrow(/no more iterations/);
+    });
+
+    it('watchIterations receives a snapshot immediately and after each push', () => {
+        const host = makeFixtureHost('medium');
+        const seen: string[][] = [];
+        const stop = host.watchIterations((list) => seen.push(list.map((iteration) => iteration.diffId)));
+
+        host.advanceIteration();
         stop();
-        expect(seen).toEqual([iterations]);
+        host.advanceIteration();
+
+        expect(seen).toEqual([[MEDIUM_DIFF_ID], [MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2]]);
+    });
+
+    it('returns a slice for a declared pair and rejects an unknown pair', async () => {
+        const host = makeFixtureHost('medium');
+        host.advanceIteration();
+
+        const slice = await host.getDiff({ base: MEDIUM_DIFF_ID, head: MEDIUM_DIFF_ID_V2 });
+        expect(prDiffSchema.parse(slice).diffId).toBe(MEDIUM_DIFF_ID_V2);
+        expect(slice.files.length).toBeGreaterThan(0);
+
+        await expect(host.getDiff({ base: MEDIUM_DIFF_ID_V3, head: MEDIUM_DIFF_ID_V2 })).rejects.toThrow(
+            /iteration 183044 is unknown to the host/,
+        );
+        await expect(host.getDiff({ base: MEDIUM_DIFF_ID_V2, head: MEDIUM_DIFF_ID })).rejects.toThrow(/slice .+ is absent from the fixture/);
+    });
+
+    it('threads follow the active iteration: an author reply and a thread on a removed file', () => {
+        const host = makeFixtureHost('medium');
+        expect(threadsOf(host).find((thread) => thread.id === '4820260')?.outdated).toBe(false);
+
+        host.advanceIteration();
+        const threads = threadsOf(host);
+
+        const handlers = threads.find((thread) => thread.id === '4820242');
+        expect(handlers?.root.replies[0]?.replies.at(-1)?.body).toMatch(/only returned for `edit-window-closed`/);
+        const departed = threads.find((thread) => thread.id === '4820260');
+        expect(departed?.outdated).toBe(true);
+    });
+
+    it('a fixture without iterations never returns a slice', async () => {
+        const host = makeFixtureHost('small');
+        const iterations = await host.listIterations();
+
+        expect(iterations.length).toBe(1);
+        expect((await host.getPr()).capabilities.iterations).toBe(false);
+        await expect(
+            host.getDiff({ base: iterations[0]?.diffId ?? '', head: iterations[0]?.diffId ?? '' }),
+        ).rejects.toThrow(/capabilities.iterations/);
+        expect(() => host.advanceIteration()).toThrow(/no more iterations/);
     });
 
     it('thread resolution is attributed to the current fixture user', async () => {

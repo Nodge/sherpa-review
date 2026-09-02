@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 
+import { mediumRawResults, sectionFor, submit, takeTask } from './route-worker.js';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
@@ -21,6 +22,8 @@ const JUMP_TOLERANCE_PX = 1;
 const SETTLE_FRAMES = 8;
 /** Scroll step is roughly one fixture card, so each step brings in a fresh, cold card. */
 const STEP_PX = 900;
+/** README "Interactions": a route jump target sits at −150px from the container edge. */
+const ROUTE_JUMP_OFFSET_PX = 150;
 
 interface WalkReport {
     readonly steps: number;
@@ -381,3 +384,340 @@ function walk(page: Page, direction: 'down' | 'up'): Promise<WalkReport> {
         { direction, step: STEP_PX, settleFrames: SETTLE_FRAMES, tolerance: JUMP_TOLERANCE_PX },
     );
 }
+
+/**
+ * "Scrolling follows collapse" (decision log 2026-09-02): marking the file
+ * the reviewer is reading moves the view to the next file. Marking the last file and clearing a mark
+ * do not move the view.
+ */
+test('marking the top file moves the view to the next one', async ({ page, launchSherpa }) => {
+    const server = await launchSherpa('fixture-large');
+    await openFullDiff(page, server.url);
+
+    const start = await page.locator('.full-diff').evaluate(async (scroller) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        const toolbarBottom = (): number =>
+            document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+
+        scroller.scrollTop = Math.round((scroller.scrollHeight - scroller.clientHeight) / 2);
+        for (let frame = 0; frame < 90 && document.querySelector('.file-card__loading') !== null; frame += 1) {
+            await nextFrame();
+        }
+        for (let frame = 0; frame < 20; frame += 1) {
+            await nextFrame();
+        }
+
+        // A tall expanded card. The reviewer has read halfway through and presses the toggle in the sticky header.
+        const item = [...document.querySelectorAll<HTMLElement>('.diff-list__item')]
+            .sort((left, right) => Number(left.dataset.index) - Number(right.dataset.index))
+            .find(
+                (candidate) =>
+                    candidate.querySelector('.file-card__collapsed--file') === null &&
+                    candidate.getBoundingClientRect().height > 500,
+            );
+        if (item === undefined) {
+            throw new Error('a tall expanded card is required in the middle of fixture-large');
+        }
+        const index = Number(item.dataset.index);
+        scroller.scrollTop += item.getBoundingClientRect().top - toolbarBottom() + 200;
+        for (let frame = 0; frame < 12; frame += 1) {
+            await nextFrame();
+        }
+        return { index, scrollTop: scroller.scrollTop };
+    });
+
+    await page
+        .locator(`.diff-list__item[data-index="${String(start.index)}"] .file-card__viewed`)
+        .click();
+
+    const after = await page.locator('.full-diff').evaluate(async (scroller, marked) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        for (let frame = 0; frame < 40; frame += 1) {
+            await nextFrame();
+        }
+        const toolbarBottom =
+            document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+        const items = [...document.querySelectorAll<HTMLElement>('.diff-list__item')].sort(
+            (left, right) => Number(left.dataset.index) - Number(right.dataset.index),
+        );
+        const top = items.find((candidate) => candidate.getBoundingClientRect().bottom > toolbarBottom + 1);
+        if (top === undefined) {
+            throw new Error('no cards remain on screen after marking viewed');
+        }
+        const markedItem = items.find((candidate) => Number(candidate.dataset.index) === marked);
+        return {
+            topIndex: Number(top.dataset.index),
+            offset: Number((top.getBoundingClientRect().top - toolbarBottom).toFixed(1)),
+            scrollTop: scroller.scrollTop,
+            markedCollapsed: markedItem?.querySelector('.file-card__collapsed--file') !== null,
+        };
+    }, start.index);
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `advance: ${String(start.index)} → ${String(after.topIndex)}, offset=${after.offset.toFixed(1)}px`,
+    });
+
+    expect(after.markedCollapsed).toBe(true);
+    // The view moves from the marked file to the next one, with its header just below the sticky toolbar
+    // (`scrollPaddingStart` = its height). `scrollTop` itself decreases because the collapsed
+    // card pulls the next one up by more than the reviewer has scrolled into it.
+    expect(after.topIndex).toBeGreaterThan(start.index);
+    expect(Math.abs(after.offset)).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});
+
+test('marking the last file and clearing a mark do not move the view', async ({ page, launchSherpa }) => {
+    const server = await launchSherpa('fixture-large');
+    await openFullDiff(page, server.url);
+
+    // The fixture's last file is generated, so it starts as read and collapsed. Expand
+    // it and clear its mark so the test marks the list's last file from a clean state.
+    const index = await page.locator('.full-diff').evaluate(async (scroller) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        scroller.scrollTop = scroller.scrollHeight;
+        for (let frame = 0; frame < 60; frame += 1) {
+            await nextFrame();
+        }
+        const index = Math.max(
+            ...[...document.querySelectorAll<HTMLElement>('.diff-list__item')].map((item) =>
+                Number(item.dataset.index),
+            ),
+        );
+        document
+            .querySelector<HTMLElement>(`.diff-list__item[data-index="${String(index)}"]`)
+            ?.querySelector<HTMLElement>('.file-card__collapsed--file')
+            ?.click();
+        for (let frame = 0; frame < 30; frame += 1) {
+            await nextFrame();
+        }
+        return index;
+    });
+
+    const toggle = page.locator(`.diff-list__item[data-index="${String(index)}"] .file-card__viewed`);
+    if ((await toggle.getAttribute('aria-pressed')) === 'true') {
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    }
+
+    const before = await placeUnderToolbar(page, index);
+    await toggle.click();
+    const marked = await settleScroll(page, index);
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `last file: scrollTop ${before.scrollTop.toFixed(1)} → ${marked.scrollTop.toFixed(1)}, height ${before.height.toFixed(1)} → ${marked.height.toFixed(1)}`,
+    });
+
+    expect(marked.collapsed).toBe(true);
+    // The view does not move forward because there is no next file and no jump was requested. It moves back only
+    // as far as the document itself shrank, since the collapsed card was last.
+    expect(marked.scrollTop).toBeLessThanOrEqual(before.scrollTop + JUMP_TOLERANCE_PX);
+    expect(before.scrollTop - marked.scrollTop).toBeLessThanOrEqual(
+        before.height - marked.height + JUMP_TOLERANCE_PX,
+    );
+
+    await toggle.click();
+    const restored = await settleScroll(page, index);
+    expect(restored.collapsed).toBe(false);
+    // Clearing a mark does not request a scroll. The card grows downwards, the document above it stays in place.
+    expect(Math.abs(restored.scrollTop - marked.scrollTop)).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});
+
+/**
+ * Place the card below the sticky toolbar and return the position used to measure the jump. `depth` is
+ * how far the reviewer has read. The header moves that far under the toolbar while remaining sticky.
+ */
+function placeUnderToolbar(
+    page: Page,
+    index: number,
+    depth = 0,
+): Promise<{ scrollTop: number; height: number }> {
+    return page.locator('.full-diff').evaluate(async (scroller, { target, depth }) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        const itemOf = (): HTMLElement | null =>
+            document.querySelector<HTMLElement>(`.diff-list__item[data-index="${String(target)}"]`);
+        const toolbarBottom = (): number =>
+            document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            const item = itemOf();
+            if (item === null) {
+                throw new Error('the card left the DOM before marking viewed');
+            }
+            scroller.scrollTop += item.getBoundingClientRect().top - toolbarBottom() + depth;
+            for (let frame = 0; frame < 12; frame += 1) {
+                await nextFrame();
+            }
+        }
+        const item = itemOf();
+        if (item === null) {
+            throw new Error('the card left the DOM before marking viewed');
+        }
+        return { scrollTop: scroller.scrollTop, height: item.getBoundingClientRect().height };
+    }, { target: index, depth });
+}
+
+/** Card position and collapsed state after remeasurements settle. `offset` is measured from the toolbar edge. */
+function settleScroll(
+    page: Page,
+    index: number,
+): Promise<{ scrollTop: number; height: number; collapsed: boolean; offset: number }> {
+    return page.locator('.full-diff').evaluate(async (scroller, target) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        for (let frame = 0; frame < 40; frame += 1) {
+            await nextFrame();
+        }
+        const item = document.querySelector<HTMLElement>(`.diff-list__item[data-index="${String(target)}"]`);
+        if (item === null) {
+            throw new Error('the card left the DOM after marking viewed');
+        }
+        const toolbarBottom =
+            document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+        return {
+            scrollTop: scroller.scrollTop,
+            height: item.getBoundingClientRect().height,
+            collapsed: item.querySelector('.file-card__collapsed--file') !== null,
+            offset: item.getBoundingClientRect().top - toolbarBottom,
+        };
+    }, index);
+}
+
+/**
+ * Collapse from an external mark (another tab, progress reload, stop coverage) is
+ * a remeasurement while the reviewer reads, not a jump requested by the view. The screen must stay on the card
+ * being read. The collapse reason is still `viewed`, and the list anchor must not depend on it.
+ */
+test('an external viewed mark collapses the card being read without moving its header', async ({ page, launchSherpa }) => {
+    const server = await launchSherpa('fixture-large');
+    await openFullDiff(page, server.url);
+
+    const target = await page.locator('.full-diff').evaluate(async (scroller) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        scroller.scrollTop = Math.round((scroller.scrollHeight - scroller.clientHeight) / 2);
+        for (let frame = 0; frame < 90 && document.querySelector('.file-card__loading') !== null; frame += 1) {
+            await nextFrame();
+        }
+        for (let frame = 0; frame < 20; frame += 1) {
+            await nextFrame();
+        }
+        const item = [...document.querySelectorAll<HTMLElement>('.diff-list__item')]
+            .sort((left, right) => Number(left.dataset.index) - Number(right.dataset.index))
+            .find(
+                (candidate) =>
+                    candidate.querySelector('.file-card__collapsed--file') === null &&
+                    candidate.getBoundingClientRect().height > 500,
+            );
+        const fileId = item?.querySelector<HTMLElement>('.file-card[data-file]')?.dataset.file;
+        if (item === undefined || fileId === undefined) {
+            throw new Error('a tall expanded card is required in the middle of fixture-large');
+        }
+        return { index: Number(item.dataset.index), fileId };
+    });
+
+    // The reviewer has read halfway through the card. Its header sticks to the toolbar, and its top is already above it,
+    // exactly the geometry in which collapsing without an anchor pulls everything below upwards.
+    const before = await placeUnderToolbar(page, target.index, 400);
+
+    // The mark bypasses the view, as if sent from another tab. It returns to this tab over SSE.
+    const token = await page.evaluate(() => new URLSearchParams(location.hash.slice(1)).get('t') ?? '');
+    const response = await page.request.post(new URL('/api/ui/review/file-viewed', server.url).toString(), {
+        headers: { authorization: `Bearer ${token}` },
+        data: { fileId: target.fileId, viewed: true },
+    });
+    expect(response.ok()).toBe(true);
+
+    const item = `.diff-list__item[data-index="${String(target.index)}"]`;
+    await expect(page.locator(`${item} .file-card__collapsed--file`)).toHaveCount(1);
+    const after = await settleScroll(page, target.index);
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `foreign viewed: offset=${after.offset.toFixed(1)}px, height ${before.height.toFixed(1)} → ${after.height.toFixed(1)}`,
+    });
+
+    expect(after.collapsed).toBe(true);
+    // The card collapsed under the cursor. Its header stayed below the sticky toolbar.
+    expect(Math.abs(after.offset)).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});
+
+test('route: marking a stop places the next one at −150px from the container edge', async ({
+    page,
+    launchSherpa,
+}) => {
+    const server = await launchSherpa('fixture-medium');
+    const raw = mediumRawResults();
+
+    await page.goto(server.url);
+    await page.getByRole('tab', { name: 'Route', exact: true }).click();
+    expect((await server.worker.register('claude-code')).code).toBe(0);
+    const skeleton = await takeTask(server.worker, 'route.skeleton');
+    await submit(server.worker, skeleton.taskId, raw.skeleton);
+    for (const sectionIndex of raw.sections.keys()) {
+        const task = await takeTask(server.worker, 'route.section');
+        expect(task.planIndexes, `section ${String(sectionIndex + 1)}`).toHaveLength(1);
+        await submit(server.worker, task.taskId, sectionFor(task.planIndexes));
+    }
+    await expect(page.locator('.route-skeleton-card')).toHaveCount(0);
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+    await page.locator('[data-stop="s01"] .route-stop__viewed').click();
+
+    // The jump takes ~320ms and is corrected once more after settle. Measure when everything has settled.
+    const geometry = await page.locator('.route').evaluate(async (container) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        for (let frame = 0; frame < 90; frame += 1) {
+            await nextFrame();
+        }
+        const section = container.querySelector<HTMLElement>('[data-stop="s02"]');
+        if (section === null) {
+            throw new Error('the fixture route has no stop s02');
+        }
+        return {
+            offset: Number((section.getBoundingClientRect().top - container.getBoundingClientRect().top).toFixed(1)),
+            scrollTop: container.scrollTop,
+            maxScroll: container.scrollHeight - container.clientHeight,
+        };
+    });
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `route jump: s02 offset=${geometry.offset.toFixed(1)}px, scrollTop=${geometry.scrollTop.toFixed(1)}/${geometry.maxScroll.toFixed(1)}`,
+    });
+
+    expect(Math.abs(geometry.offset - ROUTE_JUMP_OFFSET_PX)).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});

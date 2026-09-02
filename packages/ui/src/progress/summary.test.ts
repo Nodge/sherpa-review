@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { Comment, Thread } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -45,7 +45,7 @@ function threads(): Thread[] {
 
 describe('review progress aggregates', () => {
     it('counts viewed files and lines from effective read-state values', () => {
-        const files = fixtureData('medium').diff.files;
+        const files = fixtureIteration('medium').diff.files;
         const first = files[0];
         const second = files[1];
         if (first === undefined || second === undefined) {

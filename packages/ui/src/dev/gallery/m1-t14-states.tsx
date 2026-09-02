@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { PrMeta, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -10,7 +10,7 @@ import { ReviewComplete } from '../../components/review-complete.tsx';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { createThreadStore } from '../../threads/store.js';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const DRAFT_THREADS = withDraft(DATA.threads);
 const COMPLETION: ReviewCompletion = {
     verdict: 'ship',
@@ -125,7 +125,7 @@ function BarState({
     failure?: PublicationFailure | null;
     stickyAvailable?: boolean;
 }) {
-    const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files, storage: null }), []);
+    const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
     const threadStore = useMemo(
         () => createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId))),
         [threads],
@@ -148,7 +148,6 @@ function BarState({
                 onComplete={() => undefined}
                 defaultMenuOpen={menuOpen}
                 initialFailure={failure}
-                storage={null}
             />
         </div>
     );

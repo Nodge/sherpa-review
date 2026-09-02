@@ -73,3 +73,20 @@ export async function postJson(
 ): Promise<Response> {
     return postRaw(port, pathname, JSON.stringify(body), token, signal);
 }
+
+/** PATCH with a JSON body, used only by the global UI settings endpoint. */
+export async function patchJson(
+    port: number,
+    pathname: string,
+    body: unknown,
+    token?: string,
+): Promise<Response> {
+    return fetch(`http://127.0.0.1:${String(port)}${pathname}`, {
+        method: 'PATCH',
+        headers: {
+            'content-type': 'application/json',
+            ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(body),
+    });
+}

@@ -1,4 +1,4 @@
-import { FIXTURE_NAMES, fixtureData } from '@sherpa/fixtures';
+import { FIXTURE_NAMES, fixtureIteration } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,7 @@ function parse(file: FileDiff): DiffFileModel {
 }
 
 function fileByPath(fixture: 'medium' | 'small' | 'large' | 'edge', path: string): FileDiff {
-    const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration(fixture).diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`no file ${path} in fixture ${fixture}`);
     }
@@ -42,7 +42,7 @@ function gaps(model: DiffFileModel): DiffGap[] {
 describe('diff parser on real fixture patches', () => {
     for (const name of FIXTURE_NAMES) {
         it(`${name}: model counts match FileDiff for every file`, () => {
-            const files = fixtureData(name).diff.files;
+            const files = fixtureIteration(name).diff.files;
             const counted = files.map((file) => {
                 const model = parse(file);
                 return { path: file.path, additions: model.additions, deletions: model.deletions };
@@ -54,13 +54,13 @@ describe('diff parser on real fixture patches', () => {
         });
 
         it(`${name}: real patches parse without the malformed flag`, () => {
-            const files = fixtureData(name).diff.files;
+            const files = fixtureIteration(name).diff.files;
 
             expect(files.filter((file) => parse(file).malformed).map((file) => file.path)).toEqual([]);
         });
 
         it(`${name}: line numbers are consecutive and match the hunk header`, () => {
-            for (const file of fixtureData(name).diff.files) {
+            for (const file of fixtureIteration(name).diff.files) {
                 for (const hunk of hunks(parse(file))) {
                     let oldLine = hunk.oldStart;
                     let newLine = hunk.newStart;
@@ -253,7 +253,7 @@ describe('gaps between hunks and at the edges', () => {
 
     it('gap anchors use actual line numbers instead of zeros', () => {
         for (const name of FIXTURE_NAMES) {
-            for (const file of fixtureData(name).diff.files) {
+            for (const file of fixtureIteration(name).diff.files) {
                 for (const gap of gaps(parse(file))) {
                     expect(gap.oldStart).toBeGreaterThan(0);
                     expect(gap.newStart).toBeGreaterThan(0);
@@ -322,7 +322,7 @@ describe('malformed patches do not crash the parser', () => {
 describe('model serializability', () => {
     it('every fixture file model survives structuredClone without loss', () => {
         for (const name of FIXTURE_NAMES) {
-            for (const file of fixtureData(name).diff.files) {
+            for (const file of fixtureIteration(name).diff.files) {
                 const model = parse(file);
                 expect(structuredClone(model)).toEqual(model);
             }

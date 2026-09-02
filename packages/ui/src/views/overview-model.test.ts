@@ -1,10 +1,10 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { FileDiff, Lens, Thread } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { discussionStats, ownershipSummary } from './overview-model.js';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const BASE = requiredFile();
 
 function file(
@@ -126,7 +126,7 @@ describe('Overview: files by ownership', () => {
     });
 
     it('keeps zones owned by others visible when the edge fixture filter is unavailable', () => {
-        const edge = fixtureData('edge');
+        const edge = fixtureIteration('edge');
         const summary = ownershipSummary(edge.diff.files, edge.ownership, 'mine');
 
         expect(summary.available).toBe(false);

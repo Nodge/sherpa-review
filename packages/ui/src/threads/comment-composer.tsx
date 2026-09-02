@@ -3,13 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
 import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
-import {
-    editMarkdown,
-    readComposerLayout,
-    writeComposerLayout,
-} from './composer-markdown.js';
+import { editMarkdown } from './composer-markdown.js';
 import type { ComposerLayout, ComposerTool } from './composer-markdown.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import type { VisualEditorHandle } from './visual-editor.js';
@@ -67,7 +64,12 @@ export function CommentComposer({
         () => composerControllerFor({ store, key: composer.key, transport }),
         [composer.key, store, transport],
     );
-    const [layout, setLayout] = useState<ComposerLayout>(() => initialLayout ?? readStoredLayout());
+    const settings = useUiSettingsStore();
+    // Composer layout is global (SPEC §2.8). Until the reviewer switches it in this composer,
+    // it follows the settings, including those that arrive from the server after mounting.
+    const [chosenLayout, setChosenLayout] = useState<ComposerLayout | null>(initialLayout ?? null);
+    const settingsLayout = useUiSettings().composerLayout;
+    const layout = chosenLayout ?? settingsLayout;
     const [visualReady, setVisualReady] = useState(false);
     const resolvedSaveLabel = saveLabel ?? 'Save draft';
     const resolvedRestoreOnCancel =
@@ -175,8 +177,8 @@ export function CommentComposer({
     }, [editingDisabled]);
 
     const selectLayout = (next: ComposerLayout): void => {
-        setLayout(next);
-        writeStoredLayout(next);
+        setChosenLayout(next);
+        settings.update({ composerLayout: next });
     };
 
     const format = (tool: ComposerTool): void => {
@@ -423,20 +425,4 @@ function isComposerInputCode(code: string): boolean {
 function formatTime(timestamp: number): string {
     const date = new Date(timestamp);
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function readStoredLayout(): ComposerLayout {
-    try {
-        return readComposerLayout(typeof window === 'undefined' ? null : window.localStorage);
-    } catch {
-        return 'visual';
-    }
-}
-
-function writeStoredLayout(layout: ComposerLayout): void {
-    try {
-        writeComposerLayout(typeof window === 'undefined' ? null : window.localStorage, layout);
-    } catch {
-        // Unavailable storage must not break comment input.
-    }
 }

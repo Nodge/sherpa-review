@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,7 @@ import { RouteToolbar } from './route-toolbar.tsx';
  * the offset follows it instead of diverging from a hardcoded constant.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,7 +71,7 @@ function mount(onHeight: (value: number) => void): void {
     act(() => {
         root.render(
             <RouteToolbar
-                store={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+                store={createDiffViewStore({ files: DATA.diff.files })}
                 preset="triage"
                 onPreset={() => undefined}
                 filters={filters}

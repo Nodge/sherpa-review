@@ -3,7 +3,7 @@ import { agentNoteSchema, chatExchangeSchema } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { buildChatFixtures, chatFixtures } from './data/chat.js';
-import { fixtureData } from './data/index.js';
+import { fixtureIteration } from './data/index.js';
 
 const HUNK_HEADER = /^@@ -(\d+),\d+ \+(\d+),\d+ @@/;
 
@@ -13,9 +13,9 @@ interface ChangedFile {
     new: Set<number>;
 }
 
-function changedLines(): Map<string, ChangedFile> {
+function changedLines(index = 0): Map<string, ChangedFile> {
     const files = new Map<string, ChangedFile>();
-    for (const file of fixtureData('medium').diff.files) {
+    for (const file of fixtureIteration('medium', index).diff.files) {
         const changed: ChangedFile = { fileId: file.fileId, old: new Set(), new: new Set() };
         let oldLine = 0;
         let newLine = 0;
@@ -121,6 +121,33 @@ describe('medium chat fixtures', () => {
                 Math.min(previous?.anchor.end ?? 0, current?.anchor.end ?? 0),
             );
         }
+    });
+
+    it('notes move to the second iteration after a push, and one loses its anchor', () => {
+        const migrated = fixtures?.notesAfterPush ?? [];
+        const before = new Map((fixtures?.notes ?? []).map((item) => [item.id, item] as const));
+        const secondFiles = changedLines(1);
+        expect(migrated.length).toBe(before.size);
+
+        const lost = migrated.filter((item) => item.lostAnchor);
+        expect(lost.length).toBe(1);
+        // A lost anchor keeps its last valid value, the anchor from the first iteration.
+        expect(lost[0]?.anchor).toEqual(before.get(lost[0]?.id ?? 0)?.anchor);
+
+        for (const item of migrated) {
+            // `origin` never moves: it is the original location of the note.
+            expect(item.origin).toEqual(before.get(item.id)?.origin);
+            if (item.lostAnchor) {
+                continue;
+            }
+            expectRealAnchor(item.anchor, secondFiles);
+        }
+
+        const shifted = migrated.filter((item) => {
+            const source = before.get(item.id);
+            return !item.lostAnchor && source !== undefined && source.anchor.start !== item.anchor.start;
+        });
+        expect(shifted.length).toBeGreaterThanOrEqual(1);
     });
 
     it('two builds from scratch are deterministic, and the cache returns independent copies', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fixtureData } from '@sherpa/fixtures';
-import type { Thread } from '@sherpa/protocol';
+import { fixtureIteration } from '@sherpa/fixtures';
+import type { Thread, UiSettings, Verdict } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
 import { countDraftComments } from '../progress/summary.js';
-import { COMPOSER_LAYOUT_KEY } from '../threads/composer-markdown.js';
+import { SettingsProvider } from '../settings/context.tsx';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import { createThreadStore } from '../threads/store.js';
 import type { RouteProgress } from './review-action-bar.tsx';
 import {
@@ -18,7 +19,7 @@ import {
 } from './review-action-bar.tsx';
 import { ReviewComplete } from './review-complete.tsx';
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const DRAFT_THREADS = withDraft(DATA.threads);
 const TRANSPORT = {
@@ -46,7 +47,7 @@ function renderBar(
                 },
             }}
             diff={DATA.diff}
-            diffStore={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+            diffStore={createDiffViewStore({ files: DATA.diff.files })}
             threadStore={createThreadStore(threads, FILE_IDS)}
             connection="online"
             hostName="FixtureHost"
@@ -55,7 +56,6 @@ function renderBar(
             onComplete={() => undefined}
             route={options.route ?? null}
             {...(options.menu === undefined ? {} : { defaultMenuOpen: options.menu })}
-            storage={null}
         />,
     );
 }
@@ -76,13 +76,13 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
-    localStorage.removeItem(COMPOSER_LAYOUT_KEY);
     document.body.style.overflow = '';
 });
 
 /** Mounted bar: static markup cannot test opening a modal in a portal. */
 function mountBar(): { readonly commentButton: HTMLButtonElement } {
-    localStorage.setItem(COMPOSER_LAYOUT_KEY, 'markdown');
+    // Deterministic markdown layout, a plain textarea instead of ProseMirror.
+    const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
     const host = document.createElement('div');
     document.body.append(host);
     const threadStore = createThreadStore(DRAFT_THREADS, FILE_IDS);
@@ -90,19 +90,20 @@ function mountBar(): { readonly commentButton: HTMLButtonElement } {
 
     act(() => {
         root.render(
-            <ReviewActionBar
-                pr={DATA.pr}
-                diff={DATA.diff}
-                diffStore={createDiffViewStore({ files: DATA.diff.files, storage: null })}
-                threadStore={threadStore}
-                connection="online"
-                hostName="FixtureHost"
-                composerTransport={TRANSPORT}
-                onPublish={() => Promise.reject(new Error('the test does not publish'))}
-                onComplete={() => undefined}
-                route={null}
-                storage={null}
-            />,
+            <SettingsProvider store={settings}>
+                <ReviewActionBar
+                    pr={DATA.pr}
+                    diff={DATA.diff}
+                    diffStore={createDiffViewStore({ files: DATA.diff.files })}
+                    threadStore={threadStore}
+                    connection="online"
+                    hostName="FixtureHost"
+                    composerTransport={TRANSPORT}
+                    onPublish={() => Promise.reject(new Error('the test does not publish'))}
+                    onComplete={() => undefined}
+                    route={null}
+                />
+            </SettingsProvider>,
         );
     });
     mounted.push(() => {
@@ -147,6 +148,87 @@ describe('PR comments modal', () => {
         expect(commentButton.getAttribute('aria-expanded')).toBe('false');
         expect(document.activeElement).toBe(commentButton);
         expect(document.body.style.overflow).toBe('');
+    });
+});
+
+/** Live bar for checking ship mode writes: publishing always succeeds. */
+function mountShipBar(options: { readonly shipMode: UiSettings['shipMode']; readonly sticky: boolean; readonly menu?: boolean }): {
+    readonly host: HTMLElement;
+    readonly published: Verdict[];
+    readonly shipMode: () => UiSettings['shipMode'];
+} {
+    const settings = createUiSettingsStore({ initial: { shipMode: options.shipMode } });
+    const published: Verdict[] = [];
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+
+    act(() => {
+        root.render(
+            <SettingsProvider store={settings}>
+                <ReviewActionBar
+                    pr={{ ...DATA.pr, capabilities: { ...DATA.pr.capabilities, stickyShip: options.sticky } }}
+                    diff={DATA.diff}
+                    diffStore={createDiffViewStore({ files: DATA.diff.files })}
+                    threadStore={createThreadStore([], FILE_IDS)}
+                    connection="online"
+                    hostName="FixtureHost"
+                    composerTransport={TRANSPORT}
+                    onPublish={(verdict) => {
+                        published.push(verdict);
+                        return Promise.resolve({ publishedCommentIds: [], failed: [], verdictApplied: true });
+                    }}
+                    onComplete={() => undefined}
+                    route={null}
+                    defaultMenuOpen={options.menu ?? false}
+                />
+            </SettingsProvider>,
+        );
+    });
+    mounted.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    return { host, published, shipMode: () => settings.getSnapshot().shipMode };
+}
+
+function clickByText(host: HTMLElement, selector: string, text: string): void {
+    const target = [...host.querySelectorAll<HTMLElement>(selector)].find((node) => node.textContent.includes(text));
+    if (target === undefined) {
+        throw new Error(`the bar has no ${selector} element with text "${text}"`);
+    }
+    act(() => {
+        target.click();
+    });
+}
+
+describe('global ship mode', () => {
+    it('publishing with a fallback mode preserves the reviewer choice', async () => {
+        // Settings request sticky, but this PR has none: the button publishes ship without choosing it.
+        const bar = mountShipBar({ shipMode: 'sticky_ship', sticky: false });
+
+        clickByText(bar.host, '.review-action-bar__ship-primary', 'Ship');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['ship']);
+        expect(bar.shipMode()).toBe('sticky_ship');
+    });
+
+    it('remembers an explicit mode selection in the menu', async () => {
+        const bar = mountShipBar({ shipMode: 'ship', sticky: true, menu: true });
+
+        clickByText(bar.host, '.review-action-menu__option', 'Sticky ship');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['sticky_ship']);
+        expect(bar.shipMode()).toBe('sticky_ship');
     });
 });
 
@@ -275,7 +357,7 @@ describe('floating review bar', () => {
     });
 
     it('hides only while the diff store has an active drag selection', () => {
-        const diffStore = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const diffStore = createDiffViewStore({ files: DATA.diff.files });
         diffStore.beginSelection();
         diffStore.startSelection(DATA.diff.files[0]?.fileId ?? 'file', 'a1');
         const props = {
@@ -288,7 +370,6 @@ describe('floating review bar', () => {
             composerTransport: TRANSPORT,
             onPublish: () => Promise.reject(new Error('not called during static rendering')),
             onComplete: () => undefined,
-            storage: null,
         };
 
         expect(renderToStaticMarkup(<ReviewActionBar {...props} />)).toBe('');
@@ -301,7 +382,7 @@ describe('floating review bar', () => {
             <ReviewActionBar
                 pr={DATA.pr}
                 diff={DATA.diff}
-                diffStore={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+                diffStore={createDiffViewStore({ files: DATA.diff.files })}
                 threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
                 connection="online"
                 hostName="FixtureHost"
@@ -314,7 +395,6 @@ describe('floating review bar', () => {
                     message: null,
                     comments: [{ commentId: 'bad', body: 'Fix the boundary check', message: 'host refused' }],
                 }}
-                storage={null}
             />,
         );
 

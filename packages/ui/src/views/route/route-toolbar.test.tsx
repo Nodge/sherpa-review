@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -10,7 +10,7 @@ import { PRESET_DISABLED_TITLE, RouteToolbar, TOUR_HINT, TRIAGE_HINT } from './r
 
 /** Toolbar preset toggle: active option, hint and disabled state (SPEC §2.5). */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 
 function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): string {
     const filters = buildFileFilters({
@@ -20,7 +20,7 @@ function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): str
     });
     return renderToStaticMarkup(
         <RouteToolbar
-            store={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+            store={createDiffViewStore({ files: DATA.diff.files })}
             preset={options.preset ?? 'triage'}
             onPreset={() => undefined}
             presetDisabled={options.disabled ?? false}

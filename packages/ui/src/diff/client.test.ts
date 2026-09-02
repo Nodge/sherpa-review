@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import type { DiffParseMessage, DiffWorkerConnection, DiffWorkerHandlers } from './client.js';
@@ -7,7 +7,7 @@ import type { DiffParseRequest } from './model.js';
 import { toParseRequest } from './model.js';
 import { parseFileDiff } from './parse.js';
 
-const DIFF = fixtureData('medium').diff;
+const DIFF = fixtureIteration('medium').diff;
 
 function request(index: number): DiffParseRequest {
     const file = DIFF.files[index];

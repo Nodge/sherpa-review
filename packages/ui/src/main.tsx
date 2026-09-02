@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { fetchUiSettings, patchUiSettings } from './api.js';
 import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
@@ -17,10 +18,15 @@ import {
     parseRouteFilter,
 } from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
+import { SettingsProvider } from './settings/context.tsx';
+import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import { createStore } from './store.js';
 import './styles/base.css';
+
+/** Maximum wait for settings before the first render. */
+const SETTINGS_BOOT_TIMEOUT_MS = 1500;
 
 const container = document.getElementById('root');
 if (!container) {
@@ -43,6 +49,11 @@ if (token === null) {
     );
 } else {
     const store = createStore({ token });
+    // Global settings live on the server, and the first render waits for them. Diff mode and composer layout
+    // must be known before creating the stores, or the toggle visibly flips
+    // and the editor gets recreated while the reviewer is already typing.
+    const settings = createUiSettingsStore({ send: (patch) => patchUiSettings(token, patch) });
+    const settingsReady = loadUiSettings(settings, () => fetchUiSettings(token));
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
     // What the tab is viewing: `snapshot=` takes priority over `diff=`, "current" is omitted from the URL (M4-T9).
@@ -106,12 +117,22 @@ if (token === null) {
     });
     attachShortcuts(window, shortcuts);
 
-    root.render(
-        <StrictMode>
-            <IconSprite />
-            <ShortcutsProvider registry={shortcuts}>
-                <App store={store} session={session} token={token} />
-            </ShortcutsProvider>
-        </StrictMode>,
-    );
+    // Wait for settings until the timeout: a stalled endpoint must not leave the reviewer
+    // facing an empty page. Render with defaults, and let the response reach the store later.
+    void Promise.race([settingsReady, delay(SETTINGS_BOOT_TIMEOUT_MS)]).then(() => {
+        root.render(
+            <StrictMode>
+                <IconSprite />
+                <ShortcutsProvider registry={shortcuts}>
+                    <SettingsProvider store={settings}>
+                        <App store={store} session={session} token={token} />
+                    </SettingsProvider>
+                </ShortcutsProvider>
+            </StrictMode>,
+        );
+    });
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

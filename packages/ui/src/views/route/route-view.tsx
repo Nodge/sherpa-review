@@ -761,6 +761,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             const run: JumpRun = { cancel: () => undefined, timers: [], frame: null, reached: 'none' };
             running.current = run;
             const deadline = Date.now() + JUMP_SEARCH_MS;
+            // The last targeting time determines the remaining correction duration.
+            let aimedAt = Date.now();
 
             const goTo = (step: JumpStep, element: HTMLElement): void => {
                 if (JUMP_STEPS[step] <= JUMP_STEPS[run.reached]) {
@@ -768,7 +770,29 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 }
                 run.reached = step;
                 run.cancel();
+                aimedAt = Date.now();
                 run.cancel = animateScrollTo(container, targetScrollTop(container, element));
+            };
+            /**
+             * Recalculate the target while approaching it. Marking a stop does not collapse it in a single frame
+             * (lazy rendering, ResizeObserver, late parsing). The document above the target keeps
+             * shrinking during the animation, so calculating once causes an overshoot. Correction fits
+             * into what remains of ~320ms (README "Motion") since the last aim, but lasts at least
+             * `REAIM_MIN_DURATION`: the target often appears hundreds of milliseconds after the search
+             * starts, so time remaining "since the jump began" would turn the correction into a teleport.
+             */
+            const reaim = (): void => {
+                if (running.current !== run) {
+                    return;
+                }
+                const again = jumpTarget(container, stopId, fileId, line, side);
+                if (again === null || JUMP_STEPS[again.step] < JUMP_STEPS[run.reached]) {
+                    return;
+                }
+                const duration = Math.max(REAIM_MIN_DURATION, JUMP_DURATION - (Date.now() - aimedAt));
+                run.cancel();
+                aimedAt = Date.now();
+                run.cancel = animateScrollTo(container, targetScrollTop(container, again.element), duration);
             };
             const finish = (): void => {
                 run.frame = null;
@@ -781,6 +805,19 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         }
                     }, JUMP_DURATION + SETTLE_TAIL),
                 );
+            };
+            /** Target found: correct it twice more, on the next frame and after `ANCHOR_SETTLE`. */
+            const settle = (): void => {
+                run.frame = requestAnimationFrame(() => {
+                    run.frame = null;
+                    reaim();
+                    run.timers.push(
+                        setTimeout(() => {
+                            reaim();
+                            finish();
+                        }, ANCHOR_SETTLE),
+                    );
+                });
             };
 
             const step = (): void => {
@@ -807,7 +844,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         flashRow(target.element);
                     }
                     if (done) {
-                        finish();
+                        settle();
                         return;
                     }
                 }
@@ -1493,9 +1530,32 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         },
     });
 
+    /**
+     * Mark a file within a stop. After the file the reviewer is reading collapses,
+     * the view moves to the next card in the same stop. The same "scrolling follows
+     * collapse" rule applies to stops (decision log 2026-09-02). The last file in a stop
+     * does not request scrolling: the covered stop marks itself and moves to the next one.
+     */
+    const markFileViewed = useCallback(
+        (fileId: string, viewed: boolean): Promise<Feedback> => {
+            const container = containerRef.current;
+            // Capture the geometry before writing: the mark collapses the card in the same frame.
+            const top = viewed && container !== null ? topFileCard(container) : null;
+            const stopId = top?.fileId === fileId ? top.stopId : null;
+            const advance =
+                container === null || stopId === null ? null : nextCardInStop(container, stopId, fileId);
+            const written = markViewed(fileId, viewed);
+            if (stopId !== null && advance !== null) {
+                requestJump(stopId, advance, null, null, false);
+            }
+            return written;
+        },
+        [markViewed, requestJump],
+    );
+
     const actions = useMemo<FileCardActions>(
         () => ({
-            onViewed: markViewed,
+            onViewed: markFileViewed,
             onExpand: expand,
             onRetryParse: (fileId: string) => {
                 retryParse([fileId]);
@@ -1519,7 +1579,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 setFocusedLine(null);
             },
         }),
-        [commentLine, expand, markViewed, retryParse, store],
+        [commentLine, expand, markFileViewed, retryParse, store],
     );
 
     const cardFor = useCallback(
@@ -2128,6 +2188,45 @@ function* stopBoxes(container: HTMLElement): Generator<StopBox> {
     }
 }
 
+/**
+ * Top file card on screen and its stop. Readable content starts below
+ * the sticky toolbar, so a card entirely beneath it cannot be the top card.
+ */
+function topFileCard(container: HTMLElement): { readonly stopId: string; readonly fileId: string } | null {
+    const top = container.getBoundingClientRect().top;
+    const toolbar = container.querySelector<HTMLElement>('.route-toolbar');
+    const line = toolbar === null ? top : Math.max(top, toolbar.getBoundingClientRect().bottom);
+    for (const card of container.querySelectorAll<HTMLElement>('.file-card[data-file]')) {
+        if (card.getBoundingClientRect().bottom <= line) {
+            continue;
+        }
+        const stopId = card.closest<HTMLElement>('[data-stop]')?.dataset.stop;
+        const fileId = card.dataset.file;
+        return stopId === undefined || fileId === undefined ? null : { stopId, fileId };
+    }
+    return null;
+}
+
+/**
+ * Next card in the same stop: nearest expanded card below, or simply the next card if all below are collapsed
+ * (same rule as `nextFileToAdvance` in the full diff). The card set
+ * comes from the markup, which already reflects the lens. A placeholder body identifies collapsed cards.
+ */
+export function nextCardInStop(container: HTMLElement, stopId: string, fileId: string): string | null {
+    const section = container.querySelector<HTMLElement>(`[data-stop="${cssEscape(stopId)}"]`);
+    if (section === null) {
+        return null;
+    }
+    const cards = [...section.querySelectorAll<HTMLElement>('.file-card[data-file]')];
+    const index = cards.findIndex((card) => card.dataset.file === fileId);
+    if (index < 0) {
+        return null;
+    }
+    const rest = cards.slice(index + 1);
+    const next = rest.find((card) => card.querySelector('.file-card__collapsed--file') === null) ?? rest[0];
+    return next?.dataset.file ?? null;
+}
+
 function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {
     return files.reduce((total, file) => total + file[key], 0);
 }
@@ -2172,6 +2271,8 @@ const JUMP_SEARCH_MS = 1500;
  * the reviewer's own scrolling.
  */
 const ANCHOR_SETTLE = 120;
+/** Minimum jump correction duration: adjusting the target still moves to it instead of teleporting. */
+const REAIM_MIN_DURATION = 120;
 const EMPTY_FILE = {
     generated: false,
     viewed: false,

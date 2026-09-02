@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -20,7 +20,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * fixture: the bar uses the same 860 / 196 / 327 / 305 / 32 counts as the model tests.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {
@@ -109,7 +109,7 @@ function ViewedRouteState({ stopIds, auto = false }: { stopIds: readonly string[
         return [...byFile.values()];
     }, [auto, parsed, stopIds]);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null, progress });
+        const created = createDiffViewStore({ files: DATA.diff.files, progress });
         for (const [fileId, model] of parsed) {
             created.setModel(fileId, model);
         }

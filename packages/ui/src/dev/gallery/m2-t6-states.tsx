@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
@@ -20,7 +20,7 @@ import { RouteWorkspace } from '../../views/route/route-view.tsx';
  * always gives the same frame.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {
@@ -52,7 +52,7 @@ function RouteState({
         [filter, stops],
     );
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

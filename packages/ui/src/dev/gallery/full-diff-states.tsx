@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration } from '@sherpa/fixtures';
 import type { FixtureName } from '@sherpa/fixtures';
 import type { Comment, FileDiff, Lens, Thread, UiFileProgress, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -53,7 +53,7 @@ function WorkspaceState({
     prepareThreads,
 }: WorkspaceStateProps) {
     const data = useMemo(() => {
-        const source = fixtureData(fixture);
+        const source = fixtureIteration(fixture);
         if (onlyPath === undefined) {
             return source;
         }
@@ -75,7 +75,7 @@ function WorkspaceState({
     }, [data.diff.files, prepareThreads, shownThreads]);
 
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: data.diff.files, storage: null });
+        const created = createDiffViewStore({ files: data.diff.files });
         if (preloadModels) {
             for (const file of data.diff.files) {
                 created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
@@ -149,7 +149,7 @@ function unpinnedRecord(fixture: FixtureName, path: string): UiFileProgress {
 }
 
 function fileOf(fixture: FixtureName, path: string): FileDiff {
-    const file = fixtureData(fixture).diff.files.find((candidate) => candidate.path === path);
+    const file = fixtureIteration(fixture).diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
         throw new Error(`fixture ${fixture} has no file ${path}`);
     }
@@ -220,7 +220,7 @@ function prepareFailedComposer(store: ThreadStore): void {
 }
 
 function sourceThreadsOnHandlers(): Thread[] {
-    const data = fixtureData('medium');
+    const data = fixtureIteration('medium');
     const file = fileOf('medium', 'services/orders/src/api/handlers.ts');
     const position = { side: 'new' as const, line: 48, size: 1 };
     const openPerson = data.threads.find(
@@ -234,7 +234,7 @@ function sourceThreadsOnHandlers(): Thread[] {
 }
 
 function botThreadWithFortyReplies(): Thread[] {
-    const source = fixtureData('medium').threads.find((thread) => thread.root.author.bot);
+    const source = fixtureIteration('medium').threads.find((thread) => thread.root.author.bot);
     if (source === undefined) {
         return [];
     }
@@ -291,7 +291,7 @@ const MARKDOWN_SHOWCASE = [
 ].join('\n');
 
 function markdownShowcaseThread(): Thread[] {
-    const source = fixtureData('medium').threads.find((thread) => thread.root.author.bot);
+    const source = fixtureIteration('medium').threads.find((thread) => thread.root.author.bot);
     const file = fileOf('medium', 'services/orders/src/api/handlers.ts');
     if (source === undefined) {
         return [];
@@ -334,7 +334,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
             <WorkspaceState
                 fixture="medium"
                 filter="pci"
-                lenses={{ ownership: fixtureData('medium').ownership, extra: [EMPTY_PCI] }}
+                lenses={{ ownership: fixtureIteration('medium').ownership, extra: [EMPTY_PCI] }}
             />
         ),
     },
@@ -458,7 +458,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 fixture="edge"
                 showThreads
                 onlyPath="services/orders/assets/edit-window-flow.png"
-                threads={fixtureData('medium').threads.filter((thread) => thread.anchor === null)}
+                threads={fixtureIteration('medium').threads.filter((thread) => thread.anchor === null)}
             />
         ),
     },

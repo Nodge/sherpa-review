@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -16,7 +16,7 @@ import { RouteWorkspace } from './route-view.tsx';
  * their number, title and a shimmer skeleton instead of a diff. The coverage bar waits for the plan.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const FILLING: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.filling?.snapshot ?? null;
     if (snapshot === null) {
@@ -34,7 +34,7 @@ const READY: RouteSnapshot = (() => {
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 
 function render(options: { snapshot?: RouteSnapshot; agentStopped?: boolean } = {}): string {
-    const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
+    const store = createDiffViewStore({ files: DATA.diff.files });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

@@ -1,4 +1,4 @@
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +21,7 @@ import { DIGEST_NOTE, UNCOVERED_NOTE } from './test-digest.tsx';
  * Other copy and SPEC §2.9 edge cases.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const READY = routeFixtures('medium')?.states.ready ?? null;
 if (READY?.snapshot == null) {
     throw new Error('medium fixture needs a ready route snapshot');
@@ -59,7 +59,6 @@ function render(
 ): string {
     const store = createDiffViewStore({
         files: DATA.diff.files,
-        storage: null,
         ...(options.progress === undefined ? {} : { progress: options.progress }),
         ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
     });

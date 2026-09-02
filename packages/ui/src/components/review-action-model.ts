@@ -6,8 +6,6 @@ import { formatCount, plural } from '../text.js';
 
 export type ShipMode = Extract<Verdict, 'ship' | 'sticky_ship'>;
 
-const SHIP_MODE_KEY = 'sherpa.shipMode';
-
 export interface PublishGuardInput {
     readonly connection: ConnectionState;
     readonly pendingComposer: boolean;
@@ -51,29 +49,7 @@ export function publishDisabledReason(input: PublishGuardInput): string | null {
     return null;
 }
 
-/** The last mode is stored in the local browser profile. Unavailable sticky always falls back to ship. */
-export function loadShipMode(
-    stickyAvailable: boolean,
-    storage: Pick<Storage, 'getItem'> | null = browserStorage(),
-): ShipMode {
-    try {
-        return availableShipMode(storage?.getItem(SHIP_MODE_KEY) === 'sticky_ship' ? 'sticky_ship' : 'ship', stickyAvailable);
-    } catch {
-        return 'ship';
-    }
-}
-
-export function saveShipMode(
-    mode: ShipMode,
-    storage: Pick<Storage, 'setItem'> | null = browserStorage(),
-): void {
-    try {
-        storage?.setItem(SHIP_MODE_KEY, mode);
-    } catch {
-        // Blocked localStorage does not prevent applying the mode in the current tab.
-    }
-}
-
+/** The last mode lives in global settings. Unavailable sticky always falls back to ship. */
 export function availableShipMode(mode: ShipMode, stickyAvailable: boolean): ShipMode {
     return mode === 'sticky_ship' && !stickyAvailable ? 'ship' : mode;
 }
@@ -112,13 +88,4 @@ export function requestPublicationFailure(verdict: Verdict, drafts: number, erro
         comments: [],
         message: error instanceof Error ? error.message : String(error),
     };
-}
-
-function browserStorage(): Storage | null {
-    try {
-        const storage: unknown = globalThis.localStorage;
-        return storage == null ? null : (storage as Storage);
-    } catch {
-        return null;
-    }
 }

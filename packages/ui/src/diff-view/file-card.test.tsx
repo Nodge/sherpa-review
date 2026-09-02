@@ -1,4 +1,4 @@
-import { fixtureData } from '@sherpa/fixtures';
+import { fixtureIteration } from '@sherpa/fixtures';
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,7 @@ import { clipModelToAnchors } from '../route/anchor-clip.js';
 import type { FileCardActions } from './file-card.tsx';
 import { expansionAnnouncement, FileCard } from './file-card.tsx';
 
-const DATA = fixtureData('edge');
+const DATA = fixtureIteration('edge');
 
 const ACTIONS: FileCardActions = {
     onViewed: () => Promise.resolve(null),
