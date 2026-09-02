@@ -10,6 +10,7 @@ import { openDatabase } from './db.js';
 import type { NoteCarrier } from './iteration-feed.js';
 import { IterationFeed, staleFor } from './iteration-feed.js';
 import { IterationStore } from './iteration-store.js';
+import { ProgressStore } from './progress-store.js';
 import type { RouteListener } from './route-store.js';
 import { mediumReadySnapshot } from './route/fixture-support.js';
 import { makeTempSherpaDir, removeTempSherpaDir, seedAgentNotes } from './test-support.js';
@@ -129,11 +130,13 @@ describe('iteration feed', () => {
     function makeFeed(
         host = makeFixtureHost('medium'),
         notes: NoteCarrier | null = null,
+        progress: ProgressStore | null = null,
         carryRetryMs = 5,
     ): { host: ReturnType<typeof makeFixtureHost> } {
         feed = new IterationFeed({
             host,
             notes,
+            progress,
             carryRetryMs,
             iterations: store,
             route: {
@@ -373,6 +376,217 @@ describe('iteration feed', () => {
         await waitFor(() => notes.chat.read().notes.every((note) => note.lostAnchor));
         // The anchor keeps its last valid value. The note leaves the code but remembers its location.
         expect(notes.chat.read().notes.map((note) => note.anchor)).toEqual(NOTES.map((note) => note.anchor));
+    });
+
+    /** Reading progress in the same DB. Completed carryovers are visible in `progress_carries`. */
+    function makeProgress(): ProgressStore {
+        return new ProgressStore({ db, iterations: store, log: (message) => logs.push(message) });
+    }
+
+    /** A viewed file range, as the reader would record it. */
+    function seedSeenRange(diffId: string, fileId: string): void {
+        db.prepare(
+            `INSERT INTO file_seen_ranges (diff_id, file_id, side, start_line, end_line)
+             VALUES (?, ?, 'new', 1, 2)`,
+        ).run(diffId, fileId);
+    }
+
+    /** Source → target pairs with completed progress carryover. */
+    function progressCarries(): string[] {
+        const rows = db
+            .prepare('SELECT from_diff_id, to_diff_id FROM progress_carries ORDER BY rowid')
+            .all() as { from_diff_id: string; to_diff_id: string }[];
+        return rows.map((row) => `${row.from_diff_id} ${row.to_diff_id}`);
+    }
+
+    /** `fileId` of the first file in a fixture iteration. Progress is matched by its path. */
+    function fixtureFileId(index: number): string {
+        const fileId = fixtureIteration('medium', index).diff.files[0]?.fileId;
+        if (fileId === undefined) {
+            throw new Error(`iteration ${String(index + 1)} of the medium fixture has no files`);
+        }
+        return fileId;
+    }
+
+    it('a source removed by force-push is permanently rejected, notes lose anchors and no retry runs', async () => {
+        const notes = makeNotes(NOTES);
+        const { host } = makeFeed(makeFixtureHost('medium'), notes.carrier);
+        listen();
+        host.advanceIteration();
+        await waitFor(() => notes.chat.read().notes.some((note) => note.anchor.diffId === V2.diffId));
+
+        // Force-push removes v2 from the host list, so the host will never compute the v2→v3 slice again.
+        host.advanceIteration();
+
+        await waitFor(() => notes.chat.read().notes.every((note) => note.lostAnchor));
+        // The anchor and origin keep their last valid values, so the note remembers its location in v2.
+        expect(notes.chat.read().notes).toEqual(NOTES_AFTER_PUSH.map((note) => ({ ...note, lostAnchor: true })));
+        expect(notes.calls.filter((call) => call === `${V2.diffId} ${V3.diffId}`)).toHaveLength(1);
+        expect(
+            logs.some((message) => message.includes(`host permanently refused slice ${V2.diffId}→${V3.diffId}`)),
+        ).toBe(true);
+
+        const calls = [...notes.calls];
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        // No retry timer is set after a permanent refusal because there is nothing to retry.
+        expect(notes.calls).toEqual(calls);
+        expect(logs.some((message) => message.includes('will retry'))).toBe(false);
+    });
+
+    it('a temporary progress slice failure retries without falling back to an older source', async () => {
+        const host = makeFixtureHost('medium');
+        const original = host.getDiff.bind(host);
+        let refusals = 0;
+        host.getDiff = (slice) => {
+            if (slice !== undefined && refusals < 1) {
+                refusals += 1;
+                return Promise.reject(new Error('slice unavailable: network'));
+            }
+            return original(slice);
+        };
+        makeFeed(host, null, makeProgress());
+        listen();
+
+        await waitFor(() => store.get(V1.diffId) !== null);
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+        // An older iteration also has progress. A network failure is no reason to fall back to it.
+        const older = iterationOf(
+            { ...V1, diffId: 'iter-older', createdAt: '2000-01-01T00:00:00.000Z' },
+            'previous',
+        );
+        store.upsert({ ...fixtureIteration('medium', 0).diff, diffId: older.diffId }, older);
+        seedSeenRange(older.diffId, fixtureFileId(0));
+
+        host.advanceIteration();
+
+        await waitFor(() => progressCarries().length > 0);
+        expect(progressCarries()).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(logs.some((message) => message.includes(`could not fetch slice ${V1.diffId}→${V2.diffId}, will retry`))).toBe(
+            true,
+        );
+        expect(logs.some((message) => message.includes(older.diffId))).toBe(false);
+    });
+
+    it('a retry restarts both note anchor and progress carryover', async () => {
+        const host = makeFixtureHost('medium');
+        const original = host.getDiff.bind(host);
+        let refusals = 0;
+        host.getDiff = (slice) => {
+            if (slice !== undefined && refusals < 2) {
+                refusals += 1;
+                return Promise.reject(new Error('slice unavailable: network'));
+            }
+            return original(slice);
+        };
+        const notes = makeNotes(NOTES);
+        makeFeed(host, notes.carrier, makeProgress());
+        listen();
+        await waitFor(() => store.get(V1.diffId) !== null);
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+
+        host.advanceIteration();
+
+        await waitFor(() => notes.chat.read().notes.some((note) => note.anchor.diffId === V2.diffId));
+        await waitFor(() => progressCarries().length > 0);
+        expect(notes.chat.read().notes).toEqual(NOTES_AFTER_PUSH);
+        expect(progressCarries()).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(logs.some((message) => message.includes('note anchors from iteration') && message.includes('will retry'))).toBe(
+            true,
+        );
+        expect(logs.some((message) => message.includes(', will retry'))).toBe(true);
+    });
+
+    it('an active iteration patch failure does not lose anchors even if a force-push removed the source', async () => {
+        const host = makeFixtureHost('medium');
+        const original = host.getDiff.bind(host);
+        let activeDown = false;
+        host.getDiff = (slice) => {
+            if (slice === undefined) {
+                return activeDown ? Promise.reject(new Error('host is down')) : original(slice);
+            }
+            // The fixture cannot compute a slice with v2 (the iteration is absent from the list), so replace the response
+            // to let carryover reach the active iteration patch. That is the request that must fail.
+            return slice.base === V2.diffId
+                ? Promise.resolve(fixtureIteration('medium', 2).diff)
+                : original(slice);
+        };
+        const notes = makeNotes(NOTES);
+        makeFeed(host, notes.carrier);
+        listen();
+        host.advanceIteration();
+        await waitFor(() => notes.chat.read().notes.some((note) => note.anchor.diffId === V2.diffId));
+
+        const before = notes.chat.read().notes;
+
+        activeDown = true;
+        host.advanceIteration();
+
+        await waitFor(() =>
+            logs.some((message) => message.includes('note anchors from iteration') && message.includes('will retry')),
+        );
+        // The active patch failed, not the slice. This says nothing about the source, so anchors remain intact.
+        expect(notes.chat.read().notes).toEqual(before);
+        expect(logs.some((message) => message.includes('host permanently rejected'))).toBe(false);
+    });
+
+    it('a write failure after permanent refusal does not silently discard the source, a retry reaches lost_anchor', async () => {
+        const notes = makeNotes(NOTES);
+        const attempts: string[] = [];
+        let failWrite = false;
+        const carrier: NoteCarrier = {
+            adoptLegacyAnchors: (diffId) => notes.carrier.adoptLegacyAnchors(diffId),
+            read: () => notes.carrier.read(),
+            migrateNotes: (from, to, map, fileIdOf, headCommit) => {
+                attempts.push(`${from} ${to}`);
+                if (failWrite) {
+                    failWrite = false;
+                    throw new Error('DB is busy');
+                }
+                return notes.carrier.migrateNotes(from, to, map, fileIdOf, headCommit);
+            },
+        };
+        const { host } = makeFeed(makeFixtureHost('medium'), carrier);
+        listen();
+        host.advanceIteration();
+        await waitFor(() => notes.chat.read().notes.some((note) => note.anchor.diffId === V2.diffId));
+
+        failWrite = true;
+        host.advanceIteration();
+
+        await waitFor(() => notes.chat.read().notes.every((note) => note.lostAnchor));
+        expect(logs.some((message) => message.includes('note anchors from iteration') && message.includes('will retry'))).toBe(
+            true,
+        );
+        // The source is marked as refused only after a successful write. A DB failure allows a second attempt.
+        expect(attempts.filter((call) => call === `${V2.diffId} ${V3.diffId}`)).toHaveLength(2);
+    });
+
+    it('a host without slices does not retry progress carryover forever', async () => {
+        const host = makeFixtureHost('medium');
+        const pr = await host.getPr();
+        host.getPr = () => Promise.resolve({ ...pr, capabilities: { ...pr.capabilities, iterations: false } });
+        const slices: string[] = [];
+        const original = host.getDiff.bind(host);
+        host.getDiff = (slice) => {
+            if (slice !== undefined) {
+                slices.push(`${slice.base} ${slice.head}`);
+            }
+            return original(slice);
+        };
+        makeFeed(host, null, makeProgress());
+        listen();
+        await waitFor(() => store.get(V1.diffId) !== null);
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+
+        host.advanceIteration();
+
+        await waitFor(() => logs.some((message) => message.includes('host has no slices')));
+        // Retrying every 5 ms would produce dozens of requests. A host without slices is a permanent refusal.
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(slices).toEqual([]);
+        expect(logs.filter((message) => message.includes('progress not carried over'))).toHaveLength(1);
+        expect(progressCarries()).toEqual([]);
     });
 
     it('the last listener leaving stops the host subscription', () => {

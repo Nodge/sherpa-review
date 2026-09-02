@@ -10,6 +10,7 @@ import type {
 } from '@sherpa/protocol';
 
 import type { ChatStore } from './chat-store.js';
+import { RpcFailure } from './errors.js';
 import type { IterationStore } from './iteration-store.js';
 import type { IterationMap } from './iterations/index.js';
 import { affectedStops, buildIterationMap, opaqueMap } from './iterations/index.js';
@@ -40,8 +41,11 @@ interface AffectedStops {
 /** Everything the feed needs from chat storage to carry note anchors to a new iteration. */
 export type NoteCarrier = Pick<ChatStore, 'adoptLegacyAnchors' | 'migrateNotes' | 'read'>;
 
-/** Retry anchor carryover after this interval if the host did not provide a slice. */
+/** Delay before retrying carryover when a temporary host failure prevents fetching a slice. */
 const CARRY_RETRY_MS = 30_000;
+
+/** Host slice refusal. `permanent` means the source is unreachable forever, so there is nothing to retry. */
+type CarryRefusal = 'permanent' | 'temporary';
 
 export interface IterationFeedOptions {
     /** null means the PR has no host adapter and will never have iterations. */
@@ -51,7 +55,7 @@ export interface IterationFeedOptions {
     readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
     /** Notes whose anchors move to a new iteration (M4-T11). null means there is nobody to move them. */
     readonly notes?: NoteCarrier | null;
-    /** Delay before retrying anchor carryover after a host failure. */
+    /** Delay before retrying carryovers after a temporary host refusal. */
     readonly carryRetryMs?: number;
     /** Reading progress: a push carries it to the new iteration (M4-T6). `null` means nothing to carry over. */
     readonly progress?: ProgressCarrier | null;
@@ -76,7 +80,7 @@ export class IterationFeed {
     private readonly listeners = new Set<(revision: number) => void>();
     /** Running affected-stop calculations, to avoid starting the same one twice. */
     private readonly pending = new Set<string>();
-    /** Iteration pairs whose slice the host refused, to avoid repeating the failed request on every list. */
+    /** Iteration pairs whose slices the host permanently refused, so futile requests are not retried. */
     private readonly refused = new Set<string>();
     /** Map of the latest iteration pair, computed once and read on every snapshot change. */
     private map: { pair: string; built: Promise<IterationMap> } | null = null;
@@ -102,7 +106,7 @@ export class IterationFeed {
     private unsubscribeRoute: (() => void) | null = null;
     /** In-flight active iteration patch load, to avoid duplicate concurrent requests. */
     private diffLoad: { diffId: HostId; patch: Promise<PrDiff> } | null = null;
-    /** Scheduled anchor carryover retry after a host failure. null means nothing to retry. */
+    /** Scheduled carryover retry after a temporary host refusal. null means there is nothing to retry. */
     private carryRetry: ReturnType<typeof setTimeout> | null = null;
     /** Host capabilities, fetched once to determine whether anchor carryover is possible. */
     private capabilities: Promise<HostCapabilities> | null = null;
@@ -325,6 +329,7 @@ export class IterationFeed {
             return;
         }
 
+        const refused = this.refusedSourcesFor(active.diffId);
         const stale = new Set(
             notes
                 .read()
@@ -332,6 +337,9 @@ export class IterationFeed {
                 .map((note) => note.anchor.diffId),
         );
         for (const from of stale) {
+            if (refused.has(from)) {
+                continue;
+            }
             const pair = `notes ${from} ${active.diffId}`;
             if (this.carrying.has(pair)) {
                 continue;
@@ -348,23 +356,32 @@ export class IterationFeed {
         pair: string,
     ): Promise<void> {
         try {
-            const map = await this.noteMap(from, active);
-            const files = new Map((await this.activeDiff(active)).files.map((file) => [file.path, file.fileId]));
+            const host = this.host;
+            // Without host slices there is no way to carry over: the map is empty and notes lose their anchors.
+            const blind = host === null || !(await this.hostCapabilities(host)).iterations;
+            const carry = blind ? { map: opaqueMap(), refusal: null } : await this.noteCarry(host, from, active);
+            if (carry === null) {
+                return;
+            }
+            // An empty map needs no files: everything is touched and the anchor is lost regardless of `fileId`.
+            const fileIdOf = carry.refusal === null ? await this.activeFileIds(active) : (): null => null;
             // The author may have pushed while the slice was being computed: do not carry over to an inactive iteration.
             if (this.closed || this.active()?.diffId !== active.diffId) {
                 return;
             }
-            notes.migrateNotes(
-                from,
-                active.diffId,
-                map,
-                (path) => files.get(path) ?? null,
-                active.headCommit,
-            );
+            const migration = notes.migrateNotes(from, active.diffId, carry.map, fileIdOf, active.headCommit);
+            if (carry.refusal !== null) {
+                // Reject the source only after a successful write: otherwise there will be no retry, and
+                // notes would keep anchors on an iteration the host no longer has.
+                this.refusedSourcesFor(active.diffId).add(from);
+                this.log(
+                    `host permanently refused slice ${from}→${active.diffId}, ` +
+                        `notes without anchors ${String(migration.lost)}: ${carry.refusal}`,
+                );
+            }
         } catch (error) {
-            // A host failure leaves notes unchanged. Anchors stay in the previous iteration until the next
-            // attempt. A network error must not falsely mark an anchor lost because that is irreversible.
-            this.log(`note anchors from iteration ${from} not carried over: ${messageOf(error)}`);
+            // The active iteration patch and database write say nothing about the source: retry only.
+            this.log(`could not carry over note anchors from iteration ${from}, will retry: ${messageOf(error)}`);
             this.scheduleCarryRetry();
         } finally {
             this.carrying.delete(pair);
@@ -372,8 +389,38 @@ export class IterationFeed {
     }
 
     /**
-     * Retry carryover after a host failure. Waiting for the next iteration list will not work. The watcher wakes
-     * the feed only on a new push. Until then, a note anchored in the previous iteration cannot find its
+     * Anchor carryover map from the source: `refusal` is the reason for a permanent host refusal,
+     * which leaves the map empty and notes without anchors. `null` in place of a map means a temporary refusal, with a retry
+     * scheduled: a network error must not falsely mark an anchor as lost, since that is irreversible.
+     */
+    private async noteCarry(
+        host: ReviewHost,
+        from: HostId,
+        active: Iteration,
+    ): Promise<{ map: IterationMap; refusal: string | null } | null> {
+        try {
+            return { map: await this.noteMap(host, from, active), refusal: null };
+        } catch (error) {
+            if (this.carryRefusal(from, error) === 'temporary') {
+                this.log(`could not carry over note anchors from iteration ${from}, will retry: ${messageOf(error)}`);
+                this.scheduleCarryRetry();
+                return null;
+            }
+            // Empty map: everything is considered touched, just as with a host without slices.
+            return { map: opaqueMap(), refusal: messageOf(error) };
+        }
+    }
+
+    /** Path → `fileId` in the active iteration patch. null means the file is absent. */
+    private async activeFileIds(active: Iteration): Promise<(path: string) => string | null> {
+        const files = new Map((await this.activeDiff(active)).files.map((file) => [file.path, file.fileId]));
+        return (path) => files.get(path) ?? null;
+    }
+
+    /**
+     * Retry carryover after a temporary host refusal, for both note anchors and progress: they share
+     * a slice, so they share its refusal. Cannot wait for the next iteration list: the watcher wakes the feed
+     * only on a new push. Until then, a note anchored to a previous iteration cannot find its
      * file in the active diff and disappears from the code, with no banner or mark in chat.
      */
     private scheduleCarryRetry(): void {
@@ -383,23 +430,25 @@ export class IterationFeed {
         this.carryRetry = setTimeout(() => {
             this.carryRetry = null;
             const active = this.active();
-            if (!this.closed && this.unwatch !== null && active !== null) {
-                this.carryNotes(active);
+            if (this.closed || this.unwatch === null || active === null) {
+                return;
             }
+            this.carryNotes(active);
+            void this.activeDiff(active)
+                .then(() => this.carryProgress(active))
+                .catch((error: unknown) => {
+                    this.log(`could not carry over progress to ${active.diffId}: ${messageOf(error)}`);
+                });
         }, this.carryRetryMs);
         // The timer neither keeps the process alive nor counts as server activity (see idle.ts).
         this.carryRetry.unref();
     }
 
     /**
-     * Line carryover map for notes. Without host slices, there is no mapping. Every range
-     * counts as affected, so notes lose their anchors.
+     * Line carryover map for notes. Only exposes a host refusal of the slice, which
+     * determines whether to retry carryover or discard the anchors.
      */
-    private async noteMap(from: HostId, active: Iteration): Promise<IterationMap> {
-        const host = this.host;
-        if (host === null || !(await this.hostCapabilities(host)).iterations) {
-            return opaqueMap();
-        }
+    private async noteMap(host: ReviewHost, from: HostId, active: Iteration): Promise<IterationMap> {
         const fromIteration =
             this.list.find((iteration) => iteration.diffId === from) ?? this.store.get(from)?.iteration ?? null;
         if (fromIteration === null) {
@@ -468,6 +517,9 @@ export class IterationFeed {
             if (from === null) {
                 return;
             }
+            if (!(await this.progressSlices(host, active))) {
+                return;
+            }
 
             const pair = `progress ${from} ${active.diffId}`;
             if (this.carrying.has(pair)) {
@@ -475,17 +527,30 @@ export class IterationFeed {
             }
             this.carrying.add(pair);
             try {
-                const interdiff = await this.interdiff(host, from, active.diffId).catch((error: unknown) => {
-                    // The host cannot compute a slice with this iteration (usually removed by a force-push).
-                    // Try the next candidate. Otherwise carryover would stay blocked on an unreachable
-                    // source forever, even though earlier iterations have progress too.
-                    this.log(`slice ${from}→${active.diffId} not received: ${messageOf(error)}`);
+                const slice = await this.interdiff(host, from, active.diffId).then(
+                    (interdiff) => ({ interdiff }),
+                    (error: unknown) => {
+                        const refusal = this.carryRefusal(from, error);
+                        this.log(
+                            `could not fetch slice ${from}→${active.diffId}` +
+                                `${refusal === 'temporary' ? ', will retry' : ', will not retry'}: ${messageOf(error)}`,
+                        );
+                        return { refusal };
+                    },
+                );
+                if ('refusal' in slice) {
+                    if (slice.refusal === 'temporary') {
+                        // A network failure is no reason to use an older source: an earlier iteration has
+                        // older progress, which must not silently replace newer progress.
+                        this.scheduleCarryRetry();
+                        return;
+                    }
+                    // The source no longer exists (usually removed by a force-push): take the next
+                    // candidate, since earlier iterations have progress too.
                     refused.add(from);
-                    return null;
-                });
-                if (interdiff === null) {
                     continue;
                 }
+                const interdiff = slice.interdiff;
                 if (!this.stillActive(active.diffId)) {
                     // The author pushed again while the slice was being computed: carry over to the new active iteration.
                     return;
@@ -507,12 +572,46 @@ export class IterationFeed {
         }
     }
 
+    /**
+     * Whether progress can be carried over. A host without slices rejects every pair, so trying
+     * sources is pointless. A failed capabilities request concerns the host, not the source: retry.
+     */
+    private async progressSlices(host: ReviewHost, active: Iteration): Promise<boolean> {
+        try {
+            const { iterations } = await this.hostCapabilities(host);
+            if (!iterations) {
+                this.log(`progress not carried over to ${active.diffId}: host has no slices`);
+            }
+            return iterations;
+        } catch (error) {
+            this.log(`progress not carried over to ${active.diffId}, will retry: ${messageOf(error)}`);
+            this.scheduleCarryRetry();
+            return false;
+        }
+    }
+
     /** The iteration is still active and the feed is alive: the network result is still needed. */
     private stillActive(diffId: HostId): boolean {
         return !this.closed && this.active()?.diffId === diffId;
     }
 
-    /** Sources for which the host has already refused a slice against this active iteration. */
+    /**
+     * Shared host refusal policy for all carryovers (M4-T16). A permanent refusal means the source
+     * is no longer on the host: a force-push removed the iteration (`gone`) or the host called it unknown
+     * (`bad_request`). Everything else is a temporary failure that a retry can resolve.
+     *
+     * Only a slice refusal counts: a failure to fetch the active iteration patch or write to the database says
+     * nothing about the source and must not irreversibly mark an anchor as lost.
+     */
+    private carryRefusal(from: HostId, error: unknown): CarryRefusal {
+        if (error instanceof RpcFailure && error.code === 'bad_request') {
+            return 'permanent';
+        }
+        const known = this.list.find((iteration) => iteration.diffId === from);
+        return known?.status === 'gone' ? 'permanent' : 'temporary';
+    }
+
+    /** Sources whose slices the host permanently refused for this active iteration. */
     private refusedSourcesFor(toDiffId: HostId): Set<HostId> {
         const known = this.refusedCarry.get(toDiffId);
         if (known !== undefined) {
@@ -569,7 +668,19 @@ export class IterationFeed {
         }
 
         try {
-            const map = await this.iterationMap(host, snapshot, active);
+            if (!(await this.hostCapabilities(host)).iterations) {
+                // The host has no slices at all: the list cannot be computed now or later, like a permanent refusal.
+                this.refused.add(pair);
+                this.log(`could not compute affected stops for snapshot ${snapshot.snapshotId}: host has no slices`);
+                return;
+            }
+            let map: IterationMap;
+            try {
+                map = await this.iterationMap(host, snapshot, active);
+            } catch (error) {
+                this.refuseAffected(snapshot, pair, error);
+                return;
+            }
             // While the slice was being computed, the reviewer may have rebuilt the route, the author pushed again,
             // and section acceptance added anchors: build the list from the latest snapshot.
             const current = this.route.current();
@@ -588,15 +699,33 @@ export class IterationFeed {
             };
             this.notify();
         } catch (error) {
-            // A host without `capabilities.iterations`, a slice involving a `gone` iteration, or a network failure: the banner
-            // keeps no stop list, and there is no point retrying a request that cannot succeed.
-            this.refused.add(pair);
+            // Host capabilities and computing the list itself say nothing about the snapshot iteration:
+            // the pair may still work, so recalculate on the next event.
             this.log(
-                `affected stops for snapshot ${snapshot.snapshotId} were not computed: ${messageOf(error)}`,
+                `could not compute affected stops for snapshot ${snapshot.snapshotId}, will recalculate: ${messageOf(error)}`,
             );
         } finally {
             this.pending.delete(key);
         }
+    }
+
+    /**
+     * The slice for affected stops failed to arrive: the banner stays without a stop list. A slice with a
+     * `gone` iteration cannot recover, while a network failure is retried on the next event. Discard the map along with
+     * the pair, otherwise recalculation would read the same error from memory without asking
+     * the host again.
+     */
+    private refuseAffected(snapshot: RouteSnapshot, pair: string, error: unknown): void {
+        const refusal = this.carryRefusal(snapshot.diffId, error);
+        if (refusal === 'permanent') {
+            this.refused.add(pair);
+        } else if (this.map?.pair === pair) {
+            this.map = null;
+        }
+        this.log(
+            `could not compute affected stops for snapshot ${snapshot.snapshotId}` +
+                `${refusal === 'temporary' ? ', will recalculate' : ''}: ${messageOf(error)}`,
+        );
     }
 
     /**
