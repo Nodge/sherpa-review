@@ -62,6 +62,7 @@ function thread(id: string, body: string, draft: boolean, createdAt: string): Th
         resolved: false,
         resolvedBy: null,
         outdated: false,
+        pinnedTo: null,
         root: {
             id: `${id}-comment`,
             author: AUTHOR,

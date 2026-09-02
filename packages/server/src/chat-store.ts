@@ -346,16 +346,27 @@ function toStoredExchange(row: ExchangeRow): StoredChatExchange {
 }
 
 function toNote(row: NoteRow): AgentNote {
+    const anchor = parseAnchor(row.anchor);
     return agentNoteSchema.parse({
         id: row.id,
         exchangeId: row.exchange_id,
-        anchor: parseAnchor(row.anchor),
+        anchor,
         text: row.text,
-        commit: row.commit_hash,
+        // Migrate anchors to the new iteration in M4-T11.
+        lostAnchor: false,
+        origin: { commit: row.commit_hash, anchor },
         createdAt: row.created_at,
     });
 }
 
+/** M3 exchanges predate `diffId`. Their iteration is unknown, so the server treats them as active. */
+const LEGACY_DIFF_ID = 'unknown';
+
 function parseAnchor(raw: string): ChatAnchor {
-    return chatAnchorSchema.parse(JSON.parse(raw) as unknown);
+    const value: unknown = JSON.parse(raw);
+    const filled =
+        typeof value === 'object' && value !== null && !('diffId' in value)
+            ? { ...value, diffId: LEGACY_DIFF_ID }
+            : value;
+    return chatAnchorSchema.parse(filled);
 }

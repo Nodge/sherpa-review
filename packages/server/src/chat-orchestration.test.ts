@@ -29,6 +29,7 @@ const LOCAL_PR = 'github-777';
 const WORKER = 'w-chat';
 const ANSWER = 'The cache is cleared before the write so the next reader does not get the previous value.';
 const ANCHOR: ChatAnchor = {
+    diffId: 'iter-1',
     fileId: 'f-main',
     path: 'src/main.ts',
     side: 'new',
@@ -421,7 +422,8 @@ describe('chat and notes', () => {
                 exchangeId: anchored.id,
                 anchor: ANCHOR,
                 text: ANSWER,
-                commit: mediumReadySnapshot().commit,
+                lostAnchor: false,
+                origin: { commit: mediumReadySnapshot().commit, anchor: ANCHOR },
             }),
         ]);
 

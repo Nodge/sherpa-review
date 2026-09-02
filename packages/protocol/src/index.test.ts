@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
     agentNoteSchema,
+    chatAnchorSchema,
     chatExchangeSchema,
     commentDraftSchema,
     commentSchema,
     generateJsonSchemas,
+    iterationSchema,
     lensZoneSchema,
     LONG_POLL_CEILING_SECONDS,
     PROTOCOL_VERSION,
@@ -20,6 +22,9 @@ import {
     taskSchema,
     threadSchema,
     uiChatAskRequestSchema,
+    uiReviewDiffRequestSchema,
+    uiRouteStaleSchema,
+    uiSnapshotSummarySchema,
     workerNextRequestSchema,
     workerNextResponseSchema,
 } from './index.js';
@@ -164,9 +169,25 @@ describe('review domain', () => {
             resolved: false,
             resolvedBy: null,
             outdated: false,
+            pinnedTo: { diffId: 'iter-2', commit: '9f3c1ab' },
             root: deep,
         };
         expect(threadSchema.parse(thread)).toEqual(thread);
+        expect(threadSchema.safeParse({ ...thread, pinnedTo: null }).success).toBe(true);
+        expect(threadSchema.safeParse({ ...thread, pinnedTo: { diffId: 'iter-2' } }).success).toBe(false);
+    });
+
+    it('accepts exactly three iteration statuses, including server-set gone', () => {
+        const iteration = {
+            diffId: 'iter-2',
+            baseCommit: 'a71d4e2',
+            headCommit: '9f3c1ab',
+            createdAt: '2026-09-02T10:00:00.000Z',
+            status: 'active',
+        };
+        expect(iterationSchema.parse(iteration)).toEqual(iteration);
+        expect(iterationSchema.safeParse({ ...iteration, status: 'gone' }).success).toBe(true);
+        expect(iterationSchema.safeParse({ ...iteration, status: 'stale' }).success).toBe(false);
     });
 
     it('fails closed: an invalid reply deep in the tree rejects the entire thread', () => {
@@ -236,9 +257,12 @@ describe('route (M2)', () => {
         const snapshot = {
             snapshotId: 'snap-1',
             commit: '9f3c1ab',
+            baseCommit: 'a71d4e2',
             diffId: 'iter-3',
             createdAt: '2026-08-25T12:00:00.000Z',
             provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+            previousSnapshotId: 'snap-0',
+            carried: { kept: 3, total: 4 },
             summary: 'Summary.',
             stops: [
                 {
@@ -262,6 +286,7 @@ describe('route (M2)', () => {
                     droppedClaims: 1,
                     validationNotes: [],
                     provenance: null,
+                    change: { kind: 'changed', reason: 'The author replied in the thread and rewrote retry.', threadIds: ['1'] },
                 },
                 {
                     id: 'other',
@@ -276,17 +301,33 @@ describe('route (M2)', () => {
                     droppedClaims: 0,
                     validationNotes: [],
                     provenance: null,
+                    change: null,
                 },
             ],
             tourOrder: ['stop-1', 'other'],
             contentHash: null,
         };
         expect(routeSnapshotSchema.parse(snapshot)).toEqual(snapshot);
+        expect(
+            routeSnapshotSchema.safeParse({ ...snapshot, previousSnapshotId: null, carried: null }).success,
+        ).toBe(true);
+    });
+
+    it('allows optional change explanations and causal threads in section results after a push', () => {
+        const stop = {
+            planIndex: 1,
+            paragraph: 'What changed.',
+            anchors: [{ path: 'src/cache.py', side: 'new', start: 10, end: 24 }],
+            changeReason: 'The author rewrote retry after the thread.',
+            changeThreadIds: ['1', '2'],
+        };
+        expect(routeSectionResultSchema.safeParse({ stops: [stop] }).success).toBe(true);
+        expect(routeSectionResultSchema.safeParse({ stops: [{ ...stop, changeReason: '' }] }).success).toBe(false);
     });
 });
 
 describe('chat and notes (M3)', () => {
-    const anchor = { fileId: 'f1', path: 'src/order_service.py', side: 'new', start: 148, end: 151 };
+    const anchor = { diffId: 'iter-3', fileId: 'f1', path: 'src/order_service.py', side: 'new', start: 148, end: 151 };
     const exchange = {
         id: 1,
         question: 'why is the cache invalidated before the write here?',
@@ -311,25 +352,71 @@ describe('chat and notes (M3)', () => {
         expect(chatExchangeSchema.safeParse({ ...exchange, question: '' }).success).toBe(false);
     });
 
-    it('note: anchor is required, commit allows null', () => {
+    it('note: anchor is required, original anchor is stored separately, commit allows null', () => {
         const note = {
             id: 7,
             exchangeId: 1,
             anchor,
             text: 'The order is preserved from the old implementation: …',
-            commit: null,
+            lostAnchor: false,
+            origin: { commit: null, anchor },
             createdAt: '2026-09-01T12:01:00.000Z',
         };
         expect(agentNoteSchema.parse(note)).toEqual(note);
         expect(agentNoteSchema.safeParse({ ...note, anchor: null }).success).toBe(false);
         expect(agentNoteSchema.safeParse({ ...note, text: '' }).success).toBe(false);
+        expect(agentNoteSchema.safeParse({ ...note, origin: { commit: '9f3c1ab' } }).success).toBe(false);
     });
 
-    it('ask: rejects empty and overlong questions, anchor is optional', () => {
+    it('ask: rejects empty and overlong questions, anchor and its diffId are optional', () => {
+        const { diffId: _diffId, ...anchorWithoutDiff } = anchor;
         expect(uiChatAskRequestSchema.safeParse({ text: 'question' }).success).toBe(true);
         expect(uiChatAskRequestSchema.safeParse({ text: 'question', anchor }).success).toBe(true);
+        expect(uiChatAskRequestSchema.safeParse({ text: 'question', anchor: anchorWithoutDiff }).success).toBe(true);
+        expect(chatAnchorSchema.safeParse(anchorWithoutDiff).success).toBe(false);
         expect(uiChatAskRequestSchema.safeParse({ text: '' }).success).toBe(false);
         expect(uiChatAskRequestSchema.safeParse({ text: 'x'.repeat(4001) }).success).toBe(false);
+    });
+});
+
+describe('iterations and snapshots in the UI contract (M4)', () => {
+    it('diff selection: no parameters, by iteration or slice, rejects half a slice and mixed modes', () => {
+        expect(uiReviewDiffRequestSchema.safeParse({}).success).toBe(true);
+        expect(uiReviewDiffRequestSchema.safeParse({ diffId: 'iter-2' }).success).toBe(true);
+        expect(uiReviewDiffRequestSchema.safeParse({ base: 'iter-1', head: 'iter-2' }).success).toBe(true);
+        expect(uiReviewDiffRequestSchema.safeParse({ base: 'iter-1' }).success).toBe(false);
+        expect(uiReviewDiffRequestSchema.safeParse({ diffId: 'iter-2', base: 'iter-1', head: 'iter-2' }).success).toBe(
+            false,
+        );
+    });
+
+    it('stale route: at least one new iteration', () => {
+        const stale = {
+            routeCommit: '9f3c1ab',
+            prCommit: 'c0ffee1',
+            prDiffId: 'iter-4',
+            newIterations: 1,
+            affectedStopIds: ['stop-2', 'stop-3'],
+        };
+        expect(uiRouteStaleSchema.parse(stale)).toEqual(stale);
+        expect(uiRouteStaleSchema.safeParse({ ...stale, newIterations: 0 }).success).toBe(false);
+    });
+
+    it('snapshot summary: accepts three statuses, rejects the rest', () => {
+        const summary = {
+            snapshotId: 'snap-1',
+            diffId: 'iter-3',
+            commit: '9f3c1ab',
+            baseCommit: 'a71d4e2',
+            createdAt: '2026-08-25T12:00:00.000Z',
+            provenance: { harness: 'claude-code', model: null },
+            previousSnapshotId: null,
+            status: 'current',
+        };
+        for (const status of ['current', 'stale', 'gone']) {
+            expect(uiSnapshotSummarySchema.safeParse({ ...summary, status }).success).toBe(true);
+        }
+        expect(uiSnapshotSummarySchema.safeParse({ ...summary, status: 'previous' }).success).toBe(false);
     });
 });
 

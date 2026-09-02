@@ -12,6 +12,7 @@ const STATE: UiState = {
     pr: null,
     worker: { kind: 'never' },
     feedback: { available: true, reason: null },
+    iterations: [],
     tasks: [
         {
             id: 1,
@@ -41,7 +42,7 @@ const PR_META: NonNullable<UiState['pr']> = {
     statusLabel: 'review_in_progress',
     checks: 'passed',
     updatedAt: '2026-08-19T10:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
+    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
 };
 
 interface Harness {

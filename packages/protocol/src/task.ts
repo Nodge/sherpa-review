@@ -4,7 +4,8 @@ import { z } from 'zod';
  * Task types. `echo` is an M0 dummy task for exercising the loop. `route.skeleton`
  * (summary + stop plan + tour order) and `route.section` (filling planned stops), M2.
  * `chat` (reviewer question with selection context, markdown answer without a result schema), M3.
- * The remaining v1 types (`regenerate.*`) arrive in M4 with a protocol minor bump.
+ * Regeneration after a push (M4) uses the same `route.*` types with extra context
+ * (previous route, interdiff), with no separate types (decision M4-T1).
  * Validation rejects unknown types, fail-closed.
  */
 export const taskTypeSchema = z.enum(['echo', 'route.skeleton', 'route.section', 'chat']);

@@ -14,6 +14,7 @@ import {
     selectionScrolledPast,
 } from './selection-popover.tsx';
 
+const DIFF_ID = 'iter-1';
 const FILE = {
     fileId: 'f1',
     path: 'src/cache.ts',
@@ -75,14 +76,15 @@ describe('Selection popover', () => {
     });
 
     it('builds a contract anchor from the selection side and range', () => {
-        expect(chatAnchorFromSelection(FILE, MODEL, SELECTION)).toEqual({
+        expect(chatAnchorFromSelection(FILE, MODEL, SELECTION, DIFF_ID)).toEqual({
+            diffId: DIFF_ID,
             fileId: 'f1',
             path: 'src/cache.ts',
             side: 'new',
             start: 11,
             end: 12,
         });
-        expect(chatAnchorFromSelection(FILE, MODEL, { ...SELECTION, fileId: 'other' })).toBeNull();
+        expect(chatAnchorFromSelection(FILE, MODEL, { ...SELECTION, fileId: 'other' }, DIFF_ID)).toBeNull();
     });
 
     it('counts expanded lines using the model rendered by the card', () => {
@@ -98,8 +100,9 @@ describe('Selection popover', () => {
         const expanded = expandFileContext(MODEL, content, expandGap(new Map(), gapKeyOf(gap), 'up', 2));
         const selection: LineSelection = { fileId: FILE.fileId, side: 'new', anchor: 'c8:8', focus: 'c9:9' };
 
-        expect(chatAnchorFromSelection(FILE, MODEL, selection)).toBeNull();
-        expect(chatAnchorFromSelection(FILE, expanded, selection)).toEqual({
+        expect(chatAnchorFromSelection(FILE, MODEL, selection, DIFF_ID)).toBeNull();
+        expect(chatAnchorFromSelection(FILE, expanded, selection, DIFF_ID)).toEqual({
+            diffId: DIFF_ID,
             fileId: FILE.fileId,
             path: FILE.path,
             side: 'new',
@@ -110,6 +113,7 @@ describe('Selection popover', () => {
             renderToStaticMarkup(
                 <SelectionPopover
                     host={null}
+                    diffId={DIFF_ID}
                     file={FILE}
                     model={expanded}
                     selection={selection}
@@ -142,6 +146,7 @@ describe('Selection popover', () => {
         const html = renderToStaticMarkup(
             <SelectionPopover
                 host={null}
+                diffId={DIFF_ID}
                 file={routeFile}
                 model={clipped}
                 selection={selection}
@@ -162,6 +167,7 @@ describe('Selection popover', () => {
         const html = renderToStaticMarkup(
             <SelectionPopover
                 host={null}
+                diffId={DIFF_ID}
                 file={FILE}
                 model={MODEL}
                 selection={SELECTION}
@@ -184,6 +190,7 @@ describe('Selection popover', () => {
         const html = renderToStaticMarkup(
             <SelectionPopover
                 host={null}
+                diffId={DIFF_ID}
                 file={FILE}
                 model={MODEL}
                 selection={SELECTION}

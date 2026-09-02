@@ -27,6 +27,7 @@ const CONNECTED: WorkerStatus = {
     lastSeenAt: '2026-09-01T10:00:00.000Z',
 };
 const ANCHOR: ChatAnchor = {
+    diffId: 'iter-1',
     fileId: 'file-1',
     path: 'src/cache.ts',
     side: 'new',
@@ -136,7 +137,8 @@ describe('chat panel model', () => {
             exchangeId: 2,
             anchor: ANCHOR,
             text: 'Answer',
-            commit: 'abcdef1',
+            lostAnchor: false,
+            origin: { commit: 'abcdef1', anchor: ANCHOR },
             createdAt: '2026-09-01T10:01:00.000Z',
         };
 
@@ -329,7 +331,8 @@ describe('chat panel feed', () => {
             exchangeId: 1,
             anchor: ANCHOR,
             text: 'Answer',
-            commit: 'abcdef1',
+            lostAnchor: false,
+            origin: { commit: 'abcdef1', anchor: ANCHOR },
             createdAt: '2026-09-01T10:01:00.000Z',
         };
         const onNavigate = vi.fn();

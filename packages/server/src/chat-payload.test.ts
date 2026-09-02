@@ -30,7 +30,7 @@ const META: PrMeta = {
     statusLabel: 'Awaiting review',
     checks: null,
     updatedAt: '2026-08-20T10:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true },
+    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
 };
 
 const READY_ROUTE: UiRouteState = {
@@ -38,8 +38,9 @@ const READY_ROUTE: UiRouteState = {
     smallPr: false,
     snapshot: mediumReadySnapshot(),
     failure: null,
+    stale: null,
 };
-const EMPTY_ROUTE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null };
+const EMPTY_ROUTE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null };
 const GUTTER = /^ *(\d+|\.) +(\d+|\.) \| (.*)$/gm;
 
 function fixtureAnchor(): ChatAnchor {
@@ -49,7 +50,7 @@ function fixtureAnchor(): ChatAnchor {
             const file = diff.files.find((item) => item.fileId === candidate.fileId);
             if (file?.patch !== null && file?.patch !== undefined) {
                 const { collapsed: _collapsed, ...anchor } = candidate;
-                return anchor;
+                return { ...anchor, diffId: diff.diffId };
             }
         }
     }

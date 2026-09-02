@@ -72,6 +72,7 @@ function mountReply() {
         resolved: false,
         resolvedBy: null,
         outdated: false,
+        pinnedTo: null,
         root: {
             id: 'root-1',
             author: { login: 'reviewer', displayName: null, bot: false },

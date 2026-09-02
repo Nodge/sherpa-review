@@ -150,6 +150,7 @@ function mountApp(
         reviewHost: 'fixture',
         pr: DATA.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        iterations: [],
     };
     const snapshot: StoreSnapshot = {
         connection: 'online',

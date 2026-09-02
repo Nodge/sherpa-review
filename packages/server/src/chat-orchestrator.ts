@@ -8,12 +8,14 @@ import type {
     PrDiff,
     PrMeta,
     ReviewHost,
+    UiChatAskAnchor,
     UiChatCancelResponse,
     UiChatRetryResponse,
 } from '@sherpa/protocol';
 
 import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
+import { RpcFailure } from './errors.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
@@ -73,8 +75,9 @@ export class ChatOrchestrator {
         this.unsubscribeQueue?.();
     }
 
-    async ask(question: string, anchor: ChatAnchor | null): Promise<ChatExchange> {
-        const context = await this.loadPrContext(anchor);
+    async ask(question: string, requested: UiChatAskAnchor | null): Promise<ChatExchange> {
+        const context = await this.loadPrContext(requested);
+        const anchor = resolveAskAnchor(requested, context.diff);
         const taskDir = questionDirIn(this.payloadDir);
         this.reservedDirs.add(taskDir);
         try {
@@ -311,7 +314,7 @@ export class ChatOrchestrator {
         }
     }
 
-    private async loadPrContext(anchor: ChatAnchor | null): Promise<PrContext> {
+    private async loadPrContext(anchor: { fileId: string } | null): Promise<PrContext> {
         const host = this.host;
         if (host === null) {
             return { pr: null, diff: null, fileContent: null, headCommit: null };
@@ -344,6 +347,20 @@ interface PrContext {
     readonly diff: PrDiff | null;
     readonly fileContent: FileContent | null;
     readonly headCommit: string | null;
+}
+
+/** A UI anchor without `diffId` refers to the active iteration. Its id comes from the loaded diff. */
+function resolveAskAnchor(anchor: UiChatAskAnchor | null, diff: PrDiff | null): ChatAnchor | null {
+    if (anchor === null) {
+        return null;
+    }
+    if (anchor.diffId !== undefined) {
+        return { ...anchor, diffId: anchor.diffId };
+    }
+    if (diff === null) {
+        throw new RpcFailure('bad_request', 'Question anchor has no diffId and there is no active iteration: the host is unavailable.');
+    }
+    return { ...anchor, diffId: diff.diffId };
 }
 
 function chatResultErrors(result: string): string[] {

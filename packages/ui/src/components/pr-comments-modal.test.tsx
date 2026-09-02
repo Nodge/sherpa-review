@@ -317,6 +317,7 @@ function thread({
         resolved: false,
         resolvedBy: null,
         outdated: false,
+        pinnedTo: null,
         root: {
             id: `${id}-comment`,
             author,

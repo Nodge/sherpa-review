@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { AgentNote, FileDiff } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, FileDiff } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -35,12 +35,14 @@ const FILE: FileDiff = {
 const MODEL = parseFileDiff(FILE);
 
 function note(id: number, start = 41, end = 43, text = 'First line\n\nSecond line'): AgentNote {
+    const anchor: ChatAnchor = { diffId: 'iter-1', fileId: FILE.fileId, path: FILE.path, side: 'new', start, end };
     return {
         id,
         exchangeId: id,
-        anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start, end },
+        anchor,
         text,
-        commit: 'abcdef1',
+        lostAnchor: false,
+        origin: { commit: 'abcdef1', anchor },
         createdAt: `2026-09-01T10:0${String(id)}:00.000Z`,
     };
 }

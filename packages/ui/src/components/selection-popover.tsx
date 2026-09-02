@@ -16,6 +16,8 @@ const SCROLL_CLOSE_DISTANCE = 200;
 
 export interface SelectionPopoverProps {
     readonly host: HTMLElement | null;
+    /** Iteration where the selection was made, included in the question anchor. */
+    readonly diffId: string;
     readonly file: { readonly fileId: string; readonly path: string };
     readonly model: DiffFileModel;
     readonly selection: LineSelection;
@@ -84,6 +86,7 @@ export function chatAnchorFromSelection(
     file: { readonly fileId: string; readonly path: string },
     model: DiffFileModel,
     selection: LineSelection,
+    diffId: string,
 ): ChatAnchor | null {
     if (selection.fileId !== file.fileId) {
         return null;
@@ -93,6 +96,7 @@ export function chatAnchorFromSelection(
     return range === null
         ? null
         : {
+              diffId,
               fileId: file.fileId,
               path: file.path,
               side,
@@ -103,6 +107,7 @@ export function chatAnchorFromSelection(
 
 export function SelectionPopover(props: SelectionPopoverProps) {
     const {
+        diffId,
         file,
         model,
         selection,
@@ -115,7 +120,10 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         onClear,
         gallery,
     } = props;
-    const anchor = useMemo(() => chatAnchorFromSelection(file, model, selection), [file, model, selection]);
+    const anchor = useMemo(
+        () => chatAnchorFromSelection(file, model, selection, diffId),
+        [diffId, file, model, selection],
+    );
     const selectedKeys = useMemo(() => selectedLines(model, selection), [model, selection]);
     const count = selectedKeys.size;
     const mode = gallery?.mode ?? (inFlight ? 'sent' : 'rest');

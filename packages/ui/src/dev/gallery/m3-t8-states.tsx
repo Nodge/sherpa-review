@@ -1,4 +1,4 @@
-import type { AgentNote, FileDiff } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
 
@@ -37,16 +37,25 @@ const FILE: FileDiff = {
     ].join('\n'),
 };
 const MODEL = parseFileDiff(FILE);
+const NOTE_ANCHOR: ChatAnchor = {
+    diffId: 'gallery-iteration',
+    fileId: FILE.fileId,
+    path: FILE.path,
+    side: 'new',
+    start: 41,
+    end: 43,
+};
 const NOTE: AgentNote = {
     id: 41,
     exchangeId: 141,
-    anchor: { fileId: FILE.fileId, path: FILE.path, side: 'new', start: 41, end: 43 },
+    anchor: NOTE_ANCHOR,
     text: [
         'The check separates cache hits from data loading.',
         '',
         'The fast path stays, and cache miss behaviour does not change.',
     ].join('\n'),
-    commit: 'abcdef1',
+    lostAnchor: false,
+    origin: { commit: 'abcdef1', anchor: NOTE_ANCHOR },
     createdAt: '2026-09-01T10:04:00.000Z',
 };
 const NOW = Date.parse('2026-09-01T10:05:00.000Z');

@@ -1,12 +1,12 @@
 import type {
     AgentNote,
-    ChatAnchor,
     FileContent,
     FileDiff,
     PrDiff,
     PrMeta,
     RouteSnapshot,
     Thread,
+    UiChatAskAnchor,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
 } from '@sherpa/protocol';
@@ -97,14 +97,14 @@ export interface FullDiffViewProps {
     readonly store: DiffViewStore | null;
     readonly threadStore: ThreadStore | null;
     readonly agentConnected: boolean;
-    readonly onAskSelection: (anchor: ChatAnchor) => void;
-    readonly isSelectionPending: (anchor: ChatAnchor | null) => boolean;
-    readonly onSelectionAnchorChange: (anchor: ChatAnchor | null) => void;
+    readonly onAskSelection: (anchor: UiChatAskAnchor) => void;
+    readonly isSelectionPending: (anchor: UiChatAskAnchor | null) => boolean;
+    readonly onSelectionAnchorChange: (anchor: UiChatAskAnchor | null) => void;
     /**
      * Prefill the chat composer (README §10): the hatched strip asks about its own
      * range. The question stays unsent so the reviewer can read it and send it.
      */
-    readonly onComposeQuestion?: (text: string, anchor?: ChatAnchor) => void;
+    readonly onComposeQuestion?: (text: string, anchor?: UiChatAskAnchor) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -294,11 +294,11 @@ export interface DiffWorkspaceProps {
     readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
     readonly selectionNavigationRequest?: number;
     readonly agentConnected?: boolean;
-    readonly onAskSelection?: (anchor: ChatAnchor) => void;
-    readonly isSelectionPending?: (anchor: ChatAnchor | null) => boolean;
-    readonly onSelectionAnchorChange?: (anchor: ChatAnchor | null) => void;
+    readonly onAskSelection?: (anchor: UiChatAskAnchor) => void;
+    readonly isSelectionPending?: (anchor: UiChatAskAnchor | null) => boolean;
+    readonly onSelectionAnchorChange?: (anchor: UiChatAskAnchor | null) => void;
     /** See `FullDiffViewProps.onComposeQuestion`. Without it, the strip has no "place" button. */
-    readonly onComposeQuestion?: (text: string, anchor?: ChatAnchor) => void;
+    readonly onComposeQuestion?: (text: string, anchor?: UiChatAskAnchor) => void;
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
@@ -1148,12 +1148,15 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 <SelectionPopover
                     key={`${snapshot.selection.fileId}:${snapshot.selection.side ?? ''}:${snapshot.selection.anchor}:${snapshot.selection.focus}`}
                     host={scrollElement}
+                    diffId={diff.diffId}
                     file={selectedFile}
                     model={selectedModel}
                     selection={snapshot.selection}
                     dragging={snapshot.selectionDragging}
                     agentConnected={agentConnected}
-                    inFlight={isSelectionPending(chatAnchorFromSelection(selectedFile, selectedModel, snapshot.selection))}
+                    inFlight={isSelectionPending(
+                        chatAnchorFromSelection(selectedFile, selectedModel, snapshot.selection, diff.diffId),
+                    )}
                     onAsk={onAskSelection}
                     onSelectionAnchorChange={onSelectionAnchorChange}
                     onComment={(side, line) => {

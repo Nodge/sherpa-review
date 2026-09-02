@@ -78,8 +78,8 @@ describe('Route tab phase selection', () => {
     });
 
     it('falls back to the invitation instead of an empty screen when a phase has no data', () => {
-        expect(routeViewKind({ phase: 'ready', smallPr: false, snapshot: null, failure: null })).toBe('invitation');
-        expect(routeViewKind({ phase: 'failed', smallPr: false, snapshot: null, failure: null })).toBe('invitation');
+        expect(routeViewKind({ phase: 'ready', smallPr: false, snapshot: null, failure: null, stale: null })).toBe('invitation');
+        expect(routeViewKind({ phase: 'failed', smallPr: false, snapshot: null, failure: null, stale: null })).toBe('invitation');
     });
 });
 

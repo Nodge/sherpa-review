@@ -314,6 +314,7 @@ describe('intermediate route states', () => {
             smallPr: true,
             snapshot: null,
             failure: null,
+            stale: null,
         });
         expect(routeFixtures('large')?.states.none?.smallPr).toBe(false);
         expect(routeFixtures('edge')?.states.failed?.failure?.rawOutput).toContain('infra/clock.ts');

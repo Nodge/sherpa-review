@@ -65,7 +65,8 @@ interface RouteTaskRow extends SqlRow {
     plan_indexes: string;
 }
 
-const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null };
+// M4-T4 computes stale.
+const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null };
 
 /**
  * PR route state (M2-T4): generation phase, snapshot and failure reason, the source of truth for the UI.
@@ -136,9 +137,13 @@ export class RouteStore {
         const snapshot: RouteSnapshot = {
             snapshotId: input.snapshotId,
             commit: input.diff.headCommit,
+            baseCommit: input.diff.baseCommit,
             diffId: input.diff.diffId,
             createdAt: this.now().toISOString(),
             provenance: input.provenance,
+            // Carry progress over in M4-T6.
+            previousSnapshotId: null,
+            carried: null,
             summary: input.skeleton.summary,
             stops: input.skeleton.stops,
             tourOrder: input.skeleton.tourOrder,
@@ -399,6 +404,8 @@ export class RouteStore {
                     row.failure_message === null
                         ? null
                         : { message: row.failure_message, rawOutput: row.failure_raw_output },
+                // M4-T4 computes stale.
+                stale: null,
             });
             return { state, intents: parseIntents(row.intents) };
         } catch (error) {

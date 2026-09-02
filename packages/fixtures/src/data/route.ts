@@ -50,6 +50,8 @@ function edgeFailedState(): UiRouteState {
         phase: 'failed',
         smallPr: false,
         snapshot: null,
+        // Route staleness is handled in M4-T4.
+        stale: null,
         failure: {
             message:
                 'Generation stopped at validation: stop 02 references services/orders/src/infra/clock.ts, which is not in this iteration. The file was renamed to infra/time/clock.ts.',
@@ -80,7 +82,7 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
     }),
     // PR below the route threshold: no generation task is enqueued (requirements §3.6).
     small: () => ({
-        states: { none: { phase: 'none', smallPr: true, snapshot: null, failure: null } },
+        states: { none: { phase: 'none', smallPr: true, snapshot: null, failure: null, stale: null } },
         rawResults: null,
     }),
     edge: () => ({
@@ -89,7 +91,7 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
     }),
     // No route: `large` is used in UI virtualization tests, and no one has run generation for it.
     large: () => ({
-        states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null } },
+        states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
         rawResults: null,
     }),
 };

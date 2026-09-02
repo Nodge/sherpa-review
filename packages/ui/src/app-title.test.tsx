@@ -26,7 +26,7 @@ const PR: PrMeta = {
     statusLabel: 'review_in_progress',
     checks: 'passed',
     updatedAt: '2026-08-24T06:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true },
+    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
 };
 
 const mounted: (() => void)[] = [];
@@ -45,6 +45,7 @@ function uiState(pr: PrMeta | null): UiState {
         reviewHost: null,
         pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
+        iterations: [],
     };
 }
 
