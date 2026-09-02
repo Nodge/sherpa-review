@@ -2,14 +2,16 @@ import { spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ReviewHost, UiOpenInEditorResponse } from '@sherpa/protocol';
+import type { PrDiff, ReviewHost, UiOpenInEditorResponse } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
     uiDeleteDraftRequestSchema,
     uiOpenInEditorRequestSchema,
     uiOpenInEditorResponseSchema,
+    uiReviewDiffRequestSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentRequestSchema,
+    uiReviewProgressRequestSchema,
     uiReviewFileContentResponseSchema,
     uiReviewLensesResponseSchema,
     uiReviewProgressResponseSchema,
@@ -32,6 +34,7 @@ import type { z } from 'zod';
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
+import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
 import type { PrMetaCache } from './pr-meta.js';
@@ -73,10 +76,12 @@ export interface ReviewRoutesOptions {
     readonly progress: ProgressStore;
     /** Active route snapshot: discard late marks from the previous generation. */
     readonly route: Pick<RouteStore, 'read'>;
-    /** PR metadata cache: publishing a verdict changes the status, so it must be fetched again. */
-    readonly prMeta: Pick<PrMetaCache, 'refresh'>;
+    /** PR metadata cache: publishing a verdict changes the status, and capabilities determine whether slices are available. */
+    readonly prMeta: Pick<PrMetaCache, 'refresh' | 'get'>;
     /** Local storage for iteration patches. If absent, there is nowhere to save the diff (tests without a database). */
     readonly iterations?: IterationStore | null;
+    /** PR iterations: endpoints use these to tell whether a request concerns the active iteration or a previous one. */
+    readonly iterationFeed?: IterationFeed | null;
     readonly editor?: EditorOptions;
 }
 
@@ -100,14 +105,21 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
         {
             method: 'GET',
             path: UI_ENDPOINTS.reviewDiff,
-            handle: handlingRpcFailures(async () => {
+            handle: handlingRpcFailures(async (ctx) => {
                 const host = hostOf(options);
-                const diff = await call(() => host.getDiff());
-                // Store the active iteration's patch (brief §4a). The endpoint response does not wait for it.
-                const iterations = options.iterations;
-                if (iterations != null) {
-                    void rememberIterationDiff(iterations, host, diff);
-                }
+                const request = parseQuery(
+                    uiReviewDiffRequestSchema,
+                    {
+                        ...optionalParam(ctx, 'diffId'),
+                        ...optionalParam(ctx, 'base'),
+                        ...optionalParam(ctx, 'head'),
+                    },
+                    'diff',
+                );
+                const diff =
+                    request.base !== undefined && request.head !== undefined
+                        ? await interdiffOf(options, host, request.base, request.head)
+                        : await diffOfIteration(options, host, request.diffId);
                 return respond(uiReviewDiffResponseSchema, { diff });
             }),
         },
@@ -216,19 +228,27 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             }),
         },
         {
+            // Progress currently exists only for the active iteration. M4-T6 adds an iteration dimension
+            // to its tables. Until then, a previous iteration returns an empty list.
             method: 'GET',
             path: UI_ENDPOINTS.reviewProgress,
-            handle: handlingRpcFailures(() =>
-                respond(
+            handle: handlingRpcFailures((ctx) => {
+                const request = parseQuery(
+                    uiReviewProgressRequestSchema,
+                    { ...optionalParam(ctx, 'diffId') },
+                    'reading progress',
+                );
+                const past = request.diffId !== undefined && isPastIteration(options, request.diffId);
+                return respond(
                     uiReviewProgressResponseSchema,
                     {
-                        files: options.progress.read(),
-                        stops: options.progress.readStops(),
+                        files: past ? [] : options.progress.read(),
+                        stops: past ? [] : options.progress.readStops(),
                         progressRevision: options.progress.revision,
                     },
                     'local',
-                ),
-            ),
+                );
+            }),
         },
         {
             method: 'POST',
@@ -287,6 +307,81 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             }),
         },
     ];
+}
+
+/**
+ * One iteration's diff. The active one (or one the feed does not know about yet) comes from the host,
+ * since only it knows the latest `viewed` marks. A previous one comes from local patch storage, because
+ * `getDiff` accepts only a slice, not "the diff of iteration N".
+ */
+async function diffOfIteration(
+    options: ReviewRoutesOptions,
+    host: ReviewHost,
+    diffId: string | undefined,
+): Promise<PrDiff> {
+    const active = options.iterationFeed?.active() ?? null;
+    if (diffId === undefined || active === null || active.diffId === diffId) {
+        const diff = await call(() => host.getDiff());
+        // Store the active iteration patch locally (brief §4a). The endpoint response does not wait for it.
+        const iterations = options.iterations;
+        if (iterations != null) {
+            void rememberIterationDiff(iterations, host, diff);
+        }
+        if (diffId === undefined || diff.diffId === diffId) {
+            return diff;
+        }
+    }
+
+    const stored = options.iterations?.get(diffId) ?? null;
+    if (stored === null) {
+        throw new RpcFailure('bad_request', `The diff for iteration ${diffId} was not saved. There is nothing to display.`);
+    }
+    return stored.diff;
+}
+
+/** The host computes a slice between iterations, the local cache retains it (the host takes 2.8–3.7 s). */
+async function interdiffOf(
+    options: ReviewRoutesOptions,
+    host: ReviewHost,
+    base: string,
+    head: string,
+): Promise<PrDiff> {
+    if (options.prMeta.get()?.capabilities.iterations === false) {
+        throw new RpcFailure(
+            'bad_request',
+            'This host cannot provide slices between iterations. "What is new" is unavailable.',
+        );
+    }
+    const iterations = options.iterations;
+    if (iterations == null) {
+        return call(() => host.getDiff({ base, head }));
+    }
+    return call(() => iterations.getInterdiff(base, head, () => host.getDiff({ base, head })));
+}
+
+/** Whether a previous iteration is requested. Active and unknown (feed not started) count as current. */
+function isPastIteration(options: ReviewRoutesOptions, diffId: string): boolean {
+    const active = options.iterationFeed?.active() ?? null;
+    return active !== null && active.diffId !== diffId;
+}
+
+/** A query parameter, if present: a missing key in the parsed object means "not specified". */
+export function optionalParam(ctx: RequestContext, name: string): Record<string, string> {
+    const value = ctx.url.searchParams.get(name);
+    return value === null ? {} : { [name]: value };
+}
+
+/** Parses the query against the contract schema. `what` appears in the rejection message as "request for what". */
+export function parseQuery<T>(schema: z.ZodType<T>, query: unknown, what: string): T {
+    const parsed = schema.safeParse(query);
+    if (!parsed.success) {
+        throw new RpcFailure(
+            'bad_request',
+            `The query parameters for ${what} failed contract validation.`,
+            parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+        );
+    }
+    return parsed.data;
 }
 
 /** Request body under the contract schema. `what` appears in the rejection message as "request for what". */

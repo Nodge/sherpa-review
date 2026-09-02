@@ -29,6 +29,8 @@ import type { ChatStore } from './chat-store.js';
 import { RpcFailure } from './errors.js';
 import type { RequestContext, Route, StreamContext } from './http.js';
 import { abortOnDisconnect, handlingRpcFailures, readJsonBody } from './http.js';
+import type { IterationFeed } from './iteration-feed.js';
+import { routeRevisionOf } from './iteration-feed.js';
 import type { ProgressStore } from './progress-store.js';
 import type { TaskQueue, TaskRecord } from './queue.js';
 import type { ReviewFeed } from './review-feed.js';
@@ -58,6 +60,8 @@ export interface UiRoutesOptions {
     readonly feedback: UiFeedbackAvailability;
     /** Thread revision for SSE. null means this server never has review events. */
     readonly reviewFeed: ReviewFeed | null;
+    /** PR iterations: their list is part of the snapshot, and changing the active one makes the route stale. */
+    readonly iterationFeed: IterationFeed | null;
     /** Reading progress: its revision is sent over the channel to synchronize the second tab. */
     readonly progress: ProgressStore;
     /** Route state: its revision is sent over the channel in the same way as progress. */
@@ -186,11 +190,13 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         sendEvent(res, UI_PROGRESS_EVENT, JSON.stringify(event));
     };
 
-    const pushRoute = (revision: number): void => {
+    // The revision is composite: `stale` is computed from iterations (`withStale`), outside `RouteStore`,
+    // so without the feed a push would not make the UI reread the route.
+    const pushRoute = (): void => {
         if (abort.signal.aborted || res.writableEnded || res.destroyed) {
             return;
         }
-        const event: UiRouteEvent = { routeRevision: revision };
+        const event: UiRouteEvent = { routeRevision: routeRevisionOf(options.route, options.iterationFeed) };
         sendEvent(res, UI_ROUTE_EVENT, JSON.stringify(event));
     };
 
@@ -211,6 +217,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     // Thread subscription starts with the first SSE client and stops with the last (see ReviewFeed).
     // It starts after the first state snapshot so that the channel begins with `state`.
     let unsubscribeReview: (() => void) | null = null;
+    let unsubscribeIterations: (() => void) | null = null;
     let unsubscribeProgress: (() => void) | null = null;
     let unsubscribeRoute: (() => void) | null = null;
     let unsubscribeChat: (() => void) | null = null;
@@ -221,6 +228,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         unsubscribeWorker();
         unsubscribePrMeta();
         unsubscribeReview?.();
+        unsubscribeIterations?.();
         unsubscribeProgress?.();
         unsubscribeRoute?.();
         unsubscribeChat?.();
@@ -237,6 +245,20 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         return;
     }
 
+    // Subscribe to iterations before the first snapshot: their list is part of state, and the
+    // route's `stale` flag is part of its revision. It emits its own events only after initial pushes,
+    // otherwise the channel would begin with 2 identical `route` events.
+    let iterationsReady = false;
+    if (options.iterationFeed !== null) {
+        unsubscribeIterations = options.iterationFeed.subscribe(() => {
+            if (!iterationsReady) {
+                return;
+            }
+            schedule();
+            pushRoute();
+        });
+    }
+
     push();
     // Send the current revision immediately: a reconnected client must learn that threads changed.
     // The channel may have closed during `push` (snapshot assembly failed), leaving nothing to subscribe to.
@@ -251,13 +273,14 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     }
     // The route is local state too: without a host, it simply never leaves the `none` phase.
     if (!res.writableEnded && !res.destroyed) {
-        pushRoute(options.route.revision);
+        pushRoute();
         unsubscribeRoute = options.route.subscribe(pushRoute);
     }
     if (!res.writableEnded && !res.destroyed) {
         pushChat(options.chat.revision);
         unsubscribeChat = options.chat.subscribe(pushChat);
     }
+    iterationsReady = true;
 }
 
 function sendEvent(res: ServerResponse, event: string, data: string): void {
@@ -274,8 +297,7 @@ function buildState(options: UiRoutesOptions): UiState {
         reviewHost: options.reviewHost,
         pr: options.prMeta.get(),
         feedback: options.feedback,
-        // M4-T4 populates the iteration list.
-        iterations: [],
+        iterations: options.iterationFeed?.iterations() ?? [],
     };
 }
 

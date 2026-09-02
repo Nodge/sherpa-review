@@ -21,7 +21,7 @@ import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { DEFAULT_ROUTE_CONFIG, isSmallPr, MAX_SKELETON_TASKS } from './route-orchestrator.js';
 import { contentHashOf } from './route-store.js';
-import { asRawText, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
+import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
@@ -73,6 +73,20 @@ describe('route orchestration', () => {
     /** Connect the agent and warm up deterministically: tests need not wait for the warmup timer. */
     async function startWithWorker(prKey: string = MEDIUM_PR): Promise<SherpaServer> {
         const server = await start(prKey);
+        server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
+        await server.route.warmup();
+        return server;
+    }
+
+    /** A server over the same database, but the host is on the next iteration: a push happened while it was down. */
+    async function startWithPushedHost(host: ReturnType<typeof makeFixtureHost>): Promise<SherpaServer> {
+        const server = await startServer({
+            prKey: MEDIUM_PR,
+            sherpaDir,
+            longPollSeconds: 0.3,
+            reviewHostFactory: () => ({ name: 'fixture', host }),
+        });
+        servers.push(server);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
         await server.route.warmup();
         return server;
@@ -662,12 +676,42 @@ describe('route orchestration', () => {
             expect((await readProgress(server)).stops).toEqual([{ stopId: 's02', viewed: true }]);
         });
 
+        it('fills from the saved iteration patch even when the host is down', async () => {
+            const first = await startWithWorker();
+            await completeRouteWithFailedFirstStop(first);
+            const snapshotId = (await readRoute(first)).route.snapshot?.snapshotId ?? '';
+            await first.close();
+
+            const broken = makeFixtureHost('medium');
+            broken.getDiff = () => Promise.reject(new Error('host is down'));
+            const second = await startServer({
+                prKey: MEDIUM_PR,
+                sherpaDir,
+                longPollSeconds: 0.3,
+                reviewHostFactory: () => ({ name: 'fixture', host: broken }),
+            });
+            servers.push(second);
+
+            const response = await postJson(
+                second.port,
+                UI_ENDPOINTS.reviewRouteFillStop,
+                { snapshotId, planIndex: 1 },
+                second.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(uiRouteFillStopResponseSchema.parse(await response.json()).outcome).toBe('started');
+            expect((await readRoute(second)).route.phase).toBe('filling');
+        });
+
         it('an unavailable diff leaves the route outside filling and the failed stop unchanged', async () => {
             const first = await startWithWorker();
             await completeRouteWithFailedFirstStop(first);
             const before = await readRoute(first);
             const snapshotId = before.route.snapshot?.snapshotId ?? '';
             await first.close();
+            // Neither the host nor local storage has the iteration patch, so there is nothing to resolve section anchors against.
+            dropIterations(sherpaDir, MEDIUM_PR);
 
             const broken = makeFixtureHost('medium');
             broken.getDiff = () => Promise.reject(new Error('host is down'));
@@ -829,6 +873,8 @@ describe('route orchestration', () => {
         const first = await startWithWorker();
         const skeletonId = routeTasks(first, 'route.skeleton')[0] ?? 0;
         await first.close();
+        // The generation iteration's patch is missing locally too. Otherwise acceptance would need no host.
+        dropIterations(sherpaDir, MEDIUM_PR);
 
         // The second server started over the same database, but the host did not provide the diff. Warmup failed,
         // and the agent still holds the task lease from the previous process.
@@ -906,6 +952,47 @@ describe('route orchestration', () => {
             expect((await readRoute(second)).route.phase).toBe('reading');
         });
 
+        it('accepts a skeleton against its task iteration after a push while the server was down', async () => {
+            const first = await startWithWorker();
+            const skeletonId = routeTasks(first, 'route.skeleton')[0] ?? 0;
+            await first.close();
+
+            // The author pushed while the server was down: v2 is active, but the plan was read from v1.
+            const pushed = makeFixtureHost('medium');
+            pushed.advanceIteration();
+            const second = await startWithPushedHost(pushed);
+            const active = (await pushed.listIterations()).find((iteration) => iteration.status === 'active');
+
+            expect(second.queue.next(WORKER)?.task.id).toBe(skeletonId);
+            expect(completeTask(second, skeletonId, mediumRawResults().skeleton).kind).toBe('accepted');
+
+            const route = (await readRoute(second)).route;
+            expect(route.snapshot?.diffId).toBe(mediumDiff().diffId);
+            expect(route.snapshot?.diffId).not.toBe(active?.diffId);
+            // Sections of this snapshot resolve against the same v1. Otherwise acceptance would reject them.
+            expect(route.phase).toBe('filling');
+        });
+
+        it('a lost route iteration patch stops generation with a reason instead of repeating warmup', async () => {
+            const first = await startWithWorker();
+            completeTask(first, routeTasks(first, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
+            expect((await readRoute(first)).route.phase).toBe('filling');
+            await first.close();
+            // Section tasks are lost, there are no local patches, and the PR has moved on: there is nothing
+            // to build a section from. Repeated warmup cannot help here and must not loop.
+            dropTasks(sherpaDir, MEDIUM_PR);
+            dropIterations(sherpaDir, MEDIUM_PR);
+
+            const pushed = makeFixtureHost('medium');
+            pushed.advanceIteration();
+            const second = await startWithPushedHost(pushed);
+
+            const route = (await readRoute(second)).route;
+            expect(route.phase).toBe('failed');
+            expect(route.failure?.message).toContain('Build the route again');
+            expect(routeTasks(second, 'route.section')).toHaveLength(0);
+        });
+
         it('a rebuild survives a restart with the old snapshot and its own task', async () => {
             const first = await startWithWorker();
             await completeRoute(first);
@@ -962,6 +1049,16 @@ describe('snapshot content hash', () => {
         expect(contentHashOf(edited)).not.toBe(contentHashOf(snapshot));
     });
 });
+
+/** Deletes local iteration patches to simulate a diff unavailable from both the host and local storage. */
+function dropIterations(sherpaDir: string, prKey: string): void {
+    const db = new DatabaseSync(databasePathFor(sherpaDir, prKey));
+    try {
+        db.exec('DELETE FROM interdiffs; DELETE FROM iterations;');
+    } finally {
+        db.close();
+    }
+}
 
 /** Deletes tasks without the server to test recovery of a phase that has lost its tasks. */
 function dropTasks(sherpaDir: string, prKey: string): void {
