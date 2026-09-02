@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+    HostId,
+    Iteration,
     PrDiff,
     PrMeta,
     ReviewHost,
@@ -12,7 +14,6 @@ import type {
 
 import { RpcFailure } from './errors.js';
 import type { IterationStore } from './iteration-store.js';
-import { rememberIterationDiff } from './iteration-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import { RoutePayloadWriter } from './route-payload.js';
 import type { RouteStopStatusUpdate, RouteStore, RouteTaskBinding } from './route-store.js';
@@ -104,10 +105,17 @@ export class RouteOrchestrator {
     private readonly warmupDelayMs: number;
 
     /**
-     * Generation diff in process memory: section acceptance is synchronous, while `getDiff` is a network call,
-     * so the diff is loaded in advance and kept until generation finishes.
+     * Diff for generation running in this process: section acceptance is synchronous, while `getDiff` is a network
+     * call. The generation iteration is fixed at startup and stays unchanged even if the author pushes
+     * (planning decision 10: generation finishes, and the snapshot is already stale when created).
      */
-    private diff: PrDiff | null = null;
+    private generationDiff: PrDiff | null = null;
+    /**
+     * Latest diff of the active iteration, used to start the next generation. It does not become the diff
+     * of the running generation. The task binding names its iteration and is the only source after a restart.
+     */
+    private activeDiff: PrDiff | null = null;
+    /** Active diff load in progress. Concurrent calls share one host request. */
     private diffLoad: Promise<PrDiff> | null = null;
     /** PR metadata for the payload. `null` means the host did not provide it, so the route uses only the diff. */
     private meta: PrMeta | null = null;
@@ -206,7 +214,7 @@ export class RouteOrchestrator {
         if (phase !== 'none' || this.registry.status().kind !== 'connected' || this.hasOpenRouteTask()) {
             return;
         }
-        this.startSkeleton();
+        this.startSkeleton(diff);
     }
 
     /**
@@ -232,13 +240,18 @@ export class RouteOrchestrator {
             return 'already_running';
         }
 
-        this.startSkeleton();
+        this.startSkeleton(diff);
         return 'started';
     }
 
-    /** Fills a failed stop through the regular `filling` phase and reconciliation. */
+    /**
+     * Fill a single failed stop through the regular `filling` phase and reconciliation. Anchors resolve
+     * against the snapshot iteration diff. The PR may have advanced, but this fills the old route.
+     */
     async fillStop(snapshotId: string, planIndex: number): Promise<UiRouteFillStopResponse['outcome']> {
-        await this.loadDiff();
+        if (this.host === null) {
+            throw new RpcFailure('no_review_host', 'This PR has no host adapter, so there is no source for building a route.');
+        }
 
         const state = this.store.read();
         if (state.phase !== 'ready') {
@@ -252,6 +265,9 @@ export class RouteOrchestrator {
         if (stop?.status !== 'failed') {
             return 'not_unfilled';
         }
+        // Fill the route for its own iteration. The active iteration may have advanced, so anchors
+        // must not resolve against its diff.
+        await this.ensureDiff(state.snapshot.diffId);
 
         // Keep progress. The UI cannot mark an unfilled stop, and marks on other stops remain valid.
         this.store.beginStopFill(planIndex);
@@ -282,12 +298,16 @@ export class RouteOrchestrator {
     }
 
     private acceptSkeleton(task: TaskRecord, result: string): TaskResultAcceptance {
-        const diff = this.diff;
+        const binding = this.store.bindings().get(task.id);
+        if (binding?.kind !== 'skeleton') {
+            return { kind: 'rejected', errors: [STALE_GENERATION] };
+        }
+
+        // There is no snapshot yet, and only the task binding knows its iteration. After a server restart,
+        // using the active iteration would accept a plan read from a different diff.
+        const diff = binding.diffId === null ? null : this.diffOf(binding.diffId);
         if (diff === null) {
             return this.deferUntilDiff();
-        }
-        if (this.store.bindings().get(task.id)?.kind !== 'skeleton') {
-            return { kind: 'rejected', errors: [STALE_GENERATION] };
         }
 
         const validation = validateSkeleton(result);
@@ -323,15 +343,15 @@ export class RouteOrchestrator {
     }
 
     private acceptSection(task: TaskRecord, result: string): TaskResultAcceptance {
-        const diff = this.diff;
-        if (diff === null) {
-            return this.deferUntilDiff();
-        }
-
         const snapshot = this.store.read().snapshot;
         const binding = this.store.bindings().get(task.id);
         if (snapshot === null || binding?.kind !== 'section') {
             return { kind: 'rejected', errors: [STALE_GENERATION] };
+        }
+
+        const diff = this.diffOf(snapshot.diffId);
+        if (diff === null) {
+            return this.deferUntilDiff();
         }
 
         const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff);
@@ -497,8 +517,9 @@ export class RouteOrchestrator {
     }
 
     /** New generation cancels previous tasks and keeps the live snapshot until a new one is accepted. */
-    private startSkeleton(): void {
+    private startSkeleton(diff: PrDiff): void {
         const hasSnapshot = this.store.read().snapshot !== null;
+        this.generationDiff = diff;
         this.cancelOpenRouteTasks();
         this.store.clearBindings();
         this.store.beginSkeleton();
@@ -513,14 +534,22 @@ export class RouteOrchestrator {
     }
 
     private startSkeletonTask(): void {
-        const diff = this.diff;
+        // Rescheduling after a restart starts the plan again and uses the active iteration. The previous
+        // iteration was known by its task binding, which no longer exists at this point.
+        const diff = this.generationDiff ?? this.activeDiff;
         if (diff === null) {
             // The server restarted during generation. There is no diff to build the payload from, so scheduling
             // waits for it. Warmup finishes the work and calls reconciliation again at the end.
             this.warmupInBackground();
             return;
         }
-        this.enqueueRouteTask('skeleton', [], this.payload.skeletonTask({ diff, meta: this.meta }));
+        this.generationDiff = diff;
+        this.enqueueRouteTask(
+            'skeleton',
+            diff.diffId,
+            [],
+            this.payload.skeletonTask({ diff, meta: this.meta }),
+        );
     }
 
     /**
@@ -530,13 +559,12 @@ export class RouteOrchestrator {
      */
     private enqueueSections(planIndexes: readonly number[]): void {
         const snapshot = this.store.read().snapshot;
-        const diff = this.diff;
         if (snapshot === null) {
             return;
         }
+        const diff = this.diffOf(snapshot.diffId);
         if (diff === null) {
-            // As with the skeleton: no diff means no payload, so stops remain `queued` until warmup.
-            this.warmupInBackground();
+            this.awaitOrAbandonDiff(snapshot.diffId);
             return;
         }
 
@@ -546,7 +574,7 @@ export class RouteOrchestrator {
         for (let from = 0; from < ordered.length; from += this.config.sectionBatchSize) {
             const batch = ordered.slice(from, from + this.config.sectionBatchSize);
             const input = this.payload.sectionTask(context, batch, snapshot.stops, intents);
-            this.enqueueRouteTask('section', batch, input);
+            this.enqueueRouteTask('section', snapshot.diffId, batch, input);
         }
     }
 
@@ -559,6 +587,7 @@ export class RouteOrchestrator {
      */
     private enqueueRouteTask(
         kind: RouteTaskBinding['kind'],
+        diffId: HostId,
         planIndexes: readonly number[],
         input: EnqueueInput,
     ): void {
@@ -566,7 +595,7 @@ export class RouteOrchestrator {
         this.reconciling = true;
         try {
             const record = this.queue.enqueue(input);
-            this.store.bindTask(record.id, kind, planIndexes);
+            this.store.bindTask(record.id, kind, diffId, planIndexes);
         } finally {
             this.reconciling = outer;
         }
@@ -622,52 +651,147 @@ export class RouteOrchestrator {
         });
     }
 
+    /** Iteration diff from process memory, or from local patch storage. */
+    private diffOf(diffId: HostId): PrDiff | null {
+        for (const candidate of [this.generationDiff, this.activeDiff]) {
+            if (candidate?.diffId === diffId) {
+                return candidate;
+            }
+        }
+        return this.iterations?.get(diffId)?.diff ?? null;
+    }
+
     /**
-     * Generation diff. Cached per process: the route is built for one iteration, and section acceptance
-     * must resolve anchors against the same diff the skeleton saw.
+     * Make the iteration diff available synchronously. A cache miss has exactly one recovery path:
+     * ask the host for the active iteration, in case that is the requested one and its patch is not yet stored
+     * (a database carried over from M3). The host cannot provide a complete previous iteration (`getDiff` only accepts a
+     * slice), so failure is the only remaining option.
+     */
+    private async ensureDiff(diffId: HostId): Promise<PrDiff> {
+        const known = this.diffOf(diffId);
+        if (known !== null) {
+            return known;
+        }
+
+        await this.loadDiff();
+        const loaded = this.diffOf(diffId);
+        if (loaded === null) {
+            throw new RpcFailure('host_unavailable', lostDiffMessage(diffId));
+        }
+        return loaded;
+    }
+
+    /**
+     * The snapshot iteration patch is missing from both memory and storage. Until the active diff loads,
+     * wait for warmup, the only chance to recover it. If the active diff is already known and belongs to
+     * another iteration, the patch is permanently lost. Stop generation with a reason,
+     * otherwise reconciliation would keep warming up in a loop and monopolize the process.
+     */
+    private awaitOrAbandonDiff(diffId: HostId): void {
+        if (this.activeDiff === null) {
+            this.warmupInBackground();
+            return;
+        }
+        this.store.fail(lostDiffMessage(diffId), null);
+    }
+
+    /**
+     * Fetch the active iteration diff along with PR metadata and the iteration list. Store the patch
+     * synchronously after the response. A snapshot built on this iteration must remain
+     * readable after the next push (brief §4a), so generation cannot start before the write.
+     *
+     * Do not cache it for the process lifetime. `generationDiff` holds the generation iteration. Concurrent
+     * calls share one request so warmup and the `generate` endpoint do not query the host twice.
      */
     private async loadDiff(): Promise<PrDiff> {
         const host = this.host;
         if (host === null) {
             throw new RpcFailure('no_review_host', 'This PR has no host adapter, so there is no source for building a route.');
         }
-        if (this.diff !== null) {
-            return this.diff;
-        }
 
-        this.diffLoad ??= (async () => {
+        // Keep the promise locally. The inner `finally` clears the field before we could read it.
+        const load = (this.diffLoad ??= (async () => {
             try {
-                // PR metadata enriches the payload (title, author, branches). Its failure must not break the route,
-                // so it is fetched alongside the diff and silently left `null` on failure.
-                const [diff, meta] = await Promise.all([
+                // PR metadata supplements the payload (title, author, branches), while the iteration list provides
+                // metadata for the active iteration. Failure of either request does not break the route.
+                const [diff, meta, iterations] = await Promise.all([
                     host.getDiff(),
                     host.getPr().then(
                         (value) => value,
                         () => null,
                     ),
+                    host.listIterations().then(
+                        (value) => value,
+                        (error: unknown): Iteration[] => {
+                            process.stderr.write(
+                                `sherpa-server: could not fetch iteration list: ${messageOf(error)}\n`,
+                            );
+                            return [];
+                        },
+                    ),
                 ]);
                 this.meta = meta;
-                // The patch of the iteration used to build the route must survive the next push:
-                // it is needed to read the old snapshot (brief §4a).
-                if (this.iterations !== null) {
-                    void rememberIterationDiff(this.iterations, host, diff);
-                }
+                this.remember(diff, iterations);
+                this.activeDiff = diff;
                 return diff;
             } catch (error) {
-                // A failure must not persist for the whole process: the next call tries again.
-                this.diffLoad = null;
                 if (error instanceof RpcFailure) {
                     throw error;
                 }
-                const message = error instanceof Error ? error.message : String(error);
-                throw new RpcFailure('host_unavailable', `The host adapter did not return the diff: ${message}`);
+                throw new RpcFailure('host_unavailable', `Host adapter did not return the diff: ${messageOf(error)}`);
+            } finally {
+                // A failure must not persist for the process lifetime, and a success must not hide the next push.
+                this.diffLoad = null;
             }
-        })();
+        })());
 
-        const diff = await this.diffLoad;
-        this.diff = diff;
-        return diff;
+        return load;
     }
+
+    /**
+     * Store the active iteration patch. Metadata comes from the host list. If it is missing
+     * (the list was unavailable or the author pushed between the 2 requests), reconstruct it from the
+     * diff. The patch must be saved regardless. The next `sync` will fix the status and timestamp.
+     */
+    private remember(diff: PrDiff, iterations: readonly Iteration[]): void {
+        const store = this.iterations;
+        if (store === null) {
+            return;
+        }
+
+        const listed = iterations.find((candidate) => candidate.diffId === diff.diffId);
+        if (listed === undefined) {
+            process.stderr.write(
+                `sherpa-server: host did not list iteration ${diff.diffId}, reconstructed its metadata from the diff\n`,
+            );
+        }
+        const iteration: Iteration = listed ?? {
+            diffId: diff.diffId,
+            baseCommit: diff.baseCommit,
+            headCommit: diff.headCommit,
+            createdAt: new Date().toISOString(),
+            status: 'active',
+        };
+        try {
+            store.upsert(diff, iteration);
+        } catch (error) {
+            process.stderr.write(
+                `sherpa-server: iteration patch ${diff.diffId} not saved: ${messageOf(error)}\n`,
+            );
+        }
+    }
+}
+
+/** Iteration patch unavailable: the host cannot provide a full previous iteration and no local copy remains. */
+function lostDiffMessage(diffId: HostId): string {
+    return (
+        `The diff for iteration ${diffId}, on which this route was built, is unavailable: the host no longer ` +
+        'serves it and there is no local copy left. Build the route again.'
+    );
+}
+
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /** The server has not received the diff yet and cannot validate the result. The model must retry the call. */

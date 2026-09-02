@@ -96,7 +96,7 @@ describe('storage', () => {
             contentHash: 'abcdef123456',
         };
 
-        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        const before = openDatabase(file, migrationsBefore('010-iterations'));
         before
             .prepare(
                 `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
@@ -133,11 +133,42 @@ describe('storage', () => {
         }
     });
 
+    // Old bindings do not name the task iteration, so generation cannot continue with them.
+    it('removes previously saved bindings during the task iteration migration', () => {
+        const file = `${sherpaDir}/route-tasks.db`;
+
+        const before = openDatabase(file, migrationsBefore('011-route-task-iteration'));
+        before
+            .prepare(
+                'INSERT INTO tasks (id, type, priority, instructions, context_files, status, attempt, ' +
+                    'created_at, updated_at) ' +
+                    "VALUES (7, 'route.skeleton', 'background', '', '[]', 'queued', 1, " +
+                    "'2026-08-25T10:00:00.000Z', '2026-08-25T10:00:00.000Z')",
+            )
+            .run();
+        before
+            .prepare("INSERT INTO route_tasks (task_id, kind, plan_indexes, created_at) " +
+                "VALUES (7, 'skeleton', '[]', '2026-08-25T10:00:00.000Z')")
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT COUNT(*) AS count FROM route_tasks').get()).toMatchObject({ count: 0 });
+            // The task itself remains. The orchestrator cancels the orphan without a binding.
+            expect(after.prepare('SELECT COUNT(*) AS count FROM tasks').get()).toMatchObject({ count: 1 });
+            const columns = after.prepare('PRAGMA table_info(route_tasks)').all() as { name: string }[];
+            expect(columns.map((column) => column.name)).toContain('diff_id');
+        } finally {
+            after.close();
+        }
+    });
+
     // Manual database edits must not crash server startup during migration.
     it('handles a corrupt snapshot blob during the iteration migration', () => {
         const file = `${sherpaDir}/route-broken.db`;
 
-        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        const before = openDatabase(file, migrationsBefore('010-iterations'));
         before
             .prepare(
                 `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
@@ -197,3 +228,12 @@ describe('storage', () => {
         }
     });
 });
+
+/** Schema before the named migration: the migration test must start from that exact database state. */
+function migrationsBefore(name: string): typeof MIGRATIONS {
+    const index = MIGRATIONS.findIndex((migration) => migration.name === name);
+    if (index < 0) {
+        throw new Error(`migration ${name} not found`);
+    }
+    return MIGRATIONS.slice(0, index);
+}

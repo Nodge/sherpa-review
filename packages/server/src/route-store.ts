@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type {
+    HostId,
     PrDiff,
     RouteProvenance,
     RouteSnapshot,
@@ -45,6 +46,11 @@ export interface RouteStopStatusUpdate {
 /** A generation task and the stops it fills, which never include "Other". */
 export interface RouteTaskBinding {
     readonly kind: 'skeleton' | 'section';
+    /**
+     * The iteration whose diff supplied the task payload. Acceptance resolves anchors against that diff.
+     * `null` means the binding predates migration 011, which deletes such bindings. This only guards reads.
+     */
+    readonly diffId: HostId | null;
     readonly planIndexes: number[];
 }
 
@@ -75,10 +81,11 @@ interface RouteSnapshotRow extends SqlRow {
 interface RouteTaskRow extends SqlRow {
     task_id: number;
     kind: string;
+    diff_id: string | null;
     plan_indexes: string;
 }
 
-// M4-T4 computes stale.
+// `stale` is always null in storage. `IterationFeed` computes it when reading (`withStale`).
 const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null };
 
 /**
@@ -306,24 +313,32 @@ export class RouteStore {
     }
 
     /** Maps a generation task to the stops it fills. Does not change UI state, so the revision stays unchanged. */
-    bindTask(taskId: number, kind: RouteTaskBinding['kind'], planIndexes: readonly number[]): void {
+    bindTask(
+        taskId: number,
+        kind: RouteTaskBinding['kind'],
+        diffId: HostId,
+        planIndexes: readonly number[],
+    ): void {
         this.db
             .prepare(
-                `INSERT INTO route_tasks (task_id, kind, plan_indexes, created_at) VALUES (?, ?, ?, ?)
-                 ON CONFLICT(task_id) DO UPDATE SET kind = excluded.kind, plan_indexes = excluded.plan_indexes`,
+                `INSERT INTO route_tasks (task_id, kind, diff_id, plan_indexes, created_at)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT(task_id) DO UPDATE SET kind = excluded.kind, diff_id = excluded.diff_id,
+                    plan_indexes = excluded.plan_indexes`,
             )
-            .run(taskId, kind, JSON.stringify([...planIndexes]), this.now().toISOString());
+            .run(taskId, kind, diffId, JSON.stringify([...planIndexes]), this.now().toISOString());
     }
 
     /** Current generation's task bindings in enqueue order. */
     bindings(): Map<number, RouteTaskBinding> {
         const rows = this.db
-            .prepare('SELECT task_id, kind, plan_indexes FROM route_tasks ORDER BY task_id')
+            .prepare('SELECT task_id, kind, diff_id, plan_indexes FROM route_tasks ORDER BY task_id')
             .all() as RouteTaskRow[];
         const bindings = new Map<number, RouteTaskBinding>();
         for (const row of rows) {
             bindings.set(row.task_id, {
                 kind: row.kind === 'skeleton' ? 'skeleton' : 'section',
+                diffId: row.diff_id,
                 planIndexes: parsePlanIndexes(row.plan_indexes),
             });
         }
@@ -510,7 +525,7 @@ export class RouteStore {
                     row.failure_message === null
                         ? null
                         : { message: row.failure_message, rawOutput: row.failure_raw_output },
-                // M4-T4 computes stale.
+                // `IterationFeed` compares the snapshot with the active iteration. Storage does not.
                 stale: null,
             });
             return { state, intents: parseIntents(row.intents) };

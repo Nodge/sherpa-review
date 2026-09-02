@@ -15,11 +15,12 @@ import {
     uiChatRetryResponseSchema,
     uiStateSchema,
 } from '@sherpa/protocol';
+import { makeFixtureHost } from '@sherpa/fixtures';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { chatPayloadDirOf, databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
-import { asRawText, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
+import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
 import { bannedPhrases } from './route/voice.js';
 import { type SherpaServer, startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
@@ -29,7 +30,8 @@ const LOCAL_PR = 'github-777';
 const WORKER = 'w-chat';
 const ANSWER = 'The cache is cleared before the write so the next reader does not get the previous value.';
 const ANCHOR: ChatAnchor = {
-    diffId: 'iter-1',
+    // Active fixture iteration: the endpoint rejects an anchor from another iteration (M4-T4).
+    diffId: mediumDiff().diffId,
     fileId: 'f-main',
     path: 'src/main.ts',
     side: 'new',
@@ -355,6 +357,54 @@ describe('chat and notes', () => {
             anchor: ANCHOR,
             status: 'queued',
         });
+    });
+
+    it('retrying an M3 question treats an anchor without an iteration as belonging to the active one', async () => {
+        const first = await start(PR);
+        const exchange = await ask(first, 'Question asked before iterations existed', ANCHOR);
+        first.queue.fail(WORKER, leaseChat(first), 'not enough context');
+        await first.close();
+        // M3 exchanges stored anchors without `diffId`, so the store fills in `unknown`.
+        stripAnchorIteration(sherpaDir, PR, exchange.id);
+
+        const second = await start(PR);
+        const retry = await postJson(
+            second.port,
+            UI_ENDPOINTS.reviewChatRetry,
+            { exchangeId: exchange.id },
+            second.token,
+        );
+
+        expect(retry.status).toBe(200);
+        expect(uiChatRetryResponseSchema.parse(await retry.json()).outcome).toBe('retried');
+    });
+
+    it('does not use active-iteration file content for a question about a previous iteration', async () => {
+        const stored = await start(PR);
+        // The v1 patch is stored the first time the diff is loaded.
+        await get(stored.port, UI_ENDPOINTS.reviewDiff, stored.token);
+        await stored.close();
+
+        // The host moved to v2 and returns no diff at all: the saved v1 is the only correct context.
+        const pushed = makeFixtureHost('medium');
+        pushed.advanceIteration();
+        pushed.getDiff = () => Promise.reject(new Error('host is down'));
+        const server = await startServer({
+            prKey: PR,
+            sherpaDir,
+            longPollSeconds: 0.1,
+            reviewHostFactory: () => ({ name: 'fixture', host: pushed }),
+        });
+        servers.push(server);
+
+        await ask(server, 'What was here in the previous iteration?', ANCHOR);
+
+        const task = server.queue.listTasks().find((candidate) => candidate.type === 'chat');
+        const files = task?.contextFiles ?? [];
+        const patch = files.find((file) => path.basename(file) === 'selection.patch.md') ?? '';
+        const fileContext = files.find((file) => path.basename(file) === 'file-context.md') ?? '';
+        expect(fsSync.readFileSync(patch, 'utf8')).toContain('src/main.ts');
+        expect(fsSync.readFileSync(fileContext, 'utf8')).toContain('UNAVAILABLE');
     });
 
     it('retries invalid answers and moves the exchange to failed when rejections are exhausted', async () => {
@@ -713,4 +763,18 @@ function parseSseEvent(raw: string): SseEvent {
         }
     }
     return { event, data: data.join('\n') };
+}
+
+/** Remove `diffId` from an exchange anchor, as stored before M4. The store fills in `unknown`. */
+function stripAnchorIteration(sherpaDir: string, prKey: string, exchangeId: number): void {
+    const db = new DatabaseSync(databasePathFor(sherpaDir, prKey));
+    try {
+        const row = db.prepare('SELECT anchor FROM chat_exchanges WHERE id = ?').get(exchangeId) as {
+            anchor: string;
+        };
+        const { diffId: _iteration, ...rest } = JSON.parse(row.anchor) as ChatAnchor;
+        db.prepare('UPDATE chat_exchanges SET anchor = ? WHERE id = ?').run(JSON.stringify(rest), exchangeId);
+    } finally {
+        db.close();
+    }
 }

@@ -259,6 +259,18 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE route_state DROP COLUMN snapshot;
         `,
     },
+    {
+        // Route task iteration (M4-T4): acceptance must resolve anchors against the same
+        // diff used to build the task payload. After a server restart, there is nowhere else
+        // to recover it. Old bindings do not name an iteration, so they are deleted. Their tasks
+        // become orphans, and the orchestrator cancels them and schedules generation again.
+        name: '011-route-task-iteration',
+        sql: `
+            ALTER TABLE route_tasks ADD COLUMN diff_id TEXT;
+
+            DELETE FROM route_tasks;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

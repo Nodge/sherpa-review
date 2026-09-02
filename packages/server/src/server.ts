@@ -18,6 +18,7 @@ import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
 import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
+import { IterationFeed } from './iteration-feed.js';
 import { IterationStore } from './iteration-store.js';
 import {
     claimManifest,
@@ -230,6 +231,15 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
         const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
+        // PR iterations (M4-T4): one watcher per server supplies `uiState.iterations` and `stale`.
+        const iterationFeed =
+            reviewHost === null
+                ? null
+                : new IterationFeed({
+                      host: reviewHost.host,
+                      iterations: iterationStore,
+                      route: routeStore,
+                  });
         // Shared context survives restarts along with tasks. Cleanup at startup and on
         // key changes preserves diffs still referenced by an open or held task.
         const sharedPayload = new SharedPayloadStore(sharedPayloadDirOf(sherpaDir, prKey), () =>
@@ -255,6 +265,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             host: reviewHost?.host ?? null,
             payloadDir: chatPayloadDirOf(sherpaDir, prKey),
             iterations: iterationStore,
+            iterationFeed,
             shared: sharedPayload,
         });
         queue.setResultAcceptor(
@@ -279,6 +290,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 registry: workerRegistry,
                 reviewHost: reviewHost?.name ?? null,
                 reviewFeed,
+                iterationFeed,
                 prMeta,
                 feedback: feedbackAvailability(options.feedback?.env ?? process.env),
                 progress,
@@ -294,6 +306,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 route: routeStore,
                 prMeta,
                 iterations: iterationStore,
+                iterationFeed,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
             ...createFeedbackRoutes({
@@ -302,7 +315,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
                 ...options.feedback,
             }),
-            ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
+            ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator, iterationFeed }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
             // Dev endpoints exist only for the fixture host. Other hosts don't have these routes.
             ...(advanceIteration === undefined ? [] : createDevRoutes({ advanceIteration })),
@@ -321,6 +334,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             shutdownController,
             idleWatch,
             reviewFeed,
+            iterationFeed,
             prMeta,
             progress,
             routeStore,
@@ -415,6 +429,7 @@ function createHandle(parts: {
     shutdownController: AbortController;
     idleWatch: IdleWatch;
     reviewFeed: ReviewFeed | null;
+    iterationFeed: IterationFeed | null;
     prMeta: PrMetaCache;
     progress: ProgressStore;
     routeStore: RouteStore;
@@ -445,6 +460,7 @@ function createHandle(parts: {
                 parts.uiPresence.close();
                 // Stop host polling here too, or the subscription would outlive server shutdown.
                 parts.reviewFeed?.close();
+                parts.iterationFeed?.close();
                 // The metadata load retry must not wake up after server shutdown.
                 parts.prMeta.close();
                 parts.progress.close();

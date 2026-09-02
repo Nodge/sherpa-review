@@ -15,7 +15,9 @@ import type {
 
 import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
+import { LEGACY_DIFF_ID } from './chat-store.js';
 import { RpcFailure } from './errors.js';
+import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
@@ -32,6 +34,8 @@ export interface ChatOrchestratorOptions {
     readonly payloadDir: string;
     /** Local storage for iteration patches. `null` means nowhere to save the diff (tests without a database). */
     readonly iterations?: IterationStore | null;
+    /** PR iterations: tell whether the question concerns the active iteration or a previous one. */
+    readonly iterationFeed?: IterationFeed | null;
     /** Shared question context: guide, PR diff and file contents at stable paths. */
     readonly shared: SharedPayloadStore;
 }
@@ -47,6 +51,7 @@ export class ChatOrchestrator {
     private readonly host: ReviewHost | null;
     private readonly payloadDir: string;
     private readonly iterations: IterationStore | null;
+    private readonly iterationFeed: IterationFeed | null;
     private readonly shared: SharedPayloadStore;
     /**
      * Directories for questions whose tasks have not been enqueued: an await between writing the payload and enqueueing
@@ -66,6 +71,7 @@ export class ChatOrchestrator {
         this.host = options.host;
         this.payloadDir = options.payloadDir;
         this.iterations = options.iterations ?? null;
+        this.iterationFeed = options.iterationFeed ?? null;
         this.shared = options.shared;
     }
 
@@ -320,10 +326,22 @@ export class ChatOrchestrator {
         }
     }
 
-    private async loadPrContext(anchor: { fileId: string } | null): Promise<PrContext> {
+    /**
+     * Question material: PR header, its iteration's diff and, for an anchored question, file content.
+     * Failure of any part narrows the context without cancelling the question.
+     */
+    private async loadPrContext(anchor: { fileId: string; diffId?: string | undefined } | null): Promise<PrContext> {
         const host = this.host;
         if (host === null) {
             return { pr: null, diff: null, fileContent: null, headCommit: null };
+        }
+
+        // An M3 exchange anchor names no iteration (`LEGACY_DIFF_ID`), so its question is about the active one.
+        const pinned =
+            anchor?.diffId === undefined || anchor.diffId === LEGACY_DIFF_ID ? null : anchor.diffId;
+        const active = this.iterationFeed?.active() ?? null;
+        if (pinned !== null && active !== null && active.diffId !== pinned) {
+            return this.loadPinnedContext(host, pinned);
         }
 
         const getFileContent = host.getFileContent?.bind(host);
@@ -347,7 +365,36 @@ export class ChatOrchestrator {
             // Store the active iteration diff used to build the question context.
             void rememberIterationDiff(this.iterations, host, diff);
         }
+        // The active iteration may have advanced while the diff was loading (or the feed has not started yet):
+        // a question about a previous iteration must use its patch, not the latest one. File content
+        // from the response is discarded because `getFileContent` only knows the active iteration.
+        if (pinned !== null && diff?.diffId !== pinned) {
+            return this.loadPinnedContext(host, pinned, pr);
+        }
         return { pr, diff, fileContent, headCommit: diff?.headCommit ?? null };
+    }
+
+    /**
+     * Context for a question about a previous iteration: its patch is local (brief §4a), but it has no file
+     * contents for it. `getFileContent` only knows the active iteration.
+     */
+    private async loadPinnedContext(host: ReviewHost, diffId: string, meta?: PrMeta | null): Promise<PrContext> {
+        const stored = this.iterations?.get(diffId) ?? null;
+        if (stored === null) {
+            throw new RpcFailure(
+                'bad_request',
+                `The diff for iteration ${diffId} was not saved, so there is no context to ask a question about it.`,
+            );
+        }
+
+        const pr =
+            meta !== undefined
+                ? meta
+                : await host.getPr().then(
+                      (value) => value,
+                      () => null,
+                  );
+        return { pr, diff: stored.diff, fileContent: null, headCommit: stored.diff.headCommit };
     }
 }
 

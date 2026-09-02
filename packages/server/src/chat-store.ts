@@ -360,7 +360,7 @@ function toNote(row: NoteRow): AgentNote {
 }
 
 /** M3 exchanges predate `diffId`. Their iteration is unknown, so the server treats them as active. */
-const LEGACY_DIFF_ID = 'unknown';
+export const LEGACY_DIFF_ID = 'unknown';
 
 function parseAnchor(raw: string): ChatAnchor {
     const value: unknown = JSON.parse(raw);
