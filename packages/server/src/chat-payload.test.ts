@@ -11,11 +11,13 @@ import {
     CHAT_HISTORY_EXCHANGES,
     CHAT_PAYLOAD_BUDGET_BYTES,
     materializeChatPayload,
+    questionDirIn,
     selectedPatchContext,
     surroundingFileContext,
 } from './chat-payload.js';
 import { walkPatch } from './route/diff-index.js';
 import { mediumDiff, mediumReadySnapshot } from './route/fixture-support.js';
+import { diffKeyOf, SharedPayloadStore } from './shared-payload.js';
 
 const META: PrMeta = {
     id: '4242',
@@ -85,16 +87,29 @@ function payloadBytes(payload: ReturnType<typeof buildChatPayload>): number {
 
 describe('anchored chat payload', () => {
     let root: string;
+    let payloadDir: string;
+    let sharedDir: string;
+    let shared: SharedPayloadStore;
 
     beforeEach(async () => {
         root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-chat-payload-'));
+        payloadDir = path.join(root, 'chat');
+        sharedDir = path.join(root, 'shared');
+        shared = new SharedPayloadStore(sharedDir, () => []);
     });
 
     afterEach(async () => {
         await fs.promises.rm(root, { recursive: true, force: true });
     });
 
-    it('materializes the guide and all context as separate files in a fresh directory', async () => {
+    async function materialize(
+        context: Parameters<typeof buildChatPayload>[0],
+        options?: Parameters<typeof buildChatPayload>[1],
+    ) {
+        return materializeChatPayload(questionDirIn(payloadDir), shared, buildChatPayload(context, options));
+    }
+
+    it('uses stable paths for shared context and a fresh question directory for its own files', async () => {
         const anchor = fixtureAnchor();
         const context = {
             question: 'Why are the operations in this order?',
@@ -105,21 +120,30 @@ describe('anchored chat payload', () => {
             route: READY_ROUTE,
             history: [exchange(1)],
         };
-        const first = await materializeChatPayload(root, buildChatPayload(context));
-        const second = await materializeChatPayload(root, buildChatPayload(context));
+        const first = await materialize(context);
+        const second = await materialize(context);
 
         expect(first.contextFiles.map((file) => path.basename(file))).toEqual([
-            'chat-guide.md',
+            expect.stringMatching(/^chat-guide-[0-9a-f]{8}\.md$/),
+            expect.stringMatching(/\.new\.md$/),
             'question.md',
             'selection.patch.md',
-            'file-context.md',
             'route-context.md',
             'history.md',
         ]);
-        expect(path.dirname(first.contextFiles[0] ?? '')).not.toBe(path.dirname(second.contextFiles[0] ?? ''));
+        // The first two paths are shared. The model reads them once per session.
+        expect(first.contextFiles.slice(0, 2)).toEqual(second.contextFiles.slice(0, 2));
+        expect(first.contextFiles[0]?.startsWith(path.join(sharedDir, 'guides'))).toBe(true);
+        expect(first.contextFiles[1]?.startsWith(path.join(sharedDir, 'diff', diffKeyOf(mediumDiff()), 'files'))).toBe(
+            true,
+        );
+        // Each question has its own directory, so a retry cannot overwrite an earlier task payload.
+        expect(path.dirname(first.contextFiles[2] ?? '')).not.toBe(path.dirname(second.contextFiles[2] ?? ''));
+        expect(first.contextFiles.slice(2).every((file) => file.startsWith(payloadDir))).toBe(true);
         expect(first.contextFiles.every((file) => fs.existsSync(file))).toBe(true);
         expect(fs.readFileSync(first.contextFiles[0] ?? '', 'utf8')).toContain('# Task: answer the reviewer question');
-        expect(fs.readFileSync(first.contextFiles[1] ?? '', 'utf8')).toContain(context.question);
+        expect(fs.readFileSync(first.contextFiles[1] ?? '', 'utf8')).toContain(`File: ${anchor.path}`);
+        expect(fs.readFileSync(first.contextFiles[2] ?? '', 'utf8')).toContain(context.question);
         const routeContext = fs.readFileSync(first.contextFiles[4] ?? '', 'utf8');
         const coveringStop = mediumReadySnapshot().stops.find((stop) =>
             stop.anchors.some(
@@ -134,6 +158,69 @@ describe('anchored chat payload', () => {
         expect(routeContext).toContain(coveringStop?.title);
         expect(first.resultSchemaFile).toBeUndefined();
         expect(Buffer.byteLength(first.instructions, 'utf8')).toBeLessThan(500);
+        // Shared context rule: read a path under `shared/` once per session.
+        expect(first.instructions).toContain('shared/');
+        expect(first.instructions).toContain('once per session');
+        expect(fs.readFileSync(first.contextFiles[0] ?? '', 'utf8')).toContain('once per session');
+    });
+
+    it('two questions about one file share a path without rewriting it', async () => {
+        const anchor = fixtureAnchor();
+        const base = {
+            question: 'First question',
+            anchor,
+            pr: META,
+            diff: mediumDiff(),
+            fileContent: fileContent(anchor),
+            route: READY_ROUTE,
+            history: [],
+        };
+        const first = await materialize(base);
+        const filePath = first.contextFiles[1] ?? '';
+        const stamp = fs.statSync(filePath).mtimeMs;
+        fs.writeFileSync(filePath, 'replaced shared file');
+
+        const second = await materialize({
+            ...base,
+            question: 'Second question',
+            anchor: { ...anchor, start: anchor.start + 1, end: anchor.end + 1 },
+        });
+
+        expect(second.contextFiles[1]).toBe(filePath);
+        expect(fs.readFileSync(filePath, 'utf8')).toBe('replaced shared file');
+        expect(fs.statSync(filePath).mtimeMs).toBeGreaterThanOrEqual(stamp);
+    });
+
+    it('does not share a file over budget and puts an anchor-centred slice in the question directory', async () => {
+        const anchor = { ...fixtureAnchor(), start: 5_000, end: 5_003 };
+        const input = await materialize(
+            {
+                question: 'What does this range do?',
+                anchor,
+                pr: META,
+                diff: mediumDiff(),
+                fileContent: fileContent(anchor, 10_000),
+                route: READY_ROUTE,
+                history: [],
+            },
+            { sharedBudgetBytes: 4_000, budgetBytes: 20_000 },
+        );
+
+        expect(input.contextFiles.map((file) => path.basename(file))).toEqual([
+            expect.stringMatching(/^chat-guide-[0-9a-f]{8}\.md$/),
+            'question.md',
+            'selection.patch.md',
+            'file-context.md',
+            'route-context.md',
+            'history.md',
+        ]);
+        const slice = input.contextFiles[3] ?? '';
+        expect(slice.startsWith(payloadDir)).toBe(true);
+        const text = fs.readFileSync(slice, 'utf8');
+        expect(text).toContain('5000 | line 5000');
+        expect(text).toContain('[TRUNCATED: earlier file lines omitted');
+        expect(text).toContain('[TRUNCATED: later file lines omitted');
+        expect(fs.existsSync(path.join(sharedDir, 'diff', diffKeyOf(mediumDiff()), 'files'))).toBe(false);
     });
 
     it('prints the range with the same walkPatch numbers used to build the anchor', () => {
@@ -182,6 +269,8 @@ describe('anchored chat payload', () => {
         });
 
         expect(fileOf(payload, 'question.md')).toContain('What does this range do?');
+        expect(fileOf(payload, 'question.md')).toContain('[UNAVAILABLE: the host could not provide the active diff.]');
+        expect(payload.shared.map((entry) => entry.kind)).toEqual(['guide']);
         expect(fileOf(payload, 'selection.patch.md')).toContain('[UNAVAILABLE: the selected file is absent');
         expect(fileOf(payload, 'file-context.md')).toContain('[UNAVAILABLE: the host could not provide');
         expect(fileOf(payload, 'route-context.md')).toContain('No route snapshot is available');
@@ -189,50 +278,109 @@ describe('anchored chat payload', () => {
 });
 
 describe('PR-level chat payload', () => {
-    it('materializes summary, plan paragraphs, file list and patches without anchor files', async () => {
-        const diff = mediumDiff();
-        const snapshot = mediumReadySnapshot();
-        const payload = buildChatPayload({
-            question: 'What does this change overall?',
+    let root: string;
+    let payloadDir: string;
+    let sharedDir: string;
+    let shared: SharedPayloadStore;
+
+    beforeEach(async () => {
+        root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-chat-pr-payload-'));
+        payloadDir = path.join(root, 'chat');
+        sharedDir = path.join(root, 'shared');
+        shared = new SharedPayloadStore(sharedDir, () => []);
+    });
+
+    afterEach(async () => {
+        await fs.promises.rm(root, { recursive: true, force: true });
+    });
+
+    async function materialize(
+        context: Parameters<typeof buildChatPayload>[0],
+        options?: Parameters<typeof buildChatPayload>[1],
+    ) {
+        return materializeChatPayload(questionDirIn(payloadDir), shared, buildChatPayload(context, options));
+    }
+
+    function prContext(question: string) {
+        return {
+            question,
             anchor: null,
             pr: META,
-            diff,
+            diff: mediumDiff(),
             fileContent: null,
             route: READY_ROUTE,
             history: [],
-        });
-        const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sherpa-chat-pr-payload-'));
-        try {
-            const input = await materializeChatPayload(root, payload);
-            expect(input.contextFiles.map((file) => path.basename(file))).toEqual([
-                'chat-guide.md',
-                'question.md',
-                'pr-context.md',
-                'history.md',
-            ]);
-            const context = fs.readFileSync(input.contextFiles[2] ?? '', 'utf8');
-            expect(context).toContain(snapshot.summary);
-            expect(context).toContain('### Plan order');
-            expect(context).toContain('## Patches');
-            for (const stop of snapshot.stops) {
-                if (stop.paragraph !== null) {
-                    expect(context).toContain(stop.paragraph);
-                }
+        };
+    }
+
+    it('keeps summary and plan paragraphs per question and shares the file list and patches as a diff', async () => {
+        const diff = mediumDiff();
+        const snapshot = mediumReadySnapshot();
+        const input = await materialize(prContext('What changes overall?'));
+
+        expect(input.contextFiles.map((file) => path.basename(file))).toEqual([
+            expect.stringMatching(/^chat-guide-[0-9a-f]{8}\.md$/),
+            'pr-diff.md',
+            'question.md',
+            'route-context.md',
+            'history.md',
+        ]);
+        expect(input.contextFiles[1]).toBe(path.join(sharedDir, 'diff', diffKeyOf(diff), 'pr-diff.md'));
+
+        const route = fs.readFileSync(input.contextFiles[3] ?? '', 'utf8');
+        expect(route).toContain(snapshot.summary);
+        expect(route).toContain('### Plan order');
+        for (const stop of snapshot.stops) {
+            if (stop.paragraph !== null) {
+                expect(route).toContain(stop.paragraph);
             }
-            for (const file of diff.files) {
-                expect(context).toContain(`\`${file.path}\``);
-                if (file.patch !== null) {
-                    const changedLine = [...walkPatch(file.patch)].find((line) => line.changed);
-                    expect(changedLine).toBeDefined();
-                    expect(context).toContain(changedLine?.raw);
-                }
+        }
+
+        const context = fs.readFileSync(input.contextFiles[1] ?? '', 'utf8');
+        expect(context).toContain('## Patches');
+        for (const file of diff.files) {
+            expect(context).toContain(`\`${file.path}\``);
+            if (file.patch !== null) {
+                const changedLine = [...walkPatch(file.patch)].find((line) => line.changed);
+                expect(changedLine).toBeDefined();
+                expect(context).toContain(changedLine?.raw);
             }
-        } finally {
-            await fs.promises.rm(root, { recursive: true, force: true });
         }
     });
 
-    it('fits patches into the remaining budget and marks truncated files', () => {
+    it('writes the diff once for five PR questions and gives them all the same path', async () => {
+        const inputs = [];
+        for (const index of [1, 2, 3, 4, 5]) {
+            inputs.push(await materialize(prContext(`Question ${String(index)}`)));
+        }
+        const diffPath = inputs[0]?.contextFiles[1] ?? '';
+        // Replace the contents: materializing again must leave the file as it is.
+        fs.writeFileSync(diffPath, 'replaced diff');
+        const sixth = await materialize(prContext('Question 6'));
+
+        expect(new Set(inputs.map((input) => input.contextFiles[1])).size).toBe(1);
+        expect(sixth.contextFiles[1]).toBe(diffPath);
+        expect(fs.readFileSync(diffPath, 'utf8')).toBe('replaced diff');
+        expect(fs.readdirSync(path.dirname(diffPath))).toEqual(['pr-diff.md']);
+        // Each question still has its own directory.
+        expect(new Set(inputs.map((input) => path.dirname(input.contextFiles[2] ?? ''))).size).toBe(5);
+    });
+
+    it('creates a new directory and removes the previous one when the diff key changes', async () => {
+        const first = await materialize(prContext('Question about the previous diff'));
+        const next = mediumDiff();
+        const second = await materialize({
+            ...prContext('Question after a new push'),
+            diff: { ...next, headCommit: `${next.headCommit}f` },
+        });
+
+        expect(second.contextFiles[1]).not.toBe(first.contextFiles[1]);
+        expect(fs.existsSync(first.contextFiles[1] ?? '')).toBe(false);
+        expect(fs.existsSync(second.contextFiles[1] ?? '')).toBe(true);
+        expect(fs.readdirSync(path.join(sharedDir, 'diff'))).toHaveLength(1);
+    });
+
+    it('the overall diff is trimmed to its own budget, not the budget for question files', () => {
         const fixture = mediumDiff();
         const small = fixture.files.find((file) => file.patch !== null && !file.generated);
         if (small === undefined) {
@@ -255,7 +403,7 @@ describe('PR-level chat payload', () => {
                 },
             ],
         };
-        const budgetBytes = 48 * 1024;
+        const sharedBudgetBytes = 48 * 1024;
         const payload = buildChatPayload(
             {
                 question: 'What changes across the whole PR?',
@@ -266,16 +414,17 @@ describe('PR-level chat payload', () => {
                 route: READY_ROUTE,
                 history: [],
             },
-            { budgetBytes },
+            { sharedBudgetBytes },
         );
-        const context = fileOf(payload, 'pr-context.md');
+        const context = payload.shared.find((entry) => entry.kind === 'pr-diff')?.content ?? '';
         const smallChangedLine = [...walkPatch(small.patch ?? '')].find((line) => line.changed);
 
-        expect(payloadBytes(payload)).toBeLessThanOrEqual(budgetBytes);
+        expect(Buffer.byteLength(context, 'utf8')).toBeLessThanOrEqual(sharedBudgetBytes);
+        expect(payloadBytes(payload)).toBeLessThanOrEqual(CHAT_PAYLOAD_BUDGET_BYTES);
         expect(context).toContain(`\`${small.path}\``);
         expect(context).toContain(smallChangedLine?.raw);
         expect(context).toContain('`src/huge-chat-patch.ts`');
-        expect(context).toContain('[TRUNCATED: patch omitted');
+        expect(context).toContain('patch omitted');
         expect(context).not.toContain(hugeLines.at(-1));
     });
 

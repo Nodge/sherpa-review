@@ -54,6 +54,14 @@ export function chatPayloadDirOf(sherpaDir: string, prKey: string): string {
 }
 
 /**
+ * Shared task context: content that stays the same between tasks (diff, files, guides) lives here
+ * at a stable path, so the model can tell from the path that it has already read the file in this session.
+ */
+export function sharedPayloadDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(payloadDirOf(sherpaDir, prKey), 'shared');
+}
+
+/**
  * PR worker identity file: the server writes it at registration, and the CLI reads it because env does not
  * survive separate harness calls. The path must match `workerIdPathFor` in the CLI.
  */

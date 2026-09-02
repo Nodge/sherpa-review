@@ -23,6 +23,12 @@ You are not hunting for bugs. You are not writing a findings report. Explain and
 critique. If a real bug catches your eye on the way, say it in one sentence inside the prose —
 but never go looking for one. Most texts mention no bug at all; that is normal.
 
+## Your context files
+
+Paths under a \`shared/\` directory hold what does not change between tasks — this guide and the diff
+of the pull request. Read each of them once per session and reuse what you already read. The other
+paths belong to this task alone and are always new.
+
 ## Research budget — hard
 
 Reading the attached diff once, carefully, is 90% of the work. You organise a diff you already
@@ -228,6 +234,9 @@ export function skeletonInstructions(): string {
         'order the stops and how to write. The second one is the pull request itself: metadata, the',
         'complete list of changed files and their patches.',
         '',
+        'Both live under `shared/`: these paths are the same in every task of this session, so read each',
+        'of them once. Files in the task directory are always new.',
+        '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
         'The schema is checked by the server on submit — do not validate the result yourself and do not',
         'install anything for that; always submit what you produced.',
@@ -242,8 +251,12 @@ export function sectionInstructions(planIndexes: readonly number[]): string {
         `Fill in ${plural} of the review route: ${targets}.`,
         '',
         'The first context file is the methodology — read it first, it defines the prose, the anchors',
-        'and the behavioural test digest. The second one carries the fixed route plan (your target stops',
-        'are marked, each with the intent written for you) and the pull request itself.',
+        'and the behavioural test digest. The second one is the pull request itself: metadata, the',
+        'complete list of changed files and their patches. The third carries the fixed route plan, with',
+        'your target stops marked and the intent written for each of them.',
+        '',
+        'The first two live under `shared/`: these paths are the same in every task of this session, so',
+        'read each of them once. The plan belongs to this task alone and is always new.',
         '',
         'Return one JSON document matching the attached schema and submit it with `task complete --file`.',
         'The schema is checked by the server on submit — do not validate the result yourself and do not',

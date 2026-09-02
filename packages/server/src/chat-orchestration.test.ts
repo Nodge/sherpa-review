@@ -17,7 +17,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { chatPayloadDirOf, databasePathFor, routePayloadDirOf } from './paths.js';
+import { chatPayloadDirOf, databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { asRawText, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
 import { bannedPhrases } from './route/voice.js';
@@ -106,6 +106,15 @@ describe('chat and notes', () => {
         return server.queue.complete(WORKER, taskId, answer);
     }
 
+    /** This task's question directory: its own file lives here, shared files in the `shared` directory. */
+    function questionDirOf(server: SherpaServer, taskId: number): string {
+        const own = server.queue
+            .getTask(taskId)
+            ?.contextFiles.find((file) => file.startsWith(chatPayloadDirOf(sherpaDir, server.prKey)));
+        expect(own).toBeDefined();
+        return path.dirname(own ?? '');
+    }
+
     it('ask atomically creates a queued exchange and an interactive task with the full payload', async () => {
         const server = await start();
         const exchange = await ask(server, 'Explain the write order', ANCHOR);
@@ -114,17 +123,19 @@ describe('chat and notes', () => {
         expect(exchange).toMatchObject({ status: 'queued', answer: null, anchor: ANCHOR });
         expect(task).toMatchObject({ type: 'chat', priority: 'interactive', status: 'queued' });
         expect(Buffer.byteLength(task?.instructions ?? '', 'utf8')).toBeLessThan(500);
+        // This server has no host: no diff or file content, only the guide is shared.
         expect(task?.contextFiles.map((file) => path.basename(file))).toEqual([
-            'chat-guide.md',
+            expect.stringMatching(/^chat-guide-[0-9a-f]{8}\.md$/),
             'question.md',
             'selection.patch.md',
             'file-context.md',
             'route-context.md',
             'history.md',
         ]);
-        expect(task?.contextFiles.every((file) => file.startsWith(chatPayloadDirOf(sherpaDir, LOCAL_PR)))).toBe(
-            true,
-        );
+        expect(task?.contextFiles[0]?.startsWith(sharedPayloadDirOf(sherpaDir, LOCAL_PR))).toBe(true);
+        expect(
+            task?.contextFiles.slice(1).every((file) => file.startsWith(chatPayloadDirOf(sherpaDir, LOCAL_PR))),
+        ).toBe(true);
         expect(fsSync.readFileSync(task?.contextFiles[1] ?? '', 'utf8')).toContain('Explain the write order');
         expect((await readChat(server)).exchanges).toEqual([exchange]);
     });
@@ -133,21 +144,26 @@ describe('chat and notes', () => {
         const server = await start(PR);
         server.workerRegistry.register(WORKER, 'claude-code', 'opus-5');
         await ask(server, 'Do not delete my context');
-        const chatFile = server.queue.listTasks().find((task) => task.type === 'chat')?.contextFiles[0] ?? '';
+        const chatTask = server.queue.listTasks().find((task) => task.type === 'chat');
+        // The question's own file: the guide and diff live in the shared directory and belong to both.
+        const chatFile = chatTask?.contextFiles.find((file) => file.startsWith(chatPayloadDirOf(sherpaDir, PR))) ?? '';
 
         await server.route.warmup();
-        const routeFile = server.queue
-            .listTasks()
-            .find((task) => task.type === 'route.skeleton')?.contextFiles[0] ?? '';
+        const routeTask = server.queue.listTasks().find((task) => task.type === 'route.skeleton');
+        const routeFile = routeTask?.resultSchemaFile ?? '';
 
         expect(chatFile.startsWith(chatPayloadDirOf(sherpaDir, PR))).toBe(true);
         expect(routeFile.startsWith(routePayloadDirOf(sherpaDir, PR))).toBe(true);
         expect(fsSync.existsSync(chatFile)).toBe(true);
         expect(fsSync.existsSync(routeFile)).toBe(true);
+        // An unanchored question and the skeleton use the same shared path for the diff.
+        expect(chatTask?.contextFiles[1]).toBe(routeTask?.contextFiles[1]);
+        expect(chatTask?.contextFiles[1]?.startsWith(sharedPayloadDirOf(sherpaDir, PR))).toBe(true);
 
         await ask(server, 'Do not delete the route context');
         expect(fsSync.existsSync(chatFile)).toBe(true);
         expect(fsSync.existsSync(routeFile)).toBe(true);
+        expect(fsSync.existsSync(chatTask?.contextFiles[1] ?? '')).toBe(true);
     });
 
     it('rolls back task enqueueing when the exchange write fails', async () => {
@@ -235,6 +251,51 @@ describe('chat and notes', () => {
             { id: cancelledTask, status: 'cancelled', heldByWorker: false },
             { id: nextTask?.task.id, status: 'leased', heldByWorker: true },
         ]);
+    });
+
+    it('keeps the question directory while the task is open or held by a worker', async () => {
+        const server = await start();
+        const exchange = await ask(server);
+        const taskId = leaseChat(server);
+        const dir = questionDirOf(server, taskId);
+
+        expect(fsSync.existsSync(dir)).toBe(true);
+
+        await postJson(server.port, UI_ENDPOINTS.reviewChatCancel, { exchangeId: exchange.id }, server.token);
+        // The task is closed, but the worker does not know yet and is still reading its context.
+        expect(fsSync.existsSync(dir)).toBe(true);
+
+        expect(complete(server, taskId).kind).toBe('noop');
+        expect(fsSync.existsSync(dir)).toBe(false);
+    });
+
+    it('removes the answered question directory when the task closes', async () => {
+        const server = await start();
+        await ask(server);
+        const taskId = leaseChat(server);
+        const dir = questionDirOf(server, taskId);
+
+        expect(complete(server, taskId).kind).toBe('accepted');
+
+        expect(fsSync.existsSync(dir)).toBe(false);
+        expect((await readChat(server)).exchanges[0]).toMatchObject({ status: 'done', answer: ANSWER });
+    });
+
+    it('removes directories referenced by no task on server startup', async () => {
+        const first = await start();
+        await ask(first);
+        const openTask = first.queue.listTasks()[0];
+        const kept = questionDirOf(first, openTask?.id ?? 0);
+        const stray = path.join(chatPayloadDirOf(sherpaDir, LOCAL_PR), 'stray-question');
+        fsSync.mkdirSync(stray, { recursive: true });
+        await first.close();
+
+        const second = await start();
+
+        expect(fsSync.existsSync(stray)).toBe(false);
+        // The question and its task survived the restart, so its context is still there.
+        expect(fsSync.existsSync(kept)).toBe(true);
+        expect(second.queue.listTasks()[0]?.status).toBe('queued');
     });
 
     it('retry assigns a new task to a cancelled question\'s exchange', async () => {

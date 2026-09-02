@@ -17,6 +17,7 @@ import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from '
 import { RoutePayloadWriter } from './route-payload.js';
 import type { RouteStopStatusUpdate, RouteStore, RouteTaskBinding } from './route-store.js';
 import { validateSection, validateSkeleton } from './route/index.js';
+import type { SharedPayloadStore } from './shared-payload.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 /**
@@ -77,6 +78,8 @@ export interface RouteOrchestratorOptions {
     readonly host: ReviewHost | null;
     /** Directory owned exclusively by `RoutePayloadWriter` (`routePayloadDirOf`). */
     readonly payloadDir: string;
+    /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
+    readonly shared: SharedPayloadStore;
     /**
      * Reading progress: a new generation clears previous stop marks and their seen ranges
      * when the new plan is accepted (progress carryover is M4). `null` means nothing to clear (tests).
@@ -122,7 +125,7 @@ export class RouteOrchestrator {
         this.queue = options.queue;
         this.registry = options.registry;
         this.host = options.host;
-        this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir });
+        this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir, shared: options.shared });
         this.progress = options.progress ?? null;
         this.iterations = options.iterations ?? null;
         this.config = resolveConfig(options.config);

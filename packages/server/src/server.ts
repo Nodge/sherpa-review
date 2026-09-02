@@ -37,6 +37,7 @@ import {
     prStateDirOf,
     routePayloadDirOf,
     serversDirOf,
+    sharedPayloadDirOf,
     workerIdPathFor,
 } from './paths.js';
 import { PrMetaCache } from './pr-meta.js';
@@ -49,6 +50,7 @@ import type { RouteConfig } from './route-orchestrator.js';
 import { RouteOrchestrator } from './route-orchestrator.js';
 import { createRouteRoutes } from './route-routes.js';
 import { RouteStore } from './route-store.js';
+import { holdsPayload, SharedPayloadStore } from './shared-payload.js';
 import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
@@ -228,12 +230,19 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
         const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
+        // Shared context survives restarts along with tasks. Cleanup at startup and on
+        // key changes preserves diffs still referenced by an open or held task.
+        const sharedPayload = new SharedPayloadStore(sharedPayloadDirOf(sherpaDir, prKey), () =>
+            queue.listTasks().flatMap((task) => (holdsPayload(task) ? task.contextFiles : [])),
+        );
+        sharedPayload.sweepDiffKeys();
         const routeOrchestrator = new RouteOrchestrator({
             store: routeStore,
             queue,
             registry: workerRegistry,
             host: reviewHost?.host ?? null,
             payloadDir: routePayloadDirOf(sherpaDir, prKey),
+            shared: sharedPayload,
             progress,
             iterations: iterationStore,
             ...(options.route === undefined ? {} : { config: options.route }),
@@ -246,6 +255,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             host: reviewHost?.host ?? null,
             payloadDir: chatPayloadDirOf(sherpaDir, prKey),
             iterations: iterationStore,
+            shared: sharedPayload,
         });
         queue.setResultAcceptor(
             (task, result) =>

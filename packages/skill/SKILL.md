@@ -47,6 +47,7 @@ Idle is a normal working state, not a reason to stop: the reviewer may post the 
 DONE is the only normal end signal; it may arrive because the reviewer closed the UI tab. Stop the loop and relay its message to the user.
 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
+- Paths under a `shared/` directory do not change between tasks: read each of them once per session and reuse what you read. Files in the task's own directory are always new.
 - "No tasks" is not an error — call `worker next` again.
 - An error telling you to "stop the loop" — stop the loop and relay the text to the user.
 - **Never finish a task silently.** Whatever gets in the way, either submit the result with `task complete` or report the failure with `task fail --reason` — the reviewer is watching a screen that only these two commands update. A result kept to yourself is the worst outcome.
