@@ -235,12 +235,3 @@ describe('storage', () => {
         }
     });
 });
-
-/** Schema before the named migration: the migration test must start from that exact database state. */
-function migrationsBefore(name: string): typeof MIGRATIONS {
-    const index = MIGRATIONS.findIndex((migration) => migration.name === name);
-    if (index < 0) {
-        throw new Error(`migration ${name} not found`);
-    }
-    return MIGRATIONS.slice(0, index);
-}
