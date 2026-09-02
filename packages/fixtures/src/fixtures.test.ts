@@ -239,7 +239,6 @@ describe('small fixture', () => {
     const data = fixtureData('small');
 
     it('is below the route threshold (requirements §3.6)', () => {
-        expect(data.diff.files.length).toBeLessThanOrEqual(1);
         const totals = totalChanges(data.diff.files);
         expect(totals.additions + totals.deletions).toBeLessThanOrEqual(40);
     });

@@ -3,7 +3,7 @@ import { makeFileDiff } from '../patch.js';
 import type { FixtureData } from './types.js';
 
 /**
- * PR below the route threshold (requirements §3.6: changed lines ≤ 40 or files ≤ 1). The UI opens
+ * A PR below the route threshold (requirements §3.6: changed lines across all files ≤ 40). The UI opens
  * on the full diff with the label "small PR — no route needed" (SPEC §4.1).
  *
  * This is also the only fixture without viewed synchronization (`fileViewedSync: false`):

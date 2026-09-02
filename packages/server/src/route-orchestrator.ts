@@ -34,15 +34,12 @@ import type { WorkerRegistry } from './worker-registry.js';
 export interface RouteConfig {
     /** At most this many changed lines (additions + deletions): small PR, no route needed (requirements §3.6). */
     readonly smallPrMaxChangedLines: number;
-    /** At most this many files: small PR. */
-    readonly smallPrMaxFiles: number;
     /** How many plan stops go into one `route.section` task. */
     readonly sectionBatchSize: number;
 }
 
 export const DEFAULT_ROUTE_CONFIG: RouteConfig = {
     smallPrMaxChangedLines: 40,
-    smallPrMaxFiles: 1,
     sectionBatchSize: 1,
 };
 
@@ -661,11 +658,11 @@ const STALE_GENERATION =
     'The route generation this task belongs to is no longer running: it was restarted or cancelled. ' +
     'Call `worker next` and work on the task it gives you.';
 
-/** Route threshold (requirements §3.6): a tiny PR is read in full, so a route adds overhead. */
+/**
+ * Route threshold (requirements §3.6): a tiny PR can be read in full, so a route adds overhead.
+ * Measure only the size of the change across all files. A single 500-line file also needs a route.
+ */
 export function isSmallPr(diff: PrDiff, config: RouteConfig): boolean {
-    if (diff.files.length <= config.smallPrMaxFiles) {
-        return true;
-    }
     const changedLines = diff.files.reduce((total, file) => total + file.additions + file.deletions, 0);
     return changedLines <= config.smallPrMaxChangedLines;
 }

@@ -2,7 +2,7 @@ import fsSync from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { makeFixtureHost } from '@sherpa/fixtures';
-import type { RouteSectionResult, TaskCompleteResponse, UiReviewRouteResponse } from '@sherpa/protocol';
+import type { PrDiff, RouteSectionResult, TaskCompleteResponse, UiReviewRouteResponse } from '@sherpa/protocol';
 import {
     LEASE_TTL_SECONDS,
     rpcErrorSchema,
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { databasePathFor, routePayloadDirOf } from './paths.js';
 import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
-import { MAX_SKELETON_TASKS } from './route-orchestrator.js';
+import { DEFAULT_ROUTE_CONFIG, isSmallPr, MAX_SKELETON_TASKS } from './route-orchestrator.js';
 import { contentHashOf } from './route-store.js';
 import { asRawText, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
@@ -370,6 +370,42 @@ describe('route orchestration', () => {
         const response = await postJson(server.port, UI_ENDPOINTS.reviewRouteGenerate, {}, server.token);
         expect(uiRouteGenerateResponseSchema.parse(await response.json()).outcome).toBe('small_pr');
         expect(routeTasks(server, 'route.skeleton')).toHaveLength(0);
+    });
+
+    // Decision 2026-09-02: the threshold measures only the size of the change. The old file-count shortcut
+    // left a single 500-line file (a docs RFC) without a route.
+    it('the route threshold counts lines, not files', () => {
+        const diffOf = (changes: readonly [additions: number, deletions: number][]): PrDiff => ({
+            diffId: 'd1',
+            baseCommit: 'base',
+            headCommit: 'head',
+            files: changes.map(([additions, deletions], index) => ({
+                fileId: `f${String(index)}`,
+                path: `file-${String(index)}.md`,
+                oldPath: null,
+                changeType: 'add',
+                binary: false,
+                generated: false,
+                additions,
+                deletions,
+                patch: null,
+                viewed: null,
+                blameUrl: null,
+            })),
+        });
+
+        expect(isSmallPr(diffOf([[548, 0]]), DEFAULT_ROUTE_CONFIG)).toBe(false);
+        expect(isSmallPr(diffOf([[7, 1]]), DEFAULT_ROUTE_CONFIG)).toBe(true);
+        expect(isSmallPr(diffOf([[40, 0]]), DEFAULT_ROUTE_CONFIG)).toBe(true);
+        expect(
+            isSmallPr(
+                diffOf([
+                    [20, 0],
+                    [25, 0],
+                ]),
+                DEFAULT_ROUTE_CONFIG,
+            ),
+        ).toBe(false);
     });
 
     describe('generate endpoint', () => {

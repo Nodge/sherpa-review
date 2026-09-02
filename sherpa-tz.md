@@ -61,7 +61,7 @@ Question sources: the handoff README ("Open questions", 4 items) and rpc-design 
 3. **Keyboard**: the full SPEC §5 map, one shortcut registry → generate the palette and shortcuts sheet from it.
 4. **Reply thread depth**: follow the design (indent cap = 4, then "↳ replying to"). In M1, check real review host threads with depth > 6.
 5. **RPC**: per-PR server, SQLite, task payloads as markdown files, schema only for the result, `complete` result limit of 256 KB (larger → task fails with a clear error), context files truncated to budget with an explicit "truncated" marker in the payload.
-6. **"Small PR" threshold** (ratifies the designers' finding, SPEC §4.1): no route generation if changed lines ≤ 40 or files ≤ 1. The UI opens on the full diff with a notice. The threshold is configurable.
+6. **"Small PR" threshold** (ratifies the designers' finding, SPEC §4.1): no route is generated when changed lines across all files ≤ 40. The UI opens on the full diff with a notice. File count does not affect the threshold (decision 2026-09-02). The threshold is configurable.
 7. **Also ratified**: promote "Other" when >40% is not placed + offer regeneration (SPEC §4.3), generated files start as `read` (SPEC §2.12), a second worker for a PR is rejected with a message (SPEC §4.4, consistent with rpc-design).
 
 ## 4. Milestones and Definition of Done
