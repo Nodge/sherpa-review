@@ -691,6 +691,31 @@ export function lazyCards(files: readonly RouteFileGroup[]): readonly RouteFileG
     return head;
 }
 
+/**
+ * The stop is classified relative to the previous pass. Only these pass the
+ * "what is new" filter (README §9). The synthetic "Other" has no classification and disappears along
+ * with unchanged stops.
+ */
+export function entryChanged(entry: RouteEntry): boolean {
+    return entry.kind === 'stop' && entry.view.stop.change !== null;
+}
+
+/**
+ * The "what is new" filter is invalid when there are no classified stops. The entire
+ * route is shown, with no chip or URL entry (decision 6).
+ */
+export function changeFilterAvailable(entries: readonly RouteEntry[]): boolean {
+    return entries.some(entryChanged);
+}
+
+/**
+ * The entry passes the "what is new" filter. Stop numbers remain fixed by the plan.
+ * The filter selects what to render, while the denominator in "02 / 7" counts the full set of entries.
+ */
+export function entryMatchesChangeFilter(entry: RouteEntry, active: boolean): boolean {
+    return !active || entryChanged(entry);
+}
+
 /** Stops with no files left under the current filter leave the view (SPEC §2.7). */
 export function stopMatchesFilter(view: RouteStopView, fileIds: ReadonlySet<string> | null): boolean {
     return fileIds === null || view.files.some((group) => fileIds.has(group.fileId));

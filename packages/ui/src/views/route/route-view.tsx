@@ -63,8 +63,10 @@ import type { RouteSummary } from '../../route/route-summary.js';
 import { stopCoveredByProgress } from '../../route/stop-coverage.js';
 import {
     buildRouteModel,
+    changeFilterAvailable,
     composersForGroup,
     countStopComments,
+    entryMatchesChangeFilter,
     entryParseFailed,
     entryPending,
     entryUnfilled,
@@ -101,7 +103,16 @@ import {
     pickTopStop,
     targetScrollTop,
 } from './scroll.js';
-import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, StopSkeleton, ViewedSummary } from './stop-card.tsx';
+import type { StopChangeThread } from './stop-card.tsx';
+import {
+    AnchorDrift,
+    CollapsedStop,
+    EmptyStop,
+    StopCard,
+    stopChangeThreads,
+    StopSkeleton,
+    ViewedSummary,
+} from './stop-card.tsx';
 import { StopFileCard, stopFileShownModel } from './stop-file-card.tsx';
 import { TestDigest } from './test-digest.tsx';
 import { useOnScreen } from './use-on-screen.js';
@@ -155,6 +166,8 @@ export interface RouteViewProps {
     readonly onFillStop?: (planIndex: number) => void;
     /** Expose route counts. Only the view computes them, and the action panel and review summary need them. */
     readonly onRouteSummary?: (summary: RouteSummary) => void;
+    /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
+    readonly onOpenThread?: (threadId: string) => void;
 }
 
 export function RouteView({
@@ -186,6 +199,7 @@ export function RouteView({
     onUnderExplained,
     onFillStop,
     onRouteSummary,
+    onOpenThread,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
@@ -306,6 +320,7 @@ export function RouteView({
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
+            {...(onOpenThread === undefined ? {} : { onOpenThread })}
         />
     );
 }
@@ -356,6 +371,8 @@ export interface RouteWorkspaceProps {
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
+    /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
+    readonly onOpenThread?: (threadId: string) => void;
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
@@ -387,6 +404,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onUnderExplained,
         onFillStop,
         onRouteSummary,
+        onOpenThread,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.
@@ -400,9 +418,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const {
         filter: filterId,
         preset,
+        routeFilter,
         threadsShow,
         stops: stopState,
     } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+
+    const threadsById = useMemo(
+        () => new Map(threadSnapshot.threads.map((thread) => [thread.id, thread])),
+        [threadSnapshot.threads],
+    );
 
     const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
     const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
@@ -624,9 +648,19 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             entry.kind === 'stop' ? stopMatchesFilter(entry.view, ids) : otherMatchesFilter(entry.view, ids),
         [],
     );
+    /**
+     * "What is new since the last pass" filter (README §9). Invalid when there are no classified
+     * stops: the route stays intact, no chip appears, and no value enters the URL.
+     */
+    const changeFilterOn = routeFilter === 'new' && changeFilterAvailable(model.entries);
     const shown = useMemo(
-        () => model.entries.filter((entry) => matches(entry, filter.fileIds) || entryId(entry) === keptStopId),
-        [filter.fileIds, keptStopId, matches, model.entries],
+        () =>
+            model.entries.filter(
+                (entry) =>
+                    (entryMatchesChangeFilter(entry, changeFilterOn) && matches(entry, filter.fileIds)) ||
+                    entryId(entry) === keptStopId,
+            ),
+        [changeFilterOn, filter.fileIds, keptStopId, matches, model.entries],
     );
 
     const updateTopStop = useCallback(() => {
@@ -1021,6 +1055,30 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
         });
     }, [session, updateTopStop]);
+
+    /**
+     * The "what is new" filter changes outside the view, through the second-pass banner button and chip,
+     * so the same store subscription detects it before rerendering, while the DOM
+     * still has the old set of stops. As with the file filter, the view keeps the top stop
+     * on screen even when the new filter would hide it (SPEC §2.7).
+     */
+    useEffect(() => {
+        let last = session.getSnapshot().routeFilter;
+        return session.subscribe(() => {
+            const next = session.getSnapshot().routeFilter;
+            if (next === last) {
+                return;
+            }
+            last = next;
+            updateTopStop();
+            const top = topStopRef.current?.stopId ?? null;
+            const entry = model.entries.find((candidate) => entryId(candidate) === top) ?? null;
+            const nextChangeOn = next === 'new' && changeFilterAvailable(model.entries);
+            const shownNext =
+                entry !== null && entryMatchesChangeFilter(entry, nextChangeOn) && matches(entry, filter.fileIds);
+            setKeptStopId(entry === null || shownNext ? null : entryId(entry));
+        });
+    }, [filter.fileIds, matches, model.entries, session, updateTopStop]);
 
     const handledNavigation = useRef<number | null>(null);
     useEffect(() => {
@@ -1580,6 +1638,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 threadsShow={threadsShow}
                 threadCounts={countThreadSources(threadSnapshot.threads)}
                 onThreadsShow={session.setThreadsShow}
+                changeFilterOn={changeFilterOn}
+                onClearChangeFilter={() => {
+                    session.setRouteFilter('all');
+                }}
                 strip={
                     <CoverageStrip
                         model={settled && !filling ? coverage : null}
@@ -1624,6 +1686,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile)}
+                            changeThreads={stopChangeThreads(entry.view.stop.change, threadsById)}
+                            {...(onOpenThread === undefined ? {} : { onOpenThread })}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
                             viewed={stopViewed.get(entry.view.stop.id) === true}
@@ -1734,6 +1798,9 @@ interface StopSectionProps {
     readonly entries: readonly RouteEntry[];
     readonly stopCount: number;
     readonly comments: number;
+    /** Links to causal threads in the "why this stop changed" block. */
+    readonly changeThreads: readonly StopChangeThread[];
+    readonly onOpenThread?: (threadId: string) => void;
     /** null shows all stop files (no filter, or the stop is kept on screen). */
     readonly fileIds: ReadonlySet<string> | null;
     readonly keptInView: boolean;
@@ -1772,6 +1839,8 @@ function StopSection({
     entries,
     stopCount,
     comments,
+    changeThreads,
+    onOpenThread,
     fileIds,
     keptInView,
     viewed,
@@ -1902,6 +1971,8 @@ function StopSection({
                 view={view}
                 stopCount={stopCount}
                 comments={comments}
+                changeThreads={changeThreads}
+                {...(onOpenThread === undefined ? {} : { onOpenThread })}
                 viewed={viewed}
                 pending={pending}
                 parseFailed={parseFailed}

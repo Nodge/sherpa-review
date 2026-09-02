@@ -1,3 +1,4 @@
+import type { RouteStopChange, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -42,7 +43,47 @@ export interface StopCardProps {
     readonly diff: ReactNode;
     /** Accent line flash above the diff column after jumping to a file (README Interactions). */
     readonly flash?: boolean;
+    /** Threads from `change.threadIds` that caused the change, reduced to links with unknown ids removed. */
+    readonly changeThreads?: readonly StopChangeThread[];
+    readonly onOpenThread?: (threadId: string) => void;
 }
+
+/** Link to a thread that caused the change, in "why this stop changed" (README §1 item 4). */
+export interface StopChangeThread {
+    readonly id: string;
+    readonly label: string;
+}
+
+/**
+ * Links to threads that caused the change. A thread without an anchor position is a "PR thread". Unknown ids have no link
+ * (the section validator already removes them, but the view does not rely on that cleanup).
+ */
+export function stopChangeThreads(
+    change: RouteStopChange | null,
+    threads: ReadonlyMap<string, Thread>,
+): readonly StopChangeThread[] {
+    if (change === null) {
+        return EMPTY_CHANGE_THREADS;
+    }
+    const links: StopChangeThread[] = [];
+    for (const id of change.threadIds) {
+        const thread = threads.get(id);
+        if (thread === undefined) {
+            continue;
+        }
+        const line = thread.anchor?.position?.line ?? null;
+        links.push({ id, label: line === null ? 'thread on the PR' : `thread at line ${String(line)}` });
+    }
+    return links;
+}
+
+const EMPTY_CHANGE_THREADS: readonly StopChangeThread[] = [];
+
+/** Stop classification badge relative to the previous pass (README §1 item 1). */
+const CHANGE_BADGE: Readonly<Record<RouteStopChange['kind'], string>> = {
+    changed: 'changed',
+    new: 'new',
+};
 
 export function StopCard({
     view,
@@ -60,6 +101,8 @@ export function StopCard({
     chips,
     diff,
     flash = false,
+    changeThreads = EMPTY_CHANGE_THREADS,
+    onOpenThread,
 }: StopCardProps) {
     const { stop } = view;
     const tier = stop.tier;
@@ -69,6 +112,7 @@ export function StopCard({
         <section
             className={`route-stop route-stop--${tier}${unfilled ? ' route-stop--unfilled' : ''}${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${stop.id}`}
+            {...(stop.change === null ? {} : { 'data-stop-change': stop.change.kind })}
             role="region"
             aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stripInlineCode(stop.title)}`}
         >
@@ -81,6 +125,12 @@ export function StopCard({
                     {tier === 'high' ? <span className="route-stop__badge">high</span> : null}
                     {stop.status === 'ready' ? null : (
                         <span className="route-stop__badge route-stop__badge--queued">{statusBadge(stop.status)}</span>
+                    )}
+                    {/* Show the classification badge whenever it exists, even without a filter. */}
+                    {stop.change === null ? null : (
+                        <span className={`route-stop__badge route-stop__badge--${stop.change.kind}`}>
+                            {CHANGE_BADGE[stop.change.kind]}
+                        </span>
                     )}
                     <span className="route-stop__spacer" />
                     {comments === 0 ? null : (
@@ -124,6 +174,14 @@ export function StopCard({
                     </p>
                 ) : (
                     <Paragraph text={stop.paragraph} />
+                )}
+
+                {stop.change?.reason == null ? null : (
+                    <StopChangeReason
+                        reason={stop.change.reason}
+                        threads={changeThreads}
+                        {...(onOpenThread === undefined ? {} : { onOpenThread })}
+                    />
                 )}
 
                 {stop.bridge === null ? null : (
@@ -210,6 +268,46 @@ export function StopViewedToggle({
                 onToggle={onViewed}
             />
         </>
+    );
+}
+
+/**
+ * "Why this stop changed" (README §1 item 4): the model's explanation below the paragraph, followed by
+ * links to the threads it named as the cause. Without a handler, the links remain text:
+ * only the view, which knows about the URL fragment, can open a thread.
+ */
+function StopChangeReason({
+    reason,
+    threads,
+    onOpenThread,
+}: {
+    reason: string;
+    threads: readonly StopChangeThread[];
+    onOpenThread?: (threadId: string) => void;
+}) {
+    return (
+        <div className="route-stop__change">
+            <div className="route-stop__change-label">why this stop changed</div>
+            <div className="route-stop__change-body">
+                <Markdown text={reason} profile="route" />
+            </div>
+            {threads.length === 0 || onOpenThread === undefined ? null : (
+                <div className="route-stop__change-threads">
+                    {threads.map((thread) => (
+                        <button
+                            key={thread.id}
+                            type="button"
+                            className="route-stop__change-thread"
+                            onClick={() => {
+                                onOpenThread(thread.id);
+                            }}
+                        >
+                            {thread.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 

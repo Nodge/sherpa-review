@@ -73,11 +73,26 @@ export function parsePreset(value: string | null): RoutePreset | null {
     return value === 'triage' || value === 'tour' ? value : null;
 }
 
+/**
+ * "What is new since the last pass" filter (README §9, decision 6): `new` leaves in the route
+ * only stops classified relative to the previous snapshot. Stop numbers
+ * stay fixed by the plan, and the file filter applies on top.
+ */
+export type RouteFilter = 'all' | 'new';
+
+export const DEFAULT_ROUTE_FILTER: RouteFilter = 'all';
+
+/** `null` means the string is not a route filter (invalid URL fragment value). */
+export function parseRouteFilter(value: string | null): RouteFilter | null {
+    return value === 'all' || value === 'new' ? value : null;
+}
+
 export interface SessionState {
     readonly view: ViewId;
     /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
     readonly filter: string;
     readonly preset: RoutePreset;
+    readonly routeFilter: RouteFilter;
     /** Additive thread sources. They live only in the current tab session. */
     readonly threadsShow: ThreadsShow;
     /** The command palette is open over the current view. */
@@ -106,6 +121,7 @@ export interface SessionStore {
     readonly setView: (view: ViewId) => void;
     readonly setFilter: (filter: string) => void;
     readonly setPreset: (preset: RoutePreset) => void;
+    readonly setRouteFilter: (routeFilter: RouteFilter) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     readonly setChatOpen: (open: boolean) => void;
@@ -131,8 +147,9 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter'> & {
         readonly threadsShow?: ThreadsShow;
+        readonly routeFilter?: RouteFilter;
         readonly paletteOpen?: boolean;
         readonly chatOpen?: boolean;
         readonly notesExpanded?: ReadonlySet<string>;
@@ -163,6 +180,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         noteStacksExpanded: options.initial.noteStacksExpanded ?? EMPTY_NOTE_STACKS_EXPANDED,
         stops: options.initial.stops ?? EMPTY_STOPS,
         preset: options.initial.preset ?? DEFAULT_PRESET,
+        routeFilter: options.initial.routeFilter ?? DEFAULT_ROUTE_FILTER,
     };
 
     const toggleStop = (key: keyof StopsState, stopId: string, on: boolean): void => {
@@ -248,6 +266,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setPreset: (preset) => {
             if (preset !== state.preset) {
                 update({ ...state, preset });
+            }
+        },
+        setRouteFilter: (routeFilter) => {
+            if (routeFilter !== state.routeFilter) {
+                update({ ...state, routeFilter });
             }
         },
         setThreadsShow: (threadsShow) => {

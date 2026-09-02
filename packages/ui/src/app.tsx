@@ -104,6 +104,12 @@ import {
     RouteFillingBanner,
     RouteRegeneratingBanner,
 } from './views/route/generation-card.tsx';
+import {
+    RouteSecondPassBanner,
+    RouteStaleBanner,
+    secondPassBannerVisible,
+    staleBannerVisible,
+} from './views/route/iteration-banners.tsx';
 import { RegenerateBanner } from './views/route/other-card.tsx';
 import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views/route/route-commands.tsx';
 import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
@@ -168,7 +174,7 @@ interface ReviewState {
 
 export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const { view, filter: filterId, preset, paletteOpen, chatOpen } = useSyncExternalStore(
+    const { view, filter: filterId, preset, routeFilter, paletteOpen, chatOpen } = useSyncExternalStore(
         session.subscribe,
         session.getSnapshot,
     );
@@ -980,6 +986,32 @@ export function App({ store, session, token }: AppProps) {
         generating,
     });
 
+    /**
+     * The snapshot behind the review counts is a completed route with a `contentHash`. The old ready
+     * snapshot still qualifies during a rebuild. The new partial snapshot stays out until `ready`.
+     */
+    const routeSnapshot = route?.snapshot?.contentHash == null ? null : route.snapshot;
+    /** The Route tab renders any live snapshot, including the old one during a rebuild. */
+    const routeViewSnapshot = routeKind === 'workspace' ? (route?.snapshot ?? null) : null;
+    /**
+     * The second-pass banner is dismissed for this snapshot. It describes a filter, so it is dismissible
+     * (SPEC §2.21). Dismissal lives in the tab session and resets when a new snapshot arrives.
+     */
+    const [dismissedSecondPass, setDismissedSecondPass] = useState<string | null>(null);
+    const secondPassVisible = secondPassBannerVisible(view, routeSnapshot, route?.stale ?? null, dismissedSecondPass);
+    /** Whether the ready snapshot has classified stops determines the "what is new" filter. */
+    const routeHasChanges = routeSnapshot?.stops.some((stop) => stop.change !== null) ?? false;
+    /**
+     * The "what is new" filter is invalid on a ready snapshot without classified stops
+     * (decision 6) and resets. Otherwise it would stay in the URL and silently activate on the next
+     * pass with classifications, even though the reviewer did not enable it then.
+     */
+    useEffect(() => {
+        if (routeFilter === 'new' && routeSnapshot !== null && !routeHasChanges) {
+            session.setRouteFilter('all');
+        }
+    }, [routeFilter, routeHasChanges, routeSnapshot, session]);
+
     const bannerSources: readonly BannerSource[] = [
         {
             id: 'generation-failed',
@@ -1008,6 +1040,38 @@ export function App({ store, session, token }: AppProps) {
             priority: BANNER_PRIORITY.routeRegenerating,
             active: () => view === 'route' && routePhase === 'reading' && route?.snapshot != null,
             render: () => <RouteRegeneratingBanner cancelling={cancelling} onCancel={cancelGeneration} />,
+        },
+        {
+            id: 'route-stale',
+            priority: BANNER_PRIORITY.routeStale,
+            active: () => staleBannerVisible(routePhase, route?.stale ?? null, route?.snapshot ?? null),
+            render: () =>
+                route?.stale == null || route.snapshot == null ? null : (
+                    <RouteStaleBanner
+                        stale={route.stale}
+                        stops={route.snapshot.stops}
+                        onRegenerate={startGeneration}
+                    />
+                ),
+        },
+        {
+            id: 'route-second-pass',
+            priority: BANNER_PRIORITY.routeSecondPass,
+            active: () => secondPassVisible,
+            render: () =>
+                routeSnapshot === null ? null : (
+                    <RouteSecondPassBanner
+                        commit={routeSnapshot.commit}
+                        carried={routeSnapshot.carried}
+                        hasChanges={routeHasChanges}
+                        onShowNew={() => {
+                            session.setRouteFilter('new');
+                        }}
+                        onDismiss={() => {
+                            setDismissedSecondPass(routeSnapshot.snapshotId);
+                        }}
+                    />
+                ),
         },
         {
             id: 'route-under-explained',
@@ -1047,13 +1111,6 @@ export function App({ store, session, token }: AppProps) {
                 ),
         },
     ];
-    /**
-     * The snapshot behind the review counts is a completed route with a `contentHash`. The old ready
-     * snapshot still qualifies during a rebuild. The new partial snapshot stays out until `ready`.
-     */
-    const routeSnapshot = route?.snapshot?.contentHash == null ? null : route.snapshot;
-    /** The Route tab renders any live snapshot, including the old one during a rebuild. */
-    const routeViewSnapshot = routeKind === 'workspace' ? (route?.snapshot ?? null) : null;
     const stopViewed = useSyncExternalStore(
         stopProgress.subscribe,
         stopProgress.getSnapshot,
@@ -1305,7 +1362,8 @@ export function App({ store, session, token }: AppProps) {
         },
         [reviewKey, session],
     );
-    const openCompletedThread = useCallback(
+    /** Opens a thread by id: set the `thread` fragment and switch to the full diff, where it is visible. */
+    const openThreadInDiff = useCallback(
         (threadId: string) => {
             window.location.hash = updateFragment(window.location.hash, { thread: threadId, file: null });
             session.setView('diff');
@@ -1386,7 +1444,7 @@ export function App({ store, session, token }: AppProps) {
             {completion !== null ? (
                 <ReviewComplete
                     completion={completion}
-                    onOpenThread={openCompletedThread}
+                    onOpenThread={openThreadInDiff}
                     onOpenFullDiff={() => {
                         session.setView('diff');
                     }}
@@ -1456,6 +1514,7 @@ export function App({ store, session, token }: AppProps) {
                     onUnderExplained={setRouteUnderExplained}
                     {...(routePhase === 'ready' ? { onFillStop: fillStop } : {})}
                     onRouteSummary={reportRouteSummary}
+                    onOpenThread={openThreadInDiff}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (
                 <RouteReadingView

@@ -6,7 +6,14 @@ import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
 import type { SessionState } from './session/session-store.js';
-import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
+import {
+    createSessionStore,
+    DEFAULT_PRESET,
+    DEFAULT_ROUTE_FILTER,
+    DEFAULT_THREADS_SHOW,
+    parsePreset,
+    parseRouteFilter,
+} from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
@@ -44,6 +51,8 @@ if (token === null) {
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
             preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
+            routeFilter:
+                parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ?? DEFAULT_ROUTE_FILTER,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
         },
@@ -57,6 +66,7 @@ if (token === null) {
                     filter: filterFragmentValue(state.filter),
                     // The default is omitted from the address: the preset appears in the URL only after a change.
                     preset: state.preset === DEFAULT_PRESET ? null : state.preset,
+                    routeFilter: state.routeFilter === DEFAULT_ROUTE_FILTER ? null : state.routeFilter,
                 }),
             );
         },

@@ -1,0 +1,78 @@
+/* Iteration banners: README §9, amber token group (layout shared with the audit banner). */
+
+.iteration-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+    padding: 11px var(--space-control);
+    border: 1px solid var(--attention-border-alt);
+    border-radius: var(--radius-card);
+    background: var(--attention-surface-alt);
+}
+
+.iteration-banner__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.iteration-banner__line {
+    font-size: var(--font-size-ui);
+    color: var(--attention-text-soft);
+}
+
+.iteration-banner__note {
+    margin-top: 2px;
+    font-size: var(--font-size-secondary);
+    color: var(--attention-text-dim);
+}
+
+.iteration-banner__commit {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--attention-text);
+}
+
+.iteration-banner__action {
+    flex: none;
+    height: 28px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: var(--radius-button);
+    background: var(--attention);
+    font-size: var(--font-size-secondary);
+    color: var(--attention-ink);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.iteration-banner__secondary {
+    flex: none;
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-button);
+    background: transparent;
+    font-size: var(--font-size-secondary);
+    color: var(--attention-text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--motion-hover) var(--motion-hover-ease);
+}
+
+.iteration-banner__secondary:hover {
+    background: var(--attention-surface);
+}
+
+.iteration-banner__dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--attention-text-dim);
+    cursor: pointer;
+}

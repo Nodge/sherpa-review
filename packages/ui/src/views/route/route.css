@@ -78,6 +78,32 @@
     max-width: 1560px;
 }
 
+/* Route filter row, currently holding only the "what is new" chip. */
+.route-toolbar__filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner);
+    margin-top: 9px;
+    max-width: 1560px;
+}
+
+/* "What is new since the last pass" filter chip (README §9), height and radius match "Comments from" chips. */
+.route-change-chip {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-button);
+    background: var(--attention-surface);
+    font-size: var(--font-size-meta);
+    color: var(--attention-text);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
 /* --- Coverage strip (SPEC §2.4, README §1) --- */
 
 .route-toolbar__strip {
@@ -323,6 +349,13 @@
     color: var(--text-dim);
 }
 
+/* The `changed` badge matches the base amber group. `new` uses the green ownership tone. */
+.route-stop__badge--new {
+    border-color: var(--ownership-mine-border);
+    background: var(--ownership-mine-surface);
+    color: var(--diff-add-text-strong);
+}
+
 .route-stop__comments {
     display: flex;
     align-items: center;
@@ -436,6 +469,52 @@
     font-size: var(--font-size-ui);
     line-height: 1.6;
     color: var(--text-dim-strong);
+}
+
+/* "Why this stop changed" block (README §1 item 4). */
+
+.route-stop__change {
+    margin: 11px 0 0;
+    padding: 8px 11px;
+    border-left: 2px solid var(--attention-border-strong);
+    background: var(--attention-surface-alt);
+}
+
+.route-stop__change-label {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--attention-label);
+}
+
+.route-stop__change-body {
+    margin-top: 4px;
+    font-size: var(--font-size-ui);
+    line-height: 1.55;
+    color: var(--attention-body);
+    text-wrap: pretty;
+}
+
+.route-stop__change-threads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-inner);
+    margin-top: 6px;
+}
+
+.route-stop__change-thread {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--font-size-secondary);
+    color: var(--attention-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.route-stop__change-thread:hover {
+    color: var(--attention-text-soft);
 }
 
 .route-stop__bridge {

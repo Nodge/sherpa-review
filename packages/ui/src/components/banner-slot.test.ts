@@ -29,11 +29,13 @@ describe('banner slot', () => {
         expect(selection.hidden).toEqual([]);
     });
 
-    it('covers the full SPEC §2.21 priority order: failure → action failure → rebuild → underexplained → filling → audit', () => {
+    it('covers the full SPEC §2.21 priority order: failure → action failure → rebuild → stale → second pass → underexplained → filling → audit', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),
             source('route-filling', BANNER_PRIORITY.routeFilling),
             source('route-under-explained', BANNER_PRIORITY.routeUnderExplained),
+            source('route-second-pass', BANNER_PRIORITY.routeSecondPass),
+            source('route-stale', BANNER_PRIORITY.routeStale),
             source('route-regenerating', BANNER_PRIORITY.routeRegenerating),
             source('route-action-error', BANNER_PRIORITY.routeActionError),
             source('generation-failed', BANNER_PRIORITY.generationFailed),
@@ -43,10 +45,14 @@ describe('banner slot', () => {
             'generation-failed',
             'route-action-error',
             'route-regenerating',
+            'route-stale',
+            'route-second-pass',
             'route-under-explained',
             'route-filling',
             'audit-scope',
         ]);
+        expect(BANNER_PRIORITY.routeStale).toBe(250);
+        expect(BANNER_PRIORITY.routeSecondPass).toBe(220);
     });
 
     it('shows the action reason at the top of the slot when an endpoint fails with a live agent', () => {
