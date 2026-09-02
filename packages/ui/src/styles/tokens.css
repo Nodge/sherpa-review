@@ -108,6 +108,11 @@
     --attention-border: #4a4230;
     --attention-border-alt: #3d3524;
     --attention-border-strong: #6b5b39;
+    /* README §9: the iteration banner's primary button uses `--attention` fill and `#1b1508` ink. */
+    --attention-ink: #1b1508;
+    /* README §1 item 4: "why this stop changed" block, label and body. */
+    --attention-label: #8a7550;
+    --attention-body: #d8c9ad;
     /* SPEC additions §1d: closed field with a draft and confirmed autosave. */
     --draft-field-surface: #141210;
     --draft-saved: #5e8a6d;

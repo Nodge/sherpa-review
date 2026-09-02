@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
+import { useReadOnlyIteration } from '../iterations/read-only.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
     commentBodies,
@@ -221,16 +222,20 @@ export function ReviewActionBar({
     // A route exists, so the guardrail counts stops instead of files (SPEC §2.19).
     const unviewedStops = routeCompletion === null ? 0 : routeCompletion.stopsTotal - routeCompletion.stopsViewed;
     const draggingSelection = diffSnapshot.selectionDragging;
+    // Publishing changes the PR, so it is available only in the active iteration (M4 boundaries).
+    const readOnlyIteration = useReadOnlyIteration();
     const retryDisabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
+        readOnlyIteration,
     });
     const disabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
         failure: failure !== null,
+        readOnlyIteration,
     });
     const disabled = disabledReason !== null;
 

@@ -6,11 +6,15 @@ import './banner-slot.css';
 
 /**
  * Slot priority order (SPEC §2.21): generation failure → failed route action →
- * rebuild → underexplained route → route filling → audit scope. Numbers live here,
- * instead of being scattered across source declarations, because the order is a product decision.
+ * rebuild → stale route → read-only mode for a previous iteration → second pass →
+ * underexplained route → route filling → audit scope. Numbers live here instead of scattered source declarations. The order is
+ * a product decision.
  *
  * Failure of the button just clicked sits immediately below generation failure. The reviewer is waiting
  * for the result of their action, but a failed generation is more significant.
+ *
+ * "Route is stale" sits below rebuild. While a new route is being built, the old route's age is
+ * no longer news. The second-pass banner sits lower because it describes a filter, not a condition.
  *
  * Agent disconnection is absent here. Its status lives in the pill, with an explanation in its popover (decision #32).
  */
@@ -18,6 +22,9 @@ export const BANNER_PRIORITY = {
     generationFailed: 400,
     routeActionError: 350,
     routeRegenerating: 300,
+    routeStale: 250,
+    readOnlyIteration: 240,
+    routeSecondPass: 220,
     routeUnderExplained: 200,
     routeFilling: 150,
     auditScope: 100,

@@ -1,5 +1,6 @@
 import type { HostId, PublishResult, Verdict } from '@sherpa/protocol';
 
+import { READ_ONLY_REASON } from '../iterations/read-only.tsx';
 import type { ConnectionState } from '../store.js';
 import { formatCount, plural } from '../text.js';
 
@@ -11,6 +12,8 @@ export interface PublishGuardInput {
     readonly publishing: boolean;
     /** After failure, only an explicit retry of the same verdict is allowed. */
     readonly failure?: boolean;
+    /** The tab is viewing a previous iteration. Only the active one can be shipped (M4 boundaries). */
+    readonly readOnlyIteration?: boolean;
 }
 
 export interface FailedPublicationComment {
@@ -28,6 +31,9 @@ export interface PublicationFailure {
 
 /** The disabled-verdict reason is shared by buttons, shortcuts and the palette. */
 export function publishDisabledReason(input: PublishGuardInput): string | null {
+    if (input.readOnlyIteration === true) {
+        return READ_ONLY_REASON;
+    }
     if (input.publishing) {
         return 'publishing…';
     }

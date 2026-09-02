@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import { isNoteExpanded, isNoteStackExpanded } from '../session/session-store.js';
@@ -154,6 +155,8 @@ function AgentNoteView({
     readonly actions: CardNoteActions;
 }) {
     const [deleting, setDeleting] = useState(false);
+    // A note is always readable. Creating a comment draft from it requires the active iteration.
+    const readOnly = useReadOnlyIteration();
     const [error, setError] = useState<string | null>(null);
 
     if (!expanded) {
@@ -201,6 +204,8 @@ function AgentNoteView({
                 </button>
                 <button
                     type="button"
+                    disabled={readOnly}
+                    title={readOnly ? READ_ONLY_REASON : undefined}
                     onClick={() => {
                         actions.onTurnIntoDraft(note);
                     }}

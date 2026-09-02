@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import { openDraftEditor } from './draft-editor.tsx';
 import { createThreadStore } from './store.js';
 import type { ThreadStore } from './store.js';
@@ -513,5 +514,28 @@ describe('reply draft', () => {
             root.unmount();
         });
         host.remove();
+    });
+});
+
+/** M4 boundaries: a previous iteration's thread can be read, but cannot send any writes. */
+describe('read-only thread', () => {
+    it('disables Resolve, draft editing and draft deletion with the same reason', () => {
+        const source = threadOf('kai');
+        const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
+        const html = renderToStaticMarkup(
+            <ReadOnlyIterationProvider readOnly>
+                <ThreadList
+                    threads={[thread]}
+                    store={createThreadStore([thread], FILE_IDS)}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                />
+            </ReadOnlyIterationProvider>,
+        );
+
+        expect(html).toContain('title="only in the active iteration"');
+        expect(/<button[^>]*disabled[^>]*>Resolve<\/button>/.exec(html)).not.toBeNull();
+        expect(html).toContain('class="thread__edit-draft" aria-label="Edit draft draft-reply" title="only in the active iteration" disabled=""');
+        expect(html).toContain('class="thread__delete-draft" aria-label="Delete draft draft-reply" title="only in the active iteration" disabled=""');
     });
 });

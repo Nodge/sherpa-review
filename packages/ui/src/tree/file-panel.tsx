@@ -7,6 +7,7 @@ import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
@@ -170,6 +171,8 @@ function FileTreeView({
     route,
     onJumpToStop,
 }: FileTreeViewProps) {
+    // Marking viewed is available only in the active iteration (M4 scope).
+    const readOnly = useReadOnlyIteration();
     // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
     // and directories without a record follow the size-based default.
     const prState = usePrStateStore();
@@ -246,11 +249,13 @@ function FileTreeView({
     const cursorRow = cursor < 0 ? undefined : tree.rows[cursor];
     // `v` is a registry command (requirements §3.3), not a separate key handler, so it appears in the palette
     // and shortcuts sheet. It acts on the row under the cursor, only while the tree has focus.
+    // Previous iterations have no viewed marks, so the command is unavailable (M4 scope).
     useShortcut({
         id: 'diff.markViewed',
         keys: ['v'],
         label: 'Mark the file viewed',
-        when: () => cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
+        when: () =>
+            !readOnly && cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
         action: () => {
             if (cursorRow?.kind === 'file') {
                 onToggleViewed(cursorRow.fileId);
@@ -380,6 +385,7 @@ function FileRow({
     onJumpToStop?: ((stopId: string) => void) | undefined;
     onToggleViewed: (fileId: string) => void;
 }) {
+    const readOnly = useReadOnlyIteration();
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
@@ -390,7 +396,8 @@ function FileRow({
                 aria-pressed={row.read.state === 'read'}
                 aria-hidden="true"
                 tabIndex={-1}
-                title={row.read.tooltip}
+                disabled={readOnly}
+                title={readOnly ? READ_ONLY_REASON : row.read.tooltip}
                 onMouseDown={(event) => {
                     event.preventDefault();
                 }}

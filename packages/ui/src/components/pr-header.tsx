@@ -16,7 +16,8 @@ import './pr-header.css';
  *
  * The `overview` variant has its own layout from the prototype Overview screen (`Sherpa.dc.html:523-529`):
  * PR number in the metadata row, a larger title, author without an avatar, time, branches and check
- * checks, the audit scope chip is not clickable, and there is no `aside` slot.
+ * status, and a non-clickable audit scope chip. The `aside` slot sits in the author row here. This
+ * variant has no separate bottom row.
  */
 
 export interface PrHeaderDefaultProps {
@@ -49,6 +50,8 @@ export interface PrHeaderOverviewProps {
     readonly pci: FileFilter | null;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
+    /** Right end of the author row, also holds the snapshot pill (README §1). */
+    readonly aside?: ReactNode;
 }
 
 export type PrHeaderProps = PrHeaderDefaultProps | PrHeaderOverviewProps;
@@ -115,7 +118,7 @@ function DefaultHeader({
     );
 }
 
-function OverviewHeader({ ref, pr, counts, pci, now }: PrHeaderOverviewProps) {
+function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOverviewProps) {
     return (
         <header className="pr-header pr-header--overview" ref={ref}>
             <div className="pr-header__meta">
@@ -155,6 +158,7 @@ function OverviewHeader({ ref, pr, counts, pci, now }: PrHeaderOverviewProps) {
                         <span className={`pr-header__checks is-${pr.checks}`}>{CHECKS_LABELS[pr.checks]}</span>
                     </>
                 )}
+                {aside === null ? null : <div className="pr-header__aside">{aside}</div>}
             </div>
         </header>
     );

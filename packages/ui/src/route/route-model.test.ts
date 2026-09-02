@@ -10,8 +10,10 @@ import { changedLinesOf, readStateOf } from '../progress/read-state.js';
 import type { RouteFileGroup, RouteModel, RouteTotals } from './route-model.js';
 import {
     buildRouteModel,
+    changeFilterAvailable,
     composersForGroup,
     countStopComments,
+    entryMatchesChangeFilter,
     entryParseFailed,
     filterOtherView,
     lazyCards,
@@ -339,6 +341,34 @@ describe('route model', () => {
         expect(stopMatchesFilter(first, onlyFirst)).toBe(true);
         expect(stopMatchesFilter(first, null)).toBe(true);
         expect(stops.filter((stop) => stopMatchesFilter(stop, onlyFirst))).toEqual([first]);
+    });
+
+    it('keeps only classified stops and hides Other under the "what is new" filter', () => {
+        const snapshot: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: SNAPSHOT.stops.map((stop) =>
+                stop.id === 's02'
+                    ? { ...stop, change: { kind: 'changed', reason: null, threadIds: [] } }
+                    : stop.id === 's06'
+                      ? { ...stop, change: { kind: 'new', reason: null, threadIds: [] } }
+                      : stop,
+            ),
+        };
+        const model = buildRouteModel({ snapshot, files: DATA.diff.files, models: new Map() });
+        const shown = model.entries.filter((entry) => entryMatchesChangeFilter(entry, true));
+
+        expect(changeFilterAvailable(model.entries)).toBe(true);
+        expect(shown.map((entry) => entry.view.stop.id)).toEqual(['s02', 's06']);
+        // Numbers are fixed by the plan. The denominator uses the full set of entries.
+        expect(model.stopCount).toBe(model.entries.length);
+        expect(shown.map((entry) => entry.view.planLabel)).toEqual(['02', '06']);
+    });
+
+    it('disables the "what is new" filter when there are no classified stops', () => {
+        const model = build();
+
+        expect(changeFilterAvailable(model.entries)).toBe(false);
+        expect(model.entries.filter((entry) => entryMatchesChangeFilter(entry, false))).toEqual(model.entries);
     });
 
     it('keeps surviving files and shows a notice when some anchors have moved', () => {

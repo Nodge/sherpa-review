@@ -51,6 +51,8 @@ export {
 
 export type { ReviewHostFactory, SelectedHost } from './hosts/select.js';
 export { selectReviewHost } from './hosts/select.js';
+export { affectedStops, buildIterationMap, classifyStop, identityMap } from './iterations/index.js';
+export type { FileStatus, IterationMap, IterationMapInput, MappedRange, StopChangeKind } from './iterations/index.js';
 export {
     claimManifest,
     cleanStaleManifests,

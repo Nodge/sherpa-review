@@ -8,8 +8,17 @@ import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
 import { PrStateProvider } from './pr-state/context.tsx';
 import { createUiPrStateStore } from './pr-state/pr-state-store.js';
+import type { Viewing } from './iterations/viewing.js';
+import { parseViewing, viewingFragmentPatch } from './iterations/viewing.js';
 import type { SessionState } from './session/session-store.js';
-import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
+import {
+    createSessionStore,
+    DEFAULT_PRESET,
+    DEFAULT_ROUTE_FILTER,
+    DEFAULT_THREADS_SHOW,
+    parsePreset,
+    parseRouteFilter,
+} from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { SettingsProvider } from './settings/context.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
@@ -63,6 +72,11 @@ if (token === null) {
     });
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
+    // What the tab is viewing: `snapshot=` takes priority over `diff=`, "current" is omitted from the URL (M4-T9).
+    let persistedViewing: Viewing = parseViewing(
+        readFragmentParam(window.location.hash, 'snapshot'),
+        readFragmentParam(window.location.hash, 'diff'),
+    );
     const session = createSessionStore({
         // A view from the URL is the reviewer's choice: a small PR will not override it (SPEC §4.1).
         viewPinned: viewFromUrl !== null,
@@ -71,10 +85,15 @@ if (token === null) {
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
             preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
+            routeFilter:
+                parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ?? DEFAULT_ROUTE_FILTER,
+            viewing: persistedViewing,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
         },
         persist: (state: SessionState) => {
+            const viewingPatch = viewingFragmentPatch(state.viewing, persistedViewing);
+            persistedViewing = state.viewing;
             // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
             history.replaceState(
                 null,
@@ -84,6 +103,8 @@ if (token === null) {
                     filter: filterFragmentValue(state.filter),
                     // The default is omitted from the address: the preset appears in the URL only after a change.
                     preset: state.preset === DEFAULT_PRESET ? null : state.preset,
+                    routeFilter: state.routeFilter === DEFAULT_ROUTE_FILTER ? null : state.routeFilter,
+                    ...viewingPatch,
                 }),
             );
         },

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
 
 import { ToolbarRightCluster } from '../../components/toolbar-controls.tsx';
+import { Icon } from '../../icons/icon.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import type { FileFilter } from '../../filters/lens-filters.js';
 import type { RoutePreset, ThreadsShow } from '../../session/session-store.js';
@@ -21,6 +22,9 @@ export const TOUR_HINT = 'Reading order: entry point → definitions → consequ
 /** SPEC §2.5: the toggle is disabled until a route exists and explains why (`title`). */
 export const PRESET_DISABLED_TITLE = 'available once the route is built';
 
+/** "What is new" filter chip (README §9), dismissible with a close button. */
+export const CHANGE_CHIP_LABEL = 'Showing changes since the previous pass';
+
 const PRESETS: readonly { readonly id: RoutePreset; readonly label: string; readonly hint: string }[] = [
     { id: 'triage', label: 'Triage', hint: TRIAGE_HINT },
     { id: 'tour', label: 'Full tour', hint: TOUR_HINT },
@@ -38,6 +42,9 @@ export interface RouteToolbarProps {
     readonly threadsShow: ThreadsShow;
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
+    /** The "what is new since the last pass" filter is on (README §9): a chip appears below the preset. */
+    readonly changeFilterOn?: boolean;
+    readonly onClearChangeFilter?: () => void;
     /** Second toolbar row: coverage strip (SPEC §2.4). */
     readonly strip: ReactNode;
     /**
@@ -58,6 +65,8 @@ export function RouteToolbar({
     threadsShow,
     threadCounts,
     onThreadsShow,
+    changeFilterOn = false,
+    onClearChangeFilter,
     strip,
     onHeight,
 }: RouteToolbarProps) {
@@ -115,6 +124,20 @@ export function RouteToolbar({
                     onThreadsShow={onThreadsShow}
                 />
             </div>
+            {/* Give the filter chip its own row. It does not fit beside the preset at the minimum width of 1280. */}
+            {changeFilterOn && onClearChangeFilter !== undefined ? (
+                <div className="route-toolbar__filters">
+                    <button
+                        type="button"
+                        className="route-change-chip"
+                        title="Show the entire route"
+                        onClick={onClearChangeFilter}
+                    >
+                        {CHANGE_CHIP_LABEL}
+                        <Icon name="cross" size={9} />
+                    </button>
+                </div>
+            ) : null}
             <div className="route-toolbar__strip">{strip}</div>
         </div>
     );

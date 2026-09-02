@@ -123,6 +123,13 @@ const EXPECTED: Record<string, string> = {
     '--attention-border': '#4a4230',
     '--attention-border-alt': '#3d3524',
     '--attention-border-strong': '#6b5b39',
+    // README §9: the second-pass banner action uses "(`#e2954c`, ink `#1b1508`)". The fill is
+    // `--attention` itself, the ink is not in the token table.
+    '--attention-ink': '#1b1508',
+    // README §1 item 4 ("why this stop changed"): "label 11px mono `#8a7550`, body 12.5px `#d8c9ad`".
+    // Neither value is in the token table.
+    '--attention-label': '#8a7550',
+    '--attention-body': '#d8c9ad',
     // SPEC additions §1d: closed field with a draft `#141210`, save status `#5e8a6d`.
     '--draft-field-surface': '#141210',
     '--draft-saved': '#5e8a6d',

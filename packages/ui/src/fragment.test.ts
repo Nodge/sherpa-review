@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_ROUTE_FILTER, parseRouteFilter } from './session/session-store.js';
 import { parseFragment, readFragmentParam, readToken, updateFragment } from './fragment.js';
 
 describe('readToken', () => {
@@ -63,6 +64,28 @@ describe('updateFragment', () => {
 
     it('works with an empty fragment', () => {
         expect(updateFragment('', { view: 'route' })).toBe('#view=route');
+    });
+});
+
+/**
+ * The "what is new" filter uses the fragment just like a preset: main.tsx reads it at startup
+ * and writes it back in `persist`. The test covers this exact composition. main.tsx itself renders the root
+ * and cannot run in vitest.
+ */
+describe('route filter in the fragment', () => {
+    const read = (hash: string) => parseRouteFilter(readFragmentParam(hash, 'routeFilter')) ?? DEFAULT_ROUTE_FILTER;
+    const write = (hash: string, routeFilter: 'all' | 'new') =>
+        updateFragment(hash, { routeFilter: routeFilter === DEFAULT_ROUTE_FILTER ? null : routeFilter });
+
+    it('reads from the URL, with garbage and absence falling back to the default', () => {
+        expect(read('#t=abc&routeFilter=new')).toBe('new');
+        expect(read('#t=abc&routeFilter=garbage')).toBe('all');
+        expect(read('#t=abc')).toBe('all');
+    });
+
+    it('writes back without putting the default in the URL', () => {
+        expect(write('#t=abc&view=route', 'new')).toBe('#t=abc&view=route&routeFilter=new');
+        expect(write('#t=abc&view=route&routeFilter=new', 'all')).toBe('#t=abc&view=route');
     });
 });
 

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { VIEWING_CURRENT } from '../iterations/viewing.js';
+
 import {
     createSessionStore,
     DEFAULT_THREADS_SHOW,
@@ -9,6 +11,7 @@ import {
     isNoteExpanded,
     isNoteStackExpanded,
     parsePreset,
+    parseRouteFilter,
 } from './session-store.js';
 import { DEFAULT_VIEW, parseViewId } from './views.js';
 
@@ -37,6 +40,8 @@ describe('session store', () => {
             view: 'diff',
             filter: 'all',
             preset: 'triage',
+            routeFilter: 'all',
+            viewing: VIEWING_CURRENT,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,
@@ -62,6 +67,26 @@ describe('session store', () => {
         expect(createSessionStore({ initial: { view: 'route', filter: 'all', preset: 'tour' } }).getSnapshot().preset).toBe(
             'tour',
         );
+    });
+
+    it('disables the "what is new" filter by default, allows changes and preserves it through fragment parsing', () => {
+        const persist = vi.fn();
+        const store = createSessionStore({ initial: { view: 'route', filter: 'all' }, persist });
+
+        expect(store.getSnapshot().routeFilter).toBe('all');
+
+        store.setRouteFilter('new');
+        store.setRouteFilter('new');
+
+        expect(store.getSnapshot().routeFilter).toBe('new');
+        expect(persist).toHaveBeenCalledTimes(1);
+        expect(parseRouteFilter('new')).toBe('new');
+        expect(parseRouteFilter('all')).toBe('all');
+        expect(parseRouteFilter('garbage')).toBeNull();
+        expect(
+            createSessionStore({ initial: { view: 'route', filter: 'all', routeFilter: 'new' } }).getSnapshot()
+                .routeFilter,
+        ).toBe('new');
     });
 
     it('notifies subscribers of changes and stays silent when the same value repeats', () => {
@@ -111,6 +136,8 @@ describe('session store', () => {
                     view: 'diff',
                     filter: 'all',
                     preset: 'triage',
+                    routeFilter: 'all',
+                    viewing: VIEWING_CURRENT,
                     threadsShow: DEFAULT_THREADS_SHOW,
                     paletteOpen: false,
                     chatOpen: false,
@@ -142,6 +169,8 @@ describe('session store', () => {
             view: 'diff',
             filter: 'pci',
             preset: 'triage',
+            routeFilter: 'all',
+            viewing: VIEWING_CURRENT,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,
