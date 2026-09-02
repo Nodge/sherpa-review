@@ -95,6 +95,24 @@
     overflow-y: auto;
 }
 
+/* M4-T11: diff and chat panel in one frame, side by side as in the app. */
+.gallery-notes-lost {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+}
+
+.gallery-notes-lost__diff {
+    min-width: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.gallery-notes-lost .gallery-chat-panel {
+    height: auto;
+    flex: 0 0 auto;
+}
+
 .gallery-zero-filters {
     flex-direction: row;
     gap: var(--space-card);

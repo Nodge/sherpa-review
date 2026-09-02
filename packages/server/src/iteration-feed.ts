@@ -1,8 +1,18 @@
-import type { HostId, Iteration, ReviewHost, RouteSnapshot, UiRouteStale, UiRouteState } from '@sherpa/protocol';
+import type {
+    HostCapabilities,
+    HostId,
+    Iteration,
+    PrDiff,
+    ReviewHost,
+    RouteSnapshot,
+    UiRouteStale,
+    UiRouteState,
+} from '@sherpa/protocol';
 
+import type { ChatStore } from './chat-store.js';
 import type { IterationStore } from './iteration-store.js';
 import type { IterationMap } from './iterations/index.js';
-import { affectedStops, buildIterationMap } from './iterations/index.js';
+import { affectedStops, buildIterationMap, opaqueMap } from './iterations/index.js';
 import type { RouteStore } from './route-store.js';
 
 /**
@@ -26,12 +36,22 @@ interface AffectedStops {
     readonly stopIds: string[];
 }
 
+/** Everything the feed needs from chat storage to carry note anchors to a new iteration. */
+export type NoteCarrier = Pick<ChatStore, 'adoptLegacyAnchors' | 'migrateNotes' | 'read'>;
+
+/** Retry anchor carryover after this interval if the host did not provide a slice. */
+const CARRY_RETRY_MS = 30_000;
+
 export interface IterationFeedOptions {
     /** null means the PR has no host adapter and will never have iterations. */
     readonly host: ReviewHost | null;
     readonly iterations: IterationStore;
     /** Current snapshot: used to compute `stale`. Changing it recalculates affected stops. */
     readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    /** Notes whose anchors move to a new iteration (M4-T11). null means there is nobody to move them. */
+    readonly notes?: NoteCarrier | null;
+    /** Delay before retrying anchor carryover after a host failure. */
+    readonly carryRetryMs?: number;
     /** Where to log host refusals. Defaults to stderr. */
     readonly log?: (message: string) => void;
 }
@@ -40,6 +60,8 @@ export class IterationFeed {
     private readonly host: ReviewHost | null;
     private readonly store: IterationStore;
     private readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    private readonly notes: NoteCarrier | null;
+    private readonly carryRetryMs: number;
     private readonly log: (message: string) => void;
     private readonly listeners = new Set<(revision: number) => void>();
     /** Running affected-stop calculations, to avoid starting the same one twice. */
@@ -48,20 +70,34 @@ export class IterationFeed {
     private readonly refused = new Set<string>();
     /** Map of the latest iteration pair, computed once and read on every snapshot change. */
     private map: { pair: string; built: Promise<IterationMap> } | null = null;
+    /**
+     * In-flight slice requests by iteration pair. A slice from the review host takes 2.8–3.7 s. After a push,
+     * two consumers request it at once: affected stops and note anchor carryover. The store cache shares the result
+     * only after the first response, so in-flight requests need separate deduplication.
+     */
+    private readonly interdiffs = new Map<string, Promise<PrDiff>>();
 
     private list: Iteration[] = [];
     private affected: AffectedStops | null = null;
     private revisionValue = 0;
     private unwatch: (() => void) | null = null;
     private unsubscribeRoute: (() => void) | null = null;
-    /** Iteration whose patch is loading: concurrent requests for the same patch are unnecessary. */
-    private loadingDiffOf: HostId | null = null;
+    /** In-flight active iteration patch load, to avoid duplicate concurrent requests. */
+    private diffLoad: { diffId: HostId; patch: Promise<PrDiff> } | null = null;
+    /** Iteration pairs whose notes are already moving. A second identical carryover is unnecessary. */
+    private readonly carrying = new Set<string>();
+    /** Scheduled anchor carryover retry after a host failure. null means nothing to retry. */
+    private carryRetry: ReturnType<typeof setTimeout> | null = null;
+    /** Host capabilities, fetched once to determine whether anchor carryover is possible. */
+    private capabilities: Promise<HostCapabilities> | null = null;
     private closed = false;
 
     constructor(options: IterationFeedOptions) {
         this.host = options.host;
         this.store = options.iterations;
         this.route = options.route;
+        this.notes = options.notes ?? null;
+        this.carryRetryMs = options.carryRetryMs ?? CARRY_RETRY_MS;
         this.log =
             options.log ??
             ((message: string): void => {
@@ -147,6 +183,10 @@ export class IterationFeed {
         this.unwatch = null;
         this.unsubscribeRoute?.();
         this.unsubscribeRoute = null;
+        if (this.carryRetry !== null) {
+            clearTimeout(this.carryRetry);
+            this.carryRetry = null;
+        }
     }
 
     /** Host list: reconcile with storage, fetch the active iteration patch, recalculate stale. */
@@ -160,7 +200,11 @@ export class IterationFeed {
         }
 
         this.list = merged;
-        this.rememberActiveDiff();
+        const active = this.active();
+        if (active !== null) {
+            this.rememberActiveDiff(active);
+            this.carryNotes(active);
+        }
         this.refreshAffected();
         this.notify();
     }
@@ -169,37 +213,191 @@ export class IterationFeed {
      * The active iteration patch must be stored locally: after the next push, a snapshot
      * built on it can only be read from that patch (brief §4a).
      */
-    private rememberActiveDiff(): void {
+    private rememberActiveDiff(active: Iteration): void {
+        void this.activeDiff(active).catch(() => undefined);
+    }
+
+    /**
+     * Active iteration patch: read from storage. On a miss, fetch from the host and store immediately.
+     * Concurrent requests for the same patch share one call.
+     */
+    private activeDiff(active: Iteration): Promise<PrDiff> {
+        const stored = this.store.get(active.diffId);
+        if (stored !== null) {
+            return Promise.resolve(stored.diff);
+        }
         const host = this.host;
-        const active = this.active();
-        if (
-            host === null ||
-            active === null ||
-            this.loadingDiffOf === active.diffId ||
-            this.store.get(active.diffId) !== null
-        ) {
-            return;
+        if (host === null) {
+            return Promise.reject(new Error(`cannot fetch patch for iteration ${active.diffId}: no host`));
+        }
+        if (this.diffLoad?.diffId === active.diffId) {
+            return this.diffLoad.patch;
         }
 
-        this.loadingDiffOf = active.diffId;
-        void host
+        const patch = host
             .getDiff()
             .then((diff) => {
-                // The author may have pushed again while the patch was loading: it can no longer be stored
-                // as the active iteration, much less as another iteration.
-                if (this.closed || diff.diffId !== active.diffId || this.active()?.diffId !== active.diffId) {
-                    return;
+                // The author may have pushed again while the patch was loading, so the host returned another
+                // iteration: neither store it nor return it to the caller as the `active` patch,
+                // or the wrong patch would put the wrong fileId values into note anchors.
+                if (diff.diffId !== active.diffId) {
+                    throw new Error(`host returned patch for iteration ${diff.diffId} instead of ${active.diffId}`);
                 }
-                this.store.upsert(diff, active);
+                if (!this.closed && this.active()?.diffId === active.diffId) {
+                    this.store.upsert(diff, active);
+                }
+                return diff;
             })
             .catch((error: unknown) => {
                 this.log(`patch for iteration ${active.diffId} not saved: ${messageOf(error)}`);
+                throw error;
             })
             .finally(() => {
-                if (this.loadingDiffOf === active.diffId) {
-                    this.loadingDiffOf = null;
+                if (this.diffLoad?.diffId === active.diffId) {
+                    this.diffLoad = null;
                 }
             });
+        this.diffLoad = { diffId: active.diffId, patch };
+        return patch;
+    }
+
+    /**
+     * Note anchors move to the active iteration (M4-T11). Usually they move from one
+     * iteration, but 2 pushes in a row without an open UI leave notes on different ones, hence
+     * a set instead of a single pair. A note that has already lost its anchor never migrates again.
+     */
+    private carryNotes(active: Iteration): void {
+        const notes = this.notes;
+        if (notes === null) {
+            return;
+        }
+
+        try {
+            notes.adoptLegacyAnchors(active.diffId);
+        } catch (error) {
+            this.log(`M3 note anchors not adopted: ${messageOf(error)}`);
+            return;
+        }
+
+        const stale = new Set(
+            notes
+                .read()
+                .notes.filter((note) => !note.lostAnchor && note.anchor.diffId !== active.diffId)
+                .map((note) => note.anchor.diffId),
+        );
+        for (const from of stale) {
+            const pair = `${from} ${active.diffId}`;
+            if (this.carrying.has(pair)) {
+                continue;
+            }
+            this.carrying.add(pair);
+            void this.carryNotesFrom(notes, from, active, pair);
+        }
+    }
+
+    private async carryNotesFrom(
+        notes: NoteCarrier,
+        from: HostId,
+        active: Iteration,
+        pair: string,
+    ): Promise<void> {
+        try {
+            const map = await this.noteMap(from, active);
+            const files = new Map((await this.activeDiff(active)).files.map((file) => [file.path, file.fileId]));
+            // The author may have pushed while the slice was being computed: do not carry over to an inactive iteration.
+            if (this.closed || this.active()?.diffId !== active.diffId) {
+                return;
+            }
+            notes.migrateNotes(
+                from,
+                active.diffId,
+                map,
+                (path) => files.get(path) ?? null,
+                active.headCommit,
+            );
+        } catch (error) {
+            // A host failure leaves notes unchanged. Anchors stay in the previous iteration until the next
+            // attempt. A network error must not falsely mark an anchor lost because that is irreversible.
+            this.log(`note anchors from iteration ${from} not carried over: ${messageOf(error)}`);
+            this.scheduleCarryRetry();
+        } finally {
+            this.carrying.delete(pair);
+        }
+    }
+
+    /**
+     * Retry carryover after a host failure. Waiting for the next iteration list will not work. The watcher wakes
+     * the feed only on a new push. Until then, a note anchored in the previous iteration cannot find its
+     * file in the active diff and disappears from the code, with no banner or mark in chat.
+     */
+    private scheduleCarryRetry(): void {
+        if (this.closed || this.unwatch === null || this.carryRetry !== null) {
+            return;
+        }
+        this.carryRetry = setTimeout(() => {
+            this.carryRetry = null;
+            const active = this.active();
+            if (!this.closed && this.unwatch !== null && active !== null) {
+                this.carryNotes(active);
+            }
+        }, this.carryRetryMs);
+        // The timer neither keeps the process alive nor counts as server activity (see idle.ts).
+        this.carryRetry.unref();
+    }
+
+    /**
+     * Line carryover map for notes. Without host slices, there is no mapping. Every range
+     * counts as affected, so notes lose their anchors.
+     */
+    private async noteMap(from: HostId, active: Iteration): Promise<IterationMap> {
+        const host = this.host;
+        if (host === null || !(await this.hostCapabilities(host)).iterations) {
+            return opaqueMap();
+        }
+        const fromIteration =
+            this.list.find((iteration) => iteration.diffId === from) ?? this.store.get(from)?.iteration ?? null;
+        if (fromIteration === null) {
+            // The iteration is absent from both the list and storage: there is no way to compare its base.
+            return opaqueMap();
+        }
+        const interdiff = await this.interdiff(host, from, active.diffId);
+        return buildIterationMap({
+            interdiff,
+            fromBaseCommit: fromIteration.baseCommit,
+            toBaseCommit: active.baseCommit,
+        });
+    }
+
+    /**
+     * Slice for an iteration pair: read from the storage cache, or make one host request per pair on a miss.
+     * Affected stops and note anchor carryover start together after a push, and until
+     * the first response the storage cache is empty, so the second identical request waits for the first.
+     */
+    private interdiff(host: ReviewHost, base: HostId, head: HostId): Promise<PrDiff> {
+        const pair = `${base} ${head}`;
+        const inflight = this.interdiffs.get(pair);
+        if (inflight !== undefined) {
+            return inflight;
+        }
+        const loading = this.store
+            .getInterdiff(base, head, () => host.getDiff({ base, head }))
+            .finally(() => {
+                // Storage serves the slice from now on: there is no need to keep the patch in memory too.
+                this.interdiffs.delete(pair);
+            });
+        this.interdiffs.set(pair, loading);
+        return loading;
+    }
+
+    private hostCapabilities(host: ReviewHost): Promise<HostCapabilities> {
+        this.capabilities ??= host
+            .getPr()
+            .then((pr) => pr.capabilities)
+            .catch((error: unknown) => {
+                this.capabilities = null;
+                throw error;
+            });
+        return this.capabilities;
     }
 
     /**
@@ -288,11 +486,7 @@ export class IterationFeed {
         if (this.map?.pair !== pair) {
             this.map = {
                 pair,
-                built: this.store
-                    .getInterdiff(snapshot.diffId, active.diffId, () =>
-                        host.getDiff({ base: snapshot.diffId, head: active.diffId }),
-                    )
-                    .then((interdiff) =>
+                built: this.interdiff(host, snapshot.diffId, active.diffId).then((interdiff) =>
                         buildIterationMap({
                             interdiff,
                             fromBaseCommit: snapshot.baseCommit,

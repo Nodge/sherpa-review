@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ChatStore } from './chat-store.js';
 import { openDatabase, readSchemaVersion } from './db.js';
 import { MIGRATIONS } from './migrations.js';
 import { databasePathFor } from './paths.js';
@@ -194,6 +195,48 @@ describe('storage', () => {
             const store = new RouteStore({ db: after });
             expect(store.read().phase).toBe('none');
             expect(store.current()).toBeNull();
+        } finally {
+            after.close();
+        }
+    });
+
+    // The dogfooding DB note sits where it was pinned. Before T11, the schema had no original location.
+    it('fills the original location with a copy of the current one during the note anchor migration', () => {
+        const file = `${sherpaDir}/notes-anchors.db`;
+        const anchor = {
+            diffId: 'iter-1',
+            fileId: 'file-1',
+            path: 'src/main.ts',
+            side: 'new',
+            start: 10,
+            end: 12,
+        };
+
+        const before = openDatabase(file, migrationsBefore('014-notes-anchors'));
+        before
+            .prepare(
+                `INSERT INTO chat_exchanges (
+                    id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
+                    created_at, updated_at
+                 ) VALUES (1, 'question', ?, 'done', 'answer', NULL, NULL, NULL, 'head-1', ?, ?)`,
+            )
+            .run(JSON.stringify(anchor), '2026-08-25T10:00:00.000Z', '2026-08-25T10:00:00.000Z');
+        before
+            .prepare(
+                `INSERT INTO agent_notes (id, exchange_id, anchor, text, commit_hash, created_at)
+                 VALUES (1, 1, ?, 'answer', 'head-1', ?)`,
+            )
+            .run(JSON.stringify(anchor), '2026-08-25T10:00:00.000Z');
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            const store = new ChatStore({ db: after });
+            const note = store.read().notes[0];
+            expect(note?.anchor).toEqual(anchor);
+            expect(note?.origin).toEqual({ commit: 'head-1', anchor });
+            expect(note?.lostAnchor).toBe(false);
+            store.close();
         } finally {
             after.close();
         }

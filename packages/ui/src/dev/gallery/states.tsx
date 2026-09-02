@@ -33,6 +33,7 @@ import { M4_T2_STATES } from './m4-t2-states.tsx';
 import { M4_T8_STATES } from './m4-t8-states.tsx';
 import { M4_T9_STATES } from './m4-t9-states.tsx';
 import { M4_T10_STATES } from './m4-t10-states.tsx';
+import { M4_T11_STATES } from './m4-t11-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -107,7 +108,7 @@ const MEDIUM_BREADCRUMB = breadcrumbFor('fixture-medium', MEDIUM.pr);
  */
 const START_STATE_ID = 'overview-ownership';
 
-const M4_ITERATION_STATES = [...M4_T8_STATES, ...M4_T9_STATES, ...M4_T10_STATES];
+const M4_ITERATION_STATES = [...M4_T8_STATES, ...M4_T9_STATES, ...M4_T10_STATES, ...M4_T11_STATES];
 const M4_ITERATION_IDS = new Set(M4_ITERATION_STATES.map((state) => state.id));
 
 export const GALLERY_STATES: readonly GalleryState[] = [
@@ -207,7 +208,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    // T2 placeholders stay until real states take their ids (T8/T9 already have, T10/T11 are next).
+    // T2 placeholders stay until real states take their ids (T8–T11 have already taken theirs).
     ...[...M4_ITERATION_STATES, ...M4_T2_STATES.filter((state) => !M4_ITERATION_IDS.has(state.id))].map((state) => ({
         id: state.id,
         group: 'Iterations',

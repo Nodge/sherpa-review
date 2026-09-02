@@ -284,6 +284,22 @@ export const MIGRATIONS: readonly Migration[] = [
             DELETE FROM route_tasks;
         `,
     },
+    {
+        // Note anchors after a push (M4-T11). `anchor` and `commit_hash` describe the current
+        // location and move to the new iteration, so the original location gets its own
+        // columns. The contract's `origin` never changes. `lost_anchor` means a push rewrote the actual
+        // lines, leaving nowhere to carry the note. It leaves the code and stays in chat with a label.
+        //
+        // Number 013 is taken by the progress carryover migration (M4-T6) in another branch of this stage.
+        name: '014-notes-anchors',
+        sql: `
+            ALTER TABLE agent_notes ADD COLUMN lost_anchor INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE agent_notes ADD COLUMN origin_anchor TEXT;
+            ALTER TABLE agent_notes ADD COLUMN origin_commit TEXT;
+
+            UPDATE agent_notes SET origin_anchor = anchor, origin_commit = commit_hash;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

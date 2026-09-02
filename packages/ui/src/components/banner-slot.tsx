@@ -7,8 +7,8 @@ import './banner-slot.css';
 /**
  * Slot priority order (SPEC §2.21): generation failure → failed route action →
  * rebuild → stale route → read-only mode for a previous iteration → second pass →
- * underexplained route → route filling → audit scope. Numbers live here instead of scattered source declarations. The order is
- * a product decision.
+ * under-explained route → route filling → notes without anchors → audit scope. Numbers live
+ * here instead of being scattered across source declarations. Their order is a product decision.
  *
  * Failure of the button just clicked sits immediately below generation failure. The reviewer is waiting
  * for the result of their action, but a failed generation is more significant.
@@ -27,6 +27,7 @@ export const BANNER_PRIORITY = {
     routeSecondPass: 220,
     routeUnderExplained: 200,
     routeFilling: 150,
+    notesLost: 120,
     auditScope: 100,
 } as const;
 

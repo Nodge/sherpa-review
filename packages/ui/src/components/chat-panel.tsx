@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { breadcrumbFromPrKey } from '../pr-key.js';
 import { Markdown } from '../markdown/markdown.tsx';
+import { NOTE_LOST_ANCHOR_REASON, noteAnchorForIteration, noteVisibleInIteration } from '../notes/model.js';
 import { CHAT_EXAMPLE_QUESTIONS } from './chat-prompts.js';
 import { CommandBox } from './command-box.tsx';
 import './chat-panel.css';
@@ -36,6 +37,11 @@ export interface ChatPanelProps {
     readonly onRetry: (exchangeId: number) => Promise<void>;
     readonly onNavigate: (anchor: ChatAnchor) => void;
     readonly onNavigateToNote: (note: AgentNote) => void;
+    /**
+     * The iteration shown in the tab (M4-T11) determines whether there is code to navigate to.
+     * null means the iteration is unknown and navigation is unavailable.
+     */
+    readonly viewDiffId?: string | null;
     /** Fixed clock for the gallery and tests. */
     readonly now?: number;
 }
@@ -129,6 +135,7 @@ export function ChatPanel(props: ChatPanelProps) {
         onRetry,
         onNavigate,
         onNavigateToNote,
+        viewDiffId = null,
     } = props;
     const feed = useMemo(() => expandChatExchanges(exchanges, notes), [exchanges, notes]);
     const feedVersion = feed
@@ -349,6 +356,7 @@ export function ChatPanel(props: ChatPanelProps) {
                             onRetry={onRetry}
                             onNavigate={onNavigate}
                             onNavigateToNote={onNavigateToNote}
+                            viewDiffId={viewDiffId}
                             typingVisible={running?.id === exchange.id && typingVisible}
                             longRunning={running?.id === exchange.id && longRunning}
                         />
@@ -423,6 +431,7 @@ function ChatExchangeView({
     onRetry,
     onNavigate,
     onNavigateToNote,
+    viewDiffId,
     typingVisible,
     longRunning,
 }: {
@@ -434,6 +443,7 @@ function ChatExchangeView({
     readonly onRetry: (exchangeId: number) => Promise<void>;
     readonly onNavigate: (anchor: ChatAnchor) => void;
     readonly onNavigateToNote: (note: AgentNote) => void;
+    readonly viewDiffId: string | null;
     readonly typingVisible: boolean;
     readonly longRunning: boolean;
 }) {
@@ -484,16 +494,28 @@ function ChatExchangeView({
                         <Markdown text={exchange.answer} profile="comment" />
                     </div>
                     {note === null ? null : (
-                        <button
-                            type="button"
-                            className="chat-message__note"
-                            title={chatAnchorTitle(note.anchor)}
-                            onClick={() => {
-                                onNavigateToNote(note);
-                            }}
-                        >
-                            ◆ Pinned by a note at {chatAnchorLabel(note.anchor)}
-                        </button>
+                        <div className="chat-message__note-row">
+                            <button
+                                type="button"
+                                className="chat-message__note"
+                                disabled={!noteVisibleInIteration(note, viewDiffId)}
+                                title={
+                                    noteVisibleInIteration(note, viewDiffId)
+                                        ? chatAnchorTitle(noteAnchorForIteration(note, viewDiffId))
+                                        : NOTE_LOST_ANCHOR_REASON
+                                }
+                                onClick={() => {
+                                    onNavigateToNote(note);
+                                }}
+                            >
+                                ◆ Pinned by a note at {chatAnchorLabel(noteAnchorForIteration(note, viewDiffId))}
+                            </button>
+                            {note.lostAnchor ? (
+                                <span className="chat-message__note-lost" title={chatAnchorTitle(note.anchor)}>
+                                    anchor lost after the push · {chatAnchorLabel(note.anchor)}
+                                </span>
+                            ) : null}
+                        </div>
                     )}
                 </div>
             ) : exchange.status === 'running' ? (

@@ -235,6 +235,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
         const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
+        // Notes are created before the feed, which carries their anchors to the new iteration (M4-T11).
+        const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
         // PR iterations (M4-T4): one watcher per server supplies `uiState.iterations` and `stale`.
         const iterationFeed =
             reviewHost === null
@@ -243,6 +245,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                       host: reviewHost.host,
                       iterations: iterationStore,
                       route: routeStore,
+                      notes: chatStore,
                   });
         // Shared context survives restarts along with tasks. Cleanup at startup and on
         // key changes preserves diffs still referenced by an open or held task.
@@ -261,7 +264,6 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             iterations: iterationStore,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
-        const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
         const chatOrchestrator = new ChatOrchestrator({
             store: chatStore,
             route: routeStore,

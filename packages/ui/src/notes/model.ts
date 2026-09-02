@@ -1,6 +1,41 @@
-import type { AgentNote } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+
+/** Why a note without an anchor cannot become a comment draft. */
+export const NOTE_LOST_DRAFT_REASON = 'anchor lost — there is nothing to attach the comment to';
+
+/** Why chat cannot navigate to code: the note is absent from this iteration. */
+export const NOTE_LOST_ANCHOR_REASON = 'anchor lost — the note has no code in this iteration';
+
+/**
+ * A note anchor as seen in the viewed iteration (M4-T11). In the iteration where the note
+ * was pinned, it stays at its original lines. In any other iteration, it uses the carried-over lines.
+ */
+export function noteAnchorForIteration(note: AgentNote, viewDiffId: string | null): ChatAnchor {
+    return viewDiffId !== null && viewDiffId === note.origin.anchor.diffId ? note.origin.anchor : note.anchor;
+}
+
+/**
+ * The note appears beside code in this iteration. A note with a lost anchor leaves code everywhere except its
+ * original iteration, where the lines it was asked about still exist (SPEC §2.16).
+ */
+export function noteVisibleInIteration(note: AgentNote, viewDiffId: string | null): boolean {
+    return !note.lostAnchor || (viewDiffId !== null && viewDiffId === note.origin.anchor.diffId);
+}
+
+/** Notes to place beside code in the selected iteration, using its anchors and excluding lost anchors. */
+export function notesForIteration(
+    notes: readonly AgentNote[],
+    viewDiffId: string | null,
+): readonly AgentNote[] {
+    return notes
+        .filter((note) => noteVisibleInIteration(note, viewDiffId))
+        .map((note) => {
+            const anchor = noteAnchorForIteration(note, viewDiffId);
+            return anchor === note.anchor ? note : { ...note, anchor };
+        });
+}
 
 export interface NoteGroup {
     readonly fileId: string;

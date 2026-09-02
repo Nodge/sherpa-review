@@ -86,6 +86,22 @@ export function identityMap(): IterationMap {
     };
 }
 
+/**
+ * Mapping when carryover is impossible: no interdiff is or will be available (a host without `capabilities.iterations`,
+ * or an iteration the host no longer knows). Every range counts as touched. It is more honest to say
+ * "not carried over" than to pretend the lines are still there.
+ */
+export function opaqueMap(): IterationMap {
+    const touched = (_path: string, _side: 'old' | 'new', range: LineRange): readonly LineRange[] =>
+        isEmpty(range) ? [] : [range];
+    return {
+        fileStatus: () => 'modified',
+        mapRange: (_path, _side, range) => (isEmpty(range) ? { carried: [], touched: [] } : { carried: [], touched: [range] }),
+        touchedInA: touched,
+        touchedInB: touched,
+    };
+}
+
 /** Maps lines A→B using the interdiff: file statuses, carryover with an offset, touched ranges. */
 export function buildIterationMap(input: IterationMapInput): IterationMap {
     const statuses = new Map<string, FileStatus>();

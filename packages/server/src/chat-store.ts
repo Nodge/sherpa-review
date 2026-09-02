@@ -3,12 +3,14 @@ import type {
     ChatAnchor,
     ChatExchange,
     ChatExchangeStatus,
+    HostId,
     UiChatResponse,
 } from '@sherpa/protocol';
 import { agentNoteSchema, chatAnchorSchema, chatExchangeSchema, uiChatResponseSchema } from '@sherpa/protocol';
 
 import type { SherpaDatabase, SqlRow } from './db.js';
 import { transaction } from './db.js';
+import type { IterationMap } from './iterations/index.js';
 import type { TransactionalEnqueue } from './queue.js';
 
 /** Chat change listener consumed by the UI SSE channel (`UI_CHAT_EVENT`). */
@@ -36,10 +38,21 @@ interface ExchangeRow extends SqlRow {
 interface NoteRow extends SqlRow {
     id: number;
     exchange_id: number;
+    /** Current note location. Moves to the active iteration after a push. */
     anchor: string;
     text: string;
+    /** Commit of the current anchor. The original location has its own `origin_commit`. */
     commit_hash: string | null;
+    lost_anchor: number;
+    origin_anchor: string | null;
+    origin_commit: string | null;
     created_at: string;
+}
+
+/** Anchor carryover result for one pair of iterations. */
+export interface NoteMigration {
+    readonly moved: number;
+    readonly lost: number;
 }
 
 /** Exchange with server fields absent from the contract (`taskId` is already part of the exchange). */
@@ -68,6 +81,14 @@ export class ChatStore {
         enqueue: () => TransactionalEnqueue,
     ) => { exchange: ChatExchange; enqueued: TransactionalEnqueue } | null;
     private readonly txComplete: (taskId: number, answer: string) => boolean;
+    private readonly txAdoptLegacy: (activeDiffId: HostId) => number;
+    private readonly txMigrateNotes: (
+        fromDiffId: HostId,
+        toDiffId: HostId,
+        map: IterationMap,
+        fileIdOf: (path: string) => string | null,
+        toHeadCommit: string | null,
+    ) => NoteMigration;
 
     private revisionValue = 0;
     private closed = false;
@@ -82,6 +103,17 @@ export class ChatStore {
             this.retryInTransaction(exchangeId, headCommit, enqueue),
         );
         this.txComplete = transaction(this.db, (taskId, answer) => this.completeInTransaction(taskId, answer));
+        this.txAdoptLegacy = transaction(this.db, (activeDiffId: HostId) => this.adoptLegacyInTransaction(activeDiffId));
+        this.txMigrateNotes = transaction(
+            this.db,
+            (
+                fromDiffId: HostId,
+                toDiffId: HostId,
+                map: IterationMap,
+                fileIdOf: (path: string) => string | null,
+                toHeadCommit: string | null,
+            ) => this.migrateNotesInTransaction(fromDiffId, toDiffId, map, fileIdOf, toHeadCommit),
+        );
     }
 
     get revision(): number {
@@ -90,7 +122,7 @@ export class ChatStore {
 
     read(): UiChatResponse {
         const exchanges = this.exchangeRows().map((row) => toStoredExchange(row).exchange);
-        const notes = (this.db.prepare('SELECT * FROM agent_notes ORDER BY id').all() as NoteRow[]).map(toNote);
+        const notes = this.noteRows().map(toNote);
         return uiChatResponseSchema.parse({ exchanges, notes, chatRevision: this.revisionValue });
     }
 
@@ -202,6 +234,47 @@ export class ChatStore {
         }
     }
 
+    /**
+     * M3 note anchors have no iteration (`LEGACY_DIFF_ID`). The server treats them as created in the
+     * active one. Lines stay put. Only `diffId` changes for both the current and original anchor.
+     * Idempotent: no such notes remain after adoption.
+     */
+    adoptLegacyAnchors(activeDiffId: HostId): number {
+        const adopted = this.txAdoptLegacy(activeDiffId);
+        if (adopted > 0) {
+            this.bump();
+        }
+        return adopted;
+    }
+
+    /**
+     * Carry note anchors from iteration `fromDiffId` to `toDiffId` using a line map (SPEC §2.16).
+     * A range untouched by the push moves as a whole. All other cases lose their anchor: a deleted file, rewritten
+     * lines, a range split apart, or a file missing from the new diff. `anchor` and its
+     * commit keep their last valid values. The note leaves the code and stays in chat with a marker.
+     *
+     * `origin` never changes. Idempotent by construction: a carried note is already
+     * on `toDiffId`, and a note that lost its anchor never migrates again.
+     */
+    migrateNotes(
+        fromDiffId: HostId,
+        toDiffId: HostId,
+        map: IterationMap,
+        /** Path → file ID in the new diff. null means the file is absent. */
+        fileIdOf: (path: string) => string | null,
+        /** Reviewed commit of the new iteration, also used for the carried anchor. */
+        toHeadCommit: string | null,
+    ): NoteMigration {
+        if (fromDiffId === toDiffId) {
+            return { moved: 0, lost: 0 };
+        }
+        const result = this.txMigrateNotes(fromDiffId, toDiffId, map, fileIdOf, toHeadCommit);
+        if (result.moved + result.lost > 0) {
+            this.bump();
+        }
+        return result;
+    }
+
     deleteNote(noteId: number): boolean {
         const info = this.db.prepare('DELETE FROM agent_notes WHERE id = ?').run(noteId);
         if (info.changes === 0) {
@@ -285,15 +358,72 @@ export class ChatStore {
             )
             .run(answer, now, row.id);
         if (row.anchor !== null) {
-            const anchor = parseAnchor(row.anchor);
+            const anchor = JSON.stringify(parseAnchor(row.anchor));
             this.db
                 .prepare(
-                    `INSERT INTO agent_notes (exchange_id, anchor, text, commit_hash, created_at)
-                     VALUES (?, ?, ?, ?, ?)`,
+                    `INSERT INTO agent_notes (
+                        exchange_id, anchor, text, commit_hash, lost_anchor, origin_anchor, origin_commit, created_at
+                     ) VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
                 )
-                .run(row.id, JSON.stringify(anchor), answer, row.head_commit, now);
+                .run(row.id, anchor, answer, row.head_commit, anchor, row.head_commit, now);
         }
         return true;
+    }
+
+    private adoptLegacyInTransaction(activeDiffId: HostId): number {
+        let adopted = 0;
+        for (const row of this.noteRows()) {
+            const anchor = parseAnchor(row.anchor);
+            const origin = row.origin_anchor === null ? anchor : parseAnchor(row.origin_anchor);
+            if (anchor.diffId !== LEGACY_DIFF_ID && origin.diffId !== LEGACY_DIFF_ID) {
+                continue;
+            }
+            this.db
+                .prepare('UPDATE agent_notes SET anchor = ?, origin_anchor = ? WHERE id = ?')
+                .run(
+                    JSON.stringify(withDiffId(anchor, activeDiffId)),
+                    JSON.stringify(withDiffId(origin, activeDiffId)),
+                    row.id,
+                );
+            adopted += 1;
+        }
+        return adopted;
+    }
+
+    private migrateNotesInTransaction(
+        fromDiffId: HostId,
+        toDiffId: HostId,
+        map: IterationMap,
+        fileIdOf: (path: string) => string | null,
+        toHeadCommit: string | null,
+    ): NoteMigration {
+        let moved = 0;
+        let lost = 0;
+        for (const row of this.noteRows()) {
+            if (row.lost_anchor !== 0) {
+                continue;
+            }
+            const anchor = parseAnchor(row.anchor);
+            if (anchor.diffId !== fromDiffId) {
+                continue;
+            }
+
+            const carried = carryAnchor(anchor, toDiffId, map, fileIdOf);
+            if (carried === null) {
+                this.db.prepare('UPDATE agent_notes SET lost_anchor = 1 WHERE id = ?').run(row.id);
+                lost += 1;
+                continue;
+            }
+            this.db
+                .prepare('UPDATE agent_notes SET anchor = ?, commit_hash = ? WHERE id = ?')
+                .run(JSON.stringify(carried), toHeadCommit, row.id);
+            moved += 1;
+        }
+        return { moved, lost };
+    }
+
+    private noteRows(): NoteRow[] {
+        return this.db.prepare('SELECT * FROM agent_notes ORDER BY id').all() as NoteRow[];
     }
 
     private exchangeRows(): ExchangeRow[] {
@@ -352,11 +482,43 @@ function toNote(row: NoteRow): AgentNote {
         exchangeId: row.exchange_id,
         anchor,
         text: row.text,
-        // Migrate anchors to the new iteration in M4-T11.
-        lostAnchor: false,
-        origin: { commit: row.commit_hash, anchor },
+        lostAnchor: row.lost_anchor !== 0,
+        // A note saved before migration 014 is still where it was pinned.
+        origin: {
+            commit: row.origin_commit ?? row.commit_hash,
+            anchor: row.origin_anchor === null ? anchor : parseAnchor(row.origin_anchor),
+        },
         createdAt: row.created_at,
     });
+}
+
+function withDiffId(anchor: ChatAnchor, diffId: HostId): ChatAnchor {
+    return anchor.diffId === diffId ? anchor : { ...anchor, diffId };
+}
+
+/**
+ * Anchor in the new iteration coordinates. null means there is nowhere to carry it. An anchor is lost if the file left the PR,
+ * the push touched any line in the range, the range split into several pieces (representing those
+ * as one anchor would be misleading), or the path is absent from the new iteration patch.
+ */
+function carryAnchor(
+    anchor: ChatAnchor,
+    toDiffId: HostId,
+    map: IterationMap,
+    fileIdOf: (path: string) => string | null,
+): ChatAnchor | null {
+    if (map.fileStatus(anchor.path) === 'removed') {
+        return null;
+    }
+    const mapped = map.mapRange(anchor.path, anchor.side, { start: anchor.start, end: anchor.end });
+    const target = mapped.carried[0];
+    if (mapped.touched.length > 0 || mapped.carried.length !== 1 || target === undefined) {
+        return null;
+    }
+    const fileId = fileIdOf(anchor.path);
+    return fileId === null
+        ? null
+        : { ...anchor, diffId: toDiffId, fileId, start: target.start, end: target.end };
 }
 
 /** M3 exchanges predate `diffId`. Their iteration is unknown, so the server treats them as active. */

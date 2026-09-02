@@ -121,6 +121,25 @@ describe('note card', () => {
         expect(host.textContent).toContain('model answer · never published to the PR');
     });
 
+    it('disables the comment draft for a note without an anchor while keeping other actions available', () => {
+        const lost = { ...note(1), lostAnchor: true };
+        const { host } = mount([lost]);
+        act(() => {
+            host.querySelector<HTMLButtonElement>('[data-note="1"]')?.click();
+        });
+
+        const actions = [...host.querySelectorAll<HTMLButtonElement>('.agent-note__actions button')];
+        const draft = actions[1];
+        expect(draft?.disabled).toBe(true);
+        expect(draft?.title).toBe('anchor lost — there is nothing to attach the comment to');
+        expect(actions.filter((button) => button.disabled)).toHaveLength(1);
+
+        act(() => {
+            draft?.click();
+        });
+        expect(turnedIntoDraft).toEqual([]);
+    });
+
     it('initially shows four overlapping notes as one summary row', () => {
         const notes = [note(1), note(2, 42, 43), note(3, 43, 43), note(4, 41, 43)];
         const { host } = mount(notes);

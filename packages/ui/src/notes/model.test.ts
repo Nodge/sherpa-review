@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { parseFileDiff } from '../diff/parse.js';
 import {
     groupOverlappingNotes,
+    noteAnchorForIteration,
+    notesForIteration,
     noteStackNeedsSummary,
+    noteVisibleInIteration,
     placeNotesOnVisibleLines,
 } from './model.js';
 
@@ -113,5 +116,53 @@ describe('note placement on card lines', () => {
         expect(nearest.underHeader[0]?.notes.map((item) => item.id)).toEqual([1]);
         expect(exact.underHeader[0]?.notes.map((item) => item.id)).toEqual([1]);
         expect(exact.hidden).toEqual([]);
+    });
+});
+
+describe('notes as seen from an iteration', () => {
+    /** A note moved from `iter-1` to `iter-2` with an offset. `lost` means the anchor could not be carried over. */
+    function migrated(id: number, lost = false): AgentNote {
+        const source = note(id, 10, 12, '2026-09-01T10:00:00.000Z');
+        return lost
+            ? { ...source, lostAnchor: true }
+            : {
+                  ...source,
+                  anchor: { ...source.anchor, diffId: 'iter-2', fileId: 'file-2', start: 16, end: 18 },
+              };
+    }
+
+    it('places a note at its original lines in its original iteration', () => {
+        expect(noteAnchorForIteration(migrated(1), 'iter-1')).toMatchObject({
+            diffId: 'iter-1',
+            fileId: 'file-1',
+            start: 10,
+        });
+    });
+
+    it('places it at the carried-over lines in any other iteration', () => {
+        expect(noteAnchorForIteration(migrated(1), 'iter-2')).toMatchObject({ diffId: 'iter-2', start: 16 });
+        expect(noteAnchorForIteration(migrated(1), null)).toMatchObject({ diffId: 'iter-2', start: 16 });
+    });
+
+    it('removes a note with a lost anchor from code everywhere except its original iteration', () => {
+        const lost = migrated(1, true);
+
+        expect(noteVisibleInIteration(lost, 'iter-2')).toBe(false);
+        expect(noteVisibleInIteration(lost, null)).toBe(false);
+        expect(noteVisibleInIteration(lost, 'iter-1')).toBe(true);
+    });
+
+    it('uses carried-over anchors and drops lost ones in the active iteration layout', () => {
+        const laid = notesForIteration([migrated(1), migrated(2, true)], 'iter-2');
+
+        expect(laid.map((item) => item.id)).toEqual([1]);
+        expect(laid[0]?.anchor).toMatchObject({ fileId: 'file-2', start: 16, end: 18 });
+    });
+
+    it('places both notes beside code in the previous iteration, including the one with a lost anchor', () => {
+        const laid = notesForIteration([migrated(1), migrated(2, true)], 'iter-1');
+
+        expect(laid.map((item) => item.id)).toEqual([1, 2]);
+        expect(laid.every((item) => item.anchor.diffId === 'iter-1')).toBe(true);
     });
 });

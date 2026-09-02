@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    NotesLostBanner,
+    notesLostBannerVisible,
+    notesLostKey,
     RouteSecondPassBanner,
     RouteStaleBanner,
     secondPassBannerVisible,
@@ -210,5 +213,41 @@ describe('stale banner visibility', () => {
     it('gives way to the rebuild and filling banners during rebuild phases', () => {
         expect(staleBannerVisible('reading', stale(), snapshot())).toBe(false);
         expect(staleBannerVisible('filling', stale(), snapshot())).toBe(false);
+    });
+});
+
+describe('lost notes banner', () => {
+    it('pluralizes the count and offers to show the first note', () => {
+        const onShow = vi.fn();
+        const html = renderToStaticMarkup(
+            <NotesLostBanner count={2} onShow={onShow} onDismiss={() => undefined} />,
+        );
+
+        expect(html).toContain('2 notes lost their anchor after the new push');
+        expect(html).toContain('View');
+        expect(renderToStaticMarkup(<NotesLostBanner count={1} onShow={onShow} onDismiss={() => undefined} />))
+            .toContain('1 note lost its anchor after the new push');
+        expect(renderToStaticMarkup(<NotesLostBanner count={5} onShow={onShow} onDismiss={() => undefined} />))
+            .toContain('5 notes lost their anchor after the new push');
+    });
+
+    it('stays until this exact set of notes is dismissed', () => {
+        expect(notesLostBannerVisible('ready', [7, 3], null)).toBe(true);
+        // The key ignores order: the same set keeps the banner dismissed.
+        expect(notesLostBannerVisible('ready', [7, 3], notesLostKey([3, 7]))).toBe(false);
+        // Another note lost its anchor. That is new, so the dismissed banner returns.
+        expect(notesLostBannerVisible('ready', [7, 3, 9], notesLostKey([3, 7]))).toBe(true);
+    });
+
+    it('stays hidden without lost notes, in read-only mode and during rebuild phases', () => {
+        expect(notesLostBannerVisible('ready', [], null)).toBe(false);
+        expect(notesLostBannerVisible('ready', [7], null, true)).toBe(false);
+        expect(notesLostBannerVisible('reading', [7], null)).toBe(false);
+        expect(notesLostBannerVisible('filling', [7], null)).toBe(false);
+    });
+
+    it('allows phases without a route because notes exist without one', () => {
+        expect(notesLostBannerVisible('none', [7], null)).toBe(true);
+        expect(notesLostBannerVisible(null, [7], null)).toBe(true);
     });
 });

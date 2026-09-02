@@ -9,7 +9,7 @@ import type { SessionStore } from '../session/session-store.js';
 import { isNoteExpanded, isNoteStackExpanded } from '../session/session-store.js';
 import { formatCount, plural } from '../text.js';
 import type { NoteGroup } from './model.js';
-import { noteStackKey, noteStackNeedsSummary, placeNotesOnVisibleLines } from './model.js';
+import { NOTE_LOST_DRAFT_REASON, noteStackKey, noteStackNeedsSummary, placeNotesOnVisibleLines } from './model.js';
 import './notes.css';
 
 export interface CardNoteActions {
@@ -204,8 +204,8 @@ function AgentNoteView({
                 </button>
                 <button
                     type="button"
-                    disabled={readOnly}
-                    title={readOnly ? READ_ONLY_REASON : undefined}
+                    disabled={readOnly || note.lostAnchor}
+                    title={draftReason(note, readOnly)}
                     onClick={() => {
                         actions.onTurnIntoDraft(note);
                     }}
@@ -242,6 +242,14 @@ function AgentNoteView({
             )}
         </article>
     );
+}
+
+/** Why a comment draft is unavailable: a lost anchor takes precedence over read-only mode because it is irreversible. */
+function draftReason(note: AgentNote, readOnly: boolean): string | undefined {
+    if (note.lostAnchor) {
+        return NOTE_LOST_DRAFT_REASON;
+    }
+    return readOnly ? READ_ONLY_REASON : undefined;
 }
 
 function firstTextLine(text: string): string {

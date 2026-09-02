@@ -220,8 +220,35 @@
     white-space: nowrap;
 }
 
+/* The note and lost-anchor label share one line and wrap together. */
+.chat-message__note-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-message__note:disabled {
+    border-color: var(--border-chip);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.chat-message__note-lost {
+    margin-top: 8px;
+    padding: 4px 7px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-badge);
+    background: var(--attention-surface);
+    color: var(--attention-text);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    white-space: nowrap;
+}
+
 .chat-message__anchor:hover,
-.chat-message__note:hover {
+.chat-message__note:not(:disabled):hover {
     color: var(--accent-hover-strong);
     border-color: var(--border-strong-lifted);
 }

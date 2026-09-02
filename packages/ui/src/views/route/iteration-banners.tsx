@@ -69,6 +69,70 @@ export function secondPassBannerVisible(
     );
 }
 
+/**
+ * Dismissal key for the lost notes banner: the set of notes with lost anchors. A newly lost note
+ * brings news, so the dismissed banner returns. Dismissal survives one of the notes disappearing.
+ */
+export function notesLostKey(noteIds: readonly number[]): string {
+    return [...noteIds].sort((left, right) => left - right).join(',');
+}
+
+/**
+ * Notes with lost anchors concern the entire PR, so the banner appears on every tab, like stale.
+ * It is absent when reading a previous iteration, where the note still sits beside its code.
+ * It is also absent during route rebuild phases, when higher-priority news occupies the slot.
+ */
+export function notesLostBannerVisible(
+    phase: UiRouteState['phase'] | null,
+    lostNoteIds: readonly number[],
+    dismissedKey: string | null,
+    /** The tab shows a previous snapshot or iteration. */
+    readingOld = false,
+): boolean {
+    return (
+        !readingOld &&
+        lostNoteIds.length > 0 &&
+        phase !== 'reading' &&
+        phase !== 'filling' &&
+        dismissedKey !== notesLostKey(lostNoteIds)
+    );
+}
+
+export interface NotesLostBannerProps {
+    readonly count: number;
+    /** Open the chat at the first note that lost its anchor. */
+    readonly onShow: () => void;
+    readonly onDismiss: () => void;
+}
+
+/**
+ * "2 notes lost their anchor after the new push · view" (SPEC §2.16). A filter banner
+ * has a dismiss button because this is a one-time notice the reviewer may close (SPEC §2.21).
+ */
+export function NotesLostBanner({ count, onShow, onDismiss }: NotesLostBannerProps) {
+    return (
+        <div className="iteration-banner" role="status" aria-label="Notes lost their anchor">
+            <div className="iteration-banner__body">
+                <div className="iteration-banner__line">
+                    {formatCount(count)} {plural(count, 'note lost its', 'notes lost their', 'notes lost their')}{' '}
+                    anchor after the new push
+                </div>
+            </div>
+            <button type="button" className="iteration-banner__action" onClick={onShow}>
+                View
+            </button>
+            <button
+                type="button"
+                className="iteration-banner__dismiss"
+                aria-label="Hide the lost-notes banner"
+                onClick={onDismiss}
+            >
+                <Icon name="cross" size={14} />
+            </button>
+        </div>
+    );
+}
+
 export interface RouteStaleBannerProps {
     readonly stale: UiRouteStale;
     /** Current snapshot stops supply the plan numbers of affected stops. */

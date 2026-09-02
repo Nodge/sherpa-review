@@ -82,6 +82,7 @@ import {
     resolveViewing,
     VIEWING_CURRENT,
 } from './iterations/viewing.js';
+import { noteAnchorForIteration, notesForIteration, noteVisibleInIteration } from './notes/model.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
@@ -118,6 +119,9 @@ import {
     RouteRegeneratingBanner,
 } from './views/route/generation-card.tsx';
 import {
+    NotesLostBanner,
+    notesLostBannerVisible,
+    notesLostKey,
     ReadOnlyIterationBanner,
     RouteSecondPassBanner,
     RouteStaleBanner,
@@ -290,6 +294,8 @@ export function App({ store, session, token }: AppProps) {
         [facts.diffId, iterations],
     );
     const viewDiffId = resolved.diffId;
+    /** The iteration used to place notes: the selected one, or the active one by default. */
+    const notesDiffId = viewDiffId ?? activeDiffId;
     const viewSnapshotId = resolved.snapshotId;
     const viewPending = resolved.pending;
     const readOnly = resolved.readOnly;
@@ -303,6 +309,7 @@ export function App({ store, session, token }: AppProps) {
     }, [resolved.unknown, session]);
     const [chatState, setChatState] = useState<ChatState>(() => emptyChatState(chatKey, reviewHost !== null));
     const currentChat = chatState.key === chatKey ? chatState : emptyChatState(chatKey, reviewHost !== null);
+    const chatData = currentChat.data ?? EMPTY_CHAT_RESPONSE;
     const pendingNoteDeletions = useRef<{ key: string; ids: Set<number> }>({ key: chatKey, ids: new Set() });
     const [chatComposerContext, setChatComposerContext] = useState<ChatComposerContext>(() => ({
         key: chatKey,
@@ -1342,6 +1349,24 @@ export function App({ store, session, token }: AppProps) {
             />
         );
 
+    const openNoteInChat = useCallback(
+        (note: AgentNote) => {
+            chatScrollRequestId.current += 1;
+            setChatScrollRequest(openNoteInChatRequest(session, note, chatScrollRequestId.current));
+        },
+        [session],
+    );
+
+    /**
+     * Notes with anchors lost after a push (M4-T11). Banner dismissal lives in the tab session
+     * and resets as soon as another note loses its anchor.
+     */
+    const lostNotes = useMemo(() => chatData.notes.filter((note) => note.lostAnchor), [chatData.notes]);
+    const lostNoteIds = useMemo(() => lostNotes.map((note) => note.id), [lostNotes]);
+    /** "Show" navigates to the first note with a lost anchor, in chat feed order. */
+    const firstLostNote = lostNotes[0];
+    const [dismissedNotesLost, setDismissedNotesLost] = useState<string | null>(null);
+
     const bannerSources: readonly BannerSource[] = [
         {
             id: 'generation-failed',
@@ -1442,6 +1467,23 @@ export function App({ store, session, token }: AppProps) {
                 ),
         },
         {
+            id: 'notes-lost',
+            priority: BANNER_PRIORITY.notesLost,
+            active: () => notesLostBannerVisible(routePhase, lostNoteIds, dismissedNotesLost, readOnly),
+            render: () =>
+                firstLostNote === undefined ? null : (
+                    <NotesLostBanner
+                        count={lostNoteIds.length}
+                        onShow={() => {
+                            openNoteInChat(firstLostNote);
+                        }}
+                        onDismiss={() => {
+                            setDismissedNotesLost(notesLostKey(lostNoteIds));
+                        }}
+                    />
+                ),
+        },
+        {
             id: 'audit-scope',
             priority: BANNER_PRIORITY.auditScope,
             active: () => auditVisible && pci !== null && pciStats !== null,
@@ -1496,7 +1538,8 @@ export function App({ store, session, token }: AppProps) {
         [session],
     );
 
-    const chatData = currentChat.data ?? EMPTY_CHAT_RESPONSE;
+    /** Code shows notes for this iteration, using its anchors and excluding lost anchors (M4-T11). */
+    const notesInCode = useMemo(() => notesForIteration(chatData.notes, notesDiffId), [chatData.notes, notesDiffId]);
     const isSelectionPending = useCallback(
         (anchor: UiChatAskAnchor | null): boolean =>
             anchor !== null &&
@@ -1578,13 +1621,6 @@ export function App({ store, session, token }: AppProps) {
     const handleChatScrollRequest = useCallback((id: number) => {
         setChatScrollRequest((current) => (current?.id === id ? null : current));
     }, []);
-    const openNoteInChat = useCallback(
-        (note: AgentNote) => {
-            chatScrollRequestId.current += 1;
-            setChatScrollRequest(openNoteInChatRequest(session, note, chatScrollRequestId.current));
-        },
-        [session],
-    );
     const askChat = useCallback(
         async (text: string, anchor?: UiChatAskAnchor) => {
             const exchange = await askReviewChat(token, text, anchor);
@@ -1670,12 +1706,16 @@ export function App({ store, session, token }: AppProps) {
     );
     const navigateToNote = useCallback(
         (note: AgentNote) => {
+            // A note with a lost anchor is absent from this iteration's code, so there is nowhere to navigate.
+            if (!noteVisibleInIteration(note, notesDiffId)) {
+                return;
+            }
             session.expandNote(note.id);
-            navigateChatAnchor(note.anchor);
+            navigateChatAnchor(noteAnchorForIteration(note, notesDiffId));
             noteFocusRequestId.current += 1;
             setNoteFocusRequest({ id: noteFocusRequestId.current, noteId: note.id });
         },
-        [navigateChatAnchor, session],
+        [navigateChatAnchor, notesDiffId, session],
     );
     useEffect(() => {
         if (noteFocusRequest === null || (view !== 'route' && view !== 'diff')) {
@@ -1836,7 +1876,7 @@ export function App({ store, session, token }: AppProps) {
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
                     onComposeQuestion={composeDiffQuestion}
-                    notes={chatData.notes}
+                    notes={notesInCode}
                     onOpenNoteInChat={openNoteInChat}
                     onDeleteNote={deleteNote}
                     selectionNavigationRequest={chatAnchorNavigationRequest}
@@ -1880,7 +1920,7 @@ export function App({ store, session, token }: AppProps) {
                     isSelectionPending={isSelectionPending}
                     onSelectionAnchorChange={selectChatAnchor}
                     onComposeQuestion={composeRouteQuestion}
-                    notes={chatData.notes}
+                    notes={notesInCode}
                     onOpenNoteInChat={openNoteInChat}
                     onDeleteNote={deleteNote}
                     selectionNavigationRequest={chatAnchorNavigationRequest}
@@ -1971,6 +2011,7 @@ export function App({ store, session, token }: AppProps) {
                             onRetry={retryChat}
                             onNavigate={navigateChatAnchor}
                             onNavigateToNote={navigateToNote}
+                            viewDiffId={notesDiffId}
                         />
                     </>
                 ) : null}

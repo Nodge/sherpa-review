@@ -4,6 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import type { AgentNote } from '@sherpa/protocol';
+
+import type { SherpaDatabase } from './db.js';
 import { isProcessAlive } from './manifest.js';
 
 /** Temporary state root for one test. */
@@ -89,4 +92,42 @@ export async function patchJson(
         },
         body: JSON.stringify(body),
     });
+}
+
+/**
+ * Stores fixture notes in the database with their exchanges, as an accepted agent answer
+ * would. Anchor carryover tests need notes, regardless of how they were created.
+ */
+export function seedAgentNotes(db: SherpaDatabase, notes: readonly AgentNote[]): void {
+    for (const note of notes) {
+        db.prepare(
+            `INSERT INTO chat_exchanges (
+                id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
+                created_at, updated_at
+             ) VALUES (?, ?, ?, 'done', ?, NULL, NULL, NULL, ?, ?, ?)`,
+        ).run(
+            note.exchangeId,
+            `question ${String(note.exchangeId)}`,
+            JSON.stringify(note.origin.anchor),
+            note.text,
+            note.origin.commit,
+            note.createdAt,
+            note.createdAt,
+        );
+        db.prepare(
+            `INSERT INTO agent_notes (
+                id, exchange_id, anchor, text, commit_hash, lost_anchor, origin_anchor, origin_commit, created_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+            note.id,
+            note.exchangeId,
+            JSON.stringify(note.anchor),
+            note.text,
+            note.origin.commit,
+            note.lostAnchor ? 1 : 0,
+            JSON.stringify(note.origin.anchor),
+            note.origin.commit,
+            note.createdAt,
+        );
+    }
 }
