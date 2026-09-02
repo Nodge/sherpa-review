@@ -20,6 +20,7 @@
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-markdown": "^1.13.6",
     "prosemirror-model": "^1.25.11",
+    "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
     "prosemirror-view": "^1.42.3",
     "react": "^19.2.8",
