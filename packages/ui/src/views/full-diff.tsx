@@ -28,7 +28,6 @@ import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
-import { readCollapsed as readFileCollapsed, writeCollapsed as writeFileCollapsed } from '../diff-view/collapsed-storage.js';
 import { expandContext } from '../diff-view/context-expansion.js';
 import type { FileExpansion } from '../diff-view/expand.js';
 import type { Feedback } from '../diff-view/file-card.tsx';
@@ -53,6 +52,8 @@ import {
 import { readFragmentParam } from '../fragment.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
+import { usePrStateStore } from '../pr-state/context.tsx';
+import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
@@ -69,8 +70,6 @@ import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
-import type { CollapsedStorage } from '../tree/collapsed-storage.js';
-import { globalCollapsedStorage } from '../tree/collapsed-storage.js';
 import type { FileOutlineModel, OutlineEntry } from '../tree/file-panel.tsx';
 import { FilePanel } from '../tree/file-panel.tsx';
 import './full-diff.css';
@@ -316,8 +315,6 @@ export interface DiffWorkspaceProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
-    /** Directory and card collapse storage. `null` disables persistence (gallery, tests). */
-    readonly collapsedStorage?: CollapsedStorage | null;
 }
 
 export function DiffWorkspace(props: DiffWorkspaceProps) {
@@ -353,11 +350,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onFilterChangeHandler,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
-    const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
-    const initialCollapsed = useMemo(
-        () => readFileCollapsed(collapsedStorage, prKey),
-        [collapsedStorage, prKey],
-    );
+    // Card collapse state comes from the PR state on the server. Capture it once so
+    // a late endpoint response does not recreate the store while the reviewer is reading.
+    const prState = usePrStateStore();
+    const initialCollapsed = useMemo(() => collapsedToMap(prState.getSnapshot().diffCollapsed), [prState]);
 
     const initialProgress = props.progress;
     const settings = useUiSettingsStore();
@@ -378,10 +374,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     useEffect(() => {
+        // With a supplied store, the view does not own collapse state. The store creator (App) writes it.
         if (props.store === undefined) {
-            writeFileCollapsed(collapsedStorage, prKey, snapshot.collapsePreferences);
+            prState.update({ diffCollapsed: collapsedFromMap(snapshot.collapsePreferences) });
         }
-    }, [collapsedStorage, prKey, props.store, snapshot.collapsePreferences]);
+    }, [prState, props.store, snapshot.collapsePreferences]);
     useEffect(() => {
         if (props.store !== undefined && props.progressWriter === undefined && initialProgress !== undefined) {
             store.setProgress(initialProgress.files);
@@ -1121,8 +1118,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     }
                     outline={outline}
                     onOpenHunk={openHunk}
-                    prKey={prKey}
-                    storage={collapsedStorage}
                     inputRef={searchRef}
                 />
 

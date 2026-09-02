@@ -73,6 +73,11 @@ export interface DiffViewStore {
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
     /** Toggles manual collapse using the same layer formula as route stops (SPEC §2.9). */
     readonly toggleFileCollapse: (fileId: string) => void;
+    /**
+     * Full explicit collapse choices: PR state arrived from the server after store creation.
+     * Replaces previous choices, because the server value is the same set, just complete.
+     */
+    readonly setCollapsePreferences: (collapsed: ReadonlyMap<string, boolean>) => void;
     /** Prepare a collapsed file for navigation from the tree, a link, or search. */
     readonly revealFile: (fileId: string) => void;
     readonly openFile: (fileId: string) => void;
@@ -116,6 +121,26 @@ export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDif
         return 'generated';
     }
     return null;
+}
+
+/**
+ * Collapse layers derived from explicit choices: true means manual collapse, false means
+ * manual expansion. Both sides of the store maintain this invariant, so choices can be replaced in full.
+ */
+function collapseSetsOf(preferences: ReadonlyMap<string, boolean>): {
+    readonly collapseExpanded: Set<string>;
+    readonly collapseCollapsed: Set<string>;
+} {
+    const collapseExpanded = new Set<string>();
+    const collapseCollapsed = new Set<string>();
+    for (const [fileId, collapsed] of preferences) {
+        (collapsed ? collapseCollapsed : collapseExpanded).add(fileId);
+    }
+    return { collapseExpanded, collapseCollapsed };
+}
+
+function sameCollapsePreferences(next: ReadonlyMap<string, boolean>, current: ReadonlyMap<string, boolean>): boolean {
+    return next.size === current.size && [...next].every(([fileId, collapsed]) => current.get(fileId) === collapsed);
 }
 
 export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStore {
@@ -170,11 +195,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
 
     const initialProgress = new Map((options.progress ?? []).map((record) => [record.fileId, record]));
     const collapsePreferences = new Map(options.collapsed ?? []);
-    const collapseExpanded = new Set<string>();
-    const collapseCollapsed = new Set<string>();
-    for (const [fileId, collapsed] of collapsePreferences) {
-        (collapsed ? collapseCollapsed : collapseExpanded).add(fileId);
-    }
+    const { collapseExpanded, collapseCollapsed } = collapseSetsOf(collapsePreferences);
     let snapshot: DiffViewSnapshot = {
         diffMode,
         splitAvailable: true,
@@ -353,6 +374,14 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
                 collapseCollapsed: new Set(snapshot.collapseCollapsed).add(fileId),
                 collapsePreferences: new Map(snapshot.collapsePreferences).set(fileId, true),
             });
+        },
+
+        setCollapsePreferences: (collapsed) => {
+            if (sameCollapsePreferences(collapsed, snapshot.collapsePreferences)) {
+                return;
+            }
+            const preferences = new Map(collapsed);
+            update({ collapsePreferences: preferences, ...collapseSetsOf(preferences) });
         },
 
         revealFile,

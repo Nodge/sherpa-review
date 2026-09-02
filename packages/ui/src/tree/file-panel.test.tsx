@@ -73,8 +73,6 @@ function mount() {
                 writeError={null}
                 outline={null}
                 onOpenHunk={() => undefined}
-                prKey="fixture-edge-zero-lenses"
-                storage={null}
             />,
         );
     });

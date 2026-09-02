@@ -41,6 +41,8 @@ import {
     workerIdPathFor,
 } from './paths.js';
 import { PrMetaCache } from './pr-meta.js';
+import { createPrStateRoutes } from './pr-state-routes.js';
+import { PrStateStore } from './pr-state-store.js';
 import { ProgressStore } from './progress-store.js';
 import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
@@ -306,6 +308,10 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             }),
             // Settings are global. The endpoint depends on neither the review host nor this PR's state.
             ...createSettingsRoutes({ settings: new SettingsStore(sherpaDir) }),
+            // This PR's UI state (folds, palette history) is local and doesn't need a review host.
+            ...createPrStateRoutes({
+                prState: new PrStateStore(options.now === undefined ? { db } : { db, now: options.now }),
+            }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
             // Dev endpoints exist only for the fixture host. Other hosts don't have these routes.

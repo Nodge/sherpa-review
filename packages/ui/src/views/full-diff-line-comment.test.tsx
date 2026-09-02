@@ -115,7 +115,6 @@ function mount(options: {
                 session={session}
                 store={store}
                 threadStore={threadStore}
-                collapsedStorage={null}
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={options.loadContent ?? (() => Promise.resolve(null))}

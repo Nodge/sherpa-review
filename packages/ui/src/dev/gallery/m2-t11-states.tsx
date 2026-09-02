@@ -62,7 +62,6 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
                 session={session}
                 store={store}
                 threadStore={threadStore}
-                collapsedStorage={null}
                 threadNow={GALLERY_NOW}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={(fileId) => {

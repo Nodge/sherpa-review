@@ -911,7 +911,7 @@ export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, c
     }
     const changed = file.additions + file.deletions;
     // Binary files, files without a text diff and all collapsed cards show a single-line notice.
-    // The state is known before the first frame, so localStorage/viewed do not inflate the scrollbar.
+    // This is known before the first frame, so folds and viewed marks do not inflate the scrollbar.
     if (collapsed || file.binary || file.patch === null || changed > COLLAPSE_THRESHOLD) {
         return NOTICE_ROW_HEIGHT;
     }

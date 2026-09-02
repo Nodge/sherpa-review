@@ -55,11 +55,6 @@ import {
 } from './components/review-action-bar.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
-import {
-    globalCollapsedStorage,
-    readCollapsed as readFileCollapsed,
-    writeCollapsed as writeFileCollapsed,
-} from './diff-view/collapsed-storage.js';
 import { expandFileContext } from './diff-view/expand.js';
 import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
 import { createDiffViewStore } from './diff-view/store.js';
@@ -75,6 +70,8 @@ import { updateFragment } from './fragment.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
+import { usePrStateStore } from './pr-state/context.tsx';
+import { collapsedFromMap, collapsedToMap } from './pr-state/pr-state-store.js';
 import { selectionLinkHash } from './selection-link.js';
 import { createProgressWriter } from './progress/progress-writer.js';
 import type { ProgressWriter } from './progress/progress-writer.js';
@@ -215,22 +212,24 @@ export function App({ store, session, token }: AppProps) {
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
-    const collapsedStorage = useMemo(() => globalCollapsedStorage(), []);
     const settings = useUiSettingsStore();
+    const prState = usePrStateStore();
     const diffStore = useMemo(
         () =>
             currentDiff === null || prKey === null
                 ? null
                 : createDiffViewStore({
                       files: currentDiff.files,
-                      collapsed: readFileCollapsed(collapsedStorage, prKey),
+                      // Take the snapshot once when creating the store. A late endpoint response
+                      // must not recreate the store while the reviewer is reading.
+                      collapsed: collapsedToMap(prState.getSnapshot().diffCollapsed),
                       // Diff mode is global. It comes from the server and is written back there.
                       diffMode: settings.getSnapshot().diffMode,
                       onDiffModeChange: (mode) => {
                           settings.update({ diffMode: mode });
                       },
                   }),
-        [collapsedStorage, currentDiff, prKey, settings],
+        [currentDiff, prKey, prState, settings],
     );
     // Apply settings that arrived after store creation or changed in another view.
     useEffect(() => {
@@ -243,21 +242,36 @@ export function App({ store, session, token }: AppProps) {
         sync();
         return settings.subscribe(sync);
     }, [diffStore, settings]);
+    // Card collapse state may arrive after store creation (boot-GET missed the timeout).
+    // Apply it the same way as diff mode, without recreating the store. Otherwise the store
+    // would keep an empty map, and the first manual collapse would erase the server's map:
+    // the patch replaces the whole field.
     useEffect(() => {
-        if (diffStore === null || prKey === null) {
+        if (diffStore === null) {
+            return;
+        }
+        const sync = (): void => {
+            diffStore.setCollapsePreferences(collapsedToMap(prState.getSnapshot().diffCollapsed));
+        };
+        sync();
+        return prState.subscribe(sync);
+    }, [diffStore, prState]);
+    // Write only when preferences actually change. Other store updates (mode, progress,
+    // file models) do not affect collapse state and need no request.
+    useEffect(() => {
+        if (diffStore === null) {
             return;
         }
         let collapsePreferences = diffStore.getSnapshot().collapsePreferences;
-        writeFileCollapsed(collapsedStorage, prKey, collapsePreferences);
         return diffStore.subscribe(() => {
             const next = diffStore.getSnapshot().collapsePreferences;
             if (next === collapsePreferences) {
                 return;
             }
             collapsePreferences = next;
-            writeFileCollapsed(collapsedStorage, prKey, collapsePreferences);
+            prState.update({ diffCollapsed: collapsedFromMap(collapsePreferences) });
         });
-    }, [collapsedStorage, diffStore, prKey]);
+    }, [diffStore, prState]);
     const [progressWritesSettled, setProgressWritesSettled] = useState(0);
     // Stop marks live alongside file marks. They share a progress revision and one writer.
     // A different PR or host means a different route. Previous marks do not apply.
@@ -1576,7 +1590,6 @@ export function App({ store, session, token }: AppProps) {
 
             <CommandPalette
                 open={paletteOpen}
-                prKey={state.prKey}
                 source={paletteSource}
                 sourceError={currentReview.diffError}
                 onOpen={() => {

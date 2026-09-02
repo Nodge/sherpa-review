@@ -1,11 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { fetchUiSettings, patchUiSettings } from './api.js';
+import { fetchUiPrState, fetchUiSettings, patchUiPrState, patchUiSettings } from './api.js';
 import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
+import { PrStateProvider } from './pr-state/context.tsx';
+import { createUiPrStateStore } from './pr-state/pr-state-store.js';
 import type { SessionState } from './session/session-store.js';
 import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
@@ -16,7 +18,7 @@ import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js
 import { createStore } from './store.js';
 import './styles/base.css';
 
-/** Maximum wait for settings before the first render. */
+/** Wait limit for server state (settings and PR state) before the first render. */
 const SETTINGS_BOOT_TIMEOUT_MS = 1500;
 
 const container = document.getElementById('root');
@@ -45,6 +47,20 @@ if (token === null) {
     // and the editor gets recreated while the reviewer is already typing.
     const settings = createUiSettingsStore({ send: (patch) => patchUiSettings(token, patch) });
     const settingsReady = loadUiSettings(settings, () => fetchUiSettings(token));
+    // Collapsed directories and cards for this PR load in the same race. A late response does not
+    // recreate the diff view store: its map is loaded separately (see App).
+    const prState = createUiPrStateStore({ send: (patch, options) => patchUiPrState(token, patch, options) });
+    const prStateReady = prState.load(() => fetchUiPrState(token));
+    // A departing tab flushes pending writes: debounce must not lose the last click.
+    const flushPrState = (): void => {
+        prState.flush();
+    };
+    window.addEventListener('pagehide', flushPrState);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPrState();
+        }
+    });
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
     const session = createSessionStore({
@@ -96,15 +112,17 @@ if (token === null) {
     });
     attachShortcuts(window, shortcuts);
 
-    // Wait for settings until the timeout: a stalled endpoint must not leave the reviewer
-    // facing an empty page. Render with defaults, and let the response reach the store later.
-    void Promise.race([settingsReady, delay(SETTINGS_BOOT_TIMEOUT_MS)]).then(() => {
+    // Wait for server state until the timeout. A stalled endpoint must not leave the reviewer
+    // on an empty page. Render defaults, then load the response into the stores when it arrives.
+    void Promise.race([Promise.all([settingsReady, prStateReady]), delay(SETTINGS_BOOT_TIMEOUT_MS)]).then(() => {
         root.render(
             <StrictMode>
                 <IconSprite />
                 <ShortcutsProvider registry={shortcuts}>
                     <SettingsProvider store={settings}>
-                        <App store={store} session={session} token={token} />
+                        <PrStateProvider store={prState}>
+                            <App store={store} session={session} token={token} />
+                        </PrStateProvider>
                     </SettingsProvider>
                 </ShortcutsProvider>
             </StrictMode>,

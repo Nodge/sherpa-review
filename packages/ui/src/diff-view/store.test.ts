@@ -77,6 +77,30 @@ describe('diff view store', () => {
         expect(store.getSnapshot().collapsePreferences).toEqual(new Map([['a', false]]));
     });
 
+    it('replaces collapse choices in full when PR state arrives after store creation', () => {
+        const target = file('a');
+        const other = file('b');
+        const store = createDiffViewStore({ files: [target, other] });
+        let notified = 0;
+        store.subscribe(() => {
+            notified += 1;
+        });
+
+        store.setCollapsePreferences(new Map([['a', true]]));
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBe('manual');
+        expect(store.getSnapshot().collapseCollapsed).toEqual(new Set(['a']));
+        expect(notified).toBe(1);
+
+        // The same choices change nothing. Otherwise loading the map would rerender cards.
+        store.setCollapsePreferences(new Map([['a', true]]));
+        expect(notified).toBe(1);
+
+        store.setCollapsePreferences(new Map([['b', false]]));
+        expect(fileCollapseReason(store.getSnapshot(), target)).toBeNull();
+        expect(store.getSnapshot().collapseCollapsed).toEqual(new Set());
+        expect(store.getSnapshot().collapseExpanded).toEqual(new Set(['b']));
+    });
+
     it('viewed collapse is temporary: clearing the mark restores the previous manual expansion', () => {
         const target = file('a');
         const store = createDiffViewStore({

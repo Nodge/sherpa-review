@@ -16,6 +16,8 @@ import type {
     UiFeedbackRequest,
     UiFeedbackResponse,
     UiOpenInEditorResponse,
+    UiPrState,
+    UiPrStatePatch,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
     UiRouteFillStopRequest,
@@ -42,6 +44,7 @@ import {
     uiEnqueueResponseSchema,
     uiFeedbackResponseSchema,
     uiOpenInEditorResponseSchema,
+    uiPrStateResponseSchema,
     uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentResponseSchema,
@@ -273,6 +276,26 @@ export async function patchUiSettings(token: string, settings: UiSettingsPatch):
     return (await patch(UI_ENDPOINTS.settings, token, settings, uiSettingsResponseSchema)).settings;
 }
 
+/**
+ * UI state for this PR: collapsed directories and cards, recent palette commands. Stored in the
+ * PR database on the server for the same reason as global settings, but separately for each PR.
+ */
+export async function fetchUiPrState(token: string): Promise<UiPrState> {
+    return (await get(UI_ENDPOINTS.prState, token, uiPrStateResponseSchema)).prState;
+}
+
+/**
+ * Replaces the named fields in full. Returns the entire state. `keepalive` supports writes from
+ * `pagehide`, because the browser aborts normal requests when the page closes.
+ */
+export async function patchUiPrState(
+    token: string,
+    prState: UiPrStatePatch,
+    options: { readonly keepalive?: boolean } = {},
+): Promise<UiPrState> {
+    return (await patch(UI_ENDPOINTS.prState, token, prState, uiPrStateResponseSchema, options)).prState;
+}
+
 async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promise<T> {
     let response: Response;
     try {
@@ -297,13 +320,20 @@ async function post<T>(path: string, token: string, body: unknown, schema: z.Zod
     return validate(response, schema);
 }
 
-async function patch<T>(path: string, token: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+async function patch<T>(
+    path: string,
+    token: string,
+    body: unknown,
+    schema: z.ZodType<T>,
+    options: { readonly keepalive?: boolean } = {},
+): Promise<T> {
     let response: Response;
     try {
         response = await fetch(path, {
             method: 'PATCH',
             headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
             body: JSON.stringify(body),
+            ...(options.keepalive === true ? { keepalive: true } : {}),
         });
     } catch {
         throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');

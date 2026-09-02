@@ -142,7 +142,6 @@ function SmallPrDiffState() {
                 prKey="fixture-small"
                 session={session}
                 store={store}
-                collapsedStorage={null}
                 threadNow={GALLERY_NOW}
                 smallPr
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}

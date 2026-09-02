@@ -67,8 +67,6 @@ function ZeroLensFiltersState() {
                 writeError={null}
                 outline={null}
                 onOpenHunk={() => undefined}
-                prKey="fixture-edge-zero-lenses"
-                storage={null}
             />
             <section className="gallery-zero-filters__select" ref={selectRoot}>
                 <h2>Filter select</h2>

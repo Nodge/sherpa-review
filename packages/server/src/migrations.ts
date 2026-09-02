@@ -259,6 +259,19 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE route_state DROP COLUMN snapshot;
         `,
     },
+    {
+        // This PR's UI state (M3-T18): collapsed directories and cards, recent palette commands.
+        // Key-value storage: the contract schema defines the keys, so a new field needs no migration.
+        // No prKey column, since the database already belongs to one PR.
+        name: '011-ui-pr-state',
+        sql: `
+            CREATE TABLE ui_pr_state (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

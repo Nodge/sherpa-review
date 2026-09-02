@@ -2,6 +2,8 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
+import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
+import { addRecentCommand, PALETTE_RECENT_LIMIT } from '../pr-state/pr-state-store.js';
 import { useShortcut, useShortcutList } from '../shortcuts/context.tsx';
 import type { Shortcut } from '../shortcuts/registry.js';
 import { plural } from '../text.js';
@@ -11,19 +13,15 @@ import { lineSideInDiff, searchDiff } from './diff-search.js';
 import type { DiffSearchMatch } from './diff-search.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { parsePaletteQuery } from './query.js';
-import type { RecentStorage } from './recent-storage.js';
-import { addRecent, globalRecentStorage, readRecent } from './recent-storage.js';
 import './command-palette.css';
 
 export interface CommandPaletteProps {
     readonly open: boolean;
-    readonly prKey: string;
     readonly source: PaletteDiffSource | null;
     readonly sourceError?: string | null;
     readonly onOpen: () => void;
     readonly onClose: () => void;
     readonly initialQuery?: string;
-    readonly recentStorage?: RecentStorage | null;
 }
 
 interface PaletteItem {
@@ -43,19 +41,23 @@ const SUGGESTED_IDS = ['palette.goToFile', 'palette.searchDiff', 'diff.toggleMod
 /** Command and client-side search palette (README §14, SPEC §2.3). */
 export function CommandPalette({
     open,
-    prKey,
     source,
     sourceError = null,
     onOpen,
     onClose,
     initialQuery = '',
-    recentStorage = globalRecentStorage(),
 }: CommandPaletteProps) {
     const [query, setQuery] = useState(initialQuery);
     // SPEC has no file prefix. The command switches the internal results to files only.
     const [browseMode, setBrowseMode] = useState<'all' | 'files'>('all');
     const [cursor, setCursor] = useState(0);
-    const [recentIds, setRecentIds] = useState(() => readRecent(recentStorage, prKey));
+    // Command history is part of server-side PR state. The server only stores it, the display limit lives here.
+    const prState = usePrStateStore();
+    const paletteRecent = usePrState().paletteRecent;
+    const recentIds = useMemo(
+        () => [...new Set(paletteRecent)].slice(0, PALETTE_RECENT_LIMIT),
+        [paletteRecent],
+    );
     const inputRef = useRef<HTMLInputElement | null>(null);
     const resultsRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLElement | null>(null);
@@ -321,7 +323,7 @@ export function CommandPalette({
     };
     const execute = (item: PaletteItem): void => {
         if (item.commandId !== null) {
-            setRecentIds(addRecent(recentStorage, prKey, item.commandId));
+            prState.update({ paletteRecent: addRecentCommand(recentIds, item.commandId) });
         }
         if (!item.keepOpen) {
             close(false);

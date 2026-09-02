@@ -5,14 +5,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
+import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
+import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import type { FileReadState } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import { formatCount } from '../text.js';
-import type { CollapsedStorage } from './collapsed-storage.js';
-import { readCollapsed, writeCollapsed } from './collapsed-storage.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
 import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
@@ -74,10 +74,6 @@ export interface FilePanelProps {
     /** Outline instead of a tree. null means the PR has more than one file. */
     readonly outline: FileOutlineModel | null;
     readonly onOpenHunk: (index: number) => void;
-    /** PR key: collapsed directory state persists separately for each PR. */
-    readonly prKey: string;
-    /** Collapsed state storage. With null, state does not survive a reload (gallery, tests). */
-    readonly storage: CollapsedStorage | null;
     readonly inputRef?: RefObject<HTMLInputElement | null>;
 }
 
@@ -171,17 +167,14 @@ function FileTreeView({
     activeFileId,
     onOpenFile,
     onToggleViewed,
-    prKey,
-    storage,
     route,
     onJumpToStop,
 }: FileTreeViewProps) {
-    const [collapsed, setCollapsed] = useState<ReadonlyMap<string, boolean>>(() => readCollapsed(storage, prKey));
-    // The panel is not expected to switch PRs during its lifetime, but state must follow the key:
-    // otherwise another PR would inherit the previous collapsed directories.
-    useEffect(() => {
-        setCollapsed(readCollapsed(storage, prKey));
-    }, [storage, prKey]);
+    // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
+    // and directories without a record follow the size-based default.
+    const prState = usePrStateStore();
+    const treeCollapsed = usePrState().treeCollapsed;
+    const collapsed = useMemo(() => collapsedToMap(treeCollapsed), [treeCollapsed]);
 
     const tree: FileTree = useMemo(
         () =>
@@ -198,10 +191,9 @@ function FileTreeView({
 
     const persist = useCallback(
         (next: ReadonlyMap<string, boolean>) => {
-            setCollapsed(next);
-            writeCollapsed(storage, prKey, next);
+            prState.update({ treeCollapsed: collapsedFromMap(next) });
         },
-        [prKey, storage],
+        [prState],
     );
 
     const [cursor, setCursor] = useState(-1);

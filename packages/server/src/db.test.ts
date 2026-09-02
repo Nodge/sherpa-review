@@ -81,6 +81,13 @@ describe('storage', () => {
         }
     });
 
+    /** Schema before the named migration. Later migrations have not been applied yet. */
+    function migrationsBefore(name: string): typeof MIGRATIONS {
+        const index = MIGRATIONS.findIndex((migration) => migration.name === name);
+        expect(index).toBeGreaterThan(0);
+        return MIGRATIONS.slice(0, index);
+    }
+
     // The dogfooding database keeps its route when migrating to multiple snapshots (M4-T3).
     it('moves the snapshot from route_state to route_snapshots during the iteration migration', () => {
         const file = `${sherpaDir}/route-snapshot.db`;
@@ -96,7 +103,7 @@ describe('storage', () => {
             contentHash: 'abcdef123456',
         };
 
-        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        const before = openDatabase(file, migrationsBefore('010-iterations'));
         before
             .prepare(
                 `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
@@ -137,7 +144,7 @@ describe('storage', () => {
     it('handles a corrupt snapshot blob during the iteration migration', () => {
         const file = `${sherpaDir}/route-broken.db`;
 
-        const before = openDatabase(file, MIGRATIONS.slice(0, -1));
+        const before = openDatabase(file, migrationsBefore('010-iterations'));
         before
             .prepare(
                 `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
