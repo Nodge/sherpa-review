@@ -144,7 +144,7 @@ describe('storage', () => {
     it('removes previously saved bindings during the task iteration migration', () => {
         const file = `${sherpaDir}/route-tasks.db`;
 
-        const before = openDatabase(file, migrationsBefore('011-route-task-iteration'));
+        const before = openDatabase(file, migrationsBefore('012-route-task-iteration'));
         before
             .prepare(
                 'INSERT INTO tasks (id, type, priority, instructions, context_files, status, attempt, ' +
