@@ -1,11 +1,11 @@
 import type { Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
 import type { LineRange } from '../diff-view/selection.js';
 import type { ComposerLayout } from './composer-markdown.js';
-import { placeThreadsOnVisibleLines, positionLastLine } from './model.js';
+import { placeThreadsOnVisibleLines, positionLastLine, threadAtLines } from './model.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import type { ThreadActions } from './thread-list.tsx';
 import { NewCommentComposer, ThreadList } from './thread-list.tsx';
@@ -60,17 +60,23 @@ export function useCardThreads({
     placement = 'nearest',
 }: CardThreadsInput): CardThreads {
     const [focusedThreadRange, setFocusedThreadRange] = useState<LineRange | null>(null);
+    // Iteration of the rendered diff: in an old iteration, only threads pinned to it sit by their lines.
+    // An iteration's role changes on the fly (a push makes it previous), so read it from the store.
+    const readIteration = useCallback(() => store.getSnapshot().iterationLayout, [store]);
+    const iteration = useSyncExternalStore(store.subscribe, readIteration, readIteration);
     const focusThread = useCallback(
         (threadId: string | null): void => {
             const thread = threads.find((candidate) => candidate.id === threadId);
-            setFocusedThreadRange(thread?.outdated === false ? (thread.anchor?.position ?? null) : null);
+            setFocusedThreadRange(
+                thread !== undefined && threadAtLines(thread, iteration) ? (thread.anchor?.position ?? null) : null,
+            );
             onFocusThread(threadId);
         },
-        [onFocusThread, threads],
+        [iteration, onFocusThread, threads],
     );
     const layout = useMemo(() => {
-        const underHeader = threads.filter((thread) => thread.outdated || thread.anchor?.position === null);
-        const positional = threads.filter((thread) => !thread.outdated && thread.anchor?.position !== null);
+        const underHeader = threads.filter((thread) => !threadAtLines(thread, iteration));
+        const positional = threads.filter((thread) => threadAtLines(thread, iteration));
         const onScreen =
             placement === 'exact'
                 ? positional.filter((thread) => positionShown(model, rowsShown, thread.anchor?.position))
@@ -80,7 +86,7 @@ export function useCardThreads({
             ? placeThreadsOnVisibleLines(model, onScreen)
             : { byLine: new Map<string, readonly Thread[]>(), unplaced: onScreen };
         return { byLine: placed.byLine, underHeader: [...underHeader, ...placed.unplaced, ...offScreen] };
-    }, [model, placement, rowsShown, threads]);
+    }, [iteration, model, placement, rowsShown, threads]);
 
     const composerLayout = useMemo(() => {
         const byLine: ComposerSnapshot[] = [];

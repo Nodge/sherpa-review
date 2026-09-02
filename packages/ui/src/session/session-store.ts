@@ -129,7 +129,12 @@ export interface SessionStore {
     readonly setFilter: (filter: string) => void;
     readonly setPreset: (preset: RoutePreset) => void;
     readonly setRouteFilter: (routeFilter: RouteFilter) => void;
-    readonly setViewing: (viewing: Viewing) => void;
+    /**
+     * `fragment` contains URL keys to set in the same patch as the selection change.
+     * Otherwise `viewingFragmentPatch` removes them as anchors from another diff (M4-T10 "View at the
+     * old commit" sets `thread`).
+     */
+    readonly setViewing: (viewing: Viewing, fragment?: Readonly<Record<string, string | null>>) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     readonly setChatOpen: (open: boolean) => void;
@@ -172,7 +177,7 @@ export interface SessionStoreOptions {
      * Where state goes outside the session. On the main page, it goes into the URL fragment so a reload
      * returns to the same tab. Called only on an actual change.
      */
-    readonly persist?: (state: SessionState) => void;
+    readonly persist?: (state: SessionState, fragment?: Readonly<Record<string, string | null>>) => void;
 }
 
 export function createSessionStore(options: SessionStoreOptions): SessionStore {
@@ -207,9 +212,18 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         update({ ...state, stops: { ...state.stops, [key]: next } });
     };
 
-    const update = (next: SessionState): void => {
+    // Pass the fragment patch only when present. Without it, persist receives one argument.
+    const persist = (next: SessionState, fragment?: Readonly<Record<string, string | null>>): void => {
+        if (fragment === undefined) {
+            options.persist?.(next);
+            return;
+        }
+        options.persist?.(next, fragment);
+    };
+
+    const update = (next: SessionState, fragment?: Readonly<Record<string, string | null>>): void => {
         state = next;
-        options.persist?.(next);
+        persist(next, fragment);
         for (const listener of [...listeners]) {
             listener();
         }
@@ -283,9 +297,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
                 update({ ...state, routeFilter });
             }
         },
-        setViewing: (viewing) => {
+        setViewing: (viewing, fragment) => {
             if (!sameViewing(viewing, state.viewing)) {
-                update({ ...state, viewing });
+                update({ ...state, viewing }, fragment);
+            } else if (fragment !== undefined) {
+                persist(state, fragment);
             }
         },
         setThreadsShow: (threadsShow) => {

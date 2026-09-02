@@ -46,6 +46,18 @@ export function countDraftComments(threads: readonly Thread[]): number {
     return count;
 }
 
+/**
+ * Drafts in threads pinned outside the active iteration (SPEC §4.5) were written before the push.
+ * They will be sent to a commit that is no longer at the PR head.
+ */
+export function countPinnedDraftComments(threads: readonly Thread[], activeDiffId: string | null): number {
+    if (activeDiffId === null) {
+        return 0;
+    }
+    const pinned = threads.filter((thread) => thread.pinnedTo !== null && thread.pinnedTo.diffId !== activeDiffId);
+    return countDraftComments(pinned);
+}
+
 /** How many published ids were replies rather than thread roots. */
 export function countPublishedReplies(threads: readonly Thread[], publishedIds: readonly HostId[]): number {
     const published = new Set(publishedIds);

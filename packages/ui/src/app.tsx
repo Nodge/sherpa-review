@@ -72,8 +72,16 @@ import {
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
 import { ReadOnlyIterationProvider } from './iterations/read-only.tsx';
+import { ThreadPinProvider } from './iterations/thread-pin.tsx';
+import type { ThreadPinContextValue } from './iterations/thread-pin.tsx';
 import { SnapshotPill } from './iterations/snapshot-picker.tsx';
-import { fallbackSnapshots, pickerRows, resolveViewing, VIEWING_CURRENT } from './iterations/viewing.js';
+import {
+    activeIterationDiffId,
+    fallbackSnapshots,
+    pickerRows,
+    resolveViewing,
+    VIEWING_CURRENT,
+} from './iterations/viewing.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
@@ -275,6 +283,11 @@ export function App({ store, session, token }: AppProps) {
                 activeLoaded: facts.routeSettled,
             }),
         [facts.commit, facts.diffId, facts.routeSettled, iterations, snapshots, snapshotsLoaded, storedRoute, viewing],
+    );
+    // The active PR iteration is also the reference point for thread pins (M4-T10).
+    const activeDiffId = useMemo(
+        () => activeIterationDiffId({ iterations, activeDiffId: facts.diffId }),
+        [facts.diffId, iterations],
     );
     const viewDiffId = resolved.diffId;
     const viewSnapshotId = resolved.snapshotId;
@@ -992,14 +1005,39 @@ export function App({ store, session, token }: AppProps) {
         () => new Set(currentDiff?.files.map((file) => file.fileId) ?? []),
         [currentDiff],
     );
+    /**
+     * The displayed diff belongs to a previous iteration with its own `fileId` values. Threads arrive once for
+     * the active iteration. Placement finds files by `path` and keeps only pinned threads beside lines.
+     */
+    const threadIterationLayout = useMemo(
+        () =>
+            currentDiff === null || activeDiffId === null || currentDiff.diffId === activeDiffId
+                ? null
+                : {
+                      diffId: currentDiff.diffId,
+                      fileIdByPath: new Map(currentDiff.files.map((file) => [file.path, file.fileId])),
+                  },
+        [activeDiffId, currentDiff],
+    );
     const serverThreads = currentReview.threads ?? EMPTY_THREADS;
     const threadStore = useMemo<ThreadStore | null>(
         () =>
             currentDiff === null || state === null
                 ? null
-                : persistentThreadStore(state.prKey, currentDiff.diffId, serverThreads, threadFileIds),
-        [currentDiff, serverThreads, state, threadFileIds],
+                : persistentThreadStore(
+                      state.prKey,
+                      currentDiff.diffId,
+                      serverThreads,
+                      threadFileIds,
+                      threadIterationLayout,
+                  ),
+        [currentDiff, serverThreads, state, threadFileIds, threadIterationLayout],
     );
+    // A push turns the open iteration from active to previous. Keep the same store (it holds
+    // open composers), and change only placement.
+    useEffect(() => {
+        threadStore?.setIterationLayout(threadIterationLayout);
+    }, [threadIterationLayout, threadStore]);
     useEffect(() => {
         if (threadStore !== null && currentReview.threads !== null) {
             threadStore.setServerThreads(currentReview.threads);
@@ -1680,6 +1718,24 @@ export function App({ store, session, token }: AppProps) {
         },
         [session],
     );
+    /**
+     * "View at the old commit" (SPEC §2.17) opens the pinned iteration in the Full diff tab.
+     * It usually has no route. Patch the selection and `thread` into the fragment together,
+     * or changing iterations would clear `thread` as an anchor from another diff.
+     */
+    const openThreadAtIteration = useCallback(
+        (diffId: string, threadId: string) => {
+            session.setView('diff');
+            session.setViewing({ kind: 'diff', diffId }, { thread: threadId, file: null });
+            // replaceState writes the URL without waking `hashchange` listeners.
+            window.dispatchEvent(new Event('hashchange'));
+        },
+        [session],
+    );
+    const threadPin = useMemo<ThreadPinContextValue>(
+        () => ({ activeDiffId, viewingDiffId: currentDiff?.diffId ?? null, openAtPin: openThreadAtIteration }),
+        [activeDiffId, currentDiff, openThreadAtIteration],
+    );
 
     if (snapshot.connection === 'fatal') {
         return (
@@ -1717,6 +1773,7 @@ export function App({ store, session, token }: AppProps) {
 
     return (
         <ReadOnlyIterationProvider readOnly={readOnly}>
+            <ThreadPinProvider value={threadPin}>
             <TopBar
                 version={UI_VERSION}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
@@ -1966,6 +2023,7 @@ export function App({ store, session, token }: AppProps) {
                     <ReviewActionBarLoading diffError={currentReview.diffError} />
                 )
             ) : null}
+            </ThreadPinProvider>
         </ReadOnlyIterationProvider>
     );
 }

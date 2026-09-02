@@ -1,6 +1,7 @@
 import type { Comment, CommentDraft, FileAnchor, Thread } from '@sherpa/protocol';
 
 import { groupThreads } from './model.js';
+import type { IterationLayout } from './model.js';
 
 export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'discarding' | 'error';
 
@@ -39,6 +40,11 @@ export interface ThreadStoreSnapshot {
     readonly threads: readonly Thread[];
     readonly byFile: ReadonlyMap<string, readonly Thread[]>;
     readonly outside: readonly Thread[];
+    /**
+     * The iteration whose diff is rendered, when it is not the active PR iteration (M4-T10). The store
+     * uses it to find the thread file by `path` and decide whether the thread sits at its lines.
+     */
+    readonly iterationLayout: IterationLayout | null;
     /** Threads with an active undo window stay visible despite the resolved filter. */
     readonly keptVisible: ReadonlySet<string>;
     readonly undo: ReadonlyMap<string, ThreadUndo>;
@@ -57,6 +63,12 @@ export interface ComposerGuardSnapshot {
 }
 
 export interface ThreadStore {
+    /**
+     * The iteration stays the same, but its role changes: a push turns the active iteration into a previous one, and
+     * the layout switches from `fileId` to `path`. The store lives on, along with
+     * open composers and their unsaved text.
+     */
+    readonly setIterationLayout: (layout: IterationLayout | null) => void;
     /** Thread changes: server snapshot, draft, resolve and kept-in-view. */
     readonly subscribe: (listener: () => void) => () => void;
     readonly getSnapshot: () => ThreadStoreSnapshot;
@@ -95,7 +107,12 @@ export interface ThreadStore {
     readonly closeComposersForComments: (commentIds: ReadonlySet<string>) => readonly string[];
 }
 
-export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlySet<string>): ThreadStore {
+export function createThreadStore(
+    initial: readonly Thread[],
+    fileIds: ReadonlySet<string>,
+    initialIterationLayout: IterationLayout | null = null,
+): ThreadStore {
+    let iterationLayout = initialIterationLayout;
     const listeners = new Set<() => void>();
     const composerListeners = new Set<() => void>();
     const composerGuardListeners = new Set<() => void>();
@@ -116,12 +133,13 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
 
     function buildSnapshot(previous: ThreadStoreSnapshot | null): ThreadStoreSnapshot {
         const threads = mergeThreads(serverThreads, drafts, resolved);
-        const grouped = groupThreads(threads, fileIds);
+        const grouped = groupThreads(threads, fileIds, iterationLayout);
         const byFile = stableGroups(previous?.byFile ?? null, grouped.byFile);
         return {
             threads,
             byFile,
             outside: sameItems(previous?.outside ?? null, grouped.outside) ? (previous?.outside ?? grouped.outside) : grouped.outside,
+            iterationLayout,
             keptVisible: new Set(keptVisible),
             undo: new Map(undo),
             keptByFile: stableKeptByFile(previous?.keptByFile ?? null, byFile, keptVisible),
@@ -191,6 +209,15 @@ export function createThreadStore(initial: readonly Thread[], fileIds: ReadonlyS
     };
 
     return {
+        setIterationLayout: (next) => {
+            // An iteration diff is immutable, so `diffId` fully determines the layout. There is no reason to rebuild
+            // the snapshot for each new object representing the same iteration.
+            if ((iterationLayout?.diffId ?? null) === (next?.diffId ?? null)) {
+                return;
+            }
+            iterationLayout = next;
+            publish();
+        },
         subscribe: (listener) => {
             listeners.add(listener);
             return () => {

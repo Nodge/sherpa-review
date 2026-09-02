@@ -11,6 +11,8 @@ import {
     placeThreadsOnVisibleLines,
     positionLastLine,
     prLevelHumanThreads,
+    threadAtLines,
+    threadFileId,
     threadIsVisible,
 } from './model.js';
 
@@ -174,5 +176,75 @@ describe('thread model', () => {
         expect(counts).toEqual({ people: 4, bots: 2, resolved: 1 });
         expect(threads.filter((thread) => threadIsVisible(thread, { people: true, bots: false, resolved: false })))
             .toHaveLength(4);
+    });
+});
+
+describe('thread layout in a previous iteration', () => {
+    const V1 = fixtureIteration('medium', 0);
+    const V2 = fixtureIteration('medium', 1);
+    const LAYOUT = {
+        diffId: V1.diff.diffId,
+        fileIdByPath: new Map(V1.diff.files.map((file) => [file.path, file.fileId])),
+    };
+
+    it('finds a file by path because the active iteration fileId does not match the old diff', () => {
+        const v1FileIds = new Set(V1.diff.files.map((file) => file.fileId));
+
+        const handlers = V1.diff.files.find((file) => file.path === 'services/orders/src/api/handlers.ts');
+        const outdated = V2.threads.find((thread) => thread.outdated && thread.anchor?.position != null);
+        if (handlers === undefined || outdated === undefined) {
+            throw new Error('medium fixture needs an outdated thread on handlers.ts');
+        }
+
+        // Using `fileId`, a thread from the active iteration cannot find its file in the old diff.
+        const byFileId = groupThreads(V2.threads, v1FileIds);
+        const byPath = groupThreads(V2.threads, v1FileIds, LAYOUT);
+
+        expect(byFileId.byFile.get(handlers.fileId)).toBeUndefined();
+        expect(byFileId.outside.map((thread) => thread.id)).toContain(outdated.id);
+        expect(byPath.byFile.get(handlers.fileId)?.map((thread) => thread.id)).toContain(outdated.id);
+        expect([...byPath.byFile.keys()].every((fileId) => v1FileIds.has(fileId))).toBe(true);
+    });
+
+    it('uses the layout to find a thread file for scrolling instead of the active iteration anchor', () => {
+        const handlers = V1.diff.files.find((file) => file.path === 'services/orders/src/api/handlers.ts');
+        const outdated = V2.threads.find((thread) => thread.outdated && thread.anchor?.position != null);
+        if (handlers === undefined || outdated?.anchor == null) {
+            throw new Error('medium fixture needs an outdated thread on handlers.ts');
+        }
+
+        // Scrolling to a thread in the old diff uses the same mapping to find the card: `anchor.fileId`
+        // belongs to the active iteration and does not exist in the old diff.
+        expect(V1.diff.files.some((file) => file.fileId === outdated.anchor?.fileId)).toBe(false);
+        expect(threadFileId(outdated, LAYOUT)).toBe(handlers.fileId);
+        expect(threadFileId(outdated, null)).toBe(outdated.anchor.fileId);
+    });
+
+    it('moves a thread outside the diff when the old iteration has no file with that path', () => {
+        const v1FileIds = new Set(V1.diff.files.map((file) => file.fileId));
+        const alien = V2.threads.find((thread) => thread.anchor !== null);
+        if (alien?.anchor == null) {
+            throw new Error('fixture has no anchored thread');
+        }
+        const moved = { ...alien, anchor: { ...alien.anchor, path: 'services/orders/src/gone.ts' } };
+
+        const grouped = groupThreads([moved], v1FileIds, LAYOUT);
+
+        expect(grouped.byFile.size).toBe(0);
+        expect(grouped.outside.map((thread) => thread.id)).toEqual([moved.id]);
+    });
+
+    it('places only a thread pinned to this iteration at its lines, including an outdated thread', () => {
+        const outdated = V2.threads.find((thread) => thread.outdated && thread.anchor?.position != null);
+        if (outdated?.pinnedTo == null) {
+            throw new Error('fixture has no outdated pinned thread');
+        }
+        const alien = { ...outdated, pinnedTo: { diffId: 'another-iteration', commit: 'deadbee' } };
+
+        // An outdated anchor in the active iteration moves the thread under the file header.
+        expect(threadAtLines(outdated, null)).toBe(false);
+        // In the iteration it is pinned to, the thread sits beside the code it was written about.
+        expect(threadAtLines(outdated, LAYOUT)).toBe(true);
+        expect(threadAtLines(alien, LAYOUT)).toBe(false);
     });
 });

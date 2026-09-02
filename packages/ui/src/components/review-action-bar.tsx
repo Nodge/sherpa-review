@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useThreadPinContext } from '../iterations/thread-pin.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
     commentBodies,
     countDraftComments,
+    countPinnedDraftComments,
     countPublishedReplies,
     reviewProgressSummary,
 } from '../progress/summary.js';
@@ -215,7 +217,10 @@ export function ReviewActionBar({
         publishedIds: Set<string>;
     } | null>(null);
 
+    const threadPin = useThreadPinContext();
     const drafts = countDraftComments(threadSnapshot.threads);
+    // Drafts written before a push will go to a commit no longer at the PR head (SPEC §4.5).
+    const pinnedDrafts = countPinnedDraftComments(threadSnapshot.threads, threadPin.activeDiffId);
     const progress = reviewProgressSummary(diff.files, diffSnapshot.readState);
     const unviewed = progress.filesTotal - progress.filesSeen;
     const routeCompletion = routeCompletionOf(route);
@@ -413,6 +418,12 @@ export function ReviewActionBar({
                 <span className="review-action-bar__drafts">
                     <span className="review-action-bar__draft-dot" aria-hidden="true" />
                     {draftBatch} {plural(drafts, 'goes out', 'go out', 'go out')} on ship
+                    {pinnedDrafts === 0 ? null : (
+                        <span className="review-action-bar__pinned-drafts">
+                            · {formatCount(pinnedDrafts)}{' '}
+                            {plural(pinnedDrafts, 'is pinned', 'are pinned', 'are pinned')} to earlier commits
+                        </span>
+                    )}
                 </span>
             )}
             <span className="review-action-bar__divider" aria-hidden="true" />

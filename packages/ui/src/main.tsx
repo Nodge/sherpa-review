@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client';
 
 import { fetchUiPrState, fetchUiSettings, patchUiPrState, patchUiSettings } from './api.js';
 import { App, MessageScreen } from './app.tsx';
-import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
+import { ALL_FILTER_ID } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
 import { PrStateProvider } from './pr-state/context.tsx';
 import { createUiPrStateStore } from './pr-state/pr-state-store.js';
 import type { Viewing } from './iterations/viewing.js';
-import { parseViewing, viewingFragmentPatch } from './iterations/viewing.js';
+import { parseViewing } from './iterations/viewing.js';
+import { sessionFragmentPatch } from './session/session-fragment.js';
 import type { SessionState } from './session/session-store.js';
 import {
     createSessionStore,
@@ -91,22 +92,11 @@ if (token === null) {
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
         },
-        persist: (state: SessionState) => {
-            const viewingPatch = viewingFragmentPatch(state.viewing, persistedViewing);
+        persist: (state: SessionState, fragment?: Readonly<Record<string, string | null>>) => {
+            const patch = sessionFragmentPatch(state, persistedViewing, fragment);
             persistedViewing = state.viewing;
             // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
-            history.replaceState(
-                null,
-                '',
-                updateFragment(window.location.hash, {
-                    view: state.view,
-                    filter: filterFragmentValue(state.filter),
-                    // The default is omitted from the address: the preset appears in the URL only after a change.
-                    preset: state.preset === DEFAULT_PRESET ? null : state.preset,
-                    routeFilter: state.routeFilter === DEFAULT_ROUTE_FILTER ? null : state.routeFilter,
-                    ...viewingPatch,
-                }),
-            );
+            history.replaceState(null, '', updateFragment(window.location.hash, patch));
         },
     });
 

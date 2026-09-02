@@ -83,6 +83,11 @@
     color: var(--attention-text);
 }
 
+/* The pin note is a suffix on the draft counter, without a second visual emphasis. */
+.review-action-bar__pinned-drafts {
+    color: var(--text-muted);
+}
+
 .review-action-bar__draft-dot {
     width: 6px;
     height: 6px;

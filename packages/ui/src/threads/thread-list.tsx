@@ -5,8 +5,10 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { updateFragment } from '../fragment.js';
 import { Icon } from '../icons/icon.tsx';
 import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
+import { useThreadPin } from '../iterations/thread-pin.tsx';
+import type { ThreadPinState } from '../iterations/thread-pin.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
-import { plural } from '../text.js';
+import { plural, shortCommit } from '../text.js';
 import { closeCommentComposers } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
@@ -76,6 +78,8 @@ function ThreadBlock({
 }) {
     // A thread from a previous iteration is read-only: no replies, resolution or draft editing.
     const readOnly = useReadOnlyIteration();
+    // Pin to the commit where the thread was written: a chip and "Show on old commit" link.
+    const pinned = useThreadPin(thread);
     const all = useMemo(() => flattenThread(thread.root), [thread.root]);
     const commentIds = useMemo(() => all.map((row) => row.comment.id), [all]);
     const editingId = useActiveDraftEditor(store, commentIds);
@@ -169,6 +173,7 @@ function ThreadBlock({
                         ) : null}
                         {thread.resolved && index === 0 ? <span className="thread__chip">resolved</span> : null}
                         {thread.outdated && index === 0 ? <span className="thread__chip">outdated</span> : null}
+                        {pinned === null || index !== 0 ? null : <ThreadPinChip pinned={pinned} />}
                         {editingId === row.comment.id ? (
                             <span className="thread__chip thread__chip--editing">editing</span>
                         ) : row.comment.draft ? (
@@ -337,11 +342,40 @@ function ThreadBlock({
                         draft={draftReply}
                         draftEditorAvailable={draftEditorAvailable}
                         composer={replyComposer}
+                        pinnedCommit={pinned?.pin.commit ?? null}
                     />
                 </>
             )}
         </section>
     );
+}
+
+/** Pin chip and navigation: the label shows a short commit, the tooltip has the full hash (README §13). */
+function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
+    return (
+        <>
+            <span className="thread__chip thread__chip--pinned" title={pinned.pin.commit}>
+                pinned to {shortCommit(pinned.pin.commit)}
+            </span>
+            {pinned.open === null ? null : (
+                <button type="button" className="thread__pin-action" onClick={pinned.open}>
+                    View at the old commit
+                </button>
+            )}
+        </>
+    );
+}
+
+/**
+ * Threads absent from every line of the rendered diff: the file left the PR (SPEC §2.17)
+ * or the thread belongs to a PR-level bot. The heading names the reason only when all threads share it.
+ */
+function outsideTitle(threads: readonly Thread[]): string {
+    const count = threads.length;
+    const label = `${String(count)} ${plural(count, 'thread', 'threads', 'threads')}`;
+    return threads.every((thread) => thread.anchor !== null)
+        ? `${label} on files no longer in this PR`
+        : `${label} outside the diff`;
 }
 
 export function OutsideThreads({
@@ -376,7 +410,7 @@ export function OutsideThreads({
                     setOpened(!open);
                 }}
             >
-                {threads.length}{' '}{plural(threads.length, 'thread', 'threads', 'threads')} outside the diff
+                {outsideTitle(threads)}
                 <Icon name={open ? 'chev-down' : 'chev-right'} size={13} />
             </button>
             {open ? (
@@ -442,6 +476,7 @@ function ComposerForThread({
     draft,
     draftEditorAvailable,
     composer,
+    pinnedCommit,
 }: {
     thread: Thread;
     store: ThreadStore;
@@ -449,6 +484,8 @@ function ComposerForThread({
     draft: Comment | null;
     draftEditorAvailable: boolean;
     composer: ComposerSnapshot | null;
+    /** The thread pin commit: its draft was written before the push (SPEC §4.5). */
+    pinnedCommit: string | null;
 }) {
     // Replies are available only in the active iteration (M4 scope).
     const readOnly = useReadOnlyIteration();
@@ -469,7 +506,14 @@ function ComposerForThread({
                     }}
                 >
                     <span className="thread-composer-draft-preview__meta">
-                        <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
+                        <span
+                            className="thread__chip thread__chip--draft"
+                            {...(pinnedCommit === null ? {} : { title: pinnedCommit })}
+                        >
+                            {pinnedCommit === null
+                                ? 'draft · publishes on ship'
+                                : `draft · pinned to ${shortCommit(pinnedCommit)}`}
+                        </span>
                     </span>
                     <span className="thread-composer-draft-preview__body">{draft.body}</span>
                 </button>
@@ -501,6 +545,7 @@ function ComposerForThread({
             inputLabel="Thread reply"
             saveLabel={composer.commentId === null ? 'Save draft' : 'Save changes'}
             closeOnSave
+            pinnedCommit={pinnedCommit}
             {...(composer.commentId === null
                 ? {}
                 : { restoreOnCancel: composer.originalText ?? draft?.body ?? composer.text })}

@@ -131,6 +131,29 @@
     color: var(--attention-text);
 }
 
+.thread__chip--pinned {
+    flex: none;
+    border-style: dashed;
+    white-space: nowrap;
+}
+
+/* The action sits in the author row beside the chip, outside the thread actions shown on hover. */
+.thread__pin-action {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--font-size-meta);
+    color: var(--text-dim-strong);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.thread__pin-action:hover {
+    color: var(--text-muted);
+}
+
 .thread__chip--editing {
     border-color: var(--comment-edit-border);
     background: var(--comment-edit-chip-surface);

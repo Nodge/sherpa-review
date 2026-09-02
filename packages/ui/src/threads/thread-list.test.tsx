@@ -7,10 +7,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
+import { ThreadPinProvider } from '../iterations/thread-pin.tsx';
+import type { ThreadPinContextValue } from '../iterations/thread-pin.tsx';
 import { openDraftEditor } from './draft-editor.tsx';
 import { createThreadStore } from './store.js';
 import type { ThreadStore } from './store.js';
-import { openReply, ThreadList } from './thread-list.tsx';
+import { openReply, OutsideThreads, ThreadList } from './thread-list.tsx';
 
 /**
  * Comment bodies render as markdown (M2F-T5). Bots write headings, lists,
@@ -537,5 +539,165 @@ describe('read-only thread', () => {
         expect(/<button[^>]*disabled[^>]*>Resolve<\/button>/.exec(html)).not.toBeNull();
         expect(html).toContain('class="thread__edit-draft" aria-label="Edit draft draft-reply" title="only in the active iteration" disabled=""');
         expect(html).toContain('class="thread__delete-draft" aria-label="Delete draft draft-reply" title="only in the active iteration" disabled=""');
+    });
+});
+
+describe('thread pinned to a previous commit', () => {
+    const V2 = fixtureIteration('medium', 1);
+    const PINNED = (() => {
+        const thread = V2.threads.find((candidate) => candidate.outdated && candidate.pinnedTo !== null);
+        if (thread?.pinnedTo == null) {
+            throw new Error('the medium fixture needs an outdated pinned thread');
+        }
+        return thread;
+    })();
+    const ACTIVE_DIFF_ID = V2.diff.diffId;
+    const PIN_COMMIT = PINNED.pinnedTo?.commit ?? '';
+
+    function renderPinned(thread: Thread, pin: Partial<ThreadPinContextValue> = {}): string {
+        return renderToStaticMarkup(
+            <ThreadPinProvider
+                value={{
+                    activeDiffId: ACTIVE_DIFF_ID,
+                    viewingDiffId: ACTIVE_DIFF_ID,
+                    openAtPin: () => undefined,
+                    ...pin,
+                }}
+            >
+                <ThreadList
+                    threads={[thread]}
+                    store={createThreadStore([thread], FILE_IDS)}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                />
+            </ThreadPinProvider>,
+        );
+    }
+
+    it('shows the chip and action when the pin differs from the active iteration', () => {
+        const html = renderPinned(PINNED);
+
+        expect(html).toContain(`pinned to ${PIN_COMMIT.slice(0, 7)}`);
+        expect(html).toContain(`title="${PIN_COMMIT}"`);
+        expect(html).toContain('View at the old commit');
+    });
+
+    it('shows neither chip nor action when the pin matches the active iteration', () => {
+        const html = renderPinned(PINNED, { activeDiffId: PINNED.pinnedTo?.diffId ?? null });
+
+        expect(html).not.toContain('pinned to');
+        expect(html).not.toContain('View at the old commit');
+    });
+
+    it('has nothing to show when pinnedTo === null because the host does not know the anchor iteration', () => {
+        const html = renderPinned({ ...PINNED, pinnedTo: null });
+
+        expect(html).not.toContain('pinned to');
+        expect(html).not.toContain('View at the old commit');
+    });
+
+    it('cannot compare when the active iteration is unknown', () => {
+        const html = renderPinned(PINNED, { activeDiffId: null });
+
+        expect(html).not.toContain('pinned to');
+    });
+
+    it('keeps the chip without navigation when already viewing the pinned iteration', () => {
+        const html = renderPinned(PINNED, { viewingDiffId: PINNED.pinnedTo?.diffId ?? null });
+
+        expect(html).toContain('pinned to');
+        expect(html).not.toContain('View at the old commit');
+    });
+
+    it('opens the thread on its pinned iteration when the action is clicked', () => {
+        const openAtPin = vi.fn();
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        act(() => {
+            root.render(
+                <ThreadPinProvider value={{ activeDiffId: ACTIVE_DIFF_ID, viewingDiffId: ACTIVE_DIFF_ID, openAtPin }}>
+                    <ThreadList
+                        threads={[PINNED]}
+                        store={createThreadStore([PINNED], FILE_IDS)}
+                        actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                        now={NOW}
+                    />
+                </ThreadPinProvider>,
+            );
+        });
+
+        const action = host.querySelector<HTMLButtonElement>('.thread__pin-action');
+        act(() => {
+            action?.click();
+        });
+
+        expect(openAtPin).toHaveBeenCalledWith(PINNED.pinnedTo?.diffId, PINNED.id);
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    it('names removed files and offers the same action when every thread in the group has an anchor', () => {
+        const html = renderToStaticMarkup(
+            <ThreadPinProvider
+                value={{ activeDiffId: ACTIVE_DIFF_ID, viewingDiffId: ACTIVE_DIFF_ID, openAtPin: () => undefined }}
+            >
+                <OutsideThreads
+                    threads={[PINNED]}
+                    store={createThreadStore([PINNED], FILE_IDS)}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                    defaultOpen
+                />
+            </ThreadPinProvider>,
+        );
+
+        expect(html).toContain('1 thread on files no longer in this PR');
+        expect(html).toContain('View at the old commit');
+    });
+
+    it('the draft composer in a pinned thread names its commit instead of showing the generic chip', () => {
+        const withDraft = {
+            ...PINNED,
+            root: { ...PINNED.root, replies: [...PINNED.root.replies, DRAFT] },
+        };
+        const store = createThreadStore([withDraft], FILE_IDS);
+        openReply(store, withDraft, DRAFT);
+
+        const html = renderToStaticMarkup(
+            <ThreadPinProvider
+                value={{ activeDiffId: ACTIVE_DIFF_ID, viewingDiffId: ACTIVE_DIFF_ID, openAtPin: () => undefined }}
+            >
+                <ThreadList
+                    threads={[withDraft]}
+                    store={store}
+                    actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                    now={NOW}
+                />
+            </ThreadPinProvider>,
+        );
+
+        expect(html).toContain(`draft · pinned to ${PIN_COMMIT.slice(0, 7)}`);
+        expect(html).not.toContain('draft · publishes on ship');
+    });
+
+    it('keeps the group heading about the diff when it includes a PR-level bot', () => {
+        const bot = V2.threads.find((thread) => thread.anchor === null && thread.root.author.bot) ?? {
+            ...PINNED,
+            anchor: null,
+        };
+        const html = renderToStaticMarkup(
+            <OutsideThreads
+                threads={[bot, PINNED]}
+                store={createThreadStore([bot, PINNED], FILE_IDS)}
+                actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                now={NOW}
+            />,
+        );
+
+        expect(html).toContain('2 threads outside the diff');
     });
 });

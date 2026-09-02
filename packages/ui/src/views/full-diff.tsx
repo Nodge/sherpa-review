@@ -64,7 +64,7 @@ import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
-import { countThreadSources, threadIsVisible } from '../threads/model.js';
+import { countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
@@ -321,6 +321,8 @@ export interface DiffWorkspaceProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
+    /** Gallery only: the "outside the diff" group in the footer must appear expanded. */
+    readonly outsideThreadsOpen?: boolean;
 }
 
 export function DiffWorkspace(props: DiffWorkspaceProps) {
@@ -354,6 +356,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         paletteNavigation = null,
         onPaletteActiveFileChange,
         onFilterChangeHandler,
+        outsideThreadsOpen = false,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // Card collapse state comes from the PR state on the server. Capture it once so
@@ -597,7 +600,11 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         () => threadSnapshot.threads.find((thread) => thread.id === initialThreadId) ?? null,
         [initialThreadId, threadSnapshot.threads],
     );
-    const linkedFileId = linkedThread?.anchor?.fileId ?? null;
+    // A thread's `fileId` comes from the active iteration, so find the file by `path` in a previous one.
+    const linkedFileId = useMemo(
+        () => (linkedThread === null ? null : threadFileId(linkedThread, threadSnapshot.iterationLayout)),
+        [linkedThread, threadSnapshot.iterationLayout],
+    );
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
 
     // The label clears on the next reviewer scroll (SPEC §2.7). The list
@@ -1177,6 +1184,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                                 actions={threadActions}
                                 now={threadNow}
                                 initialThreadId={initialThreadId}
+                                defaultOpen={outsideThreadsOpen}
                                 onFocusThread={setFocusedThreadId}
                             />
                         }

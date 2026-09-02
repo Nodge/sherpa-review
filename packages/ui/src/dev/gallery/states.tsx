@@ -32,6 +32,7 @@ import { M3_T9_DIFF_STATES, M3_T9_ROUTE_STATES } from './m3-t9-states.tsx';
 import { M4_T2_STATES } from './m4-t2-states.tsx';
 import { M4_T8_STATES } from './m4-t8-states.tsx';
 import { M4_T9_STATES } from './m4-t9-states.tsx';
+import { M4_T10_STATES } from './m4-t10-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -106,7 +107,7 @@ const MEDIUM_BREADCRUMB = breadcrumbFor('fixture-medium', MEDIUM.pr);
  */
 const START_STATE_ID = 'overview-ownership';
 
-const M4_ITERATION_STATES = [...M4_T8_STATES, ...M4_T9_STATES];
+const M4_ITERATION_STATES = [...M4_T8_STATES, ...M4_T9_STATES, ...M4_T10_STATES];
 const M4_ITERATION_IDS = new Set(M4_ITERATION_STATES.map((state) => state.id));
 
 export const GALLERY_STATES: readonly GalleryState[] = [

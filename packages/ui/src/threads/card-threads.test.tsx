@@ -1,0 +1,88 @@
+import { fixtureIteration } from '@sherpa/fixtures';
+import type { Thread } from '@sherpa/protocol';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+
+import { toParseRequest } from '../diff/model.js';
+import { parseFileDiff } from '../diff/parse.js';
+import { useCardThreads } from './card-threads.tsx';
+import type { IterationLayout } from './model.js';
+import { createThreadStore } from './store.js';
+
+/**
+ * Where a file card puts a thread pinned to a previous iteration (M4-T10). In the active
+ * iteration, its outdated anchor moves it below the header. In its pinned iteration it sits by the lines.
+ */
+
+const V1 = fixtureIteration('medium', 0);
+const V2 = fixtureIteration('medium', 1);
+const NOW = Date.parse('2026-08-24T12:00:00.000Z');
+const PATH = 'services/orders/src/api/handlers.ts';
+
+const OUTDATED: Thread = (() => {
+    const thread = V2.threads.find((candidate) => candidate.outdated && candidate.anchor?.path === PATH);
+    if (thread === undefined) {
+        throw new Error('the medium fixture needs an outdated thread on handlers.ts');
+    }
+    return thread;
+})();
+
+const ACTIONS = {
+    transport: {
+        save: () => Promise.reject(new Error('this test does not save')),
+        update: () => Promise.reject(new Error('this test does not save')),
+        delete: () => Promise.reject(new Error('this test does not save')),
+    },
+    resolve: () => Promise.resolve(true),
+};
+
+function fileOf(iteration: typeof V1, path: string) {
+    const file = iteration.diff.files.find((candidate) => candidate.path === path);
+    if (file === undefined) {
+        throw new Error(`iteration has no ${path}`);
+    }
+    return file;
+}
+
+function underHeader(iteration: typeof V1, layout: IterationLayout | null): string {
+    const file = fileOf(iteration, PATH);
+    const model = parseFileDiff(toParseRequest(file));
+    const store = createThreadStore([OUTDATED], new Set([file.fileId]), layout);
+
+    function Harness() {
+        const { threadsUnderHeader } = useCardThreads({
+            model,
+            rowsShown: true,
+            threads: [OUTDATED],
+            composers: [],
+            store,
+            actions: ACTIONS,
+            now: NOW,
+            onFocusThread: () => undefined,
+        });
+        return <div>{threadsUnderHeader}</div>;
+    }
+
+    return renderToStaticMarkup(<Harness />);
+}
+
+const V1_LAYOUT: IterationLayout = {
+    diffId: V1.diff.diffId,
+    fileIdByPath: new Map(V1.diff.files.map((file) => [file.path, file.fileId])),
+};
+
+describe('thread placement in a file card', () => {
+    it('moves an outdated thread below the file header in the active iteration', () => {
+        expect(underHeader(V2, null)).toContain(`thread-${OUTDATED.id}`);
+    });
+
+    it('places the same thread by the lines in its pinned iteration, without showing it below the header', () => {
+        expect(underHeader(V1, V1_LAYOUT)).not.toContain(`thread-${OUTDATED.id}`);
+    });
+
+    it('places the thread below the header again when its pin points to another iteration', () => {
+        const alien: IterationLayout = { ...V1_LAYOUT, diffId: 'another-iteration' };
+
+        expect(underHeader(V1, alien)).toContain(`thread-${OUTDATED.id}`);
+    });
+});

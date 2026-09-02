@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
+import { ThreadPinProvider } from '../iterations/thread-pin.tsx';
 import { countDraftComments } from '../progress/summary.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import { createUiSettingsStore } from '../settings/settings-store.js';
@@ -34,10 +35,19 @@ function renderBar(
         threads?: typeof DRAFT_THREADS;
         sticky?: boolean;
         route?: RouteProgress | null;
+        /** Active PR iteration, used to count drafts pinned to previous commits. */
+        activeDiffId?: string;
     } = {},
 ): string {
     const threads = options.threads ?? DRAFT_THREADS;
     return renderToStaticMarkup(
+        <ThreadPinProvider
+            value={{
+                activeDiffId: options.activeDiffId ?? null,
+                viewingDiffId: options.activeDiffId ?? null,
+                openAtPin: null,
+            }}
+        >
         <ReviewActionBar
             pr={{
                 ...DATA.pr,
@@ -56,7 +66,8 @@ function renderBar(
             onComplete={() => undefined}
             route={options.route ?? null}
             {...(options.menu === undefined ? {} : { defaultMenuOpen: options.menu })}
-        />,
+        />
+        </ThreadPinProvider>,
     );
 }
 
@@ -509,5 +520,33 @@ describe('Review complete screen', () => {
         expect(html).not.toContain('Other read as a raw diff');
         // "Of that, read outside the route" counts seen lines: without the Other mark there is no row.
         expect(html).not.toContain('outside the route');
+    });
+});
+
+describe('drafts written before a push', () => {
+    const V2 = fixtureIteration('medium', 1);
+
+    it('counts drafts in threads pinned to previous commits as a separate note', () => {
+        const pinned = V2.threads.find((thread) => thread.pinnedTo !== null && thread.anchor !== null);
+        if (pinned === undefined) {
+            throw new Error('the medium fixture needs a pinned thread');
+        }
+        const threads = [{ ...pinned, root: { ...pinned.root, draft: true } }];
+
+        const html = renderBar({ threads, activeDiffId: V2.diff.diffId });
+
+        expect(html).toContain('1 is pinned to earlier commits');
+    });
+
+    it('omits the note when the pin matches the active iteration', () => {
+        const pinned = V2.threads.find((thread) => thread.pinnedTo !== null && thread.anchor !== null);
+        if (pinned?.pinnedTo == null) {
+            throw new Error('the medium fixture needs a pinned thread');
+        }
+        const threads = [{ ...pinned, root: { ...pinned.root, draft: true } }];
+
+        const html = renderBar({ threads, activeDiffId: pinned.pinnedTo.diffId });
+
+        expect(html).not.toContain('pinned to earlier commits');
     });
 });

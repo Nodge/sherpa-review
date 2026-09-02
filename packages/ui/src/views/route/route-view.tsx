@@ -1446,13 +1446,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
 
     const threadVisible = useCallback((thread: Thread) => threadIsVisible(thread, threadsShow), [threadsShow]);
+    // The rendered diff's iteration: in an old iteration, a thread sits by its lines only at its pinned commit.
+    const iterationLayout = threadSnapshot.iterationLayout;
     const visibleThreads = useCallback(
         (group: RouteFileGroup): readonly Thread[] =>
-            threadsForGroup(group, threadSnapshot.byFile).filter(
+            threadsForGroup(group, threadSnapshot.byFile, iterationLayout).filter(
                 (thread) =>
                     (threadSnapshot.keptByFile.get(group.fileId)?.has(thread.id) ?? false) || threadVisible(thread),
             ),
-        [threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible],
+        [iterationLayout, threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible],
     );
     const visibleByFile = useMemo(() => {
         const map = new Map<string, readonly Thread[]>();
@@ -1760,7 +1762,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             view={entry.view}
                             entries={model.entries}
                             stopCount={model.stopCount}
-                            comments={countStopComments(entry.view, visibleByFile)}
+                            comments={countStopComments(entry.view, visibleByFile, iterationLayout)}
                             changeThreads={stopChangeThreads(entry.view.stop.change, threadsById)}
                             {...(onOpenThread === undefined ? {} : { onOpenThread })}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}

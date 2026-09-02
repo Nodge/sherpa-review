@@ -17,6 +17,38 @@ export interface ThreadGroups {
     readonly outside: readonly Thread[];
 }
 
+/**
+ * The iteration whose diff is rendered, when it is not the active PR iteration (M4-T10).
+ * `fileId` belongs to an iteration (fixtures use `makeFileId(diffId, path)`, the review host uses `entry_id`
+ * from the diff set). Threads arrive once for the active iteration. In a previous iteration, the thread file is found
+ * by `anchor.path`, and a thread sits at its lines only in the iteration it is pinned to.
+ */
+export interface IterationLayout {
+    readonly diffId: string;
+    readonly fileIdByPath: ReadonlyMap<string, string>;
+}
+
+/**
+ * The thread sits at its lines instead of under the file header. In the active iteration (`layout === null`),
+ * an outdated anchor moves it under the header (SPEC §2.17). In a previous iteration, the pin decides:
+ * "view at the old commit" shows the thread beside the code it was written about.
+ */
+export function threadAtLines(thread: Thread, layout: IterationLayout | null): boolean {
+    if (thread.anchor?.position == null) {
+        return false;
+    }
+    return layout === null ? !thread.outdated : thread.pinnedTo?.diffId === layout.diffId;
+}
+
+/** The file in the rendered diff that the thread belongs to. null means the file is absent from this diff. */
+export function threadFileId(thread: Thread, layout: IterationLayout | null): string | null {
+    const anchor = thread.anchor;
+    if (anchor === null) {
+        return null;
+    }
+    return layout === null ? anchor.fileId : (layout.fileIdByPath.get(anchor.path) ?? null);
+}
+
 export interface ThreadSourceCounts {
     readonly people: number;
     readonly bots: number;
@@ -70,19 +102,23 @@ export function flattenThread(root: Comment): FlatComment[] {
 }
 
 /** Threads in the known diff go to files. outside keeps PR-level bots and missing files. */
-export function groupThreads(threads: readonly Thread[], fileIds: ReadonlySet<string>): ThreadGroups {
+export function groupThreads(
+    threads: readonly Thread[],
+    fileIds: ReadonlySet<string>,
+    layout: IterationLayout | null = null,
+): ThreadGroups {
     const byFile = new Map<string, Thread[]>();
     const outside: Thread[] = [];
 
     for (const thread of threads) {
-        const fileId = thread.anchor?.fileId ?? null;
-        if (fileId === null) {
+        if (thread.anchor === null) {
             if (thread.root.author.bot) {
                 outside.push(thread);
             }
             continue;
         }
-        if (!fileIds.has(fileId)) {
+        const fileId = threadFileId(thread, layout);
+        if (fileId === null || !fileIds.has(fileId)) {
             outside.push(thread);
             continue;
         }
@@ -135,7 +171,10 @@ export interface ThreadPlacement {
     readonly unplaced: readonly Thread[];
 }
 
-/** Places anchored threads on visible lines. Threads in hidden context attach to the nearest visible line. */
+/**
+ * Places line-anchored threads at visible lines. Hidden context pulls them to the nearest line.
+ * The caller decides which threads do not belong at their lines (outdated anchor, different iteration): `threadAtLines`.
+ */
 export function placeThreadsOnVisibleLines(
     model: DiffFileModel | null,
     threads: readonly Thread[],
@@ -163,7 +202,7 @@ export function placeThreadsOnVisibleLines(
     const unplaced: Thread[] = [];
     for (const thread of threads) {
         const position = thread.anchor?.position;
-        if (position === null || position === undefined || thread.outdated) {
+        if (position === null || position === undefined) {
             unplaced.push(thread);
             continue;
         }

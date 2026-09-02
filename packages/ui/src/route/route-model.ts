@@ -13,6 +13,8 @@ import type { DiffFileModel } from '../diff/model.js';
 import { noteCommentPosition } from '../notes/note-draft.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { RoutePreset } from '../session/session-store.js';
+import { threadAtLines } from '../threads/model.js';
+import type { IterationLayout } from '../threads/model.js';
 import type { ComposerSnapshot } from '../threads/store.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import {
@@ -562,12 +564,14 @@ function groupOwnsPosition(group: RouteFileGroup, position: { side: 'old' | 'new
 
 /**
  * Threads belonging to the stop's ranges. With a position, the line must fall within the anchors or their
- * context. Without a position (or if outdated), only when the stop explains the whole file. Otherwise,
- * the same thread would appear in every stop touching that file.
+ * context. Without a position (outdated or pinned to another iteration), the stop must
+ * explain the whole file. Otherwise, the same thread would appear in every stop that
+ * touches this file.
  */
 export function threadsForGroup(
     group: RouteFileGroup,
     byFile: ReadonlyMap<string, readonly Thread[]>,
+    iteration: IterationLayout | null = null,
 ): readonly Thread[] {
     const threads = byFile.get(group.fileId) ?? [];
     if (threads.length === 0) {
@@ -575,7 +579,7 @@ export function threadsForGroup(
     }
     return threads.filter((thread) => {
         const position = thread.anchor?.position ?? null;
-        if (position === null || thread.outdated) {
+        if (position === null || !threadAtLines(thread, iteration)) {
             return group.whole;
         }
         return groupOwnsPosition(group, position);
@@ -628,8 +632,12 @@ export function stopSeenRanges(entry: RouteEntry): readonly UiStopSeenRange[] {
 }
 
 /** Stop comments (README §1: left column counter). */
-export function countStopComments(view: RouteStopView, byFile: ReadonlyMap<string, readonly Thread[]>): number {
-    return view.files.reduce((total, group) => total + threadsForGroup(group, byFile).length, 0);
+export function countStopComments(
+    view: RouteStopView,
+    byFile: ReadonlyMap<string, readonly Thread[]>,
+    iteration: IterationLayout | null = null,
+): number {
+    return view.files.reduce((total, group) => total + threadsForGroup(group, byFile, iteration).length, 0);
 }
 
 /** An "Other" file as a regular stop file group, with the same cards and threads. */

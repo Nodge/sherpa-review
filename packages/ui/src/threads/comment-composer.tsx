@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../icons/icon.tsx';
 import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
+import { shortCommit } from '../text.js';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { editMarkdown } from './composer-markdown.js';
@@ -38,6 +39,8 @@ export interface CommentComposerProps {
     readonly onSaveComplete?: (() => void) | undefined;
     readonly closeOnSave?: boolean;
     readonly showDraftChip?: boolean;
+    /** The thread pin commit: the draft was written before the push and will go to this commit (SPEC §4.5). */
+    readonly pinnedCommit?: string | null;
     readonly restoreOnCancel?: string;
     readonly onCancel?: (() => void) | undefined;
 }
@@ -57,6 +60,7 @@ export function CommentComposer({
     onSaveComplete,
     closeOnSave = true,
     showDraftChip = false,
+    pinnedCommit = null,
     restoreOnCancel,
     onCancel,
 }: CommentComposerProps) {
@@ -204,7 +208,11 @@ export function CommentComposer({
             <div className="thread-composer__context">
                 <span>{contextLabel}</span>
                 {showDraftChip || composer.commentId !== null ? (
-                    <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
+                    <span className="thread__chip thread__chip--draft" {...(pinnedCommit === null ? {} : { title: pinnedCommit })}>
+                        {pinnedCommit === null
+                            ? 'draft · publishes on ship'
+                            : `draft · pinned to ${shortCommit(pinnedCommit)}`}
+                    </span>
                 ) : null}
             </div>
             <div className="thread-composer__editor">
