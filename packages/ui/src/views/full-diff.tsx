@@ -38,7 +38,7 @@ import { DiffFileList } from '../diff-view/file-list.tsx';
 import { findLineRow, flashRow } from '../diff-view/line-target.js';
 import { selectedLineRange } from '../diff-view/selection.js';
 import type { DiffViewSnapshot, DiffViewStore } from '../diff-view/store.js';
-import { createDiffViewStore } from '../diff-view/store.js';
+import { createDiffViewStore, fileCollapseReason } from '../diff-view/store.js';
 import '../diff-view/diff-view.css';
 import type { FileFilter } from '../filters/lens-filters.js';
 import {
@@ -422,6 +422,15 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         }
     }, [filter.id, filterId, session]);
 
+    // The top card in the viewport tells the view which file the reviewer is reading now.
+    // Filter changes ("kept in view", SPEC §2.7) and moving to the next file after
+    // marking both need it, so a ref also holds it for handlers to read without being recreated.
+    const [topFileId, setTopFileId] = useState<string | null>(null);
+    const topRef = useRef<string | null>(null);
+    useEffect(() => {
+        topRef.current = topFileId;
+    }, [topFileId]);
+
     // Reading progress (T8): optimistic writes, rollback on failure and tab convergence through SSE.
     // `ProgressWriter` handles write order, rollback and revisions. The view only renders.
     const [writesSettled, setWritesSettled] = useState(0);
@@ -445,9 +454,22 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const writer = props.progressWriter ?? createdWriter;
 
+    /**
+     * The file from which the screen moves to the next one after marking. An effect computes and
+     * starts the navigation because the list still has the old card heights in the handler. The list
+     * receives the same id and does not anchor to the collapsed card.
+     */
+    const [advanceFrom, setAdvanceFrom] = useState<string | null>(null);
+
     const markViewed = useCallback(
         async function mark(fileId: string, viewed: boolean): Promise<Feedback> {
             setWriteError(null);
+            // "Scrolling follows collapse" (decision log 2026-09-02): when the reviewer marks the file
+            // they are reading, the screen moves to the next one. Clearing a mark, marking
+            // any other file and noninteractive toggles leave scrolling alone.
+            if (viewed && fileId === topRef.current) {
+                setAdvanceFrom(fileId);
+            }
             if (await writer.write(fileId, viewed)) {
                 return null;
             }
@@ -566,15 +588,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [initialThreadId, threadSnapshot.threads],
     );
     const linkedFileId = linkedThread?.anchor?.fileId ?? null;
-    const [topFileId, setTopFileId] = useState<string | null>(null);
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
-
-    // "Kept in view" (SPEC §2.7): the file the reviewer is reading stays under the cursor
-    // when the filter changes. It remains in the list with a label.
-    const topRef = useRef<string | null>(null);
-    useEffect(() => {
-        topRef.current = topFileId;
-    }, [topFileId]);
 
     // The label clears on the next reviewer scroll (SPEC §2.7). The list
     // distinguishes its own scroll adjustments: programmatic scrolling does not reach this handler.
@@ -675,6 +689,29 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         pendingScroll.current = null;
         void listRef.current?.scrollToFile(target);
     }, [shown]);
+
+    // Move to the next file after marking. Compute the target here instead of in the handler:
+    // the mark is already in the store, and we can see which cards below are collapsed. Wait one more frame
+    // so the list can replace the collapsed card's measurement with its new estimate.
+    useEffect(() => {
+        if (advanceFrom === null) {
+            return;
+        }
+        const snapshot = store.getSnapshot();
+        const next = nextFileToAdvance(shown, advanceFrom, (file) => fileCollapseReason(snapshot, file) !== null);
+        if (next === null) {
+            setAdvanceFrom(null);
+            return;
+        }
+        const frame = requestAnimationFrame(() => {
+            setAdvanceFrom(null);
+            // Leave the target collapsed: navigation expands neither viewed nor generated files.
+            void listRef.current?.scrollToFile(next, { reveal: false });
+        });
+        return () => {
+            cancelAnimationFrame(frame);
+        };
+    }, [advanceFrom, shown, store]);
 
     const pci = findFilter(filters, PCI_FILTER_ID);
     // The reference must stay stable because rebuilding the tree depends on it.
@@ -1136,6 +1173,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         }
                         initialFileId={linkedFileId ?? initialFileId}
                         keptFileId={keptFileId}
+                        advancingFileId={advanceFrom}
                         onTopFileChange={setTopFileId}
                         onScroll={onScroll}
                         routeMargin={routeMargin}
@@ -1258,6 +1296,24 @@ const NO_STOP_WRITES: StopWriterHooks = {
     restore: () => undefined,
     send: () => Promise.reject(new Error('stop marking is unavailable in the full diff')),
 };
+
+/**
+ * The file to scroll to after marking: the nearest expanded file below in the current order and
+ * filter, or simply the next one if all below are collapsed. `null` means the marked file is last,
+ * so there is no scrolling.
+ */
+export function nextFileToAdvance<T extends { readonly fileId: string }>(
+    files: readonly T[],
+    fileId: string,
+    collapsed: (file: T) => boolean,
+): string | null {
+    const index = files.findIndex((file) => file.fileId === fileId);
+    if (index < 0) {
+        return null;
+    }
+    const rest = files.slice(index + 1);
+    return (rest.find((file) => !collapsed(file)) ?? rest[0])?.fileId ?? null;
+}
 
 function shownModelOf(snapshot: DiffViewSnapshot, fileId: string): DiffFileModel | null {
     return shownFileModel(
