@@ -184,7 +184,8 @@
 
 .route-toolbar__hint {
     flex: none;
-    max-width: 240px;
+    /* "Full tour" tooltip fits on one line at 424px. Below 250px it wraps to 3 lines. */
+    max-width: 260px;
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
     text-wrap: pretty;

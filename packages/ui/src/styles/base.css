@@ -15,8 +15,10 @@ body {
 }
 
 body {
-    /* README, "Fidelity": the layout targets desktops ≥1440px. There is no mobile layout in v1. */
-    min-width: 1440px;
+    /* README, "Fidelity": the layout targets desktops ≥1440px, v1 has no mobile layout.
+       The threshold is lowered to 1280px for a typical laptop viewport: below 1440 the layout shrinks,
+       and horizontal scrolling starts only below 1280. */
+    min-width: 1280px;
     color: var(--text-primary-soft);
     font-family: var(--font-sans);
     font-size: var(--font-size-body);
