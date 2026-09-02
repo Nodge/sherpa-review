@@ -4,11 +4,11 @@ import { chatFixtures, fixtureData } from '@sherpa/fixtures';
 import type { PrDiff } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatStore, LEGACY_DIFF_ID } from './chat-store.js';
+import { ChatStore } from './chat-store.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import type { IterationMap } from './iterations/index.js';
-import { buildIterationMap, opaqueMap } from './iterations/index.js';
+import { buildIterationMap, LEGACY_DIFF_ID, opaqueMap } from './iterations/index.js';
 import { makeTempSherpaDir, removeTempSherpaDir, seedAgentNotes } from './test-support.js';
 
 /**

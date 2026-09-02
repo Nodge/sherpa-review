@@ -7,6 +7,8 @@ import type {
     PrMeta,
     ReviewHost,
     RouteProvenance,
+    RouteSnapshot,
+    Thread,
     UiRouteFillStopResponse,
     UiRouteGenerateResponse,
     WorkerStatus,
@@ -14,9 +16,18 @@ import type {
 
 import { RpcFailure } from './errors.js';
 import type { IterationStore } from './iteration-store.js';
+import type { IterationMap } from './iterations/index.js';
+import { buildIterationMap, identityMap } from './iterations/index.js';
+import type { ProgressStore } from './progress-store.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import { RoutePayloadWriter } from './route-payload.js';
-import type { RouteStopStatusUpdate, RouteStore, RouteTaskBinding } from './route-store.js';
+import type { RouteRegenerationContext } from './route-regeneration.js';
+import type {
+    RouteStopStatusUpdate,
+    RouteStore,
+    RouteTaskBinding,
+    SnapshotAcceptance,
+} from './route-store.js';
 import { validateSection, validateSkeleton } from './route/index.js';
 import type { SharedPayloadStore } from './shared-payload.js';
 import type { WorkerRegistry } from './worker-registry.js';
@@ -64,11 +75,23 @@ const ROUTE_TASK_PREFIX = 'route.';
  */
 const WARMUP_DELAY_MS = 200;
 
-/** The part of `ProgressStore` the orchestrator needs to clear previous stop progress. */
-export interface StopProgressReset {
-    readonly clearStopProgress: () => number;
-    /** Called within the `RouteStore.acceptSkeleton` transaction. Apply the effect only after commit. */
-    readonly clearStopProgressInTransaction: () => () => void;
+/** The part of `ProgressStore` the orchestrator needs: carrying marks over to a new snapshot. */
+export type StopProgressCarry = Pick<ProgressStore, 'carryStopsInTransaction'>;
+
+/**
+ * Ongoing generation: its iteration and everything needed to carry progress over to its snapshot.
+ * The map is built ahead of time (interdiff is a network call), because the result acceptor is synchronous.
+ */
+interface GenerationContext {
+    readonly diff: PrDiff;
+    /** The snapshot current at generation start. null means the route is being built for the first time. */
+    readonly previousSnapshotId: string | null;
+    /** Line mapping "previous snapshot iteration → generation iteration". null means there is no interdiff. */
+    readonly map: IterationMap | null;
+    /** The same slice as patches, sent to the model in a context file (M4-T7). */
+    readonly interdiff: PrDiff | null;
+    /** PR threads at generation start. null means no previous snapshot, a host failure or a restart. */
+    readonly threads: readonly Thread[] | null;
 }
 
 export interface RouteOrchestratorOptions {
@@ -82,10 +105,10 @@ export interface RouteOrchestratorOptions {
     /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
     readonly shared: SharedPayloadStore;
     /**
-     * Reading progress: a new generation clears previous stop marks and their seen ranges
-     * when the new plan is accepted (progress carryover is M4). `null` means nothing to clear (tests).
+     * Reading progress: carryover marks stops in the new snapshot during acceptance
+     * (planning decision 4). `null` means nowhere to carry progress to (tests without progress).
      */
-    readonly progress?: StopProgressReset | null;
+    readonly progress?: StopProgressCarry | null;
     /** Local storage for iteration patches. `null` means there is nowhere to save the generation diff (tests without a DB). */
     readonly iterations?: IterationStore | null;
     readonly config?: Partial<RouteConfig>;
@@ -99,17 +122,18 @@ export class RouteOrchestrator {
     private readonly registry: WorkerRegistry;
     private readonly host: ReviewHost | null;
     private readonly payload: RoutePayloadWriter;
-    private readonly progress: StopProgressReset | null;
+    private readonly progress: StopProgressCarry | null;
     private readonly iterations: IterationStore | null;
     private readonly config: RouteConfig;
     private readonly warmupDelayMs: number;
 
     /**
-     * Diff for generation running in this process: section acceptance is synchronous, while `getDiff` is a network
-     * call. The generation iteration is fixed at startup and stays unchanged even if the author pushes
-     * (planning decision 10: generation finishes, and the snapshot is already stale when created).
+     * Context for the generation running in this process. Section acceptance is synchronous, while `getDiff`
+     * and interdiff are network calls. The generation iteration is fixed when generation starts and does not change,
+     * even if the author pushes (planning decision 10: generation finishes, and the snapshot
+     * is already stale when created).
      */
-    private generationDiff: PrDiff | null = null;
+    private generation: GenerationContext | null = null;
     /**
      * Latest diff of the active iteration, used to start the next generation. It does not become the diff
      * of the running generation. The task binding names its iteration and is the only source after a restart.
@@ -214,12 +238,20 @@ export class RouteOrchestrator {
         if (phase !== 'none' || this.registry.status().kind !== 'connected' || this.hasOpenRouteTask()) {
             return;
         }
-        this.startSkeleton(diff);
+
+        const context = await this.generationContextFor(diff);
+        // Another warmup or endpoint may have started generation while the slice was being calculated. A second start
+        // would cancel its task and rebuild the plan.
+        if (this.isClosed() || this.store.read().phase !== 'none' || this.hasOpenRouteTask()) {
+            return;
+        }
+        this.startSkeleton(context);
     }
 
     /**
      * The `review/route/generate` endpoint starts and restarts generation. From `ready`, the old route
-     * stays readable until the new skeleton is accepted. Its progress carryover remains in M4.
+     * remains readable until the new skeleton is accepted, and its progress carries over to the new snapshot
+     * during acceptance.
      */
     async generate(): Promise<UiRouteGenerateResponse['outcome']> {
         if (this.host === null) {
@@ -240,7 +272,13 @@ export class RouteOrchestrator {
             return 'already_running';
         }
 
-        this.startSkeleton(diff);
+        const context = await this.generationContextFor(diff);
+        // Warmup or another endpoint request may have started generation while the slice was being calculated.
+        const phaseNow = this.store.read().phase;
+        if (phaseNow === 'reading' || phaseNow === 'filling') {
+            return 'already_running';
+        }
+        this.startSkeleton(context);
         return 'started';
     }
 
@@ -320,23 +358,16 @@ export class RouteOrchestrator {
         return {
             kind: 'accepted',
             onCommitted: () => {
-                const progress = this.progress;
-                const current = this.store.read().snapshot;
-                const clearStopProgress =
-                    current === null || progress === null
-                        ? undefined
-                        : () => progress.clearStopProgressInTransaction();
-                this.store.acceptSkeleton(
-                    {
-                        skeleton,
-                        diff,
-                        provenance,
-                        snapshotId: randomUUID(),
-                        // M4-T6 carries progress and `carried` over from this snapshot.
-                        previousSnapshotId: current?.snapshotId ?? null,
-                    },
-                    clearStopProgress,
-                );
+                const previous = this.store.current();
+                // Do not calculate mark carryover yet. Stops have no anchors, and `carried` with zero
+                // would make the banner say "0 of 7". Counts appear when the snapshot is frozen (`markReady`).
+                this.store.acceptSkeleton({
+                    skeleton,
+                    diff,
+                    provenance,
+                    snapshotId: randomUUID(),
+                    previousSnapshotId: previous?.snapshotId ?? null,
+                });
                 this.reconcile();
             },
         };
@@ -354,7 +385,11 @@ export class RouteOrchestrator {
             return this.deferUntilDiff();
         }
 
-        const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff);
+        const generation = this.acceptanceContext(diff, snapshot.previousSnapshotId);
+        const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff, {
+            map: generation.map,
+            knownThreadIds: new Set((generation.threads ?? []).map((thread) => thread.id)),
+        });
         if (!validation.ok) {
             return { kind: 'rejected', errors: validation.errors };
         }
@@ -468,8 +503,91 @@ export class RouteOrchestrator {
         // a section failure does not fail the phase, and its stop keeps `status: 'failed'`).
         const stops = this.store.read().snapshot?.stops ?? [];
         if (!stops.some((stop) => stop.status === 'queued' || stop.status === 'filling')) {
-            this.store.markReady();
+            this.markReadyCarryingProgress();
         }
+    }
+
+    /**
+     * Freeze the snapshot and carry over stop marks. Anchors appear only
+     * in filled sections, so carryover is calculated here, after skeleton acceptance.
+     */
+    private markReadyCarryingProgress(): void {
+        const snapshot = this.store.read().snapshot;
+        const previousId = snapshot?.previousSnapshotId ?? null;
+        const previous = previousId === null ? null : this.store.getSnapshot(previousId);
+        if (snapshot === null || previous === null || this.progress === null) {
+            this.store.markReady();
+            return;
+        }
+
+        const diff = this.diffOf(snapshot.diffId);
+        const map = diff === null ? null : this.acceptanceContext(diff, previousId).map;
+        this.store.markReady((ready) => this.carryProgressInto(ready, previous, map));
+    }
+
+    /**
+     * Acceptance context uses the map prepared at generation start, or the slice cache
+     * after a restart. The "previous snapshot → generation iteration" pair must match, or the map is for another pair.
+     */
+    private acceptanceContext(diff: PrDiff, previousSnapshotId: string | null): GenerationContext {
+        const prepared = this.generation;
+        if (
+            prepared !== null &&
+            prepared.diff.diffId === diff.diffId &&
+            prepared.previousSnapshotId === previousSnapshotId
+        ) {
+            return prepared;
+        }
+        // Generation context was lost with the process. Look up the previous snapshot by id,
+        // because a newer one may already be current.
+        return this.cachedContextFor(
+            diff,
+            previousSnapshotId === null ? null : this.store.getSnapshot(previousSnapshotId),
+        );
+    }
+
+    /**
+     * Carry progress over to the snapshot within its write transaction. `carried` counts marked
+     * stops out of all stops in the snapshot (README §9: "4 of 7").
+     */
+    private carryProgressInto(
+        snapshot: RouteSnapshot,
+        previous: RouteSnapshot | null,
+        map: IterationMap | null,
+    ): SnapshotAcceptance {
+        const progress = this.progress;
+        const total = snapshot.stops.length;
+        if (previous === null || progress === null) {
+            // First snapshot of the PR. There is no source for carryover.
+            return { carried: null };
+        }
+
+        const diff = this.diffOf(snapshot.diffId);
+        if (map === null || diff === null) {
+            process.stderr.write(
+                `sherpa-server: cannot carry over marks: no interdiff ${previous.diffId}→${snapshot.diffId}\n`,
+            );
+            return { carried: { kept: snapshot.carried?.kept ?? 0, total } };
+        }
+
+        const carried = progress.carryStopsInTransaction({
+            snapshotId: snapshot.snapshotId,
+            diffId: snapshot.diffId,
+            stops: snapshot.stops,
+            diff,
+        });
+        // Marks may have carried over in several passes (freezing, filling a stop).
+        const kept = (snapshot.carried?.kept ?? 0) + carried.kept;
+        return {
+            carried: { kept, total },
+            afterCommit: () => {
+                carried.afterCommit();
+                process.stderr.write(
+                    `sherpa-server: snapshot ${snapshot.snapshotId}: carried over ${String(kept)} of ` +
+                        `${String(total)} stops from ${previous.snapshotId}\n`,
+                );
+            },
+        };
     }
 
     /** The `reading` phase lasts until the skeleton task reaches its outcome. */
@@ -517,38 +635,160 @@ export class RouteOrchestrator {
     }
 
     /** New generation cancels previous tasks and keeps the live snapshot until a new one is accepted. */
-    private startSkeleton(diff: PrDiff): void {
-        const hasSnapshot = this.store.read().snapshot !== null;
-        this.generationDiff = diff;
+    private startSkeleton(context: GenerationContext): void {
+        this.generation = context;
         this.cancelOpenRouteTasks();
         this.store.clearBindings();
         this.store.beginSkeleton();
         // The previous generation payload is no longer needed. Its tasks were just cancelled.
-        this.payload.beginGeneration();
-        // Keep the previous clearing point for initial generation. During a rebuild, old stops
-        // live until the new plan is accepted and are cleared atomically with its snapshot.
-        if (!hasSnapshot) {
-            this.progress?.clearStopProgress();
-        }
+        // Write regeneration context once here. The skeleton and all sections share it.
+        this.payload.beginGeneration(this.regenerationOf(context));
         this.startSkeletonTask();
+    }
+
+    /**
+     * Generation context maps lines from the current snapshot iteration to the new generation iteration.
+     * Calculate it ahead of time because interdiff is a network call and result acceptance is synchronous.
+     * Generation proceeds even if the slice is unavailable, but stop marks will not carry over.
+     */
+    private async generationContextFor(diff: PrDiff): Promise<GenerationContext> {
+        const previous = this.store.current();
+        if (previous === null) {
+            return { diff, previousSnapshotId: null, map: null, interdiff: null, threads: null };
+        }
+
+        // Only regeneration needs threads. They explain why the author changed a stop. Fetch them
+        // alongside the slice. Generation waits for both, so sequential requests would add unnecessary latency.
+        const threads = this.loadThreads();
+        const base = async (): Promise<Pick<GenerationContext, 'diff' | 'previousSnapshotId' | 'threads'>> => ({
+            diff,
+            previousSnapshotId: previous.snapshotId,
+            threads: await threads,
+        });
+        if (previous.diffId === diff.diffId) {
+            // Regeneration within the same iteration: lines have not moved (planning decision 4).
+            return { ...(await base()), map: identityMap(), interdiff: null };
+        }
+
+        const host = this.host;
+        const iterations = this.iterations;
+        if (host === null || iterations === null) {
+            return { ...(await base()), map: null, interdiff: null };
+        }
+        try {
+            const interdiff = await iterations.getInterdiff(previous.diffId, diff.diffId, () =>
+                host.getDiff({ base: previous.diffId, head: diff.diffId }),
+            );
+            return {
+                ...(await base()),
+                interdiff,
+                map: buildIterationMap({
+                    interdiff,
+                    fromBaseCommit: previous.baseCommit,
+                    toBaseCommit: diff.baseCommit,
+                }),
+            };
+        } catch (error) {
+            process.stderr.write(
+                `sherpa-server: could not fetch slice ${previous.diffId}→${diff.diffId}: ${messageOf(error)}\n`,
+            );
+            return { ...(await base()), map: null, interdiff: null };
+        }
+    }
+
+    /** PR threads for regeneration context. Host failure does not break generation, it just leaves the file absent. */
+    private async loadThreads(): Promise<Thread[] | null> {
+        const host = this.host;
+        if (host === null) {
+            return null;
+        }
+        try {
+            return await host.getThreads();
+        } catch (error) {
+            process.stderr.write(
+                `sherpa-server: could not fetch threads for regeneration context: ${messageOf(error)}\n`,
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Generation context without a host request. Use the map from the slice cache, or leave it absent.
+     * The caller names the previous snapshot, which is not always the current one.
+     */
+    private cachedContextFor(diff: PrDiff, previous: RouteSnapshot | null): GenerationContext {
+        if (previous === null) {
+            return { diff, previousSnapshotId: null, map: null, interdiff: null, threads: null };
+        }
+        if (previous.diffId === diff.diffId) {
+            return {
+                diff,
+                previousSnapshotId: previous.snapshotId,
+                map: identityMap(),
+                interdiff: null,
+                threads: null,
+            };
+        }
+
+        const interdiff = this.iterations?.peekInterdiff(previous.diffId, diff.diffId) ?? null;
+        return {
+            diff,
+            previousSnapshotId: previous.snapshotId,
+            interdiff,
+            // Threads require network requests, so restored context omits them. Acceptance will remove
+            // any model references to them.
+            threads: null,
+            map:
+                interdiff === null
+                    ? null
+                    : buildIterationMap({
+                          interdiff,
+                          fromBaseCommit: previous.baseCommit,
+                          toBaseCommit: diff.baseCommit,
+                      }),
+        };
+    }
+
+    /**
+     * Regeneration context for the payload: the previous snapshot and everything the task uses to explain the push.
+     * null means there is no previous route, and the task is built as for the first generation.
+     */
+    private regenerationOf(context: GenerationContext | null): RouteRegenerationContext | null {
+        const previousId = context?.previousSnapshotId ?? null;
+        const previous = previousId === null ? null : this.store.getSnapshot(previousId);
+        if (context === null || previous === null) {
+            return null;
+        }
+        return {
+            previous,
+            interdiff: context.interdiff,
+            map: context.map,
+            threads: context.threads,
+        };
     }
 
     private startSkeletonTask(): void {
         // Rescheduling after a restart starts the plan again and uses the active iteration. The previous
         // iteration was known by its task binding, which no longer exists at this point.
-        const diff = this.generationDiff ?? this.activeDiff;
+        const diff = this.generation?.diff ?? this.activeDiff;
         if (diff === null) {
             // The server restarted during generation. There is no diff to build the payload from, so scheduling
             // waits for it. Warmup finishes the work and calls reconciliation again at the end.
             this.warmupInBackground();
             return;
         }
-        this.generationDiff = diff;
+        // Server restart: the generation context was lost with the process. Only a map already saved
+        // in the slice cache remains.
+        this.generation ??= this.cachedContextFor(diff, this.store.current());
         this.enqueueRouteTask(
             'skeleton',
             diff.diffId,
             [],
-            this.payload.skeletonTask({ diff, meta: this.meta }),
+            this.payload.skeletonTask({
+                diff,
+                meta: this.meta,
+                regeneration: this.regenerationOf(this.generation),
+            }),
         );
     }
 
@@ -569,7 +809,11 @@ export class RouteOrchestrator {
         }
 
         const intents = this.store.stopIntents();
-        const context = { diff, meta: this.meta };
+        const context = {
+            diff,
+            meta: this.meta,
+            regeneration: this.regenerationOf(this.acceptanceContext(diff, snapshot.previousSnapshotId)),
+        };
         const ordered = [...planIndexes].sort((left, right) => left - right);
         for (let from = 0; from < ordered.length; from += this.config.sectionBatchSize) {
             const batch = ordered.slice(from, from + this.config.sectionBatchSize);
@@ -653,7 +897,7 @@ export class RouteOrchestrator {
 
     /** Iteration diff from process memory, or from local patch storage. */
     private diffOf(diffId: HostId): PrDiff | null {
-        for (const candidate of [this.generationDiff, this.activeDiff]) {
+        for (const candidate of [this.generation?.diff ?? null, this.activeDiff]) {
             if (candidate?.diffId === diffId) {
                 return candidate;
             }

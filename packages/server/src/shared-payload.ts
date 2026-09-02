@@ -48,8 +48,11 @@ export class SharedPayloadStore {
     private readonly sharedDir: string;
     /** Context paths for tasks still being read. Cleanup leaves their diff keys alone. */
     private readonly openContextFiles: () => Iterable<string>;
-    /** Key of the last written diff: a key change triggers cleanup. */
-    private diffKey: string | null = null;
+    /**
+     * Diff keys held by the current payload build: the iteration diff and the slice leading up to it
+     * (`interdiff.md`) live together, so key-change cleanup must preserve both.
+     */
+    private readonly liveKeys = new Set<string>();
 
     constructor(sharedDir: string, openContextFiles: () => Iterable<string>) {
         this.sharedDir = sharedDir;
@@ -65,14 +68,25 @@ export class SharedPayloadStore {
 
     /** Shared PR diff used by `route.skeleton`, `route.section` and unanchored chat questions. */
     prDiff(key: string, content: string): string {
-        const file = path.join(this.diffDirOf(key), 'pr-diff.md');
+        const file = path.join(this.startBuildDir(key), 'pr-diff.md');
+        this.write(file, content);
+        return file;
+    }
+
+    /**
+     * Slice between iterations for route regeneration (M4-T7). Its key is a pair of iteration heads,
+     * so it differs from the PR diff key. The directory joins the current build instead of starting
+     * a new one, or cleanup would remove the diff before a task from this same build could reference it.
+     */
+    interdiff(key: string, content: string): string {
+        const file = path.join(this.joinBuildDir(key), 'interdiff.md');
         this.write(file, content);
         return file;
     }
 
     /** Full text for one file side. Two anchored questions about the same file share a path. */
     fileSide(key: string, fileId: string, side: FileSide, content: string): string {
-        const file = path.join(this.diffDirOf(key), 'files', `${safeName(fileId)}.${side}.md`);
+        const file = path.join(this.startBuildDir(key), 'files', `${safeName(fileId)}.${side}.md`);
         this.write(file, content);
         return file;
     }
@@ -82,12 +96,12 @@ export class SharedPayloadStore {
      * the route caches the diff per process, so queued sections can easily reference a different
      * key from a fresh chat question. Deleting everything except the current key is unsafe.
      *
-     * `keepKey` is being materialized right now: its task is not yet in the queue.
+     * Cleanup also preserves the current build's keys because its tasks haven't been queued yet.
      */
-    sweepDiffKeys(keepKey?: string): void {
+    sweepDiffKeys(): void {
         const keep = this.referencedDiffKeys(this.openContextFiles());
-        if (keepKey !== undefined) {
-            keep.add(keepKey);
+        for (const key of this.liveKeys) {
+            keep.add(key);
         }
 
         const root = path.join(this.sharedDir, 'diff');
@@ -104,12 +118,22 @@ export class SharedPayloadStore {
         }
     }
 
-    /** Directory for a key. Changing the active key also cleans up keys no longer needed. */
-    private diffDirOf(key: string): string {
-        if (this.diffKey !== key) {
-            this.sweepDiffKeys(key);
-            this.diffKey = key;
+    /**
+     * Iteration diff directory. A new key starts a new build and removes directories from the previous one,
+     * unless an open task holds them.
+     */
+    private startBuildDir(key: string): string {
+        if (!this.liveKeys.has(key)) {
+            this.liveKeys.clear();
+            this.liveKeys.add(key);
+            this.sweepDiffKeys();
         }
+        return path.join(this.sharedDir, 'diff', key);
+    }
+
+    /** Directory for a companion key of the current build. Doesn't trigger cleanup, but is protected from it. */
+    private joinBuildDir(key: string): string {
+        this.liveKeys.add(key);
         return path.join(this.sharedDir, 'diff', key);
     }
 

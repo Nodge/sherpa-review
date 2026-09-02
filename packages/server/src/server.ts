@@ -223,8 +223,15 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const unsubscribeQueue = queue.subscribeChanges(() => {
             workerRegistry.checkNow();
         });
+        // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
+        const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
         // Reading progress is local and exists on every server, including those without a review host.
-        const progress = new ProgressStore(options.now === undefined ? { db } : { db, now: options.now });
+        // It needs iteration patches to carry over marks between iterations by file path.
+        const progress = new ProgressStore({
+            db,
+            iterations: iterationStore,
+            ...(options.now === undefined ? {} : { now: options.now }),
+        });
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
         const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
@@ -233,8 +240,6 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
-        // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
-        const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
         // Notes are created before the feed, which carries their anchors to the new iteration (M4-T11).
         const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
         // PR iterations (M4-T4): one watcher per server supplies `uiState.iterations` and `stale`.
@@ -246,6 +251,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                       iterations: iterationStore,
                       route: routeStore,
                       notes: chatStore,
+                      progress,
                   });
         // Shared context survives restarts along with tasks. Cleanup at startup and on
         // key changes preserves diffs still referenced by an open or held task.

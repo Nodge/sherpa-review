@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { databasePathFor, routePayloadDirOf, sharedPayloadDirOf } from './paths.js';
 import type { TaskRecord } from './queue.js';
 import { MAX_RESULT_REJECTIONS } from './queue.js';
+import { requiredSeenRanges } from './progress-store.js';
 import { DEFAULT_ROUTE_CONFIG, isSmallPr, MAX_SKELETON_TASKS } from './route-orchestrator.js';
 import { contentHashOf } from './route-store.js';
 import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
@@ -129,6 +130,25 @@ describe('route orchestration', () => {
         expect((await readRoute(server)).route.phase).toBe('ready');
     }
 
+    /** The same for a rebuild: submits only waiting tasks, leaving those completed in the previous pass untouched. */
+    async function completeGeneration(server: SherpaServer, options: { ready?: boolean } = {}): Promise<void> {
+        const queued = (type: 'route.skeleton' | 'route.section'): number[] =>
+            server.queue
+                .listTasks()
+                .filter((task) => task.type === type && task.status === 'queued')
+                .map((task) => task.id);
+        const skeleton = queued('route.skeleton').at(-1);
+        if (skeleton !== undefined) {
+            completeTask(server, skeleton, mediumRawResults().skeleton);
+        }
+        for (const [position, taskId] of queued('route.section').entries()) {
+            completeTask(server, taskId, sectionFor(position + 1));
+        }
+        if (options.ready !== false) {
+            expect((await readRoute(server)).route.phase).toBe('ready');
+        }
+    }
+
     /** Ready route with one failed slot, the initial state for the fill-stop endpoint. */
     async function completeRouteWithFailedFirstStop(server: SherpaServer): Promise<void> {
         completeTask(server, routeTasks(server, 'route.skeleton').at(-1) ?? 0, mediumRawResults().skeleton);
@@ -146,9 +166,9 @@ describe('route orchestration', () => {
         expect(route.snapshot?.stops[0]?.status).toBe('failed');
     }
 
-    async function readProgress(server: SherpaServer) {
+    async function readProgress(server: SherpaServer, query = '') {
         return uiReviewProgressResponseSchema.parse(
-            await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
+            await (await get(server.port, `${UI_ENDPOINTS.reviewProgress}${query}`, server.token)).json(),
         );
     }
 
@@ -165,6 +185,29 @@ describe('route orchestration', () => {
                 stopId,
                 viewed: true,
                 ranges: [{ fileId, side: 'new', start: 3, end: 7 }],
+            },
+            server.token,
+        );
+    }
+
+    /**
+     * A stop mark with the ranges the UI would compute: carryover to a new snapshot
+     * treats it as viewed only when all changed lines of its anchors are covered.
+     */
+    async function markStopCovering(server: SherpaServer, stopId: string): Promise<void> {
+        const route = (await readRoute(server)).route;
+        const stop = route.snapshot?.stops.find((candidate) => candidate.id === stopId);
+        if (route.snapshot === null || stop === undefined) {
+            throw new Error(`snapshot has no stop ${stopId}`);
+        }
+        await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopViewed,
+            {
+                snapshotId: route.snapshot.snapshotId,
+                stopId,
+                viewed: true,
+                ranges: requiredSeenRanges(stop.anchors, mediumDiff()),
             },
             server.token,
         );
@@ -526,10 +569,10 @@ describe('route orchestration', () => {
             expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
         });
 
-        it('clears previous stop progress only when the new skeleton is accepted atomically', async () => {
+        it('new snapshot marks arrive through carryover, not with the plan', async () => {
             const server = await startWithWorker();
             await completeRoute(server);
-            await markStop(server);
+            await markStopCovering(server, 's01');
             const before = (await readRoute(server)).route.snapshot;
 
             expect(await generate(server)).toBe('started');
@@ -541,7 +584,13 @@ describe('route orchestration', () => {
             const accepted = (await readRoute(server)).route;
             expect(accepted.phase).toBe('filling');
             expect(accepted.snapshot?.snapshotId).not.toBe(before?.snapshotId);
+            // The plan has no anchors yet, so there is nothing to carry over. Marks arrive with filled sections.
             expect((await readProgress(server)).stops).toEqual([]);
+            // The plan has no anchors. `carried` appears only on freezing, so the banner has no numbers until then.
+            expect(accepted.snapshot?.carried).toBeNull();
+
+            await completeGeneration(server);
+            expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
         });
 
         it('a late mark for the old snapshot does not reach a new stop with the same id', async () => {
@@ -573,43 +622,45 @@ describe('route orchestration', () => {
             expect(await readProgress(server)).toMatchObject({ files: [], stops: [] });
         });
 
-        it('rolls back snapshot replacement too if clearing progress fails', async () => {
+        it('a mark carryover failure also rolls back snapshot freezing', async () => {
             const server = await startWithWorker();
             await completeRoute(server);
-            await markStop(server);
+            await markStopCovering(server, 's01');
             const before = (await readRoute(server)).route.snapshot;
             expect(await generate(server)).toBe('started');
 
             const db = new DatabaseSync(databasePathFor(sherpaDir, MEDIUM_PR));
+            // Mark carryover writes to `stop_progress` inside the snapshot freezing transaction.
             db.exec(`
-                CREATE TRIGGER reject_stop_progress_clear
-                BEFORE DELETE ON stop_progress
+                CREATE TRIGGER reject_stop_progress_carry
+                BEFORE INSERT ON stop_progress
                 BEGIN
                     SELECT RAISE(ABORT, 'test rollback');
                 END;
             `);
             try {
-                const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
-                expect(completeTask(server, skeletonId, mediumRawResults().skeleton).kind).toBe('accepted');
+                await completeGeneration(server, { ready: false });
 
                 const rebuilding = (await readRoute(server)).route;
-                expect(rebuilding.phase).toBe('reading');
-                expect(rebuilding.snapshot).toEqual(before);
-                expect((await readProgress(server)).stops).toEqual([{ stopId: 's01', viewed: true }]);
+                // The snapshot is not frozen: the freezing transaction rolled back along with carryover.
+                expect(rebuilding.phase).toBe('filling');
+                expect(rebuilding.snapshot?.contentHash).toBeNull();
+                // Skeleton acceptance has not carried over anything yet: the plan has no anchors.
+                expect(rebuilding.snapshot?.carried).toBeNull();
+                // The previous snapshot's marks are intact, and no marks for the new one appeared.
+                expect(db.prepare('SELECT snapshot_id, stop_id, viewed FROM stop_progress').all()).toEqual([
+                    { snapshot_id: before?.snapshotId, stop_id: 's01', viewed: 1 },
+                ]);
             } finally {
-                db.exec('DROP TRIGGER reject_stop_progress_clear;');
+                db.exec('DROP TRIGGER reject_stop_progress_carry;');
                 db.close();
             }
         });
 
-        it('a new generation clears stop progress but preserves file marks', async () => {
-            const server = await start();
-            await postJson(
-                server.port,
-                UI_ENDPOINTS.reviewStopViewed,
-                { stopId: 's01', viewed: true, ranges: [{ fileId: 'file-1', side: 'new', start: 3, end: 7 }] },
-                server.token,
-            );
+        it('a new generation on the same iteration carries over marks instead of clearing them', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            await markStopCovering(server, 's01');
             await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewFileViewed,
@@ -618,12 +669,15 @@ describe('route orchestration', () => {
             );
 
             expect(await generate(server)).toBe('started');
+            await completeGeneration(server);
 
+            const route = (await readRoute(server)).route;
+            expect(route.snapshot?.carried).toEqual({ kept: 1, total: route.snapshot?.stops.length });
             const progress = uiReviewProgressResponseSchema.parse(
                 await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
             );
-            expect(progress.stops).toEqual([]);
-            expect(progress.files).toEqual([{ fileId: 'file-2', viewed: true, seenRanges: [] }]);
+            expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
+            expect(progress.files).toContainEqual({ fileId: 'file-2', viewed: true, seenRanges: [] });
         });
 
         it('returns no_review_host without a review host while route state stays readable', async () => {

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type {
     HostId,
     PrDiff,
+    RouteCarried,
     RouteProvenance,
     RouteSnapshot,
     RouteStop,
@@ -52,6 +53,24 @@ export interface RouteTaskBinding {
      */
     readonly diffId: HostId | null;
     readonly planIndexes: number[];
+}
+
+/**
+ * Progress carryover result for a snapshot. Computed inside its write transaction, so
+ * the progress revision advances in a separate effect after commit.
+ */
+export interface SnapshotAcceptance {
+    readonly carried: RouteCarried | null;
+    readonly afterCommit?: () => void;
+}
+
+/** Snapshot acceptance hook. Receives the prepared snapshot and returns its `carried` value. */
+export type SnapshotHook = (snapshot: RouteSnapshot) => SnapshotAcceptance;
+
+/** Work inside the state write transaction: snapshot replacement and a post-commit effect. */
+interface TransactionStep {
+    readonly snapshot?: RouteSnapshot;
+    readonly afterCommit?: () => void;
 }
 
 export interface AcceptedSkeletonInput {
@@ -106,8 +125,8 @@ export class RouteStore {
     private readonly txWrite: (
         state: UiRouteState,
         intents: ReadonlyMap<number, string>,
-        inTransaction?: () => () => void,
-    ) => (() => void) | undefined;
+        inTransaction?: () => TransactionStep,
+    ) => { state: UiRouteState; afterCommit: (() => void) | undefined };
 
     private state: UiRouteState;
     private intents: ReadonlyMap<number, string>;
@@ -119,9 +138,15 @@ export class RouteStore {
         this.now = options.now ?? ((): Date => new Date());
         this.txWrite = transaction(
             this.db,
-            (state: UiRouteState, intents: ReadonlyMap<number, string>, inTransaction?: () => () => void) => {
-                this.writeInTransaction(state, intents);
-                return inTransaction?.();
+            (state: UiRouteState, intents: ReadonlyMap<number, string>, inTransaction?: () => TransactionStep) => {
+                // The step runs before the write so its replacement snapshot is stored in the same transaction.
+                const step = inTransaction?.() ?? {};
+                const written =
+                    step.snapshot === undefined
+                        ? state
+                        : uiRouteStateSchema.parse({ ...state, snapshot: step.snapshot });
+                this.writeInTransaction(written, intents);
+                return { state: written, afterCommit: step.afterCommit };
             },
         );
 
@@ -180,10 +205,13 @@ export class RouteStore {
     }
 
     /**
-     * Skeleton accepted: commit the new snapshot and clear previous stop progress together.
+     * Skeleton accepted. The new snapshot and progress carryover commit together.
      * Adds a row to `route_snapshots` without changing or deleting previous rows.
+     *
+     * `onSnapshot` runs inside the transaction, before serialization. Its `carried` must be stored
+     * in the snapshot JSON instead of arriving in a second request.
      */
-    acceptSkeleton(input: AcceptedSkeletonInput, clearStopProgress?: () => () => void): void {
+    acceptSkeleton(input: AcceptedSkeletonInput, onSnapshot?: SnapshotHook): void {
         const snapshot: RouteSnapshot = {
             snapshotId: input.snapshotId,
             commit: input.diff.headCommit,
@@ -192,7 +220,6 @@ export class RouteStore {
             createdAt: this.now().toISOString(),
             provenance: input.provenance,
             previousSnapshotId: input.previousSnapshotId,
-            // M4-T6 computes the progress carryover result.
             carried: null,
             summary: input.skeleton.summary,
             stops: input.skeleton.stops,
@@ -202,7 +229,7 @@ export class RouteStore {
         this.commit(
             { ...this.state, phase: 'filling', snapshot, failure: null },
             new Map(input.skeleton.intents),
-            clearStopProgress,
+            stepOf(snapshot, onSnapshot),
         );
     }
 
@@ -264,7 +291,7 @@ export class RouteStore {
             this.intents,
             () => {
                 this.deleteSectionBindingsFor(planIndex);
-                return () => undefined;
+                return {};
             },
         );
     }
@@ -272,17 +299,21 @@ export class RouteStore {
     /**
      * All sections are closed. The snapshot becomes immutable, and only now is `contentHash` computed.
      * Before this point there is nothing final to hash because content is still arriving.
+     *
+     * Stop mark carryover is also computed here. Only filled stops have anchors,
+     * so there is nothing to carry over earlier (`onSnapshot` is the same hook used for skeleton acceptance).
      */
-    markReady(): void {
+    markReady(onSnapshot?: SnapshotHook): void {
         const snapshot = this.state.snapshot;
         if (snapshot === null) {
             return;
         }
-        this.commit({
-            ...this.state,
-            phase: 'ready',
-            snapshot: { ...snapshot, contentHash: contentHashOf(snapshot) },
-        });
+        const ready: RouteSnapshot = { ...snapshot, contentHash: contentHashOf(snapshot) };
+        this.commit(
+            { ...this.state, phase: 'ready', snapshot: ready },
+            this.intents,
+            stepOf(ready, onSnapshot),
+        );
     }
 
     /**
@@ -391,7 +422,7 @@ export class RouteStore {
     private commit(
         next: UiRouteState,
         intents: ReadonlyMap<number, string> = this.intents,
-        inTransaction?: () => () => void,
+        inTransaction?: () => TransactionStep,
     ): void {
         const parsed = uiRouteStateSchema.parse(next);
         if (
@@ -402,8 +433,8 @@ export class RouteStore {
             return;
         }
 
-        const afterCommit = this.txWrite(parsed, intents, inTransaction);
-        this.state = parsed;
+        const { state, afterCommit } = this.txWrite(parsed, intents, inTransaction);
+        this.state = state;
         this.intents = intents;
         this.revisionValue += 1;
         if (!this.closed) {
@@ -577,6 +608,20 @@ export function contentHashOf(snapshot: RouteSnapshot): string {
         })),
     });
     return createHash('sha256').update(payload).digest('hex').slice(0, CONTENT_HASH_LENGTH);
+}
+
+/** Acceptance hook as a transaction step. Adds `carried` to the snapshot before serialization. */
+function stepOf(snapshot: RouteSnapshot, onSnapshot?: SnapshotHook): (() => TransactionStep) | undefined {
+    if (onSnapshot === undefined) {
+        return undefined;
+    }
+    return () => {
+        const acceptance = onSnapshot(snapshot);
+        return {
+            snapshot: { ...snapshot, carried: acceptance.carried },
+            ...(acceptance.afterCommit === undefined ? {} : { afterCommit: acceptance.afterCommit }),
+        };
+    };
 }
 
 /**

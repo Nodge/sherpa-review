@@ -37,6 +37,7 @@ import { handlingRpcFailures, readJsonBody } from './http.js';
 import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
+import { LEGACY_DIFF_ID } from './iterations/index.js';
 import type { PrMetaCache } from './pr-meta.js';
 import type { ProgressStore } from './progress-store.js';
 import type { ReviewFeed } from './review-feed.js';
@@ -74,8 +75,8 @@ export interface ReviewRoutesOptions {
     readonly reviewFeed: ReviewFeed | null;
     /** Reading progress for this PR: the local source of truth for viewed marks. */
     readonly progress: ProgressStore;
-    /** Active route snapshot: discard late marks from the previous generation. */
-    readonly route: Pick<RouteStore, 'read'>;
+    /** Route snapshots: drops late marks, and iteration progress looks up its own snapshot. */
+    readonly route: Pick<RouteStore, 'read' | 'listSnapshots'>;
     /** PR metadata cache: publishing a verdict changes the status, and capabilities determine whether slices are available. */
     readonly prMeta: Pick<PrMetaCache, 'refresh' | 'get'>;
     /** Local storage for iteration patches. If absent, there is nowhere to save the diff (tests without a database). */
@@ -228,22 +229,26 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             }),
         },
         {
-            // Progress currently exists only for the active iteration. M4-T6 adds an iteration dimension
-            // to its tables. Until then, a previous iteration returns an empty list.
+            // Progress is scoped to an iteration: without a parameter, return the active one and its current snapshot,
+            // with `diffId`, return the stored iteration as is (old snapshots are readable, not editable).
             method: 'GET',
             path: UI_ENDPOINTS.reviewProgress,
-            handle: handlingRpcFailures((ctx) => {
+            handle: handlingRpcFailures(async (ctx) => {
                 const request = parseQuery(
                     uiReviewProgressRequestSchema,
                     { ...optionalParam(ctx, 'diffId') },
                     'reading progress',
                 );
-                const past = request.diffId !== undefined && isPastIteration(options, request.diffId);
+                const diffId = request.diffId ?? (await activeDiffId(options));
+                const snapshotId =
+                    request.diffId === undefined
+                        ? (options.route.read().snapshot?.snapshotId ?? null)
+                        : lastSnapshotOf(options, request.diffId);
                 return respond(
                     uiReviewProgressResponseSchema,
                     {
-                        files: past ? [] : options.progress.read(),
-                        stops: past ? [] : options.progress.readStops(),
+                        files: options.progress.read(diffId),
+                        stops: snapshotId === null ? [] : options.progress.readStops(snapshotId),
                         progressRevision: options.progress.revision,
                     },
                     'local',
@@ -256,7 +261,13 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(ctx, uiSetFileViewedRequestSchema, 'setting a viewed mark');
                 // The local record is the source of truth. The host learns about it next, and only if it supports it.
-                const progressRevision = options.progress.setFileViewed(request.fileId, request.viewed);
+                // Only the active iteration can be marked (M4 scope).
+                const progressRevision = options.progress.setFileViewed(
+                    await activeDiffId(options),
+                    request.fileId,
+                    request.viewed,
+                    options.route.read().snapshot?.snapshotId ?? null,
+                );
                 mirrorFileViewed(request.fileId, request.viewed);
                 return respond(uiSetFileViewedResponseSchema, { progressRevision }, 'local');
             }),
@@ -273,10 +284,18 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 // The stop mark itself stays local. The UI separately reports files becoming read through its ranges
                 // via reviewViewedMirror, once it recalculates diff coverage.
                 const activeSnapshotId = options.route.read().snapshot?.snapshotId ?? null;
+                const stale = request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId;
+                // Stop marks are keyed by snapshot: without a route, there is nowhere to write them.
                 const progressRevision =
-                    request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId
+                    stale || activeSnapshotId === null
                         ? options.progress.revision
-                        : options.progress.setStopViewed(request.stopId, request.viewed, request.ranges);
+                        : options.progress.setStopViewed(
+                              activeSnapshotId,
+                              await activeDiffId(options),
+                              request.stopId,
+                              request.viewed,
+                              request.ranges,
+                          );
                 return respond(uiSetStopViewedResponseSchema, { progressRevision }, 'local');
             }),
         },
@@ -359,10 +378,19 @@ async function interdiffOf(
     return call(() => iterations.getInterdiff(base, head, () => host.getDiff({ base, head })));
 }
 
-/** Whether a previous iteration is requested. Active and unknown (feed not started) count as current. */
-function isPastIteration(options: ReviewRoutesOptions, diffId: string): boolean {
-    const active = options.iterationFeed?.active() ?? null;
-    return active !== null && active.diffId !== diffId;
+/**
+ * The iteration progress writes to. The feed may not have started yet (SSE is not open), so the list
+ * is fetched on demand. Without a host, the server uses a single "iteration", `LEGACY_DIFF_ID`.
+ */
+async function activeDiffId(options: ReviewRoutesOptions): Promise<string> {
+    const active = (await options.iterationFeed?.resolveActive()) ?? null;
+    return active?.diffId ?? LEGACY_DIFF_ID;
+}
+
+/** Latest snapshot of the iteration: iteration progress shows its stop marks. */
+function lastSnapshotOf(options: ReviewRoutesOptions, diffId: string): string | null {
+    const own = options.route.listSnapshots().filter((snapshot) => snapshot.diffId === diffId);
+    return own.at(-1)?.snapshotId ?? null;
 }
 
 /** A query parameter, if present: a missing key in the parsed object means "not specified". */

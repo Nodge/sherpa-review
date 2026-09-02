@@ -11,6 +11,7 @@ import { agentNoteSchema, chatAnchorSchema, chatExchangeSchema, uiChatResponseSc
 import type { SherpaDatabase, SqlRow } from './db.js';
 import { transaction } from './db.js';
 import type { IterationMap } from './iterations/index.js';
+import { LEGACY_DIFF_ID } from './iterations/index.js';
 import type { TransactionalEnqueue } from './queue.js';
 
 /** Chat change listener consumed by the UI SSE channel (`UI_CHAT_EVENT`). */
@@ -520,9 +521,6 @@ function carryAnchor(
         ? null
         : { ...anchor, diffId: toDiffId, fileId, start: target.start, end: target.end };
 }
-
-/** M3 exchanges predate `diffId`. Their iteration is unknown, so the server treats them as active. */
-export const LEGACY_DIFF_ID = 'unknown';
 
 function parseAnchor(raw: string): ChatAnchor {
     const value: unknown = JSON.parse(raw);

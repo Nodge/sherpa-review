@@ -200,6 +200,102 @@ describe('storage', () => {
         }
     });
 
+    // Dogfooding database progress is preserved when its tables gain an iteration dimension (M4-T6).
+    it('moves progress records to the active iteration and stop marks to the current snapshot during migration', () => {
+        const file = `${sherpaDir}/progress-iterations.db`;
+
+        const before = openDatabase(file, migrationsBefore('013-progress-iterations'));
+        before
+            .prepare(
+                `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
+                 VALUES ('iter-old', 'base', 'head-old', '2026-08-30T10:00:00.000Z', 'previous', '{}', '2026-08-30T10:00:00.000Z'),
+                        ('iter-live', 'base', 'head-live', '2026-08-31T10:00:00.000Z', 'active', '{}', '2026-08-31T10:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO route_snapshots (snapshot_id, diff_id, created_at, snapshot_json)
+                 VALUES ('snap-1', 'iter-live', '2026-08-31T11:00:00.000Z', '{}')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO route_state (id, phase, small_pr, current_snapshot_id, intents, updated_at)
+                 VALUES (1, 'ready', 0, 'snap-1', '[]', '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO file_progress (file_id, viewed, updated_at)
+                 VALUES ('file-1', 1, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO file_seen_ranges (file_id, side, start_line, end_line, source_stop_id)
+                 VALUES ('file-1', 'new', 3, 7, 's01')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO stop_progress (stop_id, viewed, updated_at)
+                 VALUES ('s01', 1, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT diff_id, file_id, viewed FROM file_progress').all()).toEqual([
+                { diff_id: 'iter-live', file_id: 'file-1', viewed: 1 },
+            ]);
+            expect(
+                after.prepare('SELECT diff_id, source_stop_id, carried_from FROM file_seen_ranges').all(),
+            ).toEqual([{ diff_id: 'iter-live', source_stop_id: 's01', carried_from: null }]);
+            expect(after.prepare('SELECT snapshot_id, stop_id, viewed FROM stop_progress').all()).toEqual([
+                { snapshot_id: 'snap-1', stop_id: 's01', viewed: 1 },
+            ]);
+            expect(after.prepare('SELECT COUNT(*) AS count FROM progress_carries').get()).toMatchObject({
+                count: 0,
+            });
+        } finally {
+            after.close();
+        }
+    });
+
+    // A server without a host knows no iterations. Its progress lives on `LEGACY_DIFF_ID`.
+    it('moves records to unknown and deletes stops when migrating progress without iterations or a snapshot', () => {
+        const file = `${sherpaDir}/progress-legacy.db`;
+
+        const before = openDatabase(file, migrationsBefore('013-progress-iterations'));
+        before
+            .prepare(
+                `INSERT INTO file_progress (file_id, viewed, updated_at)
+                 VALUES ('file-1', 0, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO stop_progress (stop_id, viewed, updated_at)
+                 VALUES ('s01', 1, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT diff_id, file_id FROM file_progress').all()).toEqual([
+                { diff_id: 'unknown', file_id: 'file-1' },
+            ]);
+            // A stop mark without a snapshot has nothing to refer to.
+            expect(after.prepare('SELECT COUNT(*) AS count FROM stop_progress').get()).toMatchObject({
+                count: 0,
+            });
+        } finally {
+            after.close();
+        }
+    });
+
     // The dogfooding DB note sits where it was pinned. Before T11, the schema had no original location.
     it('fills the original location with a copy of the current one during the note anchor migration', () => {
         const file = `${sherpaDir}/notes-anchors.db`;

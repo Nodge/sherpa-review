@@ -139,7 +139,10 @@ const diffInstruction = `The task changes are NOT committed: inspect \`git statu
 const executorConstraints = `
 Executor constraints: work on your own, directly in the working tree. Do not start workflows (task-cycle or any others),
 do not spawn coder subagents, do not commit anything. The project's task-cycle and review procedures do not
-apply to you. The outer session handles those stages. Leave changes in the working tree and list them in your reply.`
+does not apply. Those stages run outside this session. Leave changes in the working tree and list them in the reply.
+The machine is Alice Ingram's daily laptop. No artificial load (busy-loop processes, stress runs
+with dozens of processes, CPU "warm-up") without explicit permission. For a flaky test, rerun vitest
+(\`--repeat\`, 1–2 processes) and report honestly that the flake was not reproduced, rather than "confirming" it under load.`
 
 // Rules for agents in nested sessions: always the codex reviewer, and the codex coder
 // when coder: 'codex' (T13 incident: the agent returned a placeholder without waiting for a background

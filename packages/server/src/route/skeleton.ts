@@ -53,7 +53,7 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
-        // Classify stops after a push in M4-T7.
+        // Section acceptance computes stop classification because the plan has no anchors yet.
         change: null,
     }));
 

@@ -306,6 +306,25 @@ const CASES: readonly Case[] = [
             'section.stops[0].tests[0].text: contains emoji — route texts are plain prose (see Voice in the methodology).',
         ],
     },
+    {
+        // The change reason is reviewer-facing text just like the paragraph. Voice checks reject it
+        // before stop classification so rejection does not depend on a previous snapshot being available.
+        name: 'section: filler phrase in change reason',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        changeReason: `${String(bannedPhrases('ru')[4])}: the author rewrote the window calculation.`,
+                    }),
+                ]),
+                plan(),
+                [1],
+                mediumDiff(),
+            ),
+        errors: [
+            `section.stops[0].changeReason: drop the filler phrase "${String(bannedPhrases('ru')[4])}" and state the fact directly (see Voice in the methodology).`,
+        ],
+    },
 ];
 
 describe('route validator: negative corpus', () => {
