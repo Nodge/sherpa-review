@@ -18,6 +18,7 @@ import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
 import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
+import { IterationStore } from './iteration-store.js';
 import {
     claimManifest,
     cleanStaleManifests,
@@ -225,6 +226,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
+        // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
+        const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
         const routeOrchestrator = new RouteOrchestrator({
             store: routeStore,
             queue,
@@ -232,6 +235,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             host: reviewHost?.host ?? null,
             payloadDir: routePayloadDirOf(sherpaDir, prKey),
             progress,
+            iterations: iterationStore,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
         const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
@@ -241,6 +245,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             queue,
             host: reviewHost?.host ?? null,
             payloadDir: chatPayloadDirOf(sherpaDir, prKey),
+            iterations: iterationStore,
         });
         queue.setResultAcceptor(
             (task, result) =>
@@ -278,6 +283,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 progress,
                 route: routeStore,
                 prMeta,
+                iterations: iterationStore,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
             ...createFeedbackRoutes({

@@ -182,6 +182,83 @@ export const MIGRATIONS: readonly Migration[] = [
                 CHECK (last_lease_return_reason IN ('expired', 'displaced'));
         `,
     },
+    {
+        // PR iterations and multiple snapshots (M4-T3, brief §4a, F3).
+        //
+        // `iterations` stores a local patch for each iteration. The host no longer serves it
+        // after a force-push, but old snapshots must remain readable. `interdiffs` caches slices
+        // (the review host computes a slice in 2.8–3.7 s, so there is no reason to pay for it twice).
+        //
+        // Route snapshots move from the `route_state.snapshot` blob to their own table. A PR has
+        // many snapshots (one per generation), while `route_state` keeps only the current ID.
+        // The migration copies the existing dogfooding database row, preserving the route.
+        // The condition uses `json_valid`: a corrupted blob (a manual database edit) must leave
+        // "no route" instead of crashing server startup during migration. If the blob did not move, reset the phase
+        // too. "ready"/"filling" without a snapshot would falsely tell the UI a route is ready.
+        name: '010-iterations',
+        sql: `
+            CREATE TABLE iterations (
+                diff_id TEXT PRIMARY KEY,
+                base_commit TEXT NOT NULL,
+                head_commit TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('active', 'previous', 'gone')),
+                diff_json TEXT NOT NULL,
+                fetched_at TEXT NOT NULL
+            );
+
+            CREATE TABLE interdiffs (
+                base_id TEXT NOT NULL,
+                head_id TEXT NOT NULL,
+                diff_json TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                PRIMARY KEY (base_id, head_id)
+            );
+
+            CREATE TABLE route_snapshots (
+                snapshot_id TEXT PRIMARY KEY,
+                diff_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                previous_snapshot_id TEXT,
+                snapshot_json TEXT NOT NULL,
+                content_hash TEXT
+            );
+
+            CREATE INDEX route_snapshots_created ON route_snapshots (created_at);
+
+            ALTER TABLE route_state ADD COLUMN current_snapshot_id TEXT;
+
+            INSERT INTO route_snapshots (
+                snapshot_id, diff_id, created_at, previous_snapshot_id, snapshot_json, content_hash
+            )
+            SELECT
+                json_extract(snapshot, '$.snapshotId'),
+                json_extract(snapshot, '$.diffId'),
+                json_extract(snapshot, '$.createdAt'),
+                json_extract(snapshot, '$.previousSnapshotId'),
+                snapshot,
+                json_extract(snapshot, '$.contentHash')
+            FROM route_state
+            WHERE snapshot IS NOT NULL
+              AND json_valid(snapshot)
+              AND json_extract(snapshot, '$.snapshotId') IS NOT NULL
+              AND json_extract(snapshot, '$.diffId') IS NOT NULL
+              AND json_extract(snapshot, '$.createdAt') IS NOT NULL;
+
+            UPDATE route_state
+               SET current_snapshot_id = (
+                   SELECT snapshot_id FROM route_snapshots
+                    WHERE snapshot_json = route_state.snapshot
+               )
+             WHERE snapshot IS NOT NULL;
+
+            UPDATE route_state
+               SET phase = 'none'
+             WHERE current_snapshot_id IS NULL AND phase IN ('ready', 'filling');
+
+            ALTER TABLE route_state DROP COLUMN snapshot;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

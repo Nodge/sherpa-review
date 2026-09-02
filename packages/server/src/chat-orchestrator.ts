@@ -13,6 +13,8 @@ import type {
 import { buildChatPayload, materializeChatPayload } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
 import { RpcFailure } from './errors.js';
+import type { IterationStore } from './iteration-store.js';
+import { rememberIterationDiff } from './iteration-store.js';
 import type { TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
@@ -23,6 +25,8 @@ export interface ChatOrchestratorOptions {
     readonly queue: TaskQueue;
     readonly host: ReviewHost | null;
     readonly payloadDir: string;
+    /** Local storage for iteration patches. `null` means nowhere to save the diff (tests without a database). */
+    readonly iterations?: IterationStore | null;
 }
 
 /**
@@ -35,6 +39,7 @@ export class ChatOrchestrator {
     private readonly queue: TaskQueue;
     private readonly host: ReviewHost | null;
     private readonly payloadDir: string;
+    private readonly iterations: IterationStore | null;
 
     private unsubscribeQueue: (() => void) | null = null;
     private closed = false;
@@ -47,6 +52,7 @@ export class ChatOrchestrator {
         this.queue = options.queue;
         this.host = options.host;
         this.payloadDir = options.payloadDir;
+        this.iterations = options.iterations ?? null;
     }
 
     start(): void {
@@ -270,6 +276,10 @@ export class ChatOrchestrator {
                       () => null,
                   ),
         ]);
+        if (this.iterations !== null && diff !== null) {
+            // Store the active iteration diff used to build the question context.
+            void rememberIterationDiff(this.iterations, host, diff);
+        }
         return { pr, diff, fileContent, headCommit: diff?.headCommit ?? null };
     }
 }

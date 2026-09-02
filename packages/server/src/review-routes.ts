@@ -32,6 +32,8 @@ import type { z } from 'zod';
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
+import type { IterationStore } from './iteration-store.js';
+import { rememberIterationDiff } from './iteration-store.js';
 import type { PrMetaCache } from './pr-meta.js';
 import type { ProgressStore } from './progress-store.js';
 import type { ReviewFeed } from './review-feed.js';
@@ -73,6 +75,8 @@ export interface ReviewRoutesOptions {
     readonly route: Pick<RouteStore, 'read'>;
     /** PR metadata cache: publishing a verdict changes the status, so it must be fetched again. */
     readonly prMeta: Pick<PrMetaCache, 'refresh'>;
+    /** Local storage for iteration patches. If absent, there is nowhere to save the diff (tests without a database). */
+    readonly iterations?: IterationStore | null;
     readonly editor?: EditorOptions;
 }
 
@@ -98,7 +102,13 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             path: UI_ENDPOINTS.reviewDiff,
             handle: handlingRpcFailures(async () => {
                 const host = hostOf(options);
-                return respond(uiReviewDiffResponseSchema, { diff: await call(() => host.getDiff()) });
+                const diff = await call(() => host.getDiff());
+                // Store the active iteration's patch (brief §4a). The endpoint response does not wait for it.
+                const iterations = options.iterations;
+                if (iterations != null) {
+                    void rememberIterationDiff(iterations, host, diff);
+                }
+                return respond(uiReviewDiffResponseSchema, { diff });
             }),
         },
         {
