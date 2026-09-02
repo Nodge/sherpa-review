@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
+import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import { FilePanel } from './file-panel.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,7 +49,7 @@ afterEach(() => {
     }
 });
 
-function mount() {
+function mount(readOnly = false) {
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -58,24 +59,26 @@ function mount() {
 
     act(() => {
         root.render(
-            <FilePanel
-                files={FILES}
-                filters={FILTERS}
-                activeFilter={ACTIVE}
-                onFilter={onFilter}
-                pciFileIds={new Set()}
-                mineFileIds={new Set()}
-                readState={new Map()}
-                route={null}
-                activeFileId={null}
-                onOpenFile={onOpenFile}
-                onToggleViewed={onToggleViewed}
-                writeError={null}
-                outline={null}
-                onOpenHunk={() => undefined}
-                prKey="fixture-edge-zero-lenses"
-                storage={null}
-            />,
+            <ReadOnlyIterationProvider readOnly={readOnly}>
+                <FilePanel
+                    files={FILES}
+                    filters={FILTERS}
+                    activeFilter={ACTIVE}
+                    onFilter={onFilter}
+                    pciFileIds={new Set()}
+                    mineFileIds={new Set()}
+                    readState={new Map()}
+                    route={null}
+                    activeFileId={null}
+                    onOpenFile={onOpenFile}
+                    onToggleViewed={onToggleViewed}
+                    writeError={null}
+                    outline={null}
+                    onOpenHunk={() => undefined}
+                    prKey="fixture-edge-zero-lenses"
+                    storage={null}
+                />
+            </ReadOnlyIterationProvider>,
         );
     });
     mounted.push(() => {
@@ -138,5 +141,21 @@ describe('FilePanel viewed checkboxes', () => {
         expect(directory).not.toBeNull();
         expect(directory?.querySelector('.file-tree__read')).toBeNull();
         expect(directory?.title).toMatch(/^\d+ of \d+ read$/);
+    });
+});
+
+describe('read-only viewed checkboxes', () => {
+    it('disables the checkbox in a previous iteration and explains why', () => {
+        const { host, onToggleViewed } = mount(true);
+        const button = host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__read');
+
+        expect(button?.disabled).toBe(true);
+        expect(button?.title).toBe('only in the active iteration');
+
+        act(() => {
+            button?.click();
+        });
+
+        expect(onToggleViewed).not.toHaveBeenCalled();
     });
 });

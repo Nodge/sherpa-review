@@ -1,4 +1,5 @@
 import { Icon } from '../icons/icon.tsx';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import './viewed-toggle.css';
 
 /**
@@ -15,19 +16,26 @@ export interface ViewedToggleProps {
     /** Call-site class: the pill in the stop header differs from the plain row in the file header. */
     readonly className: string;
     readonly disabled?: boolean;
-    /** Always carries progress counts for a file (SPEC §2.12), and the reason for disabling for a stop. */
+    /**
+     * For a file, always carries progress counts (SPEC §2.12), for a stop, the reason it is disabled.
+     * When reading a previous iteration, its reason replaces this.
+     */
     readonly title?: string | undefined;
     readonly onToggle: (viewed: boolean) => void;
 }
 
 export function ViewedToggle({ viewed, className, disabled = false, title, onToggle }: ViewedToggleProps) {
+    // Marks live in the active iteration: the control is visible but cannot be pressed in a previous one.
+    const readOnly = useReadOnlyIteration();
+    const effectiveDisabled = readOnly || disabled;
+    const effectiveTitle = readOnly ? READ_ONLY_REASON : title;
     return (
         <button
             type="button"
             className={`viewed-toggle ${className}${viewed ? ' is-viewed' : ''}`}
             aria-pressed={viewed}
-            disabled={disabled}
-            {...(title === undefined ? {} : { title })}
+            disabled={effectiveDisabled}
+            {...(effectiveTitle === undefined ? {} : { title: effectiveTitle })}
             onClick={() => {
                 onToggle(!viewed);
             }}

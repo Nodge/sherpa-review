@@ -1,0 +1,135 @@
+/* Snapshot picker: README §1 (pill on the right of the header) and §6 (Overview card). */
+
+.snapshot-picker {
+    position: relative;
+    flex: none;
+}
+
+.snapshot-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    height: 30px;
+    padding: 0 var(--space-inner);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+    background: var(--surface-control);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.snapshot-pill--button {
+    cursor: pointer;
+    transition: border-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.snapshot-pill--button:hover {
+    border-color: var(--border-strong-lifted);
+}
+
+.snapshot-pill__caret {
+    display: flex;
+    align-items: center;
+    color: var(--text-dim-strong);
+}
+
+.snapshot-picker__menu {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    z-index: 60;
+    /* Width for the longest status string, so "commit is no longer in the PR" is not truncated. */
+    width: 420px;
+    overflow: hidden;
+    border: 1px solid var(--border-raised-bar);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-menu);
+}
+
+.snapshot-picker__section {
+    padding: 7px 11px 3px;
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+}
+
+.snapshot-picker__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    padding: 7px 11px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.snapshot-picker__row.is-cursor {
+    background: var(--surface-selected);
+}
+
+.snapshot-picker__tick {
+    display: flex;
+    align-items: center;
+    width: 13px;
+    flex: none;
+    color: var(--accent-hover);
+}
+
+.snapshot-picker__row-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- "Snapshots" card on Overview --- */
+
+.snapshot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.snapshot-list__row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-button);
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.snapshot-list__row:hover {
+    background: var(--surface-chip);
+}
+
+.snapshot-list__row.is-current {
+    border-color: var(--border-control);
+    background: var(--surface-control);
+}
+
+.snapshot-list__line {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-meta);
+    color: var(--text-secondary);
+}
+
+.snapshot-list__provenance {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

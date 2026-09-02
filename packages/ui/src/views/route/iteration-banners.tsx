@@ -1,9 +1,11 @@
 import type { HostId, RouteCarried, RouteSnapshot, RouteStop, UiRouteStale, UiRouteState } from '@sherpa/protocol';
 
 import { Icon } from '../../icons/icon.tsx';
+import type { ViewingLabel } from '../../iterations/viewing.js';
 import { planLabel } from '../../route/route-model.js';
 import type { ViewId } from '../../session/views.js';
 import { formatCount, plural } from '../../text.js';
+import { relativeTime } from '../../threads/relative-time.js';
 import './iteration-banners.css';
 
 /**
@@ -37,8 +39,10 @@ export function staleBannerVisible(
     phase: UiRouteState['phase'] | null,
     stale: UiRouteStale | null,
     snapshot: RouteSnapshot | null,
+    /** The tab shows a previous snapshot or iteration. Stale concerns the current route. */
+    readingOld = false,
 ): boolean {
-    return stale !== null && snapshot !== null && phase !== 'reading' && phase !== 'filling';
+    return !readingOld && stale !== null && snapshot !== null && phase !== 'reading' && phase !== 'filling';
 }
 
 /**
@@ -52,8 +56,11 @@ export function secondPassBannerVisible(
     snapshot: RouteSnapshot | null,
     stale: UiRouteStale | null,
     dismissedSnapshotId: string | null,
+    /** The tab shows a previous snapshot or iteration. Second pass concerns the current route. */
+    readingOld = false,
 ): boolean {
     return (
+        !readingOld &&
         view === 'route' &&
         snapshot !== null &&
         snapshot.previousSnapshotId !== null &&
@@ -111,6 +118,41 @@ export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithout
                     Open the {prCommit} diff without a route
                 </button>
             )}
+        </div>
+    );
+}
+
+export interface ReadOnlyIterationBannerProps {
+    readonly label: ViewingLabel;
+    /** Snapshot timestamp. null for an iteration without a route. */
+    readonly createdAt: string | null;
+    /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
+    readonly now: number;
+    readonly gone: boolean;
+    readonly onCurrent: () => void;
+}
+
+/**
+ * Reading a previous iteration (M4 scope) is a condition, not news, so there is no dismiss button (SPEC §2.21).
+ * The date uses the same relative time format as other timestamps in the UI.
+ */
+export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent }: ReadOnlyIterationBannerProps) {
+    const what = label.kind === 'snapshot' ? 'snapshot' : 'the previous iteration';
+    return (
+        <div className="iteration-banner" role="status" aria-label="Read-only">
+            <div className="iteration-banner__body">
+                <div className="iteration-banner__line">
+                    You are looking at {what}{' '}
+                    <code className="iteration-banner__commit" title={label.commit}>
+                        {shortCommit(label.commit)}
+                    </code>
+                    {createdAt === null ? '' : ` from ${relativeTime(createdAt, now)}`} · read-only
+                    {gone ? ' · the commit is no longer in the PR' : ''}
+                </div>
+            </div>
+            <button type="button" className="iteration-banner__action" onClick={onCurrent}>
+                To the current one
+            </button>
         </div>
     );
 }

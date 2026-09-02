@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
 import { Icon } from '../../icons/icon.tsx';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../../iterations/read-only.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
@@ -104,6 +105,8 @@ export function StopCard({
     changeThreads = EMPTY_CHANGE_THREADS,
     onOpenThread,
 }: StopCardProps) {
+    // Filling writes to the snapshot and is available only in the active iteration (M4 scope).
+    const readOnly = useReadOnlyIteration();
     const { stop } = view;
     const tier = stop.tier;
     const unfilled = stop.status !== 'ready';
@@ -164,6 +167,8 @@ export function StopCard({
                             <button
                                 type="button"
                                 className="route-stop__regenerate"
+                                disabled={readOnly}
+                                {...(readOnly ? { title: READ_ONLY_REASON } : {})}
                                 onClick={() => {
                                     onFillStop(stop.planIndex);
                                 }}

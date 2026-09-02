@@ -1,7 +1,9 @@
 import type {
     AgentNote,
     ChatAnchor,
+    Iteration,
     PrDiff,
+    RouteSnapshot,
     Thread,
     UiChatAskAnchor,
     UiChatResponse,
@@ -9,6 +11,7 @@ import type {
     UiReviewProgressResponse,
     UiRoutePhase,
     UiRouteState,
+    UiSnapshotSummary,
     UiTask,
     Verdict,
 } from '@sherpa/protocol';
@@ -26,6 +29,7 @@ import {
     fetchReviewLenses,
     fetchReviewProgress,
     fetchReviewRoute,
+    fetchReviewSnapshots,
     fetchReviewThreads,
     deleteReviewDraft,
     deleteReviewChatNote,
@@ -72,6 +76,9 @@ import {
     PCI_FILTER_ID,
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
+import { ReadOnlyIterationProvider } from './iterations/read-only.tsx';
+import { SnapshotPill } from './iterations/snapshot-picker.tsx';
+import { fallbackSnapshots, pickerRows, resolveViewing, VIEWING_CURRENT } from './iterations/viewing.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
@@ -105,6 +112,7 @@ import {
     RouteRegeneratingBanner,
 } from './views/route/generation-card.tsx';
 import {
+    ReadOnlyIterationBanner,
     RouteSecondPassBanner,
     RouteStaleBanner,
     secondPassBannerVisible,
@@ -114,7 +122,7 @@ import { RegenerateBanner } from './views/route/other-card.tsx';
 import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views/route/route-commands.tsx';
 import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
 import { RouteView } from './views/route/route-view.tsx';
-import { ViewFrame } from './views/view-frames.tsx';
+import { IterationWithoutRoute, ViewFrame } from './views/view-frames.tsx';
 
 /** The main page reads server and session stores through `useSyncExternalStore`. */
 export interface AppProps {
@@ -153,8 +161,31 @@ interface ChatComposerContext {
     readonly latched: boolean;
 }
 
+/** PR snapshot list. `list === null` in loaded state means the server has no endpoint. */
+interface SnapshotsState {
+    readonly key: string;
+    readonly list: readonly UiSnapshotSummary[] | null;
+    readonly loaded: boolean;
+}
+
+/**
+ * Known facts about the active PR iteration. Collected only from responses without parameters and kept
+ * separate from tab data. Selecting a previous iteration must not erase the facts used
+ * to resolve that very selection (read-only mode, labels, fallback snapshot list).
+ */
+interface ActiveFacts {
+    readonly key: string;
+    readonly diffId: string | null;
+    readonly commit: string | null;
+    readonly snapshot: RouteSnapshot | null;
+    /** The route endpoint without parameters has already responded, including with a rejection. */
+    readonly routeSettled: boolean;
+}
+
 interface ReviewState {
     readonly key: string;
+    /** Key of the selected iteration. Reload the diff, progress and route when it changes. */
+    readonly viewKey: string;
     readonly diff: PrDiff | null;
     readonly lenses: UiReviewLensesResponse | null;
     readonly progress: UiReviewProgressResponse | null;
@@ -174,7 +205,7 @@ interface ReviewState {
 
 export function App({ store, session, token }: AppProps) {
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const { view, filter: filterId, preset, routeFilter, paletteOpen, chatOpen } = useSyncExternalStore(
+    const { view, filter: filterId, preset, routeFilter, viewing, paletteOpen, chatOpen } = useSyncExternalStore(
         session.subscribe,
         session.getSnapshot,
     );
@@ -190,8 +221,75 @@ export function App({ store, session, token }: AppProps) {
     const reviewHost = state?.reviewHost ?? null;
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
     const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
-    const [reviewState, setReviewState] = useState<ReviewState>(() => emptyReviewState(reviewKey, reviewHost !== null));
-    const currentReview = reviewState.key === reviewKey ? reviewState : emptyReviewState(reviewKey, reviewHost !== null);
+
+    // --- Iteration selection: snapshot list, selection resolution, tab data key (M4-T9) ---
+
+    const [snapshotsState, setSnapshotsState] = useState<SnapshotsState>(() => emptySnapshots(reviewKey));
+    const [activeFacts, setActiveFacts] = useState<ActiveFacts>(() => emptyActiveFacts(reviewKey));
+    const facts = activeFacts.key === reviewKey ? activeFacts : emptyActiveFacts(reviewKey);
+    /** The route without parameters provides the active iteration's `diffId` and commit, and the current snapshot. */
+    const applyActiveRoute = useCallback(
+        (route: UiRouteState | null) => {
+            setActiveFacts((current) => {
+                const base = current.key === reviewKey ? current : emptyActiveFacts(reviewKey);
+                if (route === null) {
+                    return base.routeSettled ? base : { ...base, routeSettled: true };
+                }
+                const next: ActiveFacts = {
+                    key: reviewKey,
+                    diffId: route.stale?.prDiffId ?? route.snapshot?.diffId ?? base.diffId,
+                    commit: route.stale?.prCommit ?? route.snapshot?.commit ?? base.commit,
+                    snapshot: route.snapshot,
+                    routeSettled: true,
+                };
+                return base.routeSettled &&
+                    base.diffId === next.diffId &&
+                    base.commit === next.commit &&
+                    base.snapshot?.snapshotId === next.snapshot?.snapshotId
+                    ? base
+                    : next;
+            });
+        },
+        [reviewKey],
+    );
+    const [reviewState, setReviewState] = useState<ReviewState>(() =>
+        emptyReviewState(reviewKey, reviewKey, reviewHost !== null),
+    );
+    const snapshotsLoaded = snapshotsState.key === reviewKey && snapshotsState.loaded;
+    const snapshots = useMemo(
+        () => (snapshotsState.key === reviewKey ? snapshotsState.list : null) ?? fallbackSnapshots(facts.snapshot),
+        [facts.snapshot, reviewKey, snapshotsState],
+    );
+    const iterations = state?.iterations ?? EMPTY_ITERATIONS;
+    // Read the route from stored state so selection resolution does not wait for a reload.
+    // Endpoint parameters do not depend on the route anyway, only labels do.
+    const storedRoute = reviewState.key === reviewKey ? reviewState.route : null;
+    const resolved = useMemo(
+        () =>
+            resolveViewing({
+                viewing,
+                snapshots,
+                iterations,
+                route: storedRoute,
+                activeDiffId: facts.diffId,
+                activeCommit: facts.commit,
+                snapshotsLoaded,
+                activeLoaded: facts.routeSettled,
+            }),
+        [facts.commit, facts.diffId, facts.routeSettled, iterations, snapshots, snapshotsLoaded, storedRoute, viewing],
+    );
+    const viewDiffId = resolved.diffId;
+    const viewSnapshotId = resolved.snapshotId;
+    const viewPending = resolved.pending;
+    const readOnly = resolved.readOnly;
+    const viewKey = `${reviewKey}\u0000${viewDiffId ?? ''}\u0000${viewSnapshotId ?? ''}`;
+    const currentReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
+    // The URL selection is absent from both the list and current state. Show the current state.
+    useEffect(() => {
+        if (resolved.unknown) {
+            session.setViewing(VIEWING_CURRENT);
+        }
+    }, [resolved.unknown, session]);
     const [chatState, setChatState] = useState<ChatState>(() => emptyChatState(chatKey, reviewHost !== null));
     const currentChat = chatState.key === chatKey ? chatState : emptyChatState(chatKey, reviewHost !== null);
     const pendingNoteDeletions = useRef<{ key: string; ids: Set<number> }>({ key: chatKey, ids: new Set() });
@@ -248,17 +346,17 @@ export function App({ store, session, token }: AppProps) {
     }, [collapsedStorage, diffStore, prKey]);
     const [progressWritesSettled, setProgressWritesSettled] = useState(0);
     // Stop marks live alongside file marks. They share a progress revision and one writer.
-    // A different PR or host means a different route. Previous marks do not apply.
+    // Changing the PR, host or selected iteration means a different route, so the old marks do not apply.
     const [stopProgressState, setStopProgressState] = useState(() => ({
-        key: reviewKey,
+        key: viewKey,
         store: createStopProgressStore(),
     }));
-    if (stopProgressState.key !== reviewKey) {
-        setStopProgressState({ key: reviewKey, store: createStopProgressStore() });
+    if (stopProgressState.key !== viewKey) {
+        setStopProgressState({ key: viewKey, store: createStopProgressStore() });
     }
     const stopProgress = stopProgressState.store;
     const mirroredFileWrites = useRef(new Set<string>());
-    const progressWriter = useMemo<ProgressWriter | null>(
+    const writingProgress = useMemo<ProgressWriter | null>(
         () =>
             diffStore === null
                 ? null
@@ -303,6 +401,18 @@ export function App({ store, session, token }: AppProps) {
                   }),
         [diffStore, routeSnapshotId, stopProgress, token],
     );
+    /**
+     * For a previous iteration, the progress writer only refreshes the snapshot. It rejects writes
+     * before the optimistic mark, so the control does not flash or revert (M4 boundaries).
+     * The controls themselves are disabled. Only internal paths can reach this point.
+     */
+    const progressWriter = useMemo<ProgressWriter | null>(
+        () =>
+            writingProgress === null || !readOnly
+                ? writingProgress
+                : { ...writingProgress, write: () => Promise.resolve(false), writeStop: () => Promise.resolve(false) },
+        [readOnly, writingProgress],
+    );
     const viewedMirrorBaseline = useRef<{
         readonly reviewKey: string;
         readonly diffId: string;
@@ -340,21 +450,69 @@ export function App({ store, session, token }: AppProps) {
         }
     }, [documentTitle]);
 
-    // Publish the diff as soon as it is ready. Lens and thread requests do not block the reader.
+    /**
+     * Snapshot list for the picker. Refresh it on the same route revision as the route itself.
+     * An endpoint failure is not a UI error. The server may not support it yet, so the list falls
+     * back to the current snapshot alone.
+     */
+    const seenSnapshots = useRef<{ key: string; revision: number | null; loaded: boolean }>({
+        key: reviewKey,
+        revision: null,
+        loaded: false,
+    });
     useEffect(() => {
         if (!reviewReady || reviewHost === null) {
             return;
         }
+        if (seenSnapshots.current.key !== reviewKey) {
+            seenSnapshots.current = { key: reviewKey, revision: null, loaded: false };
+        }
+        const revision = snapshot.routeRevision;
+        if (seenSnapshots.current.loaded && seenSnapshots.current.revision === revision) {
+            return;
+        }
+
         let alive = true;
-        void fetchReviewDiff(token).then(
+        const settle = (list: readonly UiSnapshotSummary[] | null): void => {
+            if (!alive) {
+                return;
+            }
+            seenSnapshots.current = { key: reviewKey, revision, loaded: true };
+            setSnapshotsState({ key: reviewKey, list, loaded: true });
+        };
+        void fetchReviewSnapshots(token).then(settle, () => {
+            settle(null);
+        });
+        return () => {
+            alive = false;
+        };
+    }, [reviewHost, reviewKey, reviewReady, snapshot.routeRevision, token]);
+
+    // Publish the diff as soon as it is ready. Lens and thread requests do not block the reader.
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null || viewPending) {
+            return;
+        }
+        let alive = true;
+        void fetchReviewDiff(token, viewDiffId).then(
             (diff) => {
                 if (!alive) {
                     return;
                 }
                 setActiveFileId(null);
                 setPaletteNavigation(null);
+                // The diff without parameters is the active iteration. Read-only mode needs its id.
+                if (viewDiffId === null) {
+                    setActiveFacts((current) => {
+                        if (current.key === reviewKey && current.diffId === diff.diffId) {
+                            return current;
+                        }
+                        const base = current.key === reviewKey ? current : emptyActiveFacts(reviewKey);
+                        return { ...base, diffId: diff.diffId };
+                    });
+                }
                 setReviewState((current) => ({
-                    ...reviewStateForKey(current, reviewKey),
+                    ...reviewStateForKeys(current, reviewKey, viewKey),
                     diff,
                     diffError: null,
                     diffLoading: false,
@@ -363,7 +521,7 @@ export function App({ store, session, token }: AppProps) {
             (error: unknown) => {
                 if (alive) {
                     setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
+                        ...reviewStateForKeys(current, reviewKey, viewKey),
                         diff: null,
                         diffError: errorMessage(error),
                         diffLoading: false,
@@ -374,7 +532,7 @@ export function App({ store, session, token }: AppProps) {
         return () => {
             alive = false;
         };
-    }, [reviewHost, reviewKey, reviewReady, token]);
+    }, [reviewHost, reviewKey, reviewReady, token, viewDiffId, viewKey, viewPending]);
 
     // Overview and Full diff filters need lenses, but load them independently of the raw diff.
     useEffect(() => {
@@ -386,7 +544,7 @@ export function App({ store, session, token }: AppProps) {
             (lenses) => {
                 if (alive) {
                     setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
+                        ...sharedReviewState(current, reviewKey, viewKey),
                         lenses,
                         lensesError: null,
                         lensesLoading: false,
@@ -396,7 +554,7 @@ export function App({ store, session, token }: AppProps) {
             (error: unknown) => {
                 if (alive) {
                     setReviewState((current) => ({
-                        ...reviewStateForKey(current, reviewKey),
+                        ...sharedReviewState(current, reviewKey, viewKey),
                         lenses: null,
                         lensesError: errorMessage(error),
                         lensesLoading: false,
@@ -407,7 +565,9 @@ export function App({ store, session, token }: AppProps) {
         return () => {
             alive = false;
         };
-    }, [reviewHost, reviewKey, reviewReady, token]);
+        // Include `viewKey` in dependencies for a fresh closure. A response that lags behind a selection change
+        // must not overwrite the key of an already loaded diff.
+    }, [reviewHost, reviewKey, reviewReady, token, viewKey]);
 
     // App owns one ProgressWriter. Server snapshots go through its merge,
     // and its own write event does not trigger an extra refresh unless there is a revision gap.
@@ -417,7 +577,7 @@ export function App({ store, session, token }: AppProps) {
     });
     const progressRetryAttempt = progressRetry.key === reviewKey ? progressRetry.attempt : 0;
     useEffect(() => {
-        if (!reviewReady || reviewHost === null || diffStore === null || progressWriter === null) {
+        if (!reviewReady || reviewHost === null || diffStore === null || progressWriter === null || viewPending) {
             return;
         }
         const initial = currentReview.progress === null;
@@ -428,7 +588,7 @@ export function App({ store, session, token }: AppProps) {
         let alive = true;
         let retry: ReturnType<typeof setTimeout> | null = null;
         const mark = progressWriter.beginReload();
-        void fetchReviewProgress(token).then(
+        void fetchReviewProgress(token, viewDiffId).then(
             (response) => {
                 if (!alive) {
                     return;
@@ -439,7 +599,7 @@ export function App({ store, session, token }: AppProps) {
                 mirroredFileWrites.current.clear();
                 stopProgress.setAll(merged.stops);
                 setReviewState((current) => ({
-                    ...reviewStateForKey(current, reviewKey),
+                    ...reviewStateForKeys(current, reviewKey, viewKey),
                     progress: { ...response, files: [...merged.files], stops: [...merged.stops] },
                     progressError: null,
                     progressLoading: false,
@@ -453,7 +613,7 @@ export function App({ store, session, token }: AppProps) {
                     return;
                 }
                 setReviewState((current) => {
-                    const next = reviewStateForKey(current, reviewKey);
+                    const next = reviewStateForKeys(current, reviewKey, viewKey);
                     return {
                         ...next,
                         // A background failure does not replace progress already on screen with a full-screen error.
@@ -484,12 +644,15 @@ export function App({ store, session, token }: AppProps) {
         snapshot.progressRevision,
         stopProgress,
         token,
+        viewDiffId,
+        viewKey,
+        viewPending,
     ]);
 
     // One app-level subscriber mirrors only coverage-driven read transitions. The first complete snapshot
     // of diff and progress is the baseline. Opening a tab does not replay history to the host.
     useEffect(() => {
-        if (!viewedMirrorAvailable || currentDiff === null || diffStore === null || !progressLoaded) {
+        if (readOnly || !viewedMirrorAvailable || currentDiff === null || diffStore === null || !progressLoaded) {
             return;
         }
         const sync = (): void => {
@@ -512,7 +675,7 @@ export function App({ store, session, token }: AppProps) {
         const unsubscribe = diffStore.subscribe(sync);
         sync();
         return unsubscribe;
-    }, [currentDiff, diffStore, progressLoaded, reviewKey, token, viewedMirrorAvailable]);
+    }, [currentDiff, diffStore, progressLoaded, readOnly, reviewKey, token, viewedMirrorAvailable]);
 
     // App is the sole owner of thread reads. A revision is marked seen only after a successful read.
     const seenThreads = useRef<{ key: string; revision: number | null; loaded: boolean }>({
@@ -537,7 +700,7 @@ export function App({ store, session, token }: AppProps) {
         let alive = true;
         let retry: ReturnType<typeof setTimeout> | null = null;
         setReviewState((current) => {
-            const next = reviewStateForKey(current, reviewKey);
+            const next = sharedReviewState(current, reviewKey, viewKey);
             return {
                 ...next,
                 threadsError: null,
@@ -551,7 +714,7 @@ export function App({ store, session, token }: AppProps) {
                 }
                 seenThreads.current = { key: reviewKey, revision, loaded: true };
                 setReviewState((current) => ({
-                    ...reviewStateForKey(current, reviewKey),
+                    ...sharedReviewState(current, reviewKey, viewKey),
                     threads,
                     threadsError: null,
                     threadsLoading: false,
@@ -565,7 +728,7 @@ export function App({ store, session, token }: AppProps) {
                     return;
                 }
                 setReviewState((current) => ({
-                    ...reviewStateForKey(current, reviewKey),
+                    ...sharedReviewState(current, reviewKey, viewKey),
                     threadsError: errorMessage(error),
                     threadsLoading: false,
                 }));
@@ -580,15 +743,18 @@ export function App({ store, session, token }: AppProps) {
                 clearTimeout(retry);
             }
         };
-    }, [reviewHost, reviewKey, reviewReady, snapshot.threadsRevision, threadRetryAttempt, token]);
+        // `viewKey` keeps the closure fresh, see the lens effect. Threads themselves do not depend on the selection.
+    }, [reviewHost, reviewKey, reviewReady, snapshot.threadsRevision, threadRetryAttempt, token, viewKey]);
 
     // Read the route in the same loop as threads. The event carries only the revision. Fetch data
     // from the endpoint and mark the revision as seen only after success.
     const seenRoute = useRef<{ key: string; revision: number | null; loaded: boolean }>({
-        key: reviewKey,
+        key: viewKey,
         revision: null,
         loaded: false,
     });
+    /** Revision whose active iteration facts have already been collected, shared by both route effects. */
+    const seenActiveRoute = useRef<{ key: string; revision: number | null }>({ key: reviewKey, revision: null });
     const [routeRetry, setRouteRetry] = useState<{ key: string; attempt: number }>({ key: reviewKey, attempt: 0 });
     const routeRetryAttempt = routeRetry.key === reviewKey ? routeRetry.attempt : 0;
     const refreshRoute = useCallback(() => {
@@ -599,11 +765,11 @@ export function App({ store, session, token }: AppProps) {
         }));
     }, [reviewKey]);
     useEffect(() => {
-        if (!reviewReady || reviewHost === null) {
+        if (!reviewReady || reviewHost === null || viewPending) {
             return;
         }
-        if (seenRoute.current.key !== reviewKey) {
-            seenRoute.current = { key: reviewKey, revision: null, loaded: false };
+        if (seenRoute.current.key !== viewKey) {
+            seenRoute.current = { key: viewKey, revision: null, loaded: false };
         }
         const revision = snapshot.routeRevision;
         if (seenRoute.current.loaded && seenRoute.current.revision === revision) {
@@ -612,14 +778,20 @@ export function App({ store, session, token }: AppProps) {
 
         let alive = true;
         let retry: ReturnType<typeof setTimeout> | null = null;
-        void fetchReviewRoute(token).then(
+        void fetchReviewRoute(token, viewSnapshotId).then(
             (response) => {
                 if (!alive) {
                     return;
                 }
-                seenRoute.current = { key: reviewKey, revision, loaded: true };
+                seenRoute.current = { key: viewKey, revision, loaded: true };
+                // The route without parameters describes the active iteration. It supplies both the facts
+                // used to compare the selection and the fallback snapshot list.
+                if (viewSnapshotId === null) {
+                    seenActiveRoute.current = { key: reviewKey, revision };
+                    applyActiveRoute(response.route);
+                }
                 setReviewState((current) => ({
-                    ...reviewStateForKey(current, reviewKey),
+                    ...reviewStateForKeys(current, reviewKey, viewKey),
                     route: response.route,
                     routeError: null,
                     routeLoading: false,
@@ -632,8 +804,11 @@ export function App({ store, session, token }: AppProps) {
                 if (!alive) {
                     return;
                 }
+                if (viewSnapshotId === null) {
+                    applyActiveRoute(null);
+                }
                 setReviewState((current) => {
-                    const next = reviewStateForKey(current, reviewKey);
+                    const next = reviewStateForKeys(current, reviewKey, viewKey);
                     return {
                         ...next,
                         // A background failure does not clear the route already on screen.
@@ -655,7 +830,56 @@ export function App({ store, session, token }: AppProps) {
                 clearTimeout(retry);
             }
         };
-    }, [reviewHost, reviewKey, reviewReady, routeRetryAttempt, snapshot.routeRevision, token]);
+    }, [
+        applyActiveRoute,
+        reviewHost,
+        reviewKey,
+        reviewReady,
+        routeRetryAttempt,
+        snapshot.routeRevision,
+        token,
+        viewKey,
+        viewPending,
+        viewSnapshotId,
+    ]);
+
+    /**
+     * While the tab shows a past snapshot (or has yet to resolve its selection), nothing reads the route
+     * without parameters. Without it, the active iteration is unknown. Read-only mode,
+     * selection labels and URL parsing would have no facts to use and would reset the selection.
+     */
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null) {
+            return;
+        }
+        if (!viewPending && viewSnapshotId === null) {
+            return;
+        }
+        const revision = snapshot.routeRevision;
+        if (seenActiveRoute.current.key === reviewKey && seenActiveRoute.current.revision === revision) {
+            return;
+        }
+
+        let alive = true;
+        const settle = (route: UiRouteState | null): void => {
+            if (!alive) {
+                return;
+            }
+            seenActiveRoute.current = { key: reviewKey, revision };
+            applyActiveRoute(route);
+        };
+        void fetchReviewRoute(token, null).then(
+            (response) => {
+                settle(response.route);
+            },
+            () => {
+                settle(null);
+            },
+        );
+        return () => {
+            alive = false;
+        };
+    }, [applyActiveRoute, reviewHost, reviewKey, reviewReady, snapshot.routeRevision, token, viewPending, viewSnapshotId]);
 
     // Read chat history when the PR opens and refresh it only after the SSE revision increases.
     const seenChat = useRef<{ key: string; revision: number | null; loaded: boolean }>({
@@ -992,13 +1216,19 @@ export function App({ store, session, token }: AppProps) {
      */
     const routeSnapshot = route?.snapshot?.contentHash == null ? null : route.snapshot;
     /** The Route tab renders any live snapshot, including the old one during a rebuild. */
-    const routeViewSnapshot = routeKind === 'workspace' ? (route?.snapshot ?? null) : null;
+    const routeViewSnapshot = routeKind === 'workspace' && !resolved.routeless ? (route?.snapshot ?? null) : null;
     /**
      * The second-pass banner is dismissed for this snapshot. It describes a filter, so it is dismissible
      * (SPEC §2.21). Dismissal lives in the tab session and resets when a new snapshot arrives.
      */
     const [dismissedSecondPass, setDismissedSecondPass] = useState<string | null>(null);
-    const secondPassVisible = secondPassBannerVisible(view, routeSnapshot, route?.stale ?? null, dismissedSecondPass);
+    const secondPassVisible = secondPassBannerVisible(
+        view,
+        routeSnapshot,
+        route?.stale ?? null,
+        dismissedSecondPass,
+        readOnly,
+    );
     /** Whether the ready snapshot has classified stops determines the "what is new" filter. */
     const routeHasChanges = routeSnapshot?.stops.some((stop) => stop.change !== null) ?? false;
     /**
@@ -1011,6 +1241,36 @@ export function App({ store, session, token }: AppProps) {
             session.setRouteFilter('all');
         }
     }, [routeFilter, routeHasChanges, routeSnapshot, session]);
+
+    /** Iteration selection: the pill menu and Overview card use the same rows. */
+    const pickerMenuRows = useMemo(
+        () =>
+            pickerRows({
+                snapshots,
+                iterations,
+                activeIteration:
+                    facts.diffId === null || facts.commit === null
+                        ? null
+                        : { diffId: facts.diffId, commit: facts.commit },
+            }),
+        [facts.commit, facts.diffId, iterations, snapshots],
+    );
+    const selectViewing = session.setViewing;
+    /** Navigation from the stale banner: an active iteration without a route is not read-only. */
+    const openIterationWithoutRoute = useCallback(
+        (diffId: string) => {
+            session.setViewing({ kind: 'diff', diffId });
+            session.setView('diff');
+        },
+        [session],
+    );
+    const snapshotPill =
+        resolved.label === null ? null : (
+            <SnapshotPill
+                label={resolved.label}
+                menu={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+            />
+        );
 
     const bannerSources: readonly BannerSource[] = [
         {
@@ -1044,13 +1304,31 @@ export function App({ store, session, token }: AppProps) {
         {
             id: 'route-stale',
             priority: BANNER_PRIORITY.routeStale,
-            active: () => staleBannerVisible(routePhase, route?.stale ?? null, route?.snapshot ?? null),
+            active: () => staleBannerVisible(routePhase, route?.stale ?? null, route?.snapshot ?? null, readOnly),
             render: () =>
                 route?.stale == null || route.snapshot == null ? null : (
                     <RouteStaleBanner
                         stale={route.stale}
                         stops={route.snapshot.stops}
                         onRegenerate={startGeneration}
+                        onOpenDiffWithoutRoute={openIterationWithoutRoute}
+                    />
+                ),
+        },
+        {
+            id: 'read-only-iteration',
+            priority: BANNER_PRIORITY.readOnlyIteration,
+            active: () => readOnly && resolved.label !== null,
+            render: () =>
+                resolved.label === null ? null : (
+                    <ReadOnlyIterationBanner
+                        label={resolved.label}
+                        createdAt={resolved.createdAt}
+                        now={now}
+                        gone={resolved.gone}
+                        onCurrent={() => {
+                            session.setViewing(VIEWING_CURRENT);
+                        }}
                     />
                 ),
         },
@@ -1406,7 +1684,7 @@ export function App({ store, session, token }: AppProps) {
     });
 
     return (
-        <>
+        <ReadOnlyIterationProvider readOnly={readOnly}>
             <TopBar
                 version={UI_VERSION}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
@@ -1480,9 +1758,17 @@ export function App({ store, session, token }: AppProps) {
                             setActiveFileId(fileId);
                         }
                     }}
-                    routeSnapshot={routeSnapshot}
+                    routeSnapshot={resolved.routeless ? null : routeSnapshot}
                     onJumpToStop={jumpToStop}
                     smallPr={route?.smallPr === true}
+                    headerAside={snapshotPill}
+                />
+            ) : view === 'route' && resolved.routeless ? (
+                <IterationWithoutRoute
+                    commit={resolved.label?.commit ?? null}
+                    onReadDiff={() => {
+                        session.setView('diff');
+                    }}
                 />
             ) : view === 'route' && routeKind === 'workspace' && routeViewSnapshot !== null ? (
                 <RouteView
@@ -1515,6 +1801,7 @@ export function App({ store, session, token }: AppProps) {
                     {...(routePhase === 'ready' ? { onFillStop: fillStop } : {})}
                     onRouteSummary={reportRouteSummary}
                     onOpenThread={openThreadInDiff}
+                    headerAside={snapshotPill}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (
                 <RouteReadingView
@@ -1550,6 +1837,8 @@ export function App({ store, session, token }: AppProps) {
                     lensesError={currentReview.lensesError}
                     threadsError={currentReview.threadsError}
                     {...(threadStore === null ? {} : { threadStore })}
+                    picker={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+                    {...(snapshotPill === null ? {} : { headerAside: snapshotPill })}
                     generation={{
                         route,
                         longRunning,
@@ -1646,7 +1935,7 @@ export function App({ store, session, token }: AppProps) {
                     <ReviewActionBarLoading diffError={currentReview.diffError} />
                 )
             ) : null}
-        </>
+        </ReadOnlyIterationProvider>
     );
 }
 
@@ -1720,9 +2009,10 @@ function updateChatExchange(
     };
 }
 
-function emptyReviewState(key: string, loading: boolean): ReviewState {
+function emptyReviewState(key: string, viewKey: string, loading: boolean): ReviewState {
     return {
         key,
+        viewKey,
         diff: null,
         lenses: null,
         progress: null,
@@ -1741,8 +2031,39 @@ function emptyReviewState(key: string, loading: boolean): ReviewState {
     };
 }
 
-function reviewStateForKey(current: ReviewState, key: string): ReviewState {
-    return current.key === key ? current : emptyReviewState(key, true);
+/**
+ * Changing the PR or host resets everything. Changing the selected iteration resets only the diff, progress and route:
+ * threads and lenses belong to the host and are shared across the PR. Old data never appears as new data.
+ * The view receives a loading skeleton (SPEC §3).
+ */
+/**
+ * PR-wide layers (lenses, threads) do not depend on the selected iteration and must not overwrite
+ * `viewKey`. A response that lags behind a selection change could roll back an already loaded diff.
+ */
+function sharedReviewState(current: ReviewState, key: string, viewKey: string): ReviewState {
+    return current.key === key ? current : emptyReviewState(key, viewKey, true);
+}
+
+function reviewStateForKeys(current: ReviewState, key: string, viewKey: string): ReviewState {
+    if (current.key !== key) {
+        return emptyReviewState(key, viewKey, true);
+    }
+    if (current.viewKey === viewKey) {
+        return current;
+    }
+    return {
+        ...current,
+        viewKey,
+        diff: null,
+        progress: null,
+        route: null,
+        diffError: null,
+        progressError: null,
+        routeError: null,
+        diffLoading: true,
+        progressLoading: true,
+        routeLoading: true,
+    };
 }
 
 function errorMessage(error: unknown): string {
@@ -1756,7 +2077,16 @@ function hostDisplayName(host: string): string {
     return host === 'fixture' ? 'FixtureHost' : host;
 }
 
+function emptySnapshots(key: string): SnapshotsState {
+    return { key, list: null, loaded: false };
+}
+
+function emptyActiveFacts(key: string): ActiveFacts {
+    return { key, diffId: null, commit: null, snapshot: null, routeSettled: false };
+}
+
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_ITERATIONS: readonly Iteration[] = [];
 const EMPTY_TASKS: readonly UiTask[] = [];
 const EMPTY_NOTE_DELETIONS: ReadonlySet<number> = new Set();
 /** How long to wait for a note after navigation. The virtualizer and route take time to render cards. */

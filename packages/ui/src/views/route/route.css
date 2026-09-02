@@ -35,22 +35,6 @@
     color: var(--text-dim);
 }
 
-/* --- Snapshot pill (`snapshot 9f3c1ab`) --- */
-
-.route-snapshot {
-    display: inline-flex;
-    align-items: center;
-    height: 30px;
-    padding: 0 var(--space-inner);
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-input);
-    background: var(--surface-control);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
 /* --- Sticky toolbar --- */
 
 .route-toolbar {

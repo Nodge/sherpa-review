@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { VIEWING_CURRENT } from '../iterations/viewing.js';
+
 import {
     createSessionStore,
     DEFAULT_THREADS_SHOW,
@@ -39,6 +41,7 @@ describe('session store', () => {
             filter: 'all',
             preset: 'triage',
             routeFilter: 'all',
+            viewing: VIEWING_CURRENT,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,
@@ -134,6 +137,7 @@ describe('session store', () => {
                     filter: 'all',
                     preset: 'triage',
                     routeFilter: 'all',
+                    viewing: VIEWING_CURRENT,
                     threadsShow: DEFAULT_THREADS_SHOW,
                     paletteOpen: false,
                     chatOpen: false,
@@ -166,6 +170,7 @@ describe('session store', () => {
             filter: 'pci',
             preset: 'triage',
             routeFilter: 'all',
+            viewing: VIEWING_CURRENT,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
             chatOpen: false,

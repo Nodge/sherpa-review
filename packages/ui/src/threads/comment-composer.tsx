@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import {
@@ -73,13 +74,19 @@ export function CommentComposer({
         restoreOnCancel ?? (composer.commentId === null ? undefined : (composer.originalText ?? composer.text));
     const resolvedWhileTyping = notice !== undefined;
     const ambiguousFirstSave = composer.status === 'error' && composer.saveUncertain && composer.commentId === null;
+    // Drafts from a previous iteration are visible but cannot be edited (M4 boundaries). The composer can
+    // be closed because closing is not a write.
+    const readOnly = useReadOnlyIteration();
     const disabled = composer.status === 'discarding';
+    const editingDisabled = disabled || readOnly;
     const markdownRef = useRef<HTMLTextAreaElement>(null);
     const visualHostRef = useRef<HTMLDivElement>(null);
     const visualRef = useRef<VisualEditorHandle | null>(null);
     const currentTextRef = useRef(composer.text);
-    const disabledRef = useRef(disabled);
-    const saveDisabledReason = disabled
+    const disabledRef = useRef(editingDisabled);
+    const saveDisabledReason = readOnly
+        ? READ_ONLY_REASON
+        : disabled
         ? 'The draft is being deleted.'
         : ambiguousFirstSave
           ? 'Use the retry link in the save status.'
@@ -119,9 +126,9 @@ export function CommentComposer({
 
     useEffect(() => {
         currentTextRef.current = composer.text;
-        disabledRef.current = disabled;
+        disabledRef.current = editingDisabled;
         handlersRef.current = { save, cancel };
-    }, [cancel, composer.text, disabled, save]);
+    }, [cancel, composer.text, editingDisabled, save]);
 
     useEffect(() => {
         if (layout !== 'visual' || visualHostRef.current === null) {
@@ -164,8 +171,8 @@ export function CommentComposer({
     }, [composer.text]);
 
     useEffect(() => {
-        visualRef.current?.setDisabled(disabled);
-    }, [disabled]);
+        visualRef.current?.setDisabled(editingDisabled);
+    }, [editingDisabled]);
 
     const selectLayout = (next: ComposerLayout): void => {
         setLayout(next);
@@ -207,7 +214,7 @@ export function CommentComposer({
                             className="thread-composer__tool"
                             title={item.title}
                             aria-label={item.title}
-                            disabled={disabled || (layout === 'visual' && !visualReady)}
+                            disabled={editingDisabled || (layout === 'visual' && !visualReady)}
                             onMouseDown={(event) => {
                                 event.preventDefault();
                             }}
@@ -248,7 +255,7 @@ export function CommentComposer({
                         className="thread-composer__markdown"
                         value={composer.text}
                         autoFocus
-                        disabled={disabled}
+                        disabled={editingDisabled}
                         aria-label={inputLabel}
                         placeholder={placeholder}
                         onChange={(event) => {
@@ -311,7 +318,7 @@ export function CommentComposer({
                         type="button"
                         className={`thread-composer__issue${composer.issue ? ' is-active' : ''}`}
                         aria-pressed={composer.issue}
-                        disabled={disabled}
+                        disabled={editingDisabled}
                         onClick={() => {
                             controller.setIssue(!composer.issue);
                         }}
@@ -335,7 +342,12 @@ export function CommentComposer({
                         </button>
                     </span>
                 ) : (
-                    <ComposerStatus composer={composer} ambiguousFirstSave={ambiguousFirstSave} onRetry={controller.retry} />
+                    <ComposerStatus
+                        composer={composer}
+                        ambiguousFirstSave={ambiguousFirstSave}
+                        readOnly={readOnly}
+                        onRetry={controller.retry}
+                    />
                 )}
             </div>
         </div>
@@ -345,10 +357,13 @@ export function CommentComposer({
 function ComposerStatus({
     composer,
     ambiguousFirstSave,
+    readOnly,
     onRetry,
 }: {
     composer: ComposerSnapshot;
     ambiguousFirstSave: boolean;
+    /** A retry is a write just like the first attempt, so it is unavailable in a previous iteration. */
+    readOnly: boolean;
     onRetry: () => Promise<boolean>;
 }) {
     if (composer.status === 'discarding') {
@@ -358,7 +373,12 @@ function ComposerStatus({
         return (
             <span className="thread-composer__status is-error">
                 could not confirm the save · retrying may create a copy ·{' '}
-                <button type="button" onClick={() => void onRetry()}>
+                <button
+                    type="button"
+                    disabled={readOnly}
+                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
+                    onClick={() => void onRetry()}
+                >
                     retry anyway
                 </button>
             </span>
@@ -368,7 +388,12 @@ function ComposerStatus({
         return (
             <span className="thread-composer__status is-error">
                 not saved — the draft stays in the field ·{' '}
-                <button type="button" onClick={() => void onRetry()}>
+                <button
+                    type="button"
+                    disabled={readOnly}
+                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
+                    onClick={() => void onRetry()}
+                >
                     retry
                 </button>
             </span>

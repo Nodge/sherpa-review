@@ -1,3 +1,5 @@
+import type { Viewing } from '../iterations/viewing.js';
+import { sameViewing, VIEWING_CURRENT } from '../iterations/viewing.js';
 import type { ViewId } from './views.js';
 
 /**
@@ -89,6 +91,11 @@ export function parseRouteFilter(value: string | null): RouteFilter | null {
 
 export interface SessionState {
     readonly view: ViewId;
+    /**
+     * What the tab is viewing: the current PR state, a previous snapshot, or an iteration without a route
+     * (M4-T9). Selection is client-side and lives in the URL fragment.
+     */
+    readonly viewing: Viewing;
     /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
     readonly filter: string;
     readonly preset: RoutePreset;
@@ -122,6 +129,7 @@ export interface SessionStore {
     readonly setFilter: (filter: string) => void;
     readonly setPreset: (preset: RoutePreset) => void;
     readonly setRouteFilter: (routeFilter: RouteFilter) => void;
+    readonly setViewing: (viewing: Viewing) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     readonly setChatOpen: (open: boolean) => void;
@@ -147,9 +155,10 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter' | 'viewing'> & {
         readonly threadsShow?: ThreadsShow;
         readonly routeFilter?: RouteFilter;
+        readonly viewing?: Viewing;
         readonly paletteOpen?: boolean;
         readonly chatOpen?: boolean;
         readonly notesExpanded?: ReadonlySet<string>;
@@ -181,6 +190,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         stops: options.initial.stops ?? EMPTY_STOPS,
         preset: options.initial.preset ?? DEFAULT_PRESET,
         routeFilter: options.initial.routeFilter ?? DEFAULT_ROUTE_FILTER,
+        viewing: options.initial.viewing ?? VIEWING_CURRENT,
     };
 
     const toggleStop = (key: keyof StopsState, stopId: string, on: boolean): void => {
@@ -271,6 +281,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         setRouteFilter: (routeFilter) => {
             if (routeFilter !== state.routeFilter) {
                 update({ ...state, routeFilter });
+            }
+        },
+        setViewing: (viewing) => {
+            if (!sameViewing(viewing, state.viewing)) {
+                update({ ...state, viewing });
             }
         },
         setThreadsShow: (threadsShow) => {

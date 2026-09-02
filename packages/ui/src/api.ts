@@ -24,6 +24,7 @@ import type {
     UiReviewRouteResponse,
     UiSetFileViewedResponse,
     UiSetStopViewedResponse,
+    UiSnapshotSummary,
     UiStopSeenRange,
     UiTask,
     UiViewedMirrorRequest,
@@ -46,6 +47,7 @@ import {
     uiReviewLensesResponseSchema,
     uiReviewProgressResponseSchema,
     uiReviewRouteResponseSchema,
+    uiReviewSnapshotsResponseSchema,
     uiReviewThreadsResponseSchema,
     uiReviewWriteAckSchema,
     uiRouteFillStopResponseSchema,
@@ -83,8 +85,9 @@ export async function cancelTask(token: string, taskId: number): Promise<UiCance
     return body.outcome;
 }
 
-export async function fetchReviewDiff(token: string): Promise<PrDiff> {
-    return (await get(UI_ENDPOINTS.reviewDiff, token, uiReviewDiffResponseSchema)).diff;
+/** Active iteration diff, or a saved iteration with `diffId` (snapshot picker, M4). */
+export async function fetchReviewDiff(token: string, diffId?: string | null): Promise<PrDiff> {
+    return (await get(withQuery(UI_ENDPOINTS.reviewDiff, { diffId }), token, uiReviewDiffResponseSchema)).diff;
 }
 
 /** File filter lenses: ownership is separate from extra lenses (README §Filters). */
@@ -131,8 +134,11 @@ export async function fetchFileContent(token: string, fileId: string): Promise<F
  * PR reading progress (T8): explicit marks and seen ranges. The endpoint is local, so it also works when
  * the PR has no review host.
  */
-export async function fetchReviewProgress(token: string): Promise<UiReviewProgressResponse> {
-    return get(UI_ENDPOINTS.reviewProgress, token, uiReviewProgressResponseSchema);
+export async function fetchReviewProgress(
+    token: string,
+    diffId?: string | null,
+): Promise<UiReviewProgressResponse> {
+    return get(withQuery(UI_ENDPOINTS.reviewProgress, { diffId }), token, uiReviewProgressResponseSchema);
 }
 
 /** Explicit "viewed" mark. Returns the progress revision after the write. */
@@ -172,8 +178,19 @@ export async function mirrorViewedFiles(token: string, entries: UiViewedMirrorRe
  * Route state (M2): phase, snapshot and revision. The endpoint is local and works without a review host,
  * Refetched when `routeRevision` from SSE increases.
  */
-export async function fetchReviewRoute(token: string): Promise<UiReviewRouteResponse> {
-    return get(UI_ENDPOINTS.reviewRoute, token, uiReviewRouteResponseSchema);
+export async function fetchReviewRoute(
+    token: string,
+    snapshotId?: string | null,
+): Promise<UiReviewRouteResponse> {
+    return get(withQuery(UI_ENDPOINTS.reviewRoute, { snapshot: snapshotId }), token, uiReviewRouteResponseSchema);
+}
+
+/**
+ * PR snapshots for the picker (M4-T9). A server without this endpoint returns 404.
+ * The caller falls back to the single current snapshot without showing an error in the UI.
+ */
+export async function fetchReviewSnapshots(token: string): Promise<readonly UiSnapshotSummary[]> {
+    return (await get(UI_ENDPOINTS.reviewSnapshots, token, uiReviewSnapshotsResponseSchema)).snapshots;
 }
 
 /**
@@ -255,6 +272,18 @@ export async function openInEditor(token: string, path: string, line?: number): 
 /** Sends feedback. On failure, forms keep their text and retry the same request. */
 export async function sendFeedback(token: string, request: UiFeedbackRequest): Promise<UiFeedbackResponse> {
     return post(UI_ENDPOINTS.feedback, token, request, uiFeedbackResponseSchema);
+}
+
+/** Endpoint parameters. Empty values (`undefined`/`null`) stay out of the URL. */
+function withQuery(path: string, params: Readonly<Record<string, string | null | undefined>>): string {
+    const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') {
+            query.set(name, value);
+        }
+    }
+    const search = query.toString();
+    return search === '' ? path : `${path}?${search}`;
 }
 
 async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promise<T> {

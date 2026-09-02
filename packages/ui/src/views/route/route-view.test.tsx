@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
+import { ReadOnlyIterationProvider } from '../../iterations/read-only.tsx';
 import type { RoutePreset, SessionStore, StopsState } from '../../session/session-store.js';
 import { createSessionStore, EMPTY_STOPS } from '../../session/session-store.js';
 import type { ThreadStore } from '../../threads/store.js';
@@ -52,6 +53,8 @@ function render(
         collapsed?: ReadonlyMap<string, boolean>;
         onSetStopViewed?: (stopId: string, viewed: boolean) => Promise<number>;
         onFillStop?: (planIndex: number) => void;
+        /** The tab shows a previous iteration. Route writes are unavailable (M4 scope). */
+        readOnly?: boolean;
     } = {},
 ): string {
     const store = createDiffViewStore({
@@ -69,6 +72,7 @@ function render(
         }
     }
     return renderToStaticMarkup(
+        <ReadOnlyIterationProvider readOnly={options.readOnly ?? false}>
         <RouteWorkspace
             pr={DATA.pr}
             diff={DATA.diff}
@@ -95,7 +99,8 @@ function render(
             onSetViewed={() => Promise.resolve(0)}
             onSetStopViewed={options.onSetStopViewed ?? (() => Promise.resolve(0))}
             {...(options.onFillStop === undefined ? {} : { onFillStop: options.onFillStop })}
-        />,
+        />
+        </ReadOnlyIterationProvider>,
     );
 }
 
@@ -233,11 +238,11 @@ describe('route view', () => {
         expect(order(tour)).toEqual([...SNAPSHOT.tourOrder]);
     });
 
-    it('shows a snapshot pill in the header with a short commit and no version picker', () => {
+    it('the header has a snapshot pill with a short commit and status', () => {
         const html = render();
 
-        expect(html).toContain(`snapshot ${SNAPSHOT.commit.slice(0, 7)}`);
-        expect(html).not.toContain('· current');
+        // Without the picker from App, the workspace renders its snapshot as current (M4-T9).
+        expect(html).toContain(`snapshot ${SNAPSHOT.commit.slice(0, 7)} · current`);
     });
 
     it('a high stop gets a badge and a numbered region role', () => {
@@ -349,6 +354,13 @@ describe('route view', () => {
         expect(available).toContain('class="route-stop__regenerate">Fill this stop</button>');
         expect(unavailable).not.toContain('route-stop__regenerate');
         expect(whileFilling).not.toContain('route-stop__regenerate');
+
+        // Filling writes to the tab snapshot. In a previous iteration the button is visible but disabled.
+        const reading = section(render({ snapshot, onFillStop: () => undefined, readOnly: true }), 's01');
+        expect(reading).toMatch(
+            /<button [^>]*class="route-stop__regenerate"[^>]*disabled=""[^>]*>Fill this stop<\/button>/,
+        );
+        expect(reading).toContain('only in the active iteration');
     });
 
     it('a stop without anchors shows a dashed card instead of an empty space', () => {

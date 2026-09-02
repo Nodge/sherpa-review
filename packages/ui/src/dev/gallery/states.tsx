@@ -30,6 +30,7 @@ import { M3_T7_STATES } from './m3-t7-states.tsx';
 import { M3_T8_STATES } from './m3-t8-states.tsx';
 import { M3_T9_DIFF_STATES, M3_T9_ROUTE_STATES } from './m3-t9-states.tsx';
 import { M4_T8_STATES } from './m4-t8-states.tsx';
+import { M4_T9_STATES } from './m4-t9-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -201,7 +202,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    ...M4_T8_STATES.map((state) => ({
+    ...[...M4_T8_STATES, ...M4_T9_STATES].map((state) => ({
         id: state.id,
         group: 'Iterations',
         title: state.title,

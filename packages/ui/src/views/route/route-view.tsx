@@ -40,6 +40,9 @@ import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
+import { useReadOnlyIteration } from '../../iterations/read-only.tsx';
+import { SnapshotPill } from '../../iterations/snapshot-picker.tsx';
+import type { ViewingLabel } from '../../iterations/viewing.js';
 import { readSelectionLink } from '../../selection-link.js';
 import {
     ALL_FILTER_ID,
@@ -168,6 +171,8 @@ export interface RouteViewProps {
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
     readonly onOpenThread?: (threadId: string) => void;
+    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    readonly headerAside?: ReactNode;
 }
 
 export function RouteView({
@@ -200,6 +205,7 @@ export function RouteView({
     onFillStop,
     onRouteSummary,
     onOpenThread,
+    headerAside,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
@@ -321,6 +327,7 @@ export function RouteView({
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
             {...(onOpenThread === undefined ? {} : { onOpenThread })}
+            {...(headerAside === undefined ? {} : { headerAside })}
         />
     );
 }
@@ -373,6 +380,8 @@ export interface RouteWorkspaceProps {
     readonly initialKeptStopId?: string | null;
     /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
     readonly onOpenThread?: (threadId: string) => void;
+    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    readonly headerAside?: ReactNode;
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
@@ -406,6 +415,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onRouteSummary,
         onOpenThread,
     } = props;
+    // A previous iteration is read-only. Viewed marks and stop filling are unavailable (M4 scope).
+    const readOnly = useReadOnlyIteration();
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.
     const diffSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -1339,14 +1350,18 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         return stopId === null ? null : (shown.find((entry) => entryId(entry) === stopId) ?? null);
     }, [shown]);
 
-    /** A stop can be marked only once its ranges are counted. Clearing a mark is always allowed. */
+    /**
+     * A mark can be set only after the stop's ranges have been counted. It can always be cleared.
+     * Previous iterations have no viewed marks at all (M4 scope).
+     */
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>
-            stopProgress.isViewed(entryId(entry)) ||
-            (!entryPending(entry, model.totals) &&
-                !entryParseFailed(entry, model.totals) &&
-                !unfilledEntry(entry)),
-        [model.totals, stopProgress, unfilledEntry],
+            !readOnly &&
+            (stopProgress.isViewed(entryId(entry)) ||
+                (!entryPending(entry, model.totals) &&
+                    !entryParseFailed(entry, model.totals) &&
+                    !unfilledEntry(entry))),
+        [model.totals, readOnly, stopProgress, unfilledEntry],
     );
     useShortcut({
         id: 'route.toggleStopViewed',
@@ -1624,7 +1639,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 onTogglePci={() => {
                     changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
                 }}
-                aside={<SnapshotPill snapshot={snapshot} />}
+                aside={props.headerAside ?? <SnapshotPill label={pillLabelOf(snapshot)} />}
             />
 
             <RouteToolbar
@@ -2097,13 +2112,9 @@ function otherQuestionRanges(view: RouteOtherView): readonly QuestionRange[] {
     );
 }
 
-/** Static snapshot pill (README §1). Snapshot selection comes in M4. */
-export function SnapshotPill({ snapshot }: { snapshot: RouteSnapshot }) {
-    return (
-        <span className="route-snapshot" title={`Route built for commit ${snapshot.commit}`}>
-            snapshot {snapshot.commit.slice(0, 7)}
-        </span>
-    );
+/** Pill without a picker: the snapshot on screen is current (gallery, standalone workspace). */
+function pillLabelOf(snapshot: RouteSnapshot): ViewingLabel {
+    return { kind: 'snapshot', commit: snapshot.commit, status: 'current' };
 }
 
 /** Stop sections in markup order. Lazy measurement stops at the first visible section when selecting an anchor. */

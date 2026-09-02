@@ -10,7 +10,7 @@ import type {
     UiReviewLensesResponse,
     UiReviewProgressResponse,
 } from '@sherpa/protocol';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
@@ -120,6 +120,8 @@ export interface FullDiffViewProps {
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
+    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    readonly headerAside?: ReactNode;
 }
 
 export function FullDiffView({
@@ -151,6 +153,7 @@ export function FullDiffView({
     routeSnapshot = null,
     onJumpToStop,
     smallPr = false,
+    headerAside,
 }: FullDiffViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
@@ -262,6 +265,7 @@ export function FullDiffView({
             routeSnapshot={routeSnapshot}
             onJumpToStop={onJumpToStop}
             smallPr={smallPr}
+            {...(headerAside === undefined ? {} : { headerAside })}
         />
     );
 }
@@ -307,6 +311,8 @@ export interface DiffWorkspaceProps {
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
+    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    readonly headerAside?: ReactNode;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
     readonly threadNow?: number;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
@@ -1037,6 +1043,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 onTogglePci={() => {
                     changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
                 }}
+                {...(props.headerAside === undefined ? {} : { aside: props.headerAside })}
             />
 
             <FullDiffToolbar
