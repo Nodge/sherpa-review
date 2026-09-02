@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -21,7 +21,7 @@ import { RouteWorkspace } from './route-view.tsx';
  * in the markup the top stop. The filter must keep that section in view.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
     if (snapshot === null) {
@@ -90,7 +90,7 @@ function snapshotChangedExcept(stopId: string): RouteSnapshot {
 function mount(snapshot: RouteSnapshot) {
     const host = document.createElement('div');
     document.body.append(host);
-    const store = createDiffViewStore({ files: DATA.diff.files, storage: null });
+    const store = createDiffViewStore({ files: DATA.diff.files });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }

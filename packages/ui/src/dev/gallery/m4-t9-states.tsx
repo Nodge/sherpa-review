@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { Iteration, RouteSnapshot, UiSnapshotSummary } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -24,7 +24,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * using the shape from the M4-T1 contract.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-31T12:00:00.000Z');
 
 const OLD_COMMIT = '5c1d0aa8b7e6f4302d9c8b7a6f5e4d3c2b1a0999';
@@ -119,7 +119,7 @@ function ReadingState({
 }: ReadingStateProps) {
     const session = useMemo(() => createSessionStore({ initial: { view: 'route', filter: 'all', viewing } }), [viewing]);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

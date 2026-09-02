@@ -1,4 +1,4 @@
-import { fileContentOf, fixtureData, routeFixtures } from '@sherpa/fixtures';
+import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, RouteStopChange, UiRouteStale } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
@@ -22,7 +22,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
  * on top of the ready `medium` snapshot: the server will fill them in T4/T6/T7, using the M4-T1 contract shape.
  */
 
-const DATA = fixtureData('medium');
+const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-31T12:00:00.000Z');
 
 /** The host's active iteration has moved ahead of the snapshot's iteration (README §9). */
@@ -89,7 +89,7 @@ function IterationState({ snapshot, routeFilter = 'all', banners = [] }: Iterati
         [routeFilter],
     );
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
