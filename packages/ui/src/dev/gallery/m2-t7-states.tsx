@@ -109,7 +109,7 @@ function ViewedRouteState({ stopIds, auto = false }: { stopIds: readonly string[
         return [...byFile.values()];
     }, [auto, parsed, stopIds]);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null, progress });
+        const created = createDiffViewStore({ files: DATA.diff.files, progress });
         for (const [fileId, model] of parsed) {
             created.setModel(fileId, model);
         }

@@ -75,7 +75,7 @@ function WorkspaceState({
     }, [data.diff.files, prepareThreads, shownThreads]);
 
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: data.diff.files, storage: null });
+        const created = createDiffViewStore({ files: data.diff.files });
         if (preloadModels) {
             for (const file of data.diff.files) {
                 created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
@@ -102,7 +102,6 @@ function WorkspaceState({
                 prKey={`fixture-${fixture}`}
                 session={session}
                 store={store}
-                collapsedStorage={null}
                 threadNow={GALLERY_NOW}
                 // The parser is synchronous: the gallery needs no worker and the frame does not depend on one.
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}

@@ -36,7 +36,7 @@ function rebuildFailure(): UiRouteFailure {
 function RebuildState({ banner }: { banner: ReactNode }) {
     const session = useMemo(() => createSessionStore({ initial: { view: 'route', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }

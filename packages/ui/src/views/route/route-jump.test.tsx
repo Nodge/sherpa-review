@@ -3,7 +3,7 @@ import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures
 import type { Lens, RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
@@ -15,7 +15,8 @@ import { buildRouteModel } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
-import { RouteWorkspace } from './route-view.tsx';
+import type * as RouteScroll from './scroll.js';
+import { nextCardInStop, RouteWorkspace } from './route-view.tsx';
 import { stopFileShownModel } from './stop-file-card.tsx';
 
 /**
@@ -26,6 +27,22 @@ import { stopFileShownModel } from './stop-file-card.tsx';
  * The container does not move in jsdom because all rectangles are zero. Observe the jump target:
  * whether the right stop or line flashes. Check the lens and folds through stores and markup.
  */
+
+/**
+ * Observe jump scrolling through `animateScrollTo` calls. jsdom has no rectangles, so
+ * `scrollTop` does not move, but the number of times the jump aimed is exact.
+ */
+const scrollAims = vi.hoisted(() => [] as number[]);
+vi.mock('./scroll.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof RouteScroll>();
+    return {
+        ...actual,
+        animateScrollTo: (container: HTMLElement, to: number, duration?: number) => {
+            scrollAims.push(to);
+            return actual.animateScrollTo(container, to, duration);
+        },
+    };
+});
 
 const DATA = fixtureIteration('medium');
 const SNAPSHOT: RouteSnapshot = (() => {
@@ -236,7 +253,7 @@ function mount(
 ): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
-    const store = createDiffViewStore({ files: DATA.diff.files, progress: options.progress ?? [], storage: null });
+    const store = createDiffViewStore({ files: DATA.diff.files, progress: options.progress ?? [] });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }
@@ -508,6 +525,26 @@ describe('marking a stop viewed jumps to the next visible stop', () => {
         expect(stopSection(view.host, 's05').querySelector('.route-collapsed')).not.toBeNull();
     });
 
+    it('adjusts the jump twice more, on the next frame and after settling', async () => {
+        const view = mount({ filter: PARTIAL_LENS.id, extraLenses: [PARTIAL_LENS] });
+        await view.settle();
+        scrollAims.length = 0;
+
+        click(viewedToggle(view.host, 's04'));
+        // The first frame targets the found section, the next targets the layout after it shrinks.
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 60));
+        });
+        const afterJump = scrollAims.length;
+        expect(afterJump).toBeGreaterThanOrEqual(2);
+
+        // The third attempt comes after ANCHOR_SETTLE, once collapsing has settled.
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+        });
+        expect(scrollAims.length).toBeGreaterThan(afterJump);
+    });
+
     it('an automatic mark through the last file jumps to the next stop', async () => {
         const view = mount();
         const toggles = [...stopSection(view.host, 's01').querySelectorAll<HTMLButtonElement>('.file-card__viewed')];
@@ -537,6 +574,45 @@ describe('marking a stop viewed jumps to the next visible stop', () => {
         await view.settle();
 
         expect(view.host.querySelector('.route-stop__flash')).toBeNull();
+    });
+
+    it('navigation within a stop targets the nearest expanded card', () => {
+        const view = mount();
+        const section = [...view.host.querySelectorAll<HTMLElement>('[data-stop]')].find(
+            (candidate) => candidate.querySelectorAll('.file-card[data-file]').length >= 3,
+        );
+        if (section === undefined) {
+            throw new Error('the fixture needs a stop with at least three cards');
+        }
+        const cards = [...section.querySelectorAll<HTMLElement>('.file-card[data-file]')];
+        const [first, second, third] = cards;
+        const stopId = section.dataset.stop;
+        const fileId = first?.dataset.file;
+        if (stopId === undefined || fileId === undefined || second === undefined || third === undefined) {
+            throw new Error('the stop cards need file ids');
+        }
+        const collapse = (card: HTMLElement): void => {
+            const name = card.querySelector<HTMLElement>('.file-card__name');
+            if (name === null) {
+                throw new Error('the card header needs a filename');
+            }
+            // Clicking the header toggles the card. It would expand an already collapsed generated file.
+            if (card.querySelector('.file-card__collapsed--file') === null) {
+                click(name);
+            }
+        };
+
+        expect(nextCardInStop(view.host, stopId, fileId)).toBe(second.dataset.file);
+
+        // A collapsed card is an already read single row, so navigation skips it.
+        collapse(second);
+        expect(nextCardInStop(view.host, stopId, fileId)).toBe(third.dataset.file);
+
+        // Everything below is collapsed, so use the next card, as in the full diff.
+        for (const card of cards.slice(2)) {
+            collapse(card);
+        }
+        expect(nextCardInStop(view.host, stopId, fileId)).toBe(second.dataset.file);
     });
 
     it('clearing the mark does not start another jump', async () => {

@@ -404,6 +404,64 @@ export const uiFeedbackResponseSchema = z.object({
 export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
+ * Global UI settings (M3-T16): one user has one set of settings across all PRs (SPEC §2.8,
+ * README "Diff mode is global"). They live on the server in `~/.sherpa/settings.json`, not in the browser:
+ * since each PR server listens on a random port, with a new origin and empty `localStorage`.
+ * Every field has a default, so a missing or corrupt file falls back to defaults instead of an error.
+ * Per-PR state (collapsed directories, recent palette commands) does not belong here.
+ */
+const uiSettingsFields = {
+    diffMode: z.enum(['unified', 'split']),
+    shipMode: z.enum(['ship', 'sticky_ship']),
+    composerLayout: z.enum(['visual', 'markdown']),
+};
+
+export const uiSettingsSchema = z.object({
+    diffMode: uiSettingsFields.diffMode.default('unified'),
+    shipMode: uiSettingsFields.shipMode.default('ship'),
+    composerLayout: uiSettingsFields.composerLayout.default('visual'),
+});
+export type UiSettings = z.infer<typeof uiSettingsSchema>;
+
+export const uiSettingsResponseSchema = z.object({ settings: uiSettingsSchema });
+export type UiSettingsResponse = z.infer<typeof uiSettingsResponseSchema>;
+
+/**
+ * Partial update. The server rereads the file, merges the named fields and returns the result
+ * in full. Built from fields without defaults, since `.partial()` over `.default()` would insert
+ * a default for a missing key, making "leave the field alone" indistinguishable from "reset it".
+ */
+export const uiSettingsPatchSchema = z.object(uiSettingsFields).partial();
+export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>;
+
+/**
+ * UI state for one PR (M3-T18): tree directories and diff cards collapsed by the reviewer, recent
+ * command palette entries. Lives in the server's per-PR SQLite for the same reason as global settings:
+ * the tab origin changes with the port, so `localStorage` does not survive a restart. Maps store only
+ * explicit reviewer choices. A missing key means "default", not `false`. The order of
+ * `paletteRecent` is newest first. The UI limits the display, the server only stores it.
+ */
+const uiPrStateFields = {
+    treeCollapsed: z.record(z.string(), z.boolean()),
+    diffCollapsed: z.record(z.string(), z.boolean()),
+    paletteRecent: z.array(z.string()).max(64),
+};
+
+export const uiPrStateSchema = z.object({
+    treeCollapsed: uiPrStateFields.treeCollapsed.default({}),
+    diffCollapsed: uiPrStateFields.diffCollapsed.default({}),
+    paletteRecent: uiPrStateFields.paletteRecent.default([]),
+});
+export type UiPrState = z.infer<typeof uiPrStateSchema>;
+
+export const uiPrStateResponseSchema = z.object({ prState: uiPrStateSchema });
+export type UiPrStateResponse = z.infer<typeof uiPrStateResponseSchema>;
+
+/** Partial update: each named field is replaced in full (not merged by key), other fields stay unchanged. */
+export const uiPrStatePatchSchema = z.object(uiPrStateFields).partial();
+export type UiPrStatePatch = z.infer<typeof uiPrStatePatchSchema>;
+
+/**
  * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
  * viewport. `viewed` has 3 values (M2F-T40): `true` is a manual mark that pins `read`
  * permanently. `false` explicitly clears the mark (unpins the generated default or undoes a manual
@@ -665,6 +723,10 @@ export const UI_ENDPOINTS = {
     openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
     feedback: '/api/ui/feedback',
+    /** GET → `uiSettingsResponseSchema`, PATCH `uiSettingsPatchSchema` → `uiSettingsResponseSchema`. Available without a review host too. */
+    settings: '/api/ui/settings',
+    /** GET → `uiPrStateResponseSchema`, PATCH `uiPrStatePatchSchema` → `uiPrStateResponseSchema`. Available without a review host too. */
+    prState: '/api/ui/pr-state',
 } as const;
 
 /**

@@ -3,14 +3,15 @@ import { fixtureIteration } from '@sherpa/fixtures';
 import type { AgentNote, ChatAnchor } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import { createDiffViewStore } from '../diff-view/store.js';
-import { COMPOSER_LAYOUT_KEY } from '../threads/composer-markdown.js';
 import { noteDraftText } from '../notes/note-draft.js';
 import { createSessionStore } from '../session/session-store.js';
+import { SettingsProvider } from '../settings/context.tsx';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import { createThreadStore } from '../threads/store.js';
 import { DiffWorkspace } from './full-diff.tsx';
 
@@ -82,11 +83,6 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: t
 
 const mounted: (() => void)[] = [];
 
-beforeEach(() => {
-    // Deterministic editor layout: markdown uses a plain textarea instead of ProseMirror.
-    window.localStorage.setItem(COMPOSER_LAYOUT_KEY, 'markdown');
-});
-
 afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
@@ -96,10 +92,12 @@ afterEach(() => {
 });
 
 function mount() {
+    // Deterministic editor layout: markdown uses a plain textarea instead of ProseMirror.
+    const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
     const host = document.createElement('div');
     document.body.append(host);
     const files = [FILE];
-    const store = createDiffViewStore({ files, storage: null });
+    const store = createDiffViewStore({ files });
     store.setModel(FILE.fileId, parseFileDiff(toParseRequest(FILE)));
     const threadStore = createThreadStore([], new Set([FILE.fileId]));
     const session = createSessionStore({
@@ -108,21 +106,22 @@ function mount() {
     const root = createRoot(host);
     act(() => {
         root.render(
-            <DiffWorkspace
-                pr={DATA.pr}
-                diff={{ ...DATA.diff, files }}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
-                prKey="fixture-medium"
-                session={session}
-                store={store}
-                threadStore={threadStore}
-                collapsedStorage={null}
-                threadNow={Date.parse('2026-09-01T12:00:00.000Z')}
-                parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
-                loadContent={() => Promise.resolve(null)}
-                onSetViewed={() => Promise.resolve(0)}
-                notes={[NOTE]}
-            />,
+            <SettingsProvider store={settings}>
+                <DiffWorkspace
+                    pr={DATA.pr}
+                    diff={{ ...DATA.diff, files }}
+                    lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                    prKey="fixture-medium"
+                    session={session}
+                    store={store}
+                    threadStore={threadStore}
+                    threadNow={Date.parse('2026-09-01T12:00:00.000Z')}
+                    parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
+                    loadContent={() => Promise.resolve(null)}
+                    onSetViewed={() => Promise.resolve(0)}
+                    notes={[NOTE]}
+                />
+            </SettingsProvider>,
         );
     });
     mounted.push(() => {

@@ -4,8 +4,8 @@ import { useMemo, useSyncExternalStore } from 'react';
 
 import { CommandPalette } from '../../palette/command-palette.tsx';
 import { PaletteDiffSourceProvider, usePaletteDiffSource } from '../../palette/diff-source.tsx';
-import type { RecentStorage } from '../../palette/recent-storage.js';
-import { writeRecent } from '../../palette/recent-storage.js';
+import { PrStateProvider } from '../../pr-state/context.tsx';
+import { createUiPrStateStore } from '../../pr-state/pr-state-store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { ShortcutsProvider } from '../../shortcuts/context.tsx';
 import { createShortcutRegistry } from '../../shortcuts/registry.js';
@@ -71,13 +71,11 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
         });
         return created;
     }, []);
-    const storage = useMemo(() => {
-        const created = memoryStorage();
-        if (recent) {
-            writeRecent(created, 'fixture-medium', ['gallery.copyLink']);
-        }
-        return created;
-    }, [recent]);
+    // The gallery keeps its own PR state in memory. There is no server here, but recent items need to appear.
+    const prState = useMemo(
+        () => createUiPrStateStore(recent ? { initial: { paletteRecent: ['gallery.copyLink'] } } : {}),
+        [recent],
+    );
     const source = useMemo(
         () => ({
             files: DATA.diff.files,
@@ -92,16 +90,17 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
 
     return (
         <ShortcutsProvider registry={registry}>
-            <PaletteDiffSourceProvider value={source}>
-                <PaletteFromContext
-                    open={paletteOpen}
-                    query={query}
-                    storage={storage}
-                    onClose={() => {
-                        session.setPaletteOpen(false);
-                    }}
-                />
-            </PaletteDiffSourceProvider>
+            <PrStateProvider store={prState}>
+                <PaletteDiffSourceProvider value={source}>
+                    <PaletteFromContext
+                        open={paletteOpen}
+                        query={query}
+                        onClose={() => {
+                            session.setPaletteOpen(false);
+                        }}
+                    />
+                </PaletteDiffSourceProvider>
+            </PrStateProvider>
         </ShortcutsProvider>
     );
 }
@@ -109,34 +108,14 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
 function PaletteFromContext({
     open,
     query,
-    storage,
     onClose,
 }: {
     open: boolean;
     query: string;
-    storage: RecentStorage;
     onClose: () => void;
 }) {
     const source = usePaletteDiffSource();
     return (
-        <CommandPalette
-            open={open}
-            prKey="fixture-medium"
-            source={source}
-            initialQuery={query}
-            recentStorage={storage}
-            onOpen={() => undefined}
-            onClose={onClose}
-        />
+        <CommandPalette open={open} source={source} initialQuery={query} onOpen={() => undefined} onClose={onClose} />
     );
-}
-
-function memoryStorage(): RecentStorage {
-    const data = new Map<string, string>();
-    return {
-        getItem: (key) => data.get(key) ?? null,
-        setItem: (key, value) => {
-            data.set(key, value);
-        },
-    };
 }

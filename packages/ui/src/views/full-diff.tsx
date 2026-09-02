@@ -10,7 +10,7 @@ import type {
     UiReviewLensesResponse,
     UiReviewProgressResponse,
 } from '@sherpa/protocol';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
@@ -28,7 +28,6 @@ import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
-import { readCollapsed as readFileCollapsed, writeCollapsed as writeFileCollapsed } from '../diff-view/collapsed-storage.js';
 import { expandContext } from '../diff-view/context-expansion.js';
 import type { FileExpansion } from '../diff-view/expand.js';
 import type { Feedback } from '../diff-view/file-card.tsx';
@@ -38,7 +37,7 @@ import { DiffFileList } from '../diff-view/file-list.tsx';
 import { findLineRow, flashRow } from '../diff-view/line-target.js';
 import { selectedLineRange } from '../diff-view/selection.js';
 import type { DiffViewSnapshot, DiffViewStore } from '../diff-view/store.js';
-import { createDiffViewStore } from '../diff-view/store.js';
+import { createDiffViewStore, fileCollapseReason } from '../diff-view/store.js';
 import '../diff-view/diff-view.css';
 import type { FileFilter } from '../filters/lens-filters.js';
 import {
@@ -53,12 +52,15 @@ import {
 import { readFragmentParam } from '../fragment.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
+import { usePrStateStore } from '../pr-state/context.tsx';
+import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
+import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
@@ -68,8 +70,6 @@ import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
-import type { CollapsedStorage } from '../tree/collapsed-storage.js';
-import { globalCollapsedStorage } from '../tree/collapsed-storage.js';
 import type { FileOutlineModel, OutlineEntry } from '../tree/file-panel.tsx';
 import { FilePanel } from '../tree/file-panel.tsx';
 import './full-diff.css';
@@ -120,6 +120,8 @@ export interface FullDiffViewProps {
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
+    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    readonly headerAside?: ReactNode;
 }
 
 export function FullDiffView({
@@ -151,6 +153,7 @@ export function FullDiffView({
     routeSnapshot = null,
     onJumpToStop,
     smallPr = false,
+    headerAside,
 }: FullDiffViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
@@ -262,6 +265,7 @@ export function FullDiffView({
             routeSnapshot={routeSnapshot}
             onJumpToStop={onJumpToStop}
             smallPr={smallPr}
+            {...(headerAside === undefined ? {} : { headerAside })}
         />
     );
 }
@@ -307,6 +311,8 @@ export interface DiffWorkspaceProps {
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
     readonly smallPr?: boolean;
+    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    readonly headerAside?: ReactNode;
     /** Fixed clock for the gallery. The application captures the time when the view mounts. */
     readonly threadNow?: number;
     /** Diff view store. Without it, a new one is created. The gallery supplies a prefilled store. */
@@ -315,8 +321,6 @@ export interface DiffWorkspaceProps {
     readonly paletteNavigation?: PaletteNavigation | null;
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
-    /** Directory and card collapse storage. `null` disables persistence (gallery, tests). */
-    readonly collapsedStorage?: CollapsedStorage | null;
 }
 
 export function DiffWorkspace(props: DiffWorkspaceProps) {
@@ -352,29 +356,35 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         onFilterChangeHandler,
     } = props;
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
-    const collapsedStorage = props.collapsedStorage === undefined ? globalCollapsedStorage() : props.collapsedStorage;
-    const initialCollapsed = useMemo(
-        () => readFileCollapsed(collapsedStorage, prKey),
-        [collapsedStorage, prKey],
-    );
+    // Card collapse state comes from the PR state on the server. Capture it once so
+    // a late endpoint response does not recreate the store while the reviewer is reading.
+    const prState = usePrStateStore();
+    const initialCollapsed = useMemo(() => collapsedToMap(prState.getSnapshot().diffCollapsed), [prState]);
 
     const initialProgress = props.progress;
+    const settings = useUiSettingsStore();
     const createdStore = useMemo(
         () =>
             createDiffViewStore({
                 files: diff.files,
                 ...(initialProgress === undefined ? {} : { progress: initialProgress.files }),
                 collapsed: initialCollapsed,
+                // Only the gallery and tests use a private store here, but they still take the mode from settings.
+                diffMode: settings.getSnapshot().diffMode,
+                onDiffModeChange: (mode) => {
+                    settings.update({ diffMode: mode });
+                },
             }),
-        [diff, initialCollapsed, initialProgress],
+        [diff, initialCollapsed, initialProgress, settings],
     );
     const store = props.store ?? createdStore;
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     useEffect(() => {
+        // With a supplied store, the view does not own collapse state. The store creator (App) writes it.
         if (props.store === undefined) {
-            writeFileCollapsed(collapsedStorage, prKey, snapshot.collapsePreferences);
+            prState.update({ diffCollapsed: collapsedFromMap(snapshot.collapsePreferences) });
         }
-    }, [collapsedStorage, prKey, props.store, snapshot.collapsePreferences]);
+    }, [prState, props.store, snapshot.collapsePreferences]);
     useEffect(() => {
         if (props.store !== undefined && props.progressWriter === undefined && initialProgress !== undefined) {
             store.setProgress(initialProgress.files);
@@ -422,6 +432,15 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         }
     }, [filter.id, filterId, session]);
 
+    // The top card in the viewport tells the view which file the reviewer is reading now.
+    // Filter changes ("kept in view", SPEC §2.7) and moving to the next file after
+    // marking both need it, so a ref also holds it for handlers to read without being recreated.
+    const [topFileId, setTopFileId] = useState<string | null>(null);
+    const topRef = useRef<string | null>(null);
+    useEffect(() => {
+        topRef.current = topFileId;
+    }, [topFileId]);
+
     // Reading progress (T8): optimistic writes, rollback on failure and tab convergence through SSE.
     // `ProgressWriter` handles write order, rollback and revisions. The view only renders.
     const [writesSettled, setWritesSettled] = useState(0);
@@ -445,9 +464,22 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const writer = props.progressWriter ?? createdWriter;
 
+    /**
+     * The file from which the screen moves to the next one after marking. An effect computes and
+     * starts the navigation because the list still has the old card heights in the handler. The list
+     * receives the same id and does not anchor to the collapsed card.
+     */
+    const [advanceFrom, setAdvanceFrom] = useState<string | null>(null);
+
     const markViewed = useCallback(
         async function mark(fileId: string, viewed: boolean): Promise<Feedback> {
             setWriteError(null);
+            // "Scrolling follows collapse" (decision log 2026-09-02): when the reviewer marks the file
+            // they are reading, the screen moves to the next one. Clearing a mark, marking
+            // any other file and noninteractive toggles leave scrolling alone.
+            if (viewed && fileId === topRef.current) {
+                setAdvanceFrom(fileId);
+            }
             if (await writer.write(fileId, viewed)) {
                 return null;
             }
@@ -566,15 +598,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [initialThreadId, threadSnapshot.threads],
     );
     const linkedFileId = linkedThread?.anchor?.fileId ?? null;
-    const [topFileId, setTopFileId] = useState<string | null>(null);
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
-
-    // "Kept in view" (SPEC §2.7): the file the reviewer is reading stays under the cursor
-    // when the filter changes. It remains in the list with a label.
-    const topRef = useRef<string | null>(null);
-    useEffect(() => {
-        topRef.current = topFileId;
-    }, [topFileId]);
 
     // The label clears on the next reviewer scroll (SPEC §2.7). The list
     // distinguishes its own scroll adjustments: programmatic scrolling does not reach this handler.
@@ -675,6 +699,29 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         pendingScroll.current = null;
         void listRef.current?.scrollToFile(target);
     }, [shown]);
+
+    // Move to the next file after marking. Compute the target here instead of in the handler:
+    // the mark is already in the store, and we can see which cards below are collapsed. Wait one more frame
+    // so the list can replace the collapsed card's measurement with its new estimate.
+    useEffect(() => {
+        if (advanceFrom === null) {
+            return;
+        }
+        const snapshot = store.getSnapshot();
+        const next = nextFileToAdvance(shown, advanceFrom, (file) => fileCollapseReason(snapshot, file) !== null);
+        if (next === null) {
+            setAdvanceFrom(null);
+            return;
+        }
+        const frame = requestAnimationFrame(() => {
+            setAdvanceFrom(null);
+            // Leave the target collapsed: navigation expands neither viewed nor generated files.
+            void listRef.current?.scrollToFile(next, { reveal: false });
+        });
+        return () => {
+            cancelAnimationFrame(frame);
+        };
+    }, [advanceFrom, shown, store]);
 
     const pci = findFilter(filters, PCI_FILTER_ID);
     // The reference must stay stable because rebuilding the tree depends on it.
@@ -1037,6 +1084,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 onTogglePci={() => {
                     changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
                 }}
+                {...(props.headerAside === undefined ? {} : { aside: props.headerAside })}
             />
 
             <FullDiffToolbar
@@ -1077,8 +1125,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     }
                     outline={outline}
                     onOpenHunk={openHunk}
-                    prKey={prKey}
-                    storage={collapsedStorage}
                     inputRef={searchRef}
                 />
 
@@ -1136,6 +1182,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         }
                         initialFileId={linkedFileId ?? initialFileId}
                         keptFileId={keptFileId}
+                        advancingFileId={advanceFrom}
                         onTopFileChange={setTopFileId}
                         onScroll={onScroll}
                         routeMargin={routeMargin}
@@ -1261,6 +1308,24 @@ const NO_STOP_WRITES: StopWriterHooks = {
     restore: () => undefined,
     send: () => Promise.reject(new Error('stop marking is unavailable in the full diff')),
 };
+
+/**
+ * The file to scroll to after marking: the nearest expanded file below in the current order and
+ * filter, or simply the next one if all below are collapsed. `null` means the marked file is last,
+ * so there is no scrolling.
+ */
+export function nextFileToAdvance<T extends { readonly fileId: string }>(
+    files: readonly T[],
+    fileId: string,
+    collapsed: (file: T) => boolean,
+): string | null {
+    const index = files.findIndex((file) => file.fileId === fileId);
+    if (index < 0) {
+        return null;
+    }
+    const rest = files.slice(index + 1);
+    return (rest.find((file) => !collapsed(file)) ?? rest[0])?.fileId ?? null;
+}
 
 function shownModelOf(snapshot: DiffViewSnapshot, fileId: string): DiffFileModel | null {
     return shownFileModel(

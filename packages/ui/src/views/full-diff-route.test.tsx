@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
-import type { CollapsedStorage } from '../diff-view/collapsed-storage.js';
 import { COLLAPSE_THRESHOLD } from '../diff-view/file-card.tsx';
 import { createDiffViewStore } from '../diff-view/store.js';
+import { PrStateProvider } from '../pr-state/context.tsx';
+import type { UiPrStateStore } from '../pr-state/pr-state-store.js';
+import { createUiPrStateStore } from '../pr-state/pr-state-store.js';
 import { createSessionStore } from '../session/session-store.js';
 import { createThreadStore } from '../threads/store.js';
 import { DiffWorkspace } from './full-diff.tsx';
@@ -98,7 +100,8 @@ function mount(
         paths?: readonly string[];
         files?: readonly FileDiff[];
         ownStore?: boolean;
-        storage?: CollapsedStorage;
+        /** Shared PR state store. Two mounts use it to share server collapse state. */
+        prState?: UiPrStateStore;
         resolvedThreads?: boolean;
     } = {},
 ): Mounted {
@@ -113,7 +116,7 @@ function mount(
             : DATA.diff.files.filter((file) => options.paths?.includes(file.path) === true));
     // `ownStore`: the view creates its own store from the diff. This checks background parsing instead of
     // models placed in the store in advance.
-    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles, storage: null });
+    const store = options.ownStore === true ? null : createDiffViewStore({ files: initialFiles });
     for (const file of store === null ? [] : initialFiles) {
         store?.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     }
@@ -129,9 +132,13 @@ function mount(
     const threadStore = createThreadStore(DATA.threads, FILE_IDS);
     const root = createRoot(host);
 
+    // Without a provider, the palette and tree use the module's shared fallback store. The test needs its own.
+    const prState = options.prState ?? createUiPrStateStore();
+
     const render = (files: readonly FileDiff[]): void => {
         act(() => {
             root.render(
+                <PrStateProvider store={prState}>
                 <DiffWorkspace
                     pr={DATA.pr}
                     diff={{ ...DATA.diff, files: [...files] }}
@@ -140,7 +147,6 @@ function mount(
                     session={session}
                     {...(store === null ? {} : { store })}
                     threadStore={threadStore}
-                    collapsedStorage={options.storage ?? null}
                     threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                     parse={(file) => {
                         parsed.push(file.fileId);
@@ -152,7 +158,8 @@ function mount(
                     onJumpToStop={(stopId) => {
                         jumps.push(stopId);
                     }}
-                />,
+                />
+                </PrStateProvider>,
             );
         });
     };
@@ -175,17 +182,6 @@ async function settleBackgroundParse(): Promise<void> {
 }
 
 const BACKGROUND_PARSE_DELAY = 300;
-
-function memoryStorage(): CollapsedStorage & { readonly data: Map<string, string> } {
-    const data = new Map<string, string>();
-    return {
-        data,
-        getItem: (key) => data.get(key) ?? null,
-        setItem: (key, value) => {
-            data.set(key, value);
-        },
-    };
-}
 
 function badges(host: HTMLElement, scope: 'tree' | 'card'): HTMLElement[] {
     return [...host.querySelectorAll<HTMLElement>(`.route-badge--${scope}`)];
@@ -294,17 +290,20 @@ describe('route in full diff margins', () => {
 
     it('keeps manual collapse state across remounts of the same PR', async () => {
         const path = 'services/orders/src/domain/order.ts';
-        const storage = memoryStorage();
-        const first = mount({ paths: [path], ownStore: true, route: false, storage });
+        // One PR state store for two mounts, just like reloading the tab.
+        // Collapse state comes from PR state, not component memory.
+        const prState = createUiPrStateStore();
+        const first = mount({ paths: [path], ownStore: true, route: false, prState });
 
         await act(async () => {
             first.host.querySelector<HTMLElement>('.file-card__name')?.click();
             await Promise.resolve();
         });
         expect(first.host.querySelector('.file-card__collapsed--file')?.textContent).toContain('collapsed by hand');
-        expect(storage.data.get('sherpa.diff.collapsed.fixture-medium')).toContain('true');
+        const fileId = first.host.querySelector<HTMLElement>('.file-card')?.dataset.file ?? '';
+        expect(prState.getSnapshot().diffCollapsed).toEqual({ [fileId]: true });
 
-        const second = mount({ paths: [path], ownStore: true, route: false, storage });
+        const second = mount({ paths: [path], ownStore: true, route: false, prState });
         expect(second.host.querySelector('.file-card__collapsed--file')?.textContent).toContain('collapsed by hand');
     });
 

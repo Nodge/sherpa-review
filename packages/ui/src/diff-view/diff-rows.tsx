@@ -4,6 +4,7 @@ import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
 import { Icon } from '../icons/icon.tsx';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { formatCount, plural } from '../text.js';
 import type { ContextExpandRequest, GapExpandResult } from './context-expansion.js';
 import type { ExpandDirection } from './expand.js';
@@ -648,11 +649,15 @@ function CommentButton({
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
 }) {
     const sideLabel = side === 'old' ? 'old' : 'new';
+    // Only the active iteration allows comments (M4 boundaries).
+    const readOnly = useReadOnlyIteration();
     return (
         <button
             type="button"
             className={`diff-row__comment${selectionStart ? ' is-selection-start' : ''}`}
             aria-label={split ? `Comment on ${sideLabel} line ${String(line)}` : `Comment on line ${String(line)}`}
+            disabled={readOnly}
+            title={readOnly ? READ_ONLY_REASON : undefined}
             onFocus={onFocus}
             onBlur={onBlur}
             onClick={() => onCommentLine?.(side, line)}

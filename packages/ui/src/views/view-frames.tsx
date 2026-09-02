@@ -12,6 +12,8 @@ import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
 import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
+import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
+import { SnapshotsCard } from '../iterations/snapshot-picker.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
@@ -65,6 +67,10 @@ export interface ViewFrameProps {
     readonly threadNow?: number;
     readonly threadStore?: ThreadStore;
     readonly generation?: RouteGenerationProps;
+    /** Snapshots and iterations for the Overview card (README §6). No data means no card. */
+    readonly picker?: Omit<SnapshotMenu, 'initialOpen'>;
+    /** Right edge of the PR header: the snapshot pill (README §1). */
+    readonly headerAside?: ReactNode;
 }
 
 /**
@@ -114,6 +120,29 @@ export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDi
 }
 
 /**
+ * The selected iteration has no route (M4-T9). The tab explains this and sends the reviewer
+ * to the reader. The route cannot be rebuilt here, as generation targets the active iteration.
+ */
+export function IterationWithoutRoute({ commit, onReadDiff }: { commit: string | null; onReadDiff: () => void }) {
+    return (
+        <main className="route-empty" id="view-route">
+            <section className="invitation-card">
+                <div className="invitation-card__eyebrow">Route</div>
+                <h1 className="invitation-card__title">No route for this iteration</h1>
+                <p className="invitation-card__text">
+                    {commit === null
+                        ? 'The route is built for the active iteration. This one is read-only.'
+                        : `The route is built for the active iteration. Iteration ${commit.slice(0, 7)} is read-only.`}
+                </p>
+                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                    Read the full diff
+                </button>
+            </section>
+        </main>
+    );
+}
+
+/**
  * PR below the route threshold (SPEC §4.1): the tab stays clickable and explains why there is
  * no route. Describe the threshold in words, since its value lives in server config and the UI does not know it.
  */
@@ -153,6 +182,8 @@ export function OverviewView({
     threadNow,
     threadStore: suppliedThreadStore,
     generation,
+    picker,
+    headerAside,
 }: ViewFrameProps) {
     const [segment, setSegment] = useState<OwnershipSegment>('all');
     const sourceThreads = threads ?? EMPTY_THREADS;
@@ -239,6 +270,7 @@ export function OverviewView({
                     counts={diff === null ? null : diffCounts(diff)}
                     pci={pci}
                     now={now}
+                    {...(headerAside === undefined ? {} : { aside: headerAside })}
                 />
             )}
             <div className="overview__grid">
@@ -281,6 +313,11 @@ export function OverviewView({
                         loading={reviewHostAvailable && threadsLoading}
                         error={threadsError}
                     />
+                    {picker === undefined ? null : (
+                        <OverviewCard title="Snapshots">
+                            <SnapshotsCard {...picker} />
+                        </OverviewCard>
+                    )}
                 </aside>
             </div>
         </main>

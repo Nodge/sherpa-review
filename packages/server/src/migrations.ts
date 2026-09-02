@@ -260,11 +260,24 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
+        // This PR's UI state (M3-T18): collapsed directories and cards, recent palette commands.
+        // Key-value storage: the contract schema defines the keys, so a new field needs no migration.
+        // No prKey column, since the database already belongs to one PR.
+        name: '011-ui-pr-state',
+        sql: `
+            CREATE TABLE ui_pr_state (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        `,
+    },
+    {
         // Route task iteration (M4-T4): acceptance must resolve anchors against the same
         // diff used to build the task payload. After a server restart, there is nowhere else
         // to recover it. Old bindings do not name an iteration, so they are deleted. Their tasks
         // become orphans, and the orchestrator cancels them and schedules generation again.
-        name: '011-route-task-iteration',
+        name: '012-route-task-iteration',
         sql: `
             ALTER TABLE route_tasks ADD COLUMN diff_id TEXT;
 
@@ -283,7 +296,7 @@ export const MIGRATIONS: readonly Migration[] = [
         // snapshot's iteration, or, if that is absent too, `unknown` (`LEGACY_DIFF_ID`). Such a server has no host,
         // and this is its only "iteration". Stop marks without a snapshot have no meaning
         // and are deleted.
-        name: '012-progress-iterations',
+        name: '013-progress-iterations',
         sql: `
             CREATE TABLE file_progress_next (
                 diff_id TEXT NOT NULL,

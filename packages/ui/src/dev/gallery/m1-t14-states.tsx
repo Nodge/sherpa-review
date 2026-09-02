@@ -125,7 +125,7 @@ function BarState({
     failure?: PublicationFailure | null;
     stickyAvailable?: boolean;
 }) {
-    const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files, storage: null }), []);
+    const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
     const threadStore = useMemo(
         () => createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId))),
         [threads],
@@ -148,7 +148,6 @@ function BarState({
                 onComplete={() => undefined}
                 defaultMenuOpen={menuOpen}
                 initialFailure={failure}
-                storage={null}
             />
         </div>
     );

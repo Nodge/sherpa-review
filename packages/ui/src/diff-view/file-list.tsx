@@ -74,8 +74,12 @@ const SCROLL_TO_FILE_FRAMES = 12;
 
 /** Imperative list control. The file tree requests scrolling to its row. */
 export interface DiffListHandle {
-    /** `true` means the card was found and the virtualizer finished adjusting. `false` means the request was cancelled or the file is missing. */
-    readonly scrollToFile: (fileId: string) => Promise<boolean>;
+    /**
+     * `true` means the card was found and the virtualizer finished adjusting. `false` means cancellation or
+     * a missing file. `reveal: false` preserves the target's collapsed state. Moving to the next file
+     * after marking one viewed must not expand an already viewed or generated file.
+     */
+    readonly scrollToFile: (fileId: string, options?: { readonly reveal?: boolean }) => Promise<boolean>;
 }
 
 export interface DiffFileListProps {
@@ -118,6 +122,11 @@ export interface DiffFileListProps {
      * "outside current filter" notice. The view decides which file to keep.
      */
     readonly keptFileId?: string | null;
+    /**
+     * File from which the view has already requested navigation to the next one. Collapsing it sets no anchor,
+     * or list adjustment and view scrolling would pull the screen in different directions.
+     */
+    readonly advancingFileId?: string | null;
     /** Top card in the viewport, used by scroll-spy for the active tree row. */
     readonly onTopFileChange?: (fileId: string | null) => void;
     /**
@@ -155,6 +164,7 @@ export function DiffFileList({
     onJumpToStop,
     initialFileId = null,
     keptFileId = null,
+    advancingFileId = null,
     onTopFileChange,
     onScroll,
     ref,
@@ -350,7 +360,10 @@ export function DiffFileList({
     );
 
     // ResizeObserver cannot see a card outside the DOM. When its collapsed state changes, replace its old
-    // estimate with a new one. Keep the current card's sticky header below the toolbar after collapse.
+    // measurement with a new estimate. Keep the collapsed card's sticky header below the toolbar, since
+    // the reviewer stayed on it. The only exception is a card from which the view already requested
+    // a move to the next file (`advancingFileId`, decision log 2026-09-02): keeping it would
+    // pull the screen back against the view's own scrolling.
     const previousCollapseReasons = useRef<ReadonlyMap<string, FileCollapseReason>>(collapseReasons);
     useEffect(() => {
         const previous = previousCollapseReasons.current;
@@ -372,6 +385,7 @@ export function DiffFileList({
                 const measurement = virtualizer.measurementsCache[index];
                 if (
                     collapsed &&
+                    file.fileId !== advancingFileId &&
                     measurement !== undefined &&
                     measurement.start < viewportTop &&
                     measurement.end > viewportTop
@@ -391,7 +405,7 @@ export function DiffFileList({
         return () => {
             cancelAnimationFrame(frame);
         };
-    }, [collapseReasons, converge, files, scrollPaddingStart, virtualizer]);
+    }, [advancingFileId, collapseReasons, converge, files, scrollPaddingStart, virtualizer]);
 
     // Adjustment lasts up to 12 frames and calls `scrollToIndex` throughout. Without cancellation,
     // the reviewer's wheel and touch would have no effect during those frames.
@@ -472,12 +486,14 @@ export function DiffFileList({
     useImperativeHandle(
         ref,
         () => ({
-            scrollToFile: (fileId: string) => {
+            scrollToFile: (fileId: string, options) => {
                 const index = files.findIndex((file) => file.fileId === fileId);
                 if (index < 0) {
                     return Promise.resolve(false);
                 }
-                store.revealFile(fileId);
+                if (options?.reveal !== false) {
+                    store.revealFile(fileId);
+                }
                 return converge(index).finished;
             },
         }),
@@ -895,7 +911,7 @@ export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, c
     }
     const changed = file.additions + file.deletions;
     // Binary files, files without a text diff and all collapsed cards show a single-line notice.
-    // The state is known before the first frame, so localStorage/viewed do not inflate the scrollbar.
+    // This is known before the first frame, so folds and viewed marks do not inflate the scrollbar.
     if (collapsed || file.binary || file.patch === null || changed > COLLAPSE_THRESHOLD) {
         return NOTICE_ROW_HEIGHT;
     }

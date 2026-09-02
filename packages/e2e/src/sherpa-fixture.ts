@@ -26,7 +26,15 @@ export interface SherpaServerHandle {
     readonly stop: () => Promise<void>;
 }
 
-type LaunchSherpa = (prKey: FixturePrKey) => Promise<SherpaServerHandle>;
+export interface LaunchOptions {
+    /**
+     * Shared state root for several servers, used to check that global settings
+     * apply across all PRs. The test creates and removes the directory. The fixture leaves it alone.
+     */
+    readonly sherpaDir?: string;
+}
+
+type LaunchSherpa = (prKey: FixturePrKey, options?: LaunchOptions) => Promise<SherpaServerHandle>;
 
 interface SherpaFixtures {
     readonly launchSherpa: LaunchSherpa;
@@ -36,8 +44,8 @@ interface SherpaFixtures {
 export const test = base.extend<SherpaFixtures>({
     launchSherpa: async ({ browserName: _browserName }, use) => {
         const handles: SherpaServerHandle[] = [];
-        await use(async (prKey) => {
-            const handle = await startSherpaServer(prKey);
+        await use(async (prKey, options) => {
+            const handle = await startSherpaServer(prKey, options);
             handles.push(handle);
             return handle;
         });
@@ -49,8 +57,9 @@ export const test = base.extend<SherpaFixtures>({
 
 export { expect };
 
-async function startSherpaServer(prKey: FixturePrKey): Promise<SherpaServerHandle> {
-    const sherpaDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-'));
+async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): Promise<SherpaServerHandle> {
+    const ownsSherpaDir = options?.sherpaDir === undefined;
+    const sherpaDir = options?.sherpaDir ?? (await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-')));
     const workDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-work-'));
     const child = spawn(
         'pnpm',
@@ -87,14 +96,18 @@ async function startSherpaServer(prKey: FixturePrKey): Promise<SherpaServerHandl
                 try {
                     await stopChild(child);
                 } finally {
-                    await rm(sherpaDir, { recursive: true, force: true });
+                    if (ownsSherpaDir) {
+                        await rm(sherpaDir, { recursive: true, force: true });
+                    }
                     await rm(workDir, { recursive: true, force: true });
                 }
             },
         };
     } catch (error) {
         await stopChild(child).catch(() => undefined);
-        await rm(sherpaDir, { recursive: true, force: true });
+        if (ownsSherpaDir) {
+            await rm(sherpaDir, { recursive: true, force: true });
+        }
         await rm(workDir, { recursive: true, force: true });
         throw error;
     }

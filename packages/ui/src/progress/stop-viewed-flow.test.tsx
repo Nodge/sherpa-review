@@ -1,14 +1,22 @@
 // @vitest-environment jsdom
 import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot, UiFileProgress, UiStopProgress, UiStopSeenRange } from '@sherpa/protocol';
+import type {
+    RouteSnapshot,
+    UiFileProgress,
+    UiPrStatePatch,
+    UiStopProgress,
+    UiStopSeenRange,
+} from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../app.tsx';
-import { collapsedStorageKey } from '../diff-view/collapsed-storage.js';
 import { parseFileDiff } from '../diff/parse.js';
+import { PrStateProvider } from '../pr-state/context.tsx';
+import type { UiPrStateStore } from '../pr-state/pr-state-store.js';
+import { createUiPrStateStore } from '../pr-state/pr-state-store.js';
 import type { SessionStore } from '../session/session-store.js';
 import { createSessionStore } from '../session/session-store.js';
 import { ShortcutsProvider } from '../shortcuts/context.tsx';
@@ -112,6 +120,9 @@ function fakeProgress(): FakeProgress {
 
 interface Mounted {
     readonly host: HTMLElement;
+    /** This tab's PR state and patches sent to the server. App writes collapse state. */
+    readonly prState: UiPrStateStore;
+    readonly prStatePatches: UiPrStatePatch[];
     /** Server restart with a channel event announcing its new (zero) revision. */
     readonly restartServer: () => void;
     readonly session: SessionStore;
@@ -265,13 +276,22 @@ function mount(options: MountOptions = {}): Mounted {
     };
 
     const session = createSessionStore({ initial: { view: 'route', filter: 'all' } });
+    const prStatePatches: UiPrStatePatch[] = [];
+    const prState = createUiPrStateStore({
+        send: (patch) => {
+            prStatePatches.push(patch);
+            return Promise.resolve(prState.getSnapshot());
+        },
+    });
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
     act(() => {
         root.render(
             <ShortcutsProvider registry={createShortcutRegistry()}>
-                <App store={store} session={session} token="token" />
+                <PrStateProvider store={prState}>
+                    <App store={store} session={session} token="token" />
+                </PrStateProvider>
             </ShortcutsProvider>,
         );
     });
@@ -294,6 +314,8 @@ function mount(options: MountOptions = {}): Mounted {
 
     return {
         host,
+        prState,
+        prStatePatches,
         session,
         progress,
         settle,
@@ -348,12 +370,9 @@ function filesRead(host: HTMLElement): string {
 
 describe('collapse persistence at the App level', () => {
     it('writes only when collapsePreferences changes', async () => {
-        const key = collapsedStorageKey('fixture/medium');
-        localStorage.removeItem(key);
-        const setItem = vi.spyOn(Storage.prototype, 'setItem');
         const view = mount();
         await view.settle();
-        setItem.mockClear();
+        view.prStatePatches.length = 0;
 
         const mode = view.host.querySelector<HTMLButtonElement>('.diff-mode-toggle');
         const card = stopSection(view.host, 's01').querySelector<HTMLElement>('.file-card');
@@ -363,17 +382,60 @@ describe('collapse persistence at the App level', () => {
             throw new Error('route needs a mode toggle and a file card');
         }
 
+        // Changing the diff mode does not collapse anything, so there is no PR state update to send.
         act(() => {
             mode.click();
         });
-        expect(setItem.mock.calls.filter(([storageKey]) => storageKey === key)).toHaveLength(0);
+        await act(async () => {
+            view.prState.flush();
+            await Promise.resolve();
+        });
+        expect(view.prStatePatches).toEqual([]);
 
         act(() => {
             name.click();
         });
-        expect(setItem.mock.calls.filter(([storageKey]) => storageKey === key)).toHaveLength(1);
-        expect(JSON.parse(localStorage.getItem(key) ?? '{}')).toMatchObject({ [fileId]: true });
-        localStorage.removeItem(key);
+        await act(async () => {
+            view.prState.flush();
+            await Promise.resolve();
+        });
+        expect(view.prStatePatches).toEqual([{ diffCollapsed: { [fileId]: true } }]);
+    });
+
+    it('merges late PR state into the diff store and preserves it on the first collapse', async () => {
+        const view = mount();
+        await view.settle();
+        view.prStatePatches.length = 0;
+
+        const cards = [...stopSection(view.host, 's01').querySelectorAll<HTMLElement>('.file-card')];
+        const saved = cards[0]?.dataset.file;
+        const target = cards[1];
+        const name = target?.querySelector<HTMLElement>('.file-card__name');
+        if (saved === undefined || target === undefined || name === null || name === undefined) {
+            throw new Error('stop needs two file cards');
+        }
+
+        // Boot-GET timed out: the diff store was created with an empty map, and the response arrives now.
+        await act(async () => {
+            await view.prState.load(() =>
+                Promise.resolve({ treeCollapsed: {}, diffCollapsed: { [saved]: true }, paletteRecent: [] }),
+            );
+        });
+
+        expect(view.host.querySelector(`[data-file="${saved}"] .file-card__collapsed--file`)).not.toBeNull();
+        expect(view.prStatePatches).toEqual([]);
+
+        act(() => {
+            name.click();
+        });
+        await act(async () => {
+            view.prState.flush();
+            await Promise.resolve();
+        });
+
+        // The patch replaces the whole field, so it must include both cards, rather than only the new one.
+        const collapsed = target.dataset.file ?? '';
+        expect(view.prStatePatches).toEqual([{ diffCollapsed: { [saved]: true, [collapsed]: true } }]);
     });
 });
 

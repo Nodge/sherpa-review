@@ -40,6 +40,9 @@ import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
+import { useReadOnlyIteration } from '../../iterations/read-only.tsx';
+import { SnapshotPill } from '../../iterations/snapshot-picker.tsx';
+import type { ViewingLabel } from '../../iterations/viewing.js';
 import { readSelectionLink } from '../../selection-link.js';
 import {
     ALL_FILTER_ID,
@@ -63,8 +66,10 @@ import type { RouteSummary } from '../../route/route-summary.js';
 import { stopCoveredByProgress } from '../../route/stop-coverage.js';
 import {
     buildRouteModel,
+    changeFilterAvailable,
     composersForGroup,
     countStopComments,
+    entryMatchesChangeFilter,
     entryParseFailed,
     entryPending,
     entryUnfilled,
@@ -101,7 +106,16 @@ import {
     pickTopStop,
     targetScrollTop,
 } from './scroll.js';
-import { AnchorDrift, CollapsedStop, EmptyStop, StopCard, StopSkeleton, ViewedSummary } from './stop-card.tsx';
+import type { StopChangeThread } from './stop-card.tsx';
+import {
+    AnchorDrift,
+    CollapsedStop,
+    EmptyStop,
+    StopCard,
+    stopChangeThreads,
+    StopSkeleton,
+    ViewedSummary,
+} from './stop-card.tsx';
 import { StopFileCard, stopFileShownModel } from './stop-file-card.tsx';
 import { TestDigest } from './test-digest.tsx';
 import { useOnScreen } from './use-on-screen.js';
@@ -155,6 +169,10 @@ export interface RouteViewProps {
     readonly onFillStop?: (planIndex: number) => void;
     /** Expose route counts. Only the view computes them, and the action panel and review summary need them. */
     readonly onRouteSummary?: (summary: RouteSummary) => void;
+    /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
+    readonly onOpenThread?: (threadId: string) => void;
+    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    readonly headerAside?: ReactNode;
 }
 
 export function RouteView({
@@ -186,6 +204,8 @@ export function RouteView({
     onUnderExplained,
     onFillStop,
     onRouteSummary,
+    onOpenThread,
+    headerAside,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
@@ -306,6 +326,8 @@ export function RouteView({
             {...(onUnderExplained === undefined ? {} : { onUnderExplained })}
             {...(onFillStop === undefined ? {} : { onFillStop })}
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
+            {...(onOpenThread === undefined ? {} : { onOpenThread })}
+            {...(headerAside === undefined ? {} : { headerAside })}
         />
     );
 }
@@ -356,6 +378,10 @@ export interface RouteWorkspaceProps {
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
+    /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
+    readonly onOpenThread?: (threadId: string) => void;
+    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    readonly headerAside?: ReactNode;
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
@@ -387,7 +413,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onUnderExplained,
         onFillStop,
         onRouteSummary,
+        onOpenThread,
     } = props;
+    // A previous iteration is read-only. Viewed marks and stop filling are unavailable (M4 scope).
+    const readOnly = useReadOnlyIteration();
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.
     const diffSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -400,9 +429,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const {
         filter: filterId,
         preset,
+        routeFilter,
         threadsShow,
         stops: stopState,
     } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+
+    const threadsById = useMemo(
+        () => new Map(threadSnapshot.threads.map((thread) => [thread.id, thread])),
+        [threadSnapshot.threads],
+    );
 
     const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
     const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
@@ -624,9 +659,19 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             entry.kind === 'stop' ? stopMatchesFilter(entry.view, ids) : otherMatchesFilter(entry.view, ids),
         [],
     );
+    /**
+     * "What is new since the last pass" filter (README §9). Invalid when there are no classified
+     * stops: the route stays intact, no chip appears, and no value enters the URL.
+     */
+    const changeFilterOn = routeFilter === 'new' && changeFilterAvailable(model.entries);
     const shown = useMemo(
-        () => model.entries.filter((entry) => matches(entry, filter.fileIds) || entryId(entry) === keptStopId),
-        [filter.fileIds, keptStopId, matches, model.entries],
+        () =>
+            model.entries.filter(
+                (entry) =>
+                    (entryMatchesChangeFilter(entry, changeFilterOn) && matches(entry, filter.fileIds)) ||
+                    entryId(entry) === keptStopId,
+            ),
+        [changeFilterOn, filter.fileIds, keptStopId, matches, model.entries],
     );
 
     const updateTopStop = useCallback(() => {
@@ -716,6 +761,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             const run: JumpRun = { cancel: () => undefined, timers: [], frame: null, reached: 'none' };
             running.current = run;
             const deadline = Date.now() + JUMP_SEARCH_MS;
+            // The last targeting time determines the remaining correction duration.
+            let aimedAt = Date.now();
 
             const goTo = (step: JumpStep, element: HTMLElement): void => {
                 if (JUMP_STEPS[step] <= JUMP_STEPS[run.reached]) {
@@ -723,7 +770,29 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 }
                 run.reached = step;
                 run.cancel();
+                aimedAt = Date.now();
                 run.cancel = animateScrollTo(container, targetScrollTop(container, element));
+            };
+            /**
+             * Recalculate the target while approaching it. Marking a stop does not collapse it in a single frame
+             * (lazy rendering, ResizeObserver, late parsing). The document above the target keeps
+             * shrinking during the animation, so calculating once causes an overshoot. Correction fits
+             * into what remains of ~320ms (README "Motion") since the last aim, but lasts at least
+             * `REAIM_MIN_DURATION`: the target often appears hundreds of milliseconds after the search
+             * starts, so time remaining "since the jump began" would turn the correction into a teleport.
+             */
+            const reaim = (): void => {
+                if (running.current !== run) {
+                    return;
+                }
+                const again = jumpTarget(container, stopId, fileId, line, side);
+                if (again === null || JUMP_STEPS[again.step] < JUMP_STEPS[run.reached]) {
+                    return;
+                }
+                const duration = Math.max(REAIM_MIN_DURATION, JUMP_DURATION - (Date.now() - aimedAt));
+                run.cancel();
+                aimedAt = Date.now();
+                run.cancel = animateScrollTo(container, targetScrollTop(container, again.element), duration);
             };
             const finish = (): void => {
                 run.frame = null;
@@ -736,6 +805,19 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         }
                     }, JUMP_DURATION + SETTLE_TAIL),
                 );
+            };
+            /** Target found: correct it twice more, on the next frame and after `ANCHOR_SETTLE`. */
+            const settle = (): void => {
+                run.frame = requestAnimationFrame(() => {
+                    run.frame = null;
+                    reaim();
+                    run.timers.push(
+                        setTimeout(() => {
+                            reaim();
+                            finish();
+                        }, ANCHOR_SETTLE),
+                    );
+                });
             };
 
             const step = (): void => {
@@ -762,7 +844,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         flashRow(target.element);
                     }
                     if (done) {
-                        finish();
+                        settle();
                         return;
                     }
                 }
@@ -1021,6 +1103,30 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
         });
     }, [session, updateTopStop]);
+
+    /**
+     * The "what is new" filter changes outside the view, through the second-pass banner button and chip,
+     * so the same store subscription detects it before rerendering, while the DOM
+     * still has the old set of stops. As with the file filter, the view keeps the top stop
+     * on screen even when the new filter would hide it (SPEC §2.7).
+     */
+    useEffect(() => {
+        let last = session.getSnapshot().routeFilter;
+        return session.subscribe(() => {
+            const next = session.getSnapshot().routeFilter;
+            if (next === last) {
+                return;
+            }
+            last = next;
+            updateTopStop();
+            const top = topStopRef.current?.stopId ?? null;
+            const entry = model.entries.find((candidate) => entryId(candidate) === top) ?? null;
+            const nextChangeOn = next === 'new' && changeFilterAvailable(model.entries);
+            const shownNext =
+                entry !== null && entryMatchesChangeFilter(entry, nextChangeOn) && matches(entry, filter.fileIds);
+            setKeptStopId(entry === null || shownNext ? null : entryId(entry));
+        });
+    }, [filter.fileIds, matches, model.entries, session, updateTopStop]);
 
     const handledNavigation = useRef<number | null>(null);
     useEffect(() => {
@@ -1281,14 +1387,18 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         return stopId === null ? null : (shown.find((entry) => entryId(entry) === stopId) ?? null);
     }, [shown]);
 
-    /** A stop can be marked only once its ranges are counted. Clearing a mark is always allowed. */
+    /**
+     * A mark can be set only after the stop's ranges have been counted. It can always be cleared.
+     * Previous iterations have no viewed marks at all (M4 scope).
+     */
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>
-            stopProgress.isViewed(entryId(entry)) ||
-            (!entryPending(entry, model.totals) &&
-                !entryParseFailed(entry, model.totals) &&
-                !unfilledEntry(entry)),
-        [model.totals, stopProgress, unfilledEntry],
+            !readOnly &&
+            (stopProgress.isViewed(entryId(entry)) ||
+                (!entryPending(entry, model.totals) &&
+                    !entryParseFailed(entry, model.totals) &&
+                    !unfilledEntry(entry))),
+        [model.totals, readOnly, stopProgress, unfilledEntry],
     );
     useShortcut({
         id: 'route.toggleStopViewed',
@@ -1420,9 +1530,32 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         },
     });
 
+    /**
+     * Mark a file within a stop. After the file the reviewer is reading collapses,
+     * the view moves to the next card in the same stop. The same "scrolling follows
+     * collapse" rule applies to stops (decision log 2026-09-02). The last file in a stop
+     * does not request scrolling: the covered stop marks itself and moves to the next one.
+     */
+    const markFileViewed = useCallback(
+        (fileId: string, viewed: boolean): Promise<Feedback> => {
+            const container = containerRef.current;
+            // Capture the geometry before writing: the mark collapses the card in the same frame.
+            const top = viewed && container !== null ? topFileCard(container) : null;
+            const stopId = top?.fileId === fileId ? top.stopId : null;
+            const advance =
+                container === null || stopId === null ? null : nextCardInStop(container, stopId, fileId);
+            const written = markViewed(fileId, viewed);
+            if (stopId !== null && advance !== null) {
+                requestJump(stopId, advance, null, null, false);
+            }
+            return written;
+        },
+        [markViewed, requestJump],
+    );
+
     const actions = useMemo<FileCardActions>(
         () => ({
-            onViewed: markViewed,
+            onViewed: markFileViewed,
             onExpand: expand,
             onRetryParse: (fileId: string) => {
                 retryParse([fileId]);
@@ -1446,7 +1579,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 setFocusedLine(null);
             },
         }),
-        [commentLine, expand, markViewed, retryParse, store],
+        [commentLine, expand, markFileViewed, retryParse, store],
     );
 
     const cardFor = useCallback(
@@ -1566,7 +1699,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 onTogglePci={() => {
                     changeFilter(filter.id === PCI_FILTER_ID ? ALL_FILTER_ID : PCI_FILTER_ID);
                 }}
-                aside={<SnapshotPill snapshot={snapshot} />}
+                aside={props.headerAside ?? <SnapshotPill label={pillLabelOf(snapshot)} />}
             />
 
             <RouteToolbar
@@ -1580,6 +1713,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 threadsShow={threadsShow}
                 threadCounts={countThreadSources(threadSnapshot.threads)}
                 onThreadsShow={session.setThreadsShow}
+                changeFilterOn={changeFilterOn}
+                onClearChangeFilter={() => {
+                    session.setRouteFilter('all');
+                }}
                 strip={
                     <CoverageStrip
                         model={settled && !filling ? coverage : null}
@@ -1624,6 +1761,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile)}
+                            changeThreads={stopChangeThreads(entry.view.stop.change, threadsById)}
+                            {...(onOpenThread === undefined ? {} : { onOpenThread })}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
                             viewed={stopViewed.get(entry.view.stop.id) === true}
@@ -1734,6 +1873,9 @@ interface StopSectionProps {
     readonly entries: readonly RouteEntry[];
     readonly stopCount: number;
     readonly comments: number;
+    /** Links to causal threads in the "why this stop changed" block. */
+    readonly changeThreads: readonly StopChangeThread[];
+    readonly onOpenThread?: (threadId: string) => void;
     /** null shows all stop files (no filter, or the stop is kept on screen). */
     readonly fileIds: ReadonlySet<string> | null;
     readonly keptInView: boolean;
@@ -1772,6 +1914,8 @@ function StopSection({
     entries,
     stopCount,
     comments,
+    changeThreads,
+    onOpenThread,
     fileIds,
     keptInView,
     viewed,
@@ -1902,6 +2046,8 @@ function StopSection({
                 view={view}
                 stopCount={stopCount}
                 comments={comments}
+                changeThreads={changeThreads}
+                {...(onOpenThread === undefined ? {} : { onOpenThread })}
                 viewed={viewed}
                 pending={pending}
                 parseFailed={parseFailed}
@@ -2026,13 +2172,9 @@ function otherQuestionRanges(view: RouteOtherView): readonly QuestionRange[] {
     );
 }
 
-/** Static snapshot pill (README §1). Snapshot selection comes in M4. */
-export function SnapshotPill({ snapshot }: { snapshot: RouteSnapshot }) {
-    return (
-        <span className="route-snapshot" title={`Route built for commit ${snapshot.commit}`}>
-            snapshot {snapshot.commit.slice(0, 7)}
-        </span>
-    );
+/** Pill without a picker: the snapshot on screen is current (gallery, standalone workspace). */
+function pillLabelOf(snapshot: RouteSnapshot): ViewingLabel {
+    return { kind: 'snapshot', commit: snapshot.commit, status: 'current' };
 }
 
 /** Stop sections in markup order. Lazy measurement stops at the first visible section when selecting an anchor. */
@@ -2044,6 +2186,45 @@ function* stopBoxes(container: HTMLElement): Generator<StopBox> {
             yield { stopId, top: rect.top, bottom: rect.bottom };
         }
     }
+}
+
+/**
+ * Top file card on screen and its stop. Readable content starts below
+ * the sticky toolbar, so a card entirely beneath it cannot be the top card.
+ */
+function topFileCard(container: HTMLElement): { readonly stopId: string; readonly fileId: string } | null {
+    const top = container.getBoundingClientRect().top;
+    const toolbar = container.querySelector<HTMLElement>('.route-toolbar');
+    const line = toolbar === null ? top : Math.max(top, toolbar.getBoundingClientRect().bottom);
+    for (const card of container.querySelectorAll<HTMLElement>('.file-card[data-file]')) {
+        if (card.getBoundingClientRect().bottom <= line) {
+            continue;
+        }
+        const stopId = card.closest<HTMLElement>('[data-stop]')?.dataset.stop;
+        const fileId = card.dataset.file;
+        return stopId === undefined || fileId === undefined ? null : { stopId, fileId };
+    }
+    return null;
+}
+
+/**
+ * Next card in the same stop: nearest expanded card below, or simply the next card if all below are collapsed
+ * (same rule as `nextFileToAdvance` in the full diff). The card set
+ * comes from the markup, which already reflects the lens. A placeholder body identifies collapsed cards.
+ */
+export function nextCardInStop(container: HTMLElement, stopId: string, fileId: string): string | null {
+    const section = container.querySelector<HTMLElement>(`[data-stop="${cssEscape(stopId)}"]`);
+    if (section === null) {
+        return null;
+    }
+    const cards = [...section.querySelectorAll<HTMLElement>('.file-card[data-file]')];
+    const index = cards.findIndex((card) => card.dataset.file === fileId);
+    if (index < 0) {
+        return null;
+    }
+    const rest = cards.slice(index + 1);
+    const next = rest.find((card) => card.querySelector('.file-card__collapsed--file') === null) ?? rest[0];
+    return next?.dataset.file ?? null;
 }
 
 function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number {
@@ -2090,6 +2271,8 @@ const JUMP_SEARCH_MS = 1500;
  * the reviewer's own scrolling.
  */
 const ANCHOR_SETTLE = 120;
+/** Minimum jump correction duration: adjusting the target still moves to it instead of teleporting. */
+const REAIM_MIN_DURATION = 120;
 const EMPTY_FILE = {
     generated: false,
     viewed: false,

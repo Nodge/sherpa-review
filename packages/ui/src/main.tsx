@@ -1,17 +1,34 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { fetchUiPrState, fetchUiSettings, patchUiPrState, patchUiSettings } from './api.js';
 import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID, filterFragmentValue } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
+import { PrStateProvider } from './pr-state/context.tsx';
+import { createUiPrStateStore } from './pr-state/pr-state-store.js';
+import type { Viewing } from './iterations/viewing.js';
+import { parseViewing, viewingFragmentPatch } from './iterations/viewing.js';
 import type { SessionState } from './session/session-store.js';
-import { createSessionStore, DEFAULT_PRESET, DEFAULT_THREADS_SHOW, parsePreset } from './session/session-store.js';
+import {
+    createSessionStore,
+    DEFAULT_PRESET,
+    DEFAULT_ROUTE_FILTER,
+    DEFAULT_THREADS_SHOW,
+    parsePreset,
+    parseRouteFilter,
+} from './session/session-store.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
+import { SettingsProvider } from './settings/context.tsx';
+import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import { createStore } from './store.js';
 import './styles/base.css';
+
+/** Wait limit for server state (settings and PR state) before the first render. */
+const SETTINGS_BOOT_TIMEOUT_MS = 1500;
 
 const container = document.getElementById('root');
 if (!container) {
@@ -34,8 +51,32 @@ if (token === null) {
     );
 } else {
     const store = createStore({ token });
+    // Global settings live on the server, and the first render waits for them. Diff mode and composer layout
+    // must be known before creating the stores, or the toggle visibly flips
+    // and the editor gets recreated while the reviewer is already typing.
+    const settings = createUiSettingsStore({ send: (patch) => patchUiSettings(token, patch) });
+    const settingsReady = loadUiSettings(settings, () => fetchUiSettings(token));
+    // Collapsed directories and cards for this PR load in the same race. A late response does not
+    // recreate the diff view store: its map is loaded separately (see App).
+    const prState = createUiPrStateStore({ send: (patch, options) => patchUiPrState(token, patch, options) });
+    const prStateReady = prState.load(() => fetchUiPrState(token));
+    // A departing tab flushes pending writes: debounce must not lose the last click.
+    const flushPrState = (): void => {
+        prState.flush();
+    };
+    window.addEventListener('pagehide', flushPrState);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPrState();
+        }
+    });
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
+    // What the tab is viewing: `snapshot=` takes priority over `diff=`, "current" is omitted from the URL (M4-T9).
+    let persistedViewing: Viewing = parseViewing(
+        readFragmentParam(window.location.hash, 'snapshot'),
+        readFragmentParam(window.location.hash, 'diff'),
+    );
     const session = createSessionStore({
         // A view from the URL is the reviewer's choice: a small PR will not override it (SPEC §4.1).
         viewPinned: viewFromUrl !== null,
@@ -44,10 +85,15 @@ if (token === null) {
             // The filter model validates the id, since only it knows which lenses the host provides.
             filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
             preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
+            routeFilter:
+                parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ?? DEFAULT_ROUTE_FILTER,
+            viewing: persistedViewing,
             threadsShow: DEFAULT_THREADS_SHOW,
             paletteOpen: false,
         },
         persist: (state: SessionState) => {
+            const viewingPatch = viewingFragmentPatch(state.viewing, persistedViewing);
+            persistedViewing = state.viewing;
             // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
             history.replaceState(
                 null,
@@ -57,6 +103,8 @@ if (token === null) {
                     filter: filterFragmentValue(state.filter),
                     // The default is omitted from the address: the preset appears in the URL only after a change.
                     preset: state.preset === DEFAULT_PRESET ? null : state.preset,
+                    routeFilter: state.routeFilter === DEFAULT_ROUTE_FILTER ? null : state.routeFilter,
+                    ...viewingPatch,
                 }),
             );
         },
@@ -85,12 +133,24 @@ if (token === null) {
     });
     attachShortcuts(window, shortcuts);
 
-    root.render(
-        <StrictMode>
-            <IconSprite />
-            <ShortcutsProvider registry={shortcuts}>
-                <App store={store} session={session} token={token} />
-            </ShortcutsProvider>
-        </StrictMode>,
-    );
+    // Wait for server state until the timeout. A stalled endpoint must not leave the reviewer
+    // on an empty page. Render defaults, then load the response into the stores when it arrives.
+    void Promise.race([Promise.all([settingsReady, prStateReady]), delay(SETTINGS_BOOT_TIMEOUT_MS)]).then(() => {
+        root.render(
+            <StrictMode>
+                <IconSprite />
+                <ShortcutsProvider registry={shortcuts}>
+                    <SettingsProvider store={settings}>
+                        <PrStateProvider store={prState}>
+                            <App store={store} session={session} token={token} />
+                        </PrStateProvider>
+                    </SettingsProvider>
+                </ShortcutsProvider>
+            </StrictMode>,
+        );
+    });
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

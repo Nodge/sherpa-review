@@ -88,7 +88,7 @@
     color: var(--text-muted);
 }
 
-/* --- Overview variant (prototype, Overview screen): no avatar or `aside` slot. --- */
+/* --- Overview variant (prototype, Overview screen), no avatar, `aside` slot in the author row. --- */
 
 .pr-header--overview {
     padding: 0;

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
 import { Icon } from '../icons/icon.tsx';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { plural } from '../text.js';
 import { closeCommentComposers } from './composer.js';
@@ -73,6 +74,8 @@ function ThreadBlock({
     inlineDraftEditing: boolean;
     initialLayout?: ComposerLayout;
 }) {
+    // A thread from a previous iteration is read-only: no replies, resolution or draft editing.
+    const readOnly = useReadOnlyIteration();
     const all = useMemo(() => flattenThread(thread.root), [thread.root]);
     const commentIds = useMemo(() => all.map((row) => row.comment.id), [all]);
     const editingId = useActiveDraftEditor(store, commentIds);
@@ -180,8 +183,8 @@ function ThreadBlock({
                                     type="button"
                                     className="thread__edit-draft"
                                     aria-label={`Edit draft ${row.comment.id}`}
-                                    title="Edit the draft"
-                                    disabled={editingId !== null || deletingId !== null}
+                                    title={readOnly ? READ_ONLY_REASON : 'Edit the draft'}
+                                    disabled={readOnly || editingId !== null || deletingId !== null}
                                     onClick={() => {
                                         setConfirmingId(null);
                                         openDraftEditor(store, thread, row.comment);
@@ -193,8 +196,8 @@ function ThreadBlock({
                                     type="button"
                                     className="thread__delete-draft"
                                     aria-label={`Delete draft ${row.comment.id}`}
-                                    title="Delete the draft"
-                                    disabled={editingId !== null || deletingId !== null}
+                                    title={readOnly ? READ_ONLY_REASON : 'Delete the draft'}
+                                    disabled={readOnly || editingId !== null || deletingId !== null}
                                     onClick={() => {
                                         setDeleteErrorId(null);
                                         setConfirmingId(row.comment.id);
@@ -291,6 +294,8 @@ function ThreadBlock({
                             <>
                                 <button
                                     type="button"
+                                    disabled={readOnly}
+                                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
                                     onClick={() => {
                                         setResolved(!thread.resolved);
                                     }}
@@ -313,6 +318,8 @@ function ThreadBlock({
                                 {undo ? 'resolved' : 'reopened'} ·{' '}
                                 <button
                                     type="button"
+                                    disabled={readOnly}
+                                    {...(readOnly ? { title: READ_ONLY_REASON } : {})}
                                     onClick={() => {
                                         setResolved(!undo);
                                     }}
@@ -443,6 +450,8 @@ function ComposerForThread({
     draftEditorAvailable: boolean;
     composer: ComposerSnapshot | null;
 }) {
+    // Replies are available only in the active iteration (M4 scope).
+    const readOnly = useReadOnlyIteration();
     if (composer === null) {
         if (draft !== null && draftEditorAvailable) {
             return null;
@@ -453,6 +462,8 @@ function ComposerForThread({
                     type="button"
                     className="thread-composer-draft-preview"
                     aria-label="Continue draft"
+                    disabled={readOnly}
+                    title={readOnly ? READ_ONLY_REASON : undefined}
                     onClick={() => {
                         openReply(store, thread, draft);
                     }}
@@ -468,6 +479,8 @@ function ComposerForThread({
             <button
                 type="button"
                 className="thread-composer-entry"
+                disabled={readOnly}
+                title={readOnly ? READ_ONLY_REASON : undefined}
                 onClick={() => {
                     openReply(store, thread, null);
                 }}

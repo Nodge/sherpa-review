@@ -39,7 +39,7 @@ function PresetRouteState({ preset }: { preset: RoutePreset }) {
         [preset],
     );
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files, storage: null });
+        const created = createDiffViewStore({ files: DATA.diff.files });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
@@ -76,7 +76,7 @@ function PresetRouteState({ preset }: { preset: RoutePreset }) {
 /** Toolbar without a route: the toggle is disabled and explains why through `title` (SPEC §2.5). */
 function DisabledPresetState() {
     const [preset, setPreset] = useState<RoutePreset>('triage');
-    const store = useMemo(() => createDiffViewStore({ files: DATA.diff.files, storage: null }), []);
+    const store = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
     const filters = useMemo(
         () => buildFileFilters({ files: DATA.diff.files, ownership: DATA.ownership, extra: DATA.extraLenses }),
         [],

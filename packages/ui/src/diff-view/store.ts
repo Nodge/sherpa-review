@@ -22,8 +22,6 @@ export type FileCollapseReason = 'viewed' | 'manual' | 'generated';
 /** Side by side is unavailable below this width (SPEC §2.6). */
 export const SPLIT_MIN_WIDTH = 1100;
 
-const DIFF_MODE_KEY = 'sherpa.diffMode';
-
 export interface DiffViewSnapshot {
     /** User choice: preserved on narrow screens while rendering switches to unified mode. */
     readonly diffMode: DiffMode;
@@ -75,6 +73,11 @@ export interface DiffViewStore {
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
     /** Toggles manual collapse using the same layer formula as route stops (SPEC §2.9). */
     readonly toggleFileCollapse: (fileId: string) => void;
+    /**
+     * Full explicit collapse choices: PR state arrived from the server after store creation.
+     * Replaces previous choices, because the server value is the same set, just complete.
+     */
+    readonly setCollapsePreferences: (collapsed: ReadonlyMap<string, boolean>) => void;
     /** Prepare a collapsed file for navigation from the tree, a link, or search. */
     readonly revealFile: (fileId: string) => void;
     readonly openFile: (fileId: string) => void;
@@ -91,19 +94,12 @@ export interface DiffViewStoreOptions {
     readonly files: readonly FileDiff[];
     /** Initial server progress. Without it, only defaults apply. */
     readonly progress?: readonly UiFileProgress[];
-    /** Storage for the mode choice. Tests and the gallery replace it. */
-    readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+    /** Initial diff mode from global settings (`~/.sherpa/settings.json`). */
+    readonly diffMode?: DiffMode;
+    /** Reviewer mode change: the view handles persistence, the store makes no network calls. */
+    readonly onDiffModeChange?: (mode: DiffMode) => void;
     /** Explicit manual collapse choices already read from per-PR storage. */
     readonly collapsed?: ReadonlyMap<string, boolean>;
-}
-
-function readDiffMode(storage: DiffViewStoreOptions['storage']): DiffMode {
-    try {
-        return storage?.getItem(DIFF_MODE_KEY) === 'split' ? 'split' : 'unified';
-    } catch {
-        // Browser policy may block localStorage. That must not crash the view.
-        return 'unified';
-    }
 }
 
 type FileCollapseSnapshot = Pick<
@@ -127,10 +123,29 @@ export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDif
     return null;
 }
 
+/**
+ * Collapse layers derived from explicit choices: true means manual collapse, false means
+ * manual expansion. Both sides of the store maintain this invariant, so choices can be replaced in full.
+ */
+function collapseSetsOf(preferences: ReadonlyMap<string, boolean>): {
+    readonly collapseExpanded: Set<string>;
+    readonly collapseCollapsed: Set<string>;
+} {
+    const collapseExpanded = new Set<string>();
+    const collapseCollapsed = new Set<string>();
+    for (const [fileId, collapsed] of preferences) {
+        (collapsed ? collapseCollapsed : collapseExpanded).add(fileId);
+    }
+    return { collapseExpanded, collapseCollapsed };
+}
+
+function sameCollapsePreferences(next: ReadonlyMap<string, boolean>, current: ReadonlyMap<string, boolean>): boolean {
+    return next.size === current.size && [...next].every(([fileId, collapsed]) => current.get(fileId) === collapsed);
+}
+
 export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStore {
-    const storage = options.storage === undefined ? globalStorage() : options.storage;
     const listeners = new Set<() => void>();
-    const diffMode = readDiffMode(storage);
+    const diffMode = options.diffMode ?? 'unified';
     const filesById = new Map(options.files.map((file) => [file.fileId, file]));
 
     /**
@@ -180,11 +195,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
 
     const initialProgress = new Map((options.progress ?? []).map((record) => [record.fileId, record]));
     const collapsePreferences = new Map(options.collapsed ?? []);
-    const collapseExpanded = new Set<string>();
-    const collapseCollapsed = new Set<string>();
-    for (const [fileId, collapsed] of collapsePreferences) {
-        (collapsed ? collapseCollapsed : collapseExpanded).add(fileId);
-    }
+    const { collapseExpanded, collapseCollapsed } = collapseSetsOf(collapsePreferences);
     let snapshot: DiffViewSnapshot = {
         diffMode,
         splitAvailable: true,
@@ -248,12 +259,8 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             if (mode === snapshot.diffMode) {
                 return;
             }
-            try {
-                storage?.setItem(DIFF_MODE_KEY, mode);
-            } catch {
-                // Saving failed, but the mode still applies to the current session.
-            }
             update({ diffMode: mode });
+            options.onDiffModeChange?.(mode);
         },
 
         setAvailableWidth: (width) => {
@@ -369,6 +376,14 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             });
         },
 
+        setCollapsePreferences: (collapsed) => {
+            if (sameCollapsePreferences(collapsed, snapshot.collapsePreferences)) {
+                return;
+            }
+            const preferences = new Map(collapsed);
+            update({ collapsePreferences: preferences, ...collapseSetsOf(preferences) });
+        },
+
         revealFile,
 
         openFile: (fileId) => {
@@ -424,15 +439,4 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
         },
     };
-}
-
-/** `localStorage` may be absent (SSR, tests). The mode then does not survive a reload. */
-function globalStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
-    try {
-        // Node (tests, worker) has no `localStorage`, despite what lib.dom promises.
-        const storage: unknown = globalThis.localStorage;
-        return storage == null ? null : (storage as Pick<Storage, 'getItem' | 'setItem'>);
-    } catch {
-        return null;
-    }
 }

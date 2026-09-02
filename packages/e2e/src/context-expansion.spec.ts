@@ -32,8 +32,10 @@ for (const mode of ['unified', 'split'] as const) {
 
 async function openFullDiff(page: Page, mode: 'unified' | 'split'): Promise<void> {
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
-    const current = await page.evaluate(() => localStorage.getItem('sherpa.diffMode') ?? 'unified');
-    if (current !== mode) {
+    // Diff mode is global and survives reloads (M3-T16), so we check what
+    // what is rendered instead of the stored selection.
+    await expect(page.locator('.diff-rows').first()).toBeVisible();
+    if ((await page.locator(`.diff-rows--${mode}`).count()) === 0) {
         await page.locator('.diff-mode-toggle').click();
     }
     await expect(page.locator(`.diff-rows--${mode}`).first()).toBeVisible();

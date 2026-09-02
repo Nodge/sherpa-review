@@ -81,6 +81,13 @@ describe('storage', () => {
         }
     });
 
+    /** Schema before the named migration. Later migrations have not been applied yet. */
+    function migrationsBefore(name: string): typeof MIGRATIONS {
+        const index = MIGRATIONS.findIndex((migration) => migration.name === name);
+        expect(index).toBeGreaterThan(0);
+        return MIGRATIONS.slice(0, index);
+    }
+
     // The dogfooding database keeps its route when migrating to multiple snapshots (M4-T3).
     it('moves the snapshot from route_state to route_snapshots during the iteration migration', () => {
         const file = `${sherpaDir}/route-snapshot.db`;
@@ -137,7 +144,7 @@ describe('storage', () => {
     it('removes previously saved bindings during the task iteration migration', () => {
         const file = `${sherpaDir}/route-tasks.db`;
 
-        const before = openDatabase(file, migrationsBefore('011-route-task-iteration'));
+        const before = openDatabase(file, migrationsBefore('012-route-task-iteration'));
         before
             .prepare(
                 'INSERT INTO tasks (id, type, priority, instructions, context_files, status, attempt, ' +
@@ -196,7 +203,7 @@ describe('storage', () => {
     it('moves progress records to the active iteration and stop marks to the current snapshot during migration', () => {
         const file = `${sherpaDir}/progress-iterations.db`;
 
-        const before = openDatabase(file, migrationsBefore('012-progress-iterations'));
+        const before = openDatabase(file, migrationsBefore('013-progress-iterations'));
         before
             .prepare(
                 `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
@@ -259,7 +266,7 @@ describe('storage', () => {
     it('moves records to unknown and deletes stops when migrating progress without iterations or a snapshot', () => {
         const file = `${sherpaDir}/progress-legacy.db`;
 
-        const before = openDatabase(file, migrationsBefore('012-progress-iterations'));
+        const before = openDatabase(file, migrationsBefore('013-progress-iterations'));
         before
             .prepare(
                 `INSERT INTO file_progress (file_id, viewed, updated_at)
@@ -324,12 +331,3 @@ describe('storage', () => {
         }
     });
 });
-
-/** Schema before the named migration: the migration test must start from that exact database state. */
-function migrationsBefore(name: string): typeof MIGRATIONS {
-    const index = MIGRATIONS.findIndex((migration) => migration.name === name);
-    if (index < 0) {
-        throw new Error(`migration ${name} not found`);
-    }
-    return MIGRATIONS.slice(0, index);
-}

@@ -19,7 +19,7 @@ describe('right-hand toolbar controls', () => {
         });
         const html = renderToStaticMarkup(
             <ToolbarRightCluster
-                store={createDiffViewStore({ files: DATA.diff.files, storage: null })}
+                store={createDiffViewStore({ files: DATA.diff.files })}
                 filters={filters}
                 filter={selectFilter(filters, 'all')}
                 onFilter={() => undefined}

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
 import { expandFileContext, expandGap, gapKeyOf } from '../diff-view/expand.js';
-import { commentPosition } from './full-diff.tsx';
+import { commentPosition, nextFileToAdvance } from './full-diff.tsx';
 
 const MODEL = parseFileDiff({
     fileId: 'f1',
@@ -87,5 +87,31 @@ describe('line comment anchor', () => {
 
     it('does not carry an old selection to another line button', () => {
         expect(commentPosition(selection, MODEL, 'f1', 'new', 50)).toEqual({ side: 'new', line: 50, size: 1 });
+    });
+});
+
+describe('next file after marking viewed', () => {
+    const FILES = [{ fileId: 'a' }, { fileId: 'b' }, { fileId: 'c' }, { fileId: 'd' }];
+    const none = (): boolean => false;
+
+    it('takes the adjacent file when nothing below is collapsed', () => {
+        expect(nextFileToAdvance(FILES, 'a', none)).toBe('b');
+    });
+
+    it('skips collapsed files and goes to the first expanded file below', () => {
+        const collapsed = new Set(['b', 'c']);
+        expect(nextFileToAdvance(FILES, 'a', (file) => collapsed.has(file.fileId))).toBe('d');
+    });
+
+    it('moves to the next file when every file below is collapsed', () => {
+        expect(nextFileToAdvance(FILES, 'b', () => true)).toBe('c');
+    });
+
+    it('does not request scrolling for the last file', () => {
+        expect(nextFileToAdvance(FILES, 'd', none)).toBeNull();
+    });
+
+    it('does not navigate when the file is absent from the current list', () => {
+        expect(nextFileToAdvance(FILES, 'z', none)).toBeNull();
     });
 });

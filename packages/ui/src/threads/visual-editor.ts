@@ -1,6 +1,19 @@
-import { baseKeymap, setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
+import {
+    baseKeymap,
+    chainCommands,
+    exitCode,
+    newlineInCode,
+    setBlockType,
+    toggleMark,
+} from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
-import { InputRule, inputRules } from 'prosemirror-inputrules';
+import {
+    InputRule,
+    inputRules,
+    textblockTypeInputRule,
+    undoInputRule,
+    wrappingInputRule,
+} from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import {
     defaultMarkdownParser,
@@ -11,6 +24,7 @@ import {
 } from 'prosemirror-markdown';
 import { Slice } from 'prosemirror-model';
 import type { MarkType, Node as ProseMirrorNode, NodeType } from 'prosemirror-model';
+import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import type { Command, Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -65,6 +79,9 @@ const markdownSerializer = new MarkdownSerializer(
     defaultMarkdownSerializer.marks,
 );
 
+/** Editor lists serialize without blank lines between items. */
+const TIGHT_LIST = { tight: true };
+
 export function parseMarkdown(markdown: string) {
     return markdownParser.parse(markdown);
 }
@@ -73,12 +90,21 @@ export function parseClipboardMarkdown(markdown: string): Slice {
     return Slice.maxOpen(parseMarkdown(markdown).content);
 }
 
-export function inlineMarkdownInputRules() {
+/** Markup typed as Markdown turns into marks and blocks during input. */
+export function markdownInputRules() {
     return inputRules({
         rules: [
             markInputRule(/\*\*([^*\n]+)\*\*$/, schema.marks.strong, 1),
             markInputRule(/(^|[^*])\*([^*\n]+)\*$/, schema.marks.em, 2, 1),
             markInputRule(/`([^`\n]+)`$/, schema.marks.code, 1),
+            wrappingInputRule(/^\s*([-+*])\s$/, schema.nodes.bullet_list, TIGHT_LIST),
+            wrappingInputRule(
+                /^(\d+)\.\s$/,
+                schema.nodes.ordered_list,
+                (match) => ({ ...TIGHT_LIST, order: numberOf(match[1], 1) }),
+                (match, node) => node.childCount + listOrder(node) === numberOf(match[1], 1),
+            ),
+            textblockTypeInputRule(/^```$/, schema.nodes.code_block),
         ],
     });
 }
@@ -111,7 +137,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
     let lastMarkdown = options.markdown;
 
     const view = new EditorView(element, {
-        state: stateFor(options.markdown, options),
+        state: createEditorState(options.markdown, options),
         dispatchTransaction: (transaction: Transaction) => {
             const nextState = view.state.apply(transaction);
             view.updateState(nextState);
@@ -148,7 +174,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
                 return;
             }
             lastMarkdown = markdown;
-            view.updateState(stateFor(markdown, options));
+            view.updateState(createEditorState(markdown, options));
         },
         setDisabled: (value) => {
             disabled = value;
@@ -166,13 +192,15 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
     };
 }
 
-function stateFor(markdown: string, options: VisualEditorOptions): EditorState {
+/** Editor state: input rules, composer hotkeys and list handling on top of baseKeymap. */
+export function createEditorState(markdown: string, options: VisualEditorOptions): EditorState {
+    const enter = enterCommand();
     return EditorState.create({
         schema,
         doc: parseMarkdown(markdown),
         plugins: [
             history(),
-            inlineMarkdownInputRules(),
+            markdownInputRules(),
             keymap({
                 'Mod-b': formatMark(schema.marks.strong, 'text'),
                 'Mod-i': formatMark(schema.marks.em, 'text'),
@@ -187,6 +215,11 @@ function stateFor(markdown: string, options: VisualEditorOptions): EditorState {
                 },
                 'Mod-z': undo,
                 'Shift-Mod-z': redo,
+                Backspace: undoInputRule,
+                Enter: enter,
+                'Shift-Enter': chainCommands(exitCode, insertHardBreak()),
+                Tab: sinkListItem(schema.nodes.list_item),
+                'Shift-Tab': liftListItem(schema.nodes.list_item),
             }),
             keymap(baseKeymap),
         ],
@@ -282,9 +315,13 @@ function blockCommand(node: NodeType, fallback: string): Command {
     };
 }
 
+/** Toolbar list toggle. Removes the item inside a list, otherwise wraps the selection. */
 function listCommand(): Command {
     const list = schema.nodes.bullet_list;
     return (state, dispatch, view) => {
+        if (isInsideList(state)) {
+            return liftListItem(schema.nodes.list_item)(state, dispatch, view);
+        }
         let nextState = state;
         if (state.selection.empty && dispatch !== undefined) {
             const from = state.selection.from;
@@ -292,8 +329,59 @@ function listCommand(): Command {
             dispatch(transaction.setSelection(TextSelection.create(transaction.doc, from, from + 5)));
             nextState = view?.state ?? state.apply(transaction);
         }
-        return wrapIn(list)(nextState, dispatch);
+        return wrapInList(list, TIGHT_LIST)(nextState, dispatch);
     };
+}
+
+/**
+ * Enter splits a list item and exits the list in an empty item. Outside a list it falls through to baseKeymap.
+ * newlineInCode comes first. Enter in a code block inside an item inserts a line break instead of a new item.
+ */
+function enterCommand(): Command {
+    return chainCommands(newlineInCode, splitListItem(schema.nodes.list_item), liftEmptyListItem());
+}
+
+/** Shift-Enter outside a code block inserts a soft break. hard_break serializes as a single \n. */
+function insertHardBreak(): Command {
+    return (state, dispatch) => {
+        dispatch?.(state.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView());
+        return true;
+    };
+}
+
+/** splitListItem falls through on an empty top-level item, so lift the item here. */
+function liftEmptyListItem(): Command {
+    const lift = liftListItem(schema.nodes.list_item);
+    return (state, dispatch, view) => {
+        const { $from, empty } = state.selection;
+        if (!empty || $from.depth < 2 || $from.parent.content.size > 0) {
+            return false;
+        }
+        if ($from.node(-1).type !== schema.nodes.list_item) {
+            return false;
+        }
+        return lift(state, dispatch, view);
+    };
+}
+
+function isInsideList(state: EditorState): boolean {
+    const { $from } = state.selection;
+    for (let depth = $from.depth; depth > 0; depth -= 1) {
+        if ($from.node(depth).type === schema.nodes.list_item) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function listOrder(node: ProseMirrorNode): number {
+    const order: unknown = node.attrs.order;
+    return typeof order === 'number' ? order : 1;
+}
+
+function numberOf(value: string | undefined, fallback: number): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function isComposerInputKey(key: string): boolean {

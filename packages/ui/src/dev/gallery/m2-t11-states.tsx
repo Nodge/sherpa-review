@@ -41,7 +41,7 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
     );
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all' } }), []);
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: diff.files, storage: null });
+        const created = createDiffViewStore({ files: diff.files });
         for (const file of diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
@@ -62,7 +62,6 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
                 session={session}
                 store={store}
                 threadStore={threadStore}
-                collapsedStorage={null}
                 threadNow={GALLERY_NOW}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={(fileId) => {

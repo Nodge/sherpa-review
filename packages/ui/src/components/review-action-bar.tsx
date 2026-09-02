@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
+import { useReadOnlyIteration } from '../iterations/read-only.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
     commentBodies,
@@ -12,6 +13,7 @@ import {
 } from '../progress/summary.js';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ViewId } from '../session/views.js';
+import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import type { ConnectionState } from '../store.js';
 import { formatCount, plural } from '../text.js';
 import { closePublishedComposers } from '../threads/composer.js';
@@ -21,13 +23,11 @@ import { discussionStats } from '../views/overview-model.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 import {
     availableShipMode,
-    loadShipMode,
     partialPublicationFailure,
     type PublicationFailure,
     publishConsequence,
     publishDisabledReason,
     requestPublicationFailure,
-    saveShipMode,
     type ShipMode,
 } from './review-action-model.js';
 import './review-action-bar.css';
@@ -85,7 +85,13 @@ export interface ReviewActionBarProps {
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
     readonly initialFailure?: PublicationFailure | null;
-    readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+}
+
+interface PublishOptions {
+    /** Retry after failure: allowed even when normal publishing is blocked. */
+    readonly retry?: boolean;
+    /** The reviewer selected the ship mode by hand. Save it in global settings. */
+    readonly remember?: boolean;
 }
 
 /** Panel mount condition: Overview shows loading, the other views wait for usable data. */
@@ -180,7 +186,6 @@ export function ReviewActionBar({
     onComplete,
     defaultMenuOpen = false,
     initialFailure = null,
-    storage,
 }: ReviewActionBarProps) {
     const diffSnapshot = useSyncExternalStore(diffStore.subscribe, diffStore.getSnapshot, diffStore.getSnapshot);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot, threadStore.getSnapshot);
@@ -190,7 +195,9 @@ export function ReviewActionBar({
         threadStore.getComposerGuardSnapshot,
     );
     const stickyAvailable = pr.capabilities.stickyShip;
-    const [shipMode, setShipMode] = useState<ShipMode>(() => loadShipMode(stickyAvailable, storage));
+    const settings = useUiSettingsStore();
+    // Ship mode is global (SPEC §2.8). Unavailable sticky always falls back to ship.
+    const shipMode = useUiSettings().shipMode;
     const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
     const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
     const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
@@ -203,6 +210,8 @@ export function ReviewActionBar({
     const menuRef = useRef<HTMLDivElement | null>(null);
     const publicationRef = useRef<{
         verdict: Verdict;
+        // The mode was selected by hand, so it can be saved even when retrying after failure.
+        remember: boolean;
         publishedIds: Set<string>;
     } | null>(null);
 
@@ -213,16 +222,20 @@ export function ReviewActionBar({
     // A route exists, so the guardrail counts stops instead of files (SPEC §2.19).
     const unviewedStops = routeCompletion === null ? 0 : routeCompletion.stopsTotal - routeCompletion.stopsViewed;
     const draggingSelection = diffSnapshot.selectionDragging;
+    // Publishing changes the PR, so it is available only in the active iteration (M4 boundaries).
+    const readOnlyIteration = useReadOnlyIteration();
     const retryDisabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
+        readOnlyIteration,
     });
     const disabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
         failure: failure !== null,
+        readOnlyIteration,
     });
     const disabled = disabledReason !== null;
 
@@ -249,9 +262,14 @@ export function ReviewActionBar({
         };
     }, [closeMenu, menuOpen]);
 
+    /**
+     * Publishes the verdict. `remember` is set only where the reviewer selects the ship mode by hand:
+     * the main button publishes the downgraded mode (this PR has no sticky), and saving that downgrade
+     * in global settings would reset the choice for every other PR.
+     */
     const publish = useCallback(
-        async (verdict: Verdict, retryFailure = false): Promise<void> => {
-            if ((retryFailure ? retryDisabledReason : disabledReason) !== null) {
+        async (verdict: Verdict, { retry = false, remember = false }: PublishOptions = {}): Promise<void> => {
+            if ((retry ? retryDisabledReason : disabledReason) !== null) {
                 return;
             }
             const threadsBefore = threadStore.getSnapshot().threads;
@@ -259,7 +277,7 @@ export function ReviewActionBar({
             const publication =
                 publicationRef.current?.verdict === verdict
                     ? publicationRef.current
-                    : { verdict, publishedIds: new Set<string>() };
+                    : { verdict, remember, publishedIds: new Set<string>() };
             publicationRef.current = publication;
             setMenuOpen(false);
             setFailure(null);
@@ -276,9 +294,8 @@ export function ReviewActionBar({
                     setFailure(partial);
                     return;
                 }
-                if (verdict === 'ship' || verdict === 'sticky_ship') {
-                    setShipMode(verdict);
-                    saveShipMode(verdict, storage);
+                if (publication.remember && (verdict === 'ship' || verdict === 'sticky_ship')) {
+                    settings.update({ shipMode: verdict });
                 }
                 const discussion = discussionStats(currentThreads);
                 const publishedIds = [...publication.publishedIds];
@@ -315,8 +332,7 @@ export function ReviewActionBar({
             setFailure,
             setMenuOpen,
             setPublishing,
-            setShipMode,
-            storage,
+            settings,
             threadStore,
         ],
     );
@@ -362,7 +378,7 @@ export function ReviewActionBar({
                     {' · '}
                     <button
                         type="button"
-                        onClick={() => void publish(failure.verdict, true)}
+                        onClick={() => void publish(failure.verdict, { retry: true })}
                         disabled={retryDisabledReason !== null}
                         title={retryDisabledReason ?? undefined}
                     >
@@ -481,7 +497,7 @@ export function ReviewActionBar({
                                 event.preventDefault();
                                 const mode: ShipMode = cursor === 0 ? 'ship' : 'sticky_ship';
                                 if (mode === 'ship' || stickyAvailable) {
-                                    void publish(mode);
+                                    void publish(mode, { remember: true });
                                 }
                             } else if (event.key === 'Escape') {
                                 event.preventDefault();
@@ -501,7 +517,7 @@ export function ReviewActionBar({
                             description={SHIP_DESCRIPTION}
                             drafts={drafts}
                             onHover={setCursor}
-                            onChoose={(mode) => void publish(mode)}
+                            onChoose={(mode) => void publish(mode, { remember: true })}
                         />
                         <ShipOption
                             index={1}
@@ -514,7 +530,7 @@ export function ReviewActionBar({
                             disabled={!stickyAvailable}
                             disabledReason="This host does not support Sticky ship."
                             onHover={setCursor}
-                            onChoose={(mode) => void publish(mode)}
+                            onChoose={(mode) => void publish(mode, { remember: true })}
                         />
                     </div>
                 ) : null}

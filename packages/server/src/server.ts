@@ -42,6 +42,8 @@ import {
     workerIdPathFor,
 } from './paths.js';
 import { PrMetaCache } from './pr-meta.js';
+import { createPrStateRoutes } from './pr-state-routes.js';
+import { PrStateStore } from './pr-state-store.js';
 import { ProgressStore } from './progress-store.js';
 import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
@@ -51,6 +53,8 @@ import type { RouteConfig } from './route-orchestrator.js';
 import { RouteOrchestrator } from './route-orchestrator.js';
 import { createRouteRoutes } from './route-routes.js';
 import { RouteStore } from './route-store.js';
+import { createSettingsRoutes } from './settings-routes.js';
+import { SettingsStore } from './settings-store.js';
 import { holdsPayload, SharedPayloadStore } from './shared-payload.js';
 import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
@@ -320,6 +324,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 workerStatus: () => workerRegistry.status(),
                 ...(reviewHost?.currentUser === undefined ? {} : { currentUser: reviewHost.currentUser }),
                 ...options.feedback,
+            }),
+            // Settings are global. The endpoint depends on neither the review host nor this PR's state.
+            ...createSettingsRoutes({ settings: new SettingsStore(sherpaDir) }),
+            // This PR's UI state (folds, palette history) is local and doesn't need a review host.
+            ...createPrStateRoutes({
+                prState: new PrStateStore(options.now === undefined ? { db } : { db, now: options.now }),
             }),
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator, iterationFeed }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),

@@ -5,6 +5,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFileModel } from '../diff/model.js';
 import type { LineSelection } from '../diff-view/selection.js';
 import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import { selectionLinkHash } from '../selection-link.js';
 import { formatCount, plural } from '../text.js';
 import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
@@ -128,6 +129,8 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     const count = selectedKeys.size;
     const mode = gallery?.mode ?? (inFlight ? 'sent' : 'rest');
     const [error, setError] = useState<string | null>(null);
+    // Asking the agent works in a previous iteration, commenting does not (M4 boundaries).
+    const readOnly = useReadOnlyIteration();
     const [position, setPosition] = useState<SelectionPopoverPosition | null>(
         gallery === undefined ? null : { ...gallery.position, placement: 'below' },
     );
@@ -306,6 +309,8 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 <button
                     type="button"
                     className="selection-popover__button"
+                    disabled={readOnly}
+                    title={readOnly ? READ_ONLY_REASON : undefined}
                     onClick={() => {
                         onComment(anchor.side, anchor.start);
                     }}

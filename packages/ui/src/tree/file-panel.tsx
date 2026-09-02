@@ -5,14 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
+import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
+import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
+import { READ_ONLY_REASON, useReadOnlyIteration } from '../iterations/read-only.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import { formatCount } from '../text.js';
-import type { CollapsedStorage } from './collapsed-storage.js';
-import { readCollapsed, writeCollapsed } from './collapsed-storage.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
 import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
@@ -74,10 +75,6 @@ export interface FilePanelProps {
     /** Outline instead of a tree. null means the PR has more than one file. */
     readonly outline: FileOutlineModel | null;
     readonly onOpenHunk: (index: number) => void;
-    /** PR key: collapsed directory state persists separately for each PR. */
-    readonly prKey: string;
-    /** Collapsed state storage. With null, state does not survive a reload (gallery, tests). */
-    readonly storage: CollapsedStorage | null;
     readonly inputRef?: RefObject<HTMLInputElement | null>;
 }
 
@@ -171,17 +168,16 @@ function FileTreeView({
     activeFileId,
     onOpenFile,
     onToggleViewed,
-    prKey,
-    storage,
     route,
     onJumpToStop,
 }: FileTreeViewProps) {
-    const [collapsed, setCollapsed] = useState<ReadonlyMap<string, boolean>>(() => readCollapsed(storage, prKey));
-    // The panel is not expected to switch PRs during its lifetime, but state must follow the key:
-    // otherwise another PR would inherit the previous collapsed directories.
-    useEffect(() => {
-        setCollapsed(readCollapsed(storage, prKey));
-    }, [storage, prKey]);
+    // Marking viewed is available only in the active iteration (M4 scope).
+    const readOnly = useReadOnlyIteration();
+    // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
+    // and directories without a record follow the size-based default.
+    const prState = usePrStateStore();
+    const treeCollapsed = usePrState().treeCollapsed;
+    const collapsed = useMemo(() => collapsedToMap(treeCollapsed), [treeCollapsed]);
 
     const tree: FileTree = useMemo(
         () =>
@@ -198,10 +194,9 @@ function FileTreeView({
 
     const persist = useCallback(
         (next: ReadonlyMap<string, boolean>) => {
-            setCollapsed(next);
-            writeCollapsed(storage, prKey, next);
+            prState.update({ treeCollapsed: collapsedFromMap(next) });
         },
-        [prKey, storage],
+        [prState],
     );
 
     const [cursor, setCursor] = useState(-1);
@@ -254,11 +249,13 @@ function FileTreeView({
     const cursorRow = cursor < 0 ? undefined : tree.rows[cursor];
     // `v` is a registry command (requirements §3.3), not a separate key handler, so it appears in the palette
     // and shortcuts sheet. It acts on the row under the cursor, only while the tree has focus.
+    // Previous iterations have no viewed marks, so the command is unavailable (M4 scope).
     useShortcut({
         id: 'diff.markViewed',
         keys: ['v'],
         label: 'Mark the file viewed',
-        when: () => cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
+        when: () =>
+            !readOnly && cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
         action: () => {
             if (cursorRow?.kind === 'file') {
                 onToggleViewed(cursorRow.fileId);
@@ -388,6 +385,7 @@ function FileRow({
     onJumpToStop?: ((stopId: string) => void) | undefined;
     onToggleViewed: (fileId: string) => void;
 }) {
+    const readOnly = useReadOnlyIteration();
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
@@ -398,7 +396,8 @@ function FileRow({
                 aria-pressed={row.read.state === 'read'}
                 aria-hidden="true"
                 tabIndex={-1}
-                title={row.read.tooltip}
+                disabled={readOnly}
+                title={readOnly ? READ_ONLY_REASON : row.read.tooltip}
                 onMouseDown={(event) => {
                     event.preventDefault();
                 }}

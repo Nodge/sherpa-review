@@ -3,8 +3,11 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { UiSettingsPatch } from '@sherpa/protocol';
+
+import { SettingsProvider } from '../settings/context.tsx';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import type { ComposerTransport } from './composer.js';
-import { COMPOSER_LAYOUT_KEY } from './composer-markdown.js';
 import { NewCommentComposer, openNewComposer, openPrComposer, openReply, ThreadList } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
 
@@ -27,11 +30,15 @@ function mount(
         update: options.update ?? (() => Promise.resolve()),
         delete: options.delete ?? (() => Promise.resolve()),
     };
-    if (layout === undefined) {
-        localStorage.removeItem(COMPOSER_LAYOUT_KEY);
-    } else {
-        localStorage.setItem(COMPOSER_LAYOUT_KEY, layout);
-    }
+    // Layout comes from global settings, not localStorage, so mock that boundary.
+    const patches: UiSettingsPatch[] = [];
+    const settings = createUiSettingsStore({
+        ...(layout === undefined ? {} : { initial: { composerLayout: layout } }),
+        send: (patch) => {
+            patches.push(patch);
+            return Promise.resolve(settings.getSnapshot());
+        },
+    });
     const store = createThreadStore([], new Set(['f1']));
     const key = options.kind === 'line' ? 'new:f1:new:10' : 'new:pr';
     if (options.kind === 'line') {
@@ -49,11 +56,9 @@ function mount(
     const root = createRoot(host);
     act(() => {
         root.render(
-            <NewCommentComposer
-                composerKey={key}
-                store={store}
-                transport={transport}
-            />,
+            <SettingsProvider store={settings}>
+                <NewCommentComposer composerKey={key} store={store} transport={transport} />
+            </SettingsProvider>,
         );
     });
     mounted.push(() => {
@@ -62,7 +67,7 @@ function mount(
         });
         host.remove();
     });
-    return { host, store };
+    return { host, store, settings, patches };
 }
 
 function mountReply() {
@@ -120,7 +125,6 @@ afterEach(() => {
     for (const unmount of mounted.splice(0)) {
         unmount();
     }
-    localStorage.removeItem(COMPOSER_LAYOUT_KEY);
 });
 
 describe('comment composer', () => {
@@ -196,8 +200,8 @@ describe('comment composer', () => {
         expect(store.getComposer('new:pr')?.text).toBe(expected);
     });
 
-    it('remembers the layout per user and does not add a placeholder to markdown', async () => {
-        const { host, store } = mount('markdown');
+    it('saves the layout in global settings without adding the placeholder to markdown', async () => {
+        const { host, store, settings, patches } = mount('markdown');
         const visualButton = [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__layout button')].find(
             (button) => button.textContent === 'Visual',
         );
@@ -210,7 +214,8 @@ describe('comment composer', () => {
                 expect(host.querySelector('.ProseMirror')).not.toBeNull();
             });
         });
-        expect(localStorage.getItem(COMPOSER_LAYOUT_KEY)).toBe('visual');
+        expect(settings.getSnapshot().composerLayout).toBe('visual');
+        expect(patches).toEqual([{ composerLayout: 'visual' }]);
         expect(host.querySelector('.thread-composer__placeholder')?.textContent).toContain('A general remark on the PR');
         expect(host.querySelector('.ProseMirror')?.textContent).toBe('');
         expect(store.getComposer('new:pr')?.text).toBe('');

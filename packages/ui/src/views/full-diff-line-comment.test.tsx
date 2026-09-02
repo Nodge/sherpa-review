@@ -97,7 +97,7 @@ function mount(options: {
     document.body.append(host);
     const file = options.file ?? FILE;
     const files = [file];
-    const store = createDiffViewStore({ files, storage: null });
+    const store = createDiffViewStore({ files });
     store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     const threadStore = createThreadStore([], new Set([file.fileId]));
     const session = createSessionStore({
@@ -115,7 +115,6 @@ function mount(options: {
                 session={session}
                 store={store}
                 threadStore={threadStore}
-                collapsedStorage={null}
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
                 parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                 loadContent={options.loadContent ?? (() => Promise.resolve(null))}
