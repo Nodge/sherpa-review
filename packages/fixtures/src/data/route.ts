@@ -8,6 +8,7 @@ import {
     makeMediumSkeletonResult,
     makeMediumRouteStates,
 } from './route-medium.js';
+import { makeHugeRawResults } from './route-huge.js';
 import {
     makeMediumBrokenResultsV2,
     makeMediumSecondPassState,
@@ -113,6 +114,13 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
     large: () => ({
         states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
         rawResults: null,
+        rawResultsV2: null,
+        secondPass: null,
+    }),
+    // Performance fixture: no prepared states. e2e builds a 25-stop route through the fake worker.
+    huge: () => ({
+        states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
+        rawResults: makeHugeRawResults(),
         rawResultsV2: null,
         secondPass: null,
     }),

@@ -16,7 +16,7 @@ const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa.mjs');
 const START_TIMEOUT_MS = 20_000;
 const STOP_TIMEOUT_MS = 10_000;
 
-type FixturePrKey = 'fixture-medium' | 'fixture-large';
+type FixturePrKey = 'fixture-medium' | 'fixture-large' | 'fixture-huge';
 
 export interface SherpaServerHandle {
     readonly prKey: FixturePrKey;

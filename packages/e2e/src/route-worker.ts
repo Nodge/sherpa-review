@@ -33,6 +33,15 @@ export function mediumRawResultsV2(): RouteRawResults {
     return raw;
 }
 
+/** Model outputs for the `huge` performance fixture: 25 stops across 100 files. */
+export function hugeRawResults(): RouteRawResults {
+    const raw = routeFixtures('huge')?.rawResults ?? null;
+    if (raw === null) {
+        throw new Error('the huge fixture has no raw model outputs');
+    }
+    return raw;
+}
+
 /** Raw result text. The model submits a file, not an object (`route/fixture-support.ts`). */
 export function asRawText(result: unknown): string {
     return JSON.stringify(result, null, 2);
@@ -126,6 +135,33 @@ export async function buildRoute(worker: FakeWorker): Promise<void> {
     const skeleton = await takeTask(worker, 'route.skeleton');
     await submit(worker, skeleton.taskId, mediumRawResults().skeleton);
     await fillSections(worker);
+}
+
+/** Number of stops in the `huge` performance fixture's plan. The server queues as many sections (section batch size is 1). */
+export const HUGE_SECTION_COUNT = 25;
+
+/**
+ * The whole performance fixture route. The server fills one stop per task, so the
+ * test waits for 25 tasks in sequence. This loop's duration is the report's "route building" number.
+ */
+export async function buildHugeRoute(worker: FakeWorker): Promise<void> {
+    const raw = hugeRawResults();
+    const skeleton = await takeTask(worker, 'route.skeleton');
+    await submit(worker, skeleton.taskId, raw.skeleton);
+
+    const stops = raw.sections.flatMap((section) => section.stops);
+    for (let filled = 0; filled < HUGE_SECTION_COUNT; filled += 1) {
+        const task = await takeTask(worker, 'route.section');
+        await submit(worker, task.taskId, {
+            stops: task.planIndexes.map((planIndex) => {
+                const stop = stops.find((entry) => entry.planIndex === planIndex);
+                if (stop === undefined) {
+                    throw new Error(`the huge fixture has no section for stop ${String(planIndex)}`);
+                }
+                return stop;
+            }),
+        });
+    }
 }
 
 /** Rebuild after a push: the same plan with second-pass sections (F3, force-push in T15). */

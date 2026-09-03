@@ -1,6 +1,6 @@
 import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
@@ -117,6 +117,20 @@ export interface FileCardProps {
     readonly actions: FileCardActions;
 }
 
+/**
+ * The first card to reach its rows sets a mark. The performance spec measures time to the first
+ * diff frame from it. The flag is module-level because there must be one mark per page, not per card.
+ */
+let firstDiffFrameMarked = false;
+
+function markFirstDiffFrame(): void {
+    if (firstDiffFrameMarked || typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+        return;
+    }
+    firstDiffFrameMarked = true;
+    performance.mark('sherpa:first-diff-frame');
+}
+
 /** The exact model `FileCard` passes to the diff rows. */
 export function shownFileModel(
     model: DiffFileModel | null,
@@ -175,6 +189,13 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             ? (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions)
             : counts.additions + counts.deletions;
     const sizeCollapsed = !opened && changed > COLLAPSE_THRESHOLD;
+
+    const rowsRendered = collapseReason === null && !sizeCollapsed && shown?.content.kind === 'text';
+    useEffect(() => {
+        if (rowsRendered) {
+            markFirstDiffFrame();
+        }
+    }, [rowsRendered]);
 
     const run = (action: Promise<Feedback>): void => {
         void action.then(setHint, (error: unknown) => {

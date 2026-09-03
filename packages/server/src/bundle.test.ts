@@ -120,7 +120,9 @@ describe('server bundle', () => {
 
             server.kill('SIGTERM');
             await waitFor(async () => (await readManifest(manifestPathFor(sherpaDir, PR_KEY))) === null);
-            expect(isProcessAlive(manifest.pid)).toBe(false);
+            // The signal handler removes the manifest, then the process exits. On a busy
+            // machine there is a gap between the two, so wait for exit instead of checking immediately after manifest removal.
+            await waitFor(() => Promise.resolve(!isProcessAlive(manifest.pid)));
         },
         TEST_TIMEOUT_MS,
     );
