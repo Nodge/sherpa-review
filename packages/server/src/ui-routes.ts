@@ -331,8 +331,7 @@ function buildState(options: UiRoutesOptions): UiState {
         feedback: options.feedback,
         iterations: options.iterationFeed?.iterations() ?? [],
         update: options.update.get(),
-        // Filled in by M5-T14.
-        generationCap: null,
+        generationCap: options.route.currentGenerationCap(),
     };
 }
 

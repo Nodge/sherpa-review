@@ -46,6 +46,7 @@ function totals(patch: Partial<RouteTotals>): RouteTotals {
         byTier: { high: 100, medium: 0, low: 0, other: 0 },
         pendingFiles: 0,
         failedFiles: 0,
+        conflictFiles: 0,
         ...patch,
     };
 }
@@ -125,6 +126,26 @@ describe('coverage bar model', () => {
         expect(built.segments.map((segment) => segment.tier)).toEqual(['high', 'other']);
         // The 6-line chunk stays in the bar. Its width stops at the minimum instead of disappearing.
         expect(built.segments[1]?.lines).toBe(6);
+    });
+
+    it('lines in a conflicted file do not enter the bar (SPEC §4.1)', () => {
+        const first = DATA.diff.files[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one file');
+        }
+        const withConflict = buildRouteModel({
+            snapshot: SNAPSHOT,
+            files: DATA.diff.files.map((file) =>
+                file.fileId === first.fileId ? { ...file, changeType: 'conflict' as const } : file,
+            ),
+            models: MODELS,
+        });
+        const built = buildCoverageStrip({ totals: withConflict.totals, entries: withConflict.entries });
+
+        expect(built.changed).toBe(withConflict.totals.changed);
+        expect(built.changed).toBeLessThan(strip().changed);
+        // The denominator and segment sum match. No tier retains the conflict.
+        expect(built.segments.reduce((total, segment) => total + segment.lines, 0)).toBe(built.changed);
     });
 });
 

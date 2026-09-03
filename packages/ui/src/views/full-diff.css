@@ -184,6 +184,19 @@
     color: var(--text-body);
 }
 
+/* Empty PR (SPEC §4.1): two lines in a column, no action, since there is no way out here. */
+.full-diff__zero--empty-pr {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.full-diff__zero-note {
+    margin: 0;
+    font-size: var(--font-size-secondary);
+    color: var(--text-muted);
+}
+
 .full-diff__zero-action {
     height: 28px;
     padding: 0 11px;

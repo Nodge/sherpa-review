@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
-import { formatCount, plural } from '../../i18n/index.js';
+import { formatCount, plural, useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../../iterations/read-only.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
@@ -447,6 +447,25 @@ export function AnchorDrift({ paths, partial = false }: { paths: readonly string
                     ))}
                 </ul>
             )}
+        </div>
+    );
+}
+
+/**
+ * The stop's anchors point to conflicted files (SPEC §4.1): the diff has lines, but the file is outside
+ * route coverage. There is nothing to read or mark here. Resolve the conflict in the host.
+ * This is not drift, so prompting regeneration would be misleading.
+ */
+export function StopConflicts({ paths }: { paths: readonly string[] }) {
+    const t = useT();
+    return (
+        <div className="route-conflicts" role="note">
+            <p className="route-conflicts__text">{t('route.stop.conflicts', paths.length)}</p>
+            <ul className="route-conflicts__paths">
+                {paths.map((path) => (
+                    <li key={path}>{path}</li>
+                ))}
+            </ul>
         </div>
     );
 }

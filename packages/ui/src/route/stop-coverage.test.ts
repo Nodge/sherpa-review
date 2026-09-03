@@ -66,6 +66,7 @@ function entry(stopId: string, groups: readonly RouteFileGroup[]): RouteEntry {
             files: groups,
             changedLines: 0,
             unresolvedPaths: [],
+            conflictPaths: [],
             drift: false,
             empty: false,
             pending: false,
@@ -173,6 +174,26 @@ describe('stop coverage by file progress', () => {
                 ]),
             ),
         ).toBe(true);
+    });
+
+    it('the guardrail does not require reading an entry held only by conflicts (SPEC §4.1)', () => {
+        const base = entry('s01', []);
+        if (base.kind !== 'stop') {
+            throw new Error('a stop is required');
+        }
+        const conflictStop: RouteEntry = {
+            kind: 'stop',
+            view: { ...base.view, conflictPaths: ['market/order.ts'] },
+        };
+        const other: RouteEntry = {
+            kind: 'other',
+            view: { stop: base.view.stop, planLabel: '07', files: [], lines: 0, conflictFiles: 2 },
+        };
+
+        expect(stopCoveredByProgress(conflictStop, snapshot([]))).toBe(true);
+        expect(stopCoveredByProgress(other, snapshot([]))).toBe(true);
+        // An empty entry without conflicts still does not complete itself.
+        expect(stopCoveredByProgress(base, snapshot([]))).toBe(false);
     });
 
     it('does not let a shared orphan whitespace line complete another stop\'s anchored range', () => {

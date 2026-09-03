@@ -308,6 +308,20 @@ export function OverviewView({
     };
     const route = generation?.route ?? null;
 
+    // Empty PR (SPEC §4.1): empty Overview cards would mislead. There is nothing to derive ownership zones, discussions or progress
+    // from. The action panel lives one level above, so ship remains available.
+    if (diff !== null && diff.files.length === 0) {
+        return (
+            <main className="route-empty" id="view-overview">
+                <section className="invitation-card">
+                    <div className="invitation-card__eyebrow">{t('view.overview')}</div>
+                    <h1 className="invitation-card__title">{t('emptyPr.title')}</h1>
+                    <p className="invitation-card__text">{t('emptyPr.text')}</p>
+                </section>
+            </main>
+        );
+    }
+
     return (
         <main className="overview" id="view-overview">
             {pr === null ? null : (

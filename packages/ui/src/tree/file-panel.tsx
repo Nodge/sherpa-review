@@ -4,7 +4,7 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
-import { formatCount } from '../i18n/index.js';
+import { formatCount, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
@@ -385,6 +385,7 @@ function FileRow({
     onJumpToStop?: ((stopId: string) => void) | undefined;
     onToggleViewed: (fileId: string) => void;
 }) {
+    const t = useT();
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     return (
@@ -412,6 +413,9 @@ function FileRow({
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}
+            {row.conflict ? (
+                <span className="file-tree__tag file-tree__tag--conflict">{t('file.conflict')}</span>
+            ) : null}
             {row.route === null ? null : (
                 <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
             )}

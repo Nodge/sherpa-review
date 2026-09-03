@@ -79,6 +79,7 @@ const OTHER_VIEW: RouteOtherView = {
     planLabel: '07',
     files: [],
     lines: 34,
+    conflictFiles: 0,
 };
 
 function renderCard(patch: Partial<Parameters<typeof OtherCard>[0]> = {}): HTMLElement {
@@ -153,5 +154,34 @@ describe('Other\'s "ask the agent to place them" entry point', () => {
         const filling = renderCard({ onAskToPlace: () => undefined, agentConnected: true, filling: true });
         expect(askButton(filling)?.disabled).toBe(true);
         expect(askButton(filling)?.title).toBe('Waiting for the route to fill');
+    });
+});
+
+describe('conflict line in Other', () => {
+    it('stays silent when there are no conflicts', () => {
+        expect(renderCard().querySelector('.route-other__conflicts')).toBeNull();
+    });
+
+    it('states the file count and sends the reviewer to the host to resolve them (SPEC §4.1)', () => {
+        const host = renderCard({ view: { ...OTHER_VIEW, conflictFiles: 2 } });
+        const line = host.querySelector('.route-other__conflicts');
+
+        expect(line?.textContent).toContain('2 files have conflicts');
+        expect(line?.textContent).toContain('they are out of coverage');
+    });
+
+    it('shows only conflicts without "0 lines in 0 files" or buttons acting on nothing', () => {
+        const host = renderCard({
+            view: { ...OTHER_VIEW, files: [], lines: 0, conflictFiles: 2 },
+            onAskToPlace: () => undefined,
+            agentConnected: true,
+        });
+
+        expect(host.textContent).not.toContain('were left without a stop');
+        expect(host.textContent).not.toContain('Open 0');
+        expect(host.querySelector('.route-other__actions')).toBeNull();
+        expect(askButton(host)).toBeNull();
+        expect(host.textContent).toContain('Not a single changed line was left without a stop');
+        expect(host.querySelector('.route-other__conflicts')?.textContent).toContain('2 files have conflicts');
     });
 });

@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 
 import { routeFixtures } from '@sherpa/fixtures';
-import type { UiRouteState } from '@sherpa/protocol';
+import type { UiRouteState, UiTask } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { generationIsLong, LONG_GENERATION_MS } from '../../route/generation.js';
 import {
     GenerationCard,
     GenerationFailedBanner,
@@ -84,6 +85,32 @@ describe('route generation card', () => {
         expect(render(state('reading'), { longRunning: true })).toContain('still working<');
         expect(render(state('reading'), { longRunning: true })).toContain('Cancel');
         expect(render(state('filling'))).not.toContain('still working');
+    });
+
+    it('the 60 s threshold uses the oldest open route task (SPEC §3)', () => {
+        const created = Date.parse('2026-09-01T10:00:00.000Z');
+        const task = (createdAt: string): UiTask => ({
+            id: 1,
+            type: 'route.section',
+            priority: 'background',
+            status: 'leased',
+            heldByWorker: true,
+            attempt: 1,
+            instructions: 'fill the stop',
+            progressText: null,
+            result: null,
+            failReason: null,
+            createdAt,
+            updatedAt: createdAt,
+        });
+        const tasks = [task(new Date(created).toISOString())];
+
+        expect(generationIsLong(tasks, created + LONG_GENERATION_MS - 1)).toBe(false);
+        expect(generationIsLong(tasks, created + LONG_GENERATION_MS)).toBe(true);
+        // This flag turns on the line with cancellation. App calculates it from the ticking clock.
+        const html = render(state('filling'), { longRunning: generationIsLong(tasks, created + LONG_GENERATION_MS) });
+        expect(html).toContain('still working · 4 of 7');
+        expect(html).toContain('>Cancel</button>');
     });
 
     it('ready route: compact card with the stop count', () => {

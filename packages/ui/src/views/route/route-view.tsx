@@ -8,6 +8,7 @@ import type {
     RouteTier,
     Thread,
     UiChatAskAnchor,
+    UiGenerationCap,
     UiReviewLensesResponse,
     UiReviewProgressResponse,
     UiStopSeenRange,
@@ -113,6 +114,7 @@ import {
     EmptyStop,
     StopCard,
     stopChangeThreads,
+    StopConflicts,
     StopSkeleton,
     ViewedSummary,
 } from './stop-card.tsx';
@@ -173,6 +175,8 @@ export interface RouteViewProps {
     readonly onOpenThread?: (threadId: string) => void;
     /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
     readonly headerAside?: ReactNode;
+    /** Generation limit from server state (SPEC §4.1), shown below the coverage bar. */
+    readonly generationCap?: UiGenerationCap | null;
 }
 
 export function RouteView({
@@ -206,6 +210,7 @@ export function RouteView({
     onRouteSummary,
     onOpenThread,
     headerAside,
+    generationCap = null,
 }: RouteViewProps) {
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
@@ -328,6 +333,7 @@ export function RouteView({
             {...(onRouteSummary === undefined ? {} : { onRouteSummary })}
             {...(onOpenThread === undefined ? {} : { onOpenThread })}
             {...(headerAside === undefined ? {} : { headerAside })}
+            generationCap={generationCap}
         />
     );
 }
@@ -382,6 +388,8 @@ export interface RouteWorkspaceProps {
     readonly onOpenThread?: (threadId: string) => void;
     /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
     readonly headerAside?: ReactNode;
+    /** See `RouteViewProps.generationCap`. */
+    readonly generationCap?: UiGenerationCap | null;
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
@@ -1717,6 +1725,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 onClearChangeFilter={() => {
                     session.setRouteFilter('all');
                 }}
+                generationCap={props.generationCap ?? null}
                 strip={
                     <CoverageStrip
                         model={settled && !filling ? coverage : null}
@@ -1986,6 +1995,9 @@ function StopSection({
         <StopSkeleton />
     ) : view.drift ? (
         <AnchorDrift paths={view.unresolvedPaths} />
+    ) : files.length === 0 && digest === null && view.conflictPaths.length > 0 ? (
+        // The entire stop moved into conflicted files. "No hunks" would be misleading here.
+        <StopConflicts paths={view.conflictPaths} />
     ) : files.length === 0 && digest === null ? (
         <EmptyStop
             text={
@@ -2016,6 +2028,7 @@ function StopSection({
         <>
             {/* Some anchors fail to resolve, while others survive. Place the notice above the remaining cards. */}
             {view.unresolvedPaths.length === 0 ? null : <AnchorDrift paths={view.unresolvedPaths} partial />}
+            {view.conflictPaths.length === 0 ? null : <StopConflicts paths={view.conflictPaths} />}
             {digest === null ? null : (
                 <TestDigest
                     model={digest}

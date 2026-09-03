@@ -273,6 +273,23 @@ describe('small fixture', () => {
     });
 });
 
+describe('empty fixture', () => {
+    const data = fixtureIteration('empty');
+
+    it('empty PR (SPEC §4.1): an iteration exists with no changes', () => {
+        expect(data.diff.files).toEqual([]);
+        // Base and head match: there is nothing to change relative to the base.
+        expect(data.diff.headCommit).toBe(data.diff.baseCommit);
+        expect(data.threads).toEqual([]);
+        expect(data.ownership?.paths).toEqual([]);
+    });
+
+    it('does not block ship on the host: sticky ship and viewed sync are available', () => {
+        expect(data.pr.capabilities.stickyShip).toBe(true);
+        expect(data.pr.state).toBe('open');
+    });
+});
+
 describe('large fixture', () => {
     const data = fixtureIteration('large');
 

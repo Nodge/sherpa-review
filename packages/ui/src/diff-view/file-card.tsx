@@ -2,9 +2,10 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useDelayedPending } from '../components/use-delayed-pending.js';
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
-import { formatCount, plural } from '../i18n/index.js';
+import { formatCount, plural, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
@@ -273,6 +274,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 }}
             >
                 <FileName file={file} />
+                <ConflictBadge file={file} />
                 <span className="file-card__counts">
                     <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions, 'ru')}</span>
                     <span className="file-card__del">−{formatCount(counts?.deletions ?? model?.deletions ?? file.deletions, 'ru')}</span>
@@ -467,6 +469,33 @@ function FileName({ file }: { file: FileDiff }) {
     );
 }
 
+/**
+ * File parsing slot (SPEC §3): space for the card body is reserved immediately, so the arriving
+ * diff does not shift the layout. The label appears only if parsing takes longer than 200 ms,
+ * so fast files produce no flash.
+ */
+function ParsingSlot({ minHeight }: { minHeight?: number | undefined }) {
+    const shown = useDelayedPending(true);
+    return (
+        <div className="file-card__loading" style={minHeight === undefined ? undefined : { minHeight }}>
+            {shown ? 'parsing the diff…' : null}
+        </div>
+    );
+}
+
+/**
+ * Conflict badge (SPEC §2.14, §4.1): the file is unmerged. This is a precondition, not
+ * a diff property. The route does not cover it, and the conflict is resolved in the host. The header has no other
+ * status badges because add/delete/rename are visible in the name and counters.
+ */
+function ConflictBadge({ file }: { file: FileDiff }) {
+    const t = useT();
+    if (file.changeType !== 'conflict') {
+        return null;
+    }
+    return <span className="file-card__badge file-card__badge--conflict">{t('file.conflict')}</span>;
+}
+
 /** Same wording as the slice gap bar (`gapLabel` in diff-rows), since both describe the same hidden lines. */
 function elsewhereLabel(changed: number): string {
     const lines = plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru');
@@ -588,14 +617,7 @@ function Body(props: BodyProps) {
     const { model, mode, content, selection, showWhitespace, onShowWhitespace } = props;
 
     if (model === null) {
-        return (
-            <div
-                className="file-card__loading"
-                style={props.loadingMinHeight === undefined ? undefined : { minHeight: props.loadingMinHeight }}
-            >
-                parsing the diff…
-            </div>
-        );
+        return <ParsingSlot minHeight={props.loadingMinHeight} />;
     }
     if (model.content.kind !== 'text') {
         return null;

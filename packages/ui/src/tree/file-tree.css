@@ -294,6 +294,12 @@
     color: var(--text-dim-strong);
 }
 
+/* A conflict is a warning, not an origin label, so its color is brighter than `gen` (SPEC §4.1). */
+.file-tree__tag--conflict {
+    border-color: var(--attention-border-strong);
+    color: var(--attention-text-dim);
+}
+
 .file-tree__counts {
     display: flex;
     gap: 4px;

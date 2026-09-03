@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../../components/chat-prompts.js';
-import { formatCount, plural } from '../../i18n/index.js';
+import { formatCount, plural, useT } from '../../i18n/index.js';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
@@ -78,8 +78,12 @@ export function OtherCard({
     flash = false,
     marked = false,
 }: OtherCardProps) {
+    const t = useT();
     const { lines } = view;
     const files = view.files.length;
+    // Only conflicts occupy the slot: there are no uncovered ranges to read or place. The card
+    // describes only conflicts, without "0 lines in 0 files" or enabled buttons acting on nothing.
+    const conflictsOnly = !filling && !pending && files === 0 && view.conflictFiles > 0;
 
     return (
         <section
@@ -119,6 +123,8 @@ export function OtherCard({
                         The diff is still being parsed. The number of lines left without a stop is unknown yet. Coverage is
                         structurally guaranteed: whatever misses the stops collects here.
                     </p>
+                ) : conflictsOnly ? (
+                    <p className="route-stop__paragraph">{t('route.other.none')}</p>
                 ) : (
                     <p className="route-stop__paragraph">
                         {formatCount(lines, 'ru')}{' '}
@@ -138,6 +144,8 @@ export function OtherCard({
                     <p className="route-other__text">
                         {filling ? (
                             'This slot counts the remainder. While stops are arriving, it is too early to call it "not explained".'
+                        ) : conflictsOnly ? (
+                            t('route.other.conflictsOnly')
                         ) : (
                             <>
                                 The model did not place these ranges. They are <strong>not explained</strong>, not{' '}
@@ -145,35 +153,44 @@ export function OtherCard({
                             </>
                         )}
                     </p>
-                    <div className="route-other__actions">
-                        <button
-                            type="button"
-                            className="route-other__action"
-                            disabled={pending || filling}
-                            onClick={onOpen}
-                        >
-                            {filling
-                                ? 'Waiting for the route to fill'
-                                : pending
-                                  ? 'Counting uncovered lines…'
-                                  : opened
-                                    ? 'Collapse uncovered ranges'
-                                    : `Open ${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`}
-                        </button>
-                        {onAskToPlace === undefined ? null : (
+                    {conflictsOnly ? null : (
+                        <div className="route-other__actions">
                             <button
                                 type="button"
-                                className="route-other__action route-other__action--secondary"
-                                disabled={pending || filling || !agentConnected}
-                                title={askToPlaceTitle({ pending, filling, agentConnected })}
-                                onClick={onAskToPlace}
+                                className="route-other__action"
+                                disabled={pending || filling}
+                                onClick={onOpen}
                             >
-                                Ask the agent to place them
+                                {filling
+                                    ? 'Waiting for the route to fill'
+                                    : pending
+                                      ? 'Counting the uncovered lines…'
+                                      : opened
+                                        ? 'Collapse the uncovered ranges'
+                                        : `Open ${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`}
                             </button>
-                        )}
-                    </div>
-                    {onAskToPlace === undefined ? null : (
+                            {onAskToPlace === undefined ? null : (
+                                <button
+                                    type="button"
+                                    className="route-other__action route-other__action--secondary"
+                                    disabled={pending || filling || !agentConnected}
+                                    title={askToPlaceTitle({ pending, filling, agentConnected })}
+                                    onClick={onAskToPlace}
+                                >
+                                    Ask the agent to place them
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {conflictsOnly || onAskToPlace === undefined ? null : (
                         <p className="route-other__honest">{ASK_ANSWER_IN_CHAT_NOTE}</p>
+                    )}
+                    {/* Conflicts are outside coverage (SPEC §4.1): they cannot be explained or read
+                        here, so the reviewer's only useful action is in the review host. */}
+                    {view.conflictFiles === 0 ? null : (
+                        <p className="route-other__conflicts" role="status">
+                            {t('route.other.conflicts', view.conflictFiles)}
+                        </p>
                     )}
                     {failedFiles === 0 ? null : (
                         <p className="route-other__failed" role="status">

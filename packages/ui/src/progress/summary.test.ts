@@ -71,6 +71,28 @@ describe('review progress aggregates', () => {
         });
     });
 
+    it('a conflicted file is outside the denominator because it cannot be read in Sherpa (SPEC §4.1)', () => {
+        const files = fixtureIteration('edge').diff.files;
+        const conflict = files.find((file) => file.changeType === 'conflict');
+        if (conflict === undefined) {
+            throw new Error('edge fixture needs a file with a conflict');
+        }
+
+        const summary = reviewProgressSummary(files, new Map());
+        const withoutConflicts = files.filter((file) => file.changeType !== 'conflict');
+
+        expect(summary.filesTotal).toBe(withoutConflicts.length);
+        expect(summary.filesTotal).toBe(files.length - 1);
+        expect(summary.linesTotal).toBe(
+            withoutConflicts.reduce((total, file) => total + file.additions + file.deletions, 0),
+        );
+        // Marking a conflict viewed changes nothing. It is absent from both counts.
+        const marked = new Map([
+            [conflict.fileId, state(conflict.additions + conflict.deletions, conflict.additions + conflict.deletions, true)],
+        ]);
+        expect(reviewProgressSummary(files, marked)).toEqual(summary);
+    });
+
     it('considers an empty diff 100% viewed', () => {
         expect(reviewProgressSummary([], new Map())).toEqual({
             filesSeen: 0,

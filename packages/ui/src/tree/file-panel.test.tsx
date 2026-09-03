@@ -89,6 +89,16 @@ function mount(readOnly = false) {
     return { host, onFilter, onOpenFile, onToggleViewed };
 }
 
+describe('tree row tags', () => {
+    it('a conflicted file gets a conflict tag (SPEC §4.1)', () => {
+        const { host } = mount();
+        const tags = [...host.querySelectorAll('.file-tree__tag--conflict')];
+
+        expect(tags.map((tag) => tag.textContent)).toEqual(['conflict']);
+        expect(FILES.filter((file) => file.changeType === 'conflict')).toHaveLength(1);
+    });
+});
+
 describe('FilePanel filter chips', () => {
     it('hides PCI and generated with zero counts and shows My files disabled with a reason', () => {
         const { host, onFilter } = mount();

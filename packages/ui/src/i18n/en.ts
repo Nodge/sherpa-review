@@ -71,6 +71,24 @@ export const en: Dictionary = {
         'The change is below the threshold where a route pays off: a couple of files read faster than the agent builds a plan. The server never queued the generation — no queue, no waiting.',
     'route.smallPr.notGenerated': 'This PR is below the route threshold — generation does not start.',
 
+    'file.conflict': 'conflict',
+    'route.stop.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'file of this stop has', 'files of this stop have')} merge conflicts: resolve them in the host. Conflicts are out of route coverage, so there are no cards here.`,
+    'route.other.none': 'Not a single changed line was left without a stop — the route covers the whole diff.',
+    'route.other.conflictsOnly':
+        'This slot is held by conflicts alone: the route does not explain them and they cannot be read here.',
+    'route.other.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'file has', 'files have')} conflicts — resolve them in the host; they are out of coverage`,
+    'route.cap.note': (covered: number, total: number) =>
+        `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}`,
+    'route.cap.note.machine': (covered: number, total: number, machine: number) =>
+        `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}; ${num(machine)} generated ${form(machine, 'file is', 'files are')} grouped in one stop`,
+    'banner.generationCap': (files: number) =>
+        `The route was built from a partial diff: ${num(files)} ${form(files, 'file', 'files')} did not fit the agent context — check them in the full diff`,
+
+    'emptyPr.title': 'Nothing to review',
+    'emptyPr.text': 'This PR has no changes against the base.',
+
     'overview.slice.title': 'No overview for a slice',
     'overview.slice.text': (baseCommit: string, headCommit: string) =>
         `Ownership zones, discussions and reading progress are counted on the active iteration. The ${baseCommit} → ${headCommit} slice is only “what’s new” in the code.`,

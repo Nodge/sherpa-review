@@ -1,4 +1,5 @@
 import { fixtureIteration } from '@sherpa/fixtures';
+import type { UiGenerationCap } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -12,7 +13,7 @@ import { PRESET_DISABLED_TITLE, RouteToolbar, TOUR_HINT, TRIAGE_HINT } from './r
 
 const DATA = fixtureIteration('medium');
 
-function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): string {
+function render(options: { preset?: RoutePreset; disabled?: boolean; cap?: UiGenerationCap | null } = {}): string {
     const filters = buildFileFilters({
         files: DATA.diff.files,
         ownership: DATA.ownership,
@@ -31,6 +32,7 @@ function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): str
             threadCounts={{ people: 0, bots: 0, resolved: 0 }}
             onThreadsShow={() => undefined}
             strip={null}
+            generationCap={options.cap ?? null}
         />,
     );
 }
@@ -45,6 +47,26 @@ describe('route toolbar', () => {
         expect(tour).toContain(TOUR_HINT);
         expect(tour).toContain('aria-pressed="true">Full tour</button>');
         expect(tour).toContain('aria-pressed="false">Triage</button>');
+    });
+
+    it('the cap row appears only when the plan does not cover the entire diff (SPEC §4.1)', () => {
+        const capped = render({ cap: { filesCovered: 120, filesTotal: 500, machineFiles: 380, truncated: false } });
+
+        expect(capped).toContain('route-toolbar__cap');
+        expect(capped).toContain('the plan covers 120 of 500 files; 380 generated files are grouped in one stop');
+        expect(render()).not.toContain('route-toolbar__cap');
+        // The limit exists, but nothing was cut, so there is nothing to say.
+        expect(
+            render({ cap: { filesCovered: 18, filesTotal: 18, machineFiles: 0, truncated: false } }),
+        ).not.toContain('route-toolbar__cap');
+    });
+
+    it('omits generated files from the row when there are none instead of printing zero', () => {
+        // Large manual refactoring without generated files. The budget excluded ordinary files.
+        const html = render({ cap: { filesCovered: 199, filesTotal: 200, machineFiles: 0, truncated: true } });
+
+        expect(html).toContain('the plan covers 199 of 200 files');
+        expect(html).not.toContain('generated');
     });
 
     it('disables both options and explains why when there is no route', () => {

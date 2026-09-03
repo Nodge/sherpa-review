@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { FileDiff, PrDiff, PrMeta, RouteStop } from '@sherpa/protocol';
+import type { FileDiff, PrDiff, PrMeta, RouteStop, UiGenerationCap } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 
 import type { EnqueueInput } from './queue.js';
@@ -128,9 +128,18 @@ export class RoutePayloadWriter {
             priority: 'background',
             instructions: skeletonInstructions(regeneration.present),
             // The skeleton has no context of its own. Both the guide and diff use shared paths.
-            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), prDiff, ...regeneration.files],
+            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), prDiff.file, ...regeneration.files],
             resultSchemaFile: this.writeSchema('skeleton'),
         };
+    }
+
+    /**
+     * Generation cap from the diff and budget, using the same pure function that prints skeleton context.
+     * Skeleton acceptance recalculates it because enqueue context may not survive the process, and the cap
+     * must reach the route header from the snapshot even after a restart.
+     */
+    generationCap(context: RoutePayloadContext): UiGenerationCap {
+        return prDiffPayload(context, this.budgetBytes).cap;
     }
 
     /**
@@ -154,7 +163,7 @@ export class RoutePayloadWriter {
             instructions: sectionInstructions(planIndexes, regeneration.present),
             contextFiles: [
                 this.shared.guide('section-guide', SECTION_GUIDE),
-                prDiff,
+                prDiff.file,
                 ...regeneration.files,
                 plan,
             ],
@@ -198,8 +207,9 @@ export class RoutePayloadWriter {
     }
 
     /** Shared PR diff keyed by the commit pair. The skeleton, sections and PR chat question use the same one. */
-    private prDiff(context: RoutePayloadContext): string {
-        return this.shared.prDiff(diffKeyOf(context.diff), prDiffContext(context, this.budgetBytes));
+    private prDiff(context: RoutePayloadContext): { file: string; cap: UiGenerationCap } {
+        const built = prDiffPayload(context, this.budgetBytes);
+        return { file: this.shared.prDiff(diffKeyOf(context.diff), built.content), cap: built.cap };
     }
 
     /** A fresh generation subdirectory. Old contents are removed because their tasks were just cancelled. */
@@ -287,6 +297,14 @@ export class RoutePayloadWriter {
  * based on section needs: tests are trimmed last, since the digest must anchor to their actual lines.
  */
 export function prDiffContext(context: RoutePayloadContext, budgetBytes: number): string {
+    return prContext(context, budgetBytes).content;
+}
+
+/**
+ * The same file with truncation metrics (M5-T14), shown in the route header and
+ * banner. Calculated in the same pass as the text, since there is no reason to trim the diff twice.
+ */
+export function prDiffPayload(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
     return prContext(context, budgetBytes);
 }
 
@@ -296,7 +314,7 @@ export function prDiffContext(context: RoutePayloadContext, budgetBytes: number)
  * It has its own budget. The interdiff must not displace the PR diff used for anchors.
  */
 export function interdiffContext(interdiff: PrDiff, budgetBytes: number): string {
-    return patchedContext(interdiff, interdiffHead(interdiff), budgetBytes, INTERDIFF_PATCHES_HEADING);
+    return patchedContext(interdiff, interdiffHead(interdiff), budgetBytes, INTERDIFF_PATCHES_HEADING).content;
 }
 
 /** Slice header explaining which patches these are, which commits they compare and how to read them. */
@@ -391,9 +409,15 @@ const INTERDIFF_PATCHES_HEADING = [
  * output file, including block separators. Otherwise "no more than N bytes" stops being
  * true exactly when it matters (requirements §3.5).
  */
-function prContext(context: RoutePayloadContext, budgetBytes: number): string {
+function prContext(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
     const { diff, meta } = context;
     return patchedContext(diff, [metaBlock(diff, meta), fileListBlock(diff)].join('\n\n'), budgetBytes);
+}
+
+/** The finished context file and what it lacks compared with the full diff. */
+interface PatchedContext {
+    readonly content: string;
+    readonly cap: UiGenerationCap;
 }
 
 /**
@@ -405,7 +429,7 @@ function patchedContext(
     head: string,
     budgetBytes: number,
     patchesHeading: string = PATCHES_HEADING,
-): string {
+): PatchedContext {
     const sections = diff.files.map((file, index) => ({
         file,
         index,
@@ -437,7 +461,18 @@ function patchedContext(
     }
 
     const patches = sections.map((section) => (kept.has(section.index) ? section.full : section.omitted));
-    return `${[...fixed, ...patches].join('\n\n')}\n`;
+    const dropped = sections.filter((section) => !kept.has(section.index));
+    return {
+        content: `${[...fixed, ...patches].join('\n\n')}\n`,
+        cap: {
+            filesCovered: kept.size,
+            filesTotal: sections.length,
+            // Rank 0 means exactly "generated and not a test": a generated snapshot test is trimmed like
+            // regular code, so counting it in the generated group would be false.
+            machineFiles: dropped.filter((section) => protectionRank(section.file) === 0).length,
+            truncated: dropped.some((section) => protectionRank(section.file) >= 1),
+        },
+    };
 }
 
 /**

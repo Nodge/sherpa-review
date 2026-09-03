@@ -12,6 +12,11 @@ export interface StopCoverageSnapshot {
 
 /** Whether viewed ranges cover every range of a route entry. An empty entry does not mark itself. */
 export function stopCoveredByProgress(entry: RouteEntry, snapshot: StopCoverageSnapshot): boolean {
+    // An entry held only by conflicts (SPEC §4.1) contains no readable ranges.
+    // The guardrail cannot require reading what is outside coverage.
+    if (conflictsOnlyEntry(entry)) {
+        return true;
+    }
     const groups: readonly RouteFileGroup[] =
         entry.kind === 'stop' ? entry.view.files : entry.view.files.map((file) => uncoveredAsGroup(file));
     if (groups.length === 0) {
@@ -28,4 +33,11 @@ export function stopCoveredByProgress(entry: RouteEntry, snapshot: StopCoverageS
         }
         return rangesCover(snapshot.progress.get(group.fileId)?.seenRanges ?? [], group.seenRanges);
     });
+}
+
+/** All files in the entry have conflicts. There are no cards and nothing to read. */
+function conflictsOnlyEntry(entry: RouteEntry): boolean {
+    return entry.kind === 'stop'
+        ? entry.view.files.length === 0 && entry.view.conflictPaths.length > 0
+        : entry.view.files.length === 0 && entry.view.conflictFiles > 0;
 }

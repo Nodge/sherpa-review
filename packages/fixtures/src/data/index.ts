@@ -9,6 +9,7 @@ import {
 } from '@sherpa/protocol';
 
 import { makeEdgeFixture } from './edge.js';
+import { makeEmptyFixture } from './empty.js';
 import { makeHugeFixture } from './huge.js';
 import { makeLargeFixture } from './large.js';
 import { makeMediumFixture } from './medium.js';
@@ -40,9 +41,9 @@ export type { ChatFixtures } from './chat.js';
 export { buildRouteFixtures, routeFixtures } from './route.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './route.js';
 
-export type FixtureName = 'medium' | 'small' | 'large' | 'edge' | 'huge';
+export type FixtureName = 'medium' | 'small' | 'large' | 'edge' | 'huge' | 'empty';
 
-export const FIXTURE_NAMES: readonly FixtureName[] = ['medium', 'small', 'large', 'edge', 'huge'];
+export const FIXTURE_NAMES: readonly FixtureName[] = ['medium', 'small', 'large', 'edge', 'huge', 'empty'];
 
 const BUILDERS: Record<FixtureName, () => FixtureData> = {
     medium: makeMediumFixture,
@@ -50,6 +51,7 @@ const BUILDERS: Record<FixtureName, () => FixtureData> = {
     large: makeLargeFixture,
     edge: makeEdgeFixture,
     huge: makeHugeFixture,
+    empty: makeEmptyFixture,
 };
 
 /** Iteration schema without status: the host computes status, so it is absent from the data. */

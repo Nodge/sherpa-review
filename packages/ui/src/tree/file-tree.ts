@@ -29,6 +29,8 @@ export interface TreeFileRow {
     readonly additions: number;
     readonly deletions: number;
     readonly generated: boolean;
+    /** The file is unmerged: a `conflict` row tag and exclusion from coverage (SPEC §4.1). */
+    readonly conflict: boolean;
     /** The file belongs to the extra `pci` lens, shown as a row tag (README §10). */
     readonly pci: boolean;
     /** File reading progress (SPEC §2.12): three states and tooltip counts. */
@@ -152,6 +154,7 @@ export function buildFileTree(input: FileTreeInput): FileTree {
             additions: file.additions,
             deletions: file.deletions,
             generated: file.generated,
+            conflict: file.changeType === 'conflict',
             pci: input.pciFileIds.has(file.fileId),
             read,
             route: input.routeFiles?.get(file.fileId) ?? null,

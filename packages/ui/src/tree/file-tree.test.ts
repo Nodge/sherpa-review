@@ -216,6 +216,15 @@ describe('buildFileTree', () => {
         expect([...tree.directories].sort()).toEqual(['a', 'a/b', 'a/c']);
     });
 
+    it('the row conflict flag comes from the file changeType (SPEC §4.1)', () => {
+        const tree = buildFileTree(
+            input([...FILES, file('services/orders/domain/slot.ts', { changeType: 'conflict' })]),
+        );
+        const tagged = tree.rows.filter((row) => row.kind === 'file' && row.conflict).map((row) => row.path);
+
+        expect(tagged).toEqual(['services/orders/domain/slot.ts']);
+    });
+
     it('sets the pci tag by lens membership', () => {
         const tree = buildFileTree(input(FILES, { pciFileIds: new Set(['f-services/orders/domain/order.ts']) }));
         const tagged = tree.rows.filter((row) => row.kind === 'file' && row.pci).map((row) => row.path);

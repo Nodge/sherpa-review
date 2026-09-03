@@ -95,6 +95,15 @@
     max-width: 1560px;
 }
 
+/* Generation limit (SPEC §4.1): muted like the bar legend, with monospaced numbers. */
+.route-toolbar__cap {
+    margin-top: 5px;
+    max-width: 1560px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-secondary);
+    color: var(--text-dim);
+}
+
 .coverage__track {
     display: flex;
     gap: 1px;
@@ -869,21 +878,25 @@
 }
 
 /* Anchor drift (SPEC §2.9): amber notice instead of empty space. */
-.route-drift {
+/* Conflict notice has the same shape as drift. Different reason, same role on screen. */
+.route-drift,
+.route-conflicts {
     padding: 12px 14px;
     border: 1px solid var(--attention-border-alt);
     border-radius: var(--radius-card);
     background: var(--attention-surface-alt);
 }
 
-.route-drift__text {
+.route-drift__text,
+.route-conflicts__text {
     margin: 0;
     font-size: var(--font-size-ui);
     line-height: 1.55;
     color: var(--attention-text-soft);
 }
 
-.route-drift__paths {
+.route-drift__paths,
+.route-conflicts__paths {
     margin: 9px 0 0;
     padding-left: 16px;
     font-family: var(--font-mono);
@@ -960,13 +973,19 @@
 }
 
 /* Failed parsing: lines from these files are excluded from the uncovered count, with retry beside them. */
-.route-other__failed {
+.route-other__failed,
+.route-other__conflicts {
     display: flex;
     align-items: center;
     gap: var(--space-inner-tight);
     margin: 10px 0 0;
     font-size: var(--font-size-secondary);
     color: var(--text-muted);
+}
+
+/* Conflicts are warnings, not just labels. They are resolved outside Sherpa (SPEC §4.1). */
+.route-other__conflicts {
+    color: var(--attention-text-dim);
 }
 
 .route-other__retry {

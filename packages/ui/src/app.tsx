@@ -50,6 +50,7 @@ import type { BannerSource } from './components/banner-slot.tsx';
 import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
 import type { ChatScrollTarget } from './components/chat-panel.tsx';
 import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
+import { generationCapBannerVisible, GenerationCapBanner } from './components/generation-cap-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -1368,6 +1369,11 @@ export function App({ store, session, token }: AppProps) {
     /** The Route tab renders any live snapshot, including the old one during a rebuild. */
     const routeViewSnapshot = routeKind === 'workspace' && !resolved.routeless ? (route?.snapshot ?? null) : null;
     /**
+     * Generation cap (SPEC §4.1). The server calculates it from the active snapshot, so it stays
+     * silent when reading a previous iteration because the displayed route belongs to another iteration.
+     */
+    const generationCap = readOnly ? null : (state?.generationCap ?? null);
+    /**
      * The second-pass banner is dismissed for this snapshot. It describes a filter, so it is dismissible
      * (SPEC §2.21). Dismissal lives in the tab session and resets when a new snapshot arrives.
      */
@@ -1568,6 +1574,12 @@ export function App({ store, session, token }: AppProps) {
                         }}
                     />
                 ),
+        },
+        {
+            id: 'generation-cap',
+            priority: BANNER_PRIORITY.generationCap,
+            active: () => generationCapBannerVisible(generationCap),
+            render: () => (generationCap === null ? null : <GenerationCapBanner cap={generationCap} />),
         },
         {
             id: 'audit-scope',
@@ -2034,6 +2046,7 @@ export function App({ store, session, token }: AppProps) {
                     onRouteSummary={reportRouteSummary}
                     onOpenThread={openThreadInDiff}
                     headerAside={snapshotPill}
+                    generationCap={generationCap}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (
                 <RouteReadingView

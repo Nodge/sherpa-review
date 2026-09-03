@@ -51,7 +51,8 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
-import { shortCommit } from '../i18n/index.js';
+import { PENDING_DELAY_MS, useDelayedPending } from '../components/use-delayed-pending.js';
+import { shortCommit, useT } from '../i18n/index.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { usePrStateStore } from '../pr-state/context.tsx';
@@ -258,6 +259,15 @@ export function FullDiffView({
             </StatusFrame>
         );
     }
+    // Empty PR (SPEC §4.1): no changes at all, so show an explicit notice instead of an empty file list.
+    // The action panel lives one level up and stays in place: an empty PR can still be shipped.
+    if (slice === null && diff !== null && diff.files.length === 0) {
+        return (
+            <StatusFrame {...frame}>
+                <EmptyPrNotice />
+            </StatusFrame>
+        );
+    }
     if (
         pr === null ||
         diff === null ||
@@ -314,7 +324,7 @@ export function FullDiffView({
 }
 
 /** Skeleton delay: nothing flashes during the first 200 ms (SPEC §3). */
-const SKELETON_DELAY_MS = 200;
+const SKELETON_DELAY_MS = PENDING_DELAY_MS;
 
 /**
  * The host calculates the slice (2.8–3.7 s on the review host), so text explains the wait. The host
@@ -361,6 +371,17 @@ function StatusFrame({
     );
 }
 
+/** Empty PR screen (SPEC §4.1). Overview shows the same two lines. */
+export function EmptyPrNotice() {
+    const t = useT();
+    return (
+        <div className="full-diff__zero full-diff__zero--empty-pr">
+            <p className="full-diff__zero-text">{t('emptyPr.title')}</p>
+            <p className="full-diff__zero-note">{t('emptyPr.text')}</p>
+        </div>
+    );
+}
+
 /** No PCI chip in the status frame, since lenses have not loaded yet. */
 const NO_PCI_TOGGLE = (): void => undefined;
 
@@ -380,18 +401,7 @@ function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () =>
  * so incoming data does not shift the layout.
  */
 function DiffSkeleton({ delayMs, note }: { delayMs: number; note: string | null }) {
-    const [shown, setShown] = useState(delayMs <= 0);
-    useEffect(() => {
-        if (delayMs <= 0) {
-            return;
-        }
-        const timer = setTimeout(() => {
-            setShown(true);
-        }, delayMs);
-        return () => {
-            clearTimeout(timer);
-        };
-    }, [delayMs]);
+    const shown = useDelayedPending(true, delayMs);
 
     if (!shown) {
         return null;
