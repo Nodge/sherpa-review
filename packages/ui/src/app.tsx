@@ -50,6 +50,7 @@ import type { BannerSource } from './components/banner-slot.tsx';
 import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
 import type { ChatScrollTarget } from './components/chat-panel.tsx';
 import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
+import { useChatDock } from './components/dock.js';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -224,6 +225,8 @@ export function App({ store, session, token }: AppProps) {
         session.getViewSelectionSnapshot,
         session.getViewSelectionSnapshot,
     );
+    // An open chat narrows the content column. CSS uses the class to calculate `--dock-*` and action panel layers.
+    useChatDock(chatOpen);
     const state = snapshot.state;
     const reviewReady = state !== null;
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
@@ -2151,6 +2154,7 @@ export function App({ store, session, token }: AppProps) {
                         composerTransport={composerTransport}
                         onPublish={(verdict: Verdict) => publishReview(token, verdict)}
                         onComplete={completeReview}
+                        chatOpen={chatOpen}
                     />
                 ) : (
                     <ReviewActionBarLoading diffError={currentReview.diffError} />

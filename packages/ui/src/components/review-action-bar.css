@@ -1,16 +1,40 @@
 /* Floating bar for final actions. README §5, SPEC §2.19. */
 
+/*
+ * Docked column widths: floating elements center on the content column, not the window.
+ * There are no docked columns on the left yet (the file tree lives inside the view). The variable starts
+ * at zero so the formula already accounts for it. Values live here rather than in `tokens.css`, which
+ * is pinned to the handoff token table. These values describe layout state.
+ */
+:root {
+    --dock-left: 0px;
+    --dock-right: 0px;
+}
+
+/*
+ * `components/dock.ts` sets the open-chat class on the root. At ≥1280 chat sits in a column
+ * on the right and takes up content width (`components/chat-panel.css`). Below that it is an overlay
+ * and takes no width. A media query selects the mode, with no JS window-width listener.
+ */
+@media (min-width: 1280px) {
+    :root.is-chat-docked {
+        --dock-right: 392px;
+    }
+}
+
 .review-action-bar {
     position: fixed;
     bottom: 22px;
-    left: 50%;
+    /* Center on the content column: docked chat narrows it, and the bar must not overlap chat. */
+    left: calc(var(--dock-left, 0px) + (100vw - var(--dock-left, 0px) - var(--dock-right, 0px)) / 2);
     z-index: 70;
     display: flex;
     align-items: center;
     gap: var(--space-inner-tight);
-    max-width: calc(100vw - 44px);
+    max-width: calc(100vw - var(--dock-left, 0px) - var(--dock-right, 0px) - 44px);
     padding: 8px 9px;
     transform: translateX(-50%);
+    transition: left var(--motion-hover) var(--motion-hover-ease);
     border: 1px solid var(--border-raised-bar);
     border-radius: var(--radius-floating);
     background: var(--surface-raised);
@@ -18,6 +42,24 @@
     color: var(--text-secondary);
     font-size: var(--font-size-ui);
     white-space: nowrap;
+}
+
+/*
+ * Below 1280 chat opens as an overlay above the content. The bar sits under its scrim (z-index 54),
+ * so final actions wait until chat closes. The question composer and Ship are not needed together.
+ * `chatOverlaysContent` (`components/dock.ts`) disables the bar shortcuts under the same condition:
+ * the scrim catches only mouse input, and publishing through an invisible button must be blocked.
+ */
+@media (max-width: 1279px) {
+    :root.is-chat-docked .review-action-bar {
+        z-index: 50;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .review-action-bar {
+        transition: none;
+    }
 }
 
 .review-action-bar button {
@@ -234,7 +276,7 @@
 
 .review-action-bar--error {
     align-items: stretch;
-    width: min(540px, calc(100vw - 44px));
+    width: min(540px, calc(100vw - var(--dock-left, 0px) - var(--dock-right, 0px) - 44px));
     flex-direction: column;
     gap: 6px;
     border-color: var(--error-border);

@@ -22,6 +22,7 @@ import { closePublishedComposers } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadStore } from '../threads/store.js';
 import { discussionStats } from '../views/overview-model.js';
+import { chatOverlaysContent } from './dock.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 import {
     availableShipMode,
@@ -87,6 +88,11 @@ export interface ReviewActionBarProps {
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
     readonly initialFailure?: PublicationFailure | null;
+    /**
+     * Whether chat is open: while it is an overlay (<1280), the bar sits under its scrim. The mouse cannot
+     * reach it because the scrim catches clicks. This flag disables publishing shortcuts too.
+     */
+    readonly chatOpen?: boolean;
 }
 
 interface PublishOptions {
@@ -188,6 +194,7 @@ export function ReviewActionBar({
     onComplete,
     defaultMenuOpen = false,
     initialFailure = null,
+    chatOpen = false,
 }: ReviewActionBarProps) {
     const diffSnapshot = useSyncExternalStore(diffStore.subscribe, diffStore.getSnapshot, diffStore.getSnapshot);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot, threadStore.getSnapshot);
@@ -350,7 +357,7 @@ export function ReviewActionBar({
         keys: ['mod+enter'],
         label: 'Open the ship menu',
         consequence: publishConsequence(effectiveShipMode, drafts),
-        when: () => !draggingSelection && !disabled && !prCommentsOpen,
+        when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
         action: () => {
             setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
             setMenuOpen(true);
@@ -361,7 +368,7 @@ export function ReviewActionBar({
         keys: ['mod+shift+enter'],
         label: 'Request changes',
         consequence: publishConsequence('request_changes', drafts),
-        when: () => !draggingSelection && !disabled && !prCommentsOpen,
+        when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
         action: () => {
             void publish('request_changes');
         },

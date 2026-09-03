@@ -151,6 +151,43 @@
     min-height: 100%;
 }
 
+/*
+ * M5-T22: chat sits in the frame just as it does in the app, in a right-hand column below the top
+ * panel. It deliberately has no layer above the action panel: if that panel overlaps chat again,
+ * the screenshot must show it.
+ */
+.gallery-dock-chat {
+    position: fixed;
+    top: 46px;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    width: 392px;
+}
+
+.gallery-dock-chat .chat-panel {
+    position: static;
+    height: auto;
+    flex: 1;
+}
+
+/* Overlay mode (<1280): chat above the scrim, with the same layers as in `app.css`. */
+.gallery-dock-chat--overlay {
+    z-index: 55;
+}
+
+/*
+ * Overlay mode scrim. Geometry and layer match `app.css`, but in the gallery it lets clicks
+ * through: otherwise switching states would be impossible.
+ */
+.gallery-dock-scrim {
+    position: fixed;
+    inset: 46px 0 0;
+    z-index: 54;
+    background: var(--overlay-dialog);
+    pointer-events: none;
+}
+
 .gallery-selection-popover {
     min-height: 250px;
     overflow: hidden;
