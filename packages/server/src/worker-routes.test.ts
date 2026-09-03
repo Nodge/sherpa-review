@@ -184,6 +184,21 @@ describe('worker endpoints', () => {
             });
         });
 
+        it('includes the session language label in worker status and omits the field without it', async () => {
+            const server = await start();
+
+            await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, lang: 'ru' }, server.token);
+            expect(server.workerRegistry.status()).toMatchObject({ lang: 'ru' });
+
+            await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, workerId: 'w-no-lang' },
+                server.token,
+            );
+            expect(server.workerRegistry.status()).not.toHaveProperty('lang');
+        });
+
         it('lets a second session take over the slot from a live first session', async () => {
             const server = await start();
             await postJson(server.port, WORKER_ENDPOINTS.register, { ...BASE, harness: 'claude-code' }, server.token);

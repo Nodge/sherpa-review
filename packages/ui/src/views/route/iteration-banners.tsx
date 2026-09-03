@@ -1,11 +1,10 @@
 import type { HostId, RouteCarried, RouteSnapshot, RouteStop, UiRouteStale, UiRouteState } from '@sherpa/protocol';
 
+import { formatCount, plural, relativeTime, shortCommit } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { ViewingLabel } from '../../iterations/viewing.js';
 import { planLabel } from '../../route/route-model.js';
 import type { ViewId } from '../../session/views.js';
-import { formatCount, plural } from '../../text.js';
-import { relativeTime } from '../../threads/relative-time.js';
 import './iteration-banners.css';
 
 /**
@@ -16,11 +15,6 @@ import './iteration-banners.css';
  * Stale describes a condition and stays while it holds (SPEC §2.21), so it has no close
  * button. The second pass banner describes a filter and can be dismissed.
  */
-
-/** First 7 hex digits of the commit. `title` holds the full hash so the reviewer can compare it with the host. */
-function shortCommit(commit: string): string {
-    return commit.slice(0, 7);
-}
 
 /** "02, 03 and 07" lists stop numbers in the banner text. */
 function enumerate(items: readonly string[]): string {
@@ -114,7 +108,7 @@ export function NotesLostBanner({ count, onShow, onDismiss }: NotesLostBannerPro
         <div className="iteration-banner" role="status" aria-label="Notes lost their anchor">
             <div className="iteration-banner__body">
                 <div className="iteration-banner__line">
-                    {formatCount(count)} {plural(count, 'note lost its', 'notes lost their', 'notes lost their')}{' '}
+                    {formatCount(count, 'ru')} {plural(count, { one: 'note lost', few: 'notes lost', many: 'notes lost', other: 'notes lost' }, 'ru')}{' '}
                     anchor after the new push
                 </div>
             </div>
@@ -163,8 +157,8 @@ export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithout
                     <code className="iteration-banner__commit" title={stale.prCommit}>
                         {prCommit}
                     </code>{' '}
-                    — {formatCount(stale.newIterations)}{' '}
-                    {plural(stale.newIterations, 'new iteration', 'new iterations', 'new iterations')}
+                    — {formatCount(stale.newIterations, 'ru')}{' '}
+                    {plural(stale.newIterations, { one: 'new iteration', few: 'new iterations', many: 'new iterations', other: 'new iterations' }, 'ru')}
                     {affected.length === 0 ? '' : `; stops ${enumerate(affected)} are affected`}
                 </div>
             </div>
@@ -232,7 +226,8 @@ export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent
                     <code className="iteration-banner__commit" title={label.commit}>
                         {shortCommit(label.commit)}
                     </code>
-                    {createdAt === null ? '' : ` from ${relativeTime(createdAt, now)}`} · read-only
+                    {/* Time is a separate segment after "·": the formatter can return "yesterday", which does not fit a preposition. */}
+                    {createdAt === null ? '' : ` · ${relativeTime(createdAt, now, 'ru')}`} · read-only
                     {gone ? ' · the commit is no longer in the PR' : ''}
                 </div>
             </div>
@@ -274,17 +269,7 @@ export function RouteSecondPassBanner({
                     {/* The noun agrees with the denominator, the verb with the numerator. */}
                     {carried === null
                         ? ''
-                        : `Progress carried over: ${formatCount(carried.kept)} of ${formatCount(carried.total)} ${plural(
-                              carried.total,
-                              'stop',
-                              'stops',
-                              'stops',
-                          )} ${plural(
-                              carried.kept,
-                              'has not changed and remains viewed',
-                              'have not changed and remain viewed',
-                              'have not changed and remain viewed',
-                          )}. `}
+                        : `Progress carried over: ${formatCount(carried.kept, 'ru')} of ${formatCount(carried.total, 'ru')} ${plural(carried.total, { one: 'stop', few: 'stops', many: 'stops', other: 'stops' }, 'ru')} ${plural(carried.kept, { one: 'is unchanged and remains viewed', few: 'are unchanged and remain viewed', many: 'are unchanged and remain viewed', other: 'are unchanged and remain viewed' }, 'ru')}. `}
                     {hasChanges
                         ? 'Comments on changed ranges are pinned to the old commit'
                         : 'No changes in the stops'}

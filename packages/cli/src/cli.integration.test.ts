@@ -311,6 +311,21 @@ describe('CLI against server', () => {
         expect(stats.mode & 0o777).toBe(0o600);
     });
 
+    // Third session label. The agent names the language it uses with the reviewer, and the UI uses it as a hint.
+    it('register passes --lang to worker status, omits the label without the flag and rejects unsupported languages', async () => {
+        const running = await start();
+
+        expect((await sherpa('worker', 'register', '--harness', 'claude-code', '--lang', 'ru')).code).toBe(0);
+        expect(running.workerRegistry.status()).toMatchObject({ harness: 'claude-code', lang: 'ru' });
+
+        expect((await sherpaWithEnv({ SHERPA_WORKER_ID: 'session-without-language' }, 'worker', 'register')).code).toBe(0);
+        expect(running.workerRegistry.status()).not.toHaveProperty('lang');
+
+        const rejected = await sherpa('worker', 'register', '--lang', 'de');
+        expect(rejected.code).toBe(1);
+        expect(rejected.stderr).toContain('--lang expects `ru` or `en`, got `de`');
+    });
+
     it('reconnection creates a new identity: register does not reuse the previous id', async () => {
         const running = await start();
         await fs.mkdir(path.join(sherpaDir, 'prs', PR_KEY), { recursive: true });

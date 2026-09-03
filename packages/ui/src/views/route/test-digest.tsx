@@ -4,9 +4,9 @@ import type {
     DigestModel,
     DigestTestCodeLocation,
 } from '../../route/digest.js';
+import { formatCount, plural } from '../../i18n/index.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { anchorLabel, claimLabel } from '../../route/digest.js';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * Behavioural digest card (README §2): a header with an assertion count, controls for
@@ -50,8 +50,8 @@ export function TestDigest({
         <section className="digest" aria-label="Behavioural test digest">
             <div className="digest__head">
                 <span className="digest__title">
-                    Behavioural digest · {formatCount(model.total)}{' '}
-                    {plural(model.total, 'assertion', 'assertions', 'assertions')}
+                    Behavioural digest · {formatCount(model.total, 'ru')}{' '}
+                    {plural(model.total, { one: 'assertion', few: 'assertions', many: 'assertions', other: 'assertions' }, 'ru')}
                 </span>
                 {hiddenFiles === 0 ? (
                     location === null ? null : (
@@ -77,7 +77,7 @@ export function TestDigest({
                             title={
                                 shown
                                     ? 'Hides the diff of the test files back under the digest'
-                                    : `Opens the diff of the test files under the digest: ${formatCount(hiddenFiles)} ${plural(hiddenFiles, 'file', 'files', 'files')}`
+                                    : `Opens the diff of the test files under the digest: ${formatCount(hiddenFiles, 'ru')} ${plural(hiddenFiles, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}`
                             }
                             onClick={onToggle}
                         >
@@ -112,8 +112,8 @@ export function TestDigest({
 
             {model.dropped === 0 ? null : (
                 <p className="digest__dropped">
-                    {formatCount(model.dropped)}{' '}
-                    {plural(model.dropped, 'assertion dropped', 'assertions dropped', 'assertions dropped')} because
+                    {formatCount(model.dropped, 'ru')}{' '}
+                    {plural(model.dropped, { one: 'assertion dropped', few: 'assertions dropped', many: 'assertions dropped', other: 'assertions dropped' }, 'ru')}:
                     the anchor did not find a test
                 </p>
             )}

@@ -3,11 +3,11 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import { isNoteExpanded, isNoteStackExpanded } from '../session/session-store.js';
-import { formatCount, plural } from '../text.js';
 import type { NoteGroup } from './model.js';
 import { NOTE_LOST_DRAFT_REASON, noteStackKey, noteStackNeedsSummary, placeNotesOnVisibleLines } from './model.js';
 import './notes.css';
@@ -111,7 +111,7 @@ function NoteGroupView({
                 }}
             >
                 <span className="agent-note__diamond" aria-hidden="true">◆</span>
-                {formatCount(group.notes.length)} {plural(group.notes.length, 'note', 'notes', 'notes')} here
+                {formatCount(group.notes.length, 'ru')} {plural(group.notes.length, { one: 'note', few: 'notes', many: 'notes', other: 'notes' }, 'ru')} here
             </button>
         );
     }
@@ -259,7 +259,7 @@ function firstTextLine(text: string): string {
 
 function lineCountLabel(text: string): string {
     const count = text.split('\n').length;
-    return `${formatCount(count)} ${plural(count, 'line', 'lines', 'lines')}`;
+    return `${formatCount(count, 'ru')} ${plural(count, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
 }
 
 function groupKey(group: NoteGroup): string {

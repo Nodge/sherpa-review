@@ -125,6 +125,7 @@ describe('"Expand file" in a route slice', () => {
         patch: ['@@ -1,2 +1,6 @@', ' alpha', '+one', '+', '+two', '+three', ' omega', ''].join('\n'),
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
     };
     const CLIP_CONTENT: FileContent = {
         oldText: 'alpha\nomega\n',

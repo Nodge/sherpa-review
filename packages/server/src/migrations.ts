@@ -411,6 +411,14 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE file_progress ADD COLUMN path TEXT;
         `,
     },
+    {
+        // The language the agent speaks with the reviewer (M5-T2): a third session label beside the harness
+        // and model. The UI uses it as a hint in locale selection, not an instruction.
+        name: '017-worker-lang',
+        sql: `
+            ALTER TABLE worker ADD COLUMN lang TEXT;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

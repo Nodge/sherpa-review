@@ -1,6 +1,6 @@
 import type { RouteTier } from '@sherpa/protocol';
 
-import { formatCount, plural } from '../text.js';
+import { formatCount, plural } from '../i18n/index.js';
 import type { RouteEntry, RouteTotals } from './route-model.js';
 
 /**
@@ -104,12 +104,12 @@ export function buildCoverageStrip({ totals, entries }: CoverageStripInput): Cov
         percent,
         uncovered,
         legend: {
-            changed: `${formatCount(changed)} ${plural(changed, 'changed line', 'changed lines', 'changed lines')}`,
+            changed: `${formatCount(changed, 'ru')} ${plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}`,
             explained: `${String(percent)}% explained`,
             unexplained:
                 uncovered === 0
                     ? null
-                    : `${formatCount(uncovered)} ${plural(uncovered, 'line not explained', 'lines not explained', 'lines not explained')}`,
+                    : `${formatCount(uncovered, 'ru')} ${plural(uncovered, { one: 'line not explained', few: 'lines not explained', many: 'lines not explained', other: 'lines not explained' }, 'ru')}`,
         },
         otherStopId,
     };
@@ -117,7 +117,7 @@ export function buildCoverageStrip({ totals, entries }: CoverageStripInput): Cov
 
 /** "high · stops 01–02 · 196 lines" uses a calculated number range, not a manually set one. */
 function segmentTitle(tier: RouteTier, labels: readonly string[], lines: number): string {
-    const counted = `${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`;
+    const counted = `${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
     if (tier === 'other' || labels.length === 0) {
         return `${TIER_LABEL[tier]} · ${counted}`;
     }

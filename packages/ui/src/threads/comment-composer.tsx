@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { shortCommit } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
-import { shortCommit } from '../text.js';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { editMarkdown } from './composer-markdown.js';

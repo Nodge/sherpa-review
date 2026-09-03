@@ -1,10 +1,10 @@
 import type { RouteSnapshot, UiRouteFailure, UiRouteState } from '@sherpa/protocol';
 import { useState } from 'react';
 
+import { formatCount, plural } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { generationCardKind, generationProgress } from '../../route/generation.js';
-import { formatCount, plural } from '../../text.js';
 import './generation.css';
 
 /**
@@ -66,8 +66,8 @@ export function GenerationCard({
             <section className="gen-card" aria-label="Route generation">
                 <div className="gen-card__head">
                     <h2 className="gen-card__title">
-                        Route ready · {formatCount(stops)}{' '}
-                        {plural(stops, 'stop', 'stops', 'stops')}
+                        Route ready · {formatCount(stops, 'ru')}{' '}
+                        {plural(stops, { one: 'stop', few: 'stops', many: 'stops', other: 'stops' }, 'ru')}
                     </h2>
                 </div>
                 <button type="button" className="gen-card__cta" onClick={onOpenRoute}>
@@ -85,7 +85,7 @@ export function GenerationCard({
                 <div className="gen-card__head">
                     <h2 className="gen-card__title">Filling the route</h2>
                     <span className="gen-card__counter">
-                        {formatCount(progress.ready)} of {formatCount(progress.total)} ready
+                        {formatCount(progress.ready, 'ru')} of {formatCount(progress.total, 'ru')} ready
                     </span>
                 </div>
 
@@ -116,7 +116,7 @@ export function GenerationCard({
 
                 {longRunning ? (
                     <StillWorking
-                        counter={`${formatCount(progress.ready)} of ${formatCount(progress.total)}`}
+                        counter={`${formatCount(progress.ready, 'ru')} of ${formatCount(progress.total, 'ru')}`}
                         cancelling={cancelling}
                         onCancel={onCancel}
                     />
@@ -126,9 +126,9 @@ export function GenerationCard({
                     Open the route
                 </button>
                 <p className="gen-card__hint">
-                    {formatCount(progress.ready)} {plural(progress.ready, 'stop', 'stops', 'stops')}{' '}
-                    are ready to read, {formatCount(rest)} are{' '}
-                    {plural(rest, 'placeholder', 'placeholders', 'placeholders')}
+                    {formatCount(progress.ready, 'ru')} {plural(progress.ready, { one: 'stop is', few: 'stops are', many: 'stops are', other: 'stops are' }, 'ru')}{' '}
+                    already readable, {formatCount(rest, 'ru')}{' '}
+                    {plural(rest, { one: 'is a placeholder', few: 'are placeholders', many: 'are placeholders', other: 'are placeholders' }, 'ru')}
                 </p>
                 {actionError === null ? null : (
                     <p className="gen-card__error" role="status">
@@ -157,7 +157,7 @@ export function GenerationCard({
                 <li className="gen-steps__item is-active">
                     {diffFiles === null
                         ? 'Reading the entire diff'
-                        : `Reading all ${formatCount(diffFiles)} ${plural(diffFiles, 'file', 'files', 'files')} in the diff`}
+                        : `Reading all ${formatCount(diffFiles, 'ru')} ${plural(diffFiles, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} in the diff`}
                 </li>
                 <li className="gen-steps__item">Deciding how many stops to make and in what order</li>
                 <li className="gen-steps__item">Filling stops one at a time</li>
@@ -303,8 +303,8 @@ export function RouteFillingBanner({
         <div className="gen-filling" role="status">
             <span className="gen-filling__dot" aria-hidden="true" />
             <span className="gen-filling__text">
-                Filling the route · {formatCount(progress.ready)} of {formatCount(progress.total)}{' '}
-                {plural(progress.total, 'stop ready', 'stops ready', 'stops ready')} · stops
+                Filling the route · {formatCount(progress.ready, 'ru')} of {formatCount(progress.total, 'ru')}{' '}
+                {plural(progress.total, { one: 'stop ready', few: 'stops ready', many: 'stops ready', other: 'stops ready' }, 'ru')} · stops
                 appear out of order
             </span>
             <button type="button" className="gen-filling__link" onClick={onReadDiff}>

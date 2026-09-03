@@ -1,8 +1,8 @@
 import type { RouteTier } from '@sherpa/protocol';
 
+import { formatCount, plural } from '../../i18n/index.js';
 import type { CoverageStripModel } from '../../route/coverage-model.js';
 import { MIN_SEGMENT_PX } from '../../route/coverage-model.js';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * Coverage strip (SPEC §2.4, README §1, second row of the route toolbar): segments
@@ -144,8 +144,8 @@ function StopCounter({ viewed, total }: { viewed: number; total: number }) {
     }
     return (
         <span className="coverage__stops">
-            viewed {formatCount(viewed)} of {formatCount(total)}{' '}
-            {plural(total, 'stop', 'stops', 'stops')}
+            viewed {formatCount(viewed, 'ru')} of {formatCount(total, 'ru')}{' '}
+            {plural(total, { one: 'stop', few: 'stops', many: 'stops', other: 'stops' }, 'ru')}
         </span>
     );
 }

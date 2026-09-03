@@ -1,3 +1,5 @@
+import type { MessageKey } from '../i18n/ru.js';
+
 /**
  * Shared keyboard command registry (requirements §3.3). Declare each command once here,
  * then use that declaration for the command palette (M1-T9) and shortcuts sheet (M5), without
@@ -14,12 +16,18 @@ export interface Shortcut {
     readonly id: string;
     /** An empty array shows the command in the palette but excludes it from keydown matching. */
     readonly keys: readonly ShortcutKeys[];
-    /** Human-readable label for the palette and shortcuts sheet, in Russian. */
-    readonly label: string;
+    /** Dictionary label key: the palette and shortcuts sheet translate it into the reviewer's language. */
+    readonly label: MessageKey;
+    /** Dynamic part of a parameterized label key: the stop title. */
+    readonly labelArg?: string | number;
     /** A command with a mod shortcut can run from an input. */
     readonly worksInInputs?: boolean;
-    /** Visible consequence of a command before it runs. */
-    readonly consequence?: string;
+    /** Key for the visible consequence of the command before it runs. */
+    readonly consequence?: MessageKey;
+    /** Dynamic part of the consequence: the draft count in the ship label. */
+    readonly consequenceArg?: string | number;
+    /** Palette group. Without one, the command goes into the general "Commands" group. */
+    readonly group?: MessageKey;
     /** The command is active only when this returns true. Without it, the command is always active. */
     readonly when?: () => boolean;
     readonly action: () => void;
@@ -75,7 +83,7 @@ export function createShortcutRegistry(): ShortcutRegistry {
     return {
         register: (shortcut) => {
             if (shortcuts.has(shortcut.id)) {
-                throw new Error(`Command "${shortcut.id}" already registered`);
+                throw new Error(`Shortcut "${shortcut.id}" is already registered`);
             }
             shortcuts.set(shortcut.id, shortcut);
             notify();

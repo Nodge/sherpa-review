@@ -3,19 +3,18 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
+import { plural, relativeTime, shortCommit } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useThreadPin } from '../iterations/thread-pin.tsx';
 import type { ThreadPinState } from '../iterations/thread-pin.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
-import { plural, shortCommit } from '../text.js';
 import { closeCommentComposers } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
 import type { ComposerLayout } from './composer-markdown.js';
 import { draftEditComposerKey, DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
 import { authorName, flattenThread } from './model.js';
-import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import './threads.css';
 
@@ -223,12 +222,12 @@ function ThreadBlock({
                                         setRepliesOpen((value) => !value);
                                     }}
                                 >
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, { one: 'reply', few: 'replies', many: 'replies', other: 'replies' }, 'ru')}
                                     <Icon name={repliesOpen ? 'chev-down' : 'chev-right'} size={13} />
                                 </button>
                             ) : (
                                 <span className="thread__reply-count">
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, { one: 'reply', few: 'replies', many: 'replies', other: 'replies' }, 'ru')}
                                     <Icon name="chev-right" size={13} />
                                 </span>
                             )
@@ -373,7 +372,7 @@ function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
  */
 function outsideTitle(threads: readonly Thread[]): string {
     const count = threads.length;
-    const label = `${String(count)} ${plural(count, 'thread', 'threads', 'threads')}`;
+    const label = `${String(count)} ${plural(count, { one: 'thread', few: 'threads', many: 'threads', other: 'threads' }, 'ru')}`;
     return threads.every((thread) => thread.anchor !== null)
         ? `${label} on files no longer in this PR`
         : `${label} outside the diff`;
@@ -664,7 +663,7 @@ export function openReply(store: ThreadStore, thread: Thread, draft: Comment | n
 function metaOf(thread: Thread, createdAt: string, now: number): string {
     const path = thread.anchor?.path.split('/').at(-1) ?? 'PR';
     const position = thread.anchor?.position;
-    return `${path}${position == null ? '' : `:${lineRange(position)}`} · ${relativeTime(createdAt, now)}`;
+    return `${path}${position == null ? '' : `:${lineRange(position)}`} · ${relativeTime(createdAt, now, 'ru')}`;
 }
 
 function lineRangeLabel(position: { readonly line: number; readonly size: number }): string {

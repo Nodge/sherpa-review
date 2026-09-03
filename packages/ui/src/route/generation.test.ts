@@ -199,7 +199,7 @@ describe('summary and provenance', () => {
     });
 
     it('leaves no dangling separators for empty provenance', () => {
-        const snapshot = { ...snapshotOf('ready'), provenance: { harness: null, model: null } };
+        const snapshot = { ...snapshotOf('ready'), provenance: { harness: null, model: null, locale: null } };
 
         expect(provenanceLine(snapshot)).toBe(snapshot.commit.slice(0, 7));
     });

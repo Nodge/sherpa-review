@@ -63,7 +63,7 @@ const SNAPSHOTS: readonly UiSnapshotSummary[] = [
         diffId: '182798',
         commit: GONE_COMMIT,
         createdAt: '2026-08-29T09:00:00.000Z',
-        provenance: { harness: 'claude-code', model: 'opus-5' },
+        provenance: { harness: 'claude-code', model: 'opus-5', locale: null },
         status: 'gone',
     }),
     summary({
@@ -71,7 +71,7 @@ const SNAPSHOTS: readonly UiSnapshotSummary[] = [
         diffId: '182799',
         commit: OLD_COMMIT,
         createdAt: '2026-08-31T06:00:00.000Z',
-        provenance: { harness: 'claude-code', model: 'opus-5' },
+        provenance: { harness: 'claude-code', model: 'opus-5', locale: null },
         status: 'stale',
     }),
     summary({ createdAt: '2026-08-31T11:00:00.000Z', previousSnapshotId: 'route-medium-5c1d0aa' }),

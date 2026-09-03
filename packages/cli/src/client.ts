@@ -1,6 +1,7 @@
 import http from 'node:http';
 
 import type {
+    Locale,
     RpcError,
     TaskAckResponse,
     TaskCompleteRequest,
@@ -50,10 +51,12 @@ export function nextTimeoutMs(waitSeconds: number | undefined): number {
 /** Other endpoints respond immediately, so there is no need for a long wait. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Session labels for the worker status in the UI: both optional, supplied by the model itself. */
+/** Session labels for worker status in the UI. All are optional and supplied by the model itself. */
 export interface WorkerLabels {
     readonly harness: string | undefined;
     readonly model: string | undefined;
+    /** Language the agent uses with the reviewer. A hint for the UI locale, not an instruction. */
+    readonly lang: Locale | undefined;
 }
 
 /** Registers the session as the PR worker (rpc-design §7) on the first skill call and every reconnection. */
@@ -66,6 +69,7 @@ export async function requestRegister(
         payload: {
             ...(labels.harness === undefined ? {} : { harness: labels.harness }),
             ...(labels.model === undefined ? {} : { model: labels.model }),
+            ...(labels.lang === undefined ? {} : { lang: labels.lang }),
         },
         requestSchema: workerRegisterRequestSchema,
         responseSchema: workerRegisterResponseSchema,

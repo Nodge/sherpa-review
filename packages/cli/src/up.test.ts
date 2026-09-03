@@ -96,9 +96,14 @@ describe('server startup in `up`', () => {
         await fs.rm(workDir, { recursive: true, force: true });
     });
 
-    /** Server bundle substitute: a real process, because the tests check daemonization and waiting. */
+    /**
+     * Server bundle substitute: a real process, because this tests daemonization and waiting.
+     * The layout matches the distribution (`<root>/bin/`), which the CLI uses to infer `--install-dir`.
+     */
     async function fakeServer(body: string): Promise<string> {
-        const file = path.join(workDir, 'sherpa-server.mjs');
+        const binDir = path.join(workDir, 'skill', 'bin');
+        await fs.mkdir(binDir, { recursive: true });
+        const file = path.join(binDir, 'sherpa-server.mjs');
         await fs.writeFile(file, `${body}\n`, { mode: 0o755 });
         return file;
     }
@@ -111,6 +116,7 @@ describe('server startup in `up`', () => {
 
         const prKey = process.argv[process.argv.indexOf('--pr') + 1];
         const sherpaDir = process.argv[process.argv.indexOf('--sherpa-dir') + 1];
+        const installDir = process.argv[process.argv.indexOf('--install-dir') + 1];
         const token = 'f'.repeat(64);
 
         let slowFirstHealth = process.argv.includes('--slow-first-health');
@@ -131,6 +137,7 @@ describe('server startup in `up`', () => {
         console.log('start: PR ' + prKey);
         const manifest = {
             prKey,
+            installDir,
             port: server.address().port,
             pid: process.pid,
             token,
@@ -172,6 +179,13 @@ describe('server startup in `up`', () => {
             started: true,
         });
         expect(manifest.pid).not.toBe(process.pid);
+    });
+
+    // Only the CLI knows where the distribution is installed. The server receives it as an argument (M5-T9).
+    it('passes --install-dir to the daemon as the distribution root above bin/', async () => {
+        await up(await fakeServer(WORKING_SERVER));
+
+        expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'skill')));
     });
 
     it('reuses a live manifest without starting a second server', async () => {
@@ -290,6 +304,8 @@ interface TestManifest {
     readonly port: number;
     readonly pid: number;
     readonly token: string;
+    /** Outside the manifest: the fake server writes its `--install-dir` here for the test to inspect. */
+    readonly installDir?: string;
 }
 
 async function readManifest(sherpaDir: string): Promise<TestManifest> {

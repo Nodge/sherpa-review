@@ -668,6 +668,7 @@ const WHITESPACE_FILE: FileDiff = {
     patch: WHITESPACE_PATCH,
     viewed: null,
     blameUrl: null,
+    hostFileUrl: null,
 };
 
 /** Snapshot with one stop containing the given anchors, plus Other. */

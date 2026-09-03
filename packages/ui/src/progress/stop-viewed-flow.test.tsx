@@ -247,6 +247,8 @@ function mount(options: MountOptions = {}): Mounted {
             pr: DATA.pr,
             feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
             iterations: [],
+            update: null,
+            generationCap: null,
         },
         error: null,
         progressRevision: null,

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
+import { formatCount, plural } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * Stop file chips (README §1): name, path, counts for this stop and a read-state
@@ -41,7 +41,7 @@ export function FileChips({ files, readStateOf, onOpen }: FileChipsProps) {
                         setExpanded(true);
                     }}
                 >
-                    {formatCount(hidden)} more {plural(hidden, 'file', 'files', 'files')}
+                    {formatCount(hidden, 'ru')} more {plural(hidden, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
                 </button>
             )}
         </div>
@@ -69,8 +69,8 @@ function FileChip({
             <span className="route-chip__name">{group.name}</span>
             <span className="route-chip__path">{group.dir}</span>
             <span className="route-chip__spacer" />
-            <span className="route-chip__add">+{formatCount(group.additions)}</span>
-            <span className="route-chip__del">−{formatCount(group.deletions)}</span>
+            <span className="route-chip__add">+{formatCount(group.additions, 'ru')}</span>
+            <span className="route-chip__del">−{formatCount(group.deletions, 'ru')}</span>
             {/* The three-state box uses the shared `readStateOf`. The tooltip always includes counts (SPEC §2.12). */}
             <span className={`route-chip__read route-chip__read--${read.state}`} title={read.tooltip}>
                 {read.state === 'read' ? <Icon name="check" size={9} /> : null}

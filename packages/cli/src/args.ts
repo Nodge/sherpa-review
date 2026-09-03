@@ -1,4 +1,5 @@
-import { LONG_POLL_CEILING_SECONDS } from '@sherpa/protocol';
+import type { Locale } from '@sherpa/protocol';
+import { LONG_POLL_CEILING_SECONDS, localeSchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
 
@@ -13,6 +14,8 @@ export type Command =
           readonly harness: string | undefined;
           /** Worker model name for worker status in the UI. Optional. */
           readonly model: string | undefined;
+          /** The language the agent uses with the reviewer, a hint for the UI locale. */
+          readonly lang: Locale | undefined;
           /** Skip opening the browser after a cold start. */
           readonly noOpen: boolean;
       }
@@ -29,6 +32,8 @@ export type Command =
           readonly harness: string | undefined;
           /** Worker model name for worker status in the UI. Optional. */
           readonly model: string | undefined;
+          /** The language the agent uses with the reviewer, a hint for the UI locale. */
+          readonly lang: Locale | undefined;
       }
     | {
           readonly kind: 'task-complete';
@@ -49,7 +54,7 @@ export type Command =
           readonly reason: string;
       };
 
-const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model', '--wait-seconds'] as const;
+const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model', '--lang', '--wait-seconds'] as const;
 const FLAGS = ['--no-open'] as const;
 type OptionName = (typeof OPTIONS)[number];
 type FlagName = (typeof FLAGS)[number];
@@ -122,7 +127,8 @@ function parseUpCommand(
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>] [--no-open]`; ' +
+                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>] ' +
+                '[--lang <ru|en>] [--no-open]`; ' +
                 'without `--pr` the PR is taken from the Git branch of the current directory.',
         );
     }
@@ -132,6 +138,7 @@ function parseUpCommand(
         prKey,
         harness: sanitizeLabel(options.get('--harness')),
         model: sanitizeLabel(options.get('--model')),
+        lang: parseLang(options.get('--lang')),
         noOpen: flags.has('--no-open'),
     };
 }
@@ -153,9 +160,31 @@ function parseWorkerCommand(
             prKey,
             harness: sanitizeLabel(options.get('--harness')),
             model: sanitizeLabel(options.get('--model')),
+            lang: parseLang(options.get('--lang')),
         };
     }
     return { kind: 'worker-next', prKey, waitSeconds: parseWaitSeconds(options.get('--wait-seconds')) };
+}
+
+/**
+ * Session language. Unlike free-form `--harness`/`--model` labels, the contract fixes the list
+ * (`localeSchema`). The UI selects a dictionary from it and has none for "de".
+ */
+function parseLang(raw: string | undefined): Locale | undefined {
+    const value = sanitizeLabel(raw);
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const parsed = localeSchema.safeParse(value.toLowerCase());
+    if (!parsed.success) {
+        throw new CliError(
+            `sherpa: --lang expects \`ru\` or \`en\`, got \`${value}\`.\n` +
+                'Pass the language you speak with the reviewer in; if you are not sure, omit the flag ' +
+                'and the UI will pick the language itself.',
+        );
+    }
+    return parsed.data;
 }
 
 /**

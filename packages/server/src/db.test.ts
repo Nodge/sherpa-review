@@ -77,10 +77,11 @@ describe('storage', () => {
         const after = openDatabase(file);
         try {
             expect(readSchemaVersion(after)).toBe(String(MIGRATIONS.length));
-            expect(after.prepare('SELECT worker_id, harness, model FROM worker').get()).toMatchObject({
+            expect(after.prepare('SELECT worker_id, harness, model, lang FROM worker').get()).toMatchObject({
                 worker_id: 'w-1',
                 harness: 'claude-code',
                 model: null,
+                lang: null,
             });
         } finally {
             after.close();
@@ -102,7 +103,7 @@ describe('storage', () => {
             commit: 'head-legacy',
             diffId: 'iter-legacy',
             createdAt: '2026-08-25T10:00:00.000Z',
-            provenance: { harness: 'claude-code', model: 'opus' },
+            provenance: { harness: 'claude-code', model: 'opus', locale: null },
             summary: 'route before iterations',
             stops: [],
             tourOrder: [],
@@ -352,7 +353,7 @@ describe('storage', () => {
             commit: 'head-m3',
             diffId: 'iter-m3',
             createdAt: at,
-            provenance: { harness: 'claude-code', model: 'opus' },
+            provenance: { harness: 'claude-code', model: 'opus', locale: null },
             summary: 'route built before iterations',
             stops: [],
             tourOrder: [],

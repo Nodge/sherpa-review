@@ -2,7 +2,7 @@ import type { UiSettings, UiSettingsPatch } from '@sherpa/protocol';
 import { uiSettingsSchema } from '@sherpa/protocol';
 
 /**
- * Global UI settings (M3-T16): diff mode, ship mode, composer layout. They live on the
+ * Global UI settings (M3-T16): diff mode, ship mode, composer layout, language. Stored on the
  * server in `~/.sherpa/settings.json` instead of `localStorage` because each PR server listens on
  * a random port, giving each PR its own browser storage.
  *
@@ -16,7 +16,12 @@ export const DEFAULT_UI_SETTINGS: UiSettings = uiSettingsSchema.parse({});
  * Individual settings fields. The patch schema cannot be used here because `.partial()` on a schema with defaults
  * supplies a default for a missing key, turning "leave the field alone" into "reset it".
  */
-const SETTINGS_FIELDS = ['diffMode', 'shipMode', 'composerLayout'] as const satisfies readonly (keyof UiSettings)[];
+const SETTINGS_FIELDS = [
+    'diffMode',
+    'shipMode',
+    'composerLayout',
+    'locale',
+] as const satisfies readonly (keyof UiSettings)[];
 
 export interface UiSettingsStore {
     readonly subscribe: (listener: () => void) => () => void;
@@ -90,7 +95,7 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
             queue = queue.then(
                 () =>
                     send(changes).catch((error: unknown) => {
-                        console.warn('Failed to save the setting on the server:', error);
+                        console.warn('Sherpa: failed to persist a UI setting:', error);
                     }),
                 () => undefined,
             );
@@ -118,7 +123,7 @@ export function loadUiSettings(store: UiSettingsStore, load: () => Promise<UiSet
             store.applyLoaded(settings);
         },
         (error: unknown) => {
-            console.warn('Failed to load Sherpa settings. Using defaults:', error);
+            console.warn('Sherpa: UI settings failed to load, falling back to defaults:', error);
         },
     );
 }

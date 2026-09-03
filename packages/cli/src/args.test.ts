@@ -20,6 +20,7 @@ describe('argument parsing', () => {
                 prKey: 'github-quillmart--quillmart--1',
                 harness: 'claude-code',
                 model: 'claude-opus-5',
+                lang: undefined,
                 noOpen: false,
             },
         );
@@ -28,6 +29,7 @@ describe('argument parsing', () => {
             prKey: undefined,
             harness: undefined,
             model: undefined,
+            lang: undefined,
             noOpen: false,
         });
         expect(parseArgs(['up', '--no-open'])).toMatchObject({ kind: 'up', noOpen: true });
@@ -75,6 +77,7 @@ describe('argument parsing', () => {
             prKey: undefined,
             harness: undefined,
             model: undefined,
+            lang: undefined,
         });
         expect(
             parseArgs(['worker', 'register', '--harness', 'claude-code', '--model', 'gpt-5', '--pr', 'github-quillmart--quillmart--1']),
@@ -83,7 +86,24 @@ describe('argument parsing', () => {
             prKey: 'github-quillmart--quillmart--1',
             harness: 'claude-code',
             model: 'gpt-5',
+            lang: undefined,
         });
+    });
+
+    // The contract fixes the language list. The UI selects a dictionary by this label and has no third dictionary.
+    it('--lang: accepts only ru and en on up and register, otherwise reports an argument error', () => {
+        expect(parseArgs(['up', '--lang', 'ru'])).toMatchObject({ kind: 'up', lang: 'ru' });
+        expect(parseArgs(['up', '--lang=EN'])).toMatchObject({ lang: 'en' });
+        expect(parseArgs(['worker', 'register', '--lang', 'en'])).toMatchObject({
+            kind: 'worker-register',
+            lang: 'en',
+        });
+        // Wrapping is stripped just as it is for harness and model labels.
+        expect(parseArgs(['worker', 'register', '--lang', '`ru`'])).toMatchObject({ lang: 'ru' });
+
+        expect(() => parseArgs(['up', '--lang', 'de'])).toThrow(CliError);
+        expect(() => parseArgs(['up', '--lang', 'de'])).toThrow('--lang expects `ru` or `en`, got `de`');
+        expect(() => parseArgs(['worker', 'register', '--lang=ru-RU'])).toThrow('--lang expects');
     });
 
     // The model supplies these values in backticks, quotes and surrounding whitespace.

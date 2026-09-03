@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { publishDisabledReason } from '../components/review-action-model.js';
+import { createT } from '../i18n/index.js';
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createThreadStore } from '../threads/store.js';
@@ -169,6 +170,7 @@ describe('write controls in read-only mode', () => {
     it('ship and publishing are disabled for the same reason', () => {
         expect(
             publishDisabledReason({
+                t: createT('en'),
                 connection: 'online',
                 pendingComposer: false,
                 publishing: false,
@@ -176,7 +178,7 @@ describe('write controls in read-only mode', () => {
             }),
         ).toBe(READ_ONLY_REASON);
         expect(
-            publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false }),
+            publishDisabledReason({ t: createT('en'), connection: 'online', pendingComposer: false, publishing: false }),
         ).toBeNull();
     });
 });

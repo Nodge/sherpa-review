@@ -40,6 +40,7 @@ function diffOf(diffId: string, paths: readonly string[] = []): PrDiff {
             patch: '@@ -1 +1,2 @@\n a\n+b\n',
             viewed: false,
             blameUrl: null,
+            hostFileUrl: null,
         })),
     };
 }

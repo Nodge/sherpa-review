@@ -2,8 +2,7 @@ import type { FileDiff, PrChecks, PrMeta } from '@sherpa/protocol';
 import type { ReactNode, Ref } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
-import { formatCount, plural } from '../text.js';
-import { relativeTime } from '../threads/relative-time.js';
+import { formatCount, plural, relativeTime } from '../i18n/index.js';
 import './pr-header.css';
 
 /**
@@ -82,11 +81,11 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
             <div className="pr-header__meta">
                 {counts === null ? null : (
                     <>
-                        <span className="pr-header__add">+{formatCount(counts.additions)}</span>
-                        <span className="pr-header__del">−{formatCount(counts.deletions)}</span>
+                        <span className="pr-header__add">+{formatCount(counts.additions, 'ru')}</span>
+                        <span className="pr-header__del">−{formatCount(counts.deletions, 'ru')}</span>
                         <Separator />
                         <span>
-                            {formatCount(counts.files)} {plural(counts.files, 'file', 'files', 'files')}
+                            {formatCount(counts.files, 'ru')} {plural(counts.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
                         </span>
                         <Separator />
                     </>
@@ -105,7 +104,7 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
                             title="Show only files in the PCI DSS audit scope"
                             onClick={onTogglePci}
                         >
-                            PCI DSS · {pci.count} {plural(pci.count, 'file', 'files', 'files')}
+                            PCI DSS · {pci.count} {plural(pci.count, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
                         </button>
                     </>
                 )}
@@ -136,11 +135,11 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
                 {counts === null ? null : (
                     <>
                         <Separator />
-                        <span className="pr-header__add">+{formatCount(counts.additions)}</span>
-                        <span className="pr-header__del">−{formatCount(counts.deletions)}</span>
+                        <span className="pr-header__add">+{formatCount(counts.additions, 'ru')}</span>
+                        <span className="pr-header__del">−{formatCount(counts.deletions, 'ru')}</span>
                         <Separator />
                         <span>
-                            {formatCount(counts.files)} {plural(counts.files, 'file', 'files', 'files')}
+                            {formatCount(counts.files, 'ru')} {plural(counts.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
                         </span>
                     </>
                 )}
@@ -157,7 +156,7 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
             <div className="pr-header__author">
                 <span>{pr.author.login}</span>
                 <Separator />
-                <span>{relativeTime(pr.updatedAt, now)}</span>
+                <span>{relativeTime(pr.updatedAt, now, 'ru')}</span>
                 <Separator />
                 <span className="pr-header__branches">
                     {pr.toBranch} ← {pr.fromBranch}

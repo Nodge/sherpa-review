@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import type { Locale } from '@sherpa/protocol';
+
 const execFileAsync = promisify(execFile);
 
 /** Result of one shell invocation of the bundle, exactly what the model sees in the harness. */
@@ -65,10 +67,14 @@ export class FakeWorker {
         return (await fs.readFile(file, 'utf8')).trim();
     }
 
-    async register(harness?: string): Promise<WorkerRun> {
-        return harness === undefined
-            ? this.run('worker', 'register')
-            : this.run('worker', 'register', '--harness', harness);
+    /** Session labels, the same as in the real skill. Each is optional. */
+    async register(harness?: string, lang?: Locale): Promise<WorkerRun> {
+        return this.run(
+            'worker',
+            'register',
+            ...(harness === undefined ? [] : ['--harness', harness]),
+            ...(lang === undefined ? [] : ['--lang', lang]),
+        );
     }
 
     /** `waitSeconds` is the same as the `--wait-seconds` flag. Without it, the server sets the window. */

@@ -23,8 +23,10 @@ Never invent one: if it is missing, drop `--pr <pr>` and start from the checkout
 ## Start
 
 ```
-node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5>
+node <this skill's directory>/bin/sherpa.mjs up --pr <pr> --harness <your harness: claude-code, codex, or your own> --model <the exact identifier of the model you run on, if you know it, e.g. claude-opus-5> --lang <ru or en>
 ```
+
+`--lang` is the language the user talks to you in: the UI opens in it unless the reviewer has picked a language explicitly. Look at the user's own messages, not at the code or the PR. Only `ru` and `en` exist — anything else is `en`. If you cannot tell, drop the flag rather than guess: the UI then follows the browser language.
 
 Without a PR key run the same command without `--pr <pr>`; if it cannot work out the PR either, it says so — then ask the user for the key.
 

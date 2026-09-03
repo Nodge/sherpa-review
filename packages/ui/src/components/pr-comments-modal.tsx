@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
+import { formatCount, plural, relativeTime } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { useShortcutRegistry } from '../shortcuts/context.tsx';
-import { formatCount, plural } from '../text.js';
 import { composerControllerFor } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ComposerLayout } from '../threads/composer-markdown.js';
@@ -17,7 +17,6 @@ import {
     useActiveDraftEditor,
 } from '../threads/draft-editor.tsx';
 import { authorName, prLevelHumanThreads } from '../threads/model.js';
-import { relativeTime } from '../threads/relative-time.js';
 import {
     NewCommentComposer,
     openPrComposer,
@@ -189,7 +188,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                     <span className="pr-comments-modal__header-spacer" />
                     {drafts === 0 ? null : (
                         <span className="pr-comments-modal__draft-count">
-                            {formatCount(drafts)} {plural(drafts, 'draft', 'drafts', 'drafts')} · publishes on Ship
+                            {formatCount(drafts, 'ru')} {plural(drafts, { one: 'draft', few: 'drafts', many: 'drafts', other: 'drafts' }, 'ru')} · published on Ship
                         </span>
                     )}
                     <button
@@ -229,7 +228,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                             <span className={`pr-comments-modal__chip${editing ? ' is-editing' : comment.draft ? ' is-draft' : ''}`}>
                                                 {editing ? 'editing' : comment.draft ? 'draft · publishes on ship' : 'published'}
                                             </span>
-                                            <time dateTime={comment.createdAt}>{relativeTime(comment.createdAt, openedAt)}</time>
+                                            <time dateTime={comment.createdAt}>{relativeTime(comment.createdAt, openedAt, 'ru')}</time>
                                             <span className="pr-comments-modal__item-spacer" />
                                             {comment.draft ? (
                                                 <span className="pr-comments-modal__item-actions">

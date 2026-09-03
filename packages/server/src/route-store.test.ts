@@ -50,7 +50,7 @@ function accepted(snapshotId: string, previousSnapshotId: string | null, diffId:
     return {
         skeleton: skeleton(),
         diff: diffOf(diffId, `head-${diffId}`),
-        provenance: { harness: 'claude-code', model: 'opus' },
+        provenance: { harness: 'claude-code', model: 'opus', locale: null },
         snapshotId,
         previousSnapshotId,
     };
@@ -139,7 +139,7 @@ describe('route store: snapshot history', () => {
             commit: 'head-legacy',
             diffId,
             createdAt: '2026-08-25T10:00:00.000Z',
-            provenance: { harness: 'claude-code', model: 'opus' },
+            provenance: { harness: 'claude-code', model: 'opus', locale: null },
             summary: 'route built before iterations',
             stops: [
                 {

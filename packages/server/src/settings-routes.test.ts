@@ -1,3 +1,4 @@
+import type { UiSettings } from '@sherpa/protocol';
 import { UI_ENDPOINTS, rpcErrorSchema, uiSettingsResponseSchema } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -37,7 +38,7 @@ describe('global UI settings endpoint', () => {
         return server;
     }
 
-    async function readSettings(server: SherpaServer): Promise<Record<string, string>> {
+    async function readSettings(server: SherpaServer): Promise<UiSettings> {
         const response = await get(server.port, UI_ENDPOINTS.settings, server.token);
         expect(response.status).toBe(200);
         return uiSettingsResponseSchema.parse(await response.json()).settings;
@@ -50,6 +51,9 @@ describe('global UI settings endpoint', () => {
             diffMode: 'unified',
             shipMode: 'ship',
             composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
     });
 
@@ -64,8 +68,37 @@ describe('global UI settings endpoint', () => {
             diffMode: 'split',
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
         expect(await readSettings(server)).toMatchObject({ diffMode: 'split', shipMode: 'sticky_ship' });
+    });
+
+    it('replaces a nested patch object in full without changing the language', async () => {
+        const server = await start();
+
+        const response = await patchJson(
+            server.port,
+            UI_ENDPOINTS.settings,
+            { onboarding: { completedAt: null, step: 3 } },
+            server.token,
+        );
+
+        expect(response.status).toBe(200);
+        expect(uiSettingsResponseSchema.parse(await response.json()).settings).toMatchObject({
+            onboarding: { completedAt: null, step: 3 },
+            locale: 'auto',
+        });
+    });
+
+    it('a language patch does not reset onboarding', async () => {
+        const server = await start();
+        await patchJson(server.port, UI_ENDPOINTS.settings, { onboarding: { completedAt: null, step: 3 } }, server.token);
+
+        await patchJson(server.port, UI_ENDPOINTS.settings, { locale: 'en' }, server.token);
+
+        expect(await readSettings(server)).toMatchObject({ locale: 'en', onboarding: { completedAt: null, step: 3 } });
     });
 
     it('another PR server sees the same settings', async () => {

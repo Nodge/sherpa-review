@@ -26,6 +26,7 @@ const FILE = {
     generated: false,
     viewed: false,
     blameUrl: null,
+    hostFileUrl: null,
     patch: ['@@ -10,3 +10,5 @@', ' keep', '-old', '+new', '+extra', ' tail', ''].join('\n'),
 };
 const MODEL = parseFileDiff(FILE);

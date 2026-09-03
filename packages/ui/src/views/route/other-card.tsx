@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 
 import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../../components/chat-prompts.js';
+import { formatCount, plural } from '../../i18n/index.js';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
-import { formatCount, plural } from '../../text.js';
 import { StopViewedToggle } from './stop-card.tsx';
 
 /**
@@ -121,9 +121,9 @@ export function OtherCard({
                     </p>
                 ) : (
                     <p className="route-stop__paragraph">
-                        {formatCount(lines)}{' '}
-                        {plural(lines, 'changed line', 'changed lines', 'changed lines')} in{' '}
-                        {formatCount(files)} {plural(files, 'file', 'files', 'files')} left without a stop.
+                        {formatCount(lines, 'ru')}{' '}
+                        {plural(lines, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')} in{' '}
+                        {formatCount(files, 'ru')} {plural(files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} left without a stop.
                         Coverage is structurally guaranteed, so they are not lost and collect here.
                     </p>
                 )}
@@ -158,7 +158,7 @@ export function OtherCard({
                                   ? 'Counting uncovered lines…'
                                   : opened
                                     ? 'Collapse uncovered ranges'
-                                    : `Open ${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`}
+                                    : `Open ${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`}
                         </button>
                         {onAskToPlace === undefined ? null : (
                             <button
@@ -177,7 +177,7 @@ export function OtherCard({
                     )}
                     {failedFiles === 0 ? null : (
                         <p className="route-other__failed" role="status">
-                            {formatCount(failedFiles)} {plural(failedFiles, 'file', 'files', 'files')} failed
+                            {formatCount(failedFiles, 'ru')} {plural(failedFiles, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} did not
                             to parse. Their uncovered lines are not counted.
                             {onRetryFailed === undefined ? null : (
                                 <button type="button" className="route-other__retry" onClick={onRetryFailed}>

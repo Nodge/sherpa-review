@@ -237,6 +237,7 @@ describe('route in full diff margins', () => {
             patch: ['@@ -1,6 +1,8 @@', ' alpha', '-old-one', '+new-one', '+', ' beta', '+  ', '+delta', ' gamma', '-\t', ' omega', ''].join('\n'),
             viewed: null,
             blameUrl: null,
+            hostFileUrl: null,
         };
         const first = SNAPSHOT.stops.find((stop) => stop.id === 's01');
         if (first === undefined) {
@@ -280,6 +281,7 @@ describe('route in full diff margins', () => {
             patch: ['@@ -1,3 +1,3 @@', ' alpha', '+', '-\t', ' omega', ''].join('\n'),
             viewed: null,
             blameUrl: null,
+            hostFileUrl: null,
         };
         const margin = buildRouteMargin({
             snapshot: { ...SNAPSHOT, stops: SNAPSHOT.stops.filter((stop) => stop.tier === 'other') },

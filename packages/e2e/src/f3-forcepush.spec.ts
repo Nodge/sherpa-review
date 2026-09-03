@@ -380,7 +380,7 @@ test('F3 force-push: route rebuilt on c4f9b17, missing iteration snapshot stays 
 
         const banner = page.locator('.banner-slot .iteration-banner[aria-label="Read-only"]');
         await expect(banner.locator('.iteration-banner__line')).toHaveText(
-            new RegExp(`^You are looking at snapshot ${V2_SHORT} from .+ · read-only · the commit is no longer in the PR$`),
+            new RegExp(`^You are looking at snapshot ${V2_SHORT} · .+ · read-only · the commit is no longer in the PR$`),
         );
 
         // The host no longer has the iteration. Both the route and its diff come from the local patch.

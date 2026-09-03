@@ -1110,8 +1110,9 @@ function skeletonFailureMessage(task: TaskRecord): string {
 }
 
 function provenanceOf(status: WorkerStatus): RouteProvenance {
+    // M5-T4 will set the generation language.
     if (status.kind === 'never') {
-        return { harness: null, model: null };
+        return { harness: null, model: null, locale: null };
     }
-    return { harness: status.harness ?? null, model: status.model ?? null };
+    return { harness: status.harness ?? null, model: status.model ?? null, locale: null };
 }

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { agentNoteIdSchema, agentNoteSchema, chatAnchorSchema, chatExchangeIdSchema, chatExchangeSchema } from './chat.js';
+import { distributionVersionSchema } from './distribution.js';
+import { localeSettingSchema } from './locale.js';
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
 import {
@@ -18,6 +20,7 @@ import {
 } from './review.js';
 import { routeProvenanceSchema, routeSnapshotSchema } from './route.js';
 import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
+import { semverSchema } from './version.js';
 
 /**
  * UI↔server contract (rpc-design §2): REST for actions, SSE for reactivity.
@@ -67,6 +70,51 @@ export const uiFeedbackAvailabilitySchema = z.object({
 export type UiFeedbackAvailability = z.infer<typeof uiFeedbackAvailabilitySchema>;
 
 /**
+ * Distribution installation source (M5, slicing decision 7) determines which
+ * update instructions to show.
+ * With `copy`, the distribution was copied elsewhere and has no update command.
+ * The toast asks the reviewer to copy the directory again.
+ */
+export const uiUpdateInstallSchema = z.object({
+    kind: z.enum(['copy']),
+    /** Distribution directory realpath as passed by the CLI (`--install-dir`). */
+    dir: z.string().min(1),
+    command: z.string().nullable(),
+});
+export type UiUpdateInstall = z.infer<typeof uiUpdateInstallSchema>;
+
+/**
+ * "New version available" (M5-T9): result of checking `version.json` in main against the embedded
+ * server version. Appears in the snapshot only when `latest > current` and the version has not been dismissed
+ * (`settings.updates.dismissedVersion`). "Later" stays in tab memory and does not change the snapshot.
+ */
+export const uiUpdateSchema = z.object({
+    current: semverSchema,
+    latest: semverSchema,
+    releasedAt: distributionVersionSchema.shape.releasedAt,
+    whatsNew: distributionVersionSchema.shape.whatsNew,
+    install: uiUpdateInstallSchema,
+});
+export type UiUpdate = z.infer<typeof uiUpdateSchema>;
+
+/**
+ * Generation cap (SPEC §4.1, M5-T14): the payload budget truncated the skeleton context. The server counts
+ * when enqueueing `route.skeleton` (`payload-budget.ts`). The UI says "plan
+ * covers N of M files, K generated files in one stop" in the route header and shows a banner if truncation
+ * affected files that are not generated.
+ */
+export const uiGenerationCapSchema = z.object({
+    /** Files whose entire diff the model saw. */
+    filesCovered: z.number().int().min(0),
+    filesTotal: z.number().int().min(0),
+    /** Generated files given to the model as one list entry instead of a diff. */
+    machineFiles: z.number().int().min(0),
+    /** Truncation affected files that are not generated, so the plan was built from an incomplete diff. */
+    truncated: z.boolean(),
+});
+export type UiGenerationCap = z.infer<typeof uiGenerationCapSchema>;
+
+/**
  * PR state snapshot for the UI. Returned by `GET state` and sent in full by the SSE channel
  * on every change. The queue is small in M0, so granular events are not worth the cost.
  */
@@ -94,6 +142,13 @@ export const uiStateSchema = z.object({
      * snapshot over SSE `state`, with no separate event.
      */
     iterations: z.array(iterationSchema),
+    /**
+     * New distribution version (M5-T9). null means no check was made (dev build `0.0.0`,
+     * fixture host), the check failed, the version is current or the reviewer dismissed it.
+     */
+    update: uiUpdateSchema.nullable(),
+    /** Generation cap for the current route snapshot (M5-T14). null means no snapshot or no truncation. */
+    generationCap: uiGenerationCapSchema.nullable(),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -404,6 +459,23 @@ export const uiFeedbackResponseSchema = z.object({
 export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
+ * Forced update check ("Check for updates" palette command, M5-T9): the cache is
+ * at `~/.sherpa/update-check.json`. The response is the same as what goes into `uiState.update`.
+ * `update: null` means the version is current, was dismissed or the check failed. The UI has no reason
+ * to distinguish them. The server writes the failure reason to stderr.
+ */
+export const uiUpdateCheckResponseSchema = z.object({ update: uiUpdateSchema.nullable() });
+export type UiUpdateCheckResponse = z.infer<typeof uiUpdateCheckResponseSchema>;
+
+/** Dev endpoint, the fixture server "learns" of a new version for gallery and toast e2e tests. */
+export const uiDevUpdateAvailableRequestSchema = z.object({
+    version: semverSchema,
+    releasedAt: distributionVersionSchema.shape.releasedAt,
+    whatsNew: distributionVersionSchema.shape.whatsNew,
+});
+export type UiDevUpdateAvailableRequest = z.infer<typeof uiDevUpdateAvailableRequestSchema>;
+
+/**
  * Global UI settings (M3-T16): one user has one set of settings across all PRs (SPEC §2.8,
  * README "Diff mode is global"). They live on the server in `~/.sherpa/settings.json`, not in the browser:
  * since each PR server listens on a random port, with a new origin and empty `localStorage`.
@@ -414,12 +486,30 @@ const uiSettingsFields = {
     diffMode: z.enum(['unified', 'split']),
     shipMode: z.enum(['ship', 'sticky_ship']),
     composerLayout: z.enum(['visual', 'markdown']),
+    /** UI language (M5, planning decision 1). */
+    locale: localeSettingSchema,
+    /**
+     * Onboarding tour (M5, planning decision 3): `completedAt` means completed or skipped
+     * (skipping is permanent). `step` is where an unfinished tour paused, and it resumes there
+     * on any PR and after a server restart. Replay from the palette resets both.
+     */
+    onboarding: z.object({
+        completedAt: z.iso.datetime().nullable(),
+        step: z.number().int().min(0),
+    }),
+    /** "Do not remind me about X" in the update toast (M5-T9) dismisses only this version. The next one will appear. */
+    updates: z.object({
+        dismissedVersion: semverSchema.nullable(),
+    }),
 };
 
 export const uiSettingsSchema = z.object({
     diffMode: uiSettingsFields.diffMode.default('unified'),
     shipMode: uiSettingsFields.shipMode.default('ship'),
     composerLayout: uiSettingsFields.composerLayout.default('visual'),
+    locale: uiSettingsFields.locale.default('auto'),
+    onboarding: uiSettingsFields.onboarding.default({ completedAt: null, step: 0 }),
+    updates: uiSettingsFields.updates.default({ dismissedVersion: null }),
 });
 export type UiSettings = z.infer<typeof uiSettingsSchema>;
 
@@ -430,6 +520,7 @@ export type UiSettingsResponse = z.infer<typeof uiSettingsResponseSchema>;
  * Partial update. The server rereads the file, merges the named fields and returns the result
  * in full. Built from fields without defaults, since `.partial()` over `.default()` would insert
  * a default for a missing key, making "leave the field alone" indistinguishable from "reset it".
+ * Nested objects (`onboarding`, `updates`) are replaced in full, not merged by key.
  */
 export const uiSettingsPatchSchema = z.object(uiSettingsFields).partial();
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>;
@@ -723,6 +814,8 @@ export const UI_ENDPOINTS = {
     openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
     feedback: '/api/ui/feedback',
+    /** POST without a body → `uiUpdateCheckResponseSchema`. Available without a review host too. */
+    updateCheck: '/api/ui/update-check',
     /** GET → `uiSettingsResponseSchema`, PATCH `uiSettingsPatchSchema` → `uiSettingsResponseSchema`. Available without a review host too. */
     settings: '/api/ui/settings',
     /** GET → `uiPrStateResponseSchema`, PATCH `uiPrStatePatchSchema` → `uiPrStateResponseSchema`. Available without a review host too. */
@@ -736,6 +829,8 @@ export const UI_ENDPOINTS = {
 export const UI_DEV_ENDPOINTS = {
     /** POST without a body → `uiReviewWriteAckSchema`: the fixture "receives a push", the next declared iteration becomes active. */
     fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
+    /** POST `uiDevUpdateAvailableRequestSchema` → `uiReviewWriteAckSchema`: inject a "new version" into `uiState.update`. */
+    updateAvailable: '/api/dev/update-available',
 } as const;
 
 /** SSE event name for a state snapshot. */

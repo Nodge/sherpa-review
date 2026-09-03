@@ -1,7 +1,7 @@
 import type { Verdict } from '@sherpa/protocol';
 
+import { formatCount, plural, shortCommit } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
-import { formatCount, plural } from '../text.js';
 import type { ReviewCompletion } from './review-action-bar.tsx';
 import './review-complete.css';
 
@@ -35,14 +35,14 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                     {completion.route === null ? (
                         <Counter
                             label="Files seen"
-                            value={`${formatCount(completion.progress.filesSeen)} of ${formatCount(completion.progress.filesTotal)}`}
+                            value={`${formatCount(completion.progress.filesSeen, 'ru')} of ${formatCount(completion.progress.filesTotal, 'ru')}`}
                         />
                     ) : (
                         <Counter label="Stops viewed" value={stopsValue(completion.route)} />
                     )}
                     <Counter
                         label="Diff seen"
-                        value={`${formatCount(completion.progress.percentSeen)}% of ${formatCount(completion.progress.linesTotal)} lines`}
+                        value={`${formatCount(completion.progress.percentSeen, 'ru')}% of ${formatCount(completion.progress.linesTotal, 'ru')} lines`}
                     />
                     {/*
                       "Of that, read outside the route" (README §13) is part of what was already seen, so
@@ -52,7 +52,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                     {readOutsideRoute(completion.route)}
                     <Counter
                         label="Comments published"
-                        value={`${formatCount(completion.publishedComments)} (${formatCount(replies)} of them ${plural(replies, 'a reply', 'replies', 'replies')})`}
+                        value={`${formatCount(completion.publishedComments, 'ru')} (including ${formatCount(replies, 'ru')} ${plural(replies, { one: 'reply', few: 'replies', many: 'replies', other: 'replies' }, 'ru')})`}
                     />
                     <Counter label="Snapshot signed" value={`${commit} · PR head ${commit}`} />
                 </dl>
@@ -60,8 +60,8 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                 {completion.openThreads > 0 && completion.firstOpenThreadId !== null ? (
                     <footer className="review-complete__open-threads">
                         <span>
-                            {formatCount(completion.openThreads)}{' '}
-                            {plural(completion.openThreads, 'thread is still open', 'threads are still open', 'threads are still open')} — that does not block the ship, you still have them on your list
+                            {formatCount(completion.openThreads, 'ru')}{' '}
+                            {plural(completion.openThreads, { one: 'thread is still open', few: 'threads are still open', many: 'threads are still open', other: 'threads are still open' }, 'ru')}. This does not block ship. Open threads remain on your list
                         </span>
                         <button
                             type="button"
@@ -86,7 +86,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
 
 /** "7 of 7 · Other read as a raw diff" (README §13): the second clause appears only when true. */
 function stopsValue(route: NonNullable<ReviewCompletion['route']>): string {
-    const counted = `${formatCount(route.stopsViewed)} of ${formatCount(route.stopsTotal)}`;
+    const counted = `${formatCount(route.stopsViewed, 'ru')} of ${formatCount(route.stopsTotal, 'ru')}`;
     return route.otherViewed ? `${counted} · Other read as a raw diff` : counted;
 }
 
@@ -99,7 +99,7 @@ function readOutsideRoute(route: ReviewCompletion['route']) {
     return (
         <Counter
             label="Of it read outside the route"
-            value={`${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')} the model did not place`}
+            value={`${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}, which the model did not place`}
         />
     );
 }
@@ -113,9 +113,6 @@ function Counter({ label, value }: { label: string; value: string }) {
     );
 }
 
-function shortCommit(commit: string): string {
-    return commit.slice(0, 7);
-}
 
 function verdictTitle(verdict: Verdict): string {
     if (verdict === 'sticky_ship') {
@@ -132,7 +129,7 @@ function verdictProvenance(verdict: Verdict, commit: string): string {
 }
 
 function publishedBatchText(value: number): string {
-    const comments = plural(value, 'comment', 'comments', 'comments');
-    const form = plural(value, 'published', 'published', 'published');
-    return `${formatCount(value)} ${comments} ${form} as one batch`;
+    const comments = plural(value, { one: 'comment', few: 'comments', many: 'comments', other: 'comments' }, 'ru');
+    const form = plural(value, { one: 'published', few: 'published', many: 'published', other: 'published' }, 'ru');
+    return `${formatCount(value, 'ru')} ${comments} ${form} in one batch`;
 }

@@ -4,6 +4,7 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import { formatCount } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
@@ -13,7 +14,6 @@ import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
-import { formatCount } from '../text.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
 import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
@@ -253,7 +253,7 @@ function FileTreeView({
     useShortcut({
         id: 'diff.markViewed',
         keys: ['v'],
-        label: 'Mark the file viewed',
+        label: 'shortcut.diff.markViewed',
         when: () =>
             !readOnly && cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
         action: () => {
@@ -445,8 +445,8 @@ function Label({ label, title }: { label: string; title: string }) {
 function Counts({ additions, deletions }: { additions: number; deletions: number }) {
     return (
         <span className="file-tree__counts">
-            <span className="file-tree__add">+{formatCount(additions)}</span>
-            {deletions > 0 ? <span className="file-tree__del">−{formatCount(deletions)}</span> : null}
+            <span className="file-tree__add">+{formatCount(additions, 'ru')}</span>
+            {deletions > 0 ? <span className="file-tree__del">−{formatCount(deletions, 'ru')}</span> : null}
         </span>
     );
 }

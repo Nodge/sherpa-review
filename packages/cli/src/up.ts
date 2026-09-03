@@ -40,7 +40,10 @@ export interface EnsureServerOptions {
     readonly prKey: string;
     /** State root: the server does not read `SHERPA_DIR`. The CLI passes it the path. */
     readonly sherpaDir: string;
-    /** Path to the running CLI file (`process.argv[1]`): the server bundle is beside it. */
+    /**
+     * Path to the running CLI file (`process.argv[1]`): the server bundle sits beside it, and the directory
+     * above is the distribution root, passed to the server as `--install-dir`.
+     */
     readonly entry: string | undefined;
     /** Explicit server bundle path from `SHERPA_SERVER_BIN`, for development scenarios. */
     readonly serverBin?: string | undefined;
@@ -158,9 +161,21 @@ function isProcessAlive(pid: number): boolean {
  * Server daemon: detached + unref so it outlives the CLI. stdio goes to a log file,
  * which nothing reads at runtime, but the user can inspect when the server fails to start.
  * No token in the log: the CLI reads the manifest and builds the link with the token.
+ *
+ * `--install-dir` is the distribution directory (parent of `bin/`). Only the
+ * CLI knows it, and the server needs it to check for a new version in main (M5, planning decision 7).
  */
 async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logPath: string): Promise<Daemon> {
-    const args = [serverBin, '--pr', options.prKey, '--sherpa-dir', options.sherpaDir];
+    const installDir = path.dirname(path.dirname(await fs.realpath(serverBin)));
+    const args = [
+        serverBin,
+        '--pr',
+        options.prKey,
+        '--sherpa-dir',
+        options.sherpaDir,
+        '--install-dir',
+        installDir,
+    ];
 
     const log = await fs.open(logPath, 'a');
     try {

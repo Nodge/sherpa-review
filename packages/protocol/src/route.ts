@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { localeSchema } from './locale.js';
 import { hostIdSchema } from './review.js';
 
 /**
@@ -66,10 +67,15 @@ export const routeTestClaimSchema = z.object({
 });
 export type RouteTestClaim = z.infer<typeof routeTestClaimSchema>;
 
-/** Generation provenance (brief, principle 7): what generated it. The commit belongs to the snapshot. */
+/**
+ * Generation provenance (brief, principle 7): which tool and language generated it.
+ * The commit belongs to the snapshot. `locale` is the UI language when generation starts (M5, planning
+ * decision 2). null on pre-M5 snapshots means Russian. The UI reads null as `ru`.
+ */
 export const routeProvenanceSchema = z.object({
     harness: z.string().nullable(),
     model: z.string().nullable(),
+    locale: localeSchema.nullable().default(null),
 });
 export type RouteProvenance = z.infer<typeof routeProvenanceSchema>;
 

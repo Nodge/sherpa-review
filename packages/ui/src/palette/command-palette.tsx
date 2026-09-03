@@ -2,11 +2,12 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
+import { translateKey, useT } from '../i18n/index.js';
+import type { MessageKey } from '../i18n/index.js';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { addRecentCommand, PALETTE_RECENT_LIMIT } from '../pr-state/pr-state-store.js';
 import { useShortcut, useShortcutList } from '../shortcuts/context.tsx';
 import type { Shortcut } from '../shortcuts/registry.js';
-import { plural } from '../text.js';
 import { movePaletteCursor, scrollPaletteCursor } from './cursor.js';
 import type { PaletteDiffSource } from './diff-source.tsx';
 import { lineSideInDiff, searchDiff } from './diff-search.js';
@@ -26,7 +27,7 @@ export interface CommandPaletteProps {
 
 interface PaletteItem {
     readonly id: string;
-    readonly group: string;
+    readonly group: MessageKey;
     readonly label: string;
     readonly keyHint: string | null;
     readonly consequence: string | null;
@@ -38,6 +39,9 @@ interface PaletteItem {
 
 const SUGGESTED_IDS = ['palette.goToFile', 'palette.searchDiff', 'diff.toggleMode'] as const;
 
+/** Limit on file results and search matches, also used in the truncation notice. */
+const SEARCH_LIMIT = 50;
+
 /** Command and client-side search palette (README §14, SPEC §2.3). */
 export function CommandPalette({
     open,
@@ -47,6 +51,7 @@ export function CommandPalette({
     onClose,
     initialQuery = '',
 }: CommandPaletteProps) {
+    const t = useT();
     const [query, setQuery] = useState(initialQuery);
     // SPEC has no file prefix. The command switches the internal results to files only.
     const [browseMode, setBrowseMode] = useState<'all' | 'files'>('all');
@@ -69,7 +74,7 @@ export function CommandPalette({
     useShortcut({
         id: 'palette.goToFile',
         keys: [],
-        label: 'Go to file',
+        label: 'shortcut.palette.goToFile',
         when: () => source !== null,
         action: () => {
             setBrowseMode('files');
@@ -81,7 +86,7 @@ export function CommandPalette({
     useShortcut({
         id: 'palette.searchDiff',
         keys: ['/'],
-        label: 'Search diff contents',
+        label: 'shortcut.palette.searchDiff',
         action: () => {
             requestedQuery.current = '/';
             setBrowseMode('all');
@@ -94,7 +99,7 @@ export function CommandPalette({
     useShortcut({
         id: 'diff.toggleMode',
         keys: ['d'],
-        label: 'Toggle diff mode',
+        label: 'shortcut.diff.toggleMode',
         when: () => source !== null,
         action: () => {
             source?.toggleDiffMode();
@@ -125,7 +130,7 @@ export function CommandPalette({
     const diffSearch = useMemo(
         () =>
             parsed.kind === 'diff' && source !== null && parsed.text !== ''
-                ? searchDiff(source.files, parsed.text, 50, source.searchModels())
+                ? searchDiff(source.files, parsed.text, SEARCH_LIMIT, source.searchModels())
                 : null,
         [parsed, source],
     );
@@ -137,13 +142,16 @@ export function CommandPalette({
         return file === undefined ? null : lineSideInDiff(file, parsed.line);
     }, [parsed, source]);
 
-    const result = (() => {
-        const itemFromCommand = (shortcut: Shortcut, group: string): PaletteItem => ({
+    const result: PaletteResult = (() => {
+        const itemFromCommand = (shortcut: Shortcut, group: MessageKey): PaletteItem => ({
             id: `command:${shortcut.id}`,
             group,
-            label: shortcut.label,
+            label: translateKey(t, shortcut.label, shortcut.labelArg),
             keyHint: formatKeys(shortcut.keys),
-            consequence: shortcut.consequence ?? null,
+            consequence:
+                shortcut.consequence === undefined
+                    ? null
+                    : translateKey(t, shortcut.consequence, shortcut.consequenceArg),
             detail: null,
             commandId: shortcut.id,
             keepOpen: shortcut.id === 'palette.goToFile' || shortcut.id === 'palette.searchDiff',
@@ -151,7 +159,7 @@ export function CommandPalette({
         });
         const itemFromFile = (file: PaletteDiffSource['files'][number]): PaletteItem => ({
             id: `file:${file.fileId}`,
-            group: 'Files',
+            group: 'palette.group.files',
             label: file.path,
             keyHint: null,
             consequence: null,
@@ -165,30 +173,26 @@ export function CommandPalette({
 
         if (parsed.kind === 'line') {
             if (source?.activeFileId == null) {
-                return { items: [] as PaletteItem[], notice: 'Open a file first', truncated: false };
+                return emptyResult(t('palette.notice.openFile'));
             }
             if (parsed.line === null) {
-                return { items: [] as PaletteItem[], notice: 'Enter a line number after the colon', truncated: false };
+                return emptyResult(t('palette.notice.lineNumber'));
             }
             const file = source.files.find((candidate) => candidate.fileId === source.activeFileId);
             if (file === undefined) {
-                return { items: [] as PaletteItem[], notice: 'Open a file first', truncated: false };
+                return emptyResult(t('palette.notice.openFile'));
             }
             const side = resolvedLineSide;
             if (side === null) {
-                return {
-                    items: [] as PaletteItem[],
-                    notice: `Line ${String(parsed.line)} does not exist in ${file.path}`,
-                    truncated: false,
-                };
+                return emptyResult(t('palette.notice.lineMissing', parsed.line, file.path));
             }
             const line = parsed.line;
             return {
                 items: [
                     {
                         id: `line:${file.fileId}:${side}:${String(line)}`,
-                        group: 'Navigation',
-                        label: `Go to line ${String(line)}`,
+                        group: 'palette.group.jump',
+                        label: t('palette.goToLine', line),
                         keyHint: null,
                         consequence: file.path,
                         detail: null,
@@ -200,26 +204,27 @@ export function CommandPalette({
                     },
                 ],
                 notice: null,
+                nothingFound: false,
                 truncated: false,
             };
         }
 
         if (parsed.kind === 'diff') {
             if (source === null) {
-                return {
-                    items: [] as PaletteItem[],
-                    notice: sourceError === null ? 'The diff is still loading' : `Could not load the diff: ${sourceError}`,
-                    truncated: false,
-                };
+                return emptyResult(
+                    sourceError === null
+                        ? t('palette.notice.diffLoading')
+                        : t('palette.notice.diffFailed', sourceError),
+                );
             }
             if (parsed.text === '') {
-                return { items: [] as PaletteItem[], notice: 'Enter text after /', truncated: false };
+                return emptyResult(t('palette.notice.searchText'));
             }
             const found = diffSearch ?? { matches: [], truncated: false };
             return {
                 items: found.matches.map((match, index) => ({
                     id: `search:${match.fileId}:${match.side}:${String(match.line)}:${String(index)}`,
-                    group: 'Search',
+                    group: 'palette.group.search' as const,
                     label: `${match.path}:${String(match.line)}`,
                     keyHint: null,
                     consequence: null,
@@ -230,7 +235,8 @@ export function CommandPalette({
                         source.goToLine(match.fileId, match.side, match.line);
                     },
                 })),
-                notice: found.matches.length === 0 ? `No results for "${parsed.text}"` : null,
+                notice: found.matches.length === 0 ? t('palette.notice.nothingFor', parsed.text) : null,
+                nothingFound: found.matches.length === 0,
                 truncated: found.truncated,
             };
         }
@@ -238,10 +244,11 @@ export function CommandPalette({
         if (browseMode === 'files') {
             const matchingFiles =
                 source?.files.filter((file) => parsed.text === '' || fuzzyMatch(file.path, parsed.text)) ?? [];
-            const files = matchingFiles.slice(0, 50).map(itemFromFile);
+            const files = matchingFiles.slice(0, SEARCH_LIMIT).map(itemFromFile);
             return {
                 items: files,
-                notice: files.length === 0 ? `No results for "${parsed.text}"` : null,
+                notice: files.length === 0 ? t('palette.notice.nothingFor', parsed.text) : null,
+                nothingFound: files.length === 0,
                 truncated: matchingFiles.length > files.length,
             };
         }
@@ -250,34 +257,38 @@ export function CommandPalette({
             const recent = recentIds
                 .map((id) => commandById.get(id))
                 .filter((shortcut): shortcut is Shortcut => shortcut !== undefined)
-                .map((shortcut) => itemFromCommand(shortcut, 'Recent'));
+                .map((shortcut) => itemFromCommand(shortcut, 'palette.group.recent'));
             const suggestedIds = source === null ? [...SUGGESTED_IDS, 'view.diff'] : SUGGESTED_IDS;
             const suggested = suggestedIds
                 .map((id) => commandById.get(id))
                 .filter((shortcut): shortcut is Shortcut => shortcut !== undefined)
                 .filter((shortcut) => !recentIds.includes(shortcut.id))
-                .map((shortcut) => itemFromCommand(shortcut, 'Suggestions'));
-            return { items: [...recent, ...suggested], notice: null, truncated: false };
+                .map((shortcut) => itemFromCommand(shortcut, 'palette.group.suggested'));
+            return { items: [...recent, ...suggested], notice: null, nothingFound: false, truncated: false };
         }
 
         const files =
             source?.files
                 .filter((file) => fuzzyMatch(file.path, parsed.text))
-                .slice(0, 50)
+                .slice(0, SEARCH_LIMIT)
                 .map(itemFromFile) ?? [];
+        // Search the translated label: the registry stores a key, but the reviewer types in their language.
         const commands = availableCommands
-            .filter((shortcut) => fuzzyMatch(shortcut.label, parsed.text))
-            .map((shortcut) => itemFromCommand(shortcut, 'Commands'));
+            .map((shortcut) => ({ shortcut, label: translateKey(t, shortcut.label, shortcut.labelArg) }))
+            .filter(({ label }) => fuzzyMatch(label, parsed.text))
+            // The command's own group ("Sherpa") applies in the full results. In recent commands and suggestions,
+            // the group describes where the row came from, rather than which section it belongs to.
+            .map(({ shortcut }) => itemFromCommand(shortcut, shortcut.group ?? 'palette.group.commands'));
         const items = [...files, ...commands];
         if (items.length > 0) {
-            return { items, notice: null, truncated: false };
+            return { items, notice: null, nothingFound: false, truncated: false };
         }
         return {
             items: [
                 {
                     id: 'search-fallback',
-                    group: 'Search',
-                    label: 'Search diff contents',
+                    group: 'palette.group.search' as const,
+                    label: t('shortcut.palette.searchDiff'),
                     keyHint: null,
                     consequence: null,
                     detail: null,
@@ -289,18 +300,18 @@ export function CommandPalette({
                     },
                 },
             ],
-            notice: `No results for "${parsed.text}"`,
+            notice: t('palette.notice.nothingFor', parsed.text),
+            nothingFound: true,
             truncated: false,
         };
     })();
 
     const items = result.items;
-    const hasRecentItems = items.some((item) => item.group === 'Recent');
+    const hasRecentItems = items.some((item) => item.group === 'palette.group.recent');
     const activeCursor = items.length === 0 ? -1 : Math.min(Math.max(cursor, 0), items.length - 1);
-    const announcement =
-        result.notice?.startsWith('No results') === true
-            ? 'No results'
-            : result.notice ?? `${String(items.length)} ${plural(items.length, 'result', 'results', 'results')}`;
+    const announcement = result.nothingFound
+        ? t('palette.notice.nothing')
+        : (result.notice ?? t('palette.results.count', items.length));
 
     useLayoutEffect(() => {
         if (!open || activeCursor < 0 || cursorOrigin.current === 'mouse') {
@@ -375,7 +386,7 @@ export function CommandPalette({
                 aria-labelledby="command-palette-title"
             >
                 <h2 id="command-palette-title" className="visually-hidden">
-                    Command palette
+                    {t('palette.title')}
                 </h2>
                 <div className="command-palette__query-row">
                     <span className="command-palette__search-icon" aria-hidden="true">
@@ -385,7 +396,7 @@ export function CommandPalette({
                         ref={inputRef}
                         className="command-palette__query"
                         value={query}
-                        placeholder={browseMode === 'files' ? 'File…' : 'Command, file, /search or :line'}
+                        placeholder={browseMode === 'files' ? t('palette.placeholder.files') : t('palette.placeholder')}
                         aria-controls="command-palette-listbox"
                         aria-activedescendant={
                             activeCursor < 0 ? undefined : `command-palette-option-${String(activeCursor)}`
@@ -404,21 +415,21 @@ export function CommandPalette({
                 </div>
                 <div ref={resultsRef} className="command-palette__results">
                     {parsed.kind === 'browse' && parsed.text === '' && browseMode === 'all' && !hasRecentItems ? (
-                        <div className="command-palette__group" aria-label="Recent">
-                            <div className="command-palette__group-label">Recent</div>
-                            <div className="command-palette__empty-recent">No recent commands yet</div>
+                        <div className="command-palette__group" aria-label={t('palette.group.recent')}>
+                            <div className="command-palette__group-label">{t('palette.group.recent')}</div>
+                            <div className="command-palette__empty-recent">{t('palette.recent.empty')}</div>
                         </div>
                     ) : null}
                     {result.notice === null ? null : <div className="command-palette__notice">{result.notice}</div>}
-                    <div id="command-palette-listbox" role="listbox" aria-label="Palette results">
+                    <div id="command-palette-listbox" role="listbox" aria-label={t('palette.results')}>
                         {groups.map((group) => (
                             <div
                                 className="command-palette__group"
                                 role="group"
-                                aria-label={group.label}
-                                key={group.label}
+                                aria-label={translateKey(t, group.key)}
+                                key={group.key}
                             >
-                                <div className="command-palette__group-label">{group.label}</div>
+                                <div className="command-palette__group-label">{translateKey(t, group.key)}</div>
                                 {group.items.map(({ item, index }) => (
                                     <button
                                         type="button"
@@ -458,7 +469,7 @@ export function CommandPalette({
                         ))}
                     </div>
                     {result.truncated ? (
-                        <div className="command-palette__limit">Showing the first 50 matches</div>
+                        <div className="command-palette__limit">{t('palette.truncated', SEARCH_LIMIT)}</div>
                     ) : null}
                 </div>
             </section>
@@ -492,14 +503,27 @@ function formatKeys(keys: readonly string[]): string | null {
 }
 
 function groupItems(items: readonly PaletteItem[]): readonly {
-    readonly label: string;
+    readonly key: MessageKey;
     readonly items: readonly { readonly item: PaletteItem; readonly index: number }[];
 }[] {
-    const groups = new Map<string, { item: PaletteItem; index: number }[]>();
+    const groups = new Map<MessageKey, { item: PaletteItem; index: number }[]>();
     items.forEach((item, index) => {
         const group = groups.get(item.group) ?? [];
         group.push({ item, index });
         groups.set(item.group, group);
     });
-    return [...groups].map(([label, grouped]) => ({ label, items: grouped }));
+    return [...groups].map(([key, grouped]) => ({ key, items: grouped }));
+}
+
+/** Results with no rows: a shared result shape keeps the hint consistent with the flag. */
+function emptyResult(notice: string): PaletteResult {
+    return { items: [], notice, nothingFound: false, truncated: false };
+}
+
+interface PaletteResult {
+    readonly items: readonly PaletteItem[];
+    readonly notice: string | null;
+    /** "Nothing found" hint: the live region uses a shorter version without the query. */
+    readonly nothingFound: boolean;
+    readonly truncated: boolean;
 }

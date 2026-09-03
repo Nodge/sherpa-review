@@ -8,6 +8,7 @@ import { FileCard, shownFileModel } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
+import { formatCount, plural } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { CardNoteActions } from '../../notes/card-notes.tsx';
 import { useCardNotes } from '../../notes/card-notes.tsx';
@@ -18,7 +19,6 @@ import type { SessionStore } from '../../session/session-store.js';
 import { useCardThreads } from '../../threads/card-threads.tsx';
 import type { ComposerSnapshot, ThreadStore } from '../../threads/store.js';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * File card inside a stop. Same `FileCard` as in the full diff, with its model clipped to
@@ -186,8 +186,8 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="updown" size={13} />
                     </span>
-                    {formatCount(group.collapsedLines)}{' '}
-                    {plural(group.collapsedLines, 'changed line', 'changed lines', 'changed lines')} collapsed
+                    {formatCount(group.collapsedLines, 'ru')}{' '}
+                    {plural(group.collapsedLines, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')} collapsed
                     by the model
                     <span className="route-stop__spacer" />
                     <span className="route-stop__collapsed-hint">nothing is hidden — click to expand</span>

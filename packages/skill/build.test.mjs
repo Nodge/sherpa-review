@@ -27,13 +27,29 @@ describe('skill package build', () => {
 
     // The harness links to `dist/`. An extra file there is junk in the installed skill.
     it('dist/ is a self-contained distribution: SKILL.md and exactly two bundles in bin/', () => {
-        expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin']);
+        expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin', 'version.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-server.mjs', 'sherpa.mjs']);
         expect(statSync(cliPath).isFile()).toBe(true);
         expect(statSync(serverPath).isFile()).toBe(true);
         expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
             readFileSync(join(packageRoot, 'SKILL.md'), 'utf8'),
         );
+    });
+
+    /**
+     * The server uses this file to check for a new version. The build does not know the release fields,
+     * which `scripts/release.mjs` fills in the target directory.
+     */
+    it('includes the distribution version and working tree state in version.json', () => {
+        const distVersion = JSON.parse(readFileSync(join(distDir, 'version.json'), 'utf8'));
+
+        const head = git(['rev-parse', '--short', 'HEAD']);
+        expect(distVersion).toEqual({
+            version: releaseVersion,
+            builtFrom: git(['status', '--porcelain']) === '' ? head : `${head}-dirty`,
+            releasedAt: null,
+            whatsNew: null,
+        });
     });
 
     it('runs the built CLI with plain node', () => {
@@ -90,3 +106,7 @@ describe('skill package build', () => {
         expect(skill).not.toContain('worker register');
     });
 });
+
+function git(args) {
+    return execFileSync('git', args, { cwd: resolve(packageRoot, '../..'), encoding: 'utf8' }).trim();
+}

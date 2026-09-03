@@ -22,6 +22,9 @@ describe('global UI settings', () => {
             diffMode: 'unified',
             shipMode: 'ship',
             composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
     });
 
@@ -43,8 +46,33 @@ describe('global UI settings', () => {
 
         const settings = store.patch({ diffMode: 'split' });
 
-        expect(settings).toEqual({ diffMode: 'split', shipMode: 'sticky_ship', composerLayout: 'visual' });
+        expect(settings).toEqual({
+            diffMode: 'split',
+            shipMode: 'sticky_ship',
+            composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
+        });
         expect(new SettingsStore(sherpaDir).read()).toEqual(settings);
+    });
+
+    it('replaces a nested patch object in full without changing adjacent fields', () => {
+        const store = new SettingsStore(sherpaDir);
+
+        const settings = store.patch({ onboarding: { completedAt: null, step: 3 } });
+
+        expect(settings.onboarding).toEqual({ completedAt: null, step: 3 });
+        expect(settings.locale).toBe('auto');
+    });
+
+    it('a language patch does not reset onboarding', () => {
+        const store = new SettingsStore(sherpaDir);
+        store.patch({ onboarding: { completedAt: null, step: 3 } });
+
+        const settings = store.patch({ locale: 'en' });
+
+        expect(settings).toMatchObject({ locale: 'en', onboarding: { completedAt: null, step: 3 } });
     });
 
     it('changes nothing for an empty patch', () => {
@@ -75,6 +103,9 @@ describe('global UI settings', () => {
             diffMode: 'split',
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
     });
 

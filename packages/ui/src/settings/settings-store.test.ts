@@ -36,6 +36,9 @@ describe('global UI settings', () => {
             diffMode: 'unified',
             shipMode: 'ship',
             composerLayout: 'visual',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
     });
 
@@ -111,12 +114,22 @@ describe('global UI settings', () => {
         const store = createUiSettingsStore();
         store.update({ diffMode: 'split' });
 
-        store.applyLoaded({ diffMode: 'unified', shipMode: 'sticky_ship', composerLayout: 'markdown' });
+        store.applyLoaded({
+            diffMode: 'unified',
+            shipMode: 'sticky_ship',
+            composerLayout: 'markdown',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
+        });
 
         expect(store.getSnapshot()).toEqual({
             diffMode: 'split',
             shipMode: 'sticky_ship',
             composerLayout: 'markdown',
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
         });
     });
 
@@ -125,7 +138,14 @@ describe('global UI settings', () => {
         const store = createUiSettingsStore({ send });
 
         await loadUiSettings(store, () =>
-            Promise.resolve({ diffMode: 'split', shipMode: 'ship', composerLayout: 'visual' }),
+            Promise.resolve({
+                diffMode: 'split',
+                shipMode: 'ship',
+                composerLayout: 'visual',
+                locale: 'auto',
+                onboarding: { completedAt: null, step: 0 },
+                updates: { dismissedVersion: null },
+            }),
         );
 
         await flush();

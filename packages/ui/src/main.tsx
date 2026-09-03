@@ -1,4 +1,6 @@
-import { StrictMode } from 'react';
+import type { Locale } from '@sherpa/protocol';
+import type { ReactNode } from 'react';
+import { StrictMode, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { fetchUiPrState, fetchUiSettings, patchUiPrState, patchUiSettings } from './api.js';
@@ -6,6 +8,7 @@ import { App, MessageScreen } from './app.tsx';
 import { ALL_FILTER_ID } from './filters/lens-filters.js';
 import { readFragmentParam, readToken, updateFragment } from './fragment.js';
 import { IconSprite } from './icons/icon.tsx';
+import { LocaleProvider, useT } from './i18n/index.js';
 import { PrStateProvider } from './pr-state/context.tsx';
 import { createUiPrStateStore } from './pr-state/pr-state-store.js';
 import type { Viewing } from './iterations/viewing.js';
@@ -25,6 +28,7 @@ import { SettingsProvider } from './settings/context.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
+import type { Store } from './store.js';
 import { createStore } from './store.js';
 import './styles/base.css';
 
@@ -33,7 +37,7 @@ const SETTINGS_BOOT_TIMEOUT_MS = 1500;
 
 const container = document.getElementById('root');
 if (!container) {
-    throw new Error('Root element #root not found');
+    throw new Error('Sherpa UI: root element #root is missing');
 }
 
 const token = readToken(window.location.hash);
@@ -41,13 +45,13 @@ const root = createRoot(container);
 
 if (token === null) {
     // Make no requests without a token. The skill/server launch prints a URL containing it.
+    // Settings are unavailable here, so use the browser language: the provider without a store reads the fallback.
     root.render(
         <StrictMode>
             <IconSprite />
-            <MessageScreen title="Sherpa">
-                <p>Open the UI using the link printed by the Sherpa skill or server. It contains the access token.</p>
-                <p className="message-screen__hint">http://127.0.0.1:&lt;port&gt;/#t=&lt;token&gt;</p>
-            </MessageScreen>
+            <LocaleProvider>
+                <NoTokenScreen />
+            </LocaleProvider>
         </StrictMode>,
     );
 } else {
@@ -109,7 +113,7 @@ if (token === null) {
         shortcuts.register({
             id: `view.${view.id}`,
             keys: [String(index + 1)],
-            label: `View "${view.label}"`,
+            label: view.command,
             action: () => {
                 session.setView(view.id);
             },
@@ -118,7 +122,7 @@ if (token === null) {
     shortcuts.register({
         id: 'palette.open',
         keys: ['mod+k'],
-        label: 'Open command palette',
+        label: 'shortcut.palette.open',
         worksInInputs: true,
         action: () => {
             session.setPaletteOpen(true);
@@ -134,14 +138,42 @@ if (token === null) {
                 <IconSprite />
                 <ShortcutsProvider registry={shortcuts}>
                     <SettingsProvider store={settings}>
-                        <PrStateProvider store={prState}>
-                            <App store={store} session={session} token={token} />
-                        </PrStateProvider>
+                        <AgentLocaleProvider store={store}>
+                            <PrStateProvider store={prState}>
+                                <App store={store} session={session} token={token} />
+                            </PrStateProvider>
+                        </AgentLocaleProvider>
                     </SettingsProvider>
                 </ShortcutsProvider>
             </StrictMode>,
         );
     });
+}
+
+/**
+ * Locale provider with the agent hint from server state. The subscription lives here so
+ * `LocaleProvider` need not know about the store, which is absent in the gallery and component tests.
+ * A new `lang` arrives over SSE and rerenders the tree without a reload.
+ */
+function AgentLocaleProvider({ store, children }: { store: Store; children: ReactNode }) {
+    const agentLang = useSyncExternalStore(store.subscribe, () => agentLangOf(store));
+    return <LocaleProvider agentLang={agentLang}>{children}</LocaleProvider>;
+}
+
+function agentLangOf(store: Store): Locale | undefined {
+    const worker = store.getSnapshot().state?.worker;
+    return worker === undefined || worker.kind === 'never' ? undefined : worker.lang;
+}
+
+/** Screen without a token: the only place where the UI runs entirely without server state. */
+function NoTokenScreen() {
+    const t = useT();
+    return (
+        <MessageScreen title={t('app.name')}>
+            <p>{t('app.noToken.text')}</p>
+            <p className="message-screen__hint">{t('app.noToken.hint')}</p>
+        </MessageScreen>
+    );
 }
 
 function delay(ms: number): Promise<void> {

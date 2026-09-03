@@ -77,6 +77,33 @@
     color: var(--text-dim);
 }
 
+.gallery__stage-spacer {
+    flex: 1;
+}
+
+/* Locale switch: the gallery shows each state in both languages (M5-T2). */
+.gallery__locales {
+    display: flex;
+    gap: 4px;
+}
+
+.gallery__locales button {
+    padding: 2px 8px;
+    border: 1px solid var(--border-standard);
+    border-radius: var(--radius-badge);
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.gallery__locales button[aria-pressed='true'] {
+    background: var(--surface-selected);
+    color: var(--text-primary);
+}
+
 .gallery__stage-id {
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
