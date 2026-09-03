@@ -829,7 +829,7 @@ export const UI_ENDPOINTS = {
 export const UI_DEV_ENDPOINTS = {
     /** POST without a body → `uiReviewWriteAckSchema`: the fixture "receives a push", the next declared iteration becomes active. */
     fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
-    /** POST `uiDevUpdateAvailableRequestSchema` → `uiReviewWriteAckSchema`: inject a "new version" into `uiState.update`. */
+    /** POST `uiDevUpdateAvailableRequestSchema` → `uiUpdateCheckResponseSchema`: inject a "new version" into `uiState.update`. */
     updateAvailable: '/api/dev/update-available',
 } as const;
 

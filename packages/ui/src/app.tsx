@@ -57,6 +57,8 @@ import {
     ReviewActionBar,
     ReviewActionBarLoading,
 } from './components/review-action-bar.tsx';
+import { useUpdateCheckCommand, useUpdateToast } from './components/update-state.js';
+import { UpdateToast } from './components/update-toast.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { TopBar } from './components/top-bar.tsx';
 import { expandFileContext } from './diff-view/expand.js';
@@ -232,6 +234,14 @@ export function App({ store, session, token }: AppProps) {
     );
     const state = snapshot.state;
     const reviewReady = state !== null;
+    // Update toast (M5-T9): state and the "Check for updates" palette command.
+    const updateToast = useUpdateToast(state?.update ?? null);
+    const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
+    useUpdateCheckCommand({
+        token,
+        current: state?.update?.current ?? UI_VERSION,
+        onStatus: setPaletteStatus,
+    });
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
@@ -1897,6 +1907,8 @@ export function App({ store, session, token }: AppProps) {
             <ThreadPinProvider value={threadPin}>
             <TopBar
                 version={UI_VERSION}
+                update={state.update}
+                onOpenUpdate={updateToast.reopen}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
                 agent={agentPillView(state.worker, state.tasks)}
                 reconnectCommand={reconnectCommand(state.prKey)}
@@ -2129,6 +2141,10 @@ export function App({ store, session, token }: AppProps) {
                 open={paletteOpen}
                 source={paletteSource}
                 sourceError={currentReview.diffError}
+                status={paletteStatus}
+                onStatusHandled={() => {
+                    setPaletteStatus(null);
+                }}
                 onOpen={() => {
                     session.setPaletteOpen(true);
                 }}
@@ -2136,6 +2152,14 @@ export function App({ store, session, token }: AppProps) {
                     session.setPaletteOpen(false);
                 }}
             />
+
+            {updateToast.visible && state.update !== null ? (
+                <UpdateToast
+                    update={state.update}
+                    onLater={updateToast.later}
+                    onDismissVersion={updateToast.dismissVersion}
+                />
+            ) : null}
 
             {showReviewActionBar ? (
                 reviewActionBarDataReady && reviewHost !== null && state.pr !== null ? (

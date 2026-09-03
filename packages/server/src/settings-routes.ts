@@ -7,6 +7,8 @@ import type { SettingsStore } from './settings-store.js';
 
 export interface SettingsRoutesOptions {
     readonly settings: SettingsStore;
+    /** A patch was applied. The UI snapshot depends on settings (`updates.dismissedVersion`) and must be rebuilt. */
+    readonly onChange?: () => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export function createSettingsRoutes(options: SettingsRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const patch = await readRequest(ctx, uiSettingsPatchSchema, 'settings change');
                 const settings = options.settings.patch(patch);
+                options.onChange?.();
                 return respond(uiSettingsResponseSchema, { settings }, 'local');
             }),
         },

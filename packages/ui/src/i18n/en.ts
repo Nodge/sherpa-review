@@ -24,6 +24,10 @@ export const en: Dictionary = {
 
     'command.hint': 'Run it in any harness — that session becomes the worker.',
     'command.copy': 'Copy',
+    'command.copied': 'Copied',
+    'command.copied.status': 'Command copied',
+    'command.manual': 'The command is selected — copy it manually',
+    'command.aria': 'Sherpa launch command',
 
     'topbar.breadcrumb': 'Pull request',
     'topbar.search': 'Search',
@@ -31,6 +35,20 @@ export const en: Dictionary = {
     'topbar.agent.connect': 'Connect the agent',
     'topbar.agent.offline':
         'The reader works in full — diff, search, comments and ship are available. The AI areas stay read-only.',
+    'topbar.update': (latest: string) => `Version ${latest} is available`,
+
+    'update.kicker': 'Update',
+    'update.title': (latest: string) => `Sherpa ${latest} is available`,
+    'update.current': (current: string) => `you have ${current}`,
+    'update.how': 'How to update',
+    'update.later': 'Later',
+    'update.dismiss': (latest: string) => `Don’t remind me about ${latest}`,
+    'update.command.aria': 'Update command',
+    'update.copyDir': (dir: string) => `Copy the directory again: ${dir}`,
+    'update.readme': 'Installation guide',
+    'update.status.none': (current: string) => `No updates — ${current} is the latest`,
+    'update.status.available': (latest: string) => `${latest} is available`,
+    'update.status.failed': 'Could not check for updates',
 
     'view.overview': 'Overview',
     'view.route': 'Route',
@@ -184,6 +202,8 @@ export const en: Dictionary = {
     'shortcut.route.generate': 'Build the route',
     'shortcut.route.regenerate': 'Regenerate the route',
     'shortcut.route.generate.consequence': 'clears the stop marks once the new route arrives',
+    'shortcut.update.check': 'Check for updates',
+    'shortcut.update.check.consequence': 'checks for a new release',
     'shortcut.locale.ru': 'Interface language: Russian',
     'shortcut.locale.en': 'Interface language: English',
     'shortcut.locale.auto': 'Language: auto (from the agent or the browser)',

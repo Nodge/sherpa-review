@@ -1,4 +1,4 @@
-import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse } from '@sherpa/protocol';
+import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse, UiUpdate } from '@sherpa/protocol';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { useT } from '../i18n/index.js';
@@ -18,6 +18,10 @@ import { ViewTabs } from './view-tabs.tsx';
 export interface TopBarProps {
     /** Distribution version from the root package.json, inserted at build time. */
     readonly version: string;
+    /** Available new version (M5-T9). With null, the version stays plain text. */
+    readonly update?: UiUpdate | null;
+    /** Clicking the version with a dot clears "Later" and reopens the toast. */
+    readonly onOpenUpdate?: () => void;
     /** Brandcrumb segments from left to right. The last is the PR itself, and a link once metadata is known. */
     readonly breadcrumb: readonly BreadcrumbSegment[];
     readonly agent: AgentPillView;
@@ -34,6 +38,8 @@ export interface TopBarProps {
 
 export function TopBar({
     version,
+    update = null,
+    onOpenUpdate,
     breadcrumb,
     agent,
     reconnectCommand: command,
@@ -52,7 +58,19 @@ export function TopBar({
             <div className="top-bar__brand">
                 <span className="top-bar__mark" aria-hidden="true" />
                 <span className="top-bar__wordmark">Sherpa</span>
-                <span className="top-bar__version">{version}</span>
+                {update === null ? (
+                    <span className="top-bar__version">{version}</span>
+                ) : (
+                    <button
+                        type="button"
+                        className="top-bar__version top-bar__version--update"
+                        aria-label={t('topbar.update', update.latest)}
+                        onClick={onOpenUpdate}
+                    >
+                        <span className="top-bar__version-dot" aria-hidden="true" />
+                        {version}
+                    </button>
+                )}
             </div>
 
             <nav className="top-bar__breadcrumb" aria-label={t('topbar.breadcrumb')}>

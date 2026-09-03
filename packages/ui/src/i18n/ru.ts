@@ -29,6 +29,10 @@ export const ru = {
 
     'command.hint': 'Запусти в любом харнесе — сессия станет воркером.',
     'command.copy': 'Скопировать',
+    'command.copied': 'Скопировано',
+    'command.copied.status': 'Команда скопирована',
+    'command.manual': 'Команда выделена — скопируй вручную',
+    'command.aria': 'Команда запуска Шерпы',
 
     'topbar.breadcrumb': 'Пул-реквест',
     'topbar.search': 'Поиск',
@@ -36,6 +40,20 @@ export const ru = {
     'topbar.agent.connect': 'Подключить агента',
     'topbar.agent.offline':
         'Читалка работает полностью — дифф, поиск, комментарии и шип доступны. ИИ-зоны остались только для чтения.',
+    'topbar.update': (latest: string) => `Доступна версия ${latest}`,
+
+    'update.kicker': 'Обновление',
+    'update.title': (latest: string) => `Шерпа ${latest} доступна`,
+    'update.current': (current: string) => `у вас ${current}`,
+    'update.how': 'Как обновить',
+    'update.later': 'Позже',
+    'update.dismiss': (latest: string) => `Не напоминать про ${latest}`,
+    'update.command.aria': 'Команда обновления',
+    'update.copyDir': (dir: string) => `Скопируйте каталог заново: ${dir}`,
+    'update.readme': 'Инструкция по установке',
+    'update.status.none': (current: string) => `Обновлений нет — ${current} последняя`,
+    'update.status.available': (latest: string) => `Доступна ${latest}`,
+    'update.status.failed': 'Не удалось проверить обновления',
 
     'view.overview': 'Обзор',
     'view.route': 'Маршрут',
@@ -192,6 +210,8 @@ export const ru = {
     'shortcut.route.generate': 'Построить маршрут',
     'shortcut.route.regenerate': 'Перегенерировать маршрут',
     'shortcut.route.generate.consequence': 'сбросит отметки остановок, когда новый маршрут приедет',
+    'shortcut.update.check': 'Проверить обновления',
+    'shortcut.update.check.consequence': 'проверит наличие нового релиза',
     'shortcut.locale.ru': 'Язык интерфейса: русский',
     'shortcut.locale.en': 'Язык интерфейса: английский',
     'shortcut.locale.auto': 'Язык: авто (от агента или браузера)',

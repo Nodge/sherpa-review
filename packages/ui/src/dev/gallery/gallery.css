@@ -479,3 +479,16 @@
     background: var(--accent);
     color: var(--accent-ink);
 }
+
+/*
+ * Update toast (M5-T9) in the gallery: the app uses `position: fixed`, but a state card
+ * needs its own flow. The frame puts it back in place and keeps the same width.
+ */
+.update-toast-frame {
+    position: relative;
+    width: 360px;
+}
+
+.update-toast-frame .update-toast {
+    position: static;
+}

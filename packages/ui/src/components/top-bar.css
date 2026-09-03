@@ -52,6 +52,30 @@
     padding-top: 2px;
 }
 
+/* While an update is available, the version is a button with an accent dot. Clicking opens the toast (M5-T9). */
+.top-bar__version--update {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    /* The base.css reset only sets the button's font and colour. Without this, UA padding would shift the version. */
+    padding: 2px 0 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.top-bar__version--update:hover {
+    color: var(--text-secondary);
+}
+
+.top-bar__version-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
 /* --- Brandcrumb --- */
 
 .top-bar__breadcrumb {

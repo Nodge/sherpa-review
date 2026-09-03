@@ -28,6 +28,14 @@ export function settingsPathFor(sherpaDir: string): string {
     return path.join(sherpaDir, 'settings.json');
 }
 
+/**
+ * Update check cache (M5-T9): one file per user next to settings.
+ * Restarting servers for any PR must not hit the review host more than once every 30 minutes.
+ */
+export function updateCheckPathFor(sherpaDir: string): string {
+    return path.join(sherpaDir, 'update-check.json');
+}
+
 /** Discovery manifest directory (rpc-design §8). */
 export function serversDirOf(sherpaDir: string): string {
     return path.join(sherpaDir, 'servers');
