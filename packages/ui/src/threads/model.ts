@@ -8,7 +8,8 @@ export interface FlatComment {
     readonly parent: Comment | null;
     readonly depth: number;
     readonly indent: number;
-    readonly replyHint: string | null;
+    /** Parent author beyond depth four. The view builds the "↳ reply to X" label. */
+    readonly replyHintAuthor: string | null;
     readonly subtreeReplies: number;
 }
 
@@ -82,7 +83,7 @@ export function flattenThread(root: Comment): FlatComment[] {
             parent,
             depth,
             indent: Math.min(Math.max(depth - 1, 0), 3) * 15,
-            replyHint: depth > 4 && parent !== null ? `reply to ${authorName(parent)}` : null,
+            replyHintAuthor: depth > 4 && parent !== null ? authorName(parent) : null,
             subtreeReplies: 0,
         });
 

@@ -95,7 +95,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readWorkerRequest(ctx, workerRegisterRequestSchema);
                 heartbeat(ctx, request.workerId, () =>
-                    options.registry.register(request.workerId, request.harness, request.model),
+                    options.registry.register(request.workerId, request.harness, request.model, request.lang),
                 );
                 // Immediately after claiming the slot, with no await in between: the identity file must
                 // change in the same order as the slot owner.

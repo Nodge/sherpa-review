@@ -47,7 +47,7 @@ export function useShortcut(shortcut: Shortcut): void {
         latest.current = shortcut;
     });
 
-    const { id, label, scope, section, worksInInputs, consequence } = shortcut;
+    const { id, label, labelArg, scope, section, worksInInputs, consequence, consequenceArg, group } = shortcut;
     const keys = shortcut.keys.join('\n');
     useEffect(() => {
         if (registry === null) {
@@ -57,16 +57,31 @@ export function useShortcut(shortcut: Shortcut): void {
             id,
             keys: keys === '' ? [] : keys.split('\n'),
             label,
+            ...(labelArg === undefined ? {} : { labelArg }),
             scope,
             section,
             ...(worksInInputs === undefined ? {} : { worksInInputs }),
             ...(consequence === undefined ? {} : { consequence }),
+            ...(consequenceArg === undefined ? {} : { consequenceArg }),
+            ...(group === undefined ? {} : { group }),
             when: () => latest.current.when?.() ?? true,
             action: () => {
                 latest.current.action();
             },
         });
-    }, [registry, id, keys, label, scope, section, worksInInputs, consequence]);
+    }, [
+        registry,
+        id,
+        keys,
+        label,
+        labelArg,
+        scope,
+        section,
+        worksInInputs,
+        consequence,
+        consequenceArg,
+        group,
+    ]);
 }
 
 /**

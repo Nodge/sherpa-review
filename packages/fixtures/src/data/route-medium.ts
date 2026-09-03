@@ -454,7 +454,7 @@ function snapshot(stops: RouteStop[], hashed: boolean): RouteSnapshot {
         baseCommit: MEDIUM_BASE_COMMIT,
         diffId: MEDIUM_DIFF_ID,
         createdAt: CREATED_AT,
-        provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+        provenance: { harness: 'claude-code', model: 'claude-opus-5', locale: null },
         // Second pass through snapshots in M4-T6.
         previousSnapshotId: null,
         carried: null,

@@ -137,8 +137,14 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
-        ['sherpa up [--harness <name>] [--model <name>] [--no-open]', 'start the PR server and become its worker'],
-        ['sherpa worker register [--harness <name>] [--model <name>]', 'register this session as the PR worker'],
+        [
+            'sherpa up [--harness <name>] [--model <name>] [--lang <ru|en>] [--no-open]',
+            'start the PR server and become its worker',
+        ],
+        [
+            'sherpa worker register [--harness <name>] [--model <name>] [--lang <ru|en>]',
+            'register this session as the PR worker',
+        ],
         [
             'sherpa worker next [--wait-seconds <n>]',
             'take the next task; waits out --wait-seconds, then reports an idle queue',
@@ -151,6 +157,10 @@ export function helpText(): string {
         ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
+        [
+            '--lang <ru|en>',
+            'the language you speak with the reviewer in; hints the UI language, omit if unsure',
+        ],
         ['--no-open', 'do not open the browser after `up` starts a new server'],
         [
             '--wait-seconds <n>',

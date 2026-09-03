@@ -8,6 +8,7 @@ import { FileCard, shownFileModel } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
+import { useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { CardNoteActions } from '../../notes/card-notes.tsx';
 import { useCardNotes } from '../../notes/card-notes.tsx';
@@ -18,7 +19,6 @@ import type { SessionStore } from '../../session/session-store.js';
 import { useCardThreads } from '../../threads/card-threads.tsx';
 import type { ComposerSnapshot, ThreadStore } from '../../threads/store.js';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * File card inside a stop. Same `FileCard` as in the full diff, with its model clipped to
@@ -102,6 +102,7 @@ export function StopFileCard({
     onToggleCollapsed,
     selection,
 }: StopFileCardProps) {
+    const t = useT();
     const anchors = useMemo(
         () => anchorSpans(collapsedOpen ? [...group.anchors, ...group.collapsedAnchors] : group.anchors),
         [collapsedOpen, group.anchors, group.collapsedAnchors],
@@ -186,11 +187,9 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="updown" size={13} />
                     </span>
-                    {formatCount(group.collapsedLines)}{' '}
-                    {plural(group.collapsedLines, 'changed line', 'changed lines', 'changed lines')} collapsed
-                    by the model
+                    {t('route.stopFile.collapsed', group.collapsedLines)}
                     <span className="route-stop__spacer" />
-                    <span className="route-stop__collapsed-hint">nothing is hidden — click to expand</span>
+                    <span className="route-stop__collapsed-hint">{t('route.collapsed.hint')}</span>
                 </button>
             ) : null}
             {collapseReason === null && collapsedOpen && group.collapsedLines > 0 ? (
@@ -198,7 +197,7 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="chev-down" size={13} className="route-stop__collapsed-icon--up" />
                     </span>
-                    collapse again
+                    {t('route.stopFile.collapse')}
                 </button>
             ) : null}
         </div>

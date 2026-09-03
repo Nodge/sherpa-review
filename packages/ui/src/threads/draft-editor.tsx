@@ -90,7 +90,7 @@ export function DraftEditor({
             contextLabel={contextLabel}
             placeholder={placeholder}
             inputLabel={inputLabel}
-            saveLabel="Save changes"
+            saveLabel="thread.composer.saveChanges"
             closeOnSave
             {...(footerHint === undefined ? {} : { footerHint })}
             {...(initialLayout === undefined ? {} : { initialLayout })}

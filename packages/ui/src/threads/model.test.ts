@@ -26,7 +26,7 @@ describe('thread model', () => {
         const rows = flattenThread(deep.root);
 
         expect(rows[0]?.subtreeReplies).toBe(rows.length - 1);
-        expect(rows.some((row) => row.depth > 4 && row.indent === 45 && row.replyHint !== null)).toBe(true);
+        expect(rows.some((row) => row.depth > 4 && row.indent === 45 && row.replyHintAuthor !== null)).toBe(true);
         expect(rows.filter((row) => row.parent?.id === '4820158')).toHaveLength(2);
     });
 

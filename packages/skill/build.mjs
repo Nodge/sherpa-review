@@ -1,12 +1,15 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(root, '../..');
 const distDir = resolve(root, 'dist');
 const binDir = resolve(distDir, 'bin');
+
+const DIRTY_SUFFIX = '-dirty';
 
 /**
  * `dist/` is the skill distribution: SKILL.md beside `bin/` with two bundles. It is `dist`
@@ -35,4 +38,49 @@ for (const bundle of bundles) {
     copyFileSync(resolve(packageRoot, bundle.file), outfile);
     chmodSync(outfile, 0o755);
     process.stdout.write(`@sherpa/skill: ${outfile}\n`);
+}
+
+writeVersionFile();
+
+/**
+ * `dist/version.json` follows `distributionVersionSchema` (M5, planning decision 7): the server compares
+ * this file from main with the embedded version. Release fields (`releasedAt`, `whatsNew`) are filled by
+ * `scripts/release.mjs` in the target directory. They are absent from the build artifact.
+ */
+function writeVersionFile() {
+    const version = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8')).version;
+    const file = resolve(distDir, 'version.json');
+
+    writeFileSync(
+        file,
+        `${JSON.stringify({ version, builtFrom: buildRevision(), releasedAt: null, whatsNew: null }, null, 4)}\n`,
+    );
+    process.stdout.write(`@sherpa/skill: ${file}\n`);
+}
+
+/**
+ * Build source identifier: short HEAD hash plus `-dirty` if the working tree has
+ * uncommitted or untracked changes. The distribution is built from the working tree, rather than
+ * HEAD. Without the suffix, the hash would point to code the bundle was not built from.
+ */
+function buildRevision() {
+    const head = git(['rev-parse', '--short', 'HEAD']);
+    if (head === null) {
+        return null;
+    }
+    // Could not determine tree state. Marking the build is more honest than claiming a clean hash.
+    const status = git(['status', '--porcelain']);
+    return status === '' ? head : `${head}${DIRTY_SUFFIX}`;
+}
+
+function git(args) {
+    try {
+        return execFileSync('git', args, {
+            cwd: repoRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+    } catch {
+        return null;
+    }
 }

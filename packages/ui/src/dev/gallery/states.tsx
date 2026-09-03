@@ -1,8 +1,10 @@
 import { fixtureIteration } from '@sherpa/fixtures';
+import type { UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { agentPillView } from '../../components/agent-pill-view.js';
+import { useT } from '../../i18n/index.js';
 import { reconnectCommand } from '../../components/reconnect-command.js';
 import { AgentPill, TopBar } from '../../components/top-bar.tsx';
 import { breadcrumbFor } from '../../pr-key.js';
@@ -127,12 +129,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         id: `agent-${state.id}`,
         group: 'Agent pill',
         title: state.title,
-        render: () => (
-            <AgentPill
-                view={agentPillView(state.worker, state.tasks)}
-                reconnectCommand={reconnectCommand('fixture-medium')}
-            />
-        ),
+        render: () => <AgentPillState worker={state.worker} tasks={state.tasks} />,
     })),
     {
         id: 'top-bar',
@@ -248,15 +245,23 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     },
 ];
 
+function AgentPillState({ worker, tasks }: { worker: WorkerStatus; tasks: readonly UiTask[] }) {
+    const t = useT();
+    return (
+        <AgentPill view={agentPillView(worker, tasks, t)} reconnectCommand={reconnectCommand('fixture-medium')} />
+    );
+}
+
 /** Gallery tabs are interactive, so their selected states can be compared. */
 function TopBarState() {
+    const t = useT();
     const [view, setView] = useState<ViewId>('route');
 
     return (
         <TopBar
             version={UI_VERSION}
             breadcrumb={MEDIUM_BREADCRUMB}
-            agent={agentPillView(CONNECTED, [])}
+            agent={agentPillView(CONNECTED, [], t)}
             reconnectCommand={reconnectCommand('fixture-medium')}
             chatOpen={false}
             onToggleChat={() => undefined}

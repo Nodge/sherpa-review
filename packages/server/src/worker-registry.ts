@@ -1,4 +1,4 @@
-import type { WorkerStatus } from '@sherpa/protocol';
+import type { Locale, WorkerStatus } from '@sherpa/protocol';
 import { WORKER_DEAD_AFTER_SECONDS } from '@sherpa/protocol';
 
 import type { SherpaDatabase, SqlRow } from './db.js';
@@ -31,6 +31,7 @@ interface WorkerRow extends SqlRow {
     worker_id: string;
     harness: string | null;
     model: string | null;
+    lang: Locale | null;
     registered_at: string;
     last_seen_at: string;
 }
@@ -79,6 +80,7 @@ export class WorkerRegistry {
         workerId: string,
         harness: string | undefined,
         model: string | undefined,
+        lang: Locale | undefined,
     ) => Outcome<string | null>;
     private readonly txTouch: (workerId: string) => Outcome<string | null>;
 
@@ -95,8 +97,8 @@ export class WorkerRegistry {
 
         this.txRegister = transaction(
             this.db,
-            (workerId: string, harness: string | undefined, model: string | undefined) =>
-                this.registerInTransaction(workerId, harness, model),
+            (workerId: string, harness: string | undefined, model: string | undefined, lang: Locale | undefined) =>
+                this.registerInTransaction(workerId, harness, model, lang),
         );
         this.txTouch = transaction(this.db, (workerId: string) => this.touchInTransaction(workerId));
 
@@ -112,8 +114,8 @@ export class WorkerRegistry {
      * its next call (`touch`/`assertOwner`).
      * Returns the displaced session's workerId so the caller can return its leases to the queue.
      */
-    register(workerId: string, harness?: string, model?: string): string | null {
-        return this.claim(this.txRegister(workerId, harness, model));
+    register(workerId: string, harness?: string, model?: string, lang?: Locale): string | null {
+        return this.claim(this.txRegister(workerId, harness, model, lang));
     }
 
     /**
@@ -170,6 +172,7 @@ export class WorkerRegistry {
             workerId: row.worker_id,
             ...(row.harness === null ? {} : { harness: row.harness }),
             ...(row.model === null ? {} : { model: row.model }),
+            ...(row.lang === null ? {} : { lang: row.lang }),
             registeredAt: row.registered_at,
             lastSeenAt: row.last_seen_at,
         };
@@ -202,6 +205,7 @@ export class WorkerRegistry {
         workerId: string,
         harness: string | undefined,
         model: string | undefined,
+        lang: Locale | undefined,
     ): Outcome<string | null> {
         const row = this.readRow();
         const nowIso = this.nowIso();
@@ -209,10 +213,10 @@ export class WorkerRegistry {
         if (row === null) {
             this.db
                 .prepare(
-                    `INSERT INTO worker (id, worker_id, harness, model, registered_at, last_seen_at)
-                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO worker (id, worker_id, harness, model, lang, registered_at, last_seen_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 )
-                .run(SLOT_ID, workerId, harness ?? null, model ?? null, nowIso, nowIso);
+                .run(SLOT_ID, workerId, harness ?? null, model ?? null, lang ?? null, nowIso, nowIso);
             return ok(null);
         }
 
@@ -220,15 +224,15 @@ export class WorkerRegistry {
             // Repeated register for the same session renews it without registering a new one.
             // `registered_at` holds the session start time, which the UI uses to calculate uptime (SPEC §2.2).
             this.db
-                .prepare('UPDATE worker SET harness = ?, model = ?, last_seen_at = ? WHERE id = ?')
-                .run(harness ?? row.harness, model ?? row.model, nowIso, SLOT_ID);
+                .prepare('UPDATE worker SET harness = ?, model = ?, lang = ?, last_seen_at = ? WHERE id = ?')
+                .run(harness ?? row.harness, model ?? row.model, lang ?? row.lang, nowIso, SLOT_ID);
             return ok(null);
         }
 
         // A live previous worker is displaced too. Starting a new session is a deliberate action
         // by the reviewer, and it takes priority (decision 2026-08-20). Otherwise two parallel sessions on one PR
         // compete for the slot, and whoever goes silent first determines the winner.
-        this.takeOver(workerId, harness ?? null, model ?? null, nowIso);
+        this.takeOver(workerId, harness ?? null, model ?? null, lang ?? null, nowIso);
         return ok(row.worker_id);
     }
 
@@ -239,8 +243,8 @@ export class WorkerRegistry {
         if (row === null) {
             this.db
                 .prepare(
-                    `INSERT INTO worker (id, worker_id, harness, model, registered_at, last_seen_at)
-                     VALUES (?, ?, NULL, NULL, ?, ?)`,
+                    `INSERT INTO worker (id, worker_id, harness, model, lang, registered_at, last_seen_at)
+                     VALUES (?, ?, NULL, NULL, NULL, ?, ?)`,
                 )
                 .run(SLOT_ID, workerId, nowIso, nowIso);
             return ok(null);
@@ -255,8 +259,8 @@ export class WorkerRegistry {
             return fail(conflict(row));
         }
 
-        // The previous session's harness and model have nothing to do with the new one. It declares its own through `register`.
-        this.takeOver(workerId, null, null, nowIso);
+        // The previous session's labels don't belong to the new one. It announces its own through `register`.
+        this.takeOver(workerId, null, null, null, nowIso);
         return ok(row.worker_id);
     }
 
@@ -274,13 +278,20 @@ export class WorkerRegistry {
         return displaced;
     }
 
-    private takeOver(workerId: string, harness: string | null, model: string | null, nowIso: string): void {
+    private takeOver(
+        workerId: string,
+        harness: string | null,
+        model: string | null,
+        lang: Locale | null,
+        nowIso: string,
+    ): void {
         this.db
             .prepare(
-                `UPDATE worker SET worker_id = ?, harness = ?, model = ?, registered_at = ?, last_seen_at = ?
+                `UPDATE worker SET worker_id = ?, harness = ?, model = ?, lang = ?, registered_at = ?,
+                        last_seen_at = ?
                  WHERE id = ?`,
             )
-            .run(workerId, harness, model, nowIso, nowIso, SLOT_ID);
+            .run(workerId, harness, model, lang, nowIso, nowIso, SLOT_ID);
     }
 
     /** Recalculates status, resets the death timer and broadcasts an event if the status changed. */
@@ -421,7 +432,14 @@ function signatureOf(status: WorkerStatus): string {
     if (status.kind === 'never') {
         return status.kind;
     }
-    return [status.kind, status.workerId, status.harness ?? '', status.model ?? '', status.registeredAt].join('|');
+    return [
+        status.kind,
+        status.workerId,
+        status.harness ?? '',
+        status.model ?? '',
+        status.lang ?? '',
+        status.registeredAt,
+    ].join('|');
 }
 
 function ok<T>(value: T): Outcome<T> {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import type { MessageKey } from '../i18n/index.js';
+import { translateKey, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer, useShortcutList, useShortcutRegistry } from '../shortcuts/context.tsx';
 import type { Shortcut, ShortcutSection } from '../shortcuts/registry.js';
@@ -21,6 +23,7 @@ export interface ShortcutCheatsheetProps {
 const FIRST_ID = 'palette.open';
 
 export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {
+    const t = useT();
     const registry = useShortcutRegistry();
     const shortcuts = useShortcutList();
     const dialogRef = useRef<HTMLElement | null>(null);
@@ -58,14 +61,14 @@ export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {
                 tabIndex={-1}
             >
                 <header className="shortcut-cheatsheet__header">
-                    <h2 id="shortcut-cheatsheet-title">Keyboard shortcuts</h2>
+                    <h2 id="shortcut-cheatsheet-title">{t('help.cheatsheet.title')}</h2>
                     <span className="shortcut-cheatsheet__spacer" />
                     <button
                         ref={closeRef}
                         type="button"
                         className="shortcut-cheatsheet__icon-button"
-                        aria-label="Close shortcuts sheet"
-                        title="Close · Esc"
+                        aria-label={t('help.cheatsheet.close')}
+                        title={t('help.cheatsheet.close.title')}
                         onClick={onClose}
                     >
                         <Icon name="cross" size={14} />
@@ -75,14 +78,16 @@ export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {
                 <div className="shortcut-cheatsheet__columns">
                     {sections.map((section) => (
                         <section className="shortcut-cheatsheet__section" key={section.id}>
-                            <h3>{section.label}</h3>
+                            <h3>{t(section.label)}</h3>
                             <dl>
                                 {section.items.map((item) => (
                                     <div className="shortcut-cheatsheet__row" key={item.id}>
                                         <dt>
-                                            <kbd className="shortcut-cheatsheet__keys">{formatKeys(item.keys)}</kbd>
+                                            <kbd className="shortcut-cheatsheet__keys">
+                                                {formatKeys(item.keys, t)}
+                                            </kbd>
                                         </dt>
-                                        <dd>{item.label}</dd>
+                                        <dd>{translateKey(t, item.label, item.labelArg)}</dd>
                                     </div>
                                 ))}
                             </dl>
@@ -98,7 +103,7 @@ export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {
 
 export interface CheatsheetSection {
     readonly id: ShortcutSection;
-    readonly label: string;
+    readonly label: MessageKey;
     readonly items: readonly Shortcut[];
 }
 

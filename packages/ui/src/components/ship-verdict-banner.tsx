@@ -1,7 +1,7 @@
 import type { ReviewerVerdict } from '@sherpa/protocol';
 
+import { useFormat, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
-import { relativeTime } from '../threads/relative-time.js';
 import './ship-verdict-banner.css';
 
 /**
@@ -83,19 +83,20 @@ export function ShipVerdictBanner({
     readonly now: number;
     readonly onDismiss: () => void;
 }) {
-    const when = relativeTime(new Date(event.observedAt).toISOString(), now);
+    const t = useT();
+    const format = useFormat();
+    const when = format.relativeTime(new Date(event.observedAt).toISOString(), now);
     return (
         <div className="ship-verdict-banner" role="status">
             <Icon name="thumb" size={14} className="ship-verdict-banner__icon" />
             <div className="ship-verdict-banner__body">
-                {event.displayName ?? event.login} shipped this PR {when}. Your comments will still
-                be published.
+                {t('ship.verdict.banner', event.displayName ?? event.login, when)}
             </div>
             <button
                 type="button"
                 className="ship-verdict-banner__dismiss"
-                aria-label="Dismiss the message about another reviewer's ship"
-                title="Dismiss until the next verdict"
+                aria-label={t('ship.verdict.dismiss')}
+                title={t('ship.verdict.dismiss.title')}
                 onClick={onDismiss}
             >
                 <Icon name="cross" size={14} />

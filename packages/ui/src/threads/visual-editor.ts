@@ -29,10 +29,12 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import type { Command, Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 
-import type { ComposerTool } from './composer-markdown.js';
+import type { ComposerTool, EditorPlaceholders } from './composer-markdown.js';
 
 export interface VisualEditorOptions {
     readonly markdown: string;
+    /** Toolbar placeholder text. Commands insert it when there is no selection. */
+    readonly placeholders: EditorPlaceholders;
     readonly disabled: boolean;
     readonly ariaLabel: string;
     readonly onChange: (markdown: string) => void;
@@ -181,7 +183,7 @@ export function createVisualEditor(element: HTMLElement, options: VisualEditorOp
             view.setProps({ editable: () => !disabled });
         },
         format: (tool) => {
-            apply(commandFor(tool));
+            apply(commandFor(tool, options.placeholders));
         },
         focus: () => {
             view.focus();
@@ -202,9 +204,9 @@ export function createEditorState(markdown: string, options: VisualEditorOptions
             history(),
             markdownInputRules(),
             keymap({
-                'Mod-b': formatMark(schema.marks.strong, 'text'),
-                'Mod-i': formatMark(schema.marks.em, 'text'),
-                'Mod-k': linkCommand(),
+                'Mod-b': formatMark(schema.marks.strong, options.placeholders.text),
+                'Mod-i': formatMark(schema.marks.em, options.placeholders.text),
+                'Mod-k': linkCommand(options.placeholders.text),
                 'Mod-Enter': () => {
                     options.onSave();
                     return true;
@@ -251,20 +253,20 @@ function markInputRule(
     );
 }
 
-function commandFor(tool: ComposerTool): Command {
+function commandFor(tool: ComposerTool, placeholders: EditorPlaceholders): Command {
     switch (tool) {
         case 'bold':
-            return formatMark(schema.marks.strong, 'text');
+            return formatMark(schema.marks.strong, placeholders.text);
         case 'italic':
-            return formatMark(schema.marks.em, 'text');
+            return formatMark(schema.marks.em, placeholders.text);
         case 'link':
-            return linkCommand();
+            return linkCommand(placeholders.text);
         case 'code':
-            return formatMark(schema.marks.code, 'code');
+            return formatMark(schema.marks.code, placeholders.code);
         case 'codeblock':
-            return blockCommand(schema.nodes.code_block, 'code');
+            return blockCommand(schema.nodes.code_block, placeholders.code);
         case 'list':
-            return listCommand();
+            return listCommand(placeholders.text);
     }
 }
 
@@ -283,7 +285,7 @@ function formatMark(mark: MarkType, fallback: string): Command {
     };
 }
 
-function linkCommand(): Command {
+function linkCommand(placeholder: string): Command {
     const link = schema.marks.link;
     return (state, dispatch) => {
         const { from, to, empty } = state.selection;
@@ -293,8 +295,8 @@ function linkCommand(): Command {
         let transaction = state.tr;
         let end = to;
         if (empty) {
-            transaction = transaction.insertText('text');
-            end = from + 5;
+            transaction = transaction.insertText(placeholder);
+            end = from + placeholder.length;
         }
         transaction = transaction.addMark(from, end, link.create({ href: 'https://', title: null }));
         dispatch(transaction.setSelection(TextSelection.create(transaction.doc, from, end)));
@@ -316,7 +318,7 @@ function blockCommand(node: NodeType, fallback: string): Command {
 }
 
 /** Toolbar list toggle. Removes the item inside a list, otherwise wraps the selection. */
-function listCommand(): Command {
+function listCommand(placeholder: string): Command {
     const list = schema.nodes.bullet_list;
     return (state, dispatch, view) => {
         if (isInsideList(state)) {
@@ -325,8 +327,12 @@ function listCommand(): Command {
         let nextState = state;
         if (state.selection.empty && dispatch !== undefined) {
             const from = state.selection.from;
-            const transaction = state.tr.insertText('text');
-            dispatch(transaction.setSelection(TextSelection.create(transaction.doc, from, from + 5)));
+            const transaction = state.tr.insertText(placeholder);
+            dispatch(
+                transaction.setSelection(
+                    TextSelection.create(transaction.doc, from, from + placeholder.length),
+                ),
+            );
             nextState = view?.state ?? state.apply(transaction);
         }
         return wrapInList(list, TIGHT_LIST)(nextState, dispatch);

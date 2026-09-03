@@ -12,6 +12,7 @@ import { IterationFeed, staleFor } from './iteration-feed.js';
 import { IterationStore } from './iteration-store.js';
 import { ProgressStore } from './progress-store.js';
 import type { RouteListener } from './route-store.js';
+import { UNKNOWN_BASE_COMMIT } from './route-store.js';
 import { mediumReadySnapshot } from './route/fixture-support.js';
 import { makeTempSherpaDir, removeTempSherpaDir, seedAgentNotes } from './test-support.js';
 
@@ -104,6 +105,8 @@ describe('iteration feed', () => {
     let store: IterationStore;
     let feed: IterationFeed;
     let snapshot: RouteSnapshot | null;
+    /** PR snapshot history. The feed uses it to find the base of an iteration absent from the host list. */
+    let snapshots: RouteSnapshot[];
     let routeListeners: Set<RouteListener>;
     let routeRevision: number;
     let revisions: number[];
@@ -114,6 +117,7 @@ describe('iteration feed', () => {
         db = openDatabase(path.join(sherpaDir, 'feed.db'));
         store = new IterationStore({ db });
         snapshot = null;
+        snapshots = [];
         routeListeners = new Set();
         routeRevision = 0;
         revisions = [];
@@ -141,6 +145,7 @@ describe('iteration feed', () => {
             iterations: store,
             route: {
                 current: () => snapshot,
+                listSnapshots: () => [...snapshots],
                 subscribe: (listener) => {
                     routeListeners.add(listener);
                     return () => {
@@ -156,6 +161,7 @@ describe('iteration feed', () => {
     /** Changes the route snapshot and notifies the feed, just as `RouteStore` does. */
     function setSnapshot(next: RouteSnapshot): void {
         snapshot = next;
+        snapshots.push(next);
         routeRevision += 1;
         for (const listener of [...routeListeners]) {
             listener(routeRevision);
@@ -408,6 +414,15 @@ describe('iteration feed', () => {
         return fileId;
     }
 
+    /** Path of the same file. It is shared by all iterations and is the only way to match them. */
+    function fixtureFilePath(index: number): string {
+        const filePath = fixtureIteration('medium', index).diff.files[0]?.path;
+        if (filePath === undefined) {
+            throw new Error(`iteration ${String(index + 1)} of the medium fixture has no files`);
+        }
+        return filePath;
+    }
+
     it('a source removed by force-push is permanently rejected, notes lose anchors and no retry runs', async () => {
         const notes = makeNotes(NOTES);
         const { host } = makeFeed(makeFixtureHost('medium'), notes.carrier);
@@ -466,6 +481,113 @@ describe('iteration feed', () => {
             true,
         );
         expect(logs.some((message) => message.includes(older.diffId))).toBe(false);
+    });
+
+    /**
+     * Route snapshot from iteration 0.3.x. Its anchors are the only path map available for carryover.
+     * The snapshot blob has no base, and `RouteStore` returns a placeholder in its place.
+     * The test snapshot history reproduces this exactly.
+     */
+    function seedRouteSnapshot(diffId: string, files: readonly { fileId: string; path: string }[]): void {
+        const at = '2026-08-25T10:00:00.000Z';
+        const snapshotId = `snap-${diffId}`;
+        const stored = {
+            snapshotId,
+            diffId,
+            createdAt: at,
+            stops: [
+                {
+                    id: 's01',
+                    anchors: files.map((file) => ({ ...file, side: 'new', start: 1, end: 5 })),
+                },
+            ],
+        };
+        db.prepare(
+            `INSERT INTO route_snapshots (snapshot_id, diff_id, created_at, snapshot_json)
+             VALUES (?, ?, ?, ?)`,
+        ).run(snapshotId, diffId, at, JSON.stringify(stored));
+        snapshots.push({
+            ...snapshotOn(V1),
+            snapshotId,
+            diffId,
+            createdAt: at,
+            baseCommit: UNKNOWN_BASE_COMMIT,
+        });
+    }
+
+    /** Ranges carried over to an iteration. */
+    function carriedRanges(diffId: string): { file_id: string; side: string; start_line: number }[] {
+        return db
+            .prepare(
+                `SELECT file_id, side, start_line FROM file_seen_ranges
+                  WHERE diff_id = ? AND carried_from IS NOT NULL ORDER BY rowid`,
+            )
+            .all(diffId) as { file_id: string; side: string; start_line: number }[];
+    }
+
+    it('progress for an iteration without a row in iterations is carried over using its snapshot anchors', async () => {
+        // M5-T20 finding: server 0.3.x recorded progress, with no iteration row or patch.
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+        seedRouteSnapshot(V1.diffId, [{ fileId: fixtureFileId(0), path: fixtureFilePath(0) }]);
+        const host = makeFixtureHost('medium');
+        // The push happened while the server was down, so it starts on the second iteration.
+        host.advanceIteration();
+        makeFeed(host, null, makeProgress());
+        listen();
+
+        await waitFor(() => progressCarries().length > 0);
+
+        expect(store.get(V1.diffId)).toBeNull();
+        expect(progressCarries()).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(carriedRanges(V2.diffId)).toEqual([
+            { file_id: fixtureFileId(1), side: 'new', start_line: 1 },
+        ]);
+    });
+
+    it('an unknown source base prevents old-side carryover and produces a log line', async () => {
+        const legacy = 'iter-0-3-x';
+        const host = makeFixtureHost('medium');
+        const original = host.getDiff.bind(host);
+        // The host omits the 0.3.x iteration from the list but computes a slice against it, as the review host does.
+        host.getDiff = (slice) =>
+            slice?.base === legacy ? original({ base: V1.diffId, head: slice.head }) : original(slice);
+        seedSeenRange(legacy, 'legacy-file');
+        db.prepare(
+            `INSERT INTO file_seen_ranges (diff_id, file_id, side, start_line, end_line)
+             VALUES (?, 'legacy-file', 'old', 1, 2)`,
+        ).run(legacy);
+        seedRouteSnapshot(legacy, [{ fileId: 'legacy-file', path: fixtureFilePath(0) }]);
+        host.advanceIteration();
+        makeFeed(host, null, makeProgress());
+        listen();
+
+        await waitFor(() => progressCarries().length > 0);
+
+        expect(progressCarries()).toEqual([`${legacy} ${V2.diffId}`]);
+        // The old side counts as affected because there is no base to compare against.
+        expect(carriedRanges(V2.diffId)).toEqual([
+            { file_id: fixtureFileId(1), side: 'new', start_line: 1 },
+        ]);
+        expect(
+            logs.some((message) =>
+                message.includes(`progress carryover ${legacy} → ${V2.diffId}: base of iteration ${legacy} is unknown`),
+            ),
+        ).toBe(true);
+    });
+
+    it('a missing source is logged once per iteration, without repeating for every watcher event', async () => {
+        const { host, replay } = replayableHost();
+        makeFeed(host, null, makeProgress());
+        listen();
+
+        await waitFor(() => logs.some((message) => message.includes('no source found')));
+        replay();
+        replay();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        expect(logs.filter((message) => message.includes('no source found'))).toEqual([
+            `progress carryover to ${V1.diffId}: no source found, no progress on other iterations`,
+        ]);
     });
 
     it('a retry restarts both note anchor and progress carryover', async () => {

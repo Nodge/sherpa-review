@@ -1,6 +1,7 @@
 import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse } from '@sherpa/protocol';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
+import { useT } from '../i18n/index.js';
 import type { BreadcrumbSegment } from '../pr-key.js';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import type { ViewId } from '../session/views.js';
@@ -46,6 +47,7 @@ export function TopBar({
     feedbackContext,
     onSendFeedback,
 }: TopBarProps) {
+    const t = useT();
     return (
         <header className="top-bar">
             <div className="top-bar__brand">
@@ -54,7 +56,7 @@ export function TopBar({
                 <span className="top-bar__version">{version}</span>
             </div>
 
-            <nav className="top-bar__breadcrumb" aria-label="Pull request">
+            <nav className="top-bar__breadcrumb" aria-label={t('topbar.breadcrumb')}>
                 {breadcrumb.map((segment, index) => (
                     <Fragment key={`${String(index)}:${segment.text}`}>
                         {index === 0 ? null : (
@@ -104,6 +106,7 @@ export function AgentPill({
     onToggleChat?: (target: ChatScrollTarget | null) => void;
     defaultOpen?: boolean;
 }) {
+    const t = useT();
     const [open, setOpen] = useState(defaultOpen);
     const [announcement, setAnnouncement] = useState('');
     const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -116,7 +119,7 @@ export function AgentPill({
             view.tone === 'disconnected'
                 ? wasDisconnected
                     ? null
-                    : 'Agent disconnected. The reader remains fully functional.'
+                    : t('topbar.agent.disconnected')
                 : '';
         if (next === null) {
             return;
@@ -127,7 +130,7 @@ export function AgentPill({
         return () => {
             window.clearTimeout(timer);
         };
-    }, [view.tone]);
+    }, [t, view.tone]);
 
     useEffect(() => {
         if (!open) {
@@ -167,18 +170,11 @@ export function AgentPill({
                 <span className="agent-pill__label">{view.label}</span>
             </button>
             {open && view.tone === 'disconnected' ? (
-                <div className="agent-popover" role="dialog" aria-label="Connect the agent">
-                    <div className="agent-popover__title">Connect the agent</div>
+                <div className="agent-popover" role="dialog" aria-label={t('topbar.agent.connect')}>
+                    <div className="agent-popover__title">{t('topbar.agent.connect')}</div>
                     {/* Text from the removed "Agent disconnected" banner (decision #32). */}
-                    <p className="agent-popover__offline">
-                        The reader works fully. Diff, search, comments and ship are available. AI sections remain
-                        read-only.
-                    </p>
-                    <CommandBox
-                        command={command}
-                        hint="Run in any harness. The session becomes a worker."
-                        actionLabel="Copy"
-                    />
+                    <p className="agent-popover__offline">{t('topbar.agent.offline')}</p>
+                    <CommandBox command={command} hint={t('command.hint')} actionLabel={t('command.copy')} />
                 </div>
             ) : null}
             <span className="visually-hidden" role="status" aria-live="polite">
@@ -192,9 +188,10 @@ export function AgentPill({
 const NOOP_TOGGLE_CHAT = (): void => undefined;
 
 function SearchButton({ onClick }: { onClick: () => void }) {
+    const t = useT();
     return (
         <button type="button" className="ghost-button search-button" onClick={onClick}>
-            Search
+            {t('topbar.search')}
             <span className="search-button__hint">⌘K</span>
         </button>
     );

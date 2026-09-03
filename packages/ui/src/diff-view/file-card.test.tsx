@@ -10,6 +10,9 @@ import type { AnchorSpan } from '../route/anchor-clip.js';
 import { clipModelToAnchors } from '../route/anchor-clip.js';
 import type { FileCardActions } from './file-card.tsx';
 import { expansionAnnouncement, FileCard } from './file-card.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 const DATA = fixtureIteration('edge');
 
@@ -125,6 +128,7 @@ describe('"Expand file" in a route slice', () => {
         patch: ['@@ -1,2 +1,6 @@', ' alpha', '+one', '+', '+two', '+three', ' omega', ''].join('\n'),
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
     };
     const CLIP_CONTENT: FileContent = {
         oldText: 'alpha\nomega\n',
@@ -172,16 +176,16 @@ describe('"Expand file" in a route slice', () => {
 
 describe('announcement after loading more context', () => {
     it('reports two counts in Full diff, including a zero remainder', () => {
-        expect(expansionAnnouncement(20, 59, 0)).toBe('20 lines loaded, 59 hidden');
-        expect(expansionAnnouncement(14, 0, 0)).toBe('14 lines loaded, 0 hidden');
+        expect(expansionAnnouncement(20, 59, 0, t)).toBe('20 lines loaded, 59 hidden');
+        expect(expansionAnnouncement(14, 0, 0, t)).toBe('14 lines loaded, 0 hidden');
     });
 
     it('reports changed lines from other stops in a route slice instead of saying 0 hidden', () => {
-        expect(expansionAnnouncement(5, 0, 2)).toBe('5 lines loaded, 2 changed lines — in other stops');
+        expect(expansionAnnouncement(5, 0, 2, t)).toBe('5 lines loaded, 2 changed lines — in other stops');
     });
 
     it('reports both counts in a route slice with remaining context', () => {
-        expect(expansionAnnouncement(20, 7, 3)).toBe(
+        expect(expansionAnnouncement(20, 7, 3, t)).toBe(
             '20 lines loaded, 7 hidden, 3 changed lines — in other stops',
         );
     });

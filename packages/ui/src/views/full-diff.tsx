@@ -50,12 +50,13 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
+import type { MessageKey } from '../i18n/index.js';
+import { shortCommit, useT } from '../i18n/index.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
-import { shortCommit } from '../text.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
@@ -172,6 +173,7 @@ export function FullDiffView({
     onActiveIteration,
     skeletonDelayMs = SKELETON_DELAY_MS,
 }: FullDiffViewProps) {
+    const t = useT();
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, started on the first parse and closed with the view. Use a ref instead of
     // `useMemo`: a closed client cannot restart, and StrictMode mounts the view twice.
@@ -240,12 +242,11 @@ export function FullDiffView({
             <StatusFrame {...frame}>
                 <div className="full-diff__zero">
                     <p className="full-diff__zero-text">
-                        Between iterations {shortCommit(slice.baseCommit)} → {shortCommit(slice.headCommit)}, there are
-                        no changes
+                        {t('fullDiff.sliceEmpty', shortCommit(slice.baseCommit), shortCommit(slice.headCommit))}
                     </p>
                     {onActiveIteration === undefined ? null : (
                         <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
-                            To the active iteration
+                            {t('iteration.toActive')}
                         </button>
                     )}
                 </div>
@@ -314,7 +315,7 @@ const SKELETON_DELAY_MS = 200;
  * The host calculates the slice (2.8–3.7 s on the review host), so text explains the wait. The host
  * is unnamed here: the UI does not distinguish hosts, and the name only lives in App state.
  */
-const SLICE_LOADING_NOTE = 'the host is calculating the slice between iterations, which takes longer than usual';
+const SLICE_LOADING_NOTE: MessageKey = 'fullDiff.slice.loading';
 
 /**
  * Status frame layout: the PR header with its `aside` (the slice pill and picker stay in place
@@ -332,6 +333,7 @@ function StatusFrame({
     headerAside?: ReactNode;
     children: ReactNode;
 }) {
+    const t = useT();
     return (
         <main className="full-diff full-diff--status">
             {pr === null ? null : (
@@ -345,7 +347,7 @@ function StatusFrame({
                 />
             )}
             <div className="full-diff__toolbar">
-                <h1 className="full-diff__title">Full diff</h1>
+                <h1 className="full-diff__title">{t('view.diff')}</h1>
             </div>
             <div className="full-diff__body">
                 <div className="full-diff__panel-placeholder" aria-hidden="true" />
@@ -359,10 +361,11 @@ function StatusFrame({
 const NO_PCI_TOGGLE = (): void => undefined;
 
 function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () => void }) {
+    const t = useT();
     return (
         <div className="full-diff__status-actions">
             <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
-                To the active iteration
+                {t('iteration.toActive')}
             </button>
         </div>
     );
@@ -373,7 +376,8 @@ function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () =>
  * nothing so a fast response does not flash. Each card has the height of a collapsed file card,
  * so incoming data does not shift the layout.
  */
-function DiffSkeleton({ delayMs, note }: { delayMs: number; note: string | null }) {
+function DiffSkeleton({ delayMs, note }: { delayMs: number; note: MessageKey | null }) {
+    const t = useT();
     const [shown, setShown] = useState(delayMs <= 0);
     useEffect(() => {
         if (delayMs <= 0) {
@@ -391,8 +395,8 @@ function DiffSkeleton({ delayMs, note }: { delayMs: number; note: string | null 
         return null;
     }
     return (
-        <div className="full-diff__skeleton" role="status" aria-label="Diff is loading">
-            {note === null ? null : <p className="full-diff__skeleton-note">{note}</p>}
+        <div className="full-diff__skeleton" role="status" aria-label={t('fullDiff.skeleton.aria')}>
+            {note === null ? null : <p className="full-diff__skeleton-note">{t(note)}</p>}
             {SKELETON_CARDS.map((card) => (
                 <div key={card} className="diff-skeleton-card" aria-hidden="true">
                     <div className="diff-skeleton-card__head" />
@@ -406,10 +410,10 @@ function DiffSkeleton({ delayMs, note }: { delayMs: number; note: string | null 
 const SKELETON_CARDS = [0, 1, 2] as const;
 
 /** "Expand file" in a slice: head contents cannot be linked to its `fileId` (M4-T12 scope). */
-const SLICE_NO_CONTENT_REASON = 'file contents are unavailable in a slice';
+const SLICE_NO_CONTENT_REASON: MessageKey = 'fullDiff.slice.noContent';
 
 /** "Ask agent" in a slice: the question would anchor to a `fileId` absent from the iteration. */
-const SLICE_NO_ASK_REASON = 'a question cannot attach to a file in a slice. Ask in the active iteration';
+const SLICE_NO_ASK_REASON: MessageKey = 'fullDiff.slice.noAsk';
 
 export interface DiffWorkspaceProps {
     readonly pr: PrMeta;
@@ -472,6 +476,7 @@ export interface DiffWorkspaceProps {
 }
 
 export function DiffWorkspace(props: DiffWorkspaceProps) {
+    const t = useT();
     const {
         pr,
         diff,
@@ -575,8 +580,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
-        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
-        [diff.files, lenses],
+        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
+        [diff.files, lenses, t],
     );
     const filter = selectFilter(filters, filterId);
 
@@ -641,9 +646,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             }
             // The optimistic write failed. The control has already returned to its previous state (SPEC §1.2),
             // so all that remains is offering a retry.
-            return { text: 'not saved', retry: () => mark(fileId, viewed) };
+            return { text: t('diff.file.notSaved'), retry: () => mark(fileId, viewed) };
         },
-        [writer],
+        [t, writer],
     );
 
     /**
@@ -958,10 +963,10 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                       agentConnected,
                       isPending: isSelectionPending,
                       onAskToPlace: (anchor) => {
-                          onComposeQuestion(placeRangeQuestion(anchor), anchor);
+                          onComposeQuestion(placeRangeQuestion(anchor, t), anchor);
                       },
                   },
-        [agentConnected, isSelectionPending, onComposeQuestion],
+        [agentConnected, isSelectionPending, onComposeQuestion, t],
     );
 
     const [focusedLine, setFocusedLine] = useState<{
@@ -1061,6 +1066,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     request: { kind: 'file' },
                     contentAvailable,
                     loadContent,
+                    t,
                 }).then(() => {
                     if (navigationId === lineNavigationId.current) {
                         reveal();
@@ -1076,7 +1082,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             timeout = setTimeout(stop, LINE_NAVIGATION_SEARCH_MS);
             expandHiddenContext();
         },
-        [contentAvailable, loadContent, store],
+        [contentAvailable, loadContent, store, t],
     );
     const openedSelectionTarget = useRef<string | null>(null);
     useEffect(() => {
@@ -1169,7 +1175,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'thread.commentLine',
         keys: ['c'],
-        label: 'Comment on the line under the cursor',
+        label: 'shortcut.thread.commentLine',
         scope: 'full-diff',
         section: 'comments',
         when: () => focusedLine !== null,
@@ -1182,7 +1188,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'thread.reply',
         keys: ['r'],
-        label: 'Reply to the thread under the cursor',
+        label: 'shortcut.thread.reply',
         scope: 'full-diff',
         section: 'comments',
         when: () => focusedThreadId !== null,
@@ -1198,7 +1204,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.filterFiles',
         keys: ['f'],
-        label: 'Filter files in the tree',
+        label: 'shortcut.diff.filterFiles',
         scope: 'full-diff',
         section: 'navigation',
         action: () => {
@@ -1220,7 +1226,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.nextFile',
         keys: ['j'],
-        label: 'Next file',
+        label: 'shortcut.diff.nextFile',
         scope: 'full-diff',
         section: 'navigation',
         action: () => {
@@ -1230,7 +1236,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.prevFile',
         keys: ['k'],
-        label: 'Previous file',
+        label: 'shortcut.diff.prevFile',
         scope: 'full-diff',
         section: 'navigation',
         action: () => {
@@ -1260,7 +1266,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.nextUnread',
         keys: ['n'],
-        label: 'Next unviewed file',
+        label: 'shortcut.diff.nextUnread',
         scope: 'full-diff',
         section: 'reading',
         action: () => {
@@ -1270,7 +1276,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.prevUnread',
         keys: ['p'],
-        label: 'Previous unviewed file',
+        label: 'shortcut.diff.prevUnread',
         scope: 'full-diff',
         section: 'reading',
         action: () => {
@@ -1287,7 +1293,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.expandContext',
         keys: ['e'],
-        label: 'Expand context around the hunk under the cursor',
+        label: 'shortcut.diff.expandContext',
         scope: 'full-diff',
         section: 'reading',
         when: () => focusedHunkRequests().length > 0,
@@ -1297,7 +1303,14 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             }
             const fileId = focusedLine.fileId;
             for (const request of focusedHunkRequests()) {
-                void expandContext({ store, fileId, request: { kind: 'gap', ...request }, contentAvailable, loadContent });
+                void expandContext({
+                    store,
+                    fileId,
+                    request: { kind: 'gap', ...request },
+                    contentAvailable,
+                    loadContent,
+                    t,
+                });
             }
         },
     });
@@ -1377,7 +1390,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         writeError === null
                             ? null
                             : {
-                                  text: 'not saved',
+                                  text: t('diff.file.notSaved'),
                                   onRetry: () => {
                                       writeFromTree(writeError.fileId, writeError.viewed);
                                   },
@@ -1393,7 +1406,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         the card, which stays on screen, instead of replacing it (SPEC §2.7). */}
                     {treeFiles.length === 0 ? (
                         <div className="full-diff__zero">
-                            <p className="full-diff__zero-text">{zeroResultText(filter)}</p>
+                            <p className="full-diff__zero-text">{zeroResultText(filter, t)}</p>
                             <button
                                 type="button"
                                 className="full-diff__zero-action"
@@ -1401,7 +1414,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                                     changeFilter(ALL_FILTER_ID);
                                 }}
                             >
-                                Show all files
+                                {t('lens.showAll')}
                             </button>
                         </div>
                     ) : null}
@@ -1416,7 +1429,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         files={shown}
                         store={store}
                         contentAvailable={contentAvailable}
-                        noContentReason={slice === null ? undefined : SLICE_NO_CONTENT_REASON}
+                        noContentReason={slice === null ? undefined : t(SLICE_NO_CONTENT_REASON)}
                         parse={parse}
                         loadContent={loadContent}
                         onViewed={markViewed}
@@ -1467,7 +1480,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         chatAnchorFromSelection(selectedFile, selectedModel, snapshot.selection, diff.diffId),
                     )}
                     onAsk={onAskSelection}
-                    askDisabledReason={slice === null ? null : SLICE_NO_ASK_REASON}
+                    askDisabledReason={slice === null ? null : t(SLICE_NO_ASK_REASON)}
                     onSelectionAnchorChange={selectionAnchorChange}
                     onComment={(side, line) => {
                         commentLine(selectedFile.fileId, side, line);
@@ -1501,6 +1514,7 @@ export function FullDiffToolbar({
     smallPr: boolean;
     onHeight?: ((height: number) => void) | undefined;
 }) {
+    const t = useT();
     const ref = useRef<HTMLDivElement | null>(null);
 
     // Measure before paint, or the first frame will use the height fallback from full-diff.css.
@@ -1523,11 +1537,9 @@ export function FullDiffToolbar({
 
     return (
         <div className="full-diff__toolbar" ref={ref}>
-            <h1 className="full-diff__title">Full diff</h1>
-            <span className="full-diff__subtitle">
-                A classic reader. The route stays in the margin and no longer sets the order.
-            </span>
-            {smallPr ? <span className="full-diff__small-pr">small PR, no route needed</span> : null}
+            <h1 className="full-diff__title">{t('view.diff')}</h1>
+            <span className="full-diff__subtitle">{t('fullDiff.subtitle')}</span>
+            {smallPr ? <span className="full-diff__small-pr">{t('route.smallPr.chip')}</span> : null}
             <span className="full-diff__spacer" />
             <ToolbarRightCluster
                 store={store}
@@ -1545,7 +1557,7 @@ export function FullDiffToolbar({
 const EMPTY_THREADS: readonly Thread[] = [];
 const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_OPEN_NOTE = (): void => undefined;
-const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('note deletion is unavailable'));
+const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('deleting notes is unavailable here'));
 const EMPTY_FILE_IDS: ReadonlySet<string> = new Set();
 const EMPTY_EXPANSION: FileExpansion = new Map();
 
@@ -1555,12 +1567,13 @@ const BACKGROUND_PARSE_DELAY = 300;
 const LINE_NAVIGATION_SEARCH_MS = 3000;
 
 const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
-    save: () => Promise.reject(new Error('draft writing is unavailable in this state')),
-    update: () => Promise.reject(new Error('draft writing is unavailable in this state')),
-    delete: () => Promise.reject(new Error('draft writing is unavailable in this state')),
+    save: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
+    update: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
+    delete: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
 };
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
-const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
+const EMPTY_SET_VIEWED = (): Promise<number> =>
+    Promise.reject(new Error('marking viewed is unavailable in this state'));
 const EMPTY_ASK_SELECTION = (): void => undefined;
 const NO_SELECTION_PENDING = (): boolean => false;
 const fileIdOf = (file: { readonly fileId: string }): string => file.fileId;
@@ -1570,7 +1583,7 @@ const NO_STOP_WRITES: StopWriterHooks = {
     read: () => null,
     apply: () => undefined,
     restore: () => undefined,
-    send: () => Promise.reject(new Error('stop marking is unavailable in the full diff')),
+    send: () => Promise.reject(new Error('marking a stop viewed is unavailable on the full diff')),
 };
 
 /**
@@ -1628,10 +1641,10 @@ function outlineOf(model: DiffFileModel | null): FileOutlineModel {
         return { state: 'parsing' };
     }
     if (model.content.kind === 'binary') {
-        return { state: 'empty', reason: 'Binary file, nothing to outline.' };
+        return { state: 'empty', reason: 'fullDiff.outline.binary' };
     }
     if (model.content.kind === 'none') {
-        return { state: 'empty', reason: model.malformed ? MALFORMED_REASON : 'No text changes in this file.' };
+        return { state: 'empty', reason: model.malformed ? MALFORMED_REASON : 'fullDiff.outline.noText' };
     }
 
     const entries: OutlineEntry[] = [];
@@ -1648,9 +1661,9 @@ function outlineOf(model: DiffFileModel | null): FileOutlineModel {
         index += 1;
     }
     if (entries.length === 0) {
-        return { state: 'empty', reason: model.malformed ? MALFORMED_REASON : 'No hunks in this file.' };
+        return { state: 'empty', reason: model.malformed ? MALFORMED_REASON : 'fullDiff.outline.noHunks' };
     }
     return { state: 'ready', entries };
 }
 
-const MALFORMED_REASON = 'The patch for this file could not be parsed, so there is no outline.';
+const MALFORMED_REASON: MessageKey = 'fullDiff.outline.malformed';

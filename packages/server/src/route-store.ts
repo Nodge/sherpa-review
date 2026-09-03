@@ -27,7 +27,7 @@ const SLOT_ID = 1;
  * Fallback for `baseCommit` in a snapshot written before M4 when its iteration is not yet stored:
  * It cannot support comparisons, but an unrelated commit would be worse than "unknown".
  */
-const UNKNOWN_BASE_COMMIT = 'unknown';
+export const UNKNOWN_BASE_COMMIT = 'unknown';
 
 /** Content hash length in hex characters, displayed in the snapshot selector ("snapshot 3f2a… · current"). */
 const CONTENT_HASH_LENGTH = 12;

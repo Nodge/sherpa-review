@@ -16,6 +16,7 @@ import type { IterationMap } from './iterations/index.js';
 import { affectedStops, buildIterationMap, opaqueMap } from './iterations/index.js';
 import type { ProgressStore } from './progress-store.js';
 import type { RouteStore } from './route-store.js';
+import { UNKNOWN_BASE_COMMIT } from './route-store.js';
 
 /**
  * One server subscription to PR iterations (M4-T4): merged host and storage list,
@@ -51,8 +52,11 @@ export interface IterationFeedOptions {
     /** null means the PR has no host adapter and will never have iterations. */
     readonly host: ReviewHost | null;
     readonly iterations: IterationStore;
-    /** Current snapshot: used to compute `stale`. Changing it recalculates affected stops. */
-    readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    /**
+     * Current snapshot, used to compute `stale`. Changing it recalculates affected stops.
+     * Snapshot history is the last place to find the base of a forgotten iteration.
+     */
+    readonly route: Pick<RouteStore, 'current' | 'subscribe' | 'listSnapshots'>;
     /** Notes whose anchors move to a new iteration (M4-T11). null means there is nobody to move them. */
     readonly notes?: NoteCarrier | null;
     /** Delay before retrying carryovers after a temporary host refusal. */
@@ -72,7 +76,7 @@ export type ProgressCarrier = Pick<
 export class IterationFeed {
     private readonly host: ReviewHost | null;
     private readonly store: IterationStore;
-    private readonly route: Pick<RouteStore, 'current' | 'subscribe'>;
+    private readonly route: Pick<RouteStore, 'current' | 'subscribe' | 'listSnapshots'>;
     private readonly notes: NoteCarrier | null;
     private readonly carryRetryMs: number;
     private readonly progress: ProgressCarrier | null;
@@ -98,6 +102,8 @@ export class IterationFeed {
     private readonly carrying = new Set<string>();
     /** Carryover sources whose slices the host refused, keyed by the target iteration. */
     private readonly refusedCarry = new Map<HostId, Set<HostId>>();
+    /** Iterations already logged as "source not found", so many watcher events produce one log line. */
+    private readonly reportedNoSource = new Set<HostId>();
 
     private list: Iteration[] = [];
     private affected: AffectedStops | null = null;
@@ -515,6 +521,13 @@ export class IterationFeed {
         for (;;) {
             const from = progress.latestDiffIdWithProgress(active.diffId, [...refused]);
             if (from === null) {
+                if (!this.reportedNoSource.has(active.diffId)) {
+                    this.reportedNoSource.add(active.diffId);
+                    this.log(
+                        `progress carryover to ${active.diffId}: no source found, ` +
+                            'no progress on other iterations',
+                    );
+                }
                 return;
             }
             if (!(await this.progressSlices(host, active))) {
@@ -556,20 +569,42 @@ export class IterationFeed {
                     return;
                 }
 
-                const fromBaseCommit =
-                    this.list.find((iteration) => iteration.diffId === from)?.baseCommit ??
-                    this.store.get(from)?.iteration.baseCommit ??
-                    active.baseCommit;
-                progress.carryRanges(
+                const fromBaseCommit = this.baseCommitOf(from);
+                const result = progress.carryRanges(
                     from,
                     active.diffId,
                     buildIterationMap({ interdiff, fromBaseCommit, toBaseCommit: active.baseCommit }),
                 );
+                if (fromBaseCommit === null && !result.skipped) {
+                    this.log(
+                        `progress carryover ${from} → ${active.diffId}: base of iteration ${from} is unknown, ` +
+                            'old-side ranges are not carried over',
+                    );
+                }
                 return;
             } finally {
                 this.carrying.delete(pair);
             }
         }
+    }
+
+    /**
+     * Iteration base: host list, saved patch, route snapshot built on it.
+     * `null` means unknown: using the active iteration base would produce a knowingly
+     * incorrect line map and silently carry over the old side with it.
+     */
+    private baseCommitOf(diffId: HostId): string | null {
+        const known =
+            this.list.find((iteration) => iteration.diffId === diffId)?.baseCommit ??
+            this.store.get(diffId)?.iteration.baseCommit;
+        if (known !== undefined) {
+            return known;
+        }
+        // A snapshot recorded before M4 has no base, and `RouteStore` fills it with a
+        // placeholder. Treating it as a commit is the same as choosing a base at random.
+        const stored = this.route.listSnapshots().findLast((snapshot) => snapshot.diffId === diffId);
+        const base = stored?.baseCommit;
+        return base === undefined || base === UNKNOWN_BASE_COMMIT ? null : base;
     }
 
     /**

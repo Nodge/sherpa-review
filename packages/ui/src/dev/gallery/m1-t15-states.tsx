@@ -3,6 +3,7 @@ import type { Lens, PrMeta, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
+import { useT } from '../../i18n/index.js';
 import { agentPillView } from '../../components/agent-pill-view.js';
 import { AuditScopeBanner } from '../../components/audit-banner.tsx';
 import type { BannerSource } from '../../components/banner-slot.tsx';
@@ -114,15 +115,7 @@ export const M1_T15_STATES: readonly M1T15GalleryState[] = [
         id: 'agent-reconnect-popover',
         group: 'Agent pill',
         title: 'reconnect popover',
-        render: () => (
-            <div className="gallery__viewport gallery-agent-popover">
-                <AgentPill
-                    view={agentPillView(DISCONNECTED, [])}
-                    reconnectCommand={reconnectCommand(PR_KEY)}
-                    defaultOpen
-                />
-            </div>
-        ),
+        render: () => <AgentReconnectState />,
     },
 ];
 
@@ -156,8 +149,27 @@ function ViewState({
 }
 
 /** Slot with 2 active sources: action failure at the top, audit scope under "+1". */
+function AgentReconnectState() {
+    const t = useT();
+    return (
+        <div className="gallery__viewport gallery-agent-popover">
+            <AgentPill
+                view={agentPillView(DISCONNECTED, [], t)}
+                reconnectCommand={reconnectCommand(PR_KEY)}
+                defaultOpen
+            />
+        </div>
+    );
+}
+
 function BannerState() {
-    const filters = buildFileFilters({ files: DATA.diff.files, ownership: DATA.ownership, extra: DATA.extraLenses });
+    const t = useT();
+    const filters = buildFileFilters({
+        files: DATA.diff.files,
+        ownership: DATA.ownership,
+        extra: DATA.extraLenses,
+        t,
+    });
     const pci = findFilter(filters, PCI_FILTER_ID);
     if (pci === null) {
         return null;

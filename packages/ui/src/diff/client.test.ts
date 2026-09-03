@@ -141,8 +141,8 @@ describe('diff worker client', () => {
         const pending = client.parseFile(DIFF.diffId, request(0));
         client.close();
 
-        await expect(pending).rejects.toThrow('Diff worker closed');
-        await expect(client.parseFile(DIFF.diffId, request(0))).rejects.toThrow('Diff worker closed');
+        await expect(pending).rejects.toThrow('the diff worker is closed');
+        await expect(client.parseFile(DIFF.diffId, request(0))).rejects.toThrow('the diff worker is closed');
         expect(worker.closed).toBe(1);
     });
 

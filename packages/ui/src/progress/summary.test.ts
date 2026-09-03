@@ -12,7 +12,6 @@ function state(seen: number, total: number, read = false): FileReadState {
         total,
         pinned: read,
         generatedDefault: false,
-        tooltip: `${String(seen)} of ${String(total)}`,
     };
 }
 

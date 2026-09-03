@@ -53,7 +53,7 @@ function snapshot(patch: Partial<RouteSnapshot> = {}): RouteSnapshot {
         baseCommit: ROUTE_COMMIT,
         diffId: '182801',
         createdAt: '2026-09-01T10:00:00.000Z',
-        provenance: { harness: 'claude-code', model: 'opus-5' },
+        provenance: { harness: 'claude-code', model: 'opus-5', locale: null },
         previousSnapshotId: 'route-medium-9f3c1ab',
         carried: { kept: 4, total: 7 },
         summary: '',

@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { FilterSelect } from './filter-select.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,7 +23,7 @@ const EMPTY_PCI: Lens = {
     note: null,
     zones: null,
 };
-const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI] });
+const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t});
 const ACTIVE = selectFilter(FILTERS, 'all');
 
 const mounted: (() => void)[] = [];

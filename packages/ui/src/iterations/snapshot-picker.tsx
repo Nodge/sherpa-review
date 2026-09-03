@@ -1,8 +1,11 @@
+import type { Locale } from '@sherpa/protocol';
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 
+import type { MessageKey, Translate } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { relativeTime } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
-import { relativeTime } from '../threads/relative-time.js';
 import type { PickerRow, PickerRows, Viewing, ViewingLabel } from './viewing.js';
 import { sameViewing } from './viewing.js';
 import './snapshot-picker.css';
@@ -22,29 +25,34 @@ export function shortCommit(commit: string): string {
 }
 
 const STATUS_LABELS = {
-    current: 'current',
-    stale: 'stale',
-    gone: 'commit no longer in the PR',
-    noRoute: 'no route',
-    slice: 'slice',
-    activeIteration: 'active iteration',
-    previousIteration: 'previous iteration',
-} as const;
+    current: 'iteration.status.current',
+    stale: 'iteration.status.stale',
+    gone: 'iteration.status.gone',
+    noRoute: 'iteration.status.noRoute',
+    slice: 'iteration.status.slice',
+    activeIteration: 'iteration.status.activeIteration',
+    previousIteration: 'iteration.status.previousIteration',
+} as const satisfies Readonly<Record<string, MessageKey>>;
 
 /** "snapshot 9f3c1ab · current", "diff a71d4e2 · no route" or "slice 9f3c1ab → a71d4e2". */
-export function pillText(label: ViewingLabel): string {
+export function pillText(label: ViewingLabel, t: Translate): string {
     if (label.kind === 'slice') {
-        return `slice ${shortCommit(label.baseCommit)} → ${shortCommit(label.commit)}`;
+        return t('iteration.pill.slice', shortCommit(label.baseCommit), shortCommit(label.commit));
     }
-    return `${label.kind === 'snapshot' ? 'snapshot' : 'diff'} ${shortCommit(label.commit)} · ${STATUS_LABELS[label.status]}`;
+    const status = t(STATUS_LABELS[label.status]);
+    return label.kind === 'snapshot'
+        ? t('iteration.pill.snapshot', shortCommit(label.commit), status)
+        : t('iteration.pill.diff', shortCommit(label.commit), status);
 }
 
 /** Full selection commits appear in the pill tooltip so the reviewer can check them against the host. */
-export function pillTitle(label: ViewingLabel): string {
+export function pillTitle(label: ViewingLabel, t: Translate): string {
     if (label.kind === 'slice') {
-        return `Slice between iterations ${label.baseCommit} → ${label.commit}`;
+        return t('iteration.title.slice', label.baseCommit, label.commit);
     }
-    return `${label.kind === 'snapshot' ? 'The route was built for commit' : 'PR iteration at commit'} ${label.commit}`;
+    return label.kind === 'snapshot'
+        ? t('iteration.title.snapshot', label.commit)
+        : t('iteration.title.iteration', label.commit);
 }
 
 /**
@@ -52,26 +60,26 @@ export function pillTitle(label: ViewingLabel): string {
  * "a71d4e2 · active iteration · no route" for an iteration without a route, and
  * "9f3c1ab · 6 h ago · → a71d4e2" for a slice to the active iteration.
  */
-export function rowText(row: PickerRow, now: number): string {
+export function rowText(row: PickerRow, now: number, t: Translate, locale: Locale): string {
     if (row.kind === 'slice') {
         const parts = [shortCommit(row.commit)];
         if (row.createdAt !== null) {
-            parts.push(relativeTime(row.createdAt, now));
+            parts.push(relativeTime(row.createdAt, now, locale));
         }
         parts.push(`→ ${shortCommit(row.toCommit ?? '')}`);
         return parts.join(' · ');
     }
     if (row.kind === 'diff') {
-        return `${shortCommit(row.commit)} · ${STATUS_LABELS[row.status]} · ${STATUS_LABELS.noRoute}`;
+        return `${shortCommit(row.commit)} · ${t(STATUS_LABELS[row.status])} · ${t(STATUS_LABELS.noRoute)}`;
     }
     const parts = [shortCommit(row.commit)];
     if (row.createdAt !== null) {
-        parts.push(relativeTime(row.createdAt, now));
+        parts.push(relativeTime(row.createdAt, now, locale));
     }
     if (row.model !== null && row.model !== '') {
         parts.push(row.model);
     }
-    parts.push(STATUS_LABELS[row.status]);
+    parts.push(t(STATUS_LABELS[row.status]));
     return parts.join(' · ');
 }
 
@@ -113,7 +121,7 @@ export interface SnapshotMenu {
 }
 
 export interface MenuSection {
-    readonly title: string;
+    readonly title: MessageKey;
     readonly rows: readonly PickerRow[];
     /** Index of the section's first row in the flat list, used by arrows and ⏎. */
     readonly offset: number;
@@ -124,11 +132,11 @@ export interface MenuSection {
  * without a route and slices appear only when they have rows.
  */
 export function menuSections(rows: PickerRows): readonly MenuSection[] {
-    const sections: MenuSection[] = [{ title: 'Snapshots', rows: rows.snapshots, offset: 0 }];
+    const sections: MenuSection[] = [{ title: 'iteration.menu.snapshots', rows: rows.snapshots, offset: 0 }];
     let offset = rows.snapshots.length;
     for (const [title, section] of [
-        ['Iterations without a route', rows.iterations],
-        ['Show changes since iteration…', rows.slices],
+        ['iteration.menu.iterations', rows.iterations],
+        ['iteration.menu.slices', rows.slices],
     ] as const) {
         if (section.length > 0) {
             sections.push({ title, rows: section, offset });
@@ -145,8 +153,9 @@ export interface SnapshotPillProps {
 }
 
 export function SnapshotPill({ label, menu }: SnapshotPillProps) {
-    const text = pillText(label);
-    const title = pillTitle(label);
+    const t = useT();
+    const text = pillText(label, t);
+    const title = pillTitle(label, t);
     if (menu === undefined) {
         return (
             <span className="snapshot-pill" title={title}>
@@ -167,6 +176,8 @@ function SnapshotPillMenu({
     title: string;
     menu: SnapshotMenu;
 }) {
+    const t = useT();
+    const locale = useLocale();
     const [open, setOpen] = useState(menu.initialOpen ?? false);
     const sections = menuSections(menu.rows);
     const flat = sections.flatMap((section) => section.rows);
@@ -243,7 +254,7 @@ function SnapshotPillMenu({
                 <span className="snapshot-picker__tick" aria-hidden="true">
                     {checked ? <Icon name="check" size={13} /> : null}
                 </span>
-                <span className="snapshot-picker__row-text">{rowText(row, menu.now)}</span>
+                <span className="snapshot-picker__row-text">{rowText(row, menu.now, t, locale)}</span>
             </div>
         );
     };
@@ -285,7 +296,7 @@ function SnapshotPillMenu({
                     role="menu"
                     ref={listRef}
                     tabIndex={-1}
-                    aria-label="Snapshots and iterations"
+                    aria-label={t('iteration.menu.aria')}
                     aria-activedescendant={`${listId}-${String(cursor)}`}
                     onKeyDown={(event) => {
                         if (event.key === 'ArrowDown') {
@@ -304,7 +315,7 @@ function SnapshotPillMenu({
                 >
                     {sections.map((section) => (
                         <Fragment key={section.title}>
-                            <div className="snapshot-picker__section">{section.title}</div>
+                            <div className="snapshot-picker__section">{t(section.title)}</div>
                             {section.rows.map((row, index) => renderRow(row, section.offset + index))}
                         </Fragment>
                     ))}
@@ -319,9 +330,11 @@ function SnapshotPillMenu({
  * for each snapshot on a separate line (SPEC §4.4).
  */
 export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMenu, 'initialOpen'>) {
+    const t = useT();
+    const locale = useLocale();
     const all = [...rows.snapshots, ...rows.iterations];
     if (all.length === 0) {
-        return <p className="overview-card__empty">No snapshots yet. They appear with the first route.</p>;
+        return <p className="overview-card__empty">{t('iteration.empty')}</p>;
     }
     return (
         <ul className="snapshot-list">
@@ -340,7 +353,7 @@ export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMen
                                 onSelect(row.viewing);
                             }}
                         >
-                            <span className="snapshot-list__line">{rowText(row, now)}</span>
+                            <span className="snapshot-list__line">{rowText(row, now, t, locale)}</span>
                             {row.kind === 'snapshot' ? (
                                 <span className="snapshot-list__provenance">{provenanceText(row)}</span>
                             ) : null}

@@ -1,12 +1,13 @@
 import type { AgentNote, ChatAnchor } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { MessageKey } from '../i18n/index.js';
 
 /** Why a note without an anchor cannot become a comment draft. */
-export const NOTE_LOST_DRAFT_REASON = 'anchor lost — there is nothing to attach the comment to';
+export const NOTE_LOST_DRAFT_REASON: MessageKey = 'thread.note.lostDraft';
 
 /** Why chat cannot navigate to code: the note is absent from this iteration. */
-export const NOTE_LOST_ANCHOR_REASON = 'anchor lost — the note has no code in this iteration';
+export const NOTE_LOST_ANCHOR_REASON: MessageKey = 'thread.note.lostAnchor';
 
 /**
  * A note anchor as seen in the viewed iteration (M4-T11). In the iteration where the note

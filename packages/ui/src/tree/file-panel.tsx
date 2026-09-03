@@ -4,16 +4,18 @@ import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import type { MessageKey } from '../i18n/index.js';
+import { useFormat, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import type { FileReadState } from '../progress/read-state.js';
+import { readStateTooltip } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
-import { formatCount } from '../text.js';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
 import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
@@ -48,7 +50,7 @@ export interface OutlineEntry {
  */
 export type FileOutlineModel =
     | { readonly state: 'parsing' }
-    | { readonly state: 'empty'; readonly reason: string }
+    | { readonly state: 'empty'; readonly reason: MessageKey }
     | { readonly state: 'ready'; readonly entries: readonly OutlineEntry[] };
 
 export interface FilePanelProps {
@@ -79,13 +81,14 @@ export interface FilePanelProps {
 }
 
 export function FilePanel(props: FilePanelProps) {
+    const t = useT();
     const { files, filters, activeFilter, onFilter, outline, inputRef, writeError, route } = props;
     const [query, setQuery] = useState('');
     // The note describes the whole route, regardless of the current filter. Badges ignore the filter too.
-    const footer = route === null ? null : marginFooterNote(route);
+    const footer = route === null ? null : marginFooterNote(route, t);
 
     return (
-        <aside className="file-panel" aria-label="Diff files">
+        <aside className="file-panel" aria-label={t('tree.aria')}>
             <div className="file-panel__search">
                 <span className="file-panel__search-icon" aria-hidden="true">
                     <Icon name="search" size={13} />
@@ -95,8 +98,8 @@ export function FilePanel(props: FilePanelProps) {
                     className="file-panel__input"
                     type="search"
                     value={query}
-                    placeholder="Filter files"
-                    aria-label="Filter files by name"
+                    placeholder={t('tree.filter.placeholder')}
+                    aria-label={t('tree.filter.aria')}
                     onChange={(event) => {
                         setQuery(event.target.value);
                     }}
@@ -119,7 +122,7 @@ export function FilePanel(props: FilePanelProps) {
                         className={`file-panel__chip${filter.id === activeFilter.id ? ' is-on' : ''}`}
                         disabled={!filter.available}
                         aria-pressed={filter.id === activeFilter.id}
-                        title={filter.available ? filter.label : (filter.note ?? 'filter unavailable')}
+                        title={filter.available ? filter.label : (filter.note ?? t('tree.filter.unavailable'))}
                         onClick={() => {
                             onFilter(filter.id);
                         }}
@@ -133,7 +136,7 @@ export function FilePanel(props: FilePanelProps) {
                 <p className="file-panel__notice" role="status">
                     {writeError.text}
                     <button type="button" className="file-panel__link" onClick={writeError.onRetry}>
-                        retry
+                        {t('tree.retry')}
                     </button>
                 </p>
             )}
@@ -174,6 +177,7 @@ function FileTreeView({
     route,
     onJumpToStop,
 }: FileTreeViewProps) {
+    const t = useT();
     // Marking viewed is available only in the active iteration (M4 scope).
     const readOnly = useReadOnlyIteration();
     // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
@@ -256,7 +260,7 @@ function FileTreeView({
     useShortcut({
         id: 'diff.markViewed',
         keys: ['v'],
-        label: 'Mark the file viewed',
+        label: 'shortcut.diff.markViewed',
         scope: 'full-diff',
         section: 'reading',
         when: () =>
@@ -269,14 +273,14 @@ function FileTreeView({
     });
 
     if (files.length === 0) {
-        return <p className="file-panel__empty">No files in this filter.</p>;
+        return <p className="file-panel__empty">{t('tree.empty.filter')}</p>;
     }
     if (tree.rows.length === 0) {
         return (
             <p className="file-panel__empty">
-                No files match.
+                {t('tree.empty.query')}
                 <button type="button" className="file-panel__link" onClick={onClearQuery}>
-                    Clear
+                    {t('tree.empty.clear')}
                 </button>
             </p>
         );
@@ -287,7 +291,7 @@ function FileTreeView({
             className="file-tree"
             ref={scrollRef}
             role="tree"
-            aria-label="File tree"
+            aria-label={t('tree.rows.aria')}
             tabIndex={0}
             aria-activedescendant={cursorRow === undefined ? undefined : rowDomId(cursorRow)}
             onKeyDown={onKeyDown}
@@ -308,7 +312,7 @@ function FileTreeView({
                             aria-selected={row.kind === 'file' && row.fileId === activeFileId}
                             title={
                                 row.kind === 'dir'
-                                    ? `read ${String(row.readFiles)} of ${String(row.files)}`
+                                    ? t('tree.dir.read', row.readFiles, row.files)
                                     : undefined
                             }
                             className={rowClassName(row, activeFileId, item.index === cursor)}
@@ -390,6 +394,7 @@ function FileRow({
     onJumpToStop?: ((stopId: string) => void) | undefined;
     onToggleViewed: (fileId: string) => void;
 }) {
+    const t = useT();
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     return (
@@ -403,7 +408,7 @@ function FileRow({
                 aria-hidden="true"
                 tabIndex={-1}
                 disabled={readOnly}
-                title={readOnly ? readOnlyReason : row.read.tooltip}
+                title={readOnly ? readOnlyReason : readStateTooltip(t, row.read)}
                 onMouseDown={(event) => {
                     event.preventDefault();
                 }}
@@ -448,10 +453,11 @@ function Label({ label, title }: { label: string; title: string }) {
 
 /** Show `−M` only when there is something to show. Space is scarce in a 290px panel. */
 function Counts({ additions, deletions }: { additions: number; deletions: number }) {
+    const { count } = useFormat();
     return (
         <span className="file-tree__counts">
-            <span className="file-tree__add">+{formatCount(additions)}</span>
-            {deletions > 0 ? <span className="file-tree__del">−{formatCount(deletions)}</span> : null}
+            <span className="file-tree__add">+{count(additions)}</span>
+            {deletions > 0 ? <span className="file-tree__del">−{count(deletions)}</span> : null}
         </span>
     );
 }
@@ -470,15 +476,16 @@ function FileOutline({
     onOpenHunk: (index: number) => void;
     name: string;
 }) {
+    const t = useT();
     if (outline.state === 'parsing') {
-        return <p className="file-panel__empty">The diff is still being parsed.</p>;
+        return <p className="file-panel__empty">{t('tree.outline.parsing')}</p>;
     }
     if (outline.state === 'empty') {
-        return <p className="file-panel__empty">{outline.reason}</p>;
+        return <p className="file-panel__empty">{t(outline.reason)}</p>;
     }
 
     return (
-        <nav className="file-tree file-tree--outline" aria-label={`Outline of ${name}`}>
+        <nav className="file-tree file-tree--outline" aria-label={t('tree.outline.aria', name)}>
             {outline.entries.map((entry) => (
                 <button
                     key={entry.index}

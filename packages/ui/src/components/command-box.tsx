@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useT } from '../i18n/index.js';
+
 import './command-box.css';
 
 export interface CommandBoxProps {
@@ -11,13 +13,14 @@ export interface CommandBoxProps {
 /** How long visible feedback stays after a click, in ms. */
 const FEEDBACK_MS = 2000;
 
-const COPIED_LABEL = 'Copied';
-const MANUAL_TEXT = 'The command is selected — copy it manually';
+
 
 type Feedback = 'copied' | 'manual';
 
 /** Copyable launch command with text selection as a fallback when Clipboard API is unavailable. */
-export function CommandBox({ command, hint, actionLabel = 'Copy' }: CommandBoxProps) {
+export function CommandBox({ command, hint, actionLabel }: CommandBoxProps) {
+    const t = useT();
+    const label = actionLabel ?? t('command.copy');
     const inputRef = useRef<HTMLInputElement | null>(null);
     const timerRef = useRef<number | null>(null);
     const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -69,15 +72,15 @@ export function CommandBox({ command, hint, actionLabel = 'Copy' }: CommandBoxPr
                     className="command-box__command"
                     value={command}
                     readOnly
-                    aria-label="Sherpa launch command"
+                    aria-label={t('command.aria')}
                     onFocus={(event) => {
                         event.currentTarget.select();
                     }}
                 />
                 <button type="button" className="command-box__action" onClick={copy}>
                     {/* Both labels share one grid cell. The button uses the wider label and does not resize on a change. */}
-                    <span className={labelClass(copied)}>{COPIED_LABEL}</span>
-                    <span className={labelClass(!copied)}>{actionLabel}</span>
+                    <span className={labelClass(copied)}>{t('command.copied')}</span>
+                    <span className={labelClass(!copied)}>{label}</span>
                 </button>
             </div>
             {hint === undefined ? null : <div className="command-box__hint">{hint}</div>}
@@ -86,7 +89,7 @@ export function CommandBox({ command, hint, actionLabel = 'Copy' }: CommandBoxPr
                 role="status"
                 aria-live="polite"
             >
-                {feedback === 'copied' ? 'Command copied' : feedback === 'manual' ? MANUAL_TEXT : ''}
+                {feedback === 'copied' ? t('command.copied.status') : feedback === 'manual' ? t('command.manual') : ''}
             </div>
         </div>
     );

@@ -89,6 +89,7 @@ function mountEditor(markdown = '') {
         markdown,
         disabled: false,
         ariaLabel: 'comment',
+        placeholders: { text: 'text', code: 'code' },
         onChange: () => undefined,
         onSave,
         onCancel,

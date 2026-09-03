@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -26,6 +27,10 @@ export default defineConfig({
     plugins: [react()],
     define: { __SHERPA_VERSION__: JSON.stringify(rootPackageJson.version) },
     server: proxy === null ? {} : { proxy },
+    // The default 5 s is too short: progress scenario tests run dozens of rerenders and time out on
+    // a busy machine (`pnpm -r test` runs all packages at once),
+    // though they take 1–2 s alone. This still catches a hung test, just later.
+    test: { testTimeout: 20_000, hookTimeout: 20_000 },
 });
 
 /**

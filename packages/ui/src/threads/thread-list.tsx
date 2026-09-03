@@ -1,21 +1,22 @@
-import type { Comment, FileAnchor, Thread } from '@sherpa/protocol';
+import type { Comment, FileAnchor, Locale, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../fragment.js';
+import type { Translate } from '../i18n/index.js';
+import { relativeTime, shortCommit, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useThreadPin } from '../iterations/thread-pin.tsx';
 import type { ThreadPinState } from '../iterations/thread-pin.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
-import { plural, shortCommit } from '../text.js';
 import { closeCommentComposers } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
+import type { ComposerSaveLabel } from './comment-composer.tsx';
 import type { ComposerLayout } from './composer-markdown.js';
 import { draftEditComposerKey, DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
 import { authorName, flattenThread } from './model.js';
-import { relativeTime } from './relative-time.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import './threads.css';
 
@@ -76,6 +77,8 @@ function ThreadBlock({
     inlineDraftEditing: boolean;
     initialLayout?: ComposerLayout;
 }) {
+    const t = useT();
+    const locale = useLocale();
     // A thread from a previous iteration is read-only: no replies, resolution or draft editing.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -155,10 +158,10 @@ function ThreadBlock({
                     className={`thread__row${index > 0 ? ' thread__row--reply' : ''}${editingId === row.comment.id ? ' is-editing' : ''}`}
                     style={{ marginLeft: `${String(row.indent)}px` }}
                 >
-                    {row.replyHint === null ? null : (
+                    {row.replyHintAuthor === null ? null : (
                         <div className="thread__reply-hint">
                             <Icon name="reply" size={13} />
-                            {row.replyHint}
+                            {t('thread.reply.context', row.replyHintAuthor)}
                         </div>
                     )}
                     <div className="thread__author-line">
@@ -168,7 +171,9 @@ function ThreadBlock({
                         <strong className="thread__author">
                             {row.comment.author.bot ? row.comment.author.login : authorName(row.comment)}
                         </strong>
-                        <span className="thread__meta">{metaOf(thread, row.comment.createdAt, now)}</span>
+                        <span className="thread__meta">
+                            {metaOf(thread, row.comment.createdAt, now, t, locale)}
+                        </span>
                         {row.comment.author.bot ? (
                             <span className="thread__chip">{row.comment.author.displayName ?? row.comment.author.login}</span>
                         ) : null}
@@ -176,9 +181,9 @@ function ThreadBlock({
                         {thread.outdated && index === 0 ? <span className="thread__chip">outdated</span> : null}
                         {pinned === null || index !== 0 ? null : <ThreadPinChip pinned={pinned} />}
                         {editingId === row.comment.id ? (
-                            <span className="thread__chip thread__chip--editing">editing</span>
+                            <span className="thread__chip thread__chip--editing">{t('thread.chip.editing')}</span>
                         ) : row.comment.draft ? (
-                            <span className="thread__chip thread__chip--draft">draft · publishes on ship</span>
+                            <span className="thread__chip thread__chip--draft">{t('thread.chip.draft')}</span>
                         ) : null}
                         <span className="thread__spacer" />
                         {row.comment.draft &&
@@ -188,8 +193,8 @@ function ThreadBlock({
                                 <button
                                     type="button"
                                     className="thread__edit-draft"
-                                    aria-label={`Edit draft ${row.comment.id}`}
-                                    title={readOnly ? readOnlyReason : 'Edit the draft'}
+                                    aria-label={t('thread.draft.editAria', row.comment.id)}
+                                    title={readOnly ? readOnlyReason : t('thread.draft.edit')}
                                     disabled={readOnly || editingId !== null || deletingId !== null}
                                     onClick={() => {
                                         setConfirmingId(null);
@@ -201,8 +206,8 @@ function ThreadBlock({
                                 <button
                                     type="button"
                                     className="thread__delete-draft"
-                                    aria-label={`Delete draft ${row.comment.id}`}
-                                    title={readOnly ? readOnlyReason : 'Delete the draft'}
+                                    aria-label={t('thread.draft.deleteAria', row.comment.id)}
+                                    title={readOnly ? readOnlyReason : t('thread.draft.delete')}
                                     disabled={readOnly || editingId !== null || deletingId !== null}
                                     onClick={() => {
                                         setDeleteErrorId(null);
@@ -223,12 +228,12 @@ function ThreadBlock({
                                         setRepliesOpen((value) => !value);
                                     }}
                                 >
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    {t('thread.replies', row.subtreeReplies)}
                                     <Icon name={repliesOpen ? 'chev-down' : 'chev-right'} size={13} />
                                 </button>
                             ) : (
                                 <span className="thread__reply-count">
-                                    {row.subtreeReplies}{' '}{plural(row.subtreeReplies, 'reply', 'replies', 'replies')}
+                                    {t('thread.replies', row.subtreeReplies)}
                                     <Icon name="chev-right" size={13} />
                                 </span>
                             )
@@ -239,9 +244,9 @@ function ThreadBlock({
                             comment={row.comment}
                             store={store}
                             transport={actions.transport}
-                            contextLabel="draft editing"
-                            placeholder="Comment on the line"
-                            inputLabel="Draft editing"
+                            contextLabel={t('thread.composer.editContext')}
+                            placeholder={t('thread.composer.linePlaceholder')}
+                            inputLabel={t('thread.composer.editLabel')}
                             {...(initialLayout === undefined ? {} : { initialLayout })}
                         />
                     ) : (
@@ -253,8 +258,8 @@ function ThreadBlock({
                         <div className="thread__delete-confirm">
                             <span>
                                 {deleteErrorId === row.comment.id
-                                    ? 'Could not delete the draft. Retry?'
-                                    : 'Delete the draft? It will not be published'}
+                                    ? t('thread.draft.deleteFailed')
+                                    : t('thread.draft.deleteConfirm')}
                             </span>
                             <span className="thread__spacer" />
                             <button
@@ -263,7 +268,9 @@ function ThreadBlock({
                                 disabled={deletingId === row.comment.id}
                                 onClick={() => void deleteDraft(row.comment.id)}
                             >
-                                {deletingId === row.comment.id ? 'Deleting…' : 'Delete'}
+                                {deletingId === row.comment.id
+                                    ? t('thread.draft.deleting')
+                                    : t('thread.draft.deleteAction')}
                             </button>
                             <button
                                 type="button"
@@ -274,7 +281,7 @@ function ThreadBlock({
                                     setConfirmingId(null);
                                 }}
                             >
-                                Keep
+                                {t('thread.draft.keep')}
                             </button>
                         </div>
                     ) : null}
@@ -289,7 +296,7 @@ function ThreadBlock({
                         setExpanded(true);
                     }}
                 >
-                    {hidden} more
+                    {t('thread.more', hidden)}
                 </button>
             ) : null}
 
@@ -306,7 +313,7 @@ function ThreadBlock({
                                         setResolved(!thread.resolved);
                                     }}
                                 >
-                                    {thread.resolved ? 'Reopen' : 'Resolve'}
+                                    {thread.resolved ? t('thread.reopen') : t('thread.resolve')}
                                 </button>
                                 {inlineDraftEditing ? null : (
                                     <button
@@ -315,13 +322,13 @@ function ThreadBlock({
                                             void copyThreadLink(thread.id);
                                         }}
                                     >
-                                        Copy link
+                                        {t('thread.copyLink')}
                                     </button>
                                 )}
                             </>
                         ) : (
                             <span className="thread__undo">
-                                {undo ? 'resolved' : 'reopened'} ·{' '}
+                                {undo ? t('thread.undo.resolved') : t('thread.undo.reopened')} ·{' '}
                                 <button
                                     type="button"
                                     disabled={readOnly}
@@ -330,7 +337,7 @@ function ThreadBlock({
                                         setResolved(!undo);
                                     }}
                                 >
-                                    undo
+                                    {t('thread.undo.action')}
                                 </button>
                             </span>
                         )}
@@ -353,14 +360,15 @@ function ThreadBlock({
 
 /** Pin chip and navigation: the label shows a short commit, the tooltip has the full hash (README §13). */
 function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
+    const t = useT();
     return (
         <>
             <span className="thread__chip thread__chip--pinned" title={pinned.pin.commit}>
-                pinned to {shortCommit(pinned.pin.commit)}
+                {t('thread.pin.chip', shortCommit(pinned.pin.commit))}
             </span>
             {pinned.open === null ? null : (
                 <button type="button" className="thread__pin-action" onClick={pinned.open}>
-                    View at the old commit
+                    {t('thread.pin.open')}
                 </button>
             )}
         </>
@@ -371,12 +379,11 @@ function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
  * Threads absent from every line of the rendered diff: the file left the PR (SPEC §2.17)
  * or the thread belongs to a PR-level bot. The heading names the reason only when all threads share it.
  */
-function outsideTitle(threads: readonly Thread[]): string {
+function outsideTitle(threads: readonly Thread[], t: Translate): string {
     const count = threads.length;
-    const label = `${String(count)} ${plural(count, 'thread', 'threads', 'threads')}`;
     return threads.every((thread) => thread.anchor !== null)
-        ? `${label} on files no longer in this PR`
-        : `${label} outside the diff`;
+        ? t('thread.outside.gone', count)
+        : t('thread.outside.offDiff', count);
 }
 
 export function OutsideThreads({
@@ -396,6 +403,7 @@ export function OutsideThreads({
     defaultOpen?: boolean;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
 }) {
+    const t = useT();
     const [opened, setOpened] = useState(defaultOpen);
     const open = opened || threads.some((thread) => thread.id === initialThreadId);
     if (threads.length === 0) {
@@ -411,7 +419,7 @@ export function OutsideThreads({
                     setOpened(!open);
                 }}
             >
-                {outsideTitle(threads)}
+                {outsideTitle(threads, t)}
                 <Icon name={open ? 'chev-down' : 'chev-right'} size={13} />
             </button>
             {open ? (
@@ -438,12 +446,13 @@ export function NewCommentComposer({
     transport: ComposerTransport;
     contextLabel?: string;
     placeholder?: string;
-    saveLabel?: 'Save draft' | 'Save changes';
+    saveLabel?: ComposerSaveLabel;
     footerHint?: ReactNode;
     initialLayout?: ComposerLayout;
     onSaveComplete?: (() => void) | undefined;
     showDraftChip?: boolean;
 }) {
+    const t = useT();
     const composer = useComposerSnapshot(store, composerKey);
     if (composer === null) {
         return null;
@@ -454,10 +463,21 @@ export function NewCommentComposer({
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={contextLabel ?? (position == null ? 'PR comment' : `new comment · ${lineRangeLabel(position)}`)}
-            placeholder={placeholder ?? (position == null ? 'A general remark on the PR — not tied to a line' : 'Comment on the code line')}
-            inputLabel="New comment"
-            saveLabel={saveLabel ?? (composer.commentId === null ? 'Save draft' : 'Save changes')}
+            contextLabel={
+                contextLabel ??
+                (position == null
+                    ? t('thread.composer.prContext')
+                    : t('thread.composer.newContext', lineRangeLabel(position, t)))
+            }
+            placeholder={
+                placeholder ??
+                (position == null ? t('thread.composer.prPlaceholder') : t('thread.composer.codePlaceholder'))
+            }
+            inputLabel={t('thread.composer.newLabel')}
+            saveLabel={
+                saveLabel ??
+                (composer.commentId === null ? 'thread.composer.saveDraft' : 'thread.composer.saveChanges')
+            }
             closeOnSave
             showDraftChip={showDraftChip}
             {...(composer.commentId === null
@@ -488,6 +508,7 @@ function ComposerForThread({
     /** The thread pin commit: its draft was written before the push (SPEC §4.5). */
     pinnedCommit: string | null;
 }) {
+    const t = useT();
     // Replies are available only in the active iteration (M4 scope).
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -500,7 +521,7 @@ function ComposerForThread({
                 <button
                     type="button"
                     className="thread-composer-draft-preview"
-                    aria-label="Continue draft"
+                    aria-label={t('thread.draft.continue')}
                     disabled={readOnly}
                     title={readOnly ? readOnlyReason : undefined}
                     onClick={() => {
@@ -513,8 +534,8 @@ function ComposerForThread({
                             {...(pinnedCommit === null ? {} : { title: pinnedCommit })}
                         >
                             {pinnedCommit === null
-                                ? 'draft · publishes on ship'
-                                : `draft · pinned to ${shortCommit(pinnedCommit)}`}
+                                ? t('thread.chip.draftShort')
+                                : t('thread.draft.pinned', shortCommit(pinnedCommit))}
                         </span>
                     </span>
                     <span className="thread-composer-draft-preview__body">{draft.body}</span>
@@ -531,7 +552,7 @@ function ComposerForThread({
                     openReply(store, thread, null);
                 }}
             >
-                <span>Reply…</span>
+                <span>{t('thread.reply.entry')}</span>
                 <Icon name="pencil" size={13} />
             </button>
         );
@@ -542,10 +563,10 @@ function ComposerForThread({
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={`reply to ${authorName(thread.root)}`}
-            placeholder="Reply in the thread"
-            inputLabel="Thread reply"
-            saveLabel={composer.commentId === null ? 'Save draft' : 'Save changes'}
+            contextLabel={t('thread.reply.context', authorName(thread.root))}
+            placeholder={t('thread.reply.placeholder')}
+            inputLabel={t('thread.reply.label')}
+            saveLabel={composer.commentId === null ? 'thread.composer.saveDraft' : 'thread.composer.saveChanges'}
             closeOnSave
             pinnedCommit={pinnedCommit}
             {...(composer.commentId === null
@@ -553,7 +574,7 @@ function ComposerForThread({
                 : { restoreOnCancel: composer.originalText ?? draft?.body ?? composer.text })}
             notice={
                 resolvedWhileTyping
-                    ? `resolved by ${thread.resolvedBy ?? 'another reviewer'} while you were writing · your reply will reopen it`
+                    ? t('thread.resolvedWhileTyping', thread.resolvedBy ?? t('thread.otherReviewer'))
                     : undefined
             }
         />
@@ -658,14 +679,15 @@ export function openReply(store: ThreadStore, thread: Thread, draft: Comment | n
     });
 }
 
-function metaOf(thread: Thread, createdAt: string, now: number): string {
+function metaOf(thread: Thread, createdAt: string, now: number, t: Translate, locale: Locale): string {
     const path = thread.anchor?.path.split('/').at(-1) ?? 'PR';
     const position = thread.anchor?.position;
-    return `${path}${position == null ? '' : `:${lineRange(position)}`} · ${relativeTime(createdAt, now)}`;
+    const when = relativeTime(createdAt, now, locale);
+    return position == null ? t('thread.meta', path, when) : t('thread.meta.line', path, lineRange(position), when);
 }
 
-function lineRangeLabel(position: { readonly line: number; readonly size: number }): string {
-    return position.size > 1 ? `lines ${lineRange(position)}` : `line ${String(position.line)}`;
+function lineRangeLabel(position: { readonly line: number; readonly size: number }, t: Translate): string {
+    return position.size > 1 ? t('thread.lineRange.many', lineRange(position)) : t('thread.lineRange.one', position.line);
 }
 
 function lineRange(position: { readonly line: number; readonly size: number }): string {

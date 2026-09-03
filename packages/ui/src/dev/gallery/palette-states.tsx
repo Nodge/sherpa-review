@@ -24,7 +24,8 @@ export const PALETTE_STATES: readonly PaletteGalleryState[] = [
         title: 'fuzzy search: files and commands',
         // key remounts the palette when switching states. query is its internal state,
         // so without a remount the previous query would survive the switch.
-        render: () => <PaletteState key="palette-fuzzy" query="hand" />,
+        // "re" matches both file paths and the Request changes label, which is the same in both languages.
+        render: () => <PaletteState key="palette-fuzzy" query="re" />,
     },
     {
         id: 'palette-empty',
@@ -54,32 +55,32 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
         created.register({
             id: 'view.diff',
             keys: ['3'],
-            label: 'Open full diff',
+            label: 'shortcut.view.diff',
             scope: 'global',
             section: 'navigation',
             action: () => undefined,
         });
         created.register({
-            id: 'gallery.handlers',
-            keys: ['g'],
-            label: 'Open handlers.ts',
+            id: 'review.requestChanges',
+            keys: ['mod+shift+enter'],
+            label: 'shortcut.review.requestChanges',
             scope: 'global',
-            section: 'navigation',
+            section: 'ship',
             action: () => undefined,
         });
         created.register({
-            id: 'gallery.copyLink',
-            keys: [],
-            label: 'Copy review link',
+            id: 'gallery.toggleMode',
+            keys: ['d'],
+            label: 'shortcut.diff.toggleMode',
             scope: 'global',
-            section: 'navigation',
+            section: 'reading',
             action: () => undefined,
         });
         return created;
     }, []);
     // The gallery keeps its own PR state in memory. There is no server here, but recent items need to appear.
     const prState = useMemo(
-        () => createUiPrStateStore(recent ? { initial: { paletteRecent: ['gallery.copyLink'] } } : {}),
+        () => createUiPrStateStore(recent ? { initial: { paletteRecent: ['gallery.toggleMode'] } } : {}),
         [recent],
     );
     const source = useMemo(

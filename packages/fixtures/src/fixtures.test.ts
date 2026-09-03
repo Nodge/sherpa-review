@@ -1,7 +1,21 @@
 import type { Comment, FileDiff } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { buildFixture, FIXTURE_NAMES, fixtureData, fixtureIteration, LARGE_FILE_COUNT, MEDIUM_TOTALS } from './data/index.js';
+import {
+    buildFixture,
+    FIXTURE_NAMES,
+    fixtureData,
+    fixtureIteration,
+    HUGE_CHANGED_LINE_COUNT,
+    HUGE_COLLAPSED_FILE_LINES,
+    HUGE_COLLAPSED_FILE_PATH,
+    HUGE_FILE_COUNT,
+    HUGE_PARSED_FILE_COUNT,
+    HUGE_PARSED_LINE_COUNT,
+    LARGE_FILE_COUNT,
+    LONG_LINE_MARKER,
+    MEDIUM_TOTALS,
+} from './data/index.js';
 import { totalChanges } from './patch.js';
 
 const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: .*)?$/;
@@ -267,6 +281,55 @@ describe('large fixture', () => {
         expect(data.diff.files.length).toBeGreaterThanOrEqual(60);
         const totals = totalChanges(data.diff.files);
         expect(totals.additions + totals.deletions).toBeGreaterThan(2000);
+    });
+});
+
+/**
+ * Guards the performance fixture numbers used by the performance run (`e2e/src/performance.spec.ts`).
+ * If they change, the measurements change meaning, so they are checked here rather than left in a comment.
+ */
+describe('huge fixture', () => {
+    const data = fixtureIteration('huge');
+    const files = data.diff.files;
+
+    it('has 100 files and more than 20 000 changed lines', () => {
+        expect(files.length).toBe(HUGE_FILE_COUNT);
+        expect(files.length).toBeGreaterThanOrEqual(100);
+        const totals = totalChanges(files);
+        expect(totals.additions + totals.deletions).toBe(HUGE_CHANGED_LINE_COUNT);
+        expect(totals.additions + totals.deletions).toBeGreaterThanOrEqual(20_000);
+    });
+
+    it('sends the measured portion to the worker: files without a collapse reason', () => {
+        // A card collapsed for viewed/generated does not request parsing, so it is outside the measurement.
+        const parsed = files.filter((file) => file.viewed !== true && !file.generated);
+        const totals = totalChanges(parsed);
+        expect(parsed.length).toBe(HUGE_PARSED_FILE_COUNT);
+        expect(totals.additions + totals.deletions).toBe(HUGE_PARSED_LINE_COUNT);
+    });
+
+    it('has exactly one file above the collapse threshold', () => {
+        const big = files.filter((file) => file.additions + file.deletions > 2000);
+        expect(big.map((file) => file.path)).toEqual([HUGE_COLLAPSED_FILE_PATH]);
+        expect(big[0]?.additions).toBe(HUGE_COLLAPSED_FILE_LINES);
+        expect(big[0]?.generated).toBe(false);
+    });
+
+    it('has a realistic shape: 2–6 hunks per edit, mixed types, generated files and long lines', () => {
+        const hunksOf = (file: FileDiff): number =>
+            (file.patch ?? '').split('\n').filter((line) => line.startsWith('@@')).length;
+        const modified = files.filter((file) => file.changeType === 'modify');
+        expect(modified.length).toBeGreaterThanOrEqual(60);
+        for (const file of modified) {
+            expect(hunksOf(file), file.path).toBeGreaterThanOrEqual(2);
+            expect(hunksOf(file), file.path).toBeLessThanOrEqual(6);
+        }
+
+        expect(files.filter((file) => file.changeType === 'add').length).toBeGreaterThanOrEqual(5);
+        expect(files.filter((file) => file.changeType === 'delete').length).toBeGreaterThanOrEqual(3);
+        expect(files.filter((file) => file.generated).length).toBe(10);
+        expect(files.filter((file) => (file.patch ?? '').includes(LONG_LINE_MARKER)).length).toBeGreaterThanOrEqual(3);
+        expect(data.threads.length).toBeGreaterThanOrEqual(5);
     });
 });
 

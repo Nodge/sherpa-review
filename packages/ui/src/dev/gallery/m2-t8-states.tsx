@@ -2,6 +2,7 @@ import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { useMemo, useState } from 'react';
 
+import { useT } from '../../i18n/index.js';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
@@ -75,11 +76,12 @@ function PresetRouteState({ preset }: { preset: RoutePreset }) {
 
 /** Toolbar without a route: the toggle is disabled and explains why through `title` (SPEC §2.5). */
 function DisabledPresetState() {
+    const t = useT();
     const [preset, setPreset] = useState<RoutePreset>('triage');
     const store = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
     const filters = useMemo(
-        () => buildFileFilters({ files: DATA.diff.files, ownership: DATA.ownership, extra: DATA.extraLenses }),
-        [],
+        () => buildFileFilters({ files: DATA.diff.files, ownership: DATA.ownership, extra: DATA.extraLenses, t }),
+        [t],
     );
 
     return (

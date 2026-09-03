@@ -1,3 +1,6 @@
+import type { MessageKey } from '../i18n/ru.js';
+import type { Translate } from '../i18n/translate.js';
+
 /**
  * Shared keyboard command registry (requirements §3.3). Declare each command once here,
  * and the same declaration builds the command palette (M1-T9) and shortcuts sheet (M5-T5) without
@@ -20,14 +23,14 @@ export type ShortcutScope = 'global' | 'route' | 'full-diff' | 'overview';
 /** Shortcuts sheet section. Section order is `SHORTCUT_SECTIONS`. */
 export type ShortcutSection = 'navigation' | 'reading' | 'comments' | 'route' | 'agent' | 'ship';
 
-/** Section order and labels for the shortcuts sheet, shared by the registry and the `?` overlay. */
-export const SHORTCUT_SECTIONS: readonly { readonly id: ShortcutSection; readonly label: string }[] = [
-    { id: 'navigation', label: 'Navigation' },
-    { id: 'reading', label: 'Reading' },
-    { id: 'comments', label: 'Comments' },
-    { id: 'route', label: 'Route' },
-    { id: 'agent', label: 'Agent' },
-    { id: 'ship', label: 'Ship' },
+/** Shortcuts sheet section order and label keys, shared by the registry and the `?` overlay. */
+export const SHORTCUT_SECTIONS: readonly { readonly id: ShortcutSection; readonly label: MessageKey }[] = [
+    { id: 'navigation', label: 'shortcut.section.navigation' },
+    { id: 'reading', label: 'shortcut.section.reading' },
+    { id: 'comments', label: 'shortcut.section.comments' },
+    { id: 'route', label: 'shortcut.section.route' },
+    { id: 'agent', label: 'shortcut.section.agent' },
+    { id: 'ship', label: 'shortcut.section.ship' },
 ];
 
 export interface Shortcut {
@@ -37,14 +40,20 @@ export interface Shortcut {
      * A space inside a string denotes a chord: `'g o'` means "G, then O".
      */
     readonly keys: readonly ShortcutKeys[];
-    /** Human-readable label for the palette and shortcuts sheet, in Russian. */
-    readonly label: string;
+    /** Dictionary label key: the palette and shortcuts sheet translate it into the reviewer's language. */
+    readonly label: MessageKey;
+    /** Dynamic part of a parameterized label key: the stop title. */
+    readonly labelArg?: string | number;
     readonly scope: ShortcutScope;
     readonly section: ShortcutSection;
     /** A command with a mod shortcut can run from an input. */
     readonly worksInInputs?: boolean;
-    /** Visible consequence of a command before it runs. */
-    readonly consequence?: string;
+    /** Key for the visible consequence of the command before it runs. */
+    readonly consequence?: MessageKey;
+    /** Dynamic part of the consequence: the draft count in the ship label. */
+    readonly consequenceArg?: string | number;
+    /** Palette group. Without one, the command goes into the general "Commands" group. */
+    readonly group?: MessageKey;
     /** The command is active only when this returns true. Without it, the command is always active. */
     readonly when?: () => boolean;
     readonly action: () => void;
@@ -176,7 +185,7 @@ export function createShortcutRegistry(options: ShortcutRegistryOptions = {}): S
     return {
         register: (shortcut) => {
             if (shortcuts.has(shortcut.id)) {
-                throw new Error(`Command "${shortcut.id}" already registered`);
+                throw new Error(`Shortcut "${shortcut.id}" is already registered`);
             }
             shortcuts.set(shortcut.id, shortcut);
             notify();
@@ -401,15 +410,18 @@ function isEditable(target: unknown): boolean {
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
 }
 
-/** Key labels for the palette and shortcuts sheet: `mod+k` → `⌘K`, chord `g o` → `G then O`. */
-export function formatKeys(keys: readonly ShortcutKeys[]): string | null {
+/**
+ * Shortcut label for the palette and shortcuts sheet: `mod+k` → `⌘K`, chord `g o` → `G then O`.
+ * The word joining chord steps is the only dictionary word in the label, so this takes `t`.
+ */
+export function formatKeys(keys: readonly ShortcutKeys[], t: Translate): string | null {
     if (keys.length === 0) {
         return null;
     }
-    return keys.map(formatCombination).join(' / ');
+    return keys.map((combination) => formatCombination(combination, t)).join(' / ');
 }
 
-function formatCombination(keys: ShortcutKeys): string {
+function formatCombination(keys: ShortcutKeys, t: Translate): string {
     return keys
         .split(' ')
         .filter((step) => step !== '')
@@ -420,5 +432,5 @@ function formatCombination(keys: ShortcutKeys): string {
                 .replace('alt+', '⌥')
                 .toUpperCase(),
         )
-        .join(' then ');
+        .join(` ${t('shortcut.chord.then')} `);
 }

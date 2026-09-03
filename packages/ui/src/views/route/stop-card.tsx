@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
+import type { MessageKey, Translate } from '../../i18n/index.js';
+import { useFormat, useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../../iterations/read-only.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
 import type { RouteStopView } from '../../route/route-model.js';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * Route stop (README §1): a grid with a sticky left column and a diff column.
@@ -62,6 +63,7 @@ export interface StopChangeThread {
 export function stopChangeThreads(
     change: RouteStopChange | null,
     threads: ReadonlyMap<string, Thread>,
+    t: Translate,
 ): readonly StopChangeThread[] {
     if (change === null) {
         return EMPTY_CHANGE_THREADS;
@@ -73,7 +75,7 @@ export function stopChangeThreads(
             continue;
         }
         const line = thread.anchor?.position?.line ?? null;
-        links.push({ id, label: line === null ? 'thread on the PR' : `thread at line ${String(line)}` });
+        links.push({ id, label: line === null ? t('route.stop.thread.pr') : t('route.stop.thread.line', line) });
     }
     return links;
 }
@@ -81,9 +83,9 @@ export function stopChangeThreads(
 const EMPTY_CHANGE_THREADS: readonly StopChangeThread[] = [];
 
 /** Stop classification badge relative to the previous pass (README §1 item 1). */
-const CHANGE_BADGE: Readonly<Record<RouteStopChange['kind'], string>> = {
-    changed: 'changed',
-    new: 'new',
+const CHANGE_BADGE: Readonly<Record<RouteStopChange['kind'], MessageKey>> = {
+    changed: 'route.stop.change.changed',
+    new: 'route.stop.change.new',
 };
 
 export function StopCard({
@@ -105,6 +107,8 @@ export function StopCard({
     changeThreads = EMPTY_CHANGE_THREADS,
     onOpenThread,
 }: StopCardProps) {
+    const t = useT();
+    const { count } = useFormat();
     // Filling writes to the snapshot and is available only in the active iteration (M4 scope).
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -118,7 +122,7 @@ export function StopCard({
             id={`stop-${stop.id}`}
             {...(stop.change === null ? {} : { 'data-stop-change': stop.change.kind })}
             role="region"
-            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stripInlineCode(stop.title)}`}
+            aria-label={t('route.stop.aria', view.planLabel, stopCount, stripInlineCode(stop.title))}
         >
             <div className="route-stop__side">
                 <div className="route-stop__head">
@@ -128,19 +132,21 @@ export function StopCard({
                     </span>
                     {tier === 'high' ? <span className="route-stop__badge">high</span> : null}
                     {stop.status === 'ready' ? null : (
-                        <span className="route-stop__badge route-stop__badge--queued">{statusBadge(stop.status)}</span>
+                        <span className="route-stop__badge route-stop__badge--queued">
+                            {t(statusBadge(stop.status))}
+                        </span>
                     )}
                     {/* Show the classification badge whenever it exists, even without a filter. */}
                     {stop.change === null ? null : (
                         <span className={`route-stop__badge route-stop__badge--${stop.change.kind}`}>
-                            {CHANGE_BADGE[stop.change.kind]}
+                            {t(CHANGE_BADGE[stop.change.kind])}
                         </span>
                     )}
                     <span className="route-stop__spacer" />
                     {comments === 0 ? null : (
-                        <span className="route-stop__comments" title={`Comments in this stop's ranges: ${String(comments)}`}>
+                        <span className="route-stop__comments" title={t('route.stop.commentsTitle', comments)}>
                             <span className="route-stop__comments-box" aria-hidden="true" />
-                            {formatCount(comments)}
+                            {count(comments)}
                         </span>
                     )}
                     <StopViewedToggle
@@ -158,12 +164,12 @@ export function StopCard({
                 </h2>
 
                 {filledBeforeStop && !unfilled ? (
-                    <p className="route-stop__filled-before">filled before the agent stopped</p>
+                    <p className="route-stop__filled-before">{t('route.stop.filledBefore')}</p>
                 ) : null}
 
                 {stop.paragraph === null ? (
                     <p className="route-stop__note">
-                        {unfilledNote(stop.status)}
+                        {t(unfilledNote(stop.status))}
                         {stop.status !== 'failed' || onFillStop === undefined ? null : (
                             <button
                                 type="button"
@@ -174,7 +180,7 @@ export function StopCard({
                                     onFillStop(stop.planIndex);
                                 }}
                             >
-                                Fill this stop
+                                {t('route.stop.fill')}
                             </button>
                         )}
                     </p>
@@ -206,9 +212,7 @@ export function StopCard({
                     </ul>
                 )}
 
-                {keptInView ? (
-                    <p className="route-stop__kept">kept in view — outside the current filter</p>
-                ) : null}
+                {keptInView ? <p className="route-stop__kept">{t('route.stop.kept')}</p> : null}
 
                 {chips}
             </div>
@@ -245,24 +249,25 @@ export function StopViewedToggle({
     failedViewed: boolean | null;
     onViewed: (viewed: boolean) => void;
 }) {
+    const t = useT();
     const disabled = (pending || parseFailed || unfilled) && !viewed;
     const reason = unfilled
-        ? 'This stop is not filled yet'
+        ? t('route.stop.viewed.unfilled')
         : parseFailed
-          ? 'Some files of this stop failed to parse — retry the parse'
-          : 'The ranges of this stop are still being counted';
+          ? t('route.stop.viewed.parseFailed')
+          : t('route.stop.viewed.pending');
     return (
         <>
             {failedViewed === null ? null : (
                 <span className="route-stop__viewed-error" role="status">
-                    not saved
+                    {t('route.stop.notSaved')}
                     <button
                         type="button"
                         onClick={() => {
                             onViewed(failedViewed);
                         }}
                     >
-                        retry
+                        {t('route.stop.retry')}
                     </button>
                 </span>
             )}
@@ -291,9 +296,10 @@ function StopChangeReason({
     threads: readonly StopChangeThread[];
     onOpenThread?: (threadId: string) => void;
 }) {
+    const t = useT();
     return (
         <div className="route-stop__change">
-            <div className="route-stop__change-label">why this stop changed</div>
+            <div className="route-stop__change-label">{t('route.stop.changeLabel')}</div>
             <div className="route-stop__change-body">
                 <Markdown text={reason} profile="route" />
             </div>
@@ -323,6 +329,7 @@ function StopChangeReason({
  * stays visible as a literal until the paragraph is expanded.
  */
 function Paragraph({ text }: { text: string }) {
+    const t = useT();
     const [full, setFull] = useState(false);
     const { head, rest } = clampParagraph(text);
 
@@ -343,7 +350,7 @@ function Paragraph({ text }: { text: string }) {
                     setFull(true);
                 }}
             >
-                more
+                {t('route.stop.more')}
             </button>
         </p>
     );
@@ -361,15 +368,15 @@ export function CollapsedStop({
     reason: string;
     onExpand: () => void;
 }) {
+    const t = useT();
     return (
         <button type="button" className="route-collapsed" onClick={onExpand}>
             <span className="route-collapsed__mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            Collapsed · {formatCount(lines)} {plural(lines, 'line', 'lines', 'lines')} in {formatCount(files)}{' '}
-            {plural(files, 'file', 'files', 'files')} · {reason}
+            {t('route.collapsed', lines, files, reason)}
             <span className="route-stop__spacer" />
-            <span className="route-collapsed__hint">nothing is hidden — click to expand</span>
+            <span className="route-collapsed__hint">{t('route.collapsed.hint')}</span>
         </button>
     );
 }
@@ -390,16 +397,15 @@ export function ViewedSummary({
     assertions?: number;
     onExpand: () => void;
 }) {
+    const t = useT();
     return (
         <button type="button" className="route-collapsed route-collapsed--viewed" onClick={onExpand}>
             <span className="route-collapsed__mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
             {assertions === 0
-                ? null
-                : `${formatCount(assertions)} ${plural(assertions, 'assertion', 'assertions', 'assertions')} · `}
-            {formatCount(files)} {plural(files, 'file', 'files', 'files')} · {formatCount(lines)}{' '}
-            {plural(lines, 'line', 'lines', 'lines')} · viewed
+                ? t('route.viewedSummary', files, lines)
+                : t('route.viewedSummary.assertions', assertions, files, lines)}
         </button>
     );
 }
@@ -434,12 +440,10 @@ const SKELETON_ROWS = ['wide', 'mid', 'wide', 'short', 'mid', 'wide'] as const;
  * `partial` means some anchors survived. The notice sits above their cards.
  */
 export function AnchorDrift({ paths, partial = false }: { paths: readonly string[]; partial?: boolean }) {
+    const t = useT();
     return (
         <div className="route-drift" role="note">
-            <p className="route-drift__text">
-                {partial ? 'Some anchors of this stop pointed' : 'This stop pointed'} at lines that are no longer in the
-                diff. Regenerate the route or read the file raw.
-            </p>
+            <p className="route-drift__text">{partial ? t('route.drift.partial') : t('route.drift')}</p>
             {paths.length === 0 ? null : (
                 <ul className="route-drift__paths">
                     {paths.map((path) => (
@@ -451,13 +455,14 @@ export function AnchorDrift({ paths, partial = false }: { paths: readonly string
     );
 }
 
-function statusBadge(status: RouteStopView['stop']['status']): string {
-    return status === 'failed' ? 'not filled' : status === 'filling' ? 'filling' : 'queued';
+function statusBadge(status: RouteStopView['stop']['status']): MessageKey {
+    return status === 'failed'
+        ? 'route.gen.plan.failed'
+        : status === 'filling'
+          ? 'route.gen.plan.filling'
+          : 'route.gen.plan.queued';
 }
 
-function unfilledNote(status: RouteStopView['stop']['status']): string {
-    if (status === 'failed') {
-        return 'Not filled — the agent stopped early. The title and the number are fixed by the plan.';
-    }
-    return 'The title is fixed by the plan. The agent has not filled this stop yet — it will land in this slot.';
+function unfilledNote(status: RouteStopView['stop']['status']): MessageKey {
+    return status === 'failed' ? 'route.stop.unfilled.failed' : 'route.stop.unfilled.queued';
 }

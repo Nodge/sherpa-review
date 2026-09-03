@@ -2,6 +2,9 @@ import type { Thread } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { stopChangeThreads } from './stop-card.tsx';
+import { createT } from '../../i18n/index.js';
+
+const t = createT('en');
 
 function thread(id: string, line: number | null): Thread {
     return {
@@ -39,7 +42,7 @@ const THREADS = new Map<string, Thread>([
 describe('links to threads that caused the change', () => {
     it('labels an anchored thread with its line and an unanchored one with PR', () => {
         expect(
-            stopChangeThreads({ kind: 'changed', reason: null, threadIds: ['t-line', 't-pr'] }, THREADS),
+            stopChangeThreads({ kind: 'changed', reason: null, threadIds: ['t-line', 't-pr'] }, THREADS, t),
         ).toEqual([
             { id: 't-line', label: 'thread at line 33' },
             { id: 't-pr', label: 'thread on the PR' },
@@ -48,11 +51,11 @@ describe('links to threads that caused the change', () => {
 
     it('creates no link for an unknown id', () => {
         expect(
-            stopChangeThreads({ kind: 'changed', reason: null, threadIds: ['t-line', 'no-such-thread'] }, THREADS),
+            stopChangeThreads({ kind: 'changed', reason: null, threadIds: ['t-line', 'no-such-thread'] }, THREADS, t),
         ).toEqual([{ id: 't-line', label: 'thread at line 33' }]);
     });
 
     it('has no links for an unclassified stop', () => {
-        expect(stopChangeThreads(null, THREADS)).toEqual([]);
+        expect(stopChangeThreads(null, THREADS, t)).toEqual([]);
     });
 });

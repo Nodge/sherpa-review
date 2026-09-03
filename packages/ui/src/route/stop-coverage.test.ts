@@ -19,6 +19,7 @@ function file(fileId: string): FileDiff {
         patch: null,
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
     };
 }
 
@@ -113,7 +114,6 @@ describe('stop coverage by file progress', () => {
             total: 40,
             pinned: true,
             generatedDefault: false,
-            tooltip: 'read',
         };
 
         expect(stopCoveredByProgress(target, snapshot([], [['a', pinned]]))).toBe(true);
@@ -127,7 +127,6 @@ describe('stop coverage by file progress', () => {
             total: 40,
             pinned: true,
             generatedDefault: true,
-            tooltip: 'generated file — read by default',
         };
 
         expect(stopCoveredByProgress(target, snapshot([], [['generated', generatedDefault]]))).toBe(false);

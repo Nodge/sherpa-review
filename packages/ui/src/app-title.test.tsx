@@ -47,6 +47,8 @@ function uiState(pr: PrMeta | null): UiState {
         pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
         iterations: [],
+        update: null,
+        generationCap: null,
     };
 }
 

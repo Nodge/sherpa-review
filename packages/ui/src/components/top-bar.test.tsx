@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { agentPillView } from './agent-pill-view.js';
 import { breadcrumbFor } from '../pr-key.js';
 import { AgentPill, TopBar } from './top-bar.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 const PR: PrMeta = {
     id: '4821',
@@ -26,7 +29,7 @@ function topBar(pr: typeof PR | null): string {
         <TopBar
             version="0.0.0"
             breadcrumb={breadcrumbFor('github-quillmart--quillmart--4821', pr)}
-            agent={agentPillView({ kind: 'never' }, [])}
+            agent={agentPillView({ kind: 'never' }, [], t)}
             reconnectCommand="/sherpa github-quillmart--quillmart--4821"
             chatOpen={false}
             onToggleChat={() => undefined}
@@ -82,7 +85,7 @@ describe('agent pill popover', () => {
     it('opens the reconnect command for never with the disconnected tone', () => {
         const html = renderToStaticMarkup(
             <AgentPill
-                view={agentPillView({ kind: 'never' }, [])}
+                view={agentPillView({ kind: 'never' }, [], t)}
                 reconnectCommand="/sherpa fixture-medium"
                 defaultOpen
             />,
@@ -96,7 +99,7 @@ describe('agent pill popover', () => {
     it('keeps the removed banner wording: the reader works in full (decision #32)', () => {
         const html = renderToStaticMarkup(
             <AgentPill
-                view={agentPillView({ kind: 'never' }, [])}
+                view={agentPillView({ kind: 'never' }, [], t)}
                 reconnectCommand="/sherpa fixture-medium"
                 defaultOpen
             />,
@@ -118,8 +121,7 @@ describe('agent pill popover', () => {
                         registeredAt: '2026-08-24T10:30:00.000Z',
                         lastSeenAt: '2026-08-24T11:59:00.000Z',
                     },
-                    [],
-                )}
+                    [], t)}
                 reconnectCommand="/sherpa fixture-medium"
                 defaultOpen
             />,

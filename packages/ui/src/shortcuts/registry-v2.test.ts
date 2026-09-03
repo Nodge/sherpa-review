@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createT } from '../i18n/index.js';
 import type { Shortcut, ShortcutEvent, ShortcutRegistry } from './registry.js';
 import { createShortcutRegistry, formatKeys } from './registry.js';
 
@@ -22,7 +23,8 @@ function keydown(key: string, extra: Partial<ShortcutEvent> = {}): ShortcutEvent
 }
 
 function shortcut(overrides: Partial<Shortcut> & Pick<Shortcut, 'id' | 'keys' | 'action'>): Shortcut {
-    return { label: `command ${overrides.id}`, scope: 'global', section: 'navigation', ...overrides };
+    // The label is a dictionary key. The registry only cares about its type.
+    return { label: 'shortcut.palette.open', scope: 'global', section: 'navigation', ...overrides };
 }
 
 /** Registry with a manual chord timer: the test does not wait a real second. */
@@ -303,10 +305,14 @@ describe('Esc priority', () => {
 });
 
 describe('formatKeys', () => {
-    it('renders modifiers as symbols and a chord with the word "then"', () => {
-        expect(formatKeys(['mod+k'])).toBe('⌘K');
-        expect(formatKeys(['mod+shift+enter'])).toBe('⌘⇧ENTER');
-        expect(formatKeys(['1', 'g o'])).toBe('1 / G then O');
-        expect(formatKeys([])).toBeNull();
+    const ru = createT('ru');
+    const en = createT('en');
+
+    it('renders modifiers as symbols and joins chord keys with a dictionary word', () => {
+        expect(formatKeys(['mod+k'], ru)).toBe('⌘K');
+        expect(formatKeys(['mod+shift+enter'], ru)).toBe('⌘⇧ENTER');
+        expect(formatKeys(['1', 'g o'], ru)).toBe('1 / G then O');
+        expect(formatKeys(['g o'], en)).toBe('G then O');
+        expect(formatKeys([], ru)).toBeNull();
     });
 });

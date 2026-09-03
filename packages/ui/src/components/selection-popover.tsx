@@ -5,9 +5,9 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFileModel } from '../diff/model.js';
 import type { LineSelection } from '../diff-view/selection.js';
 import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
+import { useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { selectionLinkHash } from '../selection-link.js';
-import { formatCount, plural } from '../text.js';
 import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
 import './selection-popover.css';
 
@@ -112,6 +112,7 @@ export function chatAnchorFromSelection(
 }
 
 export function SelectionPopover(props: SelectionPopoverProps) {
+    const t = useT();
     const {
         diffId,
         file,
@@ -274,13 +275,13 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     const copyLink = (): void => {
         const clipboard = (navigator as unknown as { readonly clipboard?: Pick<Clipboard, 'writeText'> }).clipboard;
         if (clipboard === undefined) {
-            setError('The clipboard is unavailable.');
+            setError(t('selection.clipboardUnavailable'));
             return;
         }
         const url = new URL(window.location.href);
         url.hash = selectionLinkHash(url.hash, anchor);
         void clipboard.writeText(url.toString()).catch(() => {
-            setError('Could not copy the link.');
+            setError(t('selection.copyFailed'));
         });
     };
     const style =
@@ -291,14 +292,16 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     if (mode === 'sent') {
         return (
             <div className="selection-popover selection-popover--chip" ref={popoverRef} style={style} role="status">
-                asked · the answer will land here
+                {t('chat.ask.asked')}
             </div>
         );
     }
 
-    const countLabel = `${formatCount(count)} ${plural(count, 'line selected', 'lines selected', 'lines selected')}`;
+    const countLabel = t('selection.count', count);
     const askDisabled = askDisabledReason !== null || selectionAskDisabled(agentConnected);
-    const askTitle = askDisabledReason ?? (selectionAskDisabled(agentConnected) ? ASK_SELECTION_DISABLED_TITLE : undefined);
+    const askTitle =
+        askDisabledReason ??
+        (selectionAskDisabled(agentConnected) ? t(ASK_SELECTION_DISABLED_TITLE) : undefined);
     return (
         <div className="selection-popover" ref={popoverRef} style={style} data-placement={position?.placement}>
             <div className="selection-popover__row">
@@ -313,7 +316,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                         onAsk(anchor);
                     }}
                 >
-                    Ask the agent
+                    {t('selection.ask')}
                 </button>
                 <button
                     type="button"
@@ -324,10 +327,10 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                         onComment(anchor.side, anchor.start);
                     }}
                 >
-                    Comment
+                    {t('selection.comment')}
                 </button>
                 <button type="button" className="selection-popover__button" onClick={copyLink}>
-                    Copy link
+                    {t('selection.copyLink')}
                 </button>
             </div>
             {error === null ? null : (

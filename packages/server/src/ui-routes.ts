@@ -298,6 +298,9 @@ function buildState(options: UiRoutesOptions): UiState {
         pr: options.prMeta.get(),
         feedback: options.feedback,
         iterations: options.iterationFeed?.iterations() ?? [],
+        // Filled by M5-T9 and M5-T14.
+        update: null,
+        generationCap: null,
     };
 }
 

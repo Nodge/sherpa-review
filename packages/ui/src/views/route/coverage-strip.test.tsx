@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
 import type { RouteTotals } from '../../route/route-model.js';
 import { CoverageStrip } from './coverage-strip.tsx';
+import { createT } from '../../i18n/index.js';
+
+const t = createT('en');
 
 /** Coverage strip as the reviewer sees it: widths, a 3px minimum, legend and loading state. */
 
@@ -30,8 +33,7 @@ describe('coverage strip', () => {
         const html = render(
             buildCoverageStrip({
                 totals: totals({ changed: 200, uncovered: 6, byTier: { high: 194, medium: 0, low: 0, other: 6 } }),
-                entries: [],
-            }),
+                entries: [], t,}),
         );
 
         expect(html).toContain('flex-grow:0.97');
@@ -40,7 +42,7 @@ describe('coverage strip', () => {
     });
 
     it('has no hatch or third clause when 100% is explained', () => {
-        const html = render(buildCoverageStrip({ totals: totals({}), entries: [] }), { viewed: 3, total: 7 });
+        const html = render(buildCoverageStrip({ totals: totals({}), entries: [], t}), { viewed: 3, total: 7 });
 
         expect(html).toContain('100% explained');
         expect(html).not.toContain('not explained');

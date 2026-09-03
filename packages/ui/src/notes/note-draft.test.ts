@@ -5,7 +5,10 @@ import { parseFileDiff } from '../diff/parse.js';
 import { createThreadStore } from '../threads/store.js';
 import { openNewComposer } from '../threads/thread-list.tsx';
 import { commentPosition } from '../views/full-diff.tsx';
+import { createT } from '../i18n/index.js';
 import { noteCommentPosition, noteComposerAnchor, noteComposerKey, noteDraftText } from './note-draft.js';
+
+const t = createT('en');
 
 const MODEL = parseFileDiff({
     fileId: 'f1',
@@ -40,13 +43,13 @@ function note(text: string, start = 41, end = 43, side: 'old' | 'new' = 'new'): 
 
 describe('draft text from a note', () => {
     it('quotes a single-line note on one line below the attribution', () => {
-        expect(noteDraftText(note('The cache returns immediately.'))).toBe(
+        expect(noteDraftText(note('The cache returns immediately.'), t)).toBe(
             ['Quoted from the agent’s answer:', '', '> The cache returns immediately.'].join('\n'),
         );
     });
 
     it('quotes blank lines inside the text as empty blockquote lines', () => {
-        expect(noteDraftText(note('First line\n\nAfter a blank line\n- item'))).toBe(
+        expect(noteDraftText(note('First line\n\nAfter a blank line\n- item'), t)).toBe(
             [
                 'Quoted from the agent’s answer:',
                 '',
@@ -59,7 +62,7 @@ describe('draft text from a note', () => {
     });
 
     it('trims trailing blank lines from a note', () => {
-        expect(noteDraftText(note('The only line\n\n   \n\n'))).toBe(
+        expect(noteDraftText(note('The only line\n\n   \n\n'), t)).toBe(
             ['Quoted from the agent’s answer:', '', '> The only line'].join('\n'),
         );
     });

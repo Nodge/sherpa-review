@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
 
 import { ToolbarRightCluster } from '../../components/toolbar-controls.tsx';
+import type { MessageKey } from '../../i18n/index.js';
+import { useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import type { FileFilter } from '../../filters/lens-filters.js';
@@ -16,18 +18,18 @@ import type { ThreadSourceCounts } from '../../threads/model.js';
  * The view assembles it and passes it here ready to render.
  */
 
-export const TRIAGE_HINT = 'The most important first — stop when you have seen enough.';
-export const TOUR_HINT = 'Reading order: entry point → definitions → consequences → verification.';
+export const TRIAGE_HINT: MessageKey = 'route.preset.triage.hint';
+export const TOUR_HINT: MessageKey = 'route.preset.tour.hint';
 
 /** SPEC §2.5: the toggle is disabled until a route exists and explains why (`title`). */
-export const PRESET_DISABLED_TITLE = 'available once the route is built';
+export const PRESET_DISABLED_TITLE: MessageKey = 'route.preset.disabled';
 
 /** "What is new" filter chip (README §9), dismissible with a close button. */
-export const CHANGE_CHIP_LABEL = 'Showing changes since the previous pass';
+export const CHANGE_CHIP_LABEL: MessageKey = 'route.changeChip';
 
-const PRESETS: readonly { readonly id: RoutePreset; readonly label: string; readonly hint: string }[] = [
-    { id: 'triage', label: 'Triage', hint: TRIAGE_HINT },
-    { id: 'tour', label: 'Full tour', hint: TOUR_HINT },
+const PRESETS: readonly { readonly id: RoutePreset; readonly label: MessageKey; readonly hint: MessageKey }[] = [
+    { id: 'triage', label: 'route.preset.triage', hint: TRIAGE_HINT },
+    { id: 'tour', label: 'route.preset.tour', hint: TOUR_HINT },
 ];
 
 export interface RouteToolbarProps {
@@ -70,6 +72,7 @@ export function RouteToolbar({
     strip,
     onHeight,
 }: RouteToolbarProps) {
+    const t = useT();
     const ref = useRef<HTMLDivElement | null>(null);
 
     // Measure before painting: otherwise the first frame uses the fallback height from route.css.
@@ -93,7 +96,7 @@ export function RouteToolbar({
     return (
         <div className="route-toolbar" ref={ref}>
             <div className="route-toolbar__row">
-                <div className="route-preset" role="group" aria-label="Route preset">
+                <div className="route-preset" role="group" aria-label={t('route.preset.aria')}>
                     {PRESETS.map((option) => (
                         <button
                             key={option.id}
@@ -101,17 +104,17 @@ export function RouteToolbar({
                             className={`route-preset__option${option.id === preset ? ' is-active' : ''}`}
                             aria-pressed={option.id === preset}
                             disabled={presetDisabled}
-                            {...(presetDisabled ? { title: PRESET_DISABLED_TITLE } : {})}
+                            {...(presetDisabled ? { title: t(PRESET_DISABLED_TITLE) } : {})}
                             onClick={() => {
                                 onPreset(option.id);
                             }}
                         >
-                            {option.label}
+                            {t(option.label)}
                         </button>
                     ))}
                 </div>
                 <span className="route-toolbar__hint">
-                    {PRESETS.find((option) => option.id === preset)?.hint ?? TRIAGE_HINT}
+                    {t(PRESETS.find((option) => option.id === preset)?.hint ?? TRIAGE_HINT)}
                 </span>
                 <span className="route-toolbar__spacer" />
                 <ToolbarRightCluster
@@ -130,10 +133,10 @@ export function RouteToolbar({
                     <button
                         type="button"
                         className="route-change-chip"
-                        title="Show the entire route"
+                        title={t('route.showWhole')}
                         onClick={onClearChangeFilter}
                     >
-                        {CHANGE_CHIP_LABEL}
+                        {t(CHANGE_CHIP_LABEL)}
                         <Icon name="cross" size={9} />
                     </button>
                 </div>

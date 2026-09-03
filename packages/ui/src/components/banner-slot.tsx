@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
-import { plural } from '../text.js';
+import { useT } from '../i18n/index.js';
 import './banner-slot.css';
 
 /**
@@ -53,6 +53,7 @@ export function selectBanners(sources: readonly BannerSource[]): BannerSelection
 }
 
 export function BannerSlot({ sources }: { sources: readonly BannerSource[] }) {
+    const t = useT();
     const selection = useMemo(() => selectBanners(sources), [sources]);
     const active = selection.primary === null ? [] : [selection.primary, ...selection.hidden];
     const activeKey = active.map((source) => source.id).join('\u0000');
@@ -66,7 +67,7 @@ export function BannerSlot({ sources }: { sources: readonly BannerSource[] }) {
     const hidden = active.slice(1);
 
     return (
-        <section className="banner-slot" aria-label="Review status notices">
+        <section className="banner-slot" aria-label={t('banner.slot')}>
             <div className="banner-slot__item">{primary.render()}</div>
             {hidden.length === 0 ? null : (
                 <>
@@ -78,7 +79,7 @@ export function BannerSlot({ sources }: { sources: readonly BannerSource[] }) {
                             setExpandedKey(expanded ? null : activeKey);
                         }}
                     >
-                        +{hidden.length} {plural(hidden.length, 'notice', 'notices', 'notices')}
+                        {t('banner.slot.more', hidden.length)}
                     </button>
                     {expanded
                         ? hidden.map((source) => (

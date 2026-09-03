@@ -397,13 +397,36 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
+        // File path alongside `fileId` in progress records (M5-T20). The review host's `fileId` is an
+        // opaque id, so records from two iterations can only be matched through a path.
+        // The path came from the saved source iteration patch, but iterations recorded by server
+        // 0.3.x have no patch and never will. Carryover silently returned zero.
+        //
+        // No backfill for the same reason: there is nothing to resolve old `fileId` values against. The carryover
+        // resolver handles them through fallbacks (source patch, snapshot and note anchors). New
+        // records contain the path and no longer depend on retaining the patch.
+        name: '016-progress-paths',
+        sql: `
+            ALTER TABLE file_seen_ranges ADD COLUMN path TEXT;
+            ALTER TABLE file_progress ADD COLUMN path TEXT;
+        `,
+    },
+    {
+        // The language the agent speaks with the reviewer (M5-T2): a third session label beside the harness
+        // and model. The UI uses it as a hint in locale selection, not an instruction.
+        name: '017-worker-lang',
+        sql: `
+            ALTER TABLE worker ADD COLUMN lang TEXT;
+        `,
+    },
+    {
         // Draft buffer (M5-T15, requirements §6 "drafts are never lost"): text the server
         // accepted but has not delivered to the host. `id` is the composer's `clientKey`, so repeating the same
         // write upserts the row instead of adding another. `idempotency_key` is created with the
         // row and survives every attempt. If the host has already accepted the write, retrying with the same
         // key creates no duplicate. `draft_json` is a `commentDraftSchema` blob, like a route snapshot:
         // the contract describes its shape, so there is no need to duplicate it in columns.
-        name: '016-draft-buffer',
+        name: '018-draft-buffer',
         sql: `
             CREATE TABLE draft_buffer (
                 id TEXT PRIMARY KEY,
@@ -423,7 +446,7 @@ export const MIGRATIONS: readonly Migration[] = [
         // and the pair survives deletion of the buffer row. Without it, another write with the same key would reach
         // the host as a create operation. The idempotency key would return the existing comment with
         // its old text, silently losing the new text (the server would consider the write saved).
-        name: '017-draft-buffer-saved',
+        name: '019-draft-buffer-saved',
         sql: `
             CREATE TABLE draft_buffer_saved (
                 id TEXT PRIMARY KEY,

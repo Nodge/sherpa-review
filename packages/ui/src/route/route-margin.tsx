@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 
 import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../components/chat-prompts.js';
 import type { DiffFileModel } from '../diff/model.js';
+import { useT } from '../i18n/index.js';
 import { modelHasPosition } from '../threads/card-threads.tsx';
 import type { AnchorSpan } from './anchor-clip.js';
 import type { RouteMarginFile } from './margin-model.js';
@@ -36,13 +37,14 @@ export interface RouteBadgeProps {
 }
 
 export function RouteBadge({ file, otherStopId, variant, onJump }: RouteBadgeProps) {
+    const t = useT();
     if (!marginBadgeShown(file)) {
         return null;
     }
     const target = marginTargetStopId(file, otherStopId);
     const jump = target === null ? undefined : onJump;
-    const title = marginBadgeTitle(file, jump !== undefined);
-    const label = variant === 'tree' ? treeBadgeLabel(file) : marginBadgeLabel(file);
+    const title = marginBadgeTitle(file, jump !== undefined, t);
+    const label = variant === 'tree' ? treeBadgeLabel(file, t) : marginBadgeLabel(file, t);
     // Hatching adds more than colour: the badge also says in text that there is no stop.
     const className = `route-badge route-badge--${variant}${file.stops.length === 0 ? ' route-badge--hatched' : ''}`;
 
@@ -114,6 +116,7 @@ export function useMarginStrips({
     file = null,
     actions = null,
 }: MarginStripsInput): MarginStrips {
+    const t = useT();
     const layout = useMemo(() => {
         const byLine = new Map<string, AnchorSpan>();
         const orphans: AnchorSpan[] = [];
@@ -136,19 +139,19 @@ export function useMarginStrips({
             const anchor = file === null ? null : { fileId: file.fileId, path: file.path, ...span };
             return (
                 <RouteStrip
-                    text={marginStripText(span)}
+                    text={marginStripText(span, t)}
                     {...(anchor === null || actions === null ? {} : { anchor, actions })}
                 />
             );
         },
-        [actions, file, layout.byLine],
+        [actions, file, layout.byLine, t],
     );
 
     // The header summary combines multiple ranges, but a question has one anchor, so there is no button here.
     // References stay stable. The card is memoized, and a new node on each render would defeat memo.
     const underHeader = useMemo(
-        () => (layout.orphans.length === 0 ? null : <RouteStrip text={marginStripSummary(layout.orphans)} />),
-        [layout.orphans],
+        () => (layout.orphans.length === 0 ? null : <RouteStrip text={marginStripSummary(layout.orphans, t)} />),
+        [layout.orphans, t],
     );
 
     return useMemo(() => ({ underHeader, renderAfterLine }), [renderAfterLine, underHeader]);
@@ -163,24 +166,25 @@ function RouteStrip({
     readonly anchor?: UiChatAskAnchor;
     readonly actions?: MarginStripActions;
 }) {
+    const t = useT();
     return (
         <div className="route-strip">
             <span className="route-strip__text">{text}</span>
             {anchor === undefined || actions === undefined ? null : actions.isPending(anchor) ? (
                 <span className="route-strip__chip" role="status">
-                    asked · the answer will land here
+                    {t('margin.ask.asked')}
                 </span>
             ) : (
                 <button
                     type="button"
                     className="route-strip__action"
                     disabled={!actions.agentConnected}
-                    title={actions.agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE}
+                    title={t(actions.agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE)}
                     onClick={() => {
                         actions.onAskToPlace(anchor);
                     }}
                 >
-                    Ask the agent to place
+                    {t('margin.ask.place')}
                 </button>
             )}
         </div>

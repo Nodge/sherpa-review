@@ -8,6 +8,9 @@ import { createDiffViewStore } from '../../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../../filters/lens-filters.js';
 import { DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
 import { RouteToolbar } from './route-toolbar.tsx';
+import { createT } from '../../i18n/index.js';
+
+const t = createT('en');
 
 /**
  * The toolbar measures its own height (#38). The view uses it for the sticky offset of the stops column.
@@ -63,8 +66,7 @@ function mount(onHeight: (value: number) => void): void {
     const filters = buildFileFilters({
         files: DATA.diff.files,
         ownership: DATA.ownership,
-        extra: DATA.extraLenses,
-    });
+        extra: DATA.extraLenses, t,});
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);

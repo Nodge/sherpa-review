@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import './filter-select.css';
@@ -21,6 +22,7 @@ export interface FilterSelectProps {
 }
 
 export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const [cursor, setCursor] = useState(0);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -116,7 +118,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
                     role="listbox"
                     ref={listRef}
                     tabIndex={-1}
-                    aria-label="File filter"
+                    aria-label={t('tree.filter.placeholder')}
                     aria-activedescendant={`${listId}-${String(cursor)}`}
                     onKeyDown={(event) => {
                         if (event.key === 'ArrowDown') {
@@ -140,7 +142,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
                             role="option"
                             aria-selected={filter.id === active.id}
                             aria-disabled={!filter.available}
-                            title={filter.available ? undefined : (filter.note ?? 'filter unavailable')}
+                            title={filter.available ? undefined : (filter.note ?? t('tree.filter.unavailable'))}
                             className={`filter-select__option${index === cursor ? ' is-cursor' : ''}`}
                             onMouseEnter={() => {
                                 setCursor(index);

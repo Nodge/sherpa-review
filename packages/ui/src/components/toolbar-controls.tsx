@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 
 import type { DiffViewStore } from '../diff-view/store.js';
 import type { FileFilter } from '../filters/lens-filters.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { ThreadsShow } from '../session/session-store.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
@@ -26,12 +27,13 @@ export function ToolbarRightCluster({
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
 }) {
+    const t = useT();
     return (
         <div className="toolbar-right-cluster">
             <DiffModeToggle store={store} />
             <FilterSelect filters={filters} active={filter} onSelect={onFilter} />
             <span className="toolbar-right-cluster__divider" aria-hidden="true" />
-            <span className="toolbar-right-cluster__label">Comments:</span>
+            <span className="toolbar-right-cluster__label">{t('toolbar.comments')}</span>
             <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
         </div>
     );
@@ -39,6 +41,7 @@ export function ToolbarRightCluster({
 
 /** Diff mode toggle, "deliberately quiet" (README §1) and global across views (SPEC §2.6). */
 export function DiffModeToggle({ store }: { store: DiffViewStore }) {
+    const t = useT();
     const { diffMode, splitAvailable, effectiveMode } = useSyncExternalStore(
         store.subscribe,
         store.getSnapshot,
@@ -52,13 +55,13 @@ export function DiffModeToggle({ store }: { store: DiffViewStore }) {
             type="button"
             className="diff-mode-toggle"
             disabled={!splitAvailable}
-            title={splitAvailable ? undefined : 'not enough width for two columns'}
+            title={splitAvailable ? undefined : t('toolbar.splitUnavailable')}
             onClick={() => {
                 store.setDiffMode(diffMode === 'unified' ? 'split' : 'unified');
             }}
         >
             <Icon name="swap" size={14} />
-            {effectiveMode === 'unified' ? 'unified' : 'side by side'}
+            {effectiveMode === 'unified' ? t('toolbar.mode.unified') : t('toolbar.mode.split')}
         </button>
     );
 }
@@ -76,12 +79,13 @@ export function CommentSources({
     counts: ThreadSourceCounts;
     onChange: (show: ThreadsShow) => void;
 }) {
+    const t = useT();
     const [hiddenBackup, setHiddenBackup] = useState<ThreadsShow | null>(null);
 
     if (!show.people && !show.bots && !show.resolved) {
         return (
             <span className="thread-chips-hidden">
-                Comments hidden ·{' '}
+                {t('toolbar.commentsHidden')}{' '}
                 <button
                     type="button"
                     onClick={() => {
@@ -89,7 +93,7 @@ export function CommentSources({
                         setHiddenBackup(null);
                     }}
                 >
-                    undo
+                    {t('toolbar.undo')}
                 </button>
             </span>
         );
@@ -118,13 +122,14 @@ function CommentSourceChips({
     counts: ThreadSourceCounts;
     onChange: (show: ThreadsShow) => void;
 }) {
+    const t = useT();
     const chips = [
-        { id: 'people' as const, label: 'People' },
-        { id: 'bots' as const, label: 'Bots' },
+        { id: 'people' as const, label: t('toolbar.chip.people') },
+        { id: 'bots' as const, label: t('toolbar.chip.bots') },
         { id: 'resolved' as const, label: 'Resolved' },
     ];
     return (
-        <span className="thread-chips" aria-label="Comment sources">
+        <span className="thread-chips" aria-label={t('toolbar.chips.aria')}>
             {chips.map((chip) => {
                 const count = counts[chip.id];
                 return (
@@ -134,7 +139,7 @@ function CommentSourceChips({
                         className={`thread-chip${show[chip.id] ? ' is-on' : ''}`}
                         aria-pressed={show[chip.id]}
                         disabled={count === 0}
-                        title={count === 0 ? `This PR has no threads in the "${chip.label}" category` : undefined}
+                        title={count === 0 ? t('toolbar.chip.empty', chip.label) : undefined}
                         onClick={() => {
                             onChange({ ...show, [chip.id]: !show[chip.id] });
                         }}

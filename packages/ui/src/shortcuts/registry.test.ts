@@ -17,7 +17,8 @@ function keydown(key: string, extra: Partial<ShortcutEvent> = {}): ShortcutEvent
 }
 
 function shortcut(overrides: Partial<Shortcut> & Pick<Shortcut, 'id' | 'keys' | 'action'>): Shortcut {
-    return { label: `command ${overrides.id}`, scope: 'global', section: 'navigation', ...overrides };
+    // The label is a dictionary key. The registry only cares about its type. The palette checks its content.
+    return { label: 'shortcut.palette.open', scope: 'global', section: 'navigation', ...overrides };
 }
 
 describe('shortcut registry', () => {

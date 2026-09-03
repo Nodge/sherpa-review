@@ -1,14 +1,14 @@
 import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 
 import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
-import { tsLines } from '../content.js';
-import { makeFileDiff } from '../patch.js';
+import type { SyntheticParams } from './synthetic.js';
+import { modulePathOf, synthesizeFiles } from './synthetic.js';
 import type { FixtureData } from './types.js';
 
 /**
  * Large PR for virtualization (SPEC §8 item 8: 60+ files at 60fps) and performance runs (requirements §7).
- * Content is computed from the file index, without storing megabytes in the repository,
- * and the result is byte-for-byte identical across runs.
+ * Built with the shared `synthesizeFiles` generator: content comes from the file index.
+ * No megabytes in the repository, but the result is identical byte for byte across runs.
  */
 
 const PR_ID = '5310';
@@ -18,71 +18,38 @@ const MODULES = 16;
 const FILES_PER_MODULE = 4;
 export const LARGE_FILE_COUNT = MODULES * FILES_PER_MODULE;
 
+const ROOT = 'services/orders/src/modules';
 const FILE_KINDS = ['service.ts', 'repository.ts', 'mapper.ts', 'index.test.ts'] as const;
 
 function modulePath(moduleIndex: number): string {
-    return `services/orders/src/modules/mod-${String(moduleIndex + 1).padStart(2, '0')}`;
+    return modulePathOf(ROOT, moduleIndex);
 }
 
 /** File with long lines for the gallery and browser checks of line wrapping. */
 export const LONG_LINE_FILE_PATH = `${modulePath(0)}/repository.ts`;
-/** Unique part of a long URL that lets the test find the line after patch parsing. */
-export const LONG_LINE_MARKER = 'wrap-fixture.invalid';
+export { LONG_LINE_MARKER } from './synthetic.js';
 const LONG_LINE_FILE_INDEX = 1;
 
-/** Every eighth file is generated, so generated folding has data to test. */
-function isGenerated(index: number): boolean {
-    return index % 8 === 7;
-}
-
-function fileAt(index: number): FileDiff {
-    const moduleIndex = Math.floor(index / FILES_PER_MODULE);
-    const kind = FILE_KINDS[index % FILES_PER_MODULE] ?? 'service.ts';
-    const generated = isGenerated(index);
-    const path = generated
-        ? `${modulePath(moduleIndex)}/generated/${kind}`
-        : `${modulePath(moduleIndex)}/${kind}`;
-
+const PARAMS: SyntheticParams = {
+    diffId: DIFF_ID,
+    root: ROOT,
+    modules: MODULES,
+    filesPerModule: FILES_PER_MODULE,
+    fileKinds: FILE_KINDS,
+    // Every eighth file is generated, to provide files for checking generated folds.
+    generatedAt: (index) => index % 8 === 7,
     // The first file in each module is new, the others are modified, giving a mix of add/modify.
-    const changeType = index % FILES_PER_MODULE === 0 ? 'add' : 'modify';
-    const additions = 24 + (index % 17);
-    const deletions = changeType === 'add' ? 0 : 4 + (index % 9);
-    const context = 3;
-
-    if (changeType === 'add') {
-        return makeFileDiff(DIFF_ID, {
-            path,
-            changeType,
-            generated,
-            hunks: [{ oldStart: 0, newStart: 1, lines: tsLines('+', additions, index) }],
-        });
-    }
-
-    const deletedLines = tsLines('-', deletions, index + 5);
-    const addedLines = tsLines('+', additions, index + 11);
-    if (index === LONG_LINE_FILE_INDEX) {
-        deletedLines[0] = `-    const endpoint = "https://${LONG_LINE_MARKER}/payload/${'b'.repeat(600)}/orders";`;
-        addedLines[0] = `+    const endpoint = "https://${LONG_LINE_MARKER}/payload/${'a'.repeat(600)}/orders";`;
-        addedLines[deletions] = `+    const minifiedPayload = "${'eyJrZXkiOiJ2YWx1ZSIsImZsYWciOnRydWV9'.repeat(35)}";`;
-        addedLines[deletions + 1] = `+\t\tconst tabbedTail = "${'tabbed-tail-'.repeat(100)}";`;
-        addedLines[deletions + 2] = `+    const trailingWhitespace = "${'tail-'.repeat(180)}";   `;
-    }
-
-    return makeFileDiff(DIFF_ID, {
-        path,
-        changeType,
-        generated,
-        viewed: index % 5 === 0,
-        hunks: [
-            {
-                oldStart: 12,
-                newStart: 12,
-                section: `export class Module${String(moduleIndex + 1)}`,
-                lines: [...tsLines(' ', context, index + 1), ...deletedLines, ...addedLines],
-            },
-        ],
-    });
-}
+    changeTypeAt: (index) => (index % FILES_PER_MODULE === 0 ? 'add' : 'modify'),
+    sizeAt: (index) => ({
+        additions: 24 + (index % 17),
+        deletions: index % FILES_PER_MODULE === 0 ? 0 : 4 + (index % 9),
+        hunks: 1,
+    }),
+    context: 3,
+    viewedAt: (index, changeType) => changeType === 'modify' && index % 5 === 0,
+    longLinesAt: (index) => index === LONG_LINE_FILE_INDEX,
+    sectionAt: (moduleIndex) => `export class Module${String(moduleIndex + 1)}`,
+};
 
 function threads(): Thread[] {
     const reviewer = human('alice', 'Alice Ingram');
@@ -130,10 +97,7 @@ function threads(): Thread[] {
 }
 
 export function makeLargeFixture(): FixtureData {
-    const files: FileDiff[] = [];
-    for (let index = 0; index < LARGE_FILE_COUNT; index += 1) {
-        files.push(fileAt(index));
-    }
+    const files: FileDiff[] = synthesizeFiles(PARAMS).map((entry) => entry.file);
 
     const reviewer = human('alice', 'Alice Ingram');
     const zones: LensZone[] = Array.from({ length: MODULES }, (_, moduleIndex) => {

@@ -1,11 +1,11 @@
 import type { HostId, RouteCarried, RouteSnapshot, RouteStop, UiRouteStale, UiRouteState } from '@sherpa/protocol';
 
+import type { Translate } from '../../i18n/index.js';
+import { relativeTime, shortCommit, useLocale, useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { ViewingLabel } from '../../iterations/viewing.js';
 import { planLabel } from '../../route/route-model.js';
 import type { ViewId } from '../../session/views.js';
-import { formatCount, plural } from '../../text.js';
-import { relativeTime } from '../../threads/relative-time.js';
 import './iteration-banners.css';
 
 /**
@@ -17,17 +17,12 @@ import './iteration-banners.css';
  * button. The second pass banner describes a filter and can be dismissed.
  */
 
-/** First 7 hex digits of the commit. `title` holds the full hash so the reviewer can compare it with the host. */
-function shortCommit(commit: string): string {
-    return commit.slice(0, 7);
-}
-
 /** "02, 03 and 07" lists stop numbers in the banner text. */
-function enumerate(items: readonly string[]): string {
+function enumerate(items: readonly string[], t: Translate): string {
     if (items.length <= 1) {
         return items.join('');
     }
-    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`;
+    return t('iteration.stops.enumerate', items.slice(0, -1).join(', '), items[items.length - 1] ?? '');
 }
 
 /**
@@ -110,21 +105,19 @@ export interface NotesLostBannerProps {
  * has a dismiss button because this is a one-time notice the reviewer may close (SPEC §2.21).
  */
 export function NotesLostBanner({ count, onShow, onDismiss }: NotesLostBannerProps) {
+    const t = useT();
     return (
-        <div className="iteration-banner" role="status" aria-label="Notes lost their anchor">
+        <div className="iteration-banner" role="status" aria-label={t('iteration.notesLost.aria')}>
             <div className="iteration-banner__body">
-                <div className="iteration-banner__line">
-                    {formatCount(count)} {plural(count, 'note lost its', 'notes lost their', 'notes lost their')}{' '}
-                    anchor after the new push
-                </div>
+                <div className="iteration-banner__line">{t('iteration.notesLost.text', count)}</div>
             </div>
             <button type="button" className="iteration-banner__action" onClick={onShow}>
-                View
+                {t('iteration.notesLost.show')}
             </button>
             <button
                 type="button"
                 className="iteration-banner__dismiss"
-                aria-label="Hide the lost-notes banner"
+                aria-label={t('iteration.notesLost.dismiss')}
                 onClick={onDismiss}
             >
                 <Icon name="cross" size={14} />
@@ -144,6 +137,7 @@ export interface RouteStaleBannerProps {
 }
 
 export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithoutRoute }: RouteStaleBannerProps) {
+    const t = useT();
     const byId = new Map(stops.map((stop) => [stop.id, stop]));
     const affected = stale.affectedStopIds
         .map((stopId) => byId.get(stopId))
@@ -152,24 +146,23 @@ export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithout
     const prCommit = shortCommit(stale.prCommit);
 
     return (
-        <div className="iteration-banner" role="status" aria-label="Route is stale">
+        <div className="iteration-banner" role="status" aria-label={t('iteration.stale.aria')}>
             <div className="iteration-banner__body">
                 <div className="iteration-banner__line">
-                    The route was built for{' '}
+                    {t('iteration.stale.builtFor')}
                     <code className="iteration-banner__commit" title={stale.routeCommit}>
                         {shortCommit(stale.routeCommit)}
                     </code>
-                    , the PR is already at{' '}
+                    {t('iteration.stale.prAt')}
                     <code className="iteration-banner__commit" title={stale.prCommit}>
                         {prCommit}
-                    </code>{' '}
-                    — {formatCount(stale.newIterations)}{' '}
-                    {plural(stale.newIterations, 'new iteration', 'new iterations', 'new iterations')}
-                    {affected.length === 0 ? '' : `; stops ${enumerate(affected)} are affected`}
+                    </code>
+                    {t('iteration.stale.newIterations', stale.newIterations)}
+                    {affected.length === 0 ? '' : t('iteration.stale.affected', enumerate(affected, t))}
                 </div>
             </div>
             <button type="button" className="iteration-banner__action" onClick={onRegenerate}>
-                Rebuild the route
+                {t('iteration.stale.regenerate')}
             </button>
             {onOpenDiffWithoutRoute === undefined ? null : (
                 <button
@@ -179,7 +172,7 @@ export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithout
                         onOpenDiffWithoutRoute(stale.prDiffId);
                     }}
                 >
-                    Open the {prCommit} diff without a route
+                    {t('iteration.stale.openDiff', prCommit)}
                 </button>
             )}
         </div>
@@ -201,43 +194,46 @@ export interface ReadOnlyIterationBannerProps {
  * The date uses the same relative time format as other timestamps in the UI.
  */
 export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent }: ReadOnlyIterationBannerProps) {
+    const t = useT();
+    const locale = useLocale();
     if (label.kind === 'slice') {
         return (
-            <div className="iteration-banner" role="status" aria-label="Read-only">
+            <div className="iteration-banner" role="status" aria-label={t('iteration.readOnly.aria')}>
                 <div className="iteration-banner__body">
                     <div className="iteration-banner__line">
-                        You are looking at the slice between iterations{' '}
+                        {t('iteration.slice.lead')}
                         <code className="iteration-banner__commit" title={label.baseCommit}>
                             {shortCommit(label.baseCommit)}
                         </code>{' '}
                         →{' '}
                         <code className="iteration-banner__commit" title={label.commit}>
                             {shortCommit(label.commit)}
-                        </code>{' '}
-                        · read-only
+                        </code>
+                        {t('iteration.readOnly.tail')}
                     </div>
                 </div>
                 <button type="button" className="iteration-banner__action" onClick={onCurrent}>
-                    To the active iteration
+                    {t('iteration.toActive')}
                 </button>
             </div>
         );
     }
-    const what = label.kind === 'snapshot' ? 'snapshot' : 'the previous iteration';
     return (
-        <div className="iteration-banner" role="status" aria-label="Read-only">
+        <div className="iteration-banner" role="status" aria-label={t('iteration.readOnly.aria')}>
             <div className="iteration-banner__body">
                 <div className="iteration-banner__line">
-                    You are looking at {what}{' '}
+                    {label.kind === 'snapshot' ? t('iteration.snapshot.lead') : t('iteration.previous.lead')}
                     <code className="iteration-banner__commit" title={label.commit}>
                         {shortCommit(label.commit)}
                     </code>
-                    {createdAt === null ? '' : ` from ${relativeTime(createdAt, now)}`} · read-only
-                    {gone ? ' · the commit is no longer in the PR' : ''}
+                    {/* Time is a separate segment after "·": the formatter can return "yesterday", which does not fit a preposition. */}
+                    {createdAt === null ? '' : ` · ${relativeTime(createdAt, now, locale)}`}
+                    {t('iteration.readOnly.tail')}
+                    {gone ? t('iteration.gone.tail') : ''}
                 </div>
             </div>
             <button type="button" className="iteration-banner__action" onClick={onCurrent}>
-                To the current one
+                {t('iteration.toCurrent')}
             </button>
         </div>
     );
@@ -260,45 +256,33 @@ export function RouteSecondPassBanner({
     onShowNew,
     onDismiss,
 }: RouteSecondPassBannerProps) {
+    const t = useT();
     return (
-        <div className="iteration-banner" role="status" aria-label="Route rebuilt">
+        <div className="iteration-banner" role="status" aria-label={t('iteration.secondPass.aria')}>
             <div className="iteration-banner__body">
                 <div className="iteration-banner__line">
-                    The route was rebuilt for{' '}
+                    {t('iteration.secondPass.lead')}
                     <code className="iteration-banner__commit" title={commit}>
                         {shortCommit(commit)}
                     </code>
                     .
                 </div>
                 <div className="iteration-banner__note">
-                    {/* The noun agrees with the denominator, the verb with the numerator. */}
-                    {carried === null
-                        ? ''
-                        : `Progress carried over: ${formatCount(carried.kept)} of ${formatCount(carried.total)} ${plural(
-                              carried.total,
-                              'stop',
-                              'stops',
-                              'stops',
-                          )} ${plural(
-                              carried.kept,
-                              'has not changed and remains viewed',
-                              'have not changed and remain viewed',
-                              'have not changed and remain viewed',
-                          )}. `}
+                    {carried === null ? '' : t('iteration.secondPass.carried', carried.kept, carried.total)}
                     {hasChanges
-                        ? 'Comments on changed ranges are pinned to the old commit'
-                        : 'No changes in the stops'}
+                        ? t('iteration.secondPass.hasChanges')
+                        : t('iteration.secondPass.noChanges')}
                 </div>
             </div>
             {hasChanges ? (
                 <button type="button" className="iteration-banner__action" onClick={onShowNew}>
-                    What is new since the last pass
+                    {t('iteration.secondPass.showNew')}
                 </button>
             ) : null}
             <button
                 type="button"
                 className="iteration-banner__dismiss"
-                aria-label="Hide the second-pass banner"
+                aria-label={t('iteration.secondPass.dismiss')}
                 onClick={onDismiss}
             >
                 <Icon name="cross" size={14} />

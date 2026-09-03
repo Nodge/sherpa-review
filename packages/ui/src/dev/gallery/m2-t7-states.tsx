@@ -2,6 +2,7 @@ import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures
 import type { RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
+import { useT } from '../../i18n/index.js';
 import type { ReviewCompletion } from '../../components/review-action-bar.tsx';
 import { ReviewComplete } from '../../components/review-complete.tsx';
 import { toParseRequest } from '../../diff/model.js';
@@ -41,6 +42,7 @@ function routeModel() {
 
 /** A bar with fixture counts, using the same input as the route view. */
 function StripState({ full = false, loading = false }: { full?: boolean; loading?: boolean }) {
+    const t = useT();
     const model = useMemo(() => {
         const built = routeModel();
         const totals = full
@@ -56,8 +58,8 @@ function StripState({ full = false, loading = false }: { full?: boolean; loading
                   },
               }
             : built.totals;
-        return buildCoverageStrip({ totals, entries: built.entries });
-    }, [full]);
+        return buildCoverageStrip({ totals, entries: built.entries, t });
+    }, [full, t]);
 
     return (
         <div className="gallery__viewport">

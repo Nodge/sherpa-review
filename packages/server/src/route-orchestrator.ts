@@ -76,7 +76,7 @@ const ROUTE_TASK_PREFIX = 'route.';
 const WARMUP_DELAY_MS = 200;
 
 /** The part of `ProgressStore` the orchestrator needs: carrying marks over to a new snapshot. */
-export type StopProgressCarry = Pick<ProgressStore, 'carryStopsInTransaction'>;
+export type StopProgressCarry = Pick<ProgressStore, 'carryStopsInTransaction' | 'carriedRangeCount'>;
 
 /**
  * Ongoing generation: its iteration and everything needed to carry progress over to its snapshot.
@@ -584,7 +584,8 @@ export class RouteOrchestrator {
                 carried.afterCommit();
                 process.stderr.write(
                     `sherpa-server: snapshot ${snapshot.snapshotId}: carried over ${String(kept)} of ` +
-                        `${String(total)} stops from ${previous.snapshotId}\n`,
+                        `${String(total)} stops from ${previous.snapshotId}` +
+                        `${zeroCarryReason(kept, progress, snapshot.diffId)}\n`,
                 );
             },
         };
@@ -1086,6 +1087,20 @@ function stopStatusOf(task: TaskRecord): RouteStopStatusUpdate {
     }
 }
 
+/**
+ * Why mark carryover yielded zero. "Carried over 0 of 8" reads as "everything changed", but
+ * there are two distinct reasons: no viewed ranges reached the iteration, or
+ * they arrived without covering a single stop (M5-T20).
+ */
+function zeroCarryReason(kept: number, progress: StopProgressCarry, diffId: HostId): string {
+    if (kept > 0) {
+        return '';
+    }
+    return progress.carriedRangeCount(diffId) === 0
+        ? ' — no viewed marks were carried over to the iteration'
+        : ' — the carried ranges do not cover any stops';
+}
+
 /** Generation failure reason for the red card in README §12, in one Russian sentence. */
 function skeletonFailureMessage(task: TaskRecord): string {
     const reason = (task.failReason ?? '').trim();
@@ -1095,8 +1110,9 @@ function skeletonFailureMessage(task: TaskRecord): string {
 }
 
 function provenanceOf(status: WorkerStatus): RouteProvenance {
+    // M5-T4 will set the generation language.
     if (status.kind === 'never') {
-        return { harness: null, model: null };
+        return { harness: null, model: null, locale: null };
     }
-    return { harness: status.harness ?? null, model: status.model ?? null };
+    return { harness: status.harness ?? null, model: status.model ?? null, locale: null };
 }

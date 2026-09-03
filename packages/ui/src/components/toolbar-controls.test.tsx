@@ -7,6 +7,9 @@ import { createDiffViewStore } from '../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { DEFAULT_THREADS_SHOW } from '../session/session-store.js';
 import { ToolbarRightCluster } from './toolbar-controls.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 const DATA = fixtureIteration('medium');
 
@@ -15,8 +18,7 @@ describe('right-hand toolbar controls', () => {
         const filters = buildFileFilters({
             files: DATA.diff.files,
             ownership: DATA.ownership,
-            extra: DATA.extraLenses,
-        });
+            extra: DATA.extraLenses, t,});
         const html = renderToStaticMarkup(
             <ToolbarRightCluster
                 store={createDiffViewStore({ files: DATA.diff.files })}

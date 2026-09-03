@@ -17,7 +17,7 @@ import type { FileTreeInput, TreeDirRow, TreeFileRow } from './file-tree.js';
 
 /** Ready-made progress state for tree rows. Tooltip counts are not checked here. */
 function read(state: ReadState): FileReadState {
-    return { state, seen: state === 'read' ? 12 : state === 'partial' ? 5 : 0, total: 12, pinned: false, generatedDefault: false, tooltip: 'tooltip' };
+    return { state, seen: state === 'read' ? 12 : state === 'partial' ? 5 : 0, total: 12, pinned: false, generatedDefault: false };
 }
 
 function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
@@ -33,6 +33,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
         patch: null,
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
         ...patch,
     };
 }

@@ -17,6 +17,9 @@ import {
     marginTargetStopId,
     treeBadgeLabel,
 } from './margin-model.js';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 /**
  * Route margins count the same lines as the route view: 32 uncovered lines in 3 files
@@ -106,10 +109,10 @@ describe('route in full diff margins', () => {
         expect(yaml.stops).toEqual([]);
         expect(yaml.changed).toBe(true);
         expect(marginBadgeShown(yaml)).toBe(true);
-        expect(treeBadgeLabel(yaml)).toBe('outside the route');
-        expect(marginBadgeLabel(yaml)).toBe('no route stop');
+        expect(treeBadgeLabel(yaml, t)).toBe('вне маршрута');
+        expect(marginBadgeLabel(yaml, t)).toBe('no route stop');
         expect(marginTargetStopId(yaml, model.otherStopId)).toBe(model.otherStopId);
-        expect(marginBadgeTitle(yaml, true)).toBe('No route stop — go to "Other"');
+        expect(marginBadgeTitle(yaml, true, t)).toBe('No route stop — go to “Other”');
     });
 
     it('gives a partially covered file its stop badge and uncovered ranges', () => {
@@ -117,7 +120,7 @@ describe('route in full diff margins', () => {
 
         expect(schema.stops.length).toBeGreaterThan(0);
         expect(schema.uncoveredLines).toBe(15);
-        expect(marginBadgeLabel(schema)).toContain(`explained in ${schema.stops[0]?.planLabel ?? ''} · `);
+        expect(marginBadgeLabel(schema, t)).toContain(`explained in ${schema.stops[0]?.planLabel ?? ''} · `);
     });
 
     it('a file in several stops gets the first badge plus "+N", with all numbers in the tooltip', () => {
@@ -133,9 +136,9 @@ describe('route in full diff margins', () => {
             changed: true,
         };
 
-        expect(treeBadgeLabel(many)).toBe('02 +1');
-        expect(marginBadgeLabel(many)).toBe('explained in 02 +1 · cache resets after a write');
-        expect(marginBadgeTitle(many, true)).toBe(
+        expect(treeBadgeLabel(many, t)).toBe('02 +1');
+        expect(marginBadgeLabel(many, t)).toBe('explained in 02 +1 · cache resets after a write');
+        expect(marginBadgeTitle(many, true, t)).toBe(
             'Explained in stops 02, 05 · cache resets after a write — go there',
         );
         expect(marginTargetStopId(many, 'other')).toBe('s02');
@@ -151,8 +154,8 @@ describe('route in full diff margins', () => {
             changed: true,
         };
 
-        expect(marginBadgeLabel(backticked)).toBe('explained in 02 · policy decides by EditWindow');
-        expect(marginBadgeTitle(backticked, false)).toBe('Explained in stop 02 · policy decides by EditWindow');
+        expect(marginBadgeLabel(backticked, t)).toBe('explained in 02 · the policy decides by EditWindow');
+        expect(marginBadgeTitle(backticked, false, t)).toBe('Explained in stop 02 · the policy decides by EditWindow');
     });
 
     it('gives no badge to a file without changed lines', () => {
@@ -169,18 +172,18 @@ describe('route in full diff margins', () => {
     });
 
     it('counts lines and files in the footer note and says it is counting until parsing finishes', () => {
-        expect(marginFooterNote(build())).toBe(
+        expect(marginFooterNote(build(), t)).toBe(
             'The hatch means the range has no route stop. 32 lines in 3 files.',
         );
 
         const pending = build(SNAPSHOT, new Map());
         expect(pending.pendingFiles).toBe(DATA.diff.files.length);
-        expect(marginFooterNote(pending)).toBe('The hatch means the range has no route stop. Counting the lines…');
+        expect(marginFooterNote(pending, t)).toBe('The hatch means the range has no route stop. Counting the lines…');
     });
 
     it('hides the note when nothing is uncovered and reports unparsed files', () => {
         const covered = buildRouteMargin({ snapshot: SNAPSHOT, files: [], models: new Map() });
-        expect(marginFooterNote(covered)).toBeNull();
+        expect(marginFooterNote(covered, t)).toBeNull();
 
         const failedId = DATA.diff.files[0]?.fileId ?? '';
         const failed = buildRouteMargin({
@@ -201,24 +204,24 @@ describe('route in full diff margins', () => {
         });
         expect(broken.pendingFiles).toBe(0);
         expect(broken.failedFiles).toBe(1);
-        expect(marginFooterNote(broken)).toContain('1 file failed to parse — their lines are not counted.');
+        expect(marginFooterNote(broken, t)).toContain('1 файл не разобрался — их строки в счёт не вошли.');
     });
 
     it('distinguishes diff sides and a single line in hatch labels', () => {
-        expect(marginStripText({ side: 'new', start: 18, end: 26 })).toBe('lines 18–26 without a route stop');
-        expect(marginStripText({ side: 'new', start: 18, end: 18 })).toBe('line 18 without a route stop');
-        expect(marginStripText({ side: 'old', start: 4, end: 9 })).toBe(
+        expect(marginStripText({ side: 'new', start: 18, end: 26 }, t)).toBe('lines 18–26 have no route stop');
+        expect(marginStripText({ side: 'new', start: 18, end: 18 }, t)).toBe('line 18 has no route stop');
+        expect(marginStripText({ side: 'old', start: 4, end: 9 }, t)).toBe(
             'removed lines 4–9 have no route stop',
         );
         // Line numbers match the gutter, without digit grouping.
-        expect(marginStripText({ side: 'new', start: 1234, end: 1240 })).toBe(
+        expect(marginStripText({ side: 'new', start: 1234, end: 1240 }, t)).toBe(
             'lines 1234–1240 have no route stop',
         );
         expect(
             marginStripSummary([
                 { side: 'new', start: 18, end: 26 },
                 { side: 'old', start: 4, end: 4 },
-            ]),
+            ], t),
         ).toBe('10 lines have no route stop');
     });
 
@@ -237,6 +240,7 @@ describe('route in full diff margins', () => {
             patch: ['@@ -1,6 +1,8 @@', ' alpha', '-old-one', '+new-one', '+', ' beta', '+  ', '+delta', ' gamma', '-\t', ' omega', ''].join('\n'),
             viewed: null,
             blameUrl: null,
+            hostFileUrl: null,
         };
         const first = SNAPSHOT.stops.find((stop) => stop.id === 's01');
         if (first === undefined) {
@@ -262,7 +266,7 @@ describe('route in full diff margins', () => {
 
         expect(margin.files.get(file.fileId)?.uncovered).toEqual([{ side: 'new', start: 6, end: 6 }]);
         expect(margin.uncoveredLines).toBe(1);
-        expect(marginFooterNote(margin)).toBe('The hatch means the range has no route stop. 1 line in 1 file.');
+        expect(marginFooterNote(margin, t)).toBe('The hatch means the range has no route stop. 1 line in 1 file.');
     });
 
     it('gives no outside-route badge to a file with only whitespace changes', () => {
@@ -280,6 +284,7 @@ describe('route in full diff margins', () => {
             patch: ['@@ -1,3 +1,3 @@', ' alpha', '+', '-\t', ' omega', ''].join('\n'),
             viewed: null,
             blameUrl: null,
+            hostFileUrl: null,
         };
         const margin = buildRouteMargin({
             snapshot: { ...SNAPSHOT, stops: SNAPSHOT.stops.filter((stop) => stop.tier === 'other') },
@@ -295,6 +300,6 @@ describe('route in full diff margins', () => {
         expect(view.changed).toBe(false);
         expect(marginBadgeShown(view)).toBe(false);
         expect(margin.uncoveredFiles).toBe(0);
-        expect(marginFooterNote(margin)).toBeNull();
+        expect(marginFooterNote(margin, t)).toBeNull();
     });
 });

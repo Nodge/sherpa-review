@@ -135,7 +135,7 @@ export function createUiPrStateStore(options: UiPrStateStoreOptions = {}): UiPrS
                     confirm(patch);
                 },
                 (error: unknown) => {
-                    console.warn('Failed to save UI state on the server:', error);
+                    console.warn('UI state was not saved on the server:', error);
                 },
             );
         if (keepalive) {
@@ -213,8 +213,8 @@ export function createUiPrStateStore(options: UiPrStateStoreOptions = {}): UiPrS
                     loadState = 'failed';
                     unconfirmed.clear();
                     console.warn(
-                        'This PR\'s UI state failed to load. Using defaults. Writes are disabled until' +
-                            ' reload: the request replaces the entire field and would erase saved state.',
+                        'UI state of this PR failed to load — falling back to defaults; writes are off until' +
+                            ' reload: the request replaces the whole field and would wipe what is stored.',
                         error,
                     );
                 },

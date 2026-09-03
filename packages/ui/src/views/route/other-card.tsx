@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { ASK_ANSWER_IN_CHAT_NOTE, ASK_RANGES_DISABLED_TITLE } from '../../components/chat-prompts.js';
+import type { Translate } from '../../i18n/index.js';
+import { useT } from '../../i18n/index.js';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
-import { formatCount, plural } from '../../text.js';
 import { StopViewedToggle } from './stop-card.tsx';
 
 /**
@@ -78,6 +78,7 @@ export function OtherCard({
     flash = false,
     marked = false,
 }: OtherCardProps) {
+    const t = useT();
     const { lines } = view;
     const files = view.files.length;
 
@@ -86,7 +87,7 @@ export function OtherCard({
             className={`route-stop route-stop--other${viewed ? ' is-viewed' : ''}${marked ? ' is-marked' : ''}`}
             id={`stop-${view.stop.id}`}
             role="region"
-            aria-label={`Stop ${view.planLabel} of ${String(stopCount)} — ${stripInlineCode(view.stop.title)}`}
+            aria-label={t('route.stop.aria', view.planLabel, stopCount, stripInlineCode(view.stop.title))}
         >
             <div className="route-stop__side">
                 <div className="route-stop__head">
@@ -109,27 +110,14 @@ export function OtherCard({
                 <h2 className="route-stop__title">
                     <Markdown text={view.stop.title} profile="route" />
                 </h2>
-                {filling ? (
-                    <p className="route-stop__paragraph">
-                        The route is still filling. For now, everything the agent has not reached goes here.
-                        What actually remains without a stop will become clear when the plan is filled.
-                    </p>
-                ) : pending ? (
-                    <p className="route-stop__paragraph">
-                        The diff is still being parsed. The number of lines left without a stop is unknown yet. Coverage is
-                        structurally guaranteed: whatever misses the stops collects here.
-                    </p>
-                ) : (
-                    <p className="route-stop__paragraph">
-                        {formatCount(lines)}{' '}
-                        {plural(lines, 'changed line', 'changed lines', 'changed lines')} in{' '}
-                        {formatCount(files)} {plural(files, 'file', 'files', 'files')} left without a stop.
-                        Coverage is structurally guaranteed, so they are not lost and collect here.
-                    </p>
-                )}
-                {keptInView ? (
-                    <p className="route-stop__kept">kept in view — outside the current filter</p>
-                ) : null}
+                <p className="route-stop__paragraph">
+                    {filling
+                        ? t('route.other.filling')
+                        : pending
+                          ? t('route.other.pending')
+                          : t('route.other.counted', lines, files)}
+                </p>
+                {keptInView ? <p className="route-stop__kept">{t('route.stop.kept')}</p> : null}
             </div>
 
             <div className="route-stop__diff">
@@ -137,11 +125,14 @@ export function OtherCard({
                 <div className="route-other">
                     <p className="route-other__text">
                         {filling ? (
-                            'This slot counts the remainder. While stops are arriving, it is too early to call it "not explained".'
+                            t('route.other.fillingNote')
                         ) : (
                             <>
-                                The model did not place these ranges. They are <strong>not explained</strong>, not{' '}
-                                <strong>unimportant</strong>. Read them as a raw diff.
+                                {t('route.other.text.lead')}
+                                <strong>{t('route.other.text.notExplained')}</strong>
+                                {t('route.other.text.between')}
+                                <strong>{t('route.other.text.notImportant')}</strong>
+                                {t('route.other.text.tail')}
                             </>
                         )}
                     </p>
@@ -153,35 +144,34 @@ export function OtherCard({
                             onClick={onOpen}
                         >
                             {filling
-                                ? 'Waiting for the route to fill'
+                                ? t('route.other.waitFilling')
                                 : pending
-                                  ? 'Counting uncovered lines…'
+                                  ? t('route.other.counting')
                                   : opened
-                                    ? 'Collapse uncovered ranges'
-                                    : `Open ${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')}`}
+                                    ? t('route.other.collapse')
+                                    : t('route.other.open', lines)}
                         </button>
                         {onAskToPlace === undefined ? null : (
                             <button
                                 type="button"
                                 className="route-other__action route-other__action--secondary"
                                 disabled={pending || filling || !agentConnected}
-                                title={askToPlaceTitle({ pending, filling, agentConnected })}
+                                title={askToPlaceTitle(t, { pending, filling, agentConnected })}
                                 onClick={onAskToPlace}
                             >
-                                Ask the agent to place them
+                                {t('route.other.ask')}
                             </button>
                         )}
                     </div>
                     {onAskToPlace === undefined ? null : (
-                        <p className="route-other__honest">{ASK_ANSWER_IN_CHAT_NOTE}</p>
+                        <p className="route-other__honest">{t('chat.ask.answerInChat')}</p>
                     )}
                     {failedFiles === 0 ? null : (
                         <p className="route-other__failed" role="status">
-                            {formatCount(failedFiles)} {plural(failedFiles, 'file', 'files', 'files')} failed
-                            to parse. Their uncovered lines are not counted.
+                            {t('route.other.failedFiles', failedFiles)}
                             {onRetryFailed === undefined ? null : (
                                 <button type="button" className="route-other__retry" onClick={onRetryFailed}>
-                                    Retry the parse
+                                    {t('route.other.retryParse')}
                                 </button>
                             )}
                         </p>
@@ -197,35 +187,37 @@ export function OtherCard({
  * Why the "place" button is unavailable. An unfinished range count takes priority over agent status:
  * until the counts are final, there is nothing to list in the question.
  */
-function askToPlaceTitle({
-    pending,
-    filling,
-    agentConnected,
-}: {
-    pending: boolean;
-    filling: boolean;
-    agentConnected: boolean;
-}): string {
+function askToPlaceTitle(
+    t: Translate,
+    {
+        pending,
+        filling,
+        agentConnected,
+    }: {
+        pending: boolean;
+        filling: boolean;
+        agentConnected: boolean;
+    },
+): string {
     if (filling) {
-        return 'Waiting for the route to fill';
+        return t('route.other.waitFilling');
     }
     if (pending) {
-        return 'Counting uncovered lines…';
+        return t('route.other.counting');
     }
-    return agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE;
+    return agentConnected ? t('chat.ask.answerInChat') : t('chat.ask.rangesDisabled');
 }
 
 /** SPEC §4.3 banner: the plan explains less than half the diff. */
 export function RegenerateBanner({ onGenerate }: { readonly onGenerate?: () => void }) {
+    const t = useT();
     return (
         <div className="route-regenerate" role="status">
             <span className="route-regenerate__dot" aria-hidden="true" />
-            <span className="route-regenerate__text">
-                the plan explains less than half of this diff — consider regenerating
-            </span>
+            <span className="route-regenerate__text">{t('route.regenerate.hint')}</span>
             {onGenerate === undefined ? null : (
                 <button type="button" className="route-regenerate__action" onClick={onGenerate}>
-                    Regenerate
+                    {t('route.regenerate.action')}
                 </button>
             )}
         </div>

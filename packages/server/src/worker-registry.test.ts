@@ -127,6 +127,36 @@ describe('worker lifecycle', () => {
             expect(registry.status()).toMatchObject({ model: 'claude-sonnet-5' });
         });
 
+        it('session language follows the same rules as harness and model', () => {
+            registry.register('w-1', 'claude-code', 'claude-opus-5');
+            expect(registry.status()).not.toHaveProperty('lang');
+
+            registry.register('w-1', undefined, undefined, 'ru');
+            expect(registry.status()).toMatchObject({ lang: 'ru' });
+
+            // A renewal without a label does not erase it.
+            registry.register('w-1');
+            expect(registry.status()).toMatchObject({ lang: 'ru' });
+
+            // A new session announces its own language.
+            registry.register('w-2', 'codex', undefined, 'en');
+            expect(registry.status()).toMatchObject({ workerId: 'w-2', lang: 'en' });
+
+            // ...and does not inherit the language of the evicted session if it omits its own.
+            registry.register('w-3');
+            expect(registry.status()).not.toHaveProperty('lang');
+        });
+
+        it('changing the session language emits a status event so the UI rerenders', () => {
+            registry.register('w-1', 'claude-code', 'claude-opus-5', 'ru');
+            expect(events).toHaveLength(1);
+
+            registry.register('w-1', 'claude-code', 'claude-opus-5', 'en');
+
+            expect(events).toHaveLength(2);
+            expect(events[1]).toMatchObject({ workerId: 'w-1', lang: 'en' });
+        });
+
         it('fresh registration takes the slot from a live session and returns the evicted workerId', () => {
             registry.register('w-1', 'claude-code');
             advanceSeconds(1);
@@ -197,15 +227,16 @@ describe('worker lifecycle', () => {
         });
 
         it('heartbeat taking a slot from a dead session returns its workerId', () => {
-            registry.register('w-1', 'claude-code', 'claude-opus-5');
+            registry.register('w-1', 'claude-code', 'claude-opus-5', 'ru');
             advanceSeconds(WORKER_DEAD_AFTER_SECONDS + 1);
 
             expect(registry.touch('w-2')).toBe('w-1');
             const status = registry.status();
             expect(status).toMatchObject({ kind: 'connected', workerId: 'w-2' });
-            // The previous session's harness and model have nothing to do with the new one.
+            // Labels from the previous session have no relation to the new one.
             expect(status).not.toHaveProperty('harness');
             expect(status).not.toHaveProperty('model');
+            expect(status).not.toHaveProperty('lang');
         });
 
         it('heartbeat from another worker with a live owner returns worker_conflict', () => {

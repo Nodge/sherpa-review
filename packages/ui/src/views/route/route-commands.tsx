@@ -1,5 +1,6 @@
 import type { RouteSnapshot, UiRoutePhase } from '@sherpa/protocol';
 
+import type { MessageKey } from '../../i18n/index.js';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { routeGenerationAvailable } from '../../route/generation.js';
 import { planLabel } from '../../route/route-model.js';
@@ -28,7 +29,7 @@ export function RouteCommands({
                 <StopCommand
                     key={stop.id}
                     id={stop.id}
-                    label={`Go to stop ${planLabel(stop.planIndex)} · ${stripInlineCode(stop.title)}`}
+                    stop={`${planLabel(stop.planIndex)} · ${stripInlineCode(stop.title)}`}
                     onJump={onJump}
                 />
             ))}
@@ -37,7 +38,7 @@ export function RouteCommands({
 }
 
 /** The command and `t` shortcut share a label through the common registry (SPEC §5). */
-export const PRESET_COMMAND_LABEL = 'Toggle the preset (triage / full tour)';
+export const PRESET_COMMAND_LABEL: MessageKey = 'shortcut.route.togglePreset';
 
 export interface PresetCommandInput {
     readonly preset: RoutePreset;
@@ -58,7 +59,7 @@ export function presetCommand({ preset, setPreset, setView }: PresetCommandInput
         label: PRESET_COMMAND_LABEL,
         scope: 'global',
         section: 'route',
-        consequence: next === 'tour' ? 'reorders the stops into reading order' : 'restores the triage order',
+        consequence: next === 'tour' ? 'shortcut.route.preset.tour' : 'shortcut.route.preset.triage',
         action: () => {
             setPreset(next);
             // View selection is called even from the route itself. It is the only way to dismiss
@@ -97,10 +98,10 @@ export function generateCommand({ phase, smallPr, generating, onGenerate }: Gene
     return {
         id: 'route.generate',
         keys: [],
-        label: phase === 'none' ? 'Build the route' : 'Regenerate the route',
+        label: phase === 'none' ? 'shortcut.route.generate' : 'shortcut.route.regenerate',
         scope: 'global',
         section: 'route',
-        consequence: 'clears the stop marks once the new route arrives',
+        consequence: 'shortcut.route.generate.consequence',
         when: () => routeGenerationAvailable({ phase, smallPr, generating }),
         action: onGenerate,
     };
@@ -111,11 +112,12 @@ export function RouteGenerateCommand(input: GenerateCommandInput) {
     return null;
 }
 
-function StopCommand({ id, label, onJump }: { id: string; label: string; onJump: (stopId: string) => void }) {
+function StopCommand({ id, stop, onJump }: { id: string; stop: string; onJump: (stopId: string) => void }) {
     useShortcut({
         id: `route.stop.${id}`,
         keys: [],
-        label,
+        label: 'shortcut.route.stop',
+        labelArg: stop,
         scope: 'global',
         section: 'route',
         action: () => {

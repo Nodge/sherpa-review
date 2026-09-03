@@ -5,11 +5,14 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { publishDisabledReason } from '../components/review-action-model.js';
+import { createT } from '../i18n/index.js';
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createThreadStore } from '../threads/store.js';
 import { NewCommentComposer, openPrComposer, ThreadList } from '../threads/thread-list.tsx';
 import { READ_ONLY_REASON, ReadOnlyIterationProvider } from './read-only.tsx';
+
+const t = createT('en');
 
 /**
  * Read-only mode for a previous iteration: controls that write to the PR are disabled with the same
@@ -73,7 +76,7 @@ describe('write controls in read-only mode', () => {
         const toggle = host.querySelector<HTMLButtonElement>('.viewed-toggle');
 
         expect(toggle?.disabled).toBe(true);
-        expect(toggle?.title).toBe(READ_ONLY_REASON);
+        expect(toggle?.title).toBe(t(READ_ONLY_REASON));
     });
 
     it('the toggle works as before in the active iteration', () => {
@@ -102,7 +105,7 @@ describe('write controls in read-only mode', () => {
 
         const save = host.querySelector<HTMLButtonElement>('.thread-composer__save');
         expect(save?.disabled).toBe(true);
-        expect(save?.title).toBe(READ_ONLY_REASON);
+        expect(save?.title).toBe(t(READ_ONLY_REASON));
         expect(host.querySelector<HTMLTextAreaElement>('.thread-composer__markdown')?.disabled).toBe(true);
     });
 
@@ -121,7 +124,7 @@ describe('write controls in read-only mode', () => {
 
         expect(host.textContent).toContain('question about the line');
         expect(entry?.disabled).toBe(true);
-        expect(entry?.title).toBe(READ_ONLY_REASON);
+        expect(entry?.title).toBe(t(READ_ONLY_REASON));
     });
 
     it('resolving and reopening a thread are unavailable', () => {
@@ -140,7 +143,7 @@ describe('write controls in read-only mode', () => {
         );
 
         expect(resolve?.disabled).toBe(true);
-        expect(resolve?.title).toBe(READ_ONLY_REASON);
+        expect(resolve?.title).toBe(t(READ_ONLY_REASON));
     });
 
     it('retrying a failed send in the composer is also blocked', () => {
@@ -163,20 +166,21 @@ describe('write controls in read-only mode', () => {
         );
 
         expect(retry?.disabled).toBe(true);
-        expect(retry?.title).toBe(READ_ONLY_REASON);
+        expect(retry?.title).toBe(t(READ_ONLY_REASON));
     });
 
     it('ship and publishing are disabled for the same reason', () => {
         expect(
             publishDisabledReason({
+                t: createT('en'),
                 connection: 'online',
                 pendingComposer: false,
                 publishing: false,
                 readOnlyIteration: true,
             }),
-        ).toBe(READ_ONLY_REASON);
+        ).toBe(t(READ_ONLY_REASON));
         expect(
-            publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false }),
+            publishDisabledReason({ t: createT('en'), connection: 'online', pendingComposer: false, publishing: false }),
         ).toBeNull();
     });
 });

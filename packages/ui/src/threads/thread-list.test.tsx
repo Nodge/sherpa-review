@@ -81,11 +81,11 @@ describe('comment body', () => {
         const html = render([threadOf('ai-review-bot')]);
         const body = html.slice(html.indexOf('thread__body'));
 
-        expect(body).toContain('<p class="md-heading">PCI: unmasked PAN in retained logs</p>');
+        expect(body).toContain('<h5 class="md-heading md-h5">PCI: unmasked PAN in retained logs</h5>');
         expect(body).toContain('<ul class="md-list">');
         expect(body).toContain('<strong>Severity:</strong>');
         expect(body).toContain('<code class="md-code">logs/checkout-*.jsonl</code>');
-        expect(body).toContain('<pre class="md-pre">');
+        expect(body).toContain('<pre class="md-pre" data-lang="ts">');
         // A bare URL opens a link in a new tab without a referrer.
         expect(body).toContain('target="_blank" rel="noreferrer"');
         expect(body).not.toContain('`');

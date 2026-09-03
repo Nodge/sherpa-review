@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { MessageKey } from '../../i18n/index.js';
+import { createT, translateKey } from '../../i18n/index.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createShortcutRegistry } from '../../shortcuts/registry.js';
 import { generateCommand, PRESET_COMMAND_LABEL, presetCommand } from './route-commands.tsx';
@@ -8,6 +10,10 @@ import { generateCommand, PRESET_COMMAND_LABEL, presetCommand } from './route-co
  * The "toggle preset" command shares one declaration between the `t` shortcut and the palette (SPEC §5).
  * The registry is shared, so the tests check both its description and what `action` does.
  */
+
+/** Command labels are dictionary keys. The test checks the Russian wording instead of the key. */
+const en = (key: MessageKey | undefined): string =>
+    key === undefined ? '' : translateKey(createT('en'), key);
 
 function keyEvent(key: string) {
     return {
@@ -32,7 +38,8 @@ describe('preset toggle command', () => {
 
         expect(command.keys).toEqual(['t']);
         expect(command.label).toBe(PRESET_COMMAND_LABEL);
-        expect(command.consequence).toBe('reorders the stops into reading order');
+        expect(command.consequence).toBe('shortcut.route.preset.tour');
+        expect(en(command.consequence)).toBe('reorders the stops into reading order');
     });
 
     it('switches the preset back and forth while staying on the route', () => {
@@ -115,8 +122,8 @@ describe('route generation command', () => {
     it('is called regeneration in ready and failed and states when its consequence takes effect', () => {
         for (const phase of ['ready', 'failed'] as const) {
             const { command } = run(phase);
-            expect(command.label).toBe('Regenerate the route');
-            expect(command.consequence).toBe('clears the stop marks once the new route arrives');
+            expect(en(command.label)).toBe('Regenerate the route');
+            expect(en(command.consequence)).toBe('clears the stop marks once the new route arrives');
             expect(command.when?.()).toBe(true);
         }
     });
@@ -124,7 +131,7 @@ describe('route generation command', () => {
     it('offers to build a route when there has never been one', () => {
         const { command } = run('none');
 
-        expect(command.label).toBe('Build the route');
+        expect(en(command.label)).toBe('Build the route');
         expect(command.when?.()).toBe(true);
     });
 

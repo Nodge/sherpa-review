@@ -1,20 +1,19 @@
 import type { AgentNote, AnchorPosition, ChatAnchor, FileAnchor } from '@sherpa/protocol';
 
+import type { Translate } from '../i18n/index.js';
+
 /**
  * Comment draft from an agent note (SPEC §2.16): quote text and composer address.
  * This pure module is shared by both views and the route model.
  */
 
-/** Quote heading: attribution stays in the draft text and is visible to the reviewer. */
-const ATTRIBUTION = 'Quoted from the agent’s answer:';
-
 /** Draft text: attribution, a blank line and the full note as a Markdown quote. */
-export function noteDraftText(note: AgentNote): string {
+export function noteDraftText(note: AgentNote, t: Translate): string {
     const lines = note.text.split(/\r?\n/u);
     while (lines.at(-1)?.trim() === '') {
         lines.pop();
     }
-    return [ATTRIBUTION, '', ...lines.map((line) => (line.trim() === '' ? '>' : `> ${line}`))].join('\n');
+    return [t('note.attribution'), '', ...lines.map((line) => (line.trim() === '' ? '>' : `> ${line}`))].join('\n');
 }
 
 /**

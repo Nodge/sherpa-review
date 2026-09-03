@@ -60,6 +60,7 @@ import { holdsPayload, SharedPayloadStore } from './shared-payload.js';
 import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
+import type { UpdateCheckOptions } from './update-check.js';
 import { SERVER_VERSION } from './version.js';
 import { writeWorkerIdFile } from './worker-id-file.js';
 import { WorkerRegistry } from './worker-registry.js';
@@ -113,6 +114,11 @@ export interface StartServerOptions {
      * neither the UI nor the CLI knows about it. The M2-T12 latency measurement adjusts section batches here.
      */
     route?: Partial<RouteConfig>;
+    /**
+     * Update check injection point (M5-T9): tests substitute the transport, clock, cache and distribution
+     * path.
+     */
+    updateCheck?: UpdateCheckOptions;
 }
 
 export interface SherpaServer {

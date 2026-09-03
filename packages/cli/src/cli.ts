@@ -131,7 +131,7 @@ async function registerWorker(
 
 /** Session labels from command arguments. `up` and `worker register` declare them the same way. */
 function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>): WorkerLabels {
-    return { harness: command.harness, model: command.model };
+    return { harness: command.harness, model: command.model, lang: command.lang };
 }
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
