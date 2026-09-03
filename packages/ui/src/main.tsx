@@ -20,6 +20,7 @@ import {
     parsePreset,
     parseRouteFilter,
 } from './session/session-store.js';
+import type { ViewId } from './session/views.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { SettingsProvider } from './settings/context.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
@@ -27,6 +28,9 @@ import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import { createStore } from './store.js';
 import './styles/base.css';
+
+/** Second key of a view navigation chord: `g o` for Overview, `g r` for Route, `g d` for Full diff. */
+const VIEW_CHORD: Readonly<Record<ViewId, string>> = { overview: 'o', route: 'r', diff: 'd' };
 
 /** Wait limit for server state (settings and PR state) before the first render. */
 const SETTINGS_BOOT_TIMEOUT_MS = 1500;
@@ -108,8 +112,11 @@ if (token === null) {
     VIEWS.forEach((view, index) => {
         shortcuts.register({
             id: `view.${view.id}`,
-            keys: [String(index + 1)],
+            // The `g o`/`g r`/`g d` chord is a second binding for the same command (SPEC §5).
+            keys: [String(index + 1), `g ${VIEW_CHORD[view.id]}`],
             label: `View "${view.label}"`,
+            scope: 'global',
+            section: 'navigation',
             action: () => {
                 session.setView(view.id);
             },
@@ -119,6 +126,8 @@ if (token === null) {
         id: 'palette.open',
         keys: ['mod+k'],
         label: 'Open command palette',
+        scope: 'global',
+        section: 'navigation',
         worksInInputs: true,
         action: () => {
             session.setPaletteOpen(true);

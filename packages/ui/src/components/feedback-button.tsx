@@ -7,6 +7,8 @@ import type {
 } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useEscapeLayer } from '../shortcuts/context.tsx';
+
 export interface FeedbackPreviewContext {
     readonly uiVersion: string;
     readonly prKey: string;
@@ -56,18 +58,12 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                 close();
             }
         };
-        const closeOnEscape = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                close();
-            }
-        };
         document.addEventListener('mousedown', closeOutside);
-        document.addEventListener('keydown', closeOnEscape);
         return () => {
             document.removeEventListener('mousedown', closeOutside);
-            document.removeEventListener('keydown', closeOnEscape);
         };
     }, [close, open]);
+    useEscapeLayer('popover', close, open);
 
     useEffect(() => {
         if (open && created === null) {

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
+import { useEscapeLayer } from '../shortcuts/context.tsx';
 import type { DiffViewStore } from './store.js';
 
 export function shouldClearSelectionOnPointerDown(target: EventTarget | null): boolean {
@@ -14,12 +15,12 @@ export function shouldClearSelectionOnPointerDown(target: EventTarget | null): b
  * had nothing to close it, and the action bar disappeared for good.
  */
 export function useSelectionLifecycle(store: DiffViewStore): void {
+    // Selection is the lowest Esc layer: the palette and popovers above it close first.
+    const hasSelection =
+        useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).selection !== null;
+    useEscapeLayer('selection', store.clearSelection, hasSelection);
+
     useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                store.clearSelection();
-            }
-        };
         const onPointerDown = (event: MouseEvent): void => {
             if (shouldClearSelectionOnPointerDown(event.target)) {
                 store.clearSelection();
@@ -28,11 +29,9 @@ export function useSelectionLifecycle(store: DiffViewStore): void {
         const onPointerUp = (): void => {
             store.finishSelection();
         };
-        window.addEventListener('keydown', onKeyDown);
         window.addEventListener('mousedown', onPointerDown);
         window.addEventListener('mouseup', onPointerUp);
         return () => {
-            window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('mousedown', onPointerDown);
             window.removeEventListener('mouseup', onPointerUp);
             store.finishSelection();

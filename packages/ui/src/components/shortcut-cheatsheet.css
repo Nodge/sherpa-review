@@ -1,0 +1,121 @@
+/* `?` shortcuts sheet (SPEC §5): overlay dialog using the PR comments modal anatomy. */
+
+.shortcut-cheatsheet__overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: var(--pr-comments-overlay);
+}
+
+.shortcut-cheatsheet {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    overflow: hidden auto;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-floating);
+    outline: none;
+    background: var(--surface-diff-card);
+    box-shadow: var(--shadow-pr-comments);
+    color: var(--text-secondary);
+}
+
+.shortcut-cheatsheet__header {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 15px;
+    border-bottom: 1px solid var(--border-hairline-strong);
+    background: var(--surface-card-header);
+}
+
+.shortcut-cheatsheet__header h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.shortcut-cheatsheet__spacer {
+    flex: 1;
+}
+
+.shortcut-cheatsheet__icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-button);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.shortcut-cheatsheet__icon-button:hover {
+    border-color: var(--border-strong-lifted);
+    color: var(--text-primary);
+}
+
+.shortcut-cheatsheet__columns {
+    columns: 2;
+    column-gap: 26px;
+    padding: 15px;
+}
+
+.shortcut-cheatsheet__section {
+    /* Keep a section in one column. Half of "Reading" in another column is unreadable. */
+    break-inside: avoid;
+    margin: 0 0 16px;
+}
+
+.shortcut-cheatsheet__section h3 {
+    margin: 0 0 7px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.shortcut-cheatsheet__section dl {
+    margin: 0;
+}
+
+.shortcut-cheatsheet__row {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    padding: 3px 0;
+}
+
+.shortcut-cheatsheet__row dt {
+    flex: none;
+    min-width: 92px;
+}
+
+.shortcut-cheatsheet__row dd {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.shortcut-cheatsheet__keys {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-key);
+    background: transparent;
+    color: var(--text-dim-strong);
+    font: 400 var(--font-size-gutter) / 1.4 var(--font-mono);
+    white-space: nowrap;
+}

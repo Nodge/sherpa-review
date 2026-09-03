@@ -13,7 +13,7 @@ import {
     countPublishedReplies,
     reviewProgressSummary,
 } from '../progress/summary.js';
-import { useShortcut } from '../shortcuts/context.tsx';
+import { useEscapeLayer, useShortcut } from '../shortcuts/context.tsx';
 import type { ViewId } from '../session/views.js';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import type { ConnectionState } from '../store.js';
@@ -289,6 +289,10 @@ export function ReviewActionBar({
         };
     }, [closeMenu, menuOpen]);
 
+    useEscapeLayer('popover', () => {
+        closeMenu(true);
+    }, menuOpen);
+
     /**
      * Publishes the verdict. `remember` is set only where the reviewer selects the ship mode by hand:
      * the main button publishes the downgraded mode (this PR has no sticky), and saving that downgrade
@@ -368,6 +372,8 @@ export function ReviewActionBar({
         id: 'review.shipMenu',
         keys: ['mod+enter'],
         label: 'Open the ship menu',
+        scope: 'global',
+        section: 'ship',
         consequence: publishConsequence(effectiveShipMode, drafts),
         when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
         action: () => {
@@ -379,6 +385,8 @@ export function ReviewActionBar({
         id: 'review.requestChanges',
         keys: ['mod+shift+enter'],
         label: 'Request changes',
+        scope: 'global',
+        section: 'ship',
         consequence: publishConsequence('request_changes', drafts),
         when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
         action: () => {
@@ -547,9 +555,6 @@ export function ReviewActionBar({
                                 if (mode === 'ship' || stickyAvailable) {
                                     void publish(mode, { remember: true });
                                 }
-                            } else if (event.key === 'Escape') {
-                                event.preventDefault();
-                                closeMenu(true);
                             } else if (event.key === 'Tab') {
                                 closeMenu(false);
                             }

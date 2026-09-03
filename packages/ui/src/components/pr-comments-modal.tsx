@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 
 import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
-import { useShortcutRegistry } from '../shortcuts/context.tsx';
+import { useFocusTrap } from './use-focus-trap.js';
+import { useEscapeLayer, useShortcutRegistry } from '../shortcuts/context.tsx';
 import { formatCount, plural } from '../text.js';
 import { composerControllerFor } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
@@ -113,44 +114,8 @@ export function PrCommentsModal({
         };
     }, [editingId, store, transport]);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent): void => {
-            if (event.defaultPrevented) {
-                return;
-            }
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                onClose();
-                return;
-            }
-            if (event.key !== 'Tab') {
-                return;
-            }
-            const focusable = focusableElements(modalRef.current);
-            if (focusable.length === 0) {
-                event.preventDefault();
-                modalRef.current?.focus();
-                return;
-            }
-            const first = focusable[0];
-            const last = focusable.at(-1);
-            const active = document.activeElement;
-            if (!modalRef.current?.contains(active)) {
-                event.preventDefault();
-                (event.shiftKey ? last : first)?.focus();
-            } else if (event.shiftKey && active === first) {
-                event.preventDefault();
-                last?.focus();
-            } else if (!event.shiftKey && active === last) {
-                event.preventDefault();
-                first?.focus();
-            }
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [onClose]);
+    useFocusTrap(modalRef);
+    useEscapeLayer('modal', onClose);
 
     const startEditing = (thread: Thread): void => {
         if (editingId !== null) {
@@ -457,21 +422,6 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function focusableElements(root: HTMLElement | null): HTMLElement[] {
-    if (root === null) {
-        return [];
-    }
-    const selector = [
-        'button:not(:disabled)',
-        '[href]',
-        'input:not(:disabled)',
-        'textarea:not(:disabled)',
-        '[contenteditable="true"]',
-        '[tabindex]:not([tabindex="-1"])',
-    ].join(', ');
-    return [...root.querySelectorAll<HTMLElement>(selector)].filter((element) => !element.hasAttribute('hidden'));
 }
 
 function initials(name: string): ReactNode {

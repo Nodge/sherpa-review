@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
 
-import type { Shortcut, ShortcutRegistry } from './registry.js';
+import type { EscapeLayerKind, Shortcut, ShortcutRegistry } from './registry.js';
 
 /**
  * View access to the single command registry (spec §3.3): the registry is created on page start,
@@ -19,7 +19,10 @@ export function useShortcutRegistry(): ShortcutRegistry | null {
     return useContext(ShortcutsContext);
 }
 
-/** Reactive registry snapshot for the palette, in registration order. */
+/**
+ * Reactive registry snapshot for the palette and shortcuts sheet. Active scope commands come first, then global commands.
+ * Other scopes are excluded because their keys would not work anyway.
+ */
 export function useShortcutList(): readonly Shortcut[] {
     const registry = useShortcutRegistry();
     const empty = useRef<readonly Shortcut[]>([]);
@@ -44,7 +47,7 @@ export function useShortcut(shortcut: Shortcut): void {
         latest.current = shortcut;
     });
 
-    const { id, label, worksInInputs, consequence } = shortcut;
+    const { id, label, scope, section, worksInInputs, consequence } = shortcut;
     const keys = shortcut.keys.join('\n');
     useEffect(() => {
         if (registry === null) {
@@ -54,6 +57,8 @@ export function useShortcut(shortcut: Shortcut): void {
             id,
             keys: keys === '' ? [] : keys.split('\n'),
             label,
+            scope,
+            section,
             ...(worksInInputs === undefined ? {} : { worksInInputs }),
             ...(consequence === undefined ? {} : { consequence }),
             when: () => latest.current.when?.() ?? true,
@@ -61,5 +66,30 @@ export function useShortcut(shortcut: Shortcut): void {
                 latest.current.action();
             },
         });
-    }, [registry, id, keys, label, worksInInputs, consequence]);
+    }, [registry, id, keys, label, scope, section, worksInInputs, consequence]);
+}
+
+/**
+ * A layer in the Esc hierarchy (M5 decision 10). While `active`, the layer is on the registry stack. On Esc
+ * only the highest-priority active layer fires, so the overlay does not need its own
+ * keyboard listener.
+ */
+export function useEscapeLayer(kind: EscapeLayerKind, handler: () => void, active = true): void {
+    const registry = useContext(ShortcutsContext);
+    const latest = useRef(handler);
+    useEffect(() => {
+        latest.current = handler;
+    });
+
+    useEffect(() => {
+        if (registry === null || !active) {
+            return;
+        }
+        return registry.registerEscapeLayer({
+            kind,
+            handler: () => {
+                latest.current();
+            },
+        });
+    }, [registry, kind, active]);
 }

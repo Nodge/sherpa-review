@@ -59,6 +59,8 @@ import {
     ReviewActionBarLoading,
 } from './components/review-action-bar.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
+import { selectionAskDisabled } from './components/selection-popover.tsx';
+import { ShortcutCheatsheet } from './components/shortcut-cheatsheet.tsx';
 import { TopBar } from './components/top-bar.tsx';
 import { expandFileContext } from './diff-view/expand.js';
 import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
@@ -106,6 +108,8 @@ import { routeFactsForSnapshot } from './route/route-summary.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import { useUiSettingsStore } from './settings/context.tsx';
+import { useShortcut, useShortcutRegistry } from './shortcuts/context.tsx';
+import type { ShortcutScope } from './shortcuts/registry.js';
 import type { Store } from './store.js';
 import { attachComposerBeforeUnload } from './threads/before-unload.js';
 import type { ShipVerdictEvent, ShipVerdictWatch } from './components/ship-verdict-banner.tsx';
@@ -141,6 +145,13 @@ import { RouteCommands, RouteGenerateCommand, RoutePresetCommand } from './views
 import { RouteFailedView, RouteReadingView } from './views/route/route-generating.tsx';
 import { RouteView } from './views/route/route-view.tsx';
 import { IterationWithoutRoute, SliceWithoutOverview, ViewFrame } from './views/view-frames.tsx';
+
+/** Shortcut registry scope for the open view (SPEC §5). */
+const SCOPE_OF_VIEW: Readonly<Record<ViewId, ShortcutScope>> = {
+    overview: 'overview',
+    route: 'route',
+    diff: 'full-diff',
+};
 
 /** The main page reads server and session stores through `useSyncExternalStore`. */
 export interface AppProps {
@@ -234,6 +245,11 @@ export function App({ store, session, token }: AppProps) {
     );
     // An open chat narrows the content column. CSS uses the class to calculate `--dock-*` and action panel layers.
     useChatDock(chatOpen);
+    // The shortcut registry scope is the open view. The same key means different things in different views.
+    const shortcutRegistry = useShortcutRegistry();
+    useEffect(() => {
+        shortcutRegistry?.setActiveScope(SCOPE_OF_VIEW[view]);
+    }, [shortcutRegistry, view]);
     const state = snapshot.state;
     const reviewReady = state !== null;
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
@@ -1723,8 +1739,14 @@ export function App({ store, session, token }: AppProps) {
             ),
         [chatData.exchanges],
     );
+    /**
+     * The current line selection as the question anchor. A ref keeps it beside the composer's saved anchor:
+     * the `a` key needs the live range, not the one saved in the chat panel.
+     */
+    const selectionAnchor = useRef<UiChatAskAnchor | null>(null);
     const selectChatAnchor = useCallback(
         (anchor: UiChatAskAnchor | null) => {
+            selectionAnchor.current = anchor;
             setChatComposerContext((current) => {
                 const next = current.key === chatKey ? current : { key: chatKey, anchor: null, latched: false };
                 return next.latched ? next : { ...next, anchor };
@@ -1754,6 +1776,33 @@ export function App({ store, session, token }: AppProps) {
         },
         [openChatWithQuestion],
     );
+    const agentConnected = state?.worker.kind === 'connected';
+    useShortcut({
+        id: 'agent.ask',
+        keys: ['a'],
+        label: 'Ask the agent about the selection',
+        scope: 'global',
+        section: 'agent',
+        consequence: 'opens the chat panel',
+        when: () => selectionAnchor.current === null || !selectionAskDisabled(agentConnected),
+        action: () => {
+            const anchor = selectionAnchor.current;
+            // Without a selection, the question covers the whole PR in the same composer, with no anchor.
+            openChatWithQuestion(null, anchor);
+        },
+    });
+
+    const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
+    useShortcut({
+        id: 'help.cheatsheet',
+        keys: ['?'],
+        label: 'Keyboard shortcuts',
+        scope: 'global',
+        section: 'navigation',
+        action: () => {
+            setCheatsheetOpen(true);
+        },
+    });
     /** "Other" on the Route: many ranges, but one question anchor, so the ranges are listed in the text. */
     const composeRouteQuestion = useCallback(
         (text: string) => {
@@ -2220,9 +2269,18 @@ export function App({ store, session, token }: AppProps) {
                 onGenerate={startGeneration}
             />
 
+            {cheatsheetOpen ? (
+                <ShortcutCheatsheet
+                    onClose={() => {
+                        setCheatsheetOpen(false);
+                    }}
+                />
+            ) : null}
+
             <CommandPalette
                 open={paletteOpen}
                 source={paletteSource}
+                iterations={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
                 sourceError={currentReview.diffError}
                 onOpen={() => {
                     session.setPaletteOpen(true);

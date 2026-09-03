@@ -1,12 +1,15 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '../icons/icon.tsx';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { addRecentCommand, PALETTE_RECENT_LIMIT } from '../pr-state/pr-state-store.js';
-import { useShortcut, useShortcutList } from '../shortcuts/context.tsx';
+import { useEscapeLayer, useShortcut, useShortcutList } from '../shortcuts/context.tsx';
 import type { Shortcut } from '../shortcuts/registry.js';
+import { formatKeys } from '../shortcuts/registry.js';
 import { plural } from '../text.js';
+import { isRowSelected, menuSections, rowText, rowTitle } from '../iterations/snapshot-picker.tsx';
+import type { PickerRows, Viewing } from '../iterations/viewing.js';
 import { movePaletteCursor, scrollPaletteCursor } from './cursor.js';
 import type { PaletteDiffSource } from './diff-source.tsx';
 import { lineSideInDiff, searchDiff } from './diff-search.js';
@@ -15,9 +18,19 @@ import { fuzzyMatch } from './fuzzy.js';
 import { parsePaletteQuery } from './query.js';
 import './command-palette.css';
 
+/** "Iterations…" mode uses the same rows as the snapshot pill menu (M4-T9, M5-T5). */
+export interface PaletteIterations {
+    readonly rows: PickerRows;
+    readonly viewing: Viewing;
+    /** Reference time for relative timestamps, to keep the gallery deterministic. */
+    readonly now: number;
+    readonly onSelect: (viewing: Viewing) => void;
+}
+
 export interface CommandPaletteProps {
     readonly open: boolean;
     readonly source: PaletteDiffSource | null;
+    readonly iterations?: PaletteIterations;
     readonly sourceError?: string | null;
     readonly onOpen: () => void;
     readonly onClose: () => void;
@@ -38,10 +51,19 @@ interface PaletteItem {
 
 const SUGGESTED_IDS = ['palette.goToFile', 'palette.searchDiff', 'diff.toggleMode'] as const;
 
+type BrowseMode = 'all' | 'files' | 'iterations';
+
+const PLACEHOLDER: Readonly<Record<BrowseMode, string>> = {
+    all: 'Command, file, /search or :line',
+    files: 'File…',
+    iterations: 'Iteration…',
+};
+
 /** Command and client-side search palette (README §14, SPEC §2.3). */
 export function CommandPalette({
     open,
     source,
+    iterations,
     sourceError = null,
     onOpen,
     onClose,
@@ -49,7 +71,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
     const [query, setQuery] = useState(initialQuery);
     // SPEC has no file prefix. The command switches the internal results to files only.
-    const [browseMode, setBrowseMode] = useState<'all' | 'files'>('all');
+    const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
     const [cursor, setCursor] = useState(0);
     // Command history is part of server-side PR state. The server only stores it, the display limit lives here.
     const prState = usePrStateStore();
@@ -62,6 +84,8 @@ export function CommandPalette({
     const resultsRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLElement | null>(null);
     const requestedQuery = useRef<string | null>(null);
+    /** Result mode requested by a command that opens the palette itself (`f` on Route). */
+    const requestedMode = useRef<BrowseMode | null>(null);
     const cursorOrigin = useRef<'keyboard' | 'mouse' | 'programmatic'>('programmatic');
     const wasOpen = useRef(false);
     const shortcuts = useShortcutList();
@@ -70,6 +94,8 @@ export function CommandPalette({
         id: 'palette.goToFile',
         keys: [],
         label: 'Go to file',
+        scope: 'global',
+        section: 'navigation',
         when: () => source !== null,
         action: () => {
             setBrowseMode('files');
@@ -78,10 +104,30 @@ export function CommandPalette({
             cursorOrigin.current = 'programmatic';
         },
     });
+    // Route has no file tree, so `f` opens the same file results in the palette (SPEC §5).
+    useShortcut({
+        id: 'palette.findFile',
+        keys: ['f'],
+        label: 'Find a file',
+        scope: 'route',
+        section: 'navigation',
+        when: () => source !== null,
+        action: () => {
+            requestedQuery.current = '';
+            requestedMode.current = 'files';
+            setBrowseMode('files');
+            setQuery('');
+            setCursor(0);
+            cursorOrigin.current = 'programmatic';
+            onOpen();
+        },
+    });
     useShortcut({
         id: 'palette.searchDiff',
         keys: ['/'],
         label: 'Search diff contents',
+        scope: 'global',
+        section: 'navigation',
         action: () => {
             requestedQuery.current = '/';
             setBrowseMode('all');
@@ -92,9 +138,25 @@ export function CommandPalette({
         },
     });
     useShortcut({
+        id: 'palette.iterations',
+        keys: [],
+        label: 'Iterations…',
+        scope: 'global',
+        section: 'navigation',
+        when: () => iterations !== undefined,
+        action: () => {
+            setBrowseMode('iterations');
+            setQuery('');
+            setCursor(0);
+            cursorOrigin.current = 'programmatic';
+        },
+    });
+    useShortcut({
         id: 'diff.toggleMode',
         keys: ['d'],
         label: 'Toggle diff mode',
+        scope: 'global',
+        section: 'reading',
         when: () => source !== null,
         action: () => {
             source?.toggleDiffMode();
@@ -106,7 +168,8 @@ export function CommandPalette({
             triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             const nextQuery = requestedQuery.current ?? initialQuery;
             requestedQuery.current = null;
-            setBrowseMode('all');
+            setBrowseMode(requestedMode.current ?? 'all');
+            requestedMode.current = null;
             setQuery(nextQuery);
             setCursor(0);
             cursorOrigin.current = 'programmatic';
@@ -114,6 +177,12 @@ export function CommandPalette({
             requestAnimationFrame(() => {
                 inputRef.current?.select();
             });
+        }
+        if (!open) {
+            // The mode request lasts only until opening. A command run from an already open palette
+            // does not consume it, so without resetting, the next ⌘K would open in the wrong mode.
+            requestedQuery.current = null;
+            requestedMode.current = null;
         }
         wasOpen.current = open;
     }, [initialQuery, open]);
@@ -146,7 +215,11 @@ export function CommandPalette({
             consequence: shortcut.consequence ?? null,
             detail: null,
             commandId: shortcut.id,
-            keepOpen: shortcut.id === 'palette.goToFile' || shortcut.id === 'palette.searchDiff',
+            keepOpen:
+                shortcut.id === 'palette.goToFile' ||
+                shortcut.id === 'palette.findFile' ||
+                shortcut.id === 'palette.searchDiff' ||
+                shortcut.id === 'palette.iterations',
             action: shortcut.action,
         });
         const itemFromFile = (file: PaletteDiffSource['files'][number]): PaletteItem => ({
@@ -235,6 +308,39 @@ export function CommandPalette({
             };
         }
 
+        if (browseMode === 'iterations') {
+            if (iterations === undefined) {
+                return { items: [] as PaletteItem[], notice: 'This PR has no iterations', truncated: false };
+            }
+            const items = menuSections(iterations.rows).flatMap((section) =>
+                section.rows
+                    .map((row): PaletteItem => {
+                        const text = rowText(row, iterations.now);
+                        return {
+                            // Keyed by kind+id, as in the picker itself: one commit can have
+                            // several snapshots after route regeneration.
+                            id: `iteration:${row.kind}:${row.id}`,
+                            group: section.title,
+                            label: text,
+                            keyHint: null,
+                            consequence: isRowSelected(row, iterations.viewing) ? 'currently viewing' : rowTitle(row),
+                            detail: null,
+                            commandId: null,
+                            keepOpen: false,
+                            action: () => {
+                                iterations.onSelect(row.viewing);
+                            },
+                        };
+                    })
+                    .filter((item) => parsed.text === '' || fuzzyMatch(item.label, parsed.text)),
+            );
+            return {
+                items,
+                notice: items.length === 0 ? `Nothing matches "${parsed.text}"` : null,
+                truncated: false,
+            };
+        }
+
         if (browseMode === 'files') {
             const matchingFiles =
                 source?.files.filter((file) => parsed.text === '' || fuzzyMatch(file.path, parsed.text)) ?? [];
@@ -309,18 +415,23 @@ export function CommandPalette({
         scrollPaletteCursor(resultsRef.current, activeCursor);
     }, [activeCursor, open]);
 
-    if (!open) {
-        return null;
-    }
-
-    const close = (restoreFocus: boolean): void => {
+    const close = useCallback((restoreFocus: boolean): void => {
         onClose();
         if (restoreFocus) {
             requestAnimationFrame(() => {
                 triggerRef.current?.focus();
             });
         }
-    };
+    }, [onClose]);
+    // The palette is the top layer in the Esc order: it closes before the selection beneath it.
+    useEscapeLayer('palette', () => {
+        close(true);
+    }, open);
+
+    if (!open) {
+        return null;
+    }
+
     const execute = (item: PaletteItem): void => {
         if (item.commandId !== null) {
             prState.update({ paletteRecent: addRecentCommand(recentIds, item.commandId) });
@@ -331,11 +442,9 @@ export function CommandPalette({
         item.action();
     };
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-        event.stopPropagation();
-        if (event.key === 'Escape') {
-            event.preventDefault();
-            close(true);
-            return;
+        // Let Esc through: the registry's close order handles it, rather than the palette.
+        if (event.key !== 'Escape') {
+            event.stopPropagation();
         }
         if (event.key === 'Tab') {
             event.preventDefault();
@@ -385,7 +494,7 @@ export function CommandPalette({
                         ref={inputRef}
                         className="command-palette__query"
                         value={query}
-                        placeholder={browseMode === 'files' ? 'File…' : 'Command, file, /search or :line'}
+                        placeholder={PLACEHOLDER[browseMode]}
                         aria-controls="command-palette-listbox"
                         aria-activedescendant={
                             activeCursor < 0 ? undefined : `command-palette-option-${String(activeCursor)}`
@@ -474,21 +583,6 @@ function SearchSnippet({ match }: { match: DiffSearchMatch }) {
             {match.text.slice(match.matchEnd)}
         </span>
     );
-}
-
-function formatKeys(keys: readonly string[]): string | null {
-    if (keys.length === 0) {
-        return null;
-    }
-    return keys
-        .map((keys) =>
-            keys
-                .replace('mod+', '⌘')
-                .replace('shift+', '⇧')
-                .replace('alt+', '⌥')
-                .toUpperCase(),
-        )
-        .join(' / ');
 }
 
 function groupItems(items: readonly PaletteItem[]): readonly {

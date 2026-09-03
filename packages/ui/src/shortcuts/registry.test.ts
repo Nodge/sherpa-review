@@ -17,7 +17,7 @@ function keydown(key: string, extra: Partial<ShortcutEvent> = {}): ShortcutEvent
 }
 
 function shortcut(overrides: Partial<Shortcut> & Pick<Shortcut, 'id' | 'keys' | 'action'>): Shortcut {
-    return { label: `command ${overrides.id}`, ...overrides };
+    return { label: `command ${overrides.id}`, scope: 'global', section: 'navigation', ...overrides };
 }
 
 describe('shortcut registry', () => {

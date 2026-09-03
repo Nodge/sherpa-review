@@ -29,6 +29,8 @@ import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
 import type { ContextExpandRequest, ContextExpandResult } from '../../diff-view/context-expansion.js';
 import { expandContext } from '../../diff-view/context-expansion.js';
+import type { HunkExpandRequest } from '../../diff-view/hunk-expansion.js';
+import { hunkContextRequests } from '../../diff-view/hunk-expansion.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import { flashRow } from '../../diff-view/line-target.js';
@@ -81,12 +83,13 @@ import {
 } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { useShortcut } from '../../shortcuts/context.tsx';
+import { neighbourId, unreadNeighbourId } from '../../shortcuts/navigation.js';
 import { createThreadActions } from '../../threads/actions.js';
 import type { ComposerTransport } from '../../threads/composer.js';
 import { createComposerTransport } from '../../threads/transport.js';
 import { countThreadSources, threadIsVisible } from '../../threads/model.js';
 import type { ThreadStore } from '../../threads/store.js';
-import { openNewComposer, OutsideThreads } from '../../threads/thread-list.tsx';
+import { openNewComposer, openReply, OutsideThreads } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
 import { formatCount, plural } from '../../text.js';
 import { commentPosition } from '../full-diff.tsx';
@@ -679,10 +682,18 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             topStopRef.current = anchor;
         }
     }, []);
+    /**
+     * The stop last reached with the keyboard. `j`/`k`/`n`/`p` cannot count from only
+     * the top visible stop: a jump places its target 150px below the edge, so the previous stop
+     * remains the "top" stop at that point. The keys would bounce between two neighbours.
+     * Reviewer scrolling clears the anchor, so navigation counts from what is on screen again.
+     */
+    const keyboardStopRef = useRef<string | null>(null);
     const handleScroll = useCallback(() => {
         // Reviewer scrolling clears "kept on screen", but our own scroll correction does not.
         if (settling.current === 0) {
             setKeptStopId(null);
+            keyboardStopRef.current = null;
         }
         updateTopStop();
     }, [updateTopStop]);
@@ -1395,6 +1406,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         id: 'route.toggleStopViewed',
         keys: ['v'],
         label: 'Mark the stop viewed',
+        scope: 'route',
+        section: 'reading',
         when: () => {
             const entry = focusedEntry();
             return entry !== null && canToggleViewed(entry);
@@ -1410,6 +1423,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         id: 'route.toggleStopCollapse',
         keys: ['x'],
         label: 'Collapse or expand the stop',
+        scope: 'route',
+        section: 'route',
         when: () => focusedEntry() !== null,
         action: () => {
             const entry = focusedEntry();
@@ -1461,6 +1476,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     }, [threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible]);
 
     const [focusedLine, setFocusedLine] = useState<{ fileId: string; side: 'old' | 'new'; line: number } | null>(null);
+    const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
     const [selectionCard, setSelectionCard] = useState<{ readonly stopId: string; readonly group: RouteFileGroup } | null>(
         null,
     );
@@ -1512,13 +1528,172 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         ],
     );
     useShortcut({
-        id: 'thread.commentLine',
+        id: 'route.commentLine',
         keys: ['c'],
         label: 'Comment on the line under the cursor',
+        scope: 'route',
+        section: 'comments',
         when: () => focusedLine !== null,
         action: () => {
             if (focusedLine !== null) {
                 commentLine(focusedLine.fileId, focusedLine.side, focusedLine.line);
+            }
+        },
+    });
+    useShortcut({
+        id: 'route.reply',
+        keys: ['r'],
+        label: 'Reply to the thread under the cursor',
+        scope: 'route',
+        section: 'comments',
+        when: () => focusedThreadId !== null,
+        action: () => {
+            const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
+            if (thread !== undefined) {
+                openReply(threadStore, thread);
+            }
+        },
+    });
+
+    // --- Route navigation keys (SPEC §5) ---
+
+    /** Navigation keys count from the previous jump target, otherwise from the top visible stop. */
+    const anchorStopId = useCallback(
+        (): string | null => keyboardStopRef.current ?? topStopRef.current?.stopId ?? null,
+        [],
+    );
+    const jumpFromKeyboard = useCallback(
+        (target: string | null) => {
+            if (target === null) {
+                return;
+            }
+            keyboardStopRef.current = target;
+            jumpToStop(target);
+        },
+        [jumpToStop],
+    );
+    const stepToStop = useCallback(
+        (direction: 1 | -1) => {
+            jumpFromKeyboard(neighbourId(shown, anchorStopId(), direction, entryId));
+        },
+        [anchorStopId, jumpFromKeyboard, shown],
+    );
+    const stepToUnviewedStop = useCallback(
+        (direction: 1 | -1) => {
+            jumpFromKeyboard(
+                unreadNeighbourId(
+                    shown,
+                    anchorStopId(),
+                    direction,
+                    entryId,
+                    (entry) => !stopProgress.isViewed(entryId(entry)),
+                ),
+            );
+        },
+        [anchorStopId, jumpFromKeyboard, shown, stopProgress],
+    );
+    useShortcut({
+        id: 'route.nextStop',
+        keys: ['j'],
+        label: 'Next stop',
+        scope: 'route',
+        section: 'navigation',
+        action: () => {
+            stepToStop(1);
+        },
+    });
+    useShortcut({
+        id: 'route.prevStop',
+        keys: ['k'],
+        label: 'Previous stop',
+        scope: 'route',
+        section: 'navigation',
+        action: () => {
+            stepToStop(-1);
+        },
+    });
+    useShortcut({
+        id: 'route.nextUnviewed',
+        keys: ['n'],
+        label: 'Next unviewed stop',
+        scope: 'route',
+        section: 'reading',
+        action: () => {
+            stepToUnviewedStop(1);
+        },
+    });
+    useShortcut({
+        id: 'route.prevUnviewed',
+        keys: ['p'],
+        label: 'Previous unviewed stop',
+        scope: 'route',
+        section: 'reading',
+        action: () => {
+            stepToUnviewedStop(-1);
+        },
+    });
+    useShortcut({
+        id: 'route.changeFilter',
+        keys: ['w'],
+        label: 'Filter: what is new since the last visit',
+        scope: 'route',
+        section: 'route',
+        consequence: changeFilterOn ? 'will bring the whole route back' : 'will leave only what changed',
+        when: () => changeFilterAvailable(model.entries),
+        action: () => {
+            session.setRouteFilter(changeFilterOn ? 'all' : 'new');
+        },
+    });
+
+    /**
+     * The focused card: the section (`data-stop`) gives the stop, the focused row gives the file.
+     * The same file appears in several stops, so `fileId` alone cannot identify
+     * the card.
+     */
+    const focusedCard = useCallback((): { readonly stopId: string; readonly group: RouteFileGroup } | null => {
+        if (focusedLine === null || typeof document === 'undefined') {
+            return null;
+        }
+        const active = document.activeElement;
+        const stopId = active instanceof Element ? (active.closest<HTMLElement>('[data-stop]')?.dataset.stop ?? null) : null;
+        if (stopId === null) {
+            return null;
+        }
+        const entry = shown.find((candidate) => entryId(candidate) === stopId);
+        if (entry?.kind !== 'stop') {
+            return null;
+        }
+        const group = entry.view.files.find((candidate) => candidate.fileId === focusedLine.fileId);
+        return group === undefined ? null : { stopId, group };
+    }, [focusedLine, shown]);
+    const focusedHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
+        const card = focusedCard();
+        if (card === null || focusedLine === null) {
+            return [];
+        }
+        const model = stopFileShownModel(
+            card.group,
+            diffSnapshot.models.get(card.group.fileId) ?? null,
+            diffSnapshot.content.get(card.group.fileId) ?? null,
+            diffSnapshot.expansion.get(card.group.fileId) ?? EMPTY_EXPANSION,
+            openedCollapsed.has(`${card.stopId}\u0000${card.group.fileId}`),
+        );
+        return model === null ? [] : hunkContextRequests(model, focusedLine.side, focusedLine.line);
+    }, [diffSnapshot, focusedCard, focusedLine, openedCollapsed]);
+    useShortcut({
+        id: 'route.expandContext',
+        keys: ['e'],
+        label: 'Expand context around the hunk under the cursor',
+        scope: 'route',
+        section: 'reading',
+        when: () => focusedHunkRequests().length > 0,
+        action: () => {
+            const card = focusedCard();
+            if (card === null) {
+                return;
+            }
+            for (const request of focusedHunkRequests()) {
+                void expand(card.group.fileId, { kind: 'gap', ...request });
             }
         },
     });
@@ -1623,7 +1798,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     threadStore={threadStore}
                     threadActions={threadActions}
                     threadNow={threadNow}
-                    onFocusThread={NOOP_THREAD}
+                    onFocusThread={setFocusedThreadId}
                     actions={cardActions}
                     collapsedOpen={openedCollapsed.has(key)}
                     onToggleCollapsed={() => {
@@ -2225,8 +2400,7 @@ export function nextCardInStop(container: HTMLElement, stopId: string, fileId: s
  */
 const useAnchorEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
-/** Thread focus is needed only by the full diff reply shortcut, which the route does not have. */
-const NOOP_THREAD = (): void => undefined;
+/** Defaults for optional note props, omitted by callers without chat (gallery, tests). */
 const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_OPEN_NOTE = (): void => undefined;
 const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('note deletion is unavailable'));

@@ -55,18 +55,24 @@ function PaletteState({ query, recent = false }: { query: string; recent?: boole
             id: 'view.diff',
             keys: ['3'],
             label: 'Open full diff',
+            scope: 'global',
+            section: 'navigation',
             action: () => undefined,
         });
         created.register({
             id: 'gallery.handlers',
             keys: ['g'],
             label: 'Open handlers.ts',
+            scope: 'global',
+            section: 'navigation',
             action: () => undefined,
         });
         created.register({
             id: 'gallery.copyLink',
             keys: [],
             label: 'Copy review link',
+            scope: 'global',
+            section: 'navigation',
             action: () => undefined,
         });
         return created;

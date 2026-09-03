@@ -101,7 +101,10 @@ export function FilePanel(props: FilePanelProps) {
                         setQuery(event.target.value);
                     }}
                     onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
+                        // Esc clears the query. The registry's priority chain receives it only when
+                        // there was nothing to clear, otherwise the field would swallow the overlay close action.
+                        if (event.key === 'Escape' && query !== '') {
+                            event.stopPropagation();
                             setQuery('');
                         }
                     }}
@@ -254,6 +257,8 @@ function FileTreeView({
         id: 'diff.markViewed',
         keys: ['v'],
         label: 'Mark the file viewed',
+        scope: 'full-diff',
+        section: 'reading',
         when: () =>
             !readOnly && cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
         action: () => {

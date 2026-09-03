@@ -27,6 +27,8 @@ import { createDiffClient } from '../diff/client.js';
 import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { expandContext } from '../diff-view/context-expansion.js';
+import type { HunkExpandRequest } from '../diff-view/hunk-expansion.js';
+import { hunkContextRequests } from '../diff-view/hunk-expansion.js';
 import type { FileExpansion } from '../diff-view/expand.js';
 import type { Feedback } from '../diff-view/file-card.tsx';
 import { shownFileModel } from '../diff-view/file-card.tsx';
@@ -61,6 +63,7 @@ import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
+import { neighbourId, unreadNeighbourId } from '../shortcuts/navigation.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createComposerTransport } from '../threads/transport.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
@@ -1167,6 +1170,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         id: 'thread.commentLine',
         keys: ['c'],
         label: 'Comment on the line under the cursor',
+        scope: 'full-diff',
+        section: 'comments',
         when: () => focusedLine !== null,
         action: () => {
             if (focusedLine !== null) {
@@ -1178,6 +1183,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         id: 'thread.reply',
         keys: ['r'],
         label: 'Reply to the thread under the cursor',
+        scope: 'full-diff',
+        section: 'comments',
         when: () => focusedThreadId !== null,
         action: () => {
             const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
@@ -1192,8 +1199,106 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         id: 'diff.filterFiles',
         keys: ['f'],
         label: 'Filter files in the tree',
+        scope: 'full-diff',
+        section: 'navigation',
         action: () => {
             searchRef.current?.focus();
+        },
+    });
+
+    // --- Full diff navigation keys (SPEC §5) ---
+
+    /**
+     * Scroll to a file without expanding it: `j`/`k`/`n`/`p` follow the list just like navigation
+     * after marking and leave a collapsed target alone.
+     */
+    const goToFileQuietly = useCallback((fileId: string | null) => {
+        if (fileId !== null) {
+            void listRef.current?.scrollToFile(fileId, { reveal: false });
+        }
+    }, []);
+    useShortcut({
+        id: 'diff.nextFile',
+        keys: ['j'],
+        label: 'Next file',
+        scope: 'full-diff',
+        section: 'navigation',
+        action: () => {
+            goToFileQuietly(neighbourId(shown, topRef.current, 1, fileIdOf));
+        },
+    });
+    useShortcut({
+        id: 'diff.prevFile',
+        keys: ['k'],
+        label: 'Previous file',
+        scope: 'full-diff',
+        section: 'navigation',
+        action: () => {
+            goToFileQuietly(neighbourId(shown, topRef.current, -1, fileIdOf));
+        },
+    });
+    /**
+     * `n`/`p` go to the next unread file. `partial` counts as unviewed because it
+     * still has unseen lines. Navigation works at file level: the keys
+     * do not navigate within a file (T5 scope).
+     */
+    const goToUnread = useCallback(
+        (direction: 1 | -1) => {
+            const readState = store.getSnapshot().readState;
+            goToFileQuietly(
+                unreadNeighbourId(
+                    shown,
+                    topRef.current,
+                    direction,
+                    fileIdOf,
+                    (file) => readState.get(file.fileId)?.state !== 'read',
+                ),
+            );
+        },
+        [goToFileQuietly, shown, store],
+    );
+    useShortcut({
+        id: 'diff.nextUnread',
+        keys: ['n'],
+        label: 'Next unviewed file',
+        scope: 'full-diff',
+        section: 'reading',
+        action: () => {
+            goToUnread(1);
+        },
+    });
+    useShortcut({
+        id: 'diff.prevUnread',
+        keys: ['p'],
+        label: 'Previous unviewed file',
+        scope: 'full-diff',
+        section: 'reading',
+        action: () => {
+            goToUnread(-1);
+        },
+    });
+    const focusedHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
+        if (focusedLine === null) {
+            return [];
+        }
+        const model = shownModelOf(store.getSnapshot(), focusedLine.fileId);
+        return model === null ? [] : hunkContextRequests(model, focusedLine.side, focusedLine.line);
+    }, [focusedLine, store]);
+    useShortcut({
+        id: 'diff.expandContext',
+        keys: ['e'],
+        label: 'Expand context around the hunk under the cursor',
+        scope: 'full-diff',
+        section: 'reading',
+        when: () => focusedHunkRequests().length > 0,
+        action: () => {
+            if (focusedLine === null) {
+                return;
+            }
+            const fileId = focusedLine.fileId;
+            for (const request of focusedHunkRequests()) {
+                void expandContext({ store, fileId, request: { kind: 'gap', ...request }, contentAvailable, loadContent });
+            }
         },
     });
 
@@ -1458,6 +1563,7 @@ const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is 
 const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
 const EMPTY_ASK_SELECTION = (): void => undefined;
 const NO_SELECTION_PENDING = (): boolean => false;
+const fileIdOf = (file: { readonly fileId: string }): string => file.fileId;
 const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 /** The full diff does not mark stops: it has no controls for that. */
 const NO_STOP_WRITES: StopWriterHooks = {

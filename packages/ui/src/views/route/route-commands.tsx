@@ -56,6 +56,8 @@ export function presetCommand({ preset, setPreset, setView }: PresetCommandInput
         id: 'route.togglePreset',
         keys: ['t'],
         label: PRESET_COMMAND_LABEL,
+        scope: 'global',
+        section: 'route',
         consequence: next === 'tour' ? 'reorders the stops into reading order' : 'restores the triage order',
         action: () => {
             setPreset(next);
@@ -96,6 +98,8 @@ export function generateCommand({ phase, smallPr, generating, onGenerate }: Gene
         id: 'route.generate',
         keys: [],
         label: phase === 'none' ? 'Build the route' : 'Regenerate the route',
+        scope: 'global',
+        section: 'route',
         consequence: 'clears the stop marks once the new route arrives',
         when: () => routeGenerationAvailable({ phase, smallPr, generating }),
         action: onGenerate,
@@ -112,6 +116,8 @@ function StopCommand({ id, label, onJump }: { id: string; label: string; onJump:
         id: `route.stop.${id}`,
         keys: [],
         label,
+        scope: 'global',
+        section: 'route',
         action: () => {
             onJump(id);
         },

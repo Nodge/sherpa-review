@@ -2,6 +2,7 @@ import type { UiFeedbackAvailability, UiFeedbackRequest, UiFeedbackResponse } fr
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import type { BreadcrumbSegment } from '../pr-key.js';
+import { useEscapeLayer } from '../shortcuts/context.tsx';
 import type { ViewId } from '../session/views.js';
 import type { AgentPillView } from './agent-pill-view.js';
 import type { ChatScrollTarget } from './chat-panel.tsx';
@@ -137,18 +138,14 @@ export function AgentPill({
                 setOpen(false);
             }
         };
-        const closeOnEscape = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                setOpen(false);
-            }
-        };
         document.addEventListener('mousedown', closeOutside);
-        document.addEventListener('keydown', closeOnEscape);
         return () => {
             document.removeEventListener('mousedown', closeOutside);
-            document.removeEventListener('keydown', closeOnEscape);
         };
     }, [open]);
+    useEscapeLayer('popover', () => {
+        setOpen(false);
+    }, open);
 
     return (
         <div ref={wrapperRef} className="agent-pill-wrap">

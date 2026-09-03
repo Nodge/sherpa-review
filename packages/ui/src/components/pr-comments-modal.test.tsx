@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerTransport } from '../threads/composer.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import { createUiSettingsStore } from '../settings/settings-store.js';
+import { ShortcutsProvider } from '../shortcuts/context.tsx';
+import { attachShortcuts, createShortcutRegistry } from '../shortcuts/registry.js';
 import { PR_COMPOSER_KEY } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
@@ -323,25 +325,31 @@ function mountModal(
         delete: () => Promise.resolve(),
         ...transportOverrides,
     };
+    // The modal's Esc handler uses the registry hierarchy (M5-T5). Without a provider, nothing can close it.
+    const registry = createShortcutRegistry();
+    const detach = attachShortcuts(window, registry);
     const root = createRoot(host);
     act(() => {
         root.render(
-            <SettingsProvider store={settings}>
-                <PrCommentsModal
-                    pr={DATA.pr}
-                    store={store}
-                    transport={transport}
-                    draftBuffer={draftBuffer}
-                    now={NOW}
-                    onClose={onClose}
-                />
-            </SettingsProvider>,
+            <ShortcutsProvider registry={registry}>
+                <SettingsProvider store={settings}>
+                    <PrCommentsModal
+                        pr={DATA.pr}
+                        store={store}
+                        transport={transport}
+                        draftBuffer={draftBuffer}
+                        now={NOW}
+                        onClose={onClose}
+                    />
+                </SettingsProvider>
+            </ShortcutsProvider>,
         );
     });
     mounted.push(() => {
         act(() => {
             root.unmount();
         });
+        detach();
         host.remove();
     });
     return { store };

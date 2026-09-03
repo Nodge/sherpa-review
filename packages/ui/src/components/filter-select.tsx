@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
 import { Icon } from '../icons/icon.tsx';
+import { useEscapeLayer } from '../shortcuts/context.tsx';
 import './filter-select.css';
 
 /**
@@ -58,6 +59,10 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
             window.removeEventListener('mousedown', onPointerDown);
         };
     }, [close, open]);
+
+    useEscapeLayer('popover', () => {
+        close(true);
+    }, open);
 
     // Focus moves to the list. `aria-activedescendant` moves selection inside it,
     // so arrow keys do not move focus across ten buttons.
@@ -123,9 +128,6 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
                         } else if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             choose(cursor);
-                        } else if (event.key === 'Escape') {
-                            event.preventDefault();
-                            close(true);
                         } else if (event.key === 'Tab') {
                             close(false);
                         }
