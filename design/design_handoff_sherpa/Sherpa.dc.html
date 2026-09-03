@@ -40,7 +40,7 @@
     <div style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:8px;flex:none;white-space:nowrap">
       <button onClick="{{ go }}" data-v="overview" style="{{ tabOverview }}">Overview</button>
       <button onClick="{{ go }}" data-v="route" style="{{ tabRoute }}">Route</button>
-      <button onClick="{{ go }}" data-v="diff" style="{{ tabDiff }}">Full diff</button>
+      <button onClick="{{ go }}" data-v="diff" data-tour="fulldiff" style="{{ tabDiff }}">Full diff</button>
     </div>
     <div style="flex:1"></div>
     <button onClick="{{ toggleChat }}" style="display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;background:transparent;border:1px solid #24272d;border-radius:7px;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;flex:none">
@@ -147,7 +147,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
 
       <div style="position:sticky;top:46px;z-index:30;margin-top:20px;padding:10px 30px 11px 30px;background:rgba(13,14,16,.92);backdrop-filter:blur(8px);border-bottom:1px solid #1e2126">
         <div style="max-width:1560px;display:flex;align-items:center;gap:16px">
-          <div style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:8px;flex:none">
+          <div data-tour="presets" style="display:flex;align-items:center;gap:2px;padding:3px;background:#161819;border:1px solid #24272d;border-radius:8px;flex:none">
             <button onClick="{{ setPreset }}" data-p="triage" style="{{ presetTriage }}">Triage</button>
             <button onClick="{{ setPreset }}" data-p="tour" style="{{ presetTour }}">Full tour</button>
           </div>
@@ -198,7 +198,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
           </div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap">862 changed lines · <span style="color:#9ba1ab">96% explained</span> · <a href="#other" style="color:#9ba1ab;border-bottom:1px dashed #4a4f57">34 lines not explained</a></div>
           <div style="width:1px;height:16px;background:#26292f"></div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap"><span style="color:#c7cad1">{{ viewedCount }} / {{ stopTotal }}</span> stops viewed</div>
+          <div data-tour="progress" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;white-space:nowrap"><span style="color:#c7cad1">{{ viewedCount }} / {{ stopTotal }}</span> stops viewed</div>
         </div>
       </div>
 
@@ -218,7 +218,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
         <sc-for list="{{ stops }}" as="stop" hint-placeholder-count="3">
           <div id="{{ stop.domId }}" style="display:grid;grid-template-columns:minmax(300px,368px) minmax(0,1fr);gap:40px;padding:30px 0 34px 0;border-bottom:1px solid #1a1d21">
 
-            <div style="{{ stop.leftStyle }}">
+            <div data-tour="{{ stop.tourLeft }}" style="{{ stop.leftStyle }}">
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
                 <span style="{{ stop.tierRule }}"></span>
                 <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078;letter-spacing:.04em;white-space:nowrap">{{ stop.no }} / {{ stop.of }}</span>
@@ -276,13 +276,13 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
               </div>
             </div>
 
-            <div style="min-width:0;display:flex;flex-direction:column;gap:10px">
+            <div data-tour="{{ stop.tourDiff }}" style="min-width:0;display:flex;flex-direction:column;gap:10px">
               <sc-if value="{{ stop.flash }}">
                 <div style="height:2px;background:#7f8cff;border-radius:2px;animation:shimmer 1s ease-in-out infinite"></div>
               </sc-if>
 
               <sc-if value="{{ stop.collapsed }}">
-                <button onClick="{{ toggleStop }}" data-s="{{ stop.id }}" style="display:flex;align-items:center;gap:12px;width:100%;padding:13px 15px;background:#121316;border:1px dashed #2b2f36;border-radius:9px;color:#8a8f98;font-family:inherit;font-size:12.5px;text-align:left;cursor:pointer" style-hover="background:#15171b;border-color:#3a3f47;color:#c7cad1">
+                <button onClick="{{ toggleStop }}" data-s="{{ stop.id }}" data-tour="{{ stop.tourFold }}" style="display:flex;align-items:center;gap:12px;width:100%;padding:13px 15px;background:#121316;border:1px dashed #2b2f36;border-radius:9px;color:#8a8f98;font-family:inherit;font-size:12.5px;text-align:left;cursor:pointer" style-hover="background:#15171b;border-color:#3a3f47;color:#c7cad1">
                   <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">⌄</span>
                   {{ stop.collapsedLabel }}
                   <span style="flex:1"></span>
@@ -467,7 +467,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
     </div>
 
     <sc-if value="{{ chatOpen }}">
-      <div style="position:sticky;top:46px;flex:none;width:392px;height:calc(100vh - 46px);border-left:1px solid #22252b;background:#101113;display:flex;flex-direction:column">
+      <div data-tour="chat" style="position:sticky;top:46px;flex:none;width:392px;height:calc(100vh - 46px);border-left:1px solid #22252b;background:#101113;display:flex;flex-direction:column">
         <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #1e2126">
           <span style="font-size:12.5px;font-weight:600">Agent</span>
           <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">claude-code · sonnet-5</span>
@@ -785,7 +785,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
   </sc-if>
 
   <sc-if value="{{ showActions }}">
-    <div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:8px;padding:8px 9px;background:#181a1e;border:1px solid #303540;border-radius:11px;box-shadow:0 16px 44px rgba(0,0,0,.6)">
+    <div data-tour="ship" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:8px;padding:8px 9px;background:#181a1e;border:1px solid #303540;border-radius:11px;box-shadow:0 16px 44px rgba(0,0,0,.6)">
       <div style="display:flex;align-items:center;gap:8px;padding:0 6px 0 4px;white-space:nowrap">
         <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">{{ viewedCount }} / {{ stopTotal }}</span>
         <span style="font-size:12px;color:#6b7078">stops</span>
@@ -820,7 +820,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
   </sc-if>
 
   <sc-if value="{{ paletteOpen }}">
-    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;z-index:80;background:rgba(7,8,9,.66);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:96px">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;z-index:95;background:rgba(7,8,9,.66);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:96px">
       <div style="width:100%;max-width:560px;background:#141518;border:1px solid #313640;border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.65);overflow:hidden">
         <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #1e2126">
           <span style="color:#5e636b">⌕</span>
@@ -829,7 +829,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
           <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">esc</span>
         </div>
         <sc-for list="{{ palette }}" as="p" hint-placeholder-count="5">
-          <div style="{{ p.rowStyle }}" style-hover="background:#1b1e24">
+          <div onClick="{{ paletteRun }}" data-p="{{ p.id }}" style="{{ p.rowStyle }}" style-hover="background:#1b1e24">
             <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;width:74px;flex:none">{{ p.group }}</span>
             <span style="font-size:12.5px;color:#e0e2e7;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.label }}</span>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">{{ p.key }}</span>
@@ -856,6 +856,26 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
       </div>
     </div>
   </sc-if>
+  <sc-if value="{{ tourOn }}">
+    <div style="{{ tourRingStyle }}"></div>
+    <div style="{{ tourCardStyle }}">
+      <div style="{{ tourBeakStyle }}"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">{{ tourCounter }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">{{ tourTitle }}</div>
+      <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">{{ tourBody }}</div>
+      <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+        <button onClick="{{ tourSkip }}" style="background:transparent;border:none;padding:0;color:#6b7078;font-family:inherit;font-size:12px;cursor:pointer;border-bottom:1px dashed #3a3f47" style-hover="color:#9ba1ab;border-color:#5e636b">Skip tour</button>
+        <div style="flex:1"></div>
+        <sc-if value="{{ tourHasBack }}">
+          <button onClick="{{ tourBack }}" style="height:28px;padding:0 11px;background:transparent;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-family:inherit;font-size:12.5px;cursor:pointer" style-hover="background:#1b1e24">Back</button>
+        </sc-if>
+        <button onClick="{{ tourNext }}" style="height:28px;padding:0 13px;background:#7f8cff;border:none;border-radius:7px;color:#101223;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ tourNextLabel }}</button>
+      </div>
+    </div>
+  </sc-if>
 </div>
 
 </x-dc>
@@ -866,17 +886,182 @@ class Component extends DCLogic {
     chat: false, palette: false, dock: false, lowOpen: false, genPhase: 'filling', zone: 'mine',
     diffMode: 'unified', showTestCode: false, fileViewed: {}, threadsShow: { people: true, bots: false, resolved: false }, dirClosed: {}, fileFilter: 'all', filterOpen: false,
     scenario: 'f1', viewed: { s1: true, s2: false, s3: false, s4: false, s5: false, s6: true, s7: false },
-    expanded: {}, folds: {}
+    expanded: {}, folds: {}, tour: null, tourPos: null
   };
 
   componentDidMount() {
     this._k = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState({ palette: true }); }
       if (e.key === 'Escape') this.setState({ palette: false });
+      if (this.state.tour != null && !this.state.palette) {
+        if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); this.tourNext(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); this.tourBack(); }
+      }
     };
     window.addEventListener('keydown', this._k);
+    this._tp = () => {
+      if (this.state.tour == null) return;
+      clearTimeout(this._raf);
+      this._raf = setTimeout(() => { this._raf = null; this.tourPlace('after'); }, 40);
+    };
+    window.addEventListener('scroll', this._tp, true);
+    window.addEventListener('resize', this._tp);
+    window.addEventListener('load', this._tp);
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this._tp()); } catch (err) {}
+    let seen = false, at = 0;
+    try {
+      seen = !!localStorage.getItem('sherpa.onboarding.v1');
+      at = parseInt(localStorage.getItem('sherpa.onboarding.step') || '0', 10) || 0;
+    } catch (err) {}
+    if (!seen) this._auto = setTimeout(() => { if (this.state.tour == null) this.tourStart(Math.min(at, this.TOUR.length - 1)); }, 550);
   }
-  componentWillUnmount() { window.removeEventListener('keydown', this._k); }
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._k);
+    window.removeEventListener('scroll', this._tp, true);
+    window.removeEventListener('resize', this._tp);
+    clearTimeout(this._auto);
+    clearTimeout(this._ramp);
+    clearTimeout(this._raf);
+    clearTimeout(this._retry);
+    window.removeEventListener('load', this._tp);
+  }
+
+  TOUR = [
+    { sel: '[data-tour="narrative"]', st: { view: 'route', preset: 'triage', gen: 'ready', stale: false, routeFilter: 'all', chat: false },
+      t: 'The route decides what you read first',
+      b: 'Stops are ordered by how much they can hurt \u2014 the heart of the change, then its consequences, then the wiring. You may stop after any of them: the important part is already behind you.' },
+    { sel: '[data-tour^="fold-"]',
+      t: 'Low-risk stops arrive folded',
+      b: 'Every stop carries a tier. Low ones start folded, with their line count on the fold \u2014 nothing is ever hidden from you silently, and one click opens the code.' },
+    { sel: '[data-tour="stopdiff"]',
+      t: 'Inside every stop is the real diff',
+      b: 'Not a retelling of the code \u2014 the diff itself, with comments, viewed marks, search and context expansion. If the route vanished, this would still be your reader.' },
+    { sel: '[data-tour="progress"]', fix: true,
+      t: 'Progress counts two different things',
+      b: 'The counter says where you are; the viewed marks say what you actually read. Viewed stops dim and fold, so the page gets shorter as you move. Progress is yours alone.' },
+    { sel: '[data-tour="presets"]', fix: true,
+      t: 'Two orders of the same review',
+      b: 'Triage sorts by importance. Full tour follows the reading flow \u2014 entry point, definitions, consequences, verification. Same stops, same comments, same marks; only the order changes.' },
+    { sel: '[data-tour="chat"]', fix: true, st: { chat: true, gen: 'ready' },
+      t: 'Ask about the lines in front of you',
+      b: 'Select code anywhere and ask. The answer streams in here and stays pinned to those lines as a foldable note \u2014 one click turns a note into a comment draft.' },
+    { sel: '[data-tour="fulldiff"]', fix: true, st: { chat: false },
+      t: 'The classic reader stays one click away',
+      b: 'Full diff shows every file in plain order \u2014 nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing.' },
+    { sel: '[data-tour="ship"]', fix: true,
+      t: 'Nothing reaches the author until you say so',
+      b: 'Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you.' }
+  ];
+
+  tourStart = (i) => {
+    const step = this.TOUR[i];
+    if (!step) return;
+    try { localStorage.setItem('sherpa.onboarding.step', String(i)); } catch (err) {}
+    this.setState(Object.assign({ tour: i, palette: false, tourPos: null }, step.st || {}), () => {
+      this._scrolling = false;
+      setTimeout(() => this.tourPlace(true), 0);
+      this.tourRetry(0);
+    });
+  };
+
+  RETRIES = [340, 640, 1000, 1600, 2400, 3400];
+
+  tourRetry = (n) => {
+    clearTimeout(this._retry);
+    if (n >= this.RETRIES.length) return;
+    this._retry = setTimeout(() => {
+      if (this.state.tour == null) return;
+      if (!this.state.tourPos) this.tourPlace('after');
+      if (!this.state.tourPos) this.tourRetry(n + 1);
+    }, this.RETRIES[n]);
+  };
+
+  tourScroller = (el) => {
+    let n = el.parentElement;
+    while (n && n !== document.body) {
+      const st = getComputedStyle(n);
+      if (/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight + 4) return n;
+      n = n.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  };
+
+  tourScroll = (sc, to, done) => {
+    const from = sc.scrollTop, dist = to - from, t0 = Date.now();
+    if (Math.abs(dist) < 2) return done();
+    let reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (err) {}
+    if (reduce) { sc.scrollTop = to; return done(); }
+    this._scrolling = true;
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - t0) / 320);
+      sc.scrollTop = from + dist * (p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+      if (p < 1) this._ramp = setTimeout(tick, 16);
+      else { this._scrolling = false; setTimeout(done, 0); }
+    };
+    clearTimeout(this._ramp);
+    tick();
+  };
+
+  tourPlace = (allowScroll) => {
+    const step = this.TOUR[this.state.tour];
+    if (!step) return;
+    if (this._scrolling && allowScroll !== 'after') return;
+    const el = document.querySelector(step.sel);
+    if (!el) { this.setState({ tourPos: null }); return; }
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight, W = 350, H = 200, gap = 14, pad = 5;
+    if (allowScroll === true && !step.fix) {
+      const margin = 150;
+      if (r.top < margin || r.top > vh - 180) {
+        const sc = this.tourScroller(el);
+        const isDoc = sc === document.scrollingElement || sc === document.documentElement || sc === document.body;
+        const base = isDoc ? 0 : sc.getBoundingClientRect().top;
+        this.tourScroll(sc, Math.max(0, sc.scrollTop + r.top - base - margin), () => this.tourPlace('after'));
+        return;
+      }
+    }
+    if (r.bottom < 8 || r.top > vh - 8 || r.right < 8 || r.left > vw - 8) { this.setState({ tourPos: null }); return; }
+    const rl = Math.max(4, r.left - pad), rt = Math.max(-2, r.top - pad);
+    const ring = {
+      l: rl, t: rt,
+      w: Math.min(r.width + pad * 2 - (rl - (r.left - pad)), vw - rl - 4),
+      h: Math.min(r.height + pad * 2, vh - 24)
+    };
+    const clampY = (v) => Math.min(Math.max(14, v), Math.max(14, vh - H - 14));
+    let side, top, left;
+    if (ring.t + ring.h + gap + H < vh - 12) { side = 'below'; top = ring.t + ring.h + gap; }
+    else if (ring.t - gap - H > 12) { side = 'above'; top = ring.t - gap - H; }
+    else if (ring.l + ring.w + gap + W < vw - 12) { side = 'right'; left = ring.l + ring.w + gap; top = ring.t; }
+    else { side = 'left'; left = Math.max(12, ring.l - gap - W); top = ring.t; }
+    if (side === 'below' || side === 'above') left = Math.min(Math.max(16, ring.l), vw - W - 16);
+    top = clampY(top);
+    const anchorX = ring.l + Math.min(ring.w / 2, 60), anchorY = ring.t + Math.min(ring.h / 2, 40);
+    const beak = (side === 'below' || side === 'above')
+      ? Math.min(Math.max(14, anchorX - left - 4.5), W - 23)
+      : Math.min(Math.max(14, anchorY - top - 4.5), H - 23);
+    this.setState({ tourPos: { ring, side, top, left, beak: Math.round(beak) } });
+  };
+
+  tourNext = () => {
+    if (this.state.tour + 1 >= this.TOUR.length) return this.tourDone();
+    this.tourStart(this.state.tour + 1);
+  };
+  tourBack = () => { if (this.state.tour > 0) this.tourStart(this.state.tour - 1); };
+  tourSkip = () => this.tourDone();
+  tourDone = () => {
+    clearTimeout(this._retry);
+    try { localStorage.setItem('sherpa.onboarding.v1', 'done'); localStorage.setItem('sherpa.onboarding.step', '0'); } catch (err) {}
+    this.setState({ tour: null, tourPos: null });
+  };
+  tourReplay = () => {
+    try { localStorage.removeItem('sherpa.onboarding.v1'); } catch (err) {}
+    this.tourStart(0);
+  };
+  paletteRun = (e) => {
+    if (e.currentTarget.dataset.p === 'tour') { this.tourReplay(); return; }
+    this.setState({ palette: false });
+  };
 
   ZONES = [
     { path: 'services/orders/domain', owner: 'you \u00b7 owner', files: 5, lines: 361, plus: '+338', minus: '\u221223', mine: true, note: 'EditPolicy, order aggregate, denial reasons and their tests.', ownerStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#86d9a8;background:#132019;border:1px solid #24422f;border-radius:4px;padding:1px 5px;white-space:nowrap' },
@@ -899,7 +1084,8 @@ class Component extends DCLogic {
     { id: 'failed', tag: '03', label: 'Generation failed', st: { view: 'route', gen: 'failed', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
     { id: 'diff', tag: '04', label: 'Full diff fallback', st: { view: 'diff', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
     { id: 'done', tag: '05', label: 'Review complete', st: { view: 'done', chat: false, gen: 'ready', stale: false, preset: 'triage', routeFilter: 'all' } },
-    { id: 'palette', tag: '06', label: 'Command palette', st: { palette: true } }
+    { id: 'palette', tag: '06', label: 'Command palette', st: { palette: true } },
+    { id: 'onboarding', tag: '07', label: 'First run \u00b7 onboarding tour', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } }, tour: true }
   ];
 
   // ---------- diff helpers ----------
@@ -1184,6 +1370,7 @@ class Component extends DCLogic {
         viewedBtn: 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:' + (viewed ? '#16211a' : 'transparent') + ';border:1px solid ' + (viewed ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (viewed ? '#86d9a8' : '#8a8f98') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;flex:none',
         viewedLabel: viewed ? '\u2713 Viewed' : 'Mark viewed',
         collapsed: queued ? false : collapsed, isChanged: changed, isNew,
+        tourLeft: i === 0 ? 'narrative' : '', tourDiff: i === 0 ? 'stopdiff' : '', tourFold: !queued && collapsed ? 'fold-' + s.id : '',
         changeReason: changed ? s.changeReason : null,
         skeleton: queued,
         viewedBtn: queued ? 'display:none' : 'display:flex;align-items:center;gap:6px;height:23px;padding:0 8px;background:' + (viewed ? '#16211a' : 'transparent') + ';border:1px solid ' + (viewed ? '#25422f' : '#2b2f36') + ';border-radius:5px;color:' + (viewed ? '#86d9a8' : '#8a8f98') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;flex:none',
@@ -1196,6 +1383,7 @@ class Component extends DCLogic {
         out.push({
           id: 'r' + i, no: '\u2014', of: '?', title: '', para: '', tier: 'medium', skeleton: true, files: [], hunks: [],
           leftStyle: 'opacity:1', titleStyle: 'display:none', tierRule: 'width:3px;height:15px;border-radius:2px;background:#22252b',
+          tourLeft: '', tourDiff: '', tourFold: '',
           viewedBtn: 'display:none', viewedLabel: '', collapsed: false
         });
       }
@@ -1338,7 +1526,10 @@ class Component extends DCLogic {
   showAll = () => this.setState({ routeFilter: 'all' });
   toggleShipMenu = () => this.setState((s) => ({ shipOpen: !s.shipOpen }));
   ship = (e) => this.setState({ view: 'done', shipOpen: false, shipMode: (e.currentTarget.dataset.mode || 'ship') });
-  setScenario = (e) => { const id = e.currentTarget.dataset.s; const sc = this.SCEN.find((x) => x.id === id); this.setState(Object.assign({ scenario: id, palette: false }, sc.st)); };
+  setScenario = (e) => {
+    const id = e.currentTarget.dataset.s; const sc = this.SCEN.find((x) => x.id === id);
+    this.setState(Object.assign({ scenario: id, palette: false, tour: null, tourPos: null }, sc.st), () => { if (sc.tour) this.tourStart(0); });
+  };
 
   chipBtn(on) {
     return 'display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;border:1px solid ' + (on ? '#2f333a' : '#22252b') + ';background:' + (on ? '#22252b' : 'transparent') + ';color:' + (on ? '#e0e2e7' : '#6b7078') + ';font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap';
@@ -1485,6 +1676,26 @@ class Component extends DCLogic {
       dockOpen: s.dock,
       dockBtnStyle: 'height:28px;padding:0 9px;background:' + (s.dock ? '#1b1e24' : 'transparent') + ';border:1px dashed #333842;border-radius:7px;color:#6b7078;font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;letter-spacing:.06em;cursor:pointer;flex:none;white-space:nowrap',
       showActions: s.view === 'route' || s.view === 'diff',
+      paletteRun: this.paletteRun,
+      tourOn: s.tour != null,
+      tourTitle: s.tour != null ? this.TOUR[s.tour].t : '',
+      tourBody: s.tour != null ? this.TOUR[s.tour].b : '',
+      tourCounter: s.tour != null ? String(s.tour + 1).padStart(2, '0') + ' / ' + String(this.TOUR.length).padStart(2, '0') : '',
+      tourNextLabel: s.tour != null && s.tour === this.TOUR.length - 1 ? 'Start reviewing' : 'Next',
+      tourHasBack: s.tour != null && s.tour > 0,
+      tourNext: this.tourNext, tourBack: this.tourBack, tourSkip: this.tourSkip,
+      tourRingStyle: s.tourPos
+        ? 'position:fixed;z-index:88;pointer-events:none;border:1.5px solid #7f8cff;border-radius:11px;box-shadow:0 0 0 3px rgba(127,140,255,.13),0 0 26px rgba(127,140,255,.16);left:' + Math.round(s.tourPos.ring.l) + 'px;top:' + Math.round(s.tourPos.ring.t) + 'px;width:' + Math.round(s.tourPos.ring.w) + 'px;height:' + Math.round(s.tourPos.ring.h) + 'px;transition:left .18s ease,top .18s ease,width .18s ease,height .18s ease'
+        : 'display:none',
+      tourCardStyle: 'position:fixed;z-index:89;width:350px;padding:14px 16px 15px 16px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 20px 52px rgba(0,0,0,.62);' + (s.tourPos
+        ? 'left:' + Math.round(s.tourPos.left) + 'px;top:' + Math.round(s.tourPos.top) + 'px;transition:left .18s ease,top .18s ease'
+        : 'left:50%;bottom:96px;transform:translateX(-50%)'),
+      tourBeakStyle: s.tourPos
+        ? 'position:absolute;width:9px;height:9px;background:#171a1f;transform:rotate(45deg);' + (s.tourPos.side === 'below' ? 'top:-5px;left:' + s.tourPos.beak + 'px;border-left:1px solid #313640;border-top:1px solid #313640'
+          : s.tourPos.side === 'above' ? 'bottom:-5px;left:' + s.tourPos.beak + 'px;border-right:1px solid #313640;border-bottom:1px solid #313640'
+          : s.tourPos.side === 'right' ? 'left:-5px;top:' + s.tourPos.beak + 'px;border-left:1px solid #313640;border-bottom:1px solid #313640'
+          : 'right:-5px;top:' + s.tourPos.beak + 'px;border-right:1px solid #313640;border-top:1px solid #313640')
+        : 'display:none',
       stops, stopTotal: 7, viewedCount,
       snapshotLabel: s.stale ? '9f3c1ab \u00b7 stale' : '9f3c1ab \u00b7 current',
       agentLabel: gen === 'offline' ? 'Agent disconnected' : gen === 'generating' ? 'Agent working \u00b7 1 in queue' : 'Agent \u00b7 claude-code',
@@ -1576,9 +1787,10 @@ class Component extends DCLogic {
         { group: 'route', label: 'Switch preset to full tour', key: 'T' },
         { group: 'route', label: 'Regenerate the route for a71d4e2', key: 'R' },
         { group: 'review', label: 'Ship \u00b7 publishes 2 drafts', key: '\u2318\u21b5' },
+        { group: 'sherpa', label: 'Replay the onboarding tour \u00b7 8 steps', key: '', id: 'tour' },
         { group: 'sherpa', label: 'Report a problem with Sherpa \u00b7 attaches PR, snapshot, screen', key: '' }
       ].map((p, i) => ({
-        group: p.group, label: p.label, key: p.key,
+        group: p.group, label: p.label, key: p.key, id: p.id || '',
         rowStyle: 'display:flex;align-items:center;gap:12px;padding:9px 15px;background:' + (i === 0 ? '#1b1e24' : 'transparent') + ';border-bottom:1px solid #191c20;cursor:pointer'
       }))
     };

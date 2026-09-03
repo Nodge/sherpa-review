@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0e10; }
+  * { box-sizing: border-box; }
+  a { color: #8f9bff; text-decoration: none; }
+  a:hover { color: #b3bcff; }
+  ::selection { background: rgba(127,140,255,.28); }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0d0e10;color:#e9eaee;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:34px 40px 90px">
+
+<section style="max-width:1180px">
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#6b7078">SHERPA · ONBOARDING 2026-09-02</span>
+  </div>
+  <h1 style="margin:0 0 10px;font-size:23px;font-weight:600;letter-spacing:-.015em;color:#f0f1f4">First visit: 8 tips on the live interface</h1>
+  <p style="margin:0 0 30px;max-width:760px;font-size:13px;line-height:1.62;color:#a9aeb7;text-wrap:pretty">Onboarding uses neither a wizard nor a takeover. The card sits beside a real element, the screen stays undimmed, and the interface remains usable. This extends the principle of a "scrollable document, not a step-by-step wizard". <a href="#2a">2a</a> is the step storyboard with final copy. <a href="#2b">2b</a> covers card anatomy, the ring, four positions and fallbacks. <a href="#2c">2c</a> covers display rules, fallback behaviour, keyboard controls and telemetry. The live tour runs in <a href="Sherpa.dc.html">Sherpa.dc.html</a>, through the "07 · First run" scenario in the dock or a command in the palette.</p>
+
+  <!-- ===================== 2a ===================== -->
+  <div id="2a" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:2px 6px">2a · storyboard</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Eight steps</h2>
+    </div>
+    <p style="margin:0 0 6px;max-width:760px;font-size:12.5px;line-height:1.6;color:#a9aeb7;text-wrap:pretty">The order follows the reviewer's path, not the menu structure: what to read first (01–03), how to track progress (04), how to change the order and ask questions (05–06), then the way out (07) and finishing (08). Each step attaches to an element that is actually on screen at that moment, so the tour starts once the first stop is ready, not on an empty skeleton.</p>
+
+    <div style="display:flex;align-items:center;gap:8px;margin:18px 0 4px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.06em">
+      <span>CARD 1:1</span><span style="flex:1;height:1px;background:#1a1d21"></span><span>ANCHOR · STATE · POSITION · PURPOSE</span>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">01 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">The route decides what you read first</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Stops are ordered by how much they can hurt — the heart of the change, then its consequences, then the wiring. You may stop after any of them: the important part is already behind you.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">First stop narrative: title, paragraph, file chips</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">Route · Triage · first stop filled</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">To the right of the narrative column, aligned with the top of the stop</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">The main puzzle for a first-time user is why files are not alphabetical. Permission to leave before the end also removes the fear of having to go through everything.</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Stops are sorted by how much harm they could cause: heart of the change, consequences, wiring. You can leave after any stop. The important parts came first.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">02 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Low-risk stops arrive folded</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Every stop carries a tier. Low ones start folded, with their line count on the fold — nothing is ever hidden from you silently, and one click opens the code.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">First low-tier stop fold (dashed panel with a counter)</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">The tour scrolls to the first collapsed stop without expanding it</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">Below the fold, aligned with its left edge</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">The fold is the only place where AI changes code visibility. Explain the "nothing hidden silently" principle before the reviewer suspects missing lines.</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Each stop has a tier. Low-tier stops start collapsed, with a line counter on the fold. Nothing is hidden silently. Click to expand the code.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">03 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Inside every stop is the real diff</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Not a retelling of the code — the diff itself, with comments, viewed marks, search and context expansion. If the route vanished, this would still be your reader.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">Right column of the first stop, including the entire diff viewers</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">Unchanged. The ring outlines the diff block, clipped to the viewport</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">To the left of the diff, over the narrative column</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">WHY</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">Addresses the main concern about AI tools: "I'm getting a retelling of the code instead of the code itself." Also establishes parity with the review host.</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">The actual diff, not a retelling: comments, viewed marks, search, context expansion. Remove the route and it still works as your reader.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">04 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Progress counts two different things</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">The counter says where you are; the viewed marks say what you actually read. Viewed stops dim and fold, so the page gets shorter as you move. Progress is yours alone.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">"N / 7 stops viewed" counter in the sticky bar</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">The element is sticky, so no scrolling is needed. The page stays in place</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">Below the counter, aligned with the right edge of the viewport</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">Two levels of progress need explaining: position ≠ viewed state. This also explains why stops collapse and the page gets shorter.</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">The counter shows where you are. Marks show what you have actually read. Viewed content dims and collapses, making the page shorter. Progress is personal.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">05 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Two orders of the same review</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Triage sorts by importance. Full tour follows the reading flow — entry point, definitions, consequences, verification. Same stops, same comments, same marks; only the order changes.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">Triage / Full tour switch</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">Only highlight the preset. Do not switch it for the user</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">Below the switch, aligned with its left edge</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">Otherwise, the switch reads as "two modes with separate state", making people afraid to click it. The phrase that matters is "only the order changes".</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Triage sorts by importance. Full tour follows the reading order: entry point, definitions, consequences, verification. The stops and marks stay the same. Only the order changes.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">06 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Ask about the lines in front of you</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Select code anywhere and ask. The answer streams in here and stays pinned to those lines as a foldable note — one click turns a note into a comment draft.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">Agent panel (the only step that opens it)</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">The panel opens at this step and closes at the next, restoring its initial state</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">To the left of the panel, aligned with its top edge</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">Nobody discovers "ask about a selection" on their own. The point is that the answer stays beside the code instead of getting lost in chat.</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#c9a464;letter-spacing:.05em;padding-top:2px">FALLBACK</span><span style="font-size:12.5px;color:#d8c9ad">Agent disconnected → skip this step, set the counter to 07, shift the remaining steps</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Select code anywhere and ask. The answer appears here and stays pinned to those lines as a collapsible note. One click turns it into a comment draft.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">07 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">The classic reader stays one click away</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Full diff shows every file in plain order — nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">"Full diff" tab in the header</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">Do not switch views, or the reviewer will lose their place in the route</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">Below the tab. The header is sticky, so the card always fits in the viewport</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">Provides an "emergency exit" before it is needed. Trust in the AI layer grows when it is clear you can leave it at any time.</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Full diff shows all files in their usual order, with nothing reordered or collapsed by the model. The AI layer moves to the margins instead of disappearing.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:20px 0;border-top:1px solid #17191d">
+      <div style="width:350px;flex:none;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">08 / 08</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34;text-wrap:pretty">Nothing reaches the author until you say so</div>
+        <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6;text-wrap:pretty">Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you.</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+          <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+          <div style="flex:1"></div>
+          <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+          <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Start reviewing</span>
+        </div>
+      </div>
+      <sc-if value="{{ meta }}">
+      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">ANCHOR</span><span style="font-size:12.5px;color:#c7cad1">Floating bar for final review actions</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">STATE</span><span style="font-size:12.5px;color:#a9aeb7">The bar is fixed. The card sits above it</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">POSITION</span><span style="font-size:12.5px;color:#a9aeb7">Above the bar, aligned with its left edge</span></div>
+        <div style="display:flex;gap:12px"><span style="width:96px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b;letter-spacing:.05em;padding-top:2px">PURPOSE</span><span style="font-size:12.5px;color:#a9aeb7;text-wrap:pretty">The two-stage draft model is the most dangerous hidden detail. Without an explanation, the reviewer thinks comments have already reached the author. The last step closes the tour with "the human decides".</span></div>
+        <sc-if value="{{ ru }}">
+          <div style="margin-top:3px;padding:8px 10px;background:#131519;border-left:2px solid #2b2f36;border-radius:0 6px 6px 0;font-size:12px;color:#8a8f98;line-height:1.55">Comments are saved as drafts as you write. The bar counts what is waiting to be published. Ship or Request changes sends the batch. Sherpa never posts or ships for you.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- ===================== 2b ===================== -->
+  <div id="2b" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:2px 6px">2b · anatomy</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Card, ring, positioning</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:760px;font-size:12.5px;line-height:1.6;color:#a9aeb7;text-wrap:pretty">The screen stays undimmed, with a ring around the target and a shadow under the card. The screen remains usable: you can scroll, click, open a file and return. The card recalculates its position on every scroll and resize.</p>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1 1 400px;min-width:360px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;color:#5e636b;margin-bottom:10px">Card layout</div>
+        <div style="position:relative;padding:14px 16px 15px;background:#171a1f;border:1px solid #313640;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.45)">
+          <div style="position:absolute;width:9px;height:9px;background:#171a1f;transform:rotate(45deg);top:-5px;left:26px;border-left:1px solid #313640;border-top:1px solid #313640"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.07em;color:#8f9bff">04 / 08</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.07em;color:#5e636b">HOW SHERPA WORKS</span>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:#f0f1f4;letter-spacing:-.012em;line-height:1.34">Title, up to two lines</div>
+          <div style="margin-top:7px;font-size:12.5px;color:#a9aeb7;line-height:1.6">Body, two to three lines, ~200 characters at most. No lists, no links into the tour, no second paragraph.</div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+            <span style="color:#6b7078;font-size:12px;border-bottom:1px dashed #3a3f47">Skip tour</span>
+            <div style="flex:1"></div>
+            <span style="height:28px;padding:0 11px;display:flex;align-items:center;border:1px solid #2f333a;border-radius:7px;color:#c7cad1;font-size:12.5px">Back</span>
+            <span style="height:28px;padding:0 13px;display:flex;align-items:center;background:#7f8cff;border-radius:7px;color:#101223;font-size:12.5px;font-weight:600">Next</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8f98">
+          <div>width 350 · padding 14/16/15 · radius 12 · bg #171a1f · border #313640</div>
+          <div>shadow 0 20 52 rgba(0,0,0,.62) · beak 9×9 rotate(45°), follows the target centre (clamped 14px from the card corners)</div>
+          <div>counter 10px #8f9bff · kicker 9.5px #5e636b · title 14px/600</div>
+          <div>body 12.5px/1.6 #a9aeb7 · buttons h28 · Next #7f8cff, text #101223</div>
+          <div>z-index: ring 88 · card 89, above sticky bars (30/40) and the floating bar (50).</div>
+          <div>the palette is raised to 95 and covers the tour. Open ⌘K and the card waits underneath</div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 400px;min-width:360px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;color:#5e636b;margin-bottom:10px">Ring and four positions</div>
+        <div style="padding:16px;background:#0f1012;border:1px solid #24272d;border-radius:9px">
+          <div style="display:flex;align-items:center;justify-content:center;height:120px;margin-bottom:14px">
+            <div style="position:relative;width:190px;height:56px;border:1.5px solid #7f8cff;border-radius:11px;box-shadow:0 0 0 3px rgba(127,140,255,.13),0 0 26px rgba(127,140,255,.16);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">target + 5px padding</div>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:7px 12px;font-size:12.5px;color:#a9aeb7">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">below</span><span>default: below the target if there is 214px underneath (card + 14px gap)</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">above</span><span>if it does not fit below and there is room above, the beak sits at the bottom</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">right</span><span>for tall targets (diff column, agent panel), aligned with the top of the target</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">left</span><span>last option. Everything is clamped horizontally to 16px from the edge</span>
+          </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #1e2126;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#a9aeb7">
+            <div><span style="color:#c7cad1">Scrolling.</span> Target outside the viewport → scroll smoothly to put its top 156px from the top, then measure. Sticky and fixed targets never scroll the page.</div>
+            <div><span style="color:#c7cad1">Tall target.</span> The ring is clipped to the viewport (height = min(target, vh − 24), width up to the right edge). Do not stretch the page to fit a 3000px outline.</div>
+            <div><span style="color:#c7cad1">Beak.</span> The card is clamped 16px from the viewport edge, so the beak is not fixed to its corner. Its position is calculated from the target centre and stays within the card. In a narrow window, it moves toward the edge where the target is.</div>
+            <div><span style="color:#c7cad1">Target disappeared.</span> The ring hides, the card moves to the bottom centre of the screen, and the step continues as text. Filtering the diff does not break the tour.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 2c ===================== -->
+  <div id="2c" style="padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:2px 6px">2c · rules</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Display, exit, fallback behaviour</h2>
+    </div>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1 1 340px;min-width:320px;border:1px solid #24272d;border-radius:9px;background:#121316;padding:15px 16px">
+        <div style="font-size:12.5px;font-weight:600;color:#e0e2e7;margin-bottom:10px">When to show it</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:#a9aeb7;line-height:1.55">
+          <div><span style="color:#c7cad1">Trigger:</span> first visit to the UI, when the first stop is ready (not the skeleton). No tour while generation is in progress.</div>
+          <div><span style="color:#c7cad1">Once:</span> a per-user flag, not per-PR. Set on completion and on "Skip tour", so dismissing it means it's dismissed.</div>
+          <div><span style="color:#c7cad1">Unfinished tour:</span> closing the tab at step 03 doesn't count as completion. On the next visit the tour resumes at step 03 (the step is stored in the same key).</div>
+          <div><span style="color:#c7cad1">No agent (F5):</span> show the tour but leave out step 06, with 07 steps on the counter. If generation fails, don't start the tour at all.</div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 340px;min-width:320px;border:1px solid #24272d;border-radius:9px;background:#121316;padding:15px 16px">
+        <div style="font-size:12.5px;font-weight:600;color:#e0e2e7;margin-bottom:10px">Leaving and returning</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:#a9aeb7;line-height:1.55">
+          <div><span style="color:#c7cad1">Skip tour</span> is a text link on the left of the card footer, at every step. It's the only way to dismiss the tour for good.</div>
+          <div><span style="color:#c7cad1">Clicking the interface</span> doesn't close the tour. The highlight doesn't block interaction, so the reviewer can try the element and return to the card.</div>
+          <div><span style="color:#c7cad1">Esc</span> closes the palette but keeps the tour open, so an accidental Esc doesn't use up the only showing.</div>
+          <div><span style="color:#c7cad1">Returning:</span> the palette command "Replay the onboarding tour · 8 steps", in the sherpa group. Resets the flag and starts at 01.</div>
+          <div><span style="color:#c7cad1">Keyboard:</span> → / Enter goes forward, ← goes back. Focus moves to the card, and the highlight ring is described in the step's aria description.</div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 340px;min-width:320px;border:1px solid #24272d;border-radius:9px;background:#121316;padding:15px 16px">
+        <div style="font-size:12.5px;font-weight:600;color:#e0e2e7;margin-bottom:10px">Accessibility and telemetry</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:#a9aeb7;line-height:1.55">
+          <div>The card has <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">role="dialog"</span> with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">aria-modal="false"</span>. The screen reader reads the step without trapping focus away from the page.</div>
+          <div>Step changes are announced in a live region: "step 4 of 8, progress".</div>
+          <div>Smooth scrolling and card movement are disabled with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">prefers-reduced-motion</span>.</div>
+          <div>Events: <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">tour_shown</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">tour_step</span> (number, time on step), <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">tour_skipped</span> (at which step), <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">tour_completed</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">tour_replayed</span>. The most frequently skipped step is a signal to rewrite its text, not to remove the step.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding:13px 15px;background:#151619;border:1px dashed #333842;border-radius:9px;max-width:900px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6b7078;letter-spacing:.06em;margin-bottom:7px">OPEN QUESTIONS</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#a9aeb7;line-height:1.55">
+        <div>1. Where does the completion flag live, locally per-user on Sherpa's disk or in the browser session? On disk it survives a browser change but is lost on reinstallation.</div>
+        <div>2. Does the second pass need its own small hint (F3, "what changed since last time"), or is that an explanation of the banner beyond onboarding?</div>
+        <div>3. Step 06 needs an agent. If the agent dies midway through the tour, do we finish without that step or show it with reconnection instructions?</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;meta&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Storyboard&quot;},&quot;ru&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Storyboard&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      meta: this.props.meta !== false,
+      ru: this.props.ru === true
+    };
+  }
+}
+</script>
+</body>
+</html>

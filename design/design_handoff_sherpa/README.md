@@ -5,6 +5,14 @@
 > in `SPEC-additions-2026-08-26.md`. The live mockup is `Sherpa Additions.dc.html`. It also clarifies
 > §Assets (icon set instead of font glyphs) and §3 (publishing drafts as one batch on Ship).
 > The context bridge is already implemented in `Sherpa.dc.html`.
+>
+> **Addition dated 2026-09-02, STAGE READY FOR DEVELOPMENT: onboarding.** Everything else in this handoff is already
+> coded. The new scope is only the onboarding tour: 8 tips over the live interface.
+> Implementation spec: `SPEC-onboarding-2026-09-02.md` (step copy, anatomy, positioning
+> algorithm, states, display flags, reduced functionality, a11y, telemetry, acceptance checklist).
+> Storyboard with 1:1 cards: `Sherpa Onboarding.dc.html`. Reference implementation in
+> `Sherpa.dc.html`: "07 · First run" in the SCENARIOS dock and the palette command
+> «Replay the onboarding tour».
 
 ## Overview
 
@@ -314,6 +322,56 @@ grouped lists ("Needs your review", "You are reviewing") sorted by proximity to 
 with a tier dot, PR number, title, route status ("route ready · 7 stops", "building · 2 / 6",
 "stale · 2 commits behind"), size and time-to-prod.
 
+### 16. Onboarding tour — first run (`tour: 0…7`) — **the only open build item**
+
+Eight coach-mark cards anchored to real elements of the route screen. Implementation spec:
+`SPEC-onboarding-2026-09-02.md` (read it before building — it carries the final copy, the placement
+algorithm, the state table and the acceptance checklist). **No dimming, no takeover**:
+the page stays scrollable and clickable, so the tour follows the same rule as the rest of the product
+(a document, not a wizard). Full storyboard with final copy: `Sherpa Onboarding.dc.html`.
+
+**Card** — width 350px, padding 14/16/15, radius 12px, bg `#171a1f`, border `1px solid #313640`,
+shadow `0 20px 52px rgba(0,0,0,.62)`; 9×9px beak rotated 45° with two borders, positioned from the
+target's centre (clamped 14px inside the card corners) so it keeps pointing at the highlighted
+element even when the card is clamped against the viewport edge. Content: counter `04 / 08` (10px mono `#8f9bff`) + kicker "HOW SHERPA WORKS" (9.5px mono
+`#5e636b`); title 14px/600 `#f0f1f4` (≤2 lines); body 12.5px/1.6 `#a9aeb7` (2–3 lines, ≤~200 chars);
+footer — "Skip tour" text link on the left (12px `#6b7078`, dashed underline), then "Back"
+(ghost, h28) and the primary "Next" (`#7f8cff`, ink `#101223`, h28); the last step's primary reads
+**Start reviewing**. No progress dots, no lists or links inside the card.
+
+**Highlight ring** — the target rect + 5px padding: `1.5px solid #7f8cff`, radius 11px,
+`box-shadow: 0 0 0 3px rgba(127,140,255,.13), 0 0 26px rgba(127,140,255,.16)`, `pointer-events:none`,
+z-index 88 (card 89, above the sticky bars and the floating action bar; the palette sits above both).
+Height is clamped to `min(target, viewport − 24px)` so a tall target does not produce an off-screen ring.
+
+**Placement** — below the target by default (needs 214px = card + 14px gap), else above, else right
+(used for tall targets: the diff column, the agent panel), else left; horizontal position clamped to
+16px from the viewport edge. Recomputed on every scroll and resize (rAF-throttled).
+
+**Steps** (anchor → what it explains): 1 first stop's narrative column → route order; 2 first low-tier
+fold → tiers and "nothing hidden silently"; 3 first stop's diff column → the real diff inside a stop;
+4 "N / 7 stops viewed" counter → two-level progress; 5 Triage/Full tour toggle → two orders, one state;
+6 agent panel → ask from a selection, notes pinned at the code; 7 "Full diff" tab → the classic reader
+fallback; 8 floating action bar → drafts publish as a batch, the human decides.
+
+**Rules.**
+- Trigger: first entry into the UI, **after the first stop is filled** (never over the skeleton).
+  Generation failure → do not start the tour at all.
+- Shown once per user (not per PR). The flag is set both on completion and on "Skip tour".
+- An unfinished tour resumes at the step the reviewer left it on (step index is persisted next to the flag).
+- Steps never change the reviewer's state except step 6, which opens the agent panel and closes it
+  again on the next step. The tour does not switch presets, views or expand folds.
+- Agent disconnected → step 6 is dropped and the counter becomes `/ 07`.
+- Target missing (filter hid it): ring hides, card moves to bottom-centre, the step still reads.
+- "Skip tour" is the only permanent dismissal. Clicking the UI does not close the tour; Esc closes the
+  palette but not the tour.
+- Return path: palette command "Replay the onboarding tour · 8 steps" (group `sherpa`) — resets the
+  flag and starts at 01.
+- Keyboard: → / Enter next, ← back. Card is `role="dialog"` with `aria-modal="false"`; step changes
+  announced in a live region; scroll and card movement disabled under `prefers-reduced-motion`.
+- Telemetry: `tour_shown`, `tour_step` (index, dwell), `tour_skipped` (index), `tour_completed`,
+  `tour_replayed`.
+
 ---
 
 ## Filters (one global model)
@@ -444,7 +502,13 @@ ease-in-out cubic · jump flash ~900ms. Nothing else animates; the reader must f
   focus, disabled, loading, error), per-component behaviour, data edge cases, loading timings,
   keyboard map, accessibility and the acceptance checklist. Read it together with this document:
   the README defines *what* each screen is, SPEC-elements defines *how every part behaves*.
-- `Sherpa.dc.html` — the clickable prototype (all 13 states; `SCENARIOS` menu switches between them).
+- `Sherpa.dc.html` — the clickable prototype (all 13 states + the onboarding tour; `SCENARIOS` menu
+  switches between them).
+- `SPEC-onboarding-2026-09-02.md` — **onboarding handoff spec** (the current build item): card and
+  ring anatomy, the eight steps with final copy and anchors, placement algorithm, states, show-once
+  and resume model, degradation, keyboard/a11y, telemetry, open questions, acceptance checklist.
+- `Sherpa Onboarding.dc.html` — onboarding storyboard: the eight steps with final copy and per-step
+  anchor/state/placement rationale, card and ring anatomy, show-once and degradation rules.
 - `sherpa-brief.md` — the product brief the design was built from (problem, principles, v1 scope,
   non-scope, cross-cutting scenarios F1–F5, required system states).
 
