@@ -3,29 +3,54 @@
  * stop title and route paragraph have different typography but share the same markup.
  */
 
+@import '../diff/syntax.css';
+
 .md-p,
 .md-heading,
 .md-list,
-.md-pre {
+.md-pre,
+.md-quote,
+.md-table-wrap {
     margin: 0 0 var(--space-inner-tight);
 }
 
 .md-p:last-child,
 .md-heading:last-child,
 .md-list:last-child,
-.md-pre:last-child {
+.md-pre:last-child,
+.md-quote:last-child,
+.md-table-wrap:last-child {
     margin-bottom: 0;
 }
 
-/* A markdown heading is a bold line at the same font size (SPEC-additions §1e). */
+/*
+ * Markdown headings use h1–h6 with three font sizes. SPEC-additions §1e ("a bold line
+ * at the same font size") remains literally true for h4–h6, with higher levels one step apart.
+ */
 .md-heading {
     margin-top: var(--space-inner);
     font-weight: 600;
+    line-height: var(--line-height-body);
     color: var(--text-primary-soft);
 }
 
 .md-heading:first-child {
     margin-top: 0;
+}
+
+.md-h1,
+.md-h2 {
+    font-size: var(--font-size-input);
+}
+
+.md-h3 {
+    font-size: var(--font-size-body);
+}
+
+.md-h4,
+.md-h5,
+.md-h6 {
+    font-size: var(--font-size-ui);
 }
 
 .md-list {
@@ -34,11 +59,81 @@
 
 .md-item {
     margin: 2px 0;
+    overflow-wrap: anywhere;
 }
 
 /* Keep a nested list close to its parent item rather than the neighbouring paragraph. */
 .md-item .md-list {
     margin: 2px 0 0;
+}
+
+.md-p {
+    overflow-wrap: anywhere;
+}
+
+/* A checklist item draws its own marker, so it needs no native list bullet. */
+.md-item--task {
+    list-style: none;
+}
+
+/*
+ * A negative margin on the marker itself puts the square in the bullet position:
+ * shifting the item at every level would consume the nested checklist indentation.
+ */
+.md-check {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+    margin-left: -18px;
+    border: 1px solid var(--border-strong-lifted);
+    border-radius: var(--radius-rule);
+    vertical-align: -1px;
+}
+
+.md-check--on {
+    border-color: var(--read-border);
+    background: var(--read-fill);
+}
+
+/* A blockquote has a left border and muted text. A nested blockquote gets its own. */
+.md-quote {
+    padding-left: 10px;
+    border-left: 2px solid var(--border-strong);
+    overflow-wrap: anywhere;
+    color: var(--text-secondary);
+}
+
+/*
+ * The only part of a card with horizontal scrolling: unlike a line of text, a table
+ * cannot wrap, and a narrow column would cut it off.
+ */
+.md-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.md-table {
+    border-collapse: collapse;
+}
+
+/*
+ * Use `break-word` instead of `anywhere`: `anywhere` affects min-content calculation, so automatic layout
+ * would shrink the table to one character per line. The wrapper would never scroll, and header words
+ * would break in the middle. With `break-word`, only an unbreakable token widens a column and triggers scrolling.
+ */
+.md-table th,
+.md-table td {
+    padding: 3px 8px;
+    border: 1px solid var(--border-standard);
+    overflow-wrap: break-word;
+    text-align: left;
+}
+
+.md-table th {
+    font-weight: 600;
+    color: var(--text-primary-soft);
 }
 
 /*
@@ -69,6 +164,11 @@
 .md-pre code {
     font: inherit;
     color: inherit;
+}
+
+del {
+    text-decoration: line-through;
+    color: var(--text-secondary);
 }
 
 /* A long URL breaks anywhere instead of widening the column. */

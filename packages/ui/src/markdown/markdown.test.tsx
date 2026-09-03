@@ -24,12 +24,16 @@ describe('markdown, comment profile', () => {
         );
     });
 
-    it('renders any heading level as a bold line at the same font size, without h1–h6', () => {
-        const html = comment('##### What is wrong\ntext');
-
-        expect(html).toContain('<p class="md-heading">What is wrong</p>');
-        expect(html).not.toContain('<h5');
-        expect(html).not.toContain('<h1');
+    it('uses h1–h6 with a level class and treats a seventh hash as plain text', () => {
+        expect(comment('# one')).toBe('<h1 class="md-heading md-h1">one</h1>');
+        expect(comment('## two')).toBe('<h2 class="md-heading md-h2">two</h2>');
+        expect(comment('### three')).toBe('<h3 class="md-heading md-h3">three</h3>');
+        expect(comment('#### four')).toBe('<h4 class="md-heading md-h4">four</h4>');
+        expect(comment('###### six')).toBe('<h6 class="md-heading md-h6">six</h6>');
+        expect(comment('##### What is wrong\ntext')).toBe(
+            '<h5 class="md-heading md-h5">What is wrong</h5><p class="md-p">text</p>',
+        );
+        expect(comment('####### seven')).toBe('<p class="md-p">####### seven</p>');
     });
 
     it('renders bulleted and numbered lists with indentation-based nesting', () => {
@@ -43,12 +47,29 @@ describe('markdown, comment profile', () => {
         );
     });
 
-    it('wraps lines in fenced code blocks without syntax highlighting', () => {
+    it('renders fenced code line breaks and passes the language to data-lang and highlighting', () => {
         const html = comment('before\n```ts\nconst a = 1;\nconst b = 2;\n```\nafter');
 
-        expect(html).toContain('<pre class="md-pre"><code>const a = 1;\nconst b = 2;</code></pre>');
+        expect(html).toContain(
+            '<pre class="md-pre" data-lang="ts"><code><span class="syntax-keyword">const</span> a = ' +
+                '<span class="syntax-string">1</span>;\n<span class="syntax-keyword">const</span> b = ' +
+                '<span class="syntax-string">2</span>;</code></pre>',
+        );
         expect(html).toContain('<p class="md-p">before</p>');
         expect(html).toContain('<p class="md-p">after</p>');
+    });
+
+    it('sets only data-lang for an unknown language and omits the attribute for a fence without a language', () => {
+        expect(comment('```rust\nfn main() {}\n```')).toBe(
+            '<pre class="md-pre" data-lang="rust"><code>fn main() {}</code></pre>',
+        );
+        expect(comment('```\nfn main() {}\n```')).toBe('<pre class="md-pre"><code>fn main() {}</code></pre>');
+    });
+
+    it('treats blockquotes and tables inside a fence as literal text', () => {
+        expect(comment('```\n> not a quote\n| not | table |\n| --- | --- |\n```')).toBe(
+            '<pre class="md-pre"><code>&gt; not a quote\n| not | table |\n| --- | --- |</code></pre>',
+        );
     });
 
     it('closes an unclosed fence at the end of the text without losing the tail', () => {
@@ -75,6 +96,85 @@ describe('markdown, comment profile', () => {
         expect(comment('char *buf, int *len')).toBe('<p class="md-p">char *buf, int *len</p>');
         expect(comment('area = a * b * c')).toBe('<p class="md-p">area = a * b * c</p>');
         expect(comment('2 ** 3 and 4 ** 5')).toBe('<p class="md-p">2 ** 3 and 4 ** 5</p>');
+    });
+
+    it('matches strikethrough pairs and treats a single tilde or an unmatched pair as a literal', () => {
+        expect(comment('~~struck through~~ and ~~pair~~')).toBe(
+            '<p class="md-p"><del>struck through</del> and <del>pair</del></p>',
+        );
+        expect(comment('unmatched ~~tail and a ~ b and ~/dir')).toBe(
+            '<p class="md-p">unmatched ~~tail and a ~ b and ~/dir</p>',
+        );
+    });
+
+    it('draws checklist markers with spans and no interactive input', () => {
+        const html = comment('- [ ] not done\n- [x] done\n- [X] also');
+
+        expect(html).toBe(
+            '<ul class="md-list">' +
+                '<li class="md-item md-item--task"><span class="md-check" aria-hidden="true"></span>not done</li>' +
+                '<li class="md-item md-item--task"><span class="md-check md-check--on" aria-hidden="true"></span>done</li>' +
+                '<li class="md-item md-item--task"><span class="md-check md-check--on" aria-hidden="true"></span>also</li>' +
+                '</ul>',
+        );
+        expect(html).not.toContain('<input');
+    });
+
+    it('treats brackets without following text as a literal in a normal list item', () => {
+        expect(comment('- [ ]')).toBe('<ul class="md-list"><li class="md-item">[ ]</li></ul>');
+    });
+
+    it('parses blockquotes recursively with their own paragraphs and lists', () => {
+        expect(comment('> quote\n> - item')).toBe(
+            '<blockquote class="md-quote"><p class="md-p">quote</p>' +
+                '<ul class="md-list"><li class="md-item">item</li></ul></blockquote>',
+        );
+    });
+
+    it('nests blockquotes up to two levels and treats the third marker as a literal', () => {
+        expect(comment('> > nested')).toBe(
+            '<blockquote class="md-quote"><blockquote class="md-quote"><p class="md-p">nested</p></blockquote></blockquote>',
+        );
+        expect(comment('> > > text')).toBe(
+            '<blockquote class="md-quote"><blockquote class="md-quote"><p class="md-p">&gt; text</p></blockquote></blockquote>',
+        );
+    });
+
+    it('ends a blockquote at the first line without `>` and does not accept lazy continuation', () => {
+        expect(comment('> quote\nplain')).toBe(
+            '<blockquote class="md-quote"><p class="md-p">quote</p></blockquote><p class="md-p">plain</p>',
+        );
+        expect(comment('paragraph\n> quote')).toBe(
+            '<p class="md-p">paragraph</p><blockquote class="md-quote"><p class="md-p">quote</p></blockquote>',
+        );
+    });
+
+    it('takes table alignment from the separator row and allows omitted outer pipes', () => {
+        expect(comment('| a | b |\n| :-- | --: |\n| 1 | 2 |')).toBe(
+            '<div class="md-table-wrap"><table class="md-table"><thead><tr>' +
+                '<th style="text-align:left">a</th><th style="text-align:right">b</th>' +
+                '</tr></thead><tbody><tr>' +
+                '<td style="text-align:left">1</td><td style="text-align:right">2</td>' +
+                '</tr></tbody></table></div>',
+        );
+        expect(comment('a | b\n--- | ---\n1 | 2')).toContain('<th>a</th><th>b</th>');
+    });
+
+    it('keeps an escaped pipe inside a cell and fits rows to the header', () => {
+        expect(comment('| a | b |\n| --- | --- |\n| x \\| y | z |')).toContain('<td>x | y</td><td>z</td>');
+        expect(comment('| a | b | c |\n| --- | --- | --- |\n| 1 |\n| 1 | 2 | 3 | 4 |')).toContain(
+            '<tbody><tr><td>1</td><td></td><td></td></tr><tr><td>1</td><td>2</td><td>3</td></tr></tbody>',
+        );
+    });
+
+    it('treats a line with pipes but no separator row as a normal paragraph', () => {
+        expect(comment('| a | b |\nplain text')).toBe('<p class="md-p">| a | b |<br/>plain text</p>');
+    });
+
+    it('ends a paragraph before a table instead of consuming its lines', () => {
+        expect(comment('paragraph\n| a | b |\n| --- | --- |\n| 1 | 2 |')).toContain(
+            '<p class="md-p">paragraph</p><div class="md-table-wrap">',
+        );
     });
 
     it('opens a link in a new tab without a referrer and uses a class to wrap long URLs', () => {
@@ -149,6 +249,13 @@ describe('markdown, route profile', () => {
         expect(route('**bold** and *italic*')).toBe('**bold** and *italic*');
         expect(route('[text](https://example.com)')).toBe('[text](https://example.com)');
         expect(route('https://example.com')).toBe('https://example.com');
+    });
+
+    it('also keeps blockquotes, tables and strikethrough literal in a route', () => {
+        expect(route('~~struck through~~')).toBe('~~struck through~~');
+        expect(route('> quote')).toBe('&gt; quote');
+        expect(route('| a | b |')).toBe('| a | b |');
+        expect(route('- [x] done')).toBe('- [x] done');
     });
 
     it('escapes raw HTML here too', () => {

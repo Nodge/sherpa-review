@@ -3,6 +3,8 @@
  * ("Right column: one card per hunk…") and SPEC §2.13–2.14. Values use tokens only.
  */
 
+@import '../diff/syntax.css';
+
 /* --- Card list: a regular block inside the outer view scroller --- */
 
 .diff-list {
@@ -565,22 +567,4 @@
 
 .diff-row__no-newline {
     color: var(--text-dim-strong);
-}
-
-/* Syntax highlighting follows README §1, with exactly four categories. */
-.syntax-keyword {
-    color: var(--syntax-keyword);
-}
-
-.syntax-string {
-    color: var(--syntax-string);
-}
-
-.syntax-comment {
-    color: var(--syntax-comment);
-    font-style: italic;
-}
-
-.syntax-decorator {
-    color: var(--syntax-decorator);
 }

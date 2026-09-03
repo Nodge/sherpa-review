@@ -6,7 +6,7 @@
  * There are two profiles. `comment` is the full set for comment bodies. `route` supports only inline code
  * in backticks. All other syntax is literal in the narrow route columns.
  *
- * An unmatched delimiter (backtick, asterisk, link bracket) stays literal text. Other people's text
+ * An unmatched delimiter (backtick, asterisk, tilde, link bracket) is literal text. Other people's text
  * must not break, and "almost markdown" is more common than the real thing.
  */
 
@@ -17,6 +17,7 @@ export type InlineNode =
     | { readonly kind: 'code'; readonly text: string }
     | { readonly kind: 'strong'; readonly children: readonly InlineNode[] }
     | { readonly kind: 'em'; readonly children: readonly InlineNode[] }
+    | { readonly kind: 'strike'; readonly children: readonly InlineNode[] }
     | { readonly kind: 'link'; readonly href: string; readonly children: readonly InlineNode[] };
 
 export interface MarkdownList {
@@ -27,26 +28,52 @@ export interface MarkdownList {
 export interface MarkdownListItem {
     readonly children: readonly InlineNode[];
     readonly list: MarkdownList | null;
+    /** null means a regular item, a boolean means a checklist item `- [ ]` / `- [x]`. */
+    readonly check: boolean | null;
 }
+
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+/** null means the separator line has no colons specifying column alignment. */
+export type TableAlign = 'left' | 'center' | 'right' | null;
 
 export type MarkdownBlock =
     /** Paragraph lines: single newlines are preserved because people write plain text. */
     | { readonly kind: 'paragraph'; readonly lines: readonly (readonly InlineNode[])[] }
-    | { readonly kind: 'heading'; readonly children: readonly InlineNode[] }
-    | { readonly kind: 'code'; readonly text: string }
-    | { readonly kind: 'list'; readonly list: MarkdownList };
+    | { readonly kind: 'heading'; readonly level: HeadingLevel; readonly children: readonly InlineNode[] }
+    /** `lang` is the first word of the fence info string, lowercased. null means a fence without a language. */
+    | { readonly kind: 'code'; readonly lang: string | null; readonly text: string }
+    | { readonly kind: 'list'; readonly list: MarkdownList }
+    | { readonly kind: 'quote'; readonly depth: 1 | 2; readonly children: readonly MarkdownBlock[] }
+    | {
+          readonly kind: 'table';
+          readonly align: readonly TableAlign[];
+          readonly head: readonly (readonly InlineNode[])[];
+          readonly rows: readonly (readonly (readonly InlineNode[])[])[];
+      };
 
 /** Links render only with these schemes. Everything else (`javascript:`, `data:`) stays text. */
 const SAFE_HREF = /^(?:https?:\/\/|mailto:)[^\s]+$/i;
 
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/;
-const FENCE_OPEN = /^ {0,3}(`{3,})/;
+const FENCE_OPEN = /^ {0,3}(`{3,})[ \t]*(.*)$/;
 const FENCE_CLOSE = /^ {0,3}(`{3,})[ \t]*$/;
 const LIST_ITEM = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])[ \t]+(.*)$/;
 const BARE_URL = /https?:\/\/[^\s<>"'`\\]+/iy;
+/** Blockquote line: consume `>` and one following space. The rest is nested markdown. */
+const QUOTE = /^ {0,3}>[ \t]?(.*)$/;
+/** Checklist marker at the start of item text. */
+const TASK_MARKER = /^\[([ xX])\][ \t]+(.*)$/;
+/** Table delimiter row cell. Colons set alignment. */
+const DELIMITER_CELL = /^:?-+:?$/;
 
 /** Lists nest no deeper than this. Deeper items become siblings of their parent. */
 const MAX_LIST_DEPTH = 4;
+
+/** Quotes nest no deeper than this. The third and subsequent `>` stay literal text. */
+const MAX_QUOTE_DEPTH = 2;
+
+const HEADING_LEVELS: readonly HeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
 /** Inline parsing: in the `route` profile, only code in backticks is recognized as syntax. */
 export function parseInline(source: string, profile: MarkdownProfile): readonly InlineNode[] {
@@ -95,6 +122,14 @@ export function parseInline(source: string, profile: MarkdownProfile): readonly 
                     index = close + 1;
                     continue;
                 }
+            } else if (source.startsWith('~~', index) && opensEmphasis(source, index + 2)) {
+                const close = findClosing(source, index + 2, '~~');
+                if (close > index + 2) {
+                    flush();
+                    nodes.push({ kind: 'strike', children: parseInline(source.slice(index + 2, close), profile) });
+                    index = close + 2;
+                    continue;
+                }
             } else if (char === '[') {
                 const link = matchLink(source, index);
                 if (link !== null) {
@@ -130,10 +165,14 @@ export function parseInline(source: string, profile: MarkdownProfile): readonly 
     return nodes;
 }
 
-/** Block parsing for the `comment` profile: headings, lists, code blocks and paragraphs. */
+/** Block parsing for the `comment` profile: headings, blockquotes, tables, lists, code blocks, and paragraphs. */
 export function parseBlocks(source: string): readonly MarkdownBlock[] {
-    const lines = source.replace(/\r\n?/g, '\n').split('\n');
+    return parseLines(source.replace(/\r\n?/g, '\n').split('\n'), 0);
+}
+
+function parseLines(lines: readonly string[], quoteDepth: number): readonly MarkdownBlock[] {
     const blocks: MarkdownBlock[] = [];
+    const quotesAllowed = quoteDepth < MAX_QUOTE_DEPTH;
     let index = 0;
 
     while (index < lines.length) {
@@ -155,15 +194,45 @@ export function parseBlocks(source: string): readonly MarkdownBlock[] {
             }
             // End of text closes an unclosed fence, otherwise the rest of the comment would disappear.
             index += 1;
-            blocks.push({ kind: 'code', text: body.join('\n') });
+            blocks.push({ kind: 'code', lang: fenceLang(fence[2] ?? ''), text: body.join('\n') });
             continue;
         }
 
         const heading = HEADING.exec(line);
         if (heading !== null) {
             const text = (heading[2] ?? '').replace(/[ \t]+#+[ \t]*$/, '');
-            blocks.push({ kind: 'heading', children: parseInline(text, 'comment') });
+            blocks.push({
+                kind: 'heading',
+                level: headingLevel((heading[1] ?? '').length),
+                children: parseInline(text, 'comment'),
+            });
             index += 1;
+            continue;
+        }
+
+        if (quotesAllowed && QUOTE.test(line)) {
+            const body: string[] = [];
+            // No lazy continuation: the first line without `>` ends the blockquote.
+            while (index < lines.length) {
+                const quoted = QUOTE.exec(lines[index] ?? '');
+                if (quoted === null) {
+                    break;
+                }
+                body.push(quoted[1] ?? '');
+                index += 1;
+            }
+            blocks.push({
+                kind: 'quote',
+                depth: quoteDepth === 0 ? 1 : 2,
+                children: parseLines(body, quoteDepth + 1),
+            });
+            continue;
+        }
+
+        if (isTableStart(lines, index)) {
+            const table = parseTable(lines, index, quotesAllowed);
+            blocks.push(table.block);
+            index = table.next;
             continue;
         }
 
@@ -190,7 +259,7 @@ export function parseBlocks(source: string): readonly MarkdownBlock[] {
         const paragraph: (readonly InlineNode[])[] = [];
         while (index < lines.length) {
             const next = lines[index] ?? '';
-            if (next.trim() === '' || FENCE_OPEN.test(next) || HEADING.test(next) || LIST_ITEM.test(next)) {
+            if (next.trim() === '' || startsBlock(lines, index, quotesAllowed)) {
                 break;
             }
             paragraph.push(parseInline(next, 'comment'));
@@ -200,6 +269,123 @@ export function parseBlocks(source: string): readonly MarkdownBlock[] {
     }
 
     return blocks;
+}
+
+/** The line starts its own block, ending both a paragraph and a table body. */
+function startsBlock(lines: readonly string[], index: number, quotesAllowed: boolean): boolean {
+    const line = lines[index] ?? '';
+    return (
+        FENCE_OPEN.test(line) ||
+        HEADING.test(line) ||
+        LIST_ITEM.test(line) ||
+        (quotesAllowed && QUOTE.test(line)) ||
+        isTableStart(lines, index)
+    );
+}
+
+function headingLevel(hashes: number): HeadingLevel {
+    return HEADING_LEVELS[hashes - 1] ?? 1;
+}
+
+/** Fence language: first word of the info string, without backticks, lowercased. */
+function fenceLang(info: string): string | null {
+    const word = (info.trim().split(/\s+/)[0] ?? '').replace(/`/g, '').toLowerCase();
+    return word === '' ? null : word;
+}
+
+/** A table requires a pipe-separated row followed by a delimiter row. */
+function isTableStart(lines: readonly string[], index: number): boolean {
+    const head = lines[index] ?? '';
+    if (!head.includes('|')) {
+        return false;
+    }
+    const delimiter = lines[index + 1];
+    if (delimiter?.includes('-') !== true) {
+        return false;
+    }
+    const cells = splitRow(delimiter);
+    return cells.length === splitRow(head).length && cells.every((cell) => DELIMITER_CELL.test(cell));
+}
+
+function parseTable(
+    lines: readonly string[],
+    from: number,
+    quotesAllowed: boolean,
+): { readonly block: MarkdownBlock; readonly next: number } {
+    const head = splitRow(lines[from] ?? '');
+    const align = splitRow(lines[from + 1] ?? '').map(alignOf);
+    const rows: (readonly InlineNode[])[][] = [];
+    let index = from + 2;
+
+    while (index < lines.length) {
+        const line = lines[index] ?? '';
+        if (line.trim() === '' || !line.includes('|') || startsBlock(lines, index, quotesAllowed)) {
+            break;
+        }
+        rows.push(fitRow(splitRow(line), head.length).map((cell) => parseInline(cell, 'comment')));
+        index += 1;
+    }
+
+    return {
+        block: {
+            kind: 'table',
+            align,
+            head: head.map((cell) => parseInline(cell, 'comment')),
+            rows,
+        },
+        next: index,
+    };
+}
+
+/** Body rows match the header: discard extra cells and fill missing cells with empty ones. */
+function fitRow(cells: readonly string[], columns: number): readonly string[] {
+    const fitted = cells.slice(0, columns);
+    while (fitted.length < columns) {
+        fitted.push('');
+    }
+    return fitted;
+}
+
+function alignOf(cell: string): TableAlign {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) {
+        return 'center';
+    }
+    if (left) {
+        return 'left';
+    }
+    return right ? 'right' : null;
+}
+
+/** Table row cells: outer pipes are optional, `\|` is a pipe inside a cell. */
+function splitRow(line: string): string[] {
+    const source = line.trim().replace(/^\|/, '');
+    const cells: string[] = [];
+    let cell = '';
+    let index = 0;
+
+    while (index < source.length) {
+        if (source[index] === '\\' && source[index + 1] === '|') {
+            cell += '|';
+            index += 2;
+            continue;
+        }
+        if (source[index] === '|') {
+            cells.push(cell.trim());
+            cell = '';
+            index += 1;
+            continue;
+        }
+        cell += source[index] ?? '';
+        index += 1;
+    }
+
+    // The trailing pipe leaves an empty tail, with no column after it.
+    if (cell.trim() !== '' || cells.length === 0) {
+        cells.push(cell.trim());
+    }
+    return cells;
 }
 
 /**
@@ -218,6 +404,7 @@ function nodeText(node: InlineNode): string {
             return node.text;
         case 'strong':
         case 'em':
+        case 'strike':
         case 'link':
             return node.children.map(nodeText).join('');
     }
@@ -284,10 +471,21 @@ function buildList(
             nested = built.list;
             index = built.next;
         }
-        items.push({ children: parseInline(item.text, 'comment'), list: nested });
+        const task = taskOf(item.text);
+        items.push({ children: parseInline(task.text, 'comment'), list: nested, check: task.check });
     }
 
     return { list: { ordered, items }, next: index };
+}
+
+/** Removes a checklist marker only with text after it: `- [ ]` on its own is literal. */
+function taskOf(text: string): { readonly check: boolean | null; readonly text: string } {
+    const match = TASK_MARKER.exec(text);
+    const rest = match === null ? '' : match[2] ?? '';
+    if (match === null || rest.trim() === '') {
+        return { check: null, text };
+    }
+    return { check: (match[1] ?? '') !== ' ', text: rest };
 }
 
 /**
