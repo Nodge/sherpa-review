@@ -19,6 +19,7 @@ function file(fileId: string): FileDiff {
         patch: null,
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
     };
 }
 

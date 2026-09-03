@@ -16,6 +16,7 @@ const FILE: FileDiff = {
     generated: false,
     viewed: false,
     blameUrl: null,
+    hostFileUrl: null,
     patch: ['@@ -40,3 +40,5 @@', ' const cached = readCache(key);', '-return cached;', '+if (cached !== null) {', '+    return cached;', '+}', ' return load(key);', ''].join('\n'),
 };
 const MODEL = parseFileDiff(FILE);

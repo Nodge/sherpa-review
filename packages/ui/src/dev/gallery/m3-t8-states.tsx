@@ -25,6 +25,7 @@ const FILE: FileDiff = {
     generated: false,
     viewed: false,
     blameUrl: null,
+    hostFileUrl: null,
     patch: [
         '@@ -40,3 +40,5 @@',
         ' const cached = readCache(key);',

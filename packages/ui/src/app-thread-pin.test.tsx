@@ -137,6 +137,8 @@ function mountApp(): Mounted {
         pr: V2.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
         iterations: [...ITERATIONS],
+        update: null,
+        generationCap: null,
     };
     const snapshot: StoreSnapshot = {
         connection: 'online',

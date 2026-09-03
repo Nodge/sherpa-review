@@ -31,6 +31,8 @@ export interface FileSpec {
     viewed?: boolean | null;
     /** Link to blame on the host website, absent by default. */
     blameUrl?: string;
+    /** Link to the file in the PR on the host website, absent by default. */
+    hostFileUrl?: string;
     hunks?: readonly HunkSpec[];
     /** File mode in the git header, defaults to a regular file. */
     mode?: string;
@@ -184,6 +186,7 @@ export function makeFileDiff(diffId: HostId, spec: FileSpec): FileDiff {
         patch: hasPatch ? [...renderFileHeader(spec), ...hunks.map(renderHunk), ''].join('\n') : null,
         viewed: spec.viewed === undefined ? false : spec.viewed,
         blameUrl: spec.blameUrl ?? null,
+        hostFileUrl: spec.hostFileUrl ?? null,
     };
 }
 

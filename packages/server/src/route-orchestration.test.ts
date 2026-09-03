@@ -280,7 +280,7 @@ describe('route orchestration', () => {
         expect(ready.snapshot?.summary).toBe(mediumReadySnapshot().summary);
         expect(ready.snapshot?.tourOrder).toEqual(mediumReadySnapshot().tourOrder);
         expect(ready.snapshot?.contentHash).toMatch(/^[0-9a-f]{12}$/);
-        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5' });
+        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5', locale: null });
         expect(ready.snapshot?.commit).toBe(mediumReadySnapshot().commit);
     });
 
@@ -459,6 +459,7 @@ describe('route orchestration', () => {
                 patch: null,
                 viewed: null,
                 blameUrl: null,
+                hostFileUrl: null,
             })),
         });
 
@@ -1089,7 +1090,7 @@ describe('snapshot content hash', () => {
             ...snapshot,
             snapshotId: 'another-id',
             createdAt: '2030-01-01T00:00:00.000Z',
-            provenance: { harness: 'codex', model: null },
+            provenance: { harness: 'codex', model: null, locale: null },
             contentHash: 'anything',
         };
         expect(contentHashOf(sameContent)).toBe(contentHashOf(snapshot));

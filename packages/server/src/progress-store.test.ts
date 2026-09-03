@@ -621,6 +621,7 @@ function fileDiff(overrides: Partial<FileDiff> & Pick<FileDiff, 'path'>): FileDi
         patch: null,
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
         ...overrides,
     };
 }

@@ -27,6 +27,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
         patch: null,
         viewed: null,
         blameUrl: null,
+        hostFileUrl: null,
         ...patch,
     };
 }

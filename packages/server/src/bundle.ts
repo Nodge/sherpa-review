@@ -19,7 +19,7 @@ import { UI_ASSETS } from './ui-assets.js';
  * No token in stdout: output goes to a log file that outlives the server, and the CLI prints the link with the token
  * after reading the manifest.
  */
-const USAGE = 'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>]';
+const USAGE = 'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>]';
 
 async function main(argv: readonly string[]): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
@@ -37,6 +37,9 @@ async function main(argv: readonly string[]): Promise<number> {
     // The process inherits its launcher's cwd, so resolve the state path to an absolute path.
     const sherpaDir = path.resolve(readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR);
 
+    // Only the CLI knows where the distribution is installed. The server compares its version with main (M5-T9).
+    const installDir = readOption(argv, '--install-dir');
+
     const idleSeconds = readIdleSeconds(process.env);
 
     let server: SherpaServer;
@@ -46,6 +49,7 @@ async function main(argv: readonly string[]): Promise<number> {
             sherpaDir,
             assets: bundledAssets(UI_ASSETS),
             idleSeconds,
+            updateCheck: installDir === null ? {} : { installDir },
             onIdleStop: (seconds) => {
                 writeLog(`idle shutdown: ${formatIdlePeriod(seconds)} without requests or open connections`);
             },

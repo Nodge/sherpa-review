@@ -227,7 +227,7 @@ function readySnapshotV2(): RouteSnapshot {
         baseCommit: MEDIUM_BASE_COMMIT,
         diffId: MEDIUM_DIFF_ID_V2,
         createdAt: CREATED_AT_V2,
-        provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+        provenance: { harness: 'claude-code', model: 'claude-opus-5', locale: null },
         previousSnapshotId: SNAPSHOT_ID,
         carried: { ...CARRIED },
         summary: SUMMARY_V2,

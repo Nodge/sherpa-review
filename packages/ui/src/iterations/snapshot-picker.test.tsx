@@ -26,7 +26,7 @@ const SNAPSHOT: UiSnapshotSummary = {
     commit: NEW_COMMIT,
     baseCommit: 'base',
     createdAt: '2026-08-31T09:30:00.000Z',
-    provenance: { harness: 'claude-code', model: 'sonnet-5' },
+    provenance: { harness: 'claude-code', model: 'sonnet-5', locale: null },
     previousSnapshotId: null,
     status: 'current',
 };

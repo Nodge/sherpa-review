@@ -203,7 +203,7 @@ describe('medium fixture route', () => {
             expect(stop.provenance).toBeNull();
         }
         expect(snapshot.contentHash).toMatch(/^[0-9a-f]{16}$/);
-        expect(snapshot.provenance).toEqual({ harness: 'claude-code', model: 'claude-opus-5' });
+        expect(snapshot.provenance).toEqual({ harness: 'claude-code', model: 'claude-opus-5', locale: null });
         expect(snapshot.commit).toBe(fixtureIteration('medium').diff.headCommit);
         expect(snapshot.diffId).toBe(fixtureIteration('medium').diff.diffId);
         expect(snapshot.summary.split('\n\n').length).toBeGreaterThanOrEqual(2);

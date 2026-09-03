@@ -6,6 +6,8 @@ import {
     chatExchangeSchema,
     commentDraftSchema,
     commentSchema,
+    DISTRIBUTION_WHATS_NEW_MAX_CHARS,
+    distributionVersionSchema,
     generateJsonSchemas,
     iterationSchema,
     lensZoneSchema,
@@ -13,6 +15,7 @@ import {
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
     RESULT_MAX_BYTES,
+    routeProvenanceSchema,
     routeSectionResultSchema,
     routeSkeletonResultSchema,
     routeSnapshotSchema,
@@ -22,9 +25,13 @@ import {
     taskSchema,
     threadSchema,
     uiChatAskRequestSchema,
+    uiDevUpdateAvailableRequestSchema,
     uiReviewDiffRequestSchema,
     uiRouteStaleSchema,
+    uiSettingsPatchSchema,
+    uiSettingsSchema,
     uiSnapshotSummarySchema,
+    uiUpdateSchema,
     workerNextRequestSchema,
     workerNextResponseSchema,
 } from './index.js';
@@ -260,7 +267,7 @@ describe('route (M2)', () => {
             baseCommit: 'a71d4e2',
             diffId: 'iter-3',
             createdAt: '2026-08-25T12:00:00.000Z',
-            provenance: { harness: 'claude-code', model: 'claude-opus-5' },
+            provenance: { harness: 'claude-code', model: 'claude-opus-5', locale: 'ru' },
             previousSnapshotId: 'snap-0',
             carried: { kept: 3, total: 4 },
             summary: 'Summary.',
@@ -417,6 +424,62 @@ describe('iterations and snapshots in the UI contract (M4)', () => {
             expect(uiSnapshotSummarySchema.safeParse({ ...summary, status }).success).toBe(true);
         }
         expect(uiSnapshotSummarySchema.safeParse({ ...summary, status: 'previous' }).success).toBe(false);
+    });
+});
+
+describe('M5 contracts (locale, onboarding, update)', () => {
+    it('settings: new fields get defaults, patches have no defaults and replace fields as a whole', () => {
+        expect(uiSettingsSchema.parse({})).toMatchObject({
+            locale: 'auto',
+            onboarding: { completedAt: null, step: 0 },
+            updates: { dismissedVersion: null },
+        });
+        expect(uiSettingsSchema.safeParse({ locale: 'de' }).success).toBe(false);
+        expect(uiSettingsSchema.safeParse({ onboarding: { completedAt: null, step: -1 } }).success).toBe(false);
+        expect(uiSettingsSchema.safeParse({ updates: { dismissedVersion: 'latest' } }).success).toBe(false);
+
+        // A single-field patch supplies no defaults for other fields, or "leave unchanged" would become "reset".
+        expect(uiSettingsPatchSchema.parse({ locale: 'en' })).toEqual({ locale: 'en' });
+        expect(uiSettingsPatchSchema.safeParse({ onboarding: { step: 3 } }).success).toBe(false);
+    });
+
+    it('provenance: locale is optional on input (old snapshots) and null on output', () => {
+        expect(routeProvenanceSchema.parse({ harness: 'claude-code', model: null })).toEqual({
+            harness: 'claude-code',
+            model: null,
+            locale: null,
+        });
+        expect(routeProvenanceSchema.safeParse({ harness: null, model: null, locale: 'fr' }).success).toBe(false);
+    });
+
+    it('version.json: release fields are nullable, whatsNew is bounded', () => {
+        const built = { version: '0.5.0', builtFrom: 'b1e4515-dirty', releasedAt: null, whatsNew: null };
+        expect(distributionVersionSchema.parse(built)).toEqual(built);
+        expect(
+            distributionVersionSchema.safeParse({ ...built, whatsNew: 'x'.repeat(DISTRIBUTION_WHATS_NEW_MAX_CHARS + 1) })
+                .success,
+        ).toBe(false);
+        expect(distributionVersionSchema.safeParse({ ...built, version: '0.5' }).success).toBe(false);
+    });
+
+    it('snapshot update: checkout installation has a command, a copy has none', () => {
+        const update = {
+            current: '0.4.0',
+            latest: '0.5.0',
+            releasedAt: '2026-09-10T10:00:00.000Z',
+            whatsNew: 'Onboarding and English UI',
+            
+        };
+        expect(uiUpdateSchema.parse(update)).toEqual(update);
+        expect(
+            uiUpdateSchema.safeParse({ ...update, install: { kind: 'copy', dir: '/opt/sherpa', command: null } }).success,
+        ).toBe(true);
+        expect(uiUpdateSchema.safeParse({ ...update, install: { kind: 'zip', dir: '/opt', command: null } }).success).toBe(
+            false,
+        );
+        expect(
+            uiDevUpdateAvailableRequestSchema.safeParse({ version: '0.5.0', releasedAt: null, whatsNew: null }).success,
+        ).toBe(true);
     });
 });
 

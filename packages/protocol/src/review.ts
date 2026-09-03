@@ -96,6 +96,11 @@ export const fileDiffSchema = z.object({
     viewed: z.boolean().nullable(),
     /** Link to this file's blame view on the host. null if the host has no link to offer. */
     blameUrl: z.string().nullable(),
+    /**
+     * Link to this file in this PR on the host. "Copy file link" points to the host,
+     * outside Sherpa (decision 2026-09-03). null means the host has no web UI (fixtures) or file link.
+     */
+    hostFileUrl: z.string().nullable(),
 });
 export type FileDiff = z.infer<typeof fileDiffSchema>;
 

@@ -13,6 +13,8 @@ const STATE: UiState = {
     worker: { kind: 'never' },
     feedback: { available: true, reason: null },
     iterations: [],
+    update: null,
+    generationCap: null,
     tasks: [
         {
             id: 1,
