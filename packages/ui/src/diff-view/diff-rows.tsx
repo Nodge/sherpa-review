@@ -3,9 +3,9 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
-import { formatCount, plural } from '../text.js';
 import type { ContextExpandRequest, GapExpandResult } from './context-expansion.js';
 import type { ExpandDirection } from './expand.js';
 import { EXPAND_STEP, gapKeyOf, hiddenLinesOf } from './expand.js';
@@ -256,12 +256,12 @@ function gapLabel(gap: DiffGap, content: FileContent | null): string {
     const unchanged =
         hidden === null
             ? 'unchanged to the end of the file'
-            : `${formatCount(hidden)} ${plural(hidden, 'unchanged line', 'unchanged lines', 'unchanged lines')}`;
+            : `${formatCount(hidden, 'ru')} ${plural(hidden, { one: 'unchanged line', few: 'unchanged lines', many: 'unchanged lines', other: 'unchanged lines' }, 'ru')}`;
     if (changed === 0) {
         return unchanged;
     }
     // Clip to the stop anchors. Changed lines outside the slice are explained in other stops.
-    const elsewhere = `${formatCount(changed)} ${plural(changed, 'changed line', 'changed lines', 'changed lines')} — in other stops`;
+    const elsewhere = `${formatCount(changed, 'ru')} ${plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')} in other stops`;
     return hidden === 0 ? elsewhere : `${unchanged} and ${elsewhere}`;
 }
 

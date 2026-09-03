@@ -51,12 +51,12 @@ import {
     zeroResultText,
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
+import { shortCommit } from '../i18n/index.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
 import type { PaletteNavigation } from '../palette/diff-source.tsx';
 import { usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
-import { shortCommit } from '../text.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
@@ -1175,7 +1175,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'thread.commentLine',
         keys: ['c'],
-        label: 'Comment on the line under the cursor',
+        label: 'shortcut.thread.commentLine',
         when: () => focusedLine !== null,
         action: () => {
             if (focusedLine !== null) {
@@ -1186,7 +1186,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'thread.reply',
         keys: ['r'],
-        label: 'Reply to the thread under the cursor',
+        label: 'shortcut.thread.reply',
         when: () => focusedThreadId !== null,
         action: () => {
             const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
@@ -1200,7 +1200,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     useShortcut({
         id: 'diff.filterFiles',
         keys: ['f'],
-        label: 'Filter files in the tree',
+        label: 'shortcut.diff.filterFiles',
         action: () => {
             searchRef.current?.focus();
         },

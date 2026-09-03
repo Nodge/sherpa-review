@@ -279,7 +279,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         await expect.poll(() => fragmentParam(page, 'thread')).toBe(CHANGE_THREAD);
         const readOnly = page.locator('.banner-slot .iteration-banner[aria-label="Read-only"]');
         await expect(readOnly.locator('.iteration-banner__line')).toHaveText(
-            new RegExp(`^You are looking at the previous iteration ${V1_SHORT} from .+ · read-only$`),
+            new RegExp(`^You are looking at the previous iteration ${V1_SHORT} · .+ · read-only$`),
         );
         await expect(page.locator(`#thread-${CHANGE_THREAD}`)).toBeVisible();
         // Marks belong to the active iteration: the control is visible in a previous one, but cannot be clicked.

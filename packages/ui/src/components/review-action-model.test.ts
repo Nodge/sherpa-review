@@ -1,28 +1,39 @@
 import { describe, expect, it } from 'vitest';
 
+import { createT, ru } from '../i18n/index.js';
 import {
     availableShipMode,
     partialPublicationFailure,
-    publishConsequence,
+    publishConsequenceKey,
     publishDisabledReason,
     requestPublicationFailure,
 } from './review-action-model.js';
 
+const t = createT('ru');
+
 describe('floating bar model', () => {
     it('blocks publishing with unsaved text, no connection or an in-flight request', () => {
-        expect(publishDisabledReason({ connection: 'online', pendingComposer: true, publishing: false })).toBe(
+        expect(publishDisabledReason({ t, connection: 'online', pendingComposer: true, publishing: false })).toBe(
             ru['ship.disabled.pending'],
         );
-        expect(publishDisabledReason({ connection: 'reconnecting', pendingComposer: false, publishing: false })).toBe(
-            'no connection to the server',
-        );
-        expect(publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: true })).toBe(
+        expect(
+            publishDisabledReason({ t, connection: 'reconnecting', pendingComposer: false, publishing: false }),
+        ).toBe(ru['ship.disabled.offline']);
+        expect(publishDisabledReason({ t, connection: 'online', pendingComposer: false, publishing: true })).toBe(
             ru['ship.disabled.publishing'],
         );
         expect(
-            publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false, failure: true }),
+            publishDisabledReason({
+                t,
+                connection: 'online',
+                pendingComposer: false,
+                publishing: false,
+                failure: true,
+            }),
         ).toBe(ru['ship.disabled.retry']);
-        expect(publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false })).toBeNull();
+        expect(
+            publishDisabledReason({ t, connection: 'online', pendingComposer: false, publishing: false }),
+        ).toBeNull();
     });
 
     it('falls back from sticky on a host without the capability', () => {
@@ -32,8 +43,9 @@ describe('floating bar model', () => {
     });
 
     it('shows the exact command consequence with the draft count', () => {
-        expect(publishConsequence('request_changes', 2)).toBe('Publishes 2 drafts and requests changes');
-        expect(publishConsequence('ship', 1)).toBe('Publishes 1 draft and approves the snapshot');
+        expect(t(publishConsequenceKey('request_changes'), 2)).toBe('Опубликует 2 черновика и запросит изменения');
+        expect(t(publishConsequenceKey('ship'), 1)).toBe('Опубликует 1 черновик и одобрит снапшот');
+        expect(createT('en')(publishConsequenceKey('ship'), 1)).toBe('Publishes 1 draft and approves the snapshot');
     });
 
     it('keeps the comment list on partial failure without reporting success', () => {
@@ -45,6 +57,7 @@ describe('floating bar model', () => {
                 verdictApplied: false,
             },
             new Map([['bad', 'Fix the boundary']]),
+            t,
         );
 
         expect(failure).toEqual({
@@ -53,7 +66,14 @@ describe('floating bar model', () => {
             comments: [{ commentId: 'bad', message: 'The review host refused', body: 'The boundary needs fixing' }],
             message: null,
         });
-        expect(partialPublicationFailure('ship', { publishedCommentIds: [], failed: [], verdictApplied: true }, new Map())).toBeNull();
+        expect(
+            partialPublicationFailure(
+                'ship',
+                { publishedCommentIds: [], failed: [], verdictApplied: true },
+                new Map(),
+                t,
+            ),
+        ).toBeNull();
     });
 
     it('keeps the same verdict for an explicit retry after a network failure', () => {

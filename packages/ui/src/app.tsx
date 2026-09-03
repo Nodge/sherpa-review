@@ -71,6 +71,9 @@ import {
     PCI_FILTER_ID,
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
+import type { Translate } from './i18n/index.js';
+import { useT } from './i18n/index.js';
+import { useLocaleCommands } from './i18n/locale-commands.js';
 import { ReadOnlyIterationProvider, SLICE_READ_ONLY_REASON } from './iterations/read-only.tsx';
 import { ThreadPinProvider } from './iterations/thread-pin.tsx';
 import type { ThreadPinContextValue } from './iterations/thread-pin.tsx';
@@ -214,6 +217,9 @@ interface ReviewState {
 }
 
 export function App({ store, session, token }: AppProps) {
+    const t = useT();
+    // Language changes use palette commands in the "Sherpa" group. The design has no separate settings popover.
+    useLocaleCommands();
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const { view, filter: filterId, preset, routeFilter, viewing, paletteOpen, chatOpen } = useSyncExternalStore(
         session.subscribe,
@@ -470,7 +476,7 @@ export function App({ store, session, token }: AppProps) {
                           restore: stopProgress.restore,
                           send: async (stopId, viewed, ranges) => {
                               if (routeSnapshotId === null) {
-                                  throw new Error('Cannot mark a stop without a route snapshot.');
+                                  throw new Error('Sherpa UI: cannot mark a stop without a route snapshot');
                               }
                               return (await setStopViewed(token, routeSnapshotId, stopId, viewed, ranges))
                                   .progressRevision;
@@ -1258,10 +1264,7 @@ export function App({ store, session, token }: AppProps) {
                     stopGenerating();
                 }
                 if (outcome === 'small_pr') {
-                    setRouteActionFailure({
-                        phase: routePhase,
-                        message: 'The PR is below the route threshold, generation will not start.',
-                    });
+                    setRouteActionFailure({ phase: routePhase, message: t('route.smallPr.notGenerated') });
                 }
             },
             (error: unknown) => {
@@ -1269,7 +1272,7 @@ export function App({ store, session, token }: AppProps) {
                 setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
             },
         );
-    }, [route?.smallPr, routePhase, stopGenerating, token]);
+    }, [route?.smallPr, routePhase, stopGenerating, t, token]);
     const fillStop = useCallback(
         (planIndex: number) => {
             const snapshotId = route?.snapshot?.snapshotId;
@@ -1858,7 +1861,7 @@ export function App({ store, session, token }: AppProps) {
 
     if (snapshot.connection === 'fatal') {
         return (
-            <MessageScreen title="Sherpa stopped">
+            <MessageScreen title={t('app.stopped')}>
                 <p>{snapshot.error}</p>
             </MessageScreen>
         );
@@ -1866,12 +1869,8 @@ export function App({ store, session, token }: AppProps) {
 
     if (state === null) {
         return (
-            <MessageScreen title="Sherpa">
-                <p>
-                    {snapshot.connection === 'connecting'
-                        ? 'Connecting to the server…'
-                        : 'Server unavailable, reconnecting…'}
-                </p>
+            <MessageScreen title={t('app.name')}>
+                <p>{snapshot.connection === 'connecting' ? t('app.connecting') : t('app.reconnecting')}</p>
             </MessageScreen>
         );
     }
@@ -1923,8 +1922,8 @@ export function App({ store, session, token }: AppProps) {
                 <div className="app-workspace__content">
             {snapshot.connection === 'reconnecting' ? (
                 <div className="connection-banner">
-                    <div className="connection-banner__title">Server unavailable, reconnecting…</div>
-                    <p>This is the last known state. It will update automatically when the connection returns.</p>
+                    <div className="connection-banner__title">{t('app.reconnecting')}</div>
+                    <p>{t('app.reconnecting.text')}</p>
                 </div>
             ) : null}
 
@@ -2077,7 +2076,7 @@ export function App({ store, session, token }: AppProps) {
                         <button
                             type="button"
                             className="chat-panel-scrim"
-                            aria-label="Close chat"
+                            aria-label={t('app.closeChat')}
                             onClick={closeChat}
                         />
                         <ChatPanel
@@ -2146,7 +2145,7 @@ export function App({ store, session, token }: AppProps) {
                         diffStore={diffStore}
                         threadStore={threadStore}
                         connection={snapshot.connection}
-                        hostName={hostDisplayName(reviewHost)}
+                        hostName={hostDisplayName(reviewHost, t)}
                         route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                         composerTransport={composerTransport}
                         onPublish={(verdict: Verdict) => publishReview(token, verdict)}
@@ -2314,9 +2313,9 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function hostDisplayName(host: string): string {
+function hostDisplayName(host: string, t: Translate): string {
     if (host === 'github') {
-        return 'GitHub';
+        return t('host.github');
     }
     return host === 'fixture' ? 'FixtureHost' : host;
 }

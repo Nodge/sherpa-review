@@ -2,6 +2,8 @@ import { chatFixtures, fixtureData, fixtureIteration, routeFixtures } from '@she
 import type { AgentNote, RouteSnapshot, RouteStop, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 
+import { shortCommit } from '../../i18n/index.js';
+
 /**
  * The "Iterations" group has placeholders for second-pass screens (README §9, SPEC §2.16–2.17, §4.1).
  * M4-T8…T11 build the real components. Each state already has its own id and fixture data
@@ -15,9 +17,6 @@ const SECOND_PASS = routeFixtures('medium')?.secondPass?.snapshot ?? null;
 const FIRST_PASS = routeFixtures('medium')?.states.ready?.snapshot ?? null;
 const NOTES_AFTER_PUSH = chatFixtures('medium')?.notesAfterPush ?? [];
 
-function shortCommit(commit: string): string {
-    return commit.slice(0, 7);
-}
 
 function changedStops(snapshot: RouteSnapshot | null): RouteStop[] {
     return (snapshot?.stops ?? []).filter((stop) => stop.change !== null);

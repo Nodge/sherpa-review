@@ -1,9 +1,9 @@
 import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { stripInlineCode } from '../markdown/markdown.js';
 import { changedLinesOf } from '../progress/read-state.js';
-import { formatCount, plural } from '../text.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import { droppedWhitespaceLines, spanLines, uncoveredRanges } from './anchor-clip.js';
 import { planLabel } from './route-model.js';
@@ -187,7 +187,7 @@ export function marginStripText(span: AnchorSpan): string {
 /** Summary of ranges with no rendered line (collapsed card, "whitespace only"). */
 export function marginStripSummary(spans: readonly AnchorSpan[]): string {
     const lines = spanLines(spans);
-    return `${formatCount(lines)} ${plural(lines, 'line', 'lines', 'lines')} without a route stop`;
+    return `${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')} without a route stop`;
 }
 
 /**
@@ -201,12 +201,12 @@ export function marginFooterNote(model: RouteMarginModel): string | null {
     const failed =
         model.failedFiles === 0
             ? ''
-            : ` ${formatCount(model.failedFiles)} ${plural(model.failedFiles, 'file failed to parse', 'files failed to parse', 'files failed to parse')} — their lines are not counted.`;
+            : ` ${formatCount(model.failedFiles, 'ru')} ${plural(model.failedFiles, { one: 'file failed to parse', few: 'files failed to parse', many: 'files failed to parse', other: 'files failed to parse' }, 'ru')}. Their lines are not counted.`;
     if (model.uncoveredLines === 0) {
         return failed === '' ? null : `${HATCH_MEANING}${failed}`;
     }
-    const lines = `${formatCount(model.uncoveredLines)} ${plural(model.uncoveredLines, 'line', 'lines', 'lines')}`;
-    const files = `${formatCount(model.uncoveredFiles)} ${plural(model.uncoveredFiles, 'file', 'files', 'files')}`;
+    const lines = `${formatCount(model.uncoveredLines, 'ru')} ${plural(model.uncoveredLines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
+    const files = `${formatCount(model.uncoveredFiles, 'ru')} ${plural(model.uncoveredFiles, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}`;
     return `${HATCH_MEANING} ${lines} in ${files}.${failed}`;
 }
 

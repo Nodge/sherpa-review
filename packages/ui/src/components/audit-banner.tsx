@@ -1,8 +1,8 @@
 import { PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { FileFilter, FilterStats } from '../filters/lens-filters.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { ViewId } from '../session/views.js';
-import { formatCount, plural } from '../text.js';
 import './audit-banner.css';
 
 /**
@@ -50,10 +50,10 @@ export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }:
             <span className="audit-banner__tag">PCI DSS</span>
             <div className="audit-banner__body">
                 <div className="audit-banner__line">
-                    Showing only {formatCount(stats.files)}{' '}
-                    {plural(stats.files, 'file', 'files', 'files')} in the audit scope,{' '}
-                    {formatCount(stats.changedLines)} of {formatCount(stats.totalChangedLines)}{' '}
-                    {plural(stats.totalChangedLines, 'changed line', 'changed lines', 'changed lines')}.
+                    Showing only {formatCount(stats.files, 'ru')}{' '}
+                    {plural(stats.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} in the audit scope,{' '}
+                    {formatCount(stats.changedLines, 'ru')} of {formatCount(stats.totalChangedLines, 'ru')}{' '}
+                    {plural(stats.totalChangedLines, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}.
                     The rest is hidden, not deleted.
                 </div>
                 {/* README §Filters requires the scope file list and the consequence for sign-off.

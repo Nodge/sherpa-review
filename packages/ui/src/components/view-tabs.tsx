@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 
+import { translateKey, useT } from '../i18n/index.js';
 import type { ViewId } from '../session/views.js';
 import { VIEWS } from '../session/views.js';
 
@@ -16,6 +17,7 @@ export interface ViewTabsProps {
 }
 
 export function ViewTabs({ view, onSelect }: ViewTabsProps) {
+    const t = useT();
     const buttons = useRef(new Map<ViewId, HTMLButtonElement>());
 
     const step = (delta: number): void => {
@@ -29,7 +31,7 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
     };
 
     return (
-        <div className="view-tabs" role="tablist" aria-label="Views">
+        <div className="view-tabs" role="tablist" aria-label={t('view.tabs')}>
             {VIEWS.map((item) => (
                 <button
                     key={item.id}
@@ -59,7 +61,7 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
                         }
                     }}
                 >
-                    {item.label}
+                    {translateKey(t, item.label)}
                 </button>
             ))}
         </div>

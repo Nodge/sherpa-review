@@ -5,9 +5,9 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFileModel } from '../diff/model.js';
 import type { LineSelection } from '../diff-view/selection.js';
 import { selectedLineRange, selectedLines, selectionSide } from '../diff-view/selection.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { selectionLinkHash } from '../selection-link.js';
-import { formatCount, plural } from '../text.js';
 import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
 import './selection-popover.css';
 
@@ -296,7 +296,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         );
     }
 
-    const countLabel = `${formatCount(count)} ${plural(count, 'line selected', 'lines selected', 'lines selected')}`;
+    const countLabel = `${formatCount(count, 'ru')} ${plural(count, { one: 'line selected', few: 'lines selected', many: 'lines selected', other: 'lines selected' }, 'ru')}`;
     const askDisabled = askDisabledReason !== null || selectionAskDisabled(agentConnected);
     const askTitle = askDisabledReason ?? (selectionAskDisabled(agentConnected) ? ASK_SELECTION_DISABLED_TITLE : undefined);
     return (

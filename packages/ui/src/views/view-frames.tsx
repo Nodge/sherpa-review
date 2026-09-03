@@ -12,6 +12,7 @@ import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
 import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
+import { shortCommit, useFormat, useT } from '../i18n/index.js';
 import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
 import { SnapshotsCard } from '../iterations/snapshot-picker.tsx';
 import type { SessionStore } from '../session/session-store.js';
@@ -24,7 +25,6 @@ import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
 import { Markdown } from '../markdown/markdown.tsx';
 import { provenanceLine, summaryParagraphs } from '../route/generation.js';
-import { formatCount, plural, shortCommit } from '../text.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
 import { discussionStats, ownershipSummary } from './overview-model.js';
@@ -91,28 +91,33 @@ export function ViewFrame(props: ViewFrameProps) {
     if (props.view === 'overview') {
         return <OverviewView {...props} />;
     }
+    return <FullDiffFrame />;
+}
+
+function FullDiffFrame() {
+    const t = useT();
     return (
         <main className="view-frame" id="view-diff">
-            <h1 className="view-frame__title">Full diff</h1>
+            <h1 className="view-frame__title">{t('view.diff')}</h1>
         </main>
     );
 }
 
 export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDiff: () => void }) {
+    const t = useT();
     return (
         <main className="route-empty" id="view-route">
             <section className="invitation-card">
-                <div className="invitation-card__eyebrow">Route</div>
-                <h1 className="invitation-card__title">There is no route for this PR yet</h1>
-                <p className="invitation-card__text">
-                    Run the skill in your harness to build a route. The full diff is already available without waiting for the agent.
-                </p>
+                <div className="invitation-card__eyebrow">{t('view.route')}</div>
+                <h1 className="invitation-card__title">{t('route.invitation.title')}</h1>
+                <p className="invitation-card__text">{t('route.invitation.text')}</p>
                 <CommandBox
                     command={reconnectCommand(prKey)}
-                    hint="Run in any harness to make this session a worker."
+                    hint={t('command.hint')}
+                    actionLabel={t('command.copy')}
                 />
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    Read the full diff
+                    {t('route.readFullDiff')}
                 </button>
             </section>
         </main>
@@ -133,22 +138,23 @@ export function IterationWithoutRoute({
     slice?: { readonly baseCommit: string; readonly headCommit: string } | null;
     onReadDiff: () => void;
 }) {
+    const t = useT();
     return (
         <main className="route-empty" id="view-route">
             <section className="invitation-card">
-                <div className="invitation-card__eyebrow">Route</div>
+                <div className="invitation-card__eyebrow">{t('view.route')}</div>
                 <h1 className="invitation-card__title">
-                    {slice === null ? 'No route for this iteration' : 'No route for a slice'}
+                    {slice === null ? t('route.iteration.title') : t('route.slice.title')}
                 </h1>
                 <p className="invitation-card__text">
                     {slice !== null
-                        ? 'No route is built for an inter-iteration slice. It shows what is new without AI.'
+                        ? t('route.slice.text')
                         : commit === null
-                          ? 'The route is built for the active iteration. This one is read-only.'
-                          : `The route is built for the active iteration. Iteration ${commit.slice(0, 7)} is read-only.`}
+                          ? t('route.iteration.text')
+                          : t('route.iteration.textCommit', shortCommit(commit))}
                 </p>
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    {slice === null ? 'Read the full diff' : 'To the full diff'}
+                    {slice === null ? t('route.readFullDiff') : t('route.toFullDiff')}
                 </button>
             </section>
         </main>
@@ -167,18 +173,17 @@ export function SliceWithoutOverview({
     slice: { readonly baseCommit: string; readonly headCommit: string };
     onReadDiff: () => void;
 }) {
+    const t = useT();
     return (
         <main className="route-empty" id="view-overview">
             <section className="invitation-card">
-                <div className="invitation-card__eyebrow">Overview</div>
-                <h1 className="invitation-card__title">No overview for a slice</h1>
+                <div className="invitation-card__eyebrow">{t('view.overview')}</div>
+                <h1 className="invitation-card__title">{t('overview.slice.title')}</h1>
                 <p className="invitation-card__text">
-                    Ownership zones, discussions, and reading progress are calculated for the active iteration. Slice{' '}
-                    {shortCommit(slice.baseCommit)} → {shortCommit(slice.headCommit)} only shows what is new in the
-                    code.
+                    {t('overview.slice.text', shortCommit(slice.baseCommit), shortCommit(slice.headCommit))}
                 </p>
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    To the full diff
+                    {t('route.toFullDiff')}
                 </button>
             </section>
         </main>
@@ -190,17 +195,15 @@ export function SliceWithoutOverview({
  * no route. Describe the threshold in words, since its value lives in server config and the UI does not know it.
  */
 export function SmallPrRoute({ onReadDiff }: { onReadDiff: () => void }) {
+    const t = useT();
     return (
         <main className="route-empty" id="view-route">
             <section className="invitation-card">
-                <div className="invitation-card__eyebrow">Route</div>
-                <h1 className="invitation-card__title">Small PR, no route needed</h1>
-                <p className="invitation-card__text">
-                    The change is below the threshold where a route pays off: reading a couple of files takes less time than
-                    building a plan. The server did not schedule generation, so there is no queue or wait.
-                </p>
+                <div className="invitation-card__eyebrow">{t('view.route')}</div>
+                <h1 className="invitation-card__title">{t('route.smallPr.title')}</h1>
+                <p className="invitation-card__text">{t('route.smallPr.text')}</p>
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    Read the full diff
+                    {t('route.readFullDiff')}
                 </button>
             </section>
         </main>
@@ -228,6 +231,7 @@ export function OverviewView({
     picker,
     headerAside,
 }: ViewFrameProps) {
+    const t = useT();
     const [segment, setSegment] = useState<OwnershipSegment>('all');
     const sourceThreads = threads ?? EMPTY_THREADS;
     const fileIds = useMemo(() => new Set(diff?.files.map((file) => file.fileId) ?? []), [diff]);
@@ -357,7 +361,7 @@ export function OverviewView({
                         error={threadsError}
                     />
                     {picker === undefined ? null : (
-                        <OverviewCard title="Snapshots">
+                        <OverviewCard title={t('overview.snapshots')}>
                             <SnapshotsCard {...picker} />
                         </OverviewCard>
                     )}
@@ -381,10 +385,11 @@ function SummaryCard({
     route: UiRouteState | null;
     onReadDiff: () => void;
 }) {
+    const t = useT();
     const snapshot = route?.snapshot ?? null;
     if (snapshot !== null) {
         return (
-            <OverviewCard title="Summary">
+            <OverviewCard title={t('overview.summary')}>
                 {summaryParagraphs(snapshot.summary).map((paragraph) => (
                     <p key={paragraph} className="overview-card__text">
                         <Markdown text={paragraph} profile="route" />
@@ -397,8 +402,8 @@ function SummaryCard({
 
     if (route?.phase === 'reading') {
         return (
-            <OverviewCard title="Summary">
-                <div className="summary-skeleton" role="status" aria-label="Preparing the PR summary">
+            <OverviewCard title={t('overview.summary')}>
+                <div className="summary-skeleton" role="status" aria-label={t('overview.summary.loading')}>
                     {SUMMARY_SKELETON.map((row, index) => (
                         <div key={`${row}-${String(index)}`} className={`summary-skeleton__line is-${row}`} />
                     ))}
@@ -409,39 +414,30 @@ function SummaryCard({
 
     if (route?.phase === 'failed') {
         return (
-            <OverviewCard title="Summary">
-                <p className="overview-card__lead">No summary available.</p>
-                <p className="overview-card__text">
-                    It arrives with the route skeleton, and generation did not get that far. The full diff is
-                    unaffected.
-                </p>
+            <OverviewCard title={t('overview.summary')}>
+                <p className="overview-card__lead">{t('overview.summary.failed.lead')}</p>
+                <p className="overview-card__text">{t('overview.summary.failed.text')}</p>
             </OverviewCard>
         );
     }
 
     if (route?.smallPr === true) {
         return (
-            <OverviewCard title="Summary">
-                <p className="overview-card__lead">Small PR, no route needed.</p>
-                <p className="overview-card__text">
-                    The change is below the threshold where a route pays off: the agent did not run, so there is no
-                    summary.
-                </p>
+            <OverviewCard title={t('overview.summary')}>
+                <p className="overview-card__lead">{t('overview.summary.smallPr.lead')}</p>
+                <p className="overview-card__text">{t('overview.summary.smallPr.text')}</p>
                 <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
-                    Read the full diff
+                    {t('route.readFullDiff')}
                 </button>
             </OverviewCard>
         );
     }
 
     return (
-        <OverviewCard title="Summary">
-            <p className="overview-card__lead">There is no route yet.</p>
-            <p className="overview-card__text">Run the skill so the agent can build a route and a short PR description.</p>
-            <CommandBox
-                command={reconnectCommand(prKey)}
-                hint="Run in any harness to make this session a worker."
-            />
+        <OverviewCard title={t('overview.summary')}>
+            <p className="overview-card__lead">{t('overview.summary.noRoute.lead')}</p>
+            <p className="overview-card__text">{t('overview.summary.noRoute.text')}</p>
+            <CommandBox command={reconnectCommand(prKey)} hint={t('command.hint')} actionLabel={t('command.copy')} />
         </OverviewCard>
     );
 }
@@ -472,13 +468,15 @@ function OwnershipCard({
     onSegment: (segment: OwnershipSegment) => void;
     onOpenDiff: () => void;
 }) {
+    const t = useT();
+    const format = useFormat();
     const files = diff?.files ?? EMPTY_FILES;
     const fallbackNote = hostAvailable
-        ? (lensesError ?? 'The host did not provide an ownership zone for this PR.')
-        : 'This PR has no review host, so the ownership zone is unavailable.';
+        ? (lensesError ?? t('overview.ownership.noZone'))
+        : t('overview.ownership.noHost');
     const summary = ownershipSummary(files, ownership, segment, fallbackNote);
 
-    const title = 'Files by ownership zone';
+    const title = t('overview.ownership.title');
     const header =
         diff !== null && (ownership !== null || !lensesLoading) ? (
             <div className="ownership-card__toolbar">
@@ -486,11 +484,17 @@ function OwnershipCard({
                     <h2 className="overview-card__title">{title}</h2>
                     <div className="ownership-card__header">
                         {summary.available
-                            ? `CODEOWNERS · ${formatCount(summary.mineFiles)} of ${formatCount(summary.totalFiles)} files · ${formatCount(summary.mineLines)} of ${formatCount(summary.totalLines)} lines are yours`
-                            : 'CODEOWNERS · ownership zone unavailable'}
+                            ? t(
+                                  'overview.ownership.stats',
+                                  summary.mineFiles,
+                                  summary.totalFiles,
+                                  summary.mineLines,
+                                  summary.totalLines,
+                              )
+                            : t('overview.ownership.statsUnavailable')}
                     </div>
                     <div className="ownership-card__toolbar-spacer" />
-                    <div className="ownership-segments" aria-label="Files by ownership zone">
+                    <div className="ownership-segments" aria-label={t('overview.ownership.segments')}>
                         <button
                             type="button"
                             aria-pressed={segment === 'mine'}
@@ -500,7 +504,7 @@ function OwnershipCard({
                                 onSegment('mine');
                             }}
                         >
-                            My files {formatCount(summary.mineFiles)}
+                            {t('overview.ownership.mine', summary.mineFiles)}
                         </button>
                         <button
                             type="button"
@@ -509,7 +513,7 @@ function OwnershipCard({
                                 onSegment('all');
                             }}
                         >
-                            All {formatCount(summary.totalFiles)}
+                            {t('overview.ownership.all', summary.totalFiles)}
                         </button>
                     </div>
                 </div>
@@ -520,13 +524,11 @@ function OwnershipCard({
     return (
         <OverviewCard title={title} header={header} className="ownership-card">
             {diff === null && diffLoading ? (
-                <p className="overview-card__empty">Loading diff…</p>
+                <p className="overview-card__empty">{t('overview.diff.loading')}</p>
             ) : diff === null ? (
-                <p className="overview-card__empty">
-                    {diffError ?? 'The diff is unavailable. Files cannot be aggregated yet.'}
-                </p>
+                <p className="overview-card__empty">{diffError ?? t('overview.diff.unavailable')}</p>
             ) : ownership === null && lensesLoading ? (
-                <p className="overview-card__empty">Loading ownership zone…</p>
+                <p className="overview-card__empty">{t('overview.ownership.loading')}</p>
             ) : (
                 <div className="ownership-list">
                     {summary.groups.map((group) => (
@@ -543,11 +545,10 @@ function OwnershipCard({
                                 )}
                                 <span className="ownership-row__spacer" />
                                 <span className="ownership-row__stats">
-                                    {formatCount(group.files)} {plural(group.files, 'file', 'files', 'files')} ·{' '}
-                                    {formatCount(group.lines)} {plural(group.lines, 'line', 'lines', 'lines')}
+                                    {t('overview.ownership.rowStats', group.files, group.lines)}
                                 </span>
-                                <span className="ownership-row__add">+{formatCount(group.additions)}</span>
-                                <span className="ownership-row__del">−{formatCount(group.deletions)}</span>
+                                <span className="ownership-row__add">+{format.count(group.additions)}</span>
+                                <span className="ownership-row__del">−{format.count(group.deletions)}</span>
                             </span>
                             <span className="ownership-row__note">{group.note}</span>
                         </button>
@@ -559,16 +560,18 @@ function OwnershipCard({
 }
 
 function OwnershipChip({ kind, owner }: { kind: OwnershipKind; owner: string | null }) {
+    const t = useT();
+    // The owner from CODEOWNERS is the host's zone name, used as is without translation.
     const label =
         kind === 'mine'
             ? owner === null
-                ? 'you'
-                : `you · ${owner}`
+                ? t('overview.ownership.chip.mine')
+                : t('overview.ownership.chip.mineOwner', owner)
             : kind === 'other'
-              ? (owner ?? 'other')
+              ? (owner ?? t('overview.ownership.chip.other'))
               : kind === 'generated'
-                ? 'generated'
-                : 'mixed';
+                ? t('overview.ownership.chip.generated')
+                : t('overview.ownership.chip.mixed');
     return <span className={`ownership-chip ownership-chip--${kind}`}>{label}</span>;
 }
 
@@ -589,25 +592,26 @@ function DiscussionCard({
     loading: boolean;
     error: string | null;
 }) {
+    const t = useT();
     if (threads === null) {
         return (
-            <OverviewCard title="Discussion">
+            <OverviewCard title={t('overview.discussion')}>
                 <p className="overview-card__empty">
-                    {loading ? 'Loading discussions…' : (error ?? 'No discussions.')}
+                    {loading ? t('overview.discussion.loading') : (error ?? t('overview.discussion.empty'))}
                 </p>
             </OverviewCard>
         );
     }
     const counts = discussionStats(threads);
     return (
-        <OverviewCard title="Discussion">
+        <OverviewCard title={t('overview.discussion')}>
             <div className="discussion-counts">
-                <DiscussionCount value={counts.open} label="open" />
-                <DiscussionCount value={counts.resolved} label="resolved" />
-                <DiscussionCount value={counts.bots} label="from bots" />
+                <DiscussionCount value={counts.open} label={t('overview.discussion.open')} />
+                <DiscussionCount value={counts.resolved} label={t('overview.discussion.resolved')} />
+                <DiscussionCount value={counts.bots} label={t('overview.discussion.bots')} />
             </div>
             {outside.length === 0 ? (
-                <p className="overview-card__empty">No PR-level threads or threads outside the diff.</p>
+                <p className="overview-card__empty">{t('overview.discussion.noOutside')}</p>
             ) : (
                 // Collapsed: the Overview discussion card is a summary, not a feed (dogfooding #5).
                 <OutsideThreads threads={outside} store={store} actions={actions} now={now} />
@@ -617,9 +621,10 @@ function DiscussionCard({
 }
 
 function DiscussionCount({ value, label }: { value: number; label: string }) {
+    const format = useFormat();
     return (
         <div className="discussion-count">
-            <strong>{formatCount(value)}</strong>
+            <strong>{format.count(value)}</strong>
             <span>{label}</span>
         </div>
     );
@@ -647,9 +652,11 @@ function OverviewCard({
 const NOOP = (): void => undefined;
 const EMPTY_FILES: PrDiff['files'] = [];
 const EMPTY_THREADS: readonly Thread[] = [];
+const GALLERY_WRITE = 'Sherpa gallery: writing drafts is not available';
 const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
-    save: () => Promise.reject(new Error('draft writing is unavailable in the gallery')),
-    update: () => Promise.reject(new Error('draft writing is unavailable in the gallery')),
-    delete: () => Promise.reject(new Error('draft writing is unavailable in the gallery')),
+    save: () => Promise.reject(new Error(GALLERY_WRITE)),
+    update: () => Promise.reject(new Error(GALLERY_WRITE)),
+    delete: () => Promise.reject(new Error(GALLERY_WRITE)),
 };
-const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in the gallery'));
+const EMPTY_RESOLVE = (): Promise<void> =>
+    Promise.reject(new Error('Sherpa gallery: resolving threads is not available'));

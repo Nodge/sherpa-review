@@ -4,9 +4,9 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
+import { formatCount, plural } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
-import { formatCount, plural } from '../text.js';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { FileExpansion } from './expand.js';
@@ -253,8 +253,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             >
                 <FileName file={file} />
                 <span className="file-card__counts">
-                    <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions)}</span>
-                    <span className="file-card__del">−{formatCount(counts?.deletions ?? model?.deletions ?? file.deletions)}</span>
+                    <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions, 'ru')}</span>
+                    <span className="file-card__del">−{formatCount(counts?.deletions ?? model?.deletions ?? file.deletions, 'ru')}</span>
                 </span>
                 <span className="file-card__entity">{entityText(shown)}</span>
 
@@ -363,7 +363,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         actions.onOpenFile(file.fileId);
                     }}
                 >
-                    {formatCount(changed)} {plural(changed, 'changed line', 'changed lines', 'changed lines')}{' '}
+                    {formatCount(changed, 'ru')} {plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}{' '}
                     — open file
                 </button>
             ) : (
@@ -413,8 +413,8 @@ function CollapsedFileSummary({
             <span className="file-card__collapsed-mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            <span className="file-card__add">+{formatCount(counts?.additions ?? file.additions)}</span>
-            <span className="file-card__del">−{formatCount(counts?.deletions ?? file.deletions)}</span>
+            <span className="file-card__add">+{formatCount(counts?.additions ?? file.additions, 'ru')}</span>
+            <span className="file-card__del">−{formatCount(counts?.deletions ?? file.deletions, 'ru')}</span>
             <span>· {text}</span>
             <span className="file-card__collapsed-spacer" />
             <span className="file-card__collapsed-hint">click to expand the lines</span>
@@ -448,8 +448,8 @@ function FileName({ file }: { file: FileDiff }) {
 
 /** Same wording as the slice gap bar (`gapLabel` in diff-rows), since both describe the same hidden lines. */
 function elsewhereLabel(changed: number): string {
-    const lines = plural(changed, 'changed line', 'changed lines', 'changed lines');
-    return `${formatCount(changed)} ${lines} — in other stops`;
+    const lines = plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru');
+    return `${formatCount(changed, 'ru')} ${lines} in other stops`;
 }
 
 /**

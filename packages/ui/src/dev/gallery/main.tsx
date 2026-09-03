@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { readFragmentParam } from '../../fragment.js';
 import { IconSprite } from '../../icons/icon.tsx';
 import '../../styles/base.css';
-import { Gallery } from './gallery.tsx';
+import { Gallery, parseGalleryLocale } from './gallery.tsx';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -14,6 +14,9 @@ if (!container) {
 createRoot(container).render(
     <StrictMode>
         <IconSprite />
-        <Gallery initialId={readFragmentParam(window.location.hash, 'state')} />
+        <Gallery
+            initialId={readFragmentParam(window.location.hash, 'state')}
+            initialLocale={parseGalleryLocale(readFragmentParam(window.location.hash, 'locale'))}
+        />
     </StrictMode>,
 );

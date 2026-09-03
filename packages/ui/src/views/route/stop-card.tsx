@@ -3,13 +3,13 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
+import { formatCount, plural } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../../iterations/read-only.tsx';
 import { stripInlineCode } from '../../markdown/markdown.js';
 import { Markdown } from '../../markdown/markdown.tsx';
 import { clampParagraph } from '../../route/paragraph.js';
 import type { RouteStopView } from '../../route/route-model.js';
-import { formatCount, plural } from '../../text.js';
 
 /**
  * Route stop (README §1): a grid with a sticky left column and a diff column.
@@ -140,7 +140,7 @@ export function StopCard({
                     {comments === 0 ? null : (
                         <span className="route-stop__comments" title={`Comments in this stop's ranges: ${String(comments)}`}>
                             <span className="route-stop__comments-box" aria-hidden="true" />
-                            {formatCount(comments)}
+                            {formatCount(comments, 'ru')}
                         </span>
                     )}
                     <StopViewedToggle
@@ -366,8 +366,8 @@ export function CollapsedStop({
             <span className="route-collapsed__mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            Collapsed · {formatCount(lines)} {plural(lines, 'line', 'lines', 'lines')} in {formatCount(files)}{' '}
-            {plural(files, 'file', 'files', 'files')} · {reason}
+            Collapsed · {formatCount(lines, 'ru')} {plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')} in {formatCount(files, 'ru')}{' '}
+            {plural(files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} · {reason}
             <span className="route-stop__spacer" />
             <span className="route-collapsed__hint">nothing is hidden — click to expand</span>
         </button>
@@ -397,9 +397,9 @@ export function ViewedSummary({
             </span>
             {assertions === 0
                 ? null
-                : `${formatCount(assertions)} ${plural(assertions, 'assertion', 'assertions', 'assertions')} · `}
-            {formatCount(files)} {plural(files, 'file', 'files', 'files')} · {formatCount(lines)}{' '}
-            {plural(lines, 'line', 'lines', 'lines')} · viewed
+                : `${formatCount(assertions, 'ru')} ${plural(assertions, { one: 'assertion', few: 'assertions', many: 'assertions', other: 'assertions' }, 'ru')} · `}
+            {formatCount(files, 'ru')} {plural(files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} · {formatCount(lines, 'ru')}{' '}
+            {plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')} · viewed
         </button>
     );
 }

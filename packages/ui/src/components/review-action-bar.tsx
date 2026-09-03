@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
+import { useFormat, useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useThreadPinContext } from '../iterations/thread-pin.tsx';
 import type { ReviewProgressSummary } from '../progress/summary.js';
@@ -17,7 +18,6 @@ import { useShortcut } from '../shortcuts/context.tsx';
 import type { ViewId } from '../session/views.js';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import type { ConnectionState } from '../store.js';
-import { formatCount, plural } from '../text.js';
 import { closePublishedComposers } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadStore } from '../threads/store.js';
@@ -27,17 +27,15 @@ import {
     availableShipMode,
     partialPublicationFailure,
     type PublicationFailure,
-    publishConsequence,
+    publishConsequenceKey,
     publishDisabledReason,
     requestPublicationFailure,
     type ShipMode,
 } from './review-action-model.js';
 import './review-action-bar.css';
 
-const SHIP_DESCRIPTION = 'Approves this snapshot only. A new push drops the approval and asks again.';
-// The promise in README §5 to revoke by CODEOWNERS zone is absent here. This publishes the regular sticky ship
-// of the host. We have no zone-based mechanism (decision log, #36).
-const STICKY_DESCRIPTION = 'The approval carries over to later pushes — the host’s own sticky ship.';
+// The sticky description does not promise cancellation by CODEOWNERS zone from README §5. It publishes the host's
+// regular sticky ship. Sherpa has no zone-specific mechanism (decision log, #36).
 
 /**
  * The route layer in the action bar (SPEC §2.19, README §13): the guardrail counts unviewed
@@ -124,28 +122,30 @@ export function reviewActionBarVisible({
 
 /** Panel without a usable diff: keeps the layout and distinguishes loading from errors. */
 export function ReviewActionBarLoading({ diffError }: { readonly diffError: string | null }) {
+    const t = useT();
     const errored = diffError !== null;
-    const disabledReason = errored ? `The diff failed to load: ${diffError}` : 'The diff and review data are still loading.';
+    const disabledReason =
+        diffError === null ? t('ship.loading.reason') : t('ship.diffFailed.reason', diffError);
     return (
         <div className="review-action-bar" aria-busy={errored ? undefined : true}>
             <span
                 className={`review-action-bar__progress ${errored ? 'is-error' : 'is-loading'}`}
-                aria-label={errored ? undefined : 'File counter loading'}
+                aria-label={errored ? undefined : t('ship.loading.filesAria')}
             >
                 {errored ? (
-                    'diff failed to load'
+                    t('ship.diffFailed')
                 ) : (
                     <>
                         <span className="review-action-bar__progress-spinner" aria-hidden="true" />
-                        <span>files</span>
+                        <span>{t('ship.loading.files')}</span>
                     </>
                 )}
             </span>
             <span className="review-action-bar__divider" aria-hidden="true" />
-            <span className="review-action-bar__no-drafts">comments loading</span>
+            <span className="review-action-bar__no-drafts">{t('ship.loading.comments')}</span>
             <span className="review-action-bar__divider" aria-hidden="true" />
             <button type="button" className="review-action-bar__button" disabled title={disabledReason}>
-                Comment on the PR
+                {t('ship.prComment')}
             </button>
             <button
                 type="button"
@@ -158,14 +158,14 @@ export function ReviewActionBarLoading({ diffError }: { readonly diffError: stri
             <div className="review-action-bar__ship">
                 <button type="button" className="review-action-bar__ship-primary" disabled title={disabledReason}>
                     <Icon name="thumb" size={15} className="review-action-bar__thumb" />
-                    Ship
+                    {t('ship.mode.ship')}
                 </button>
                 <button
                     type="button"
                     className="review-action-bar__ship-caret"
                     disabled
                     title={disabledReason}
-                    aria-label="Choose ship mode"
+                    aria-label={t('ship.chooseMode')}
                 >
                     <Icon name="chev-down" size={14} />
                 </button>
@@ -189,6 +189,8 @@ export function ReviewActionBar({
     defaultMenuOpen = false,
     initialFailure = null,
 }: ReviewActionBarProps) {
+    const t = useT();
+    const format = useFormat();
     const diffSnapshot = useSyncExternalStore(diffStore.subscribe, diffStore.getSnapshot, diffStore.getSnapshot);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot, threadStore.getSnapshot);
     const composerGuard = useSyncExternalStore(
@@ -231,6 +233,7 @@ export function ReviewActionBar({
     const readOnlyIteration = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     const retryDisabledReason = publishDisabledReason({
+        t,
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
@@ -238,6 +241,7 @@ export function ReviewActionBar({
         readOnlyReason,
     });
     const disabledReason = publishDisabledReason({
+        t,
         connection,
         pendingComposer: composerGuard.pending,
         publishing: publishing !== null,
@@ -297,7 +301,7 @@ export function ReviewActionBar({
                     publication.publishedIds.add(commentId);
                 }
                 const currentThreads = threadStore.getSnapshot().threads;
-                const partial = partialPublicationFailure(verdict, result, commentBodies(currentThreads));
+                const partial = partialPublicationFailure(verdict, result, commentBodies(currentThreads), t);
                 if (partial !== null) {
                     setFailure(partial);
                     return;
@@ -341,6 +345,7 @@ export function ReviewActionBar({
             setMenuOpen,
             setPublishing,
             settings,
+            t,
             threadStore,
         ],
     );
@@ -348,8 +353,9 @@ export function ReviewActionBar({
     useShortcut({
         id: 'review.shipMenu',
         keys: ['mod+enter'],
-        label: 'Open the ship menu',
-        consequence: publishConsequence(effectiveShipMode, drafts),
+        label: 'shortcut.review.shipMenu',
+        consequence: publishConsequenceKey(effectiveShipMode),
+        consequenceArg: drafts,
         when: () => !draggingSelection && !disabled && !prCommentsOpen,
         action: () => {
             setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
@@ -359,8 +365,9 @@ export function ReviewActionBar({
     useShortcut({
         id: 'review.requestChanges',
         keys: ['mod+shift+enter'],
-        label: 'Request changes',
-        consequence: publishConsequence('request_changes', drafts),
+        label: 'shortcut.review.requestChanges',
+        consequence: publishConsequenceKey('request_changes'),
+        consequenceArg: drafts,
         when: () => !draggingSelection && !disabled && !prCommentsOpen,
         action: () => {
             void publish('request_changes');
@@ -375,14 +382,9 @@ export function ReviewActionBar({
         return (
             <div className="review-action-bar review-action-bar--error" ref={rootRef} role="alert">
                 <div className="review-action-error__summary">
-                    {failure.failedCount === 0 ? (
-                        'Could not finish the review'
-                    ) : (
-                        <>
-                            {formatCount(failure.failedCount)}{' '}
-                            {plural(failure.failedCount, 'comment failed to publish', 'comments failed to publish', 'comments failed to publish')}
-                        </>
-                    )}
+                    {failure.failedCount === 0
+                        ? t('ship.error.failed')
+                        : t('ship.error.comments', failure.failedCount)}
                     {' · '}
                     <button
                         type="button"
@@ -390,7 +392,7 @@ export function ReviewActionBar({
                         disabled={retryDisabledReason !== null}
                         title={retryDisabledReason ?? undefined}
                     >
-                        retry
+                        {t('ship.error.retry')}
                     </button>
                 </div>
                 {failure.message === null ? null : <div className="review-action-error__message">{failure.message}</div>}
@@ -398,7 +400,7 @@ export function ReviewActionBar({
                     <ul className="review-action-error__comments">
                         {failure.comments.map((comment) => (
                             <li key={comment.commentId}>
-                                <span>{comment.body ?? `Comment ${comment.commentId}`}</span>
+                                <span>{comment.body ?? t('ship.error.comment', comment.commentId)}</span>
                                 <small>{comment.message}</small>
                             </li>
                         ))}
@@ -408,23 +410,22 @@ export function ReviewActionBar({
         );
     }
 
-    const draftBatch = `${formatCount(drafts)} ${plural(drafts, 'draft', 'drafts', 'drafts')}`;
     return (
         <div className="review-action-bar" ref={rootRef}>
             <span className="review-action-bar__progress">
-                {formatCount(progress.filesSeen)} / {formatCount(progress.filesTotal)} files
+                {t('ship.progress', progress.filesSeen, progress.filesTotal)}
             </span>
             <span className="review-action-bar__divider" aria-hidden="true" />
             {drafts === 0 ? (
-                <span className="review-action-bar__no-drafts">no unpublished comments</span>
+                <span className="review-action-bar__no-drafts">{t('ship.noDrafts')}</span>
             ) : (
                 <span className="review-action-bar__drafts">
                     <span className="review-action-bar__draft-dot" aria-hidden="true" />
-                    {draftBatch} {plural(drafts, 'goes out', 'go out', 'go out')} on ship
+                    {t('ship.drafts', drafts)}
                     {pinnedDrafts === 0 ? null : (
                         <span className="review-action-bar__pinned-drafts">
-                            · {formatCount(pinnedDrafts)}{' '}
-                            {plural(pinnedDrafts, 'is pinned', 'are pinned', 'are pinned')} to earlier commits
+                            {' '}
+                            {t('ship.drafts.pinned', pinnedDrafts)}
                         </span>
                     )}
                 </span>
@@ -441,16 +442,17 @@ export function ReviewActionBar({
                     setMenuOpen(false);
                 }}
             >
-                Comment on the PR
+                {t('ship.prComment')}
             </button>
             <button
                 type="button"
                 className="review-action-bar__button review-action-bar__request"
                 disabled={disabled}
-                title={disabledReason ?? publishConsequence('request_changes', drafts)}
+                title={disabledReason ?? t('ship.consequence.requestChanges', drafts)}
                 onClick={() => void publish('request_changes')}
             >
-                Request changes{drafts === 0 ? '' : ` · ${formatCount(drafts)}`}
+                {t('shortcut.review.requestChanges')}
+                {drafts === 0 ? '' : ` · ${format.count(drafts)}`}
             </button>
             <div className="review-action-bar__ship">
                 <button
@@ -458,13 +460,13 @@ export function ReviewActionBar({
                     type="button"
                     className="review-action-bar__ship-primary"
                     disabled={disabled}
-                    title={disabledReason ?? publishConsequence(effectiveShipMode, drafts)}
+                    title={disabledReason ?? t(publishConsequenceKey(effectiveShipMode), drafts)}
                     onClick={() => void publish(effectiveShipMode)}
                 >
                     <Icon name="thumb" size={15} className="review-action-bar__thumb" />
                     {publishing === null
-                        ? `${shipModeLabel(effectiveShipMode)}${drafts === 0 ? '' : ` · ${formatCount(drafts)}`}`
-                        : 'Publishing…'}
+                        ? `${t(shipModeKey(effectiveShipMode))}${drafts === 0 ? '' : ` · ${format.count(drafts)}`}`
+                        : t('ship.publishing')}
                 </button>
                 <button
                     type="button"
@@ -472,7 +474,7 @@ export function ReviewActionBar({
                     aria-haspopup="listbox"
                     aria-expanded={menuOpen}
                     disabled={disabled}
-                    title={disabledReason ?? 'Choose the ship mode'}
+                    title={disabledReason ?? t('ship.chooseMode')}
                     onClick={() => {
                         if (menuOpen) {
                             closeMenu(false);
@@ -497,7 +499,7 @@ export function ReviewActionBar({
                         ref={menuRef}
                         className="review-action-menu"
                         role="listbox"
-                        aria-label="Ship mode"
+                        aria-label={t('ship.menu')}
                         tabIndex={-1}
                         aria-activedescendant={`review-ship-option-${String(cursor)}`}
                         onKeyDown={(event) => {
@@ -527,8 +529,8 @@ export function ReviewActionBar({
                             cursor={cursor}
                             mode="ship"
                             active={effectiveShipMode === 'ship'}
-                            label="Ship"
-                            description={SHIP_DESCRIPTION}
+                            label={t('ship.mode.ship')}
+                            description={t('ship.mode.ship.description')}
                             drafts={drafts}
                             onHover={setCursor}
                             onChoose={(mode) => void publish(mode, { remember: true })}
@@ -538,11 +540,11 @@ export function ReviewActionBar({
                             cursor={cursor}
                             mode="sticky_ship"
                             active={effectiveShipMode === 'sticky_ship'}
-                            label="Sticky ship"
-                            description={STICKY_DESCRIPTION}
+                            label={t('ship.mode.sticky')}
+                            description={t('ship.mode.sticky.description')}
                             drafts={drafts}
                             disabled={!stickyAvailable}
-                            disabledReason="This host does not support Sticky ship."
+                            disabledReason={t('ship.mode.sticky.unavailable')}
                             onHover={setCursor}
                             onChoose={(mode) => void publish(mode, { remember: true })}
                         />
@@ -572,21 +574,11 @@ export function ReviewActionBar({
  * route it counts stops. A file counter next to it would only confuse the reader.
  */
 function ShipGuard({ files, stops }: { files: number; stops: number | null }) {
+    const t = useT();
     if (stops !== null) {
-        return stops === 0 ? null : (
-            <div className="review-action-menu__guard">
-                {formatCount(stops)}{' '}
-                {plural(stops, 'stop not viewed', 'stops not viewed', 'stops not viewed')} — ship
-                anyway?
-            </div>
-        );
+        return stops === 0 ? null : <div className="review-action-menu__guard">{t('ship.guard.stops', stops)}</div>;
     }
-    return files === 0 ? null : (
-        <div className="review-action-menu__guard">
-            {formatCount(files)}{' '}
-            {plural(files, 'file not viewed', 'files not viewed', 'files not viewed')} — ship anyway?
-        </div>
-    );
+    return files === 0 ? null : <div className="review-action-menu__guard">{t('ship.guard.files', files)}</div>;
 }
 
 /** Route state for the warning and summary, computed from actual marks, not the snapshot. */
@@ -627,6 +619,7 @@ function ShipOption({
     onHover: (index: number) => void;
     onChoose: (mode: ShipMode) => void;
 }) {
+    const t = useT();
     return (
         <div
             id={`review-ship-option-${String(index)}`}
@@ -650,17 +643,13 @@ function ShipOption({
             <span>
                 <strong>{label}</strong>
                 <span>{description}</span>
-                {drafts === 0 ? null : (
-                    <small>
-                        Publishes {formatCount(drafts)} {plural(drafts, 'draft', 'drafts', 'drafts')}.
-                    </small>
-                )}
+                {drafts === 0 ? null : <small>{t('ship.option.publishes', drafts)}</small>}
                 {disabled ? <small>{disabledReason}</small> : null}
             </span>
         </div>
     );
 }
 
-function shipModeLabel(mode: ShipMode): string {
-    return mode === 'sticky_ship' ? 'Sticky ship' : 'Ship';
+function shipModeKey(mode: ShipMode): 'ship.mode.ship' | 'ship.mode.sticky' {
+    return mode === 'sticky_ship' ? 'ship.mode.sticky' : 'ship.mode.ship';
 }

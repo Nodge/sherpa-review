@@ -40,6 +40,7 @@ import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
+import { formatCount, plural } from '../../i18n/index.js';
 import { useReadOnlyIteration } from '../../iterations/read-only.tsx';
 import { SnapshotPill } from '../../iterations/snapshot-picker.tsx';
 import type { ViewingLabel } from '../../iterations/viewing.js';
@@ -90,7 +91,6 @@ import { countThreadSources, threadIsVisible } from '../../threads/model.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { openNewComposer, OutsideThreads } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
-import { formatCount, plural } from '../../text.js';
 import { commentPosition } from '../full-diff.tsx';
 import { CoverageStrip } from './coverage-strip.tsx';
 import { FileChips } from './file-chips.tsx';
@@ -1403,7 +1403,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     useShortcut({
         id: 'route.toggleStopViewed',
         keys: ['v'],
-        label: 'Mark the stop viewed',
+        label: 'shortcut.route.toggleStopViewed',
         when: () => {
             const entry = focusedEntry();
             return entry !== null && canToggleViewed(entry);
@@ -1418,7 +1418,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     useShortcut({
         id: 'route.toggleStopCollapse',
         keys: ['x'],
-        label: 'Collapse or expand the stop',
+        label: 'shortcut.route.toggleStopCollapse',
         when: () => focusedEntry() !== null,
         action: () => {
             const entry = focusedEntry();
@@ -1523,7 +1523,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     useShortcut({
         id: 'thread.commentLine',
         keys: ['c'],
-        label: 'Comment on the line under the cursor',
+        label: 'shortcut.thread.commentLine',
         when: () => focusedLine !== null,
         action: () => {
             if (focusedLine !== null) {
@@ -2032,8 +2032,8 @@ function StopSection({
             {cards.map((group) => renderCard(view.stop.id, group))}
             {cards.length < shownFiles.length ? (
                 <p className="route-stop__lazy">
-                    another {formatCount(shownFiles.length - cards.length)}{' '}
-                    {plural(shownFiles.length - cards.length, 'card', 'cards', 'cards')} will appear as you
+                    {formatCount(shownFiles.length - cards.length, 'ru')} more{' '}
+                    {plural(shownFiles.length - cards.length, { one: 'card', few: 'cards', many: 'cards', other: 'cards' }, 'ru')} appear as you
                     scroll
                 </p>
             ) : null}
