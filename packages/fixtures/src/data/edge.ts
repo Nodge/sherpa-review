@@ -196,6 +196,7 @@ export function makeEdgeFixture(): FixtureData {
             checks: null,
             updatedAt: UPDATED_AT,
             capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, iterations: false },
+            verdicts: [],
         },
         iterations: singleIteration(
             {

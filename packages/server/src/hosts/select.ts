@@ -25,6 +25,13 @@ export interface SelectedHost {
      * knows nothing about fixtures.
      */
     readonly advanceIteration?: () => Iteration;
+    /**
+     * Host-specific subscription to review status changes (a status field in the lightweight
+     * poll, M5-T15). When present, the server uses it to reread PR metadata and detect another reviewer's ship.
+     */
+    readonly watchStatus?: (onChange: () => void) => () => void;
+    /** Fixture host only: development toggle for draft write failures (buffer e2e). */
+    readonly setFailDraftWrites?: (fail: boolean) => void;
 }
 
 export type ReviewHostFactory = (prKey: string) => SelectedHost | null;
@@ -40,7 +47,12 @@ export function selectReviewHost(prKey: string): SelectedHost | null {
             return null;
         }
         
-        
+        return {
+            
+            host,
+            currentUser: () => host.currentUser(),
+            watchStatus: (onChange) => host.watchStatus(onChange),
+        };
     }
 
     if (prKey.startsWith(FIXTURE_PREFIX)) {
@@ -49,7 +61,14 @@ export function selectReviewHost(prKey: string): SelectedHost | null {
             return null;
         }
         const host = makeFixtureHost(raw);
-        return { name: 'fixture', host, advanceIteration: () => host.advanceIteration() };
+        return {
+            name: 'fixture',
+            host,
+            advanceIteration: () => host.advanceIteration(),
+            setFailDraftWrites: (fail) => {
+                host.setFailDraftWrites(fail);
+            },
+        };
     }
 
     return null;

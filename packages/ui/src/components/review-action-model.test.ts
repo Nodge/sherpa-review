@@ -25,6 +25,34 @@ describe('floating bar model', () => {
         expect(publishDisabledReason({ connection: 'online', pendingComposer: false, publishing: false })).toBeNull();
     });
 
+    // Draft buffer (M5-T15): there is nothing to publish until the host accepts the text.
+    it('blocks publishing while buffered drafts have not arrived', () => {
+        expect(
+            publishDisabledReason({
+                connection: 'online',
+                pendingComposer: false,
+                bufferedDrafts: 2,
+                publishing: false,
+            }),
+        ).toBe('2 drafts not yet saved to the host. ship is unavailable until saved');
+        expect(
+            publishDisabledReason({
+                connection: 'online',
+                pendingComposer: false,
+                bufferedDrafts: 1,
+                publishing: false,
+            }),
+        ).toBe('1 draft not yet saved to the host. ship is unavailable until saved');
+        expect(
+            publishDisabledReason({
+                connection: 'online',
+                pendingComposer: false,
+                bufferedDrafts: 0,
+                publishing: false,
+            }),
+        ).toBeNull();
+    });
+
     it('falls back from sticky on a host without the capability', () => {
         expect(availableShipMode('sticky_ship', true)).toBe('sticky_ship');
         expect(availableShipMode('sticky_ship', false)).toBe('ship');

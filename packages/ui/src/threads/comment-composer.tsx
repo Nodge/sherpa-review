@@ -79,7 +79,6 @@ export function CommentComposer({
     const resolvedRestoreOnCancel =
         restoreOnCancel ?? (composer.commentId === null ? undefined : (composer.originalText ?? composer.text));
     const resolvedWhileTyping = notice !== undefined;
-    const ambiguousFirstSave = composer.status === 'error' && composer.saveUncertain && composer.commentId === null;
     // Drafts from a previous iteration are visible but cannot be edited (M4 boundaries). The composer can
     // be closed because closing is not a write.
     const readOnly = useReadOnlyIteration();
@@ -94,9 +93,7 @@ export function CommentComposer({
     const saveDisabledReason = readOnly
         ? readOnlyReason
         : disabled
-        ? 'The draft is being deleted.'
-        : ambiguousFirstSave
-          ? 'Use the retry link in the save status.'
+          ? 'The draft is being deleted.'
           : composer.text.trim() === ''
             ? 'Type the comment text.'
             : null;
@@ -355,9 +352,10 @@ export function CommentComposer({
                 ) : (
                     <ComposerStatus
                         composer={composer}
-                        ambiguousFirstSave={ambiguousFirstSave}
                         readOnly={readOnly}
-                        onRetry={controller.retry}
+                        // Retrying a buffered write is the same explicit save. On success,
+                        // the draft has reached the host and the composer has nothing left to hold.
+                        onRetry={composer.status === 'buffered' ? save : controller.retry}
                     />
                 )}
             </div>
@@ -367,31 +365,31 @@ export function CommentComposer({
 
 function ComposerStatus({
     composer,
-    ambiguousFirstSave,
     readOnly,
     onRetry,
 }: {
     composer: ComposerSnapshot;
-    ambiguousFirstSave: boolean;
     /** A retry is a write just like the first attempt, so it is unavailable in a previous iteration. */
     readOnly: boolean;
-    onRetry: () => Promise<boolean>;
+    onRetry: () => Promise<unknown>;
 }) {
     const readOnlyReason = useReadOnlyReason();
     if (composer.status === 'discarding') {
         return <span className="thread-composer__status">deleting…</span>;
     }
-    if (ambiguousFirstSave) {
+    // The text is already on the server. The host has not accepted it, but it can no longer be lost (M5-T15).
+    if (composer.status === 'buffered') {
+        const error = composer.bufferEntry?.error ?? null;
         return (
-            <span className="thread-composer__status is-error">
-                could not confirm the save · retrying may create a copy ·{' '}
+            <span className="thread-composer__status" {...(error === null ? {} : { title: error })}>
+                we will save it once the connection is back ·{' '}
                 <button
                     type="button"
                     disabled={readOnly}
                     {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
                 >
-                    retry anyway
+                    retry
                 </button>
             </span>
         );

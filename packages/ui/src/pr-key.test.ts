@@ -15,6 +15,7 @@ const PR: PrMeta = {
     checks: 'passed',
     updatedAt: '2026-08-24T06:00:00.000Z',
     capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
+    verdicts: [],
 };
 
 describe('breadcrumbFromPrKey', () => {

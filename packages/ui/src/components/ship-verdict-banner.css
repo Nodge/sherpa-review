@@ -1,0 +1,39 @@
+/* "Someone else ships first" (M5-T15) is news, not an alert. Use the neutral card background. */
+
+.ship-verdict-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+    margin: 18px var(--space-page) 0;
+    max-width: 1560px;
+    padding: 11px var(--space-control);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+}
+
+.ship-verdict-banner__icon {
+    flex: none;
+    color: var(--text-muted);
+}
+
+.ship-verdict-banner__body {
+    min-width: 0;
+    flex: 1;
+    font-size: var(--font-size-ui);
+    color: var(--text-secondary);
+}
+
+.ship-verdict-banner__dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}

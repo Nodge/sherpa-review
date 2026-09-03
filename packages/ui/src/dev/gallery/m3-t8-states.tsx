@@ -61,7 +61,7 @@ const NOTE: AgentNote = {
 const NOW = Date.parse('2026-09-01T10:05:00.000Z');
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('gallery does not save')),
-    update: () => Promise.resolve(),
+    update: () => Promise.resolve({ outcome: 'saved' }),
     delete: () => Promise.resolve(),
 };
 const ACTIONS: FileCardActions = {

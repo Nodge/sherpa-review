@@ -534,7 +534,6 @@ describe('route model', () => {
             text: '',
             commentId: null,
             status: 'idle' as const,
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,

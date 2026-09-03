@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { Thread, UiSettings, Verdict } from '@sherpa/protocol';
+import type { DraftBufferEntry, Thread, UiSettings, Verdict } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -23,6 +23,17 @@ import { ReviewComplete } from './review-complete.tsx';
 const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const DRAFT_THREADS = withDraft(DATA.threads);
+const BUFFERED: DraftBufferEntry = {
+    id: 'ck-1',
+    draft: { body: 'waiting for a connection', parentId: null, anchor: null },
+    commentId: null,
+    state: 'failed',
+    error: 'review host: 502',
+    attempts: 1,
+    createdAt: '2026-09-03T10:00:00.000Z',
+    updatedAt: '2026-09-03T10:00:00.000Z',
+};
+
 const TRANSPORT = {
     save: () => Promise.reject(new Error('not called during static rendering')),
     update: () => Promise.reject(new Error('not called during static rendering')),
@@ -37,6 +48,7 @@ function renderBar(
         route?: RouteProgress | null;
         /** Active PR iteration, used to count drafts pinned to previous commits. */
         activeDiffId?: string;
+        draftBuffer?: readonly DraftBufferEntry[];
     } = {},
 ): string {
     const threads = options.threads ?? DRAFT_THREADS;
@@ -62,6 +74,7 @@ function renderBar(
             connection="online"
             hostName="FixtureHost"
             composerTransport={TRANSPORT}
+            {...(options.draftBuffer === undefined ? {} : { draftBuffer: options.draftBuffer })}
             onPublish={() => Promise.reject(new Error('not called during static rendering'))}
             onComplete={() => undefined}
             route={options.route ?? null}
@@ -317,6 +330,41 @@ describe('floating review bar', () => {
         }));
 
         expect(renderBar({ threads })).toContain('21 drafts go out on ship');
+    });
+
+    // Draft buffer (M5-T15): records count in the batch and block ship until they reach the host.
+    it('counts buffered drafts and blocks ship with a reason', () => {
+        const drafts = countDraftComments(DRAFT_THREADS);
+
+        const html = renderBar({ draftBuffer: [BUFFERED] });
+
+        expect(html).toContain(`${String(drafts + 1)} draft`);
+        expect(html).toContain('1 not yet saved to the host');
+        expect(html).toContain('1 draft not yet saved to the host. ship is unavailable until saved');
+        expect(html).toContain('<button type="button" class="review-action-bar__ship-primary" disabled=""');
+    });
+
+    // The edit belongs to a draft already counted in the threads, so it adds no second draft
+    // to the batch, but blocks ship just like a create operation.
+    it('does not double the draft count for a buffered edit but blocks ship', () => {
+        const drafts = countDraftComments(DRAFT_THREADS);
+
+        const html = renderBar({ draftBuffer: [{ ...BUFFERED, commentId: 'draft-1' }] });
+
+        expect(html).toContain(`${String(drafts)} draft`);
+        expect(html).toContain('1 not yet saved to the host');
+        expect(html).toContain('ship is unavailable until saved');
+    });
+
+    // Ship summary (SPEC §4.5): informational, does not block publishing.
+    it('shows the unresolved thread count and nothing when it is zero', () => {
+        const open = DRAFT_THREADS.filter((thread) => !thread.resolved).length;
+        expect(open).toBeGreaterThan(0);
+
+        expect(renderBar()).toContain(`${String(open)} unresolved`);
+        expect(renderBar({ threads: [] })).not.toContain('unresolved');
+        // Unresolved threads do not disable ship. The guard only checks drafts and connectivity.
+        expect(renderBar()).not.toContain('review-action-bar__ship-primary" disabled');
     });
 
     it('shows a non-blocking warning, exact consequences and a reason for disabled sticky in the menu', () => {

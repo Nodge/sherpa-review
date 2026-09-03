@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { Thread } from '@sherpa/protocol';
+import type { DraftBufferEntry, Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -70,7 +70,55 @@ afterEach(() => {
     document.body.style.overflow = '';
 });
 
+const BUFFERED_PR: DraftBufferEntry = {
+    id: 'ck-pr',
+    draft: { body: 'PR comment waiting for a connection.', parentId: null, anchor: null },
+    commentId: null,
+    state: 'failed',
+    error: 'review host: 502',
+    attempts: 1,
+    createdAt: '2026-08-31T11:30:00.000Z',
+    updatedAt: '2026-08-31T11:30:00.000Z',
+};
+
 describe('PR comments modal', () => {
+    // Draft buffer (M5-T15) and ship summary (SPEC §4.5) in the modal header.
+    it('counts PR-level buffer records as drafts and shows unresolved threads', () => {
+        mountModal([PUBLISHED, DRAFT], {}, () => undefined, [BUFFERED_PR]);
+
+        const header = document.querySelector('.pr-comments-modal__header')?.textContent ?? '';
+        expect(header).toContain('2 drafts · will be sent on Ship');
+        expect(header).toContain('1 not yet saved to the host');
+        expect(document.querySelector('.pr-comments-modal__open-threads')?.textContent).toContain('unresolved');
+    });
+
+    // A record may have no composer at all (the draft was edited at a line in a previous iteration),
+    // yet it blocks ship. This list is the only place to see and discard it.
+    it('shows buffered records with discard and retry actions, including edits', async () => {
+        const discardBuffered = vi.fn(() => Promise.resolve());
+        const retryBuffered = vi.fn(() => Promise.resolve());
+        mountModal([PUBLISHED, DRAFT], { discardBuffered, retryBuffered }, () => undefined, [
+            BUFFERED_PR,
+            { ...BUFFERED_PR, id: 'ck-edit', commentId: 'draft-9' },
+        ]);
+
+        const section = document.querySelector('.pr-comments-modal__buffered');
+        expect(section?.textContent).toContain('2 drafts wait for a host connection');
+        expect(section?.querySelectorAll('.pr-comments-modal__buffered-item')).toHaveLength(2);
+
+        await act(async () => {
+            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__delete-button')?.click();
+            await Promise.resolve();
+        });
+        expect(discardBuffered).toHaveBeenCalledWith('ck-pr');
+
+        await act(async () => {
+            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__keep-button')?.click();
+            await Promise.resolve();
+        });
+        expect(retryBuffered).toHaveBeenCalledWith('ck-pr');
+    });
+
     it('shows only roots of human PR-level threads: drafts and published comments', () => {
         mountModal([PUBLISHED, DRAFT, BOT_PR, DISAPPEARED]);
 
@@ -211,7 +259,7 @@ describe('PR comments modal', () => {
     });
 
     it('restores the original text through transport.update when editing is cancelled', async () => {
-        const update = vi.fn(() => Promise.resolve());
+        const update = vi.fn(() => Promise.resolve({ outcome: 'saved' as const }));
         const { store } = mountModal([DRAFT], { update });
         act(() => {
             document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`)?.click();
@@ -234,7 +282,7 @@ describe('PR comments modal', () => {
                 .find((button) => button.textContent === 'discard')
                 ?.click();
             await vi.waitFor(() => {
-                expect(update).toHaveBeenCalledWith(DRAFT.root.id, DRAFT.root.body);
+                expect(update).toHaveBeenCalledWith(DRAFT.root.id, DRAFT.root.body, undefined, expect.any(String));
             });
         });
 
@@ -262,6 +310,7 @@ function mountModal(
     threads: readonly Thread[],
     transportOverrides: Partial<ComposerTransport> = {},
     onClose: () => void = () => undefined,
+    draftBuffer: readonly DraftBufferEntry[] = [],
 ): { readonly store: ThreadStore } {
     // Deterministic markdown layout, a plain textarea instead of ProseMirror.
     const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
@@ -270,7 +319,7 @@ function mountModal(
     const store = createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId)));
     const transport: ComposerTransport = {
         save: () => Promise.reject(new Error('test does not save a new draft')),
-        update: () => Promise.resolve(),
+        update: () => Promise.resolve({ outcome: 'saved' as const }),
         delete: () => Promise.resolve(),
         ...transportOverrides,
     };
@@ -282,6 +331,7 @@ function mountModal(
                     pr={DATA.pr}
                     store={store}
                     transport={transport}
+                    draftBuffer={draftBuffer}
                     now={NOW}
                     onClose={onClose}
                 />

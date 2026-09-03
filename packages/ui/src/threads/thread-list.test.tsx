@@ -298,7 +298,6 @@ describe('editing a line comment', () => {
             originalText: DRAFT.body,
             commentId: 'outside-draft',
             status: 'saved',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,
@@ -424,7 +423,9 @@ describe('reply draft', () => {
         const store = createThreadStore([thread], FILE_IDS);
         openReply(store, thread, null);
         store.updateComposer(`reply:${thread.id}`, { text: 'New reply.' });
-        const save = vi.fn(() => Promise.resolve({ ...DRAFT, id: 'new-draft-reply', body: 'New reply.' }));
+        const save = vi.fn(() =>
+            Promise.resolve({ outcome: 'saved' as const, comment: { ...DRAFT, id: 'new-draft-reply', body: 'New reply.' } }),
+        );
         const host = document.createElement('div');
         document.body.append(host);
         const root = createRoot(host);
@@ -475,7 +476,7 @@ describe('reply draft', () => {
         const store = createThreadStore([thread], FILE_IDS);
         openReply(store, thread, DRAFT);
         store.updateComposer(`reply:${thread.id}`, { text: 'broken', status: 'idle' });
-        const update = vi.fn(() => Promise.resolve());
+        const update = vi.fn(() => Promise.resolve({ outcome: 'saved' as const }));
         const remove = vi.fn(() => Promise.resolve());
         const host = document.createElement('div');
         document.body.append(host);
@@ -510,7 +511,7 @@ describe('reply draft', () => {
             });
         });
 
-        expect(update).toHaveBeenCalledWith(DRAFT.id, DRAFT.body);
+        expect(update).toHaveBeenCalledWith(DRAFT.id, DRAFT.body, undefined, expect.any(String));
         expect(remove).not.toHaveBeenCalled();
         act(() => {
             root.unmount();

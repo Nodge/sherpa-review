@@ -6,6 +6,8 @@ import type { PrDiff, ReviewHost, UiOpenInEditorResponse } from '@sherpa/protoco
 import {
     UI_ENDPOINTS,
     uiDeleteDraftRequestSchema,
+    uiDraftBufferEntryRequestSchema,
+    uiDraftBufferResponseSchema,
     uiOpenInEditorRequestSchema,
     uiOpenInEditorResponseSchema,
     uiReviewDiffRequestSchema,
@@ -28,9 +30,11 @@ import {
     uiSetThreadResolvedRequestSchema,
     uiViewedMirrorRequestSchema,
     uiUpdateDraftRequestSchema,
+    uiUpdateDraftResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
+import type { DraftBufferWriter } from './draft-buffer.js';
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
@@ -79,6 +83,8 @@ export interface ReviewRoutesOptions {
     readonly route: Pick<RouteStore, 'read' | 'listSnapshots'>;
     /** PR metadata cache: publishing a verdict changes the status, and capabilities determine whether slices are available. */
     readonly prMeta: Pick<PrMetaCache, 'refresh' | 'get'>;
+    /** Draft buffer (M5-T15): all draft writes go through it, both creation and editing. */
+    readonly draftBuffer: DraftBufferWriter;
     /** Local storage for iteration patches. If absent, there is nowhere to save the diff (tests without a database). */
     readonly iterations?: IterationStore | null;
     /** PR iterations: endpoints use these to tell whether a request concerns the active iteration or a previous one. */
@@ -88,16 +94,6 @@ export interface ReviewRoutesOptions {
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     const mirrorFileViewed = createViewedMirror(options.host);
-    const updateDraft = createKeyedWriteQueue(
-        (commentId: string, update: { body: string; issue?: boolean }) => {
-            const host = hostOf(options);
-            return call(() =>
-                update.issue === undefined
-                    ? host.updateDraft(commentId, update.body)
-                    : host.updateDraft(commentId, update.body, update.issue),
-            );
-        },
-    );
     const setThreadResolved = createKeyedWriteQueue((threadId: string, resolved: boolean) => {
         const host = hostOf(options);
         return call(() => host.setThreadResolved(threadId, resolved));
@@ -136,24 +132,72 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             method: 'POST',
             path: UI_ENDPOINTS.reviewSaveDraft,
             handle: handlingRpcFailures(async (ctx) => {
-                const host = hostOf(options);
+                hostOf(options);
                 const request = await readRequest(ctx, uiSaveDraftRequestSchema, 'saving a draft');
-                const comment = await call(() => host.saveDraft(request.draft));
-                options.reviewFeed?.bumpLocalWrite();
-                return respond(uiSaveDraftResponseSchema, { comment });
+                const result = await options.draftBuffer.write({
+                    id: request.clientKey,
+                    draft: request.draft,
+                    commentId: null,
+                });
+                if (result.outcome === 'buffered') {
+                    return respond(uiSaveDraftResponseSchema, result, 'local');
+                }
+                if (result.comment === null) {
+                    // The record disappeared between the upsert and the attempt (a concurrent request discarded the buffer entry).
+                    throw new RpcFailure('internal', 'The draft disappeared from the buffer before it could be written to the host.');
+                }
+                return respond(uiSaveDraftResponseSchema, { outcome: 'saved', comment: result.comment });
             }),
         },
         {
             method: 'POST',
             path: UI_ENDPOINTS.reviewUpdateDraft,
             handle: handlingRpcFailures(async (ctx) => {
+                hostOf(options);
                 const request = await readRequest(ctx, uiUpdateDraftRequestSchema, 'updating a draft');
-                await updateDraft(request.commentId, {
-                    body: request.body,
-                    ...(request.issue === undefined ? {} : { issue: request.issue }),
+                const result = await options.draftBuffer.write({
+                    id: request.clientKey,
+                    // An edit knows only the text and issue: after a reload, the comment being edited
+                    // determines the composer location (the edit composer carries no anchor).
+                    draft: {
+                        body: request.body,
+                        parentId: null,
+                        anchor: null,
+                        ...(request.issue === undefined ? {} : { issue: request.issue }),
+                    },
+                    commentId: request.commentId,
                 });
-                options.reviewFeed?.bumpLocalWrite();
-                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+                return respond(
+                    uiUpdateDraftResponseSchema,
+                    result.outcome === 'buffered' ? result : { outcome: 'saved' },
+                    'local',
+                );
+            }),
+        },
+        {
+            method: 'GET',
+            path: UI_ENDPOINTS.reviewDraftBuffer,
+            handle: handlingRpcFailures(() =>
+                respond(uiDraftBufferResponseSchema, { entries: options.draftBuffer.list() }, 'local'),
+            ),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewDraftBufferRetry,
+            handle: handlingRpcFailures(async (ctx) => {
+                hostOf(options);
+                const request = await readRequest(ctx, uiDraftBufferEntryRequestSchema, 'retrying a draft');
+                await options.draftBuffer.retry(request.id);
+                return respond(uiDraftBufferResponseSchema, { entries: options.draftBuffer.list() }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewDraftBufferDiscard,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiDraftBufferEntryRequestSchema, 'discarding a draft');
+                await options.draftBuffer.discard(request.id);
+                return respond(uiDraftBufferResponseSchema, { entries: options.draftBuffer.list() }, 'local');
             }),
         },
         {
@@ -163,6 +207,9 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const host = hostOf(options);
                 const request = await readRequest(ctx, uiDeleteDraftRequestSchema, 'deleting a draft');
                 await deleteDraftConvergently(host, request.commentId);
+                // The draft is gone, so there is nowhere to deliver the pending edit. Letting it block ship
+                // would block it forever. Remove the buffer records for this comment along with it (M5-T15).
+                options.draftBuffer.forgetComment(request.commentId);
                 options.reviewFeed?.bumpLocalWrite();
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),

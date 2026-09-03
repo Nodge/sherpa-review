@@ -161,6 +161,7 @@ export function makeLargeFixture(): FixtureData {
             checks: 'failed',
             updatedAt: UPDATED_AT,
             capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
+            verdicts: [],
         },
         iterations: singleIteration(
             {

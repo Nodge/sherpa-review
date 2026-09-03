@@ -223,7 +223,6 @@ describe('route view', () => {
             text: 'the draft survives reordering',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,

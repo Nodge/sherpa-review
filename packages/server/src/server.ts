@@ -10,6 +10,7 @@ import { ChatStore } from './chat-store.js';
 import type { SherpaDatabase } from './db.js';
 import { openDatabase } from './db.js';
 import { createDevRoutes } from './dev-routes.js';
+import { DraftBufferStore, DraftBufferWriter } from './draft-buffer.js';
 import { ServerAlreadyRunningError } from './errors.js';
 import type { FeedbackIntegrationOptions } from './feedback-routes.js';
 import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
@@ -235,9 +236,25 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
         const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
-        const reviewFeed = reviewHost === null ? null : new ReviewFeed(reviewHost.host);
+        // Review status changes (another reviewer's ship, M5-T15) reload metadata so verdicts reach the UI snapshot.
+        const reviewFeed =
+            reviewHost === null
+                ? null
+                : new ReviewFeed(reviewHost.host, {
+                      ...(reviewHost.watchStatus === undefined ? {} : { watchStatus: reviewHost.watchStatus }),
+                      onStatusChange: () => {
+                          void prMeta.refresh();
+                      },
+                  });
         // The snapshot includes PR metadata, and `buildState` is synchronous. The network `getPr()` call uses a cache.
         const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
+        // Draft buffer (M5-T15): text the host has not accepted survives crashes,
+        // tab reloads and server restarts.
+        const draftBuffer = new DraftBufferWriter({
+            host: reviewHost?.host ?? null,
+            store: new DraftBufferStore(options.now === undefined ? { db } : { db, now: options.now }),
+            reviewFeed,
+        });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         // Notes are created before the feed, which carries their anchors to the new iteration (M4-T11).
@@ -317,6 +334,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 progress,
                 route: routeStore,
                 prMeta,
+                draftBuffer,
                 iterations: iterationStore,
                 iterationFeed,
                 ...(options.editor === undefined ? {} : { editor: options.editor }),
@@ -336,7 +354,14 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             ...createRouteRoutes({ store: routeStore, orchestrator: routeOrchestrator, iterationFeed }),
             ...createChatRoutes({ store: chatStore, orchestrator: chatOrchestrator }),
             // Dev endpoints exist only for the fixture host. Other hosts don't have these routes.
-            ...(advanceIteration === undefined ? [] : createDevRoutes({ advanceIteration })),
+            ...(advanceIteration === undefined
+                ? []
+                : createDevRoutes({
+                      advanceIteration,
+                      ...(reviewHost?.setFailDraftWrites === undefined
+                          ? {}
+                          : { setFailDraftWrites: reviewHost.setFailDraftWrites }),
+                  })),
         );
         markRoutesReady();
 
@@ -354,6 +379,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             reviewFeed,
             iterationFeed,
             prMeta,
+            draftBuffer,
             progress,
             routeStore,
             routeOrchestrator,
@@ -366,6 +392,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         chatOrchestrator.start();
         // PR metadata also loads in the background. The snapshot is served immediately, and metadata arrives over SSE.
         prMeta.start();
+        // Queue retries for drafts that weren't delivered during the previous run.
+        draftBuffer.start();
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
         idleWatch.arm(() => {
             options.onIdleStop?.(idleSeconds);
@@ -449,6 +477,7 @@ function createHandle(parts: {
     reviewFeed: ReviewFeed | null;
     iterationFeed: IterationFeed | null;
     prMeta: PrMetaCache;
+    draftBuffer: DraftBufferWriter;
     progress: ProgressStore;
     routeStore: RouteStore;
     routeOrchestrator: RouteOrchestrator;
@@ -481,6 +510,8 @@ function createHandle(parts: {
                 parts.iterationFeed?.close();
                 // The metadata load retry must not wake up after server shutdown.
                 parts.prMeta.close();
+                // The same applies to draft buffer retries. The next run will pick them up.
+                parts.draftBuffer.close();
                 parts.progress.close();
                 // Stop the route state machine before closing storage. Its delayed warmup must not
                 // wake up with the database already closed.

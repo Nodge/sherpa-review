@@ -17,6 +17,8 @@ import './banner-slot.css';
  * no longer news. The second-pass banner sits lower because it describes a filter, not a condition.
  *
  * Agent disconnection is absent here. Its status lives in the pill, with an explanation in its popover (decision #32).
+ *
+ * A ship from someone else is last. It does not end the review or require any action.
  */
 export const BANNER_PRIORITY = {
     generationFailed: 400,
@@ -29,6 +31,7 @@ export const BANNER_PRIORITY = {
     routeFilling: 150,
     notesLost: 120,
     auditScope: 100,
+    shipVerdict: 50,
 } as const;
 
 export interface BannerSource {

@@ -3,10 +3,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import {
-    deleteReviewDraft,
-    saveReviewDraft,
     setReviewThreadResolved,
-    updateReviewDraft,
 } from '../api.js';
 import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
@@ -16,6 +13,7 @@ import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
 import { SnapshotsCard } from '../iterations/snapshot-picker.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import type { ComposerTransport } from '../threads/composer.js';
+import { createComposerTransport } from '../threads/transport.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { threadResolvedWriterFor } from '../threads/resolved-writer.js';
 import type { ThreadActions } from '../threads/thread-list.tsx';
@@ -249,14 +247,7 @@ export function OverviewView({
         threadStore.getSnapshot,
     );
     const transport = useMemo<ComposerTransport>(
-        () =>
-            token === undefined
-                ? EMPTY_THREAD_TRANSPORT
-                : {
-                      save: (draft) => saveReviewDraft(token, draft),
-                      update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
-                      delete: (commentId) => deleteReviewDraft(token, commentId),
-                  },
+        () => (token === undefined ? EMPTY_THREAD_TRANSPORT : createComposerTransport(token)),
         [token],
     );
     const resolveThread = useMemo(

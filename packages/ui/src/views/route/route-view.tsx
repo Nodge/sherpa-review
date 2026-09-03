@@ -16,11 +16,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
-    deleteReviewDraft,
     fetchFileContent,
-    saveReviewDraft,
     setReviewThreadResolved,
-    updateReviewDraft,
 } from '../../api.js';
 import type { QuestionRange } from '../../components/chat-prompts.js';
 import { placeRangesQuestion } from '../../components/chat-prompts.js';
@@ -86,6 +83,7 @@ import type { SessionStore } from '../../session/session-store.js';
 import { useShortcut } from '../../shortcuts/context.tsx';
 import { createThreadActions } from '../../threads/actions.js';
 import type { ComposerTransport } from '../../threads/composer.js';
+import { createComposerTransport } from '../../threads/transport.js';
 import { countThreadSources, threadIsVisible } from '../../threads/model.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { openNewComposer, OutsideThreads } from '../../threads/thread-list.tsx';
@@ -226,14 +224,7 @@ export function RouteView({
         [diffId],
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
-    const threadTransport = useMemo<ComposerTransport>(
-        () => ({
-            save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
-            delete: (commentId) => deleteReviewDraft(token, commentId),
-        }),
-        [token],
-    );
+    const threadTransport = useMemo(() => createComposerTransport(token), [token]);
     const resolveThread = useCallback(
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],

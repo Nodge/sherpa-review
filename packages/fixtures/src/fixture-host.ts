@@ -42,6 +42,11 @@ export interface FixtureHostOptions {
      * in which case the verdict is not applied (SPEC §4.5).
      */
     readonly failPublishFor?: readonly HostId[];
+    /**
+     * Draft writes fail: fixture hook for the draft buffer (M5-T15), where the host rejects
+     * the write and the server keeps the text. Toggle on a running host through `setFailDraftWrites`.
+     */
+    readonly failDraftWrites?: boolean;
 }
 
 interface Located {
@@ -119,6 +124,9 @@ export class FixtureHost implements ReviewHost {
     /** Last applied verdict, observable in tests and the state gallery. */
     private verdict: Verdict | null = null;
 
+    /** Draft writes fail: development toggle for the draft buffer (M5-T15). */
+    private failDraftWrites: boolean;
+
     /** Present only when the fixture host supports viewed marks (`capabilities.fileViewedSync`). */
     setFileViewed?: (fileId: HostId, viewed: boolean) => Promise<void>;
 
@@ -128,6 +136,7 @@ export class FixtureHost implements ReviewHost {
     constructor(name: FixtureName, options: FixtureHostOptions = {}) {
         this.data = fixtureData(name);
         this.failPublishFor = new Set(options.failPublishFor ?? []);
+        this.failDraftWrites = options.failDraftWrites ?? false;
         // Fixture data usually leaves issue status unset. The contract invariant is enforced here so
         // every comment in every data file does not need manual annotation.
         for (const iteration of this.data.iterations) {
@@ -205,6 +214,11 @@ export class FixtureHost implements ReviewHost {
         return this.activeIteration();
     }
 
+    /** Development toggle for draft write failures, used by buffer e2e to fail the host on a running server. */
+    setFailDraftWrites(fail: boolean): void {
+        this.failDraftWrites = fail;
+    }
+
     getThreads(): Promise<Thread[]> {
         return Promise.resolve(this.threadsSnapshot());
     }
@@ -217,7 +231,14 @@ export class FixtureHost implements ReviewHost {
         };
     }
 
-    saveDraft(draft: CommentDraft): Promise<Comment> {
+    /**
+     * The fixture ignores the idempotency key because duplicates are harmless here. The contract must accept
+     * the parameter, because retries from the draft buffer depend on it (M5-T15).
+     */
+    saveDraft(draft: CommentDraft, _options?: { idempotencyKey?: string }): Promise<Comment> {
+        if (this.failDraftWrites) {
+            return Promise.reject(new Error('fixture host refuses to accept drafts'));
+        }
         const parsed = commentDraftSchema.parse(draft);
         const createdAt = this.nextTimestamp();
 
@@ -256,6 +277,9 @@ export class FixtureHost implements ReviewHost {
     }
 
     updateDraft(commentId: HostId, body: string, issue?: boolean): Promise<void> {
+        if (this.failDraftWrites) {
+            return Promise.reject(new Error('fixture host refuses to accept drafts'));
+        }
         const found = locate(this.activeData().threads, commentId);
         if (found === null) {
             return Promise.reject(new Error(`comment ${commentId} not found`));

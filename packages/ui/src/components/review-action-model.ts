@@ -9,6 +9,11 @@ export type ShipMode = Extract<Verdict, 'ship' | 'sticky_ship'>;
 export interface PublishGuardInput {
     readonly connection: ConnectionState;
     readonly pendingComposer: boolean;
+    /**
+     * Drafts in the server buffer (M5-T15): the host has not accepted them yet, so there is nothing to publish.
+     * ship waits for them to arrive (SPEC §4.5).
+     */
+    readonly bufferedDrafts?: number;
     readonly publishing: boolean;
     /** After failure, only an explicit retry of the same verdict is allowed. */
     readonly failure?: boolean;
@@ -44,6 +49,14 @@ export function publishDisabledReason(input: PublishGuardInput): string | null {
     }
     if (input.pendingComposer) {
         return 'there is unsaved text';
+    }
+    const buffered = input.bufferedDrafts ?? 0;
+    if (buffered > 0) {
+        return (
+            `${formatCount(buffered)} ${plural(buffered, 'draft', 'drafts', 'drafts')} ` +
+            `${plural(buffered, 'not yet saved', 'not yet saved', 'not yet saved')} to the host. ` +
+            'ship is unavailable until saved'
+        );
     }
     if (input.failure === true) {
         return 'retry the previous publication first';

@@ -1863,6 +1863,7 @@ export function makeMediumFixture(): FixtureData {
             checks: 'passed',
             updatedAt: CREATED_AT_V1,
             capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: true },
+            verdicts: [],
         },
         iterations: iterations(),
         interdiffs: interdiffs(),

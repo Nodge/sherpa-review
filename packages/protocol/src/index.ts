@@ -4,6 +4,7 @@
  */
 export * from './chat.js';
 export * from './constants.js';
+export * from './draft-buffer.js';
 export * from './json-schema.js';
 export * from './manifest.js';
 export * from './messages.js';

@@ -24,8 +24,8 @@ const DRAFT: Comment = {
     replies: [],
 };
 const TRANSPORT: ComposerTransport = {
-    save: () => Promise.resolve(DRAFT),
-    update: () => Promise.resolve(),
+    save: () => Promise.resolve({ outcome: 'saved', comment: DRAFT }),
+    update: () => Promise.resolve({ outcome: 'saved' }),
     delete: () => Promise.resolve(),
 };
 
@@ -69,7 +69,6 @@ function OpenState({
             commentId: kind === 'saved' ? DRAFT.id : null,
             status: kind === 'error' ? 'error' : kind === 'saved' ? 'saved' : 'idle',
             savedAt: kind === 'saved' ? SAVED_AT : null,
-            saveUncertain: false,
             slow: false,
             confirmDiscard: kind === 'confirm',
             resolvedAtOpen: false,
@@ -113,7 +112,6 @@ function IssueState({ issue }: { issue?: boolean }) {
             text: 'Check zero width before Ship.',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,

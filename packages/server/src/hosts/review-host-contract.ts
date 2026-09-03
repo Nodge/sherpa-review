@@ -444,6 +444,30 @@ export function describeReviewHostContract<H extends ReviewHost>(
             feed.stop();
         });
 
+        // A retry from the draft buffer (M5-T15) uses the key from the first attempt. The host
+        // must accept the parameter even if it does not handle duplicates itself (fixture).
+        it.runIf(writes)('saveDraft accepts an idempotency key', async () => {
+            const host = makeHost();
+            const idempotencyKey = 'contract-idempotency-key';
+
+            const created = await host.saveDraft(
+                { body: 'contract idempotency', parentId: null, anchor: null },
+                { idempotencyKey },
+            );
+            expect(created.draft).toBe(true);
+
+            const repeated = await host.saveDraft(
+                { body: 'contract idempotency', parentId: null, anchor: null },
+                { idempotencyKey },
+            );
+            expect(repeated.draft).toBe(true);
+
+            await host.deleteDraft(created.id);
+            if (repeated.id !== created.id) {
+                await host.deleteDraft(repeated.id);
+            }
+        });
+
         it.runIf(writes)('a reply using parentId appears in the reply tree', async () => {
             const host = makeHost();
             const feed = subscribe(host);

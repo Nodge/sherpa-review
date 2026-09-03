@@ -24,8 +24,8 @@ const PUBLISHED = thread(
     '2026-08-31T11:18:00.000Z',
 );
 const TRANSPORT: ComposerTransport = {
-    save: () => Promise.resolve(DRAFT.root),
-    update: () => Promise.resolve(),
+    save: () => Promise.resolve({ outcome: 'saved', comment: DRAFT.root }),
+    update: () => Promise.resolve({ outcome: 'saved' }),
     delete: () => Promise.resolve(),
 };
 

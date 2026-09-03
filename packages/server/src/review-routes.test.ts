@@ -3,9 +3,11 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
-import type { UiState } from '@sherpa/protocol';
+import type { Comment, UiState } from '@sherpa/protocol';
 import {
     rpcErrorSchema,
+    uiDraftBufferResponseSchema,
+    uiUpdateDraftResponseSchema,
     UI_ENDPOINTS,
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
@@ -80,6 +82,21 @@ describe('server review endpoints', () => {
         });
         servers.push(server);
         return server;
+    }
+
+    /** Creates a draft through the server endpoint. A failed host write fails the test. */
+    async function saveDraftVia(server: SherpaServer, body: string, clientKey: string): Promise<Comment> {
+        const response = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewSaveDraft,
+            { draft: { body, parentId: null, anchor: null }, clientKey },
+            server.token,
+        );
+        const saved = uiSaveDraftResponseSchema.parse(await response.json());
+        if (saved.outcome !== 'saved') {
+            throw new Error(`draft ${clientKey} went to the buffer instead of the host`);
+        }
+        return saved.comment;
     }
 
     async function openEvents(server: SherpaServer): Promise<SseStream> {
@@ -324,12 +341,16 @@ describe('server review endpoints', () => {
             const response = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewSaveDraft,
-                { draft: { body: 'new draft', parentId: null, anchor: null } },
+                { draft: { body: 'new draft', parentId: null, anchor: null }, clientKey: 'ck-1' },
                 server.token,
             );
 
             expect(response.status).toBe(200);
-            const { comment } = uiSaveDraftResponseSchema.parse(await response.json());
+            const saved = uiSaveDraftResponseSchema.parse(await response.json());
+            if (saved.outcome !== 'saved') {
+                throw new Error('the draft should have reached the host');
+            }
+            const comment = saved.comment;
             expect(comment).toMatchObject({ body: 'new draft', draft: true });
             const threads = uiReviewThreadsResponseSchema.parse(
                 await (await get(server.port, UI_ENDPOINTS.reviewThreads, server.token)).json(),
@@ -342,24 +363,20 @@ describe('server review endpoints', () => {
             const update = vi.spyOn(host, 'updateDraft');
             const remove = vi.spyOn(host, 'deleteDraft');
             const server = await start(FIXTURE_PR, host);
-            const created = uiSaveDraftResponseSchema.parse(
-                await (
-                    await postJson(
-                        server.port,
-                        UI_ENDPOINTS.reviewSaveDraft,
-                        { draft: { body: 'draft', parentId: null, anchor: null } },
-                        server.token,
-                    )
-                ).json(),
-            ).comment;
+            const created = await saveDraftVia(server, 'draft', 'ck-update');
 
             const updated = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewUpdateDraft,
-                { commentId: created.id, body: 'edited draft', issue: false },
+                {
+                    commentId: created.id,
+                    body: 'edited draft',
+                    issue: false,
+                    clientKey: 'ck-update-2',
+                },
                 server.token,
             );
-            expect(uiReviewWriteAckSchema.parse(await updated.json())).toEqual({ acknowledged: true });
+            expect(uiUpdateDraftResponseSchema.parse(await updated.json())).toEqual({ outcome: 'saved' });
             expect(update).toHaveBeenCalledWith(created.id, 'edited draft', false);
 
             const deleted = await postJson(
@@ -393,14 +410,14 @@ describe('server review endpoints', () => {
             const first = postJson(
                 server.port,
                 UI_ENDPOINTS.reviewUpdateDraft,
-                { commentId: created.id, body: 'old text' },
+                { commentId: created.id, body: 'old text', clientKey: 'ck-order-1' },
                 server.token,
             );
             await expect.poll(() => applied).toEqual(['old text']);
             const second = postJson(
                 server.port,
                 UI_ENDPOINTS.reviewUpdateDraft,
-                { commentId: created.id, body: 'new text' },
+                { commentId: created.id, body: 'new text', clientKey: 'ck-order-2' },
                 server.token,
             );
             await new Promise((resolve) => setTimeout(resolve, 20));
@@ -503,7 +520,7 @@ describe('server review endpoints', () => {
             const response = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewSaveDraft,
-                { draft: { body: 'nowhere to save', parentId: null, anchor: null } },
+                { draft: { body: 'nowhere to save', parentId: null, anchor: null }, clientKey: 'ck-none' },
                 server.token,
             );
 
@@ -511,7 +528,8 @@ describe('server review endpoints', () => {
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
         });
 
-        it('a host write method error reaches the client as host_unavailable', async () => {
+        // A failed "server → host" step no longer fails the endpoint. The text goes into the buffer (M5-T15).
+        it('a failed host draft write returns buffered instead of an error', async () => {
             const host = makeFixtureHost('medium');
             host.saveDraft = () => Promise.reject(new Error('drafts temporarily unavailable'));
             const server = await start(FIXTURE_PR, host);
@@ -519,14 +537,74 @@ describe('server review endpoints', () => {
             const response = await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewSaveDraft,
-                { draft: { body: 'will not be saved', parentId: null, anchor: null } },
+                { draft: { body: 'will not save', parentId: null, anchor: null }, clientKey: 'ck-fail' },
                 server.token,
             );
 
-            expect(response.status).toBe(502);
-            const body = rpcErrorSchema.parse(await response.json());
-            expect(body.error.code).toBe('host_unavailable');
-            expect(body.error.message).toContain('drafts temporarily unavailable');
+            expect(response.status).toBe(200);
+            const body = uiSaveDraftResponseSchema.parse(await response.json());
+            expect(body.outcome).toBe('buffered');
+            if (body.outcome !== 'buffered') {
+                throw new Error('the write should have gone to the buffer');
+            }
+            expect(body.entry).toMatchObject({
+                id: 'ck-fail',
+                commentId: null,
+                state: 'failed',
+                attempts: 1,
+            });
+            expect(body.entry.error).toContain('drafts temporarily unavailable');
+
+            const buffer = uiDraftBufferResponseSchema.parse(
+                await (await get(server.port, UI_ENDPOINTS.reviewDraftBuffer, server.token)).json(),
+            );
+            expect(buffer.entries.map((entry) => entry.id)).toEqual(['ck-fail']);
+        });
+
+        it('retry delivers a buffered write and discard removes it', async () => {
+            const host = makeFixtureHost('medium', { failDraftWrites: true });
+            const server = await start(FIXTURE_PR, host);
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'will deliver later', parentId: null, anchor: null }, clientKey: 'ck-retry' },
+                server.token,
+            );
+            await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewSaveDraft,
+                { draft: { body: 'will discard this one', parentId: null, anchor: null }, clientKey: 'ck-discard' },
+                server.token,
+            );
+
+            host.setFailDraftWrites(false);
+            const afterRetry = uiDraftBufferResponseSchema.parse(
+                await (
+                    await postJson(
+                        server.port,
+                        UI_ENDPOINTS.reviewDraftBufferRetry,
+                        { id: 'ck-retry' },
+                        server.token,
+                    )
+                ).json(),
+            );
+            expect(afterRetry.entries.map((entry) => entry.id)).toEqual(['ck-discard']);
+            const threads = uiReviewThreadsResponseSchema.parse(
+                await (await get(server.port, UI_ENDPOINTS.reviewThreads, server.token)).json(),
+            );
+            expect(threads.threads.some((thread) => thread.root.body === 'will deliver later')).toBe(true);
+
+            const afterDiscard = uiDraftBufferResponseSchema.parse(
+                await (
+                    await postJson(
+                        server.port,
+                        UI_ENDPOINTS.reviewDraftBufferDiscard,
+                        { id: 'ck-discard' },
+                        server.token,
+                    )
+                ).json(),
+            );
+            expect(afterDiscard.entries).toEqual([]);
         });
 
         it('a successful write immediately advances the review feed revision', async () => {
@@ -540,7 +618,7 @@ describe('server review endpoints', () => {
             await postJson(
                 server.port,
                 UI_ENDPOINTS.reviewSaveDraft,
-                { draft: { body: 'local revision bump', parentId: null, anchor: null } },
+                { draft: { body: 'local bump', parentId: null, anchor: null }, clientKey: 'ck-bump' },
                 server.token,
             );
 

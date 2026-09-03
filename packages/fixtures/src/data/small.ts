@@ -90,6 +90,7 @@ export function makeSmallFixture(): FixtureData {
             checks: 'pending',
             updatedAt: UPDATED_AT,
             capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
+            verdicts: [],
         },
         iterations: singleIteration(diff, threads, UPDATED_AT),
         interdiffs: [],

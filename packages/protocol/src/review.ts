@@ -52,7 +52,21 @@ export type PrState = z.infer<typeof prStateSchema>;
 export const prChecksSchema = z.enum(['passed', 'failed', 'pending']);
 export type PrChecks = z.infer<typeof prChecksSchema>;
 
-/** PR header. `statusLabel` is the review status in the host's words, displayed as is by the UI. */
+/**
+ * Current reviewer verdict on a PR (M5-T15, SPEC §4.5 "someone else ships first"): the host exposes
+ * the reviewer's action (`ship` / `sticky_ship` / `request_changes`).
+ * Hosts do not supply verdict timestamps. The UI records when the verdict appeared in a snapshot.
+ */
+export const reviewerVerdictSchema = z.object({
+    user: reviewUserSchema,
+    verdict: z.enum(['ship', 'sticky_ship', 'request_changes']),
+});
+export type ReviewerVerdict = z.infer<typeof reviewerVerdictSchema>;
+
+/**
+ * PR header. `statusLabel` is the review status in the host's wording, displayed as is in the UI.
+ * `verdicts` includes only reviewers with a verdict. An empty list means no verdicts or the host does not supply them.
+ */
 export const prMetaSchema = z.object({
     id: hostIdSchema,
     url: z.string().min(1),
@@ -65,6 +79,7 @@ export const prMetaSchema = z.object({
     checks: prChecksSchema.nullable(),
     updatedAt: z.iso.datetime(),
     capabilities: hostCapabilitiesSchema,
+    verdicts: z.array(reviewerVerdictSchema),
 });
 export type PrMeta = z.infer<typeof prMetaSchema>;
 

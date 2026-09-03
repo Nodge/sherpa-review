@@ -8,18 +8,33 @@ import type { ReviewHost, Thread } from '@sherpa/protocol';
  * would run with no clients (the server's idle shutdown does not count internal timers as activity,
  * see `idle.ts`).
  */
+export interface ReviewFeedOptions {
+    /**
+     * Host-specific subscription to review status changes (M5-T15): the host exposes a status field
+     * in the same lightweight poll. It lives in the feed because it must follow the same lazy lifecycle as threads.
+     */
+    readonly watchStatus?: (onChange: () => void) => () => void;
+    /** On a status change, the server rereads PR metadata. */
+    readonly onStatusChange?: () => void;
+}
+
 export class ReviewFeed {
     private readonly host: ReviewHost | null;
+    private readonly watchStatus: ((onChange: () => void) => () => void) | null;
+    private readonly onStatusChange: (() => void) | null;
     private readonly listeners = new Set<(revision: number) => void>();
 
     private revisionValue = 0;
     private unwatch: (() => void) | null = null;
+    private unwatchStatus: (() => void) | null = null;
     /** Last seen snapshot survives unsubscription so reconnecting does not advance the revision falsely. */
     private lastSnapshot: string | null = null;
     private closed = false;
 
-    constructor(host: ReviewHost | null) {
+    constructor(host: ReviewHost | null, options: ReviewFeedOptions = {}) {
         this.host = host;
+        this.watchStatus = options.watchStatus ?? null;
+        this.onStatusChange = options.onStatusChange ?? null;
     }
 
     get revision(): number {
@@ -73,11 +88,17 @@ export class ReviewFeed {
         this.unwatch = this.host.watchThreads((threads) => {
             this.onThreads(threads);
         });
+        const onStatusChange = this.onStatusChange;
+        if (this.watchStatus !== null && onStatusChange !== null) {
+            this.unwatchStatus = this.watchStatus(onStatusChange);
+        }
     }
 
     private stop(): void {
         this.unwatch?.();
         this.unwatch = null;
+        this.unwatchStatus?.();
+        this.unwatchStatus = null;
     }
 
     private onThreads(threads: Thread[]): void {

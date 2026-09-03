@@ -396,6 +396,42 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE stop_progress ADD COLUMN carried INTEGER NOT NULL DEFAULT 0;
         `,
     },
+    {
+        // Draft buffer (M5-T15, requirements §6 "drafts are never lost"): text the server
+        // accepted but has not delivered to the host. `id` is the composer's `clientKey`, so repeating the same
+        // write upserts the row instead of adding another. `idempotency_key` is created with the
+        // row and survives every attempt. If the host has already accepted the write, retrying with the same
+        // key creates no duplicate. `draft_json` is a `commentDraftSchema` blob, like a route snapshot:
+        // the contract describes its shape, so there is no need to duplicate it in columns.
+        name: '016-draft-buffer',
+        sql: `
+            CREATE TABLE draft_buffer (
+                id TEXT PRIMARY KEY,
+                comment_id TEXT,
+                draft_json TEXT NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('pending', 'failed')),
+                error TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                idempotency_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        `,
+    },
+    {
+        // Drafts created from buffer records (M5-T15): `id` is the composer's `clientKey`,
+        // and the pair survives deletion of the buffer row. Without it, another write with the same key would reach
+        // the host as a create operation. The idempotency key would return the existing comment with
+        // its old text, silently losing the new text (the server would consider the write saved).
+        name: '017-draft-buffer-saved',
+        sql: `
+            CREATE TABLE draft_buffer_saved (
+                id TEXT PRIMARY KEY,
+                comment_id TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

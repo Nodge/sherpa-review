@@ -1,7 +1,7 @@
 import type {
     ChatExchange,
-    Comment,
     CommentDraft,
+    DraftBufferEntry,
     FileContent,
     PrDiff,
     PriorityClass,
@@ -24,6 +24,7 @@ import type {
     UiRouteFillStopResponse,
     UiRouteGenerateResponse,
     UiReviewRouteResponse,
+    UiSaveDraftResponse,
     UiSetFileViewedResponse,
     UiSetStopViewedResponse,
     UiSettings,
@@ -31,6 +32,7 @@ import type {
     UiSnapshotSummary,
     UiStopSeenRange,
     UiTask,
+    UiUpdateDraftResponse,
     UiViewedMirrorRequest,
     Verdict,
 } from '@sherpa/protocol';
@@ -42,6 +44,7 @@ import {
     uiChatCancelResponseSchema,
     uiChatResponseSchema,
     uiChatRetryResponseSchema,
+    uiDraftBufferResponseSchema,
     uiEnqueueResponseSchema,
     uiFeedbackResponseSchema,
     uiOpenInEditorResponseSchema,
@@ -61,6 +64,7 @@ import {
     uiSetFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
     uiSettingsResponseSchema,
+    uiUpdateDraftResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -117,12 +121,47 @@ export async function fetchReviewThreads(token: string): Promise<Thread[]> {
     return (await get(UI_ENDPOINTS.reviewThreads, token, uiReviewThreadsResponseSchema)).threads;
 }
 
-export async function saveReviewDraft(token: string, draft: CommentDraft): Promise<Comment> {
-    return (await post(UI_ENDPOINTS.reviewSaveDraft, token, { draft }, uiSaveDraftResponseSchema)).comment;
+/**
+ * Drafts reach the host through the server buffer (M5-T15): `buffered` means the host rejected the write, and the text stays
+ * on the server for later delivery. `clientKey` identifies one logical record: retrying the same key
+ * upserts that record without creating a duplicate.
+ */
+export async function saveReviewDraft(
+    token: string,
+    draft: CommentDraft,
+    clientKey: string,
+): Promise<UiSaveDraftResponse> {
+    return post(UI_ENDPOINTS.reviewSaveDraft, token, { draft, clientKey }, uiSaveDraftResponseSchema);
 }
 
-export async function updateReviewDraft(token: string, commentId: string, body: string, issue?: boolean): Promise<void> {
-    await post(UI_ENDPOINTS.reviewUpdateDraft, token, { commentId, body, issue }, uiReviewWriteAckSchema);
+export async function updateReviewDraft(
+    token: string,
+    commentId: string,
+    body: string,
+    issue: boolean | undefined,
+    clientKey: string,
+): Promise<UiUpdateDraftResponse> {
+    return post(
+        UI_ENDPOINTS.reviewUpdateDraft,
+        token,
+        { commentId, body, issue, clientKey },
+        uiUpdateDraftResponseSchema,
+    );
+}
+
+/** Draft buffer for this PR. Fetched with threads on the same `review` SSE event. */
+export async function fetchDraftBuffer(token: string): Promise<DraftBufferEntry[]> {
+    return (await get(UI_ENDPOINTS.reviewDraftBuffer, token, uiDraftBufferResponseSchema)).entries;
+}
+
+/** Retries a write immediately. Returns the buffer after the attempt. */
+export async function retryDraftBufferEntry(token: string, id: string): Promise<DraftBufferEntry[]> {
+    return (await post(UI_ENDPOINTS.reviewDraftBufferRetry, token, { id }, uiDraftBufferResponseSchema)).entries;
+}
+
+/** Discards a buffered record because its text is no longer needed. */
+export async function discardDraftBufferEntry(token: string, id: string): Promise<DraftBufferEntry[]> {
+    return (await post(UI_ENDPOINTS.reviewDraftBufferDiscard, token, { id }, uiDraftBufferResponseSchema)).entries;
 }
 
 export async function deleteReviewDraft(token: string, commentId: string): Promise<void> {

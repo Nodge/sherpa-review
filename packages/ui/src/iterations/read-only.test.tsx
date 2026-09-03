@@ -44,7 +44,7 @@ function render(node: React.ReactNode, readOnly: boolean): HTMLElement {
 
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('the test does not save')),
-    update: () => Promise.resolve(),
+    update: () => Promise.resolve({ outcome: 'saved' as const }),
     delete: () => Promise.resolve(),
 };
 

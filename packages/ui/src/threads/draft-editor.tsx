@@ -31,7 +31,6 @@ export function openDraftEditor(store: ThreadStore, thread: Thread, comment: Com
         commentId: comment.id,
         status: 'saved',
         savedAt: Date.parse(comment.editedAt ?? comment.createdAt),
-        saveUncertain: false,
         slow: false,
         confirmDiscard: false,
         resolvedAtOpen: thread.resolved,

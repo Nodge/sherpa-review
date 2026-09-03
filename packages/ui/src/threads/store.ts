@@ -1,9 +1,14 @@
-import type { Comment, CommentDraft, FileAnchor, Thread } from '@sherpa/protocol';
+import type { Comment, CommentDraft, DraftBufferEntry, FileAnchor, Thread } from '@sherpa/protocol';
 
 import { groupThreads } from './model.js';
 import type { IterationLayout } from './model.js';
 
-export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'discarding' | 'error';
+/**
+ * `buffered` (M5-T15) means the server accepted the text but the host has not yet. The record is in the
+ * buffer and will be sent automatically. The reviewer sees this as "saved, but not fully", rather than an error: the text
+ * survives tab reloads, but ship stays blocked until it is sent (SPEC §4.5).
+ */
+export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'discarding' | 'error' | 'buffered';
 
 export interface ComposerSnapshot {
     readonly key: string;
@@ -19,8 +24,13 @@ export interface ComposerSnapshot {
     readonly status: ComposerStatus;
     /** Time of the last confirmed save, for the status under the field. */
     readonly savedAt?: number | null;
-    /** The first save may have reached the host, but the UI received no commentId. */
-    readonly saveUncertain: boolean;
+    /**
+     * Logical record key for the server (M5-T15): lives from the first save until it succeeds, so
+     * a retry cannot create a duplicate. `undefined` means no write has happened yet.
+     */
+    readonly clientKey?: string | undefined;
+    /** Server buffer entry when `status: 'buffered'`, otherwise `null`. */
+    readonly bufferEntry?: DraftBufferEntry | null;
     readonly slow: boolean;
     readonly confirmDiscard: boolean;
     readonly resolvedAtOpen: boolean;
@@ -81,6 +91,8 @@ export interface ThreadStore {
     /** Local subscription to one composer: typing does not notify the card list. */
     readonly subscribeComposer: (key: string, listener: () => void) => () => void;
     readonly getComposer: (key: string) => ComposerSnapshot | null;
+    /** All open composers, used to reconcile the draft buffer (M5-T15). */
+    readonly listComposers: () => readonly ComposerSnapshot[];
     readonly setServerThreads: (threads: readonly Thread[]) => void;
     readonly addDraft: (draft: CommentDraft, comment: Comment) => void;
     /** `issue` is set only if the edit changed it. Otherwise, the comment status stays as it is. */
@@ -166,8 +178,14 @@ export function createThreadStore(
                 (composer) =>
                     composer.status === 'saving' ||
                     composer.status === 'discarding' ||
-                    composer.saveUncertain ||
-                    (composer.commentId === null ? composer.text.trim() !== '' : composer.status !== 'saved'),
+                    // Buffered text is already on the server, so leaving is safe. A separate reason blocks ship
+                    // (`publishDisabledReason`, M5-T15). Text added after
+                    // a failure is different: it is not on the server yet, and leaving would lose it.
+                    (composer.status === 'buffered'
+                        ? composer.text !== composer.bufferEntry?.draft.body
+                        : composer.commentId === null
+                          ? composer.text.trim() !== ''
+                          : composer.status !== 'saved'),
             );
         if (pending === composerGuardSnapshot.pending) {
             return;
@@ -251,6 +269,7 @@ export function createThreadStore(
             };
         },
         getComposer: (key) => composers.get(key) ?? null,
+        listComposers: () => [...composers.values()],
         setServerThreads: (threads) => {
             serverThreads = [...threads];
             const serverIds = commentIds(serverThreads);

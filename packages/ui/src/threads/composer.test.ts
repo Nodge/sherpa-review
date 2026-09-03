@@ -1,9 +1,34 @@
-import type { Comment, Thread } from '@sherpa/protocol';
+import type { Comment, DraftBufferEntry, Thread, UiSaveDraftResponse } from '@sherpa/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ComposerTransport } from './composer.js';
 import { closePublishedComposers, composerControllerFor, createComposerController } from './composer.js';
 import { openNewComposer, openReply } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
+
+/** Draft endpoint responses (M5-T15): the host accepted the write. */
+const SAVED = { outcome: 'saved' } as const;
+function saved(comment: Comment): UiSaveDraftResponse {
+    return { outcome: 'saved', comment };
+}
+
+/** Response when the host has not accepted the text, which is in the server buffer. */
+function bufferedEntry(id: string, body: string, error = 'host is down'): DraftBufferEntry {
+    return {
+        id,
+        draft: {
+            body,
+            parentId: null,
+            anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+        },
+        commentId: null,
+        state: 'failed',
+        error,
+        attempts: 1,
+        createdAt: '2026-09-03T10:00:00.000Z',
+        updatedAt: '2026-09-03T10:00:00.000Z',
+    };
+}
 
 const CREATED: Comment = {
     id: 'draft-1',
@@ -46,16 +71,56 @@ function setup() {
         text: '',
         commentId: null,
         status: 'idle',
-        saveUncertain: false,
         slow: false,
         confirmDiscard: false,
         resolvedAtOpen: false,
     });
-    const save = vi.fn(() => Promise.resolve(CREATED));
-    const update = vi.fn(() => Promise.resolve());
+    const save = vi.fn<ComposerTransport['save']>(() => Promise.resolve(saved(CREATED)));
+    const update = vi.fn<ComposerTransport['update']>(() => Promise.resolve(SAVED));
     const remove = vi.fn(() => Promise.resolve());
-    const controller = createComposerController({ store, key: 'new:f1:new:10', transport: { save, update, delete: remove } });
-    return { store, controller, save, update, remove };
+    const discardBuffered = vi.fn(() => Promise.resolve());
+    const controller = createComposerController({
+        store,
+        key: 'new:f1:new:10',
+        transport: { save, update, delete: remove, discardBuffered },
+    });
+    return { store, controller, save, update, remove, discardBuffered };
+}
+
+const EDIT_KEY = 'edit:draft-1';
+
+/** Buffer entry for editing your own draft. */
+function editEntry(id: string, body: string): DraftBufferEntry {
+    return { ...bufferedEntry(id, body), commentId: 'draft-1', draft: { body, parentId: null, anchor: null } };
+}
+
+/** Composer for editing your own draft, as opened by `openDraftEditor`. */
+function setupEditComposer(issue?: boolean) {
+    const store = createThreadStore([], new Set(['f1']));
+    store.openComposer({
+        key: EDIT_KEY,
+        threadId: 'thread-1',
+        parentId: null,
+        anchor: null,
+        ...(issue === undefined ? {} : { issue }),
+        text: 'this is on the host',
+        originalText: 'this is on the host',
+        commentId: 'draft-1',
+        status: 'saved',
+        slow: false,
+        confirmDiscard: false,
+        resolvedAtOpen: false,
+    });
+    const save = vi.fn<ComposerTransport['save']>(() => Promise.resolve(saved(CREATED)));
+    const update = vi.fn<ComposerTransport['update']>(() => Promise.resolve(SAVED));
+    const remove = vi.fn(() => Promise.resolve());
+    const discardBuffered = vi.fn(() => Promise.resolve());
+    const controller = createComposerController({
+        store,
+        key: EDIT_KEY,
+        transport: { save, update, delete: remove, discardBuffered },
+    });
+    return { store, controller, save, update, remove, discardBuffered };
 }
 
 function setupIssueComposer(kind: 'new' | 'reply') {
@@ -71,8 +136,8 @@ function setupIssueComposer(kind: 'new' | 'reply') {
     } else {
         openReply(store, THREAD, null);
     }
-    const save = vi.fn(() => Promise.resolve(CREATED));
-    const update = vi.fn(() => Promise.resolve());
+    const save = vi.fn(() => Promise.resolve(saved(CREATED)));
+    const update = vi.fn(() => Promise.resolve(SAVED));
     const remove = vi.fn(() => Promise.resolve());
     const controller = createComposerController({ store, key, transport: { save, update, delete: remove } });
     return { store, controller, save, update };
@@ -89,12 +154,15 @@ describe('composer state machine', () => {
         controller.input('first');
         await controller.saveNow();
 
-        expect(save).toHaveBeenCalledWith({
-            body: 'first',
-            parentId: null,
-            anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
-            issue: true,
-        });
+        expect(save).toHaveBeenCalledWith(
+            {
+                body: 'first',
+                parentId: null,
+                anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
+                issue: true,
+            },
+            expect.any(String),
+        );
     });
 
     it('passes issue disabled before the first save to save', async () => {
@@ -104,7 +172,7 @@ describe('composer state machine', () => {
         controller.input('no reply needed');
         await controller.saveNow();
 
-        expect(save).toHaveBeenCalledWith(expect.objectContaining({ issue: false }));
+        expect(save).toHaveBeenCalledWith(expect.objectContaining({ issue: false }), expect.any(String));
     });
 
     it('passes an issue change after the first save to update on the next save', async () => {
@@ -115,7 +183,7 @@ describe('composer state machine', () => {
         controller.setIssue(false);
         await controller.saveNow();
 
-        expect(update).toHaveBeenCalledWith('draft-1', 'first', false);
+        expect(update).toHaveBeenCalledWith('draft-1', 'first', false, expect.any(String));
     });
 
     it('does not resend issue when saving text after create', async () => {
@@ -126,7 +194,7 @@ describe('composer state machine', () => {
         controller.input('second');
         await controller.saveNow();
 
-        expect(update.mock.calls).toEqual([['draft-1', 'second']]);
+        expect(update.mock.calls.map((call) => call.slice(0, 2))).toEqual([['draft-1', 'second']]);
     });
 
     it('does not resend issue when saving text after changing it', async () => {
@@ -139,9 +207,9 @@ describe('composer state machine', () => {
         controller.input('second');
         await controller.saveNow();
 
-        expect(update.mock.calls).toEqual([
+        expect(update.mock.calls.map((call) => call.slice(0, 3))).toEqual([
             ['draft-1', 'first', false],
-            ['draft-1', 'second'],
+            ['draft-1', 'second', undefined],
         ]);
     });
 
@@ -155,7 +223,7 @@ describe('composer state machine', () => {
         controller.input('second');
         await controller.saveNow();
 
-        expect(update.mock.calls).toEqual([['draft-1', 'second']]);
+        expect(update.mock.calls.map((call) => call.slice(0, 2))).toEqual([['draft-1', 'second']]);
     });
 
     it('a reply does not pass issue', async () => {
@@ -164,7 +232,7 @@ describe('composer state machine', () => {
         controller.input('reply');
         await controller.saveNow();
 
-        expect(save).toHaveBeenCalledWith({ body: 'reply', parentId: 'root-1', anchor: null });
+        expect(save).toHaveBeenCalledWith({ body: 'reply', parentId: 'root-1', anchor: null }, expect.any(String));
     });
 
     it('saves only on an explicit action: save first, then update', async () => {
@@ -181,7 +249,7 @@ describe('composer state machine', () => {
         await vi.advanceTimersByTimeAsync(5000);
         expect(update).not.toHaveBeenCalled();
         await controller.saveNow();
-        expect(update).toHaveBeenCalledWith('draft-1', 'second');
+        expect(update).toHaveBeenCalledWith('draft-1', 'second', undefined, expect.any(String));
     });
 
     it('Cancel after saving closes the composer without deleting Comment', async () => {
@@ -194,7 +262,7 @@ describe('composer state machine', () => {
         expect(store.getComposer('new:f1:new:10')?.confirmDiscard).toBe(true);
         await controller.confirmDiscard();
 
-        expect(update).toHaveBeenCalledWith('draft-1', 'text');
+        expect(update).toHaveBeenCalledWith('draft-1', 'text', undefined, expect.any(String));
         expect(remove).not.toHaveBeenCalled();
         expect(store.getComposer('new:f1:new:10')).toBeNull();
     });
@@ -212,23 +280,23 @@ describe('composer state machine', () => {
         expect(await controller.retry()).toBe(true);
     });
 
-    it('does not close or automatically retry an ambiguous first save', async () => {
-        vi.useFakeTimers();
-        const { store, controller, save, remove } = setup();
-        save.mockRejectedValueOnce(new Error('response lost'));
+    // The server did not respond. The text stays in the field, and a retry uses the same `clientKey`, so
+    // there is no duplicate even if the first request did get through (M5-T15).
+    it('keeps the text in the field on request failure and retries with the same clientKey', async () => {
+        const { store, controller, save } = setup();
+        save.mockRejectedValueOnce(new Error('server did not respond'));
         controller.input('may have been saved');
         await controller.saveNow();
-        expect(await controller.saveNow(true)).toBe(false);
-        expect(save).toHaveBeenCalledTimes(1);
-        controller.input('changed text');
-        expect(save).toHaveBeenCalledTimes(1);
-        controller.input('');
 
-        controller.escape();
-        await Promise.resolve();
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({
+            text: 'may have been saved',
+            status: 'error',
+        });
+        const firstKey = save.mock.calls[0]?.[1];
+        expect(firstKey).toEqual(expect.any(String));
 
-        expect(remove).not.toHaveBeenCalled();
-        expect(store.getComposer('new:f1:new:10')?.status).toBe('error');
+        expect(await controller.retry()).toBe(true);
+        expect(save.mock.calls[1]?.[1]).toBe(firstKey);
     });
 
     it('accepts input again through a new controller instance after closing', async () => {
@@ -245,7 +313,6 @@ describe('composer state machine', () => {
             text: '',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,
@@ -271,36 +338,36 @@ describe('composer state machine', () => {
         await controller.confirmDiscard();
 
         expect(store.getComposer('new:f1:new:10')).toBeNull();
-        expect(update).toHaveBeenCalledWith('draft-1', 'oops, wrong text');
+        expect(update).toHaveBeenCalledWith('draft-1', 'oops, wrong text', undefined, expect.any(String));
         expect(remove).not.toHaveBeenCalled();
     });
 
     it('leaves input entered during save unsaved until the next explicit action', async () => {
         const { store, controller, save, update } = setup();
-        const pendingSave = deferred<Comment>();
+        const pendingSave = deferred<UiSaveDraftResponse>();
         save.mockImplementationOnce(() => pendingSave.promise);
         controller.input('first');
         const saving = controller.saveNow();
 
         controller.input('second');
-        pendingSave.resolve(CREATED);
+        pendingSave.resolve(saved(CREATED));
         await saving;
 
         expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'second', status: 'idle' });
         expect(update).not.toHaveBeenCalled();
         await controller.saveNow();
-        expect(update).toHaveBeenCalledWith('draft-1', 'second');
+        expect(update).toHaveBeenCalledWith('draft-1', 'second', undefined, expect.any(String));
     });
 
     it('does not mark new text as saved when an earlier save responds', async () => {
         const { store, controller, save, update } = setup();
-        const pendingSave = deferred<Comment>();
+        const pendingSave = deferred<UiSaveDraftResponse>();
         save.mockImplementationOnce(() => pendingSave.promise);
         controller.input('first');
         const saving = controller.saveNow();
 
         controller.input('second');
-        pendingSave.resolve(CREATED);
+        pendingSave.resolve(saved(CREATED));
         await saving;
 
         expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'second', status: 'idle' });
@@ -309,7 +376,7 @@ describe('composer state machine', () => {
 
     it('does not mark a cleared field as saved when an earlier save responds', async () => {
         const { store, controller, save, update } = setup();
-        const pendingSave = deferred<Comment>();
+        const pendingSave = deferred<UiSaveDraftResponse>();
         save.mockImplementationOnce(() => pendingSave.promise);
         controller.input('first');
         const saving = controller.saveNow();
@@ -318,7 +385,7 @@ describe('composer state machine', () => {
         expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: '', status: 'saving' });
         expect(store.getComposerGuardSnapshot().pending).toBe(true);
 
-        pendingSave.resolve(CREATED);
+        pendingSave.resolve(saved(CREATED));
         await saving;
 
         expect(store.getComposer('new:f1:new:10')).toMatchObject({
@@ -354,7 +421,6 @@ describe('composer state machine', () => {
             text: '',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,
@@ -376,14 +442,13 @@ describe('composer state machine', () => {
             text: '',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,
         });
         const transport = {
-            save: vi.fn(() => Promise.resolve(CREATED)),
-            update: vi.fn(() => Promise.resolve()),
+            save: vi.fn(() => Promise.resolve(saved(CREATED))),
+            update: vi.fn(() => Promise.resolve(SAVED)),
             delete: vi.fn(() => Promise.resolve()),
         };
         const first = composerControllerFor({ store, key, transport });
@@ -401,7 +466,6 @@ describe('composer state machine', () => {
             text: '',
             commentId: null,
             status: 'idle',
-            saveUncertain: false,
             slow: false,
             confirmDiscard: false,
             resolvedAtOpen: false,
@@ -415,13 +479,13 @@ describe('composer state machine', () => {
 
     it('deletes the returned id without adding a draft when closed during the first save', async () => {
         const { store, controller, save, remove } = setup();
-        const pendingSave = deferred<Comment>();
+        const pendingSave = deferred<UiSaveDraftResponse>();
         save.mockImplementationOnce(() => pendingSave.promise);
         controller.input('do not save');
         const saving = controller.saveNow();
         const discarding = controller.confirmDiscard();
 
-        pendingSave.resolve(CREATED);
+        pendingSave.resolve(saved(CREATED));
         await expect(saving).resolves.toBe(true);
         await expect(discarding).resolves.toBe(true);
 
@@ -434,8 +498,8 @@ describe('composer state machine', () => {
         const { store, controller, update } = setup();
         controller.input('original');
         await controller.saveNow();
-        const firstUpdate = deferred<undefined>();
-        const lastUpdate = deferred<undefined>();
+        const firstUpdate = deferred<typeof SAVED>();
+        const lastUpdate = deferred<typeof SAVED>();
         update.mockImplementationOnce(() => firstUpdate.promise).mockImplementationOnce(() => lastUpdate.promise);
 
         controller.input('intermediate');
@@ -447,14 +511,14 @@ describe('composer state machine', () => {
             return saved;
         });
 
-        firstUpdate.resolve(undefined);
+        firstUpdate.resolve(SAVED);
         await vi.waitFor(() => {
-            expect(update).toHaveBeenLastCalledWith('draft-1', 'last');
+            expect(update).toHaveBeenLastCalledWith('draft-1', 'latest', undefined, expect.any(String));
         });
         expect(completed).toBe(false);
         expect(store.getComposer('new:f1:new:10')).not.toBeNull();
 
-        lastUpdate.resolve(undefined);
+        lastUpdate.resolve(SAVED);
         await expect(savingLast).resolves.toBe(true);
         expect(store.getComposer('new:f1:new:10')).toBeNull();
     });
@@ -463,7 +527,7 @@ describe('composer state machine', () => {
         const { store, controller, update } = setup();
         controller.input('original');
         await controller.saveNow();
-        const pendingUpdate = deferred<undefined>();
+        const pendingUpdate = deferred<typeof SAVED>();
         update.mockImplementationOnce(() => pendingUpdate.promise);
 
         controller.input('broken');
@@ -471,10 +535,10 @@ describe('composer state machine', () => {
         const restoring = controller.restore('original');
 
         expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'broken', status: 'saving' });
-        pendingUpdate.resolve(undefined);
+        pendingUpdate.resolve(SAVED);
         await expect(restoring).resolves.toBe(true);
 
-        expect(update.mock.calls).toEqual([
+        expect(update.mock.calls.map((call) => call.slice(0, 2))).toEqual([
             ['draft-1', 'broken'],
             ['draft-1', 'original'],
         ]);
@@ -493,5 +557,124 @@ describe('composer state machine', () => {
 
         expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'keep this', status: 'error' });
         expect(store.getSnapshot().threads[0]?.root.body).toBe(CREATED.body);
+    });
+});
+
+// Draft buffer (M5-T15): the host rejected the write, the server accepted the text and will deliver it.
+describe('composer and draft buffer', () => {
+    it('keeps the composer open without adding a draft to threads on a buffered response', async () => {
+        const { store, controller, save } = setup();
+        const entry = bufferedEntry('ck-1', 'waiting for a connection');
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry });
+
+        controller.input('waiting for a connection');
+        expect(await controller.saveNow(true)).toBe(false);
+
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({
+            text: 'waiting for a connection',
+            status: 'buffered',
+            commentId: null,
+            bufferEntry: entry,
+        });
+        expect(store.getSnapshot().threads).toEqual([]);
+    });
+
+    it('does not keep the navigation guard active for a buffered composer', async () => {
+        const { store, controller, save } = setup();
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry: bufferedEntry('ck-1', 'waiting for a connection') });
+
+        controller.input('waiting for a connection');
+        await controller.saveNow();
+
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
+    });
+
+    it('retries a buffered write with the same clientKey and closes the composer on success', async () => {
+        const { store, controller, save } = setup();
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry: bufferedEntry('ck-1', 'waiting for a connection') });
+        controller.input('waiting for a connection');
+        await controller.saveNow();
+        const clientKey = save.mock.calls[0]?.[1];
+
+        expect(await controller.retry()).toBe(true);
+
+        expect(save.mock.calls[1]?.[1]).toBe(clientKey);
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({ status: 'saved', commentId: 'draft-1' });
+    });
+
+    it('keeps buffered status when editing text and writes to the same entry', async () => {
+        const { store, controller, save } = setup();
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry: bufferedEntry('ck-1', 'first version') });
+        controller.input('first version');
+        await controller.saveNow();
+        const clientKey = save.mock.calls[0]?.[1];
+
+        controller.input('second version');
+        expect(store.getComposer('new:f1:new:10')).toMatchObject({ text: 'second version', status: 'buffered' });
+
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry: bufferedEntry('ck-1', 'second version') });
+        await controller.saveNow();
+        expect(save.mock.calls[1]).toEqual([expect.objectContaining({ body: 'second version' }), clientKey]);
+    });
+
+    it('removes the server entry and closes the field when discarding a buffered composer', async () => {
+        const { store, controller, save, remove, discardBuffered } = setup();
+        save.mockResolvedValueOnce({ outcome: 'buffered', entry: bufferedEntry('ck-1', 'no longer needed') });
+        controller.input('no longer needed');
+        await controller.saveNow();
+
+        await expect(controller.confirmDiscard()).resolves.toBe(true);
+
+        expect(discardBuffered).toHaveBeenCalledWith('ck-1');
+        expect(remove).not.toHaveBeenCalled();
+        expect(store.getComposer('new:f1:new:10')).toBeNull();
+    });
+
+    // The edit did not reach the host, which still has the original text. "Discard" must remove the entry,
+    // and leave the draft itself intact: the reviewer did not ask to delete it.
+    it('removes the entry and keeps the host draft when discarding a buffered edit', async () => {
+        const { store, controller, update, remove, discardBuffered } = setupEditComposer();
+        update.mockResolvedValueOnce({ outcome: 'buffered', entry: editEntry('ck-edit', 'edit') });
+
+        controller.input('edit');
+        await controller.saveNow();
+        expect(store.getComposer(EDIT_KEY)).toMatchObject({ status: 'buffered' });
+
+        await expect(controller.confirmDiscard()).resolves.toBe(true);
+
+        expect(discardBuffered).toHaveBeenCalledWith('ck-edit');
+        expect(remove).not.toHaveBeenCalled();
+        expect(store.getComposer(EDIT_KEY)).toBeNull();
+    });
+
+    // Returning to the original text with an existing entry also removes the entry: the unavailable host
+    // already has that text, so there is no reason to write it again.
+    it('removes the entry without writing to the host when reverting a buffered edit to the original text', async () => {
+        const { controller, update, discardBuffered } = setupEditComposer();
+        update.mockResolvedValueOnce({ outcome: 'buffered', entry: editEntry('ck-edit', 'edit') });
+        controller.input('edit');
+        await controller.saveNow();
+        update.mockClear();
+
+        await expect(controller.restore('this is on the host')).resolves.toBe(true);
+
+        expect(update).not.toHaveBeenCalled();
+        expect(discardBuffered).toHaveBeenCalledWith('ck-edit');
+    });
+
+    // Issue is tracked after a successful write. Failure leaves the change unwritten, so a retry
+    // must send it again, or the host will keep the old status.
+    it('sends issue again on the next attempt if it did not reach the host', async () => {
+        const { controller, update } = setupEditComposer(true);
+        update.mockResolvedValueOnce({ outcome: 'buffered', entry: editEntry('ck-edit', 'edit') });
+
+        controller.setIssue(false);
+        controller.input('edit');
+        await controller.saveNow();
+        expect(update.mock.calls[0]?.[2]).toBe(false);
+
+        await controller.retry();
+
+        expect(update.mock.calls[1]?.[2]).toBe(false);
     });
 });

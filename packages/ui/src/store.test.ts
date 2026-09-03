@@ -43,6 +43,7 @@ const PR_META: NonNullable<UiState['pr']> = {
     checks: 'passed',
     updatedAt: '2026-08-19T10:00:00.000Z',
     capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
+    verdicts: [],
 };
 
 interface Harness {

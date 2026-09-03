@@ -1,3 +1,4 @@
+import type { PrMeta } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -5,7 +6,7 @@ import { agentPillView } from './agent-pill-view.js';
 import { breadcrumbFor } from '../pr-key.js';
 import { AgentPill, TopBar } from './top-bar.tsx';
 
-const PR = {
+const PR: PrMeta = {
     id: '4821',
     url: 'https://github.com/quillmart/quillmart/pull/4821',
     title: 'Order editing window',
@@ -17,7 +18,8 @@ const PR = {
     checks: 'passed',
     updatedAt: '2026-08-24T06:00:00.000Z',
     capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
-} as const;
+    verdicts: [],
+};
 
 function topBar(pr: typeof PR | null): string {
     return renderToStaticMarkup(

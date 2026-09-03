@@ -1,4 +1,4 @@
-import type { PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
+import type { DraftBufferEntry, PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { DiffViewStore } from '../diff-view/store.js';
@@ -34,6 +34,8 @@ import {
     type ShipMode,
 } from './review-action-model.js';
 import './review-action-bar.css';
+
+const EMPTY_DRAFT_BUFFER: readonly DraftBufferEntry[] = [];
 
 const SHIP_DESCRIPTION = 'Approves this snapshot only. A new push drops the approval and asks again.';
 // The promise in README §5 to revoke by CODEOWNERS zone is absent here. This publishes the regular sticky ship
@@ -84,6 +86,8 @@ export interface ReviewActionBarProps {
     readonly hostName: string;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
+    /** Drafts in the server buffer (M5-T15): count in the batch and block ship until delivered. */
+    readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
@@ -190,6 +194,7 @@ export function ReviewActionBar({
     hostName,
     route = null,
     composerTransport,
+    draftBuffer = EMPTY_DRAFT_BUFFER,
     onPublish,
     onComplete,
     defaultMenuOpen = false,
@@ -225,7 +230,12 @@ export function ReviewActionBar({
     } | null>(null);
 
     const threadPin = useThreadPinContext();
-    const drafts = countDraftComments(threadSnapshot.threads);
+    // Buffered records are drafts in the batch. They will be published on ship once they reach the host.
+    // Count only creates: an edit belongs to a draft already counted in the threads.
+    const buffered = draftBuffer.length;
+    const bufferedNew = draftBuffer.filter((entry) => entry.commentId === null).length;
+    const drafts = countDraftComments(threadSnapshot.threads) + bufferedNew;
+    const openThreads = discussionStats(threadSnapshot.threads).open;
     // Drafts written before a push will go to a commit no longer at the PR head (SPEC §4.5).
     const pinnedDrafts = countPinnedDraftComments(threadSnapshot.threads, threadPin.activeDiffId);
     const progress = reviewProgressSummary(diff.files, diffSnapshot.readState);
@@ -240,6 +250,7 @@ export function ReviewActionBar({
     const retryDisabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
+        bufferedDrafts: buffered,
         publishing: publishing !== null,
         readOnlyIteration,
         readOnlyReason,
@@ -247,6 +258,7 @@ export function ReviewActionBar({
     const disabledReason = publishDisabledReason({
         connection,
         pendingComposer: composerGuard.pending,
+        bufferedDrafts: buffered,
         publishing: publishing !== null,
         failure: failure !== null,
         readOnlyIteration,
@@ -428,6 +440,12 @@ export function ReviewActionBar({
                 <span className="review-action-bar__drafts">
                     <span className="review-action-bar__draft-dot" aria-hidden="true" />
                     {draftBatch} {plural(drafts, 'goes out', 'go out', 'go out')} on ship
+                    {buffered === 0 ? null : (
+                        <span className="review-action-bar__pinned-drafts">
+                            · {formatCount(buffered)}{' '}
+                            {plural(buffered, 'not yet saved', 'not yet saved', 'not yet saved')} to the host
+                        </span>
+                    )}
                     {pinnedDrafts === 0 ? null : (
                         <span className="review-action-bar__pinned-drafts">
                             · {formatCount(pinnedDrafts)}{' '}
@@ -435,6 +453,15 @@ export function ReviewActionBar({
                         </span>
                     )}
                 </span>
+            )}
+            {openThreads === 0 ? null : (
+                <>
+                    <span className="review-action-bar__divider" aria-hidden="true" />
+                    <span className="review-action-bar__open-threads">
+                        {formatCount(openThreads)}{' '}
+                        {plural(openThreads, 'unresolved thread', 'unresolved threads', 'unresolved threads')}
+                    </span>
+                </>
             )}
             <span className="review-action-bar__divider" aria-hidden="true" />
             <button
@@ -562,6 +589,7 @@ export function ReviewActionBar({
                     pr={pr}
                     store={threadStore}
                     transport={composerTransport}
+                    draftBuffer={draftBuffer}
                     onClose={() => {
                         setPrCommentsOpen(false);
                         queueMicrotask(() => {

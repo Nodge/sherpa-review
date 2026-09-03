@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { agentNoteIdSchema, agentNoteSchema, chatAnchorSchema, chatExchangeIdSchema, chatExchangeSchema } from './chat.js';
+import { draftBufferEntrySchema } from './draft-buffer.js';
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
 import {
@@ -582,10 +583,27 @@ export type UiViewedMirrorRequest = z.infer<typeof uiViewedMirrorRequestSchema>;
  * `review`. Until then, the UI uses optimistic state. `saveDraft` returns
  * the created comment: the composer needs its id for `updateDraft`/`deleteDraft`.
  */
-export const uiSaveDraftRequestSchema = z.object({ draft: commentDraftSchema });
+export const uiSaveDraftRequestSchema = z.object({
+    draft: commentDraftSchema,
+    /**
+     * Buffer record key (M5-T15): composer UUID, one per logical write until it succeeds.
+     * A retry with the same key upserts the same record and reaches the host with the same
+     * idempotency key. No duplicate is created even if the previous attempt's response was lost.
+     */
+    clientKey: z.string().min(1),
+});
 export type UiSaveDraftRequest = z.infer<typeof uiSaveDraftRequestSchema>;
 
-export const uiSaveDraftResponseSchema = z.object({ comment: commentSchema });
+/**
+ * Draft write result (M5-T15): `saved` means the host accepted it, `buffered` means the host did not respond or
+ * rejected it. The text is in the server buffer and will be retried (SPEC §4.5 "we will save it once
+ * the connection returns"). Network and validation errors in the endpoint itself remain HTTP errors:
+ * only failures in the "server → host" step are buffered.
+ */
+export const uiSaveDraftResponseSchema = z.discriminatedUnion('outcome', [
+    z.object({ outcome: z.literal('saved'), comment: commentSchema }),
+    z.object({ outcome: z.literal('buffered'), entry: draftBufferEntrySchema }),
+]);
 export type UiSaveDraftResponse = z.infer<typeof uiSaveDraftResponseSchema>;
 
 export const uiUpdateDraftRequestSchema = z.object({
@@ -593,8 +611,28 @@ export const uiUpdateDraftRequestSchema = z.object({
     body: z.string().min(1),
     /** Changes the draft issue status (M2F-T39). undefined leaves it unchanged. */
     issue: z.boolean().optional(),
+    /** See `uiSaveDraftRequestSchema.clientKey`. */
+    clientKey: z.string().min(1),
 });
 export type UiUpdateDraftRequest = z.infer<typeof uiUpdateDraftRequestSchema>;
+
+export const uiUpdateDraftResponseSchema = z.discriminatedUnion('outcome', [
+    z.object({ outcome: z.literal('saved') }),
+    z.object({ outcome: z.literal('buffered'), entry: draftBufferEntrySchema }),
+]);
+export type UiUpdateDraftResponse = z.infer<typeof uiUpdateDraftResponseSchema>;
+
+/**
+ * Draft buffer for this PR (M5-T15). Changes on save/update, server retries, `retry`
+ * and `discard`. Each change increments `threadsRevision`. The UI rereads the buffer along
+ * with threads on the SSE event `review`.
+ */
+export const uiDraftBufferResponseSchema = z.object({ entries: z.array(draftBufferEntrySchema) });
+export type UiDraftBufferResponse = z.infer<typeof uiDraftBufferResponseSchema>;
+
+/** Retry the host write now ("retry" button) or discard it ("delete"). */
+export const uiDraftBufferEntryRequestSchema = z.object({ id: z.string().min(1) });
+export type UiDraftBufferEntryRequest = z.infer<typeof uiDraftBufferEntryRequestSchema>;
 
 export const uiDeleteDraftRequestSchema = z.object({ commentId: hostIdSchema });
 export type UiDeleteDraftRequest = z.infer<typeof uiDeleteDraftRequestSchema>;
@@ -693,8 +731,14 @@ export const UI_ENDPOINTS = {
     reviewViewedMirror: '/api/ui/review/viewed-mirror',
     /** POST `uiSaveDraftRequestSchema` → `uiSaveDraftResponseSchema`. */
     reviewSaveDraft: '/api/ui/review/draft',
-    /** POST `uiUpdateDraftRequestSchema` → `uiReviewWriteAckSchema`. */
+    /** POST `uiUpdateDraftRequestSchema` → `uiUpdateDraftResponseSchema`. */
     reviewUpdateDraft: '/api/ui/review/draft/update',
+    /** GET → `uiDraftBufferResponseSchema`. */
+    reviewDraftBuffer: '/api/ui/review/draft-buffer',
+    /** POST `uiDraftBufferEntryRequestSchema` → `uiDraftBufferResponseSchema` (buffer after the attempt). */
+    reviewDraftBufferRetry: '/api/ui/review/draft-buffer/retry',
+    /** POST `uiDraftBufferEntryRequestSchema` → `uiDraftBufferResponseSchema`. */
+    reviewDraftBufferDiscard: '/api/ui/review/draft-buffer/discard',
     /** POST `uiDeleteDraftRequestSchema` → `uiReviewWriteAckSchema`. */
     reviewDeleteDraft: '/api/ui/review/draft/delete',
     /** POST `uiSetThreadResolvedRequestSchema` → `uiReviewWriteAckSchema`. */
@@ -736,7 +780,13 @@ export const UI_ENDPOINTS = {
 export const UI_DEV_ENDPOINTS = {
     /** POST without a body → `uiReviewWriteAckSchema`: the fixture "receives a push", the next declared iteration becomes active. */
     fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
+    /** POST `uiDevFixtureFailDraftWritesRequestSchema` → `uiReviewWriteAckSchema`: fixture refuses draft writes (buffer, M5-T15). */
+    fixtureFailDraftWrites: '/api/dev/fixture/fail-draft-writes',
 } as const;
+
+/** Body of the dev endpoint for draft write failures: `fail: false` restores the fixture to working order. */
+export const uiDevFixtureFailDraftWritesRequestSchema = z.object({ fail: z.boolean() });
+export type UiDevFixtureFailDraftWritesRequest = z.infer<typeof uiDevFixtureFailDraftWritesRequestSchema>;
 
 /** SSE event name for a state snapshot. */
 export const UI_STATE_EVENT = 'state';

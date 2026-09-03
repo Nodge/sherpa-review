@@ -31,6 +31,7 @@ const META: PrMeta = {
     checks: null,
     updatedAt: '2026-08-20T10:00:00.000Z',
     capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
+    verdicts: [],
 };
 
 const READY_ROUTE: UiRouteState = {

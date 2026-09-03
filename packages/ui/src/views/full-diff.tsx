@@ -15,10 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 
 import {
     fetchFileContent,
-    deleteReviewDraft,
-    saveReviewDraft,
     setReviewThreadResolved,
-    updateReviewDraft,
 } from '../api.js';
 import { placeRangeQuestion } from '../components/chat-prompts.js';
 import type { PrHeaderCounts } from '../components/pr-header.tsx';
@@ -65,6 +62,7 @@ import type { SessionStore, ThreadsShow } from '../session/session-store.js';
 import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import type { ComposerTransport } from '../threads/composer.js';
+import { createComposerTransport } from '../threads/transport.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
 import { countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
@@ -191,14 +189,7 @@ export function FullDiffView({
         [diffId],
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
-    const threadTransport = useMemo<ComposerTransport>(
-        () => ({
-            save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
-            delete: (commentId) => deleteReviewDraft(token, commentId),
-        }),
-        [token],
-    );
+    const threadTransport = useMemo(() => createComposerTransport(token), [token]);
     const resolveThread = useCallback(
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],

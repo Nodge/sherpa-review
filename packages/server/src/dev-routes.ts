@@ -1,10 +1,14 @@
 import type { Iteration } from '@sherpa/protocol';
-import { UI_DEV_ENDPOINTS, uiReviewWriteAckSchema } from '@sherpa/protocol';
+import {
+    UI_DEV_ENDPOINTS,
+    uiDevFixtureFailDraftWritesRequestSchema,
+    uiReviewWriteAckSchema,
+} from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
 import type { Route } from './http.js';
 import { handlingRpcFailures } from './http.js';
-import { respond } from './review-routes.js';
+import { readRequest, respond } from './review-routes.js';
 
 /**
  * Server dev endpoints (`UI_DEV_ENDPOINTS`) provide an operation no real host can offer:
@@ -18,6 +22,8 @@ import { respond } from './review-routes.js';
 export interface DevRoutesOptions {
     /** Fixture "push": makes the next declared iteration active. */
     readonly advanceIteration: () => Iteration;
+    /** Fixture draft write failure: e2e uses it to test the buffer (M5-T15). */
+    readonly setFailDraftWrites?: (fail: boolean) => void;
 }
 
 export function createDevRoutes(options: DevRoutesOptions): Route[] {
@@ -35,5 +41,22 @@ export function createDevRoutes(options: DevRoutesOptions): Route[] {
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),
         },
+        ...(options.setFailDraftWrites === undefined
+            ? []
+            : [
+                  {
+                      method: 'POST' as const,
+                      path: UI_DEV_ENDPOINTS.fixtureFailDraftWrites,
+                      handle: handlingRpcFailures(async (ctx) => {
+                          const request = await readRequest(
+                              ctx,
+                              uiDevFixtureFailDraftWritesRequestSchema,
+                              'dev draft write failure',
+                          );
+                          options.setFailDraftWrites?.(request.fail);
+                          return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+                      }),
+                  },
+              ]),
     ];
 }

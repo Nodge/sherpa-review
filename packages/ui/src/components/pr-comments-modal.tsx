@@ -1,4 +1,4 @@
-import type { PrMeta, Thread } from '@sherpa/protocol';
+import type { DraftBufferEntry, PrMeta, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
@@ -17,6 +17,7 @@ import {
     useActiveDraftEditor,
 } from '../threads/draft-editor.tsx';
 import { authorName, prLevelHumanThreads } from '../threads/model.js';
+import { discussionStats } from '../views/overview-model.js';
 import { relativeTime } from '../threads/relative-time.js';
 import {
     NewCommentComposer,
@@ -26,17 +27,29 @@ import {
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
 import './pr-comments-modal.css';
 
+const EMPTY_DRAFT_BUFFER: readonly DraftBufferEntry[] = [];
+
 export interface PrCommentsModalProps {
     readonly pr: PrMeta;
     readonly store: ThreadStore;
     readonly transport: ComposerTransport;
+    /** Draft buffer records (M5-T15). Only PR-level records count in the modal counter. */
+    readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onClose: () => void;
     readonly now?: number;
     readonly initialLayout?: ComposerLayout;
 }
 
 /** Human PR-level comments: a list of written comments and a separate composer for a new draft. */
-export function PrCommentsModal({ pr, store, transport, onClose, now, initialLayout }: PrCommentsModalProps) {
+export function PrCommentsModal({
+    pr,
+    store,
+    transport,
+    draftBuffer = EMPTY_DRAFT_BUFFER,
+    onClose,
+    now,
+    initialLayout,
+}: PrCommentsModalProps) {
     const shortcutRegistry = useShortcutRegistry();
     const commentIssues = pr.capabilities.commentIssues;
     const [openedAt] = useState(() => now ?? Date.now());
@@ -55,7 +68,12 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     );
     const commentIds = useMemo(() => comments.map((thread) => thread.root.id), [comments]);
     const editingId = useActiveDraftEditor(store, commentIds);
-    const drafts = prThreads.filter((thread) => thread.root.draft).length;
+    // A buffered PR-level record is a draft in the batch, just one the host has not accepted yet.
+    const bufferedPrDrafts = draftBuffer.filter(
+        (entry) => entry.commentId === null && entry.draft.parentId === null && entry.draft.anchor === null,
+    ).length;
+    const drafts = prThreads.filter((thread) => thread.root.draft).length + bufferedPrDrafts;
+    const openThreads = discussionStats(snapshot.threads).open;
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
@@ -187,9 +205,18 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                     <h2 id="pr-comments-modal-title">Comments on the PR</h2>
                     <span className="pr-comments-modal__context">outside the diff · {pr.id}</span>
                     <span className="pr-comments-modal__header-spacer" />
+                    {openThreads === 0 ? null : (
+                        <span className="pr-comments-modal__open-threads">
+                            {formatCount(openThreads)}{' '}
+                            {plural(openThreads, 'unresolved thread', 'unresolved threads', 'unresolved threads')}
+                        </span>
+                    )}
                     {drafts === 0 ? null : (
                         <span className="pr-comments-modal__draft-count">
                             {formatCount(drafts)} {plural(drafts, 'draft', 'drafts', 'drafts')} · publishes on Ship
+                            {bufferedPrDrafts === 0
+                                ? null
+                                : ` · ${formatCount(bufferedPrDrafts)} ${plural(bufferedPrDrafts, 'not yet saved', 'not yet saved', 'not yet saved')} to the host`}
                         </span>
                     )}
                     <button
@@ -203,6 +230,10 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                         <Icon name="cross" size={14} />
                     </button>
                 </header>
+
+                {draftBuffer.length === 0 ? null : (
+                    <BufferedDrafts entries={draftBuffer} transport={transport} />
+                )}
 
                 <div className="pr-comments-modal__list-shell">
                     <div ref={listRef} className="pr-comments-modal__list">
@@ -348,6 +379,70 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     );
 
     return typeof document === 'undefined' ? content : createPortal(content, document.body);
+}
+
+/**
+ * Drafts the server has accepted but the host has not (M5-T15). This includes all drafts, not just
+ * PR-level drafts. While a record exists, ship is unavailable, and its composer may be off screen,
+ * for example at a file line in a previous iteration. This is the only place to see such a record
+ * and discard it.
+ */
+function BufferedDrafts({
+    entries,
+    transport,
+}: {
+    readonly entries: readonly DraftBufferEntry[];
+    readonly transport: ComposerTransport;
+}) {
+    const [busyId, setBusyId] = useState<string | null>(null);
+    const act = (id: string, action: ((id: string) => Promise<void>) | undefined): void => {
+        if (action === undefined) {
+            return;
+        }
+        setBusyId(id);
+        void action(id).finally(() => {
+            setBusyId((current) => (current === id ? null : current));
+        });
+    };
+    return (
+        <section className="pr-comments-modal__buffered" aria-label="Drafts not saved to the host">
+            <h3>
+                {formatCount(entries.length)} {plural(entries.length, 'draft', 'drafts', 'drafts')}{' '}
+                {plural(entries.length, 'waits', 'wait', 'wait')} for a host connection. ship is unavailable until saved
+            </h3>
+            {entries.map((entry) => (
+                <div key={entry.id} className="pr-comments-modal__buffered-item">
+                    <span
+                        className="pr-comments-modal__buffered-text"
+                        {...(entry.error === null ? {} : { title: entry.error })}
+                    >
+                        {entry.draft.body}
+                    </span>
+                    <span className="pr-comments-modal__item-spacer" />
+                    <button
+                        type="button"
+                        className="pr-comments-modal__keep-button"
+                        disabled={busyId !== null}
+                        onClick={() => {
+                            act(entry.id, transport.retryBuffered);
+                        }}
+                    >
+                        Retry
+                    </button>
+                    <button
+                        type="button"
+                        className="pr-comments-modal__delete-button"
+                        disabled={busyId !== null}
+                        onClick={() => {
+                            act(entry.id, transport.discardBuffered);
+                        }}
+                    >
+                        Delete
+                    </button>
+                </div>
+            ))}
+        </section>
+    );
 }
 
 function ComposerShortcutHint({ escapeLabel }: { escapeLabel: string }) {

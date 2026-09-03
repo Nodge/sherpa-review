@@ -1,8 +1,10 @@
 import type {
     AgentNote,
     ChatAnchor,
+    DraftBufferEntry,
     Iteration,
     PrDiff,
+    PublishResult,
     RouteSnapshot,
     Thread,
     UiChatAskAnchor,
@@ -24,6 +26,7 @@ import {
     askReviewChat,
     cancelReviewChat,
     cancelTask,
+    fetchDraftBuffer,
     fetchReviewChat,
     fetchReviewDiff,
     fetchReviewLenses,
@@ -31,18 +34,15 @@ import {
     fetchReviewRoute,
     fetchReviewSnapshots,
     fetchReviewThreads,
-    deleteReviewDraft,
     deleteReviewChatNote,
     fillRouteStop,
     generateReviewRoute,
     mirrorViewedFiles,
     publishReview,
     retryReviewChat,
-    saveReviewDraft,
     sendFeedback,
     setFileViewed,
     setStopViewed,
-    updateReviewDraft,
 } from './api.js';
 import { agentPillView } from './components/agent-pill-view.js';
 import { auditScopeBannerVisible, AuditScopeBanner } from './components/audit-banner.tsx';
@@ -108,7 +108,14 @@ import type { ViewId } from './session/views.js';
 import { useUiSettingsStore } from './settings/context.tsx';
 import type { Store } from './store.js';
 import { attachComposerBeforeUnload } from './threads/before-unload.js';
-import type { ComposerTransport } from './threads/composer.js';
+import type { ShipVerdictEvent, ShipVerdictWatch } from './components/ship-verdict-banner.tsx';
+import {
+    INITIAL_SHIP_VERDICT_WATCH,
+    observeShipVerdicts,
+    ShipVerdictBanner,
+} from './components/ship-verdict-banner.tsx';
+import { syncBufferedComposers } from './threads/draft-buffer.js';
+import { createComposerTransport } from './threads/transport.js';
 import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
@@ -1114,14 +1121,83 @@ export function App({ store, session, token }: AppProps) {
         }
     }, [currentReview.threads, threadStore]);
     useEffect(() => (threadStore === null ? undefined : attachComposerBeforeUnload(threadStore)), [threadStore]);
-    const composerTransport = useMemo<ComposerTransport>(
-        () => ({
-            save: (draft) => saveReviewDraft(token, draft),
-            update: (commentId, body, issue) => updateReviewDraft(token, commentId, body, issue),
-            delete: (commentId) => deleteReviewDraft(token, commentId),
-        }),
+    const composerTransport = useMemo(() => createComposerTransport(token), [token]);
+
+    /**
+     * Another reviewer's ship (M5-T15): verdicts arrive in the metadata snapshot without timestamps, so
+     * we record when we see them. The first snapshot in a tab session is the baseline and shows no banner.
+     */
+    const verdictWatch = useRef<ShipVerdictWatch>(INITIAL_SHIP_VERDICT_WATCH);
+    const [shipVerdict, setShipVerdict] = useState<ShipVerdictEvent | null>(null);
+    const [shipVerdictNow, setShipVerdictNow] = useState(() => Date.now());
+    const verdicts = state?.pr?.verdicts ?? null;
+    useEffect(() => {
+        if (verdicts === null) {
+            return;
+        }
+        const observed = observeShipVerdicts(verdictWatch.current, verdicts, Date.now());
+        verdictWatch.current = observed.watch;
+        if (observed.event !== null) {
+            setShipVerdict(observed.event);
+            setShipVerdictNow(observed.event.observedAt);
+        }
+    }, [verdicts]);
+    const publishHere = useCallback(
+        async (verdict: Verdict): Promise<PublishResult> => {
+            const result = await publishReview(token, verdict);
+            if (verdict === 'ship' || verdict === 'sticky_ship') {
+                // Our own verdict is about to appear in metadata. There is nobody to notify with a banner.
+                verdictWatch.current = { ...verdictWatch.current, ownShipPending: true };
+            }
+            return result;
+        },
         [token],
     );
+    // After a minute, "just now" becomes "N min ago". The banner time updates automatically.
+    useEffect(() => {
+        if (shipVerdict === null) {
+            return;
+        }
+        const timer = window.setInterval(() => {
+            setShipVerdictNow(Date.now());
+        }, 60_000);
+        return () => {
+            window.clearInterval(timer);
+        };
+    }, [shipVerdict]);
+
+    /**
+     * The draft buffer (M5-T15) is read along with threads, using the same `review` event and token.
+     * A read failure gets no separate error display. Keep the last known buffer on screen,
+     * and reload it at the next revision.
+     */
+    const [draftBuffer, setDraftBuffer] = useState<readonly DraftBufferEntry[]>(EMPTY_DRAFT_BUFFER);
+    useEffect(() => {
+        if (!reviewReady || reviewHost === null) {
+            return;
+        }
+        let alive = true;
+        void fetchDraftBuffer(token).then(
+            (entries) => {
+                if (alive) {
+                    setDraftBuffer(entries);
+                }
+            },
+            () => undefined,
+        );
+        return () => {
+            alive = false;
+        };
+    }, [reviewHost, reviewReady, snapshot.threadsRevision, token]);
+    // Buffered entries return to composers at their own anchors. After a tab reload,
+    // the text must appear on the same line.
+    // Threads are dependencies for restoration, not rendering: a draft edit can only be restored together
+    // with its comment, which arrives separately.
+    useEffect(() => {
+        if (threadStore !== null) {
+            syncBufferedComposers(threadStore, draftBuffer);
+        }
+    }, [currentReview.threads, draftBuffer, threadStore]);
 
     const diffFilterHandler = useRef<((id: string) => void) | null>(null);
     const setDiffFilterHandler = useCallback((handler: ((id: string) => void) | null) => {
@@ -1555,6 +1631,21 @@ export function App({ store, session, token }: AppProps) {
                         }}
                         onDismiss={() => {
                             setDismissedNotesLost(notesLostKey(lostNoteIds));
+                        }}
+                    />
+                ),
+        },
+        {
+            id: 'ship-verdict',
+            priority: BANNER_PRIORITY.shipVerdict,
+            active: () => shipVerdict !== null,
+            render: () =>
+                shipVerdict === null ? null : (
+                    <ShipVerdictBanner
+                        event={shipVerdict}
+                        now={shipVerdictNow}
+                        onDismiss={() => {
+                            setShipVerdict(null);
                         }}
                     />
                 ),
@@ -2152,7 +2243,8 @@ export function App({ store, session, token }: AppProps) {
                         hostName={hostDisplayName(reviewHost)}
                         route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                         composerTransport={composerTransport}
-                        onPublish={(verdict: Verdict) => publishReview(token, verdict)}
+                        draftBuffer={draftBuffer}
+                        onPublish={publishHere}
                         onComplete={completeReview}
                         chatOpen={chatOpen}
                     />
@@ -2334,6 +2426,7 @@ function emptyActiveFacts(key: string): ActiveFacts {
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];
+const EMPTY_DRAFT_BUFFER: readonly DraftBufferEntry[] = [];
 const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_ITERATIONS: readonly Iteration[] = [];
 const EMPTY_TASKS: readonly UiTask[] = [];

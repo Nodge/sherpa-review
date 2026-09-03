@@ -27,7 +27,7 @@ function mount(
 ) {
     const transport: ComposerTransport = {
         save: options.save ?? (() => Promise.reject(new Error('this test does not save'))),
-        update: options.update ?? (() => Promise.resolve()),
+        update: options.update ?? (() => Promise.resolve({ outcome: 'saved' as const })),
         delete: options.delete ?? (() => Promise.resolve()),
     };
     // Layout comes from global settings, not localStorage, so mock that boundary.
@@ -102,7 +102,7 @@ function mountReply() {
                 actions={{
                     transport: {
                         save: () => Promise.reject(new Error('this test does not save')),
-                        update: () => Promise.resolve(),
+                        update: () => Promise.resolve({ outcome: 'saved' as const }),
                         delete: () => Promise.resolve(),
                     },
                     resolve: () => Promise.resolve(true),
@@ -252,7 +252,7 @@ describe('comment composer', () => {
                     store={store}
                     transport={{
                         save: () => Promise.reject(new Error('this test does not save')),
-                        update: () => Promise.resolve(),
+                        update: () => Promise.resolve({ outcome: 'saved' as const }),
                         delete: () => Promise.resolve(),
                     }}
                     initialLayout="markdown"
@@ -278,22 +278,52 @@ describe('comment composer', () => {
         expect(host.querySelector('.thread-composer__status')?.textContent).toBe('not saved — ⌘⏎ or the button');
     });
 
+    // Draft buffer (M5-T15): the text is on the server, the host has not accepted it yet.
+    it('a buffered composer promises to deliver the text and offers a retry', () => {
+        const { host, store } = mount('markdown');
+        act(() => {
+            store.updateComposer('new:pr', {
+                text: 'waiting for connection',
+                status: 'buffered',
+                bufferEntry: {
+                    id: 'ck-1',
+                    draft: { body: 'waiting for connection', parentId: null, anchor: null },
+                    commentId: null,
+                    state: 'failed',
+                    error: 'review host: 502',
+                    attempts: 1,
+                    createdAt: '2026-09-03T10:00:00.000Z',
+                    updatedAt: '2026-09-03T10:00:00.000Z',
+                },
+            });
+        });
+
+        const status = host.querySelector('.thread-composer__status');
+        expect(status?.textContent).toBe('we will save it once the connection is back · retry');
+        expect(status?.getAttribute('title')).toBe('review host: 502');
+        // The text stays editable. The buffer holds it without locking it.
+        expect(host.querySelector<HTMLTextAreaElement>('.thread-composer__markdown')?.disabled).toBe(false);
+    });
+
     it('closes the field after the first save, leaving the draft card', async () => {
         const save = vi.fn(() =>
             Promise.resolve({
-                id: 'draft-1',
-                author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
-                body: 'ready draft',
-                draft: true,
-                issue: null,
-                createdAt: '2026-08-24T10:00:00.000Z',
-                editedAt: null,
-                replies: [],
+                outcome: 'saved' as const,
+                comment: {
+                    id: 'draft-1',
+                    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+                    body: 'finished draft',
+                    draft: true,
+                    issue: null,
+                    createdAt: '2026-08-24T10:00:00.000Z',
+                    editedAt: null,
+                    replies: [],
+                },
             }),
         );
         const { host, store } = mount('markdown', {
             save,
-            update: () => Promise.resolve(),
+            update: () => Promise.resolve({ outcome: 'saved' as const }),
             delete: () => Promise.resolve(),
         });
         act(() => {
@@ -330,7 +360,7 @@ describe('comment composer', () => {
     });
 
     it('Cancel asks for confirmation before cancelling edits to a saved draft', async () => {
-        const update = vi.fn(() => Promise.resolve());
+        const update = vi.fn(() => Promise.resolve({ outcome: 'saved' as const }));
         const { host, store } = mount('markdown', {
             save: () => Promise.reject(new Error('there is no first save here')),
             update,
@@ -363,7 +393,7 @@ describe('comment composer', () => {
             });
         });
 
-        expect(update).toHaveBeenCalledWith('draft-1', 'original text');
+        expect(update).toHaveBeenCalledWith('draft-1', 'original text', undefined, expect.any(String));
     });
 
     it.each(['c', 'v'])('Markdown takes the plain %s key from global shortcuts', (key) => {

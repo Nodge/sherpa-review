@@ -55,8 +55,12 @@ export interface ReviewHost {
      */
     watchThreads(onChange: (threads: Thread[]) => void): () => void;
 
-    /** Save a draft to the host immediately (two-stage model). Returns the created comment. */
-    saveDraft(draft: CommentDraft): Promise<Comment>;
+    /**
+     * Save a draft to the host immediately (two-stage model). Returns the created comment.
+     * `idempotencyKey` is the retry key from the draft buffer (M5-T15). Retrying with the same key
+     * must not create a second comment. A host without such an endpoint ignores the key.
+     */
+    saveDraft(draft: CommentDraft, options?: { idempotencyKey?: string }): Promise<Comment>;
 
     /**
      * Edits your own draft. `issue` is passed only with `capabilities.commentIssues`

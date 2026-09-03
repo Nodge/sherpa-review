@@ -338,6 +338,43 @@ describe('storage', () => {
         }
     });
 
+    // The draft buffer (M5-T15) starts as an empty table and leaves existing state alone.
+    it('creates a table with state validation during the draft buffer migration', () => {
+        const file = `${sherpaDir}/draft-buffer.db`;
+
+        const before = openDatabase(file, migrationsBefore('016-draft-buffer'));
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            const insert = after.prepare(
+                `INSERT INTO draft_buffer (
+                    id, comment_id, draft_json, state, error, attempts, idempotency_key, created_at, updated_at
+                 ) VALUES (?, NULL, '{}', ?, NULL, 0, 'key-1', ?, ?)`,
+            );
+            insert.run('ck-1', 'pending', '2026-09-03T10:00:00.000Z', '2026-09-03T10:00:00.000Z');
+            expect(after.prepare('SELECT id, state, attempts FROM draft_buffer').all()).toEqual([
+                { id: 'ck-1', state: 'pending', attempts: 0 },
+            ]);
+            expect(() => {
+                insert.run('ck-2', 'sent', '2026-09-03T10:00:00.000Z', '2026-09-03T10:00:00.000Z');
+            }).toThrow();
+
+            // Pairs of "record key → created draft" live separately. The buffer record disappears after
+            // success, but the created comment must still be remembered.
+            after.prepare('INSERT INTO draft_buffer_saved (id, comment_id, created_at) VALUES (?, ?, ?)').run(
+                'ck-1',
+                'c-42',
+                '2026-09-03T10:00:01.000Z',
+            );
+            expect(after.prepare('SELECT id, comment_id FROM draft_buffer_saved').all()).toEqual([
+                { id: 'ck-1', comment_id: 'c-42' },
+            ]);
+        } finally {
+            after.close();
+        }
+    });
+
     // The M3 dogfooding database migrates to iterations through the full 010…015 migration chain at once.
     it('the migration chain upgrades an M3 database to iterations without losing data', () => {
         const file = `${sherpaDir}/m3-to-m4.db`;
