@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { localeSchema } from './locale.js';
+
 import { LONG_POLL_CEILING_SECONDS, PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from './constants.js';
 import { leaseSchema, taskIdSchema, taskSchema } from './task.js';
 import { semverSchema } from './version.js';
@@ -31,6 +33,12 @@ export const workerRegisterRequestSchema = workerRequestBase.extend({
     harness: z.string().min(1).max(64).optional(),
     /** Worker model name for UI status ("claude-opus-5", "gpt-5"), a free-form string reported by the model itself. */
     model: z.string().min(1).max(64).optional(),
+    /**
+     * Language hint (M5, planning decision 1): the language the user speaks with the agent,
+     * The UI uses it if the reviewer has not chosen a language explicitly. If absent, the agent did not determine it,
+     * so the UI uses the browser language.
+     */
+    lang: localeSchema.optional(),
 });
 export type WorkerRegisterRequest = z.infer<typeof workerRegisterRequestSchema>;
 
@@ -52,6 +60,7 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
         workerId: workerIdSchema,
         harness: z.string().optional(),
         model: z.string().optional(),
+        lang: localeSchema.optional(),
         registeredAt: z.iso.datetime(),
         lastSeenAt: z.iso.datetime(),
     }),
@@ -60,6 +69,7 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
         workerId: workerIdSchema,
         harness: z.string().optional(),
         model: z.string().optional(),
+        lang: localeSchema.optional(),
         registeredAt: z.iso.datetime(),
         lastSeenAt: z.iso.datetime(),
     }),

@@ -72,10 +72,11 @@ describe('storage', () => {
         const after = openDatabase(file);
         try {
             expect(readSchemaVersion(after)).toBe(String(MIGRATIONS.length));
-            expect(after.prepare('SELECT worker_id, harness, model FROM worker').get()).toMatchObject({
+            expect(after.prepare('SELECT worker_id, harness, model, lang FROM worker').get()).toMatchObject({
                 worker_id: 'w-1',
                 harness: 'claude-code',
                 model: null,
+                lang: null,
             });
         } finally {
             after.close();
