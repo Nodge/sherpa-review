@@ -21,6 +21,18 @@ export function mediumRawResults(): RouteRawResults {
     return raw;
 }
 
+/**
+ * Model outputs for the second iteration of `medium`. The same six-stop plan, but the three sections affected
+ * by the push have "why this stop changed", and the anchors are recalculated for the new iteration.
+ */
+export function mediumRawResultsV2(): RouteRawResults {
+    const raw = routeFixtures('medium')?.rawResultsV2 ?? null;
+    if (raw === null) {
+        throw new Error('the medium fixture has no raw model outputs for the second pass');
+    }
+    return raw;
+}
+
 /** Raw result text. The model submits a file, not an object (`route/fixture-support.ts`). */
 export function asRawText(result: unknown): string {
     return JSON.stringify(result, null, 2);
@@ -51,10 +63,22 @@ export async function takeTask(worker: FakeWorker, type: TaskType): Promise<Rout
 
 /** Section result for the task's target stops. Their indexes are read from its instructions. */
 export function sectionFor(planIndexes: readonly number[]): RouteSectionResult {
-    const sections = mediumRawResults().sections;
+    return pickStops(mediumRawResults(), planIndexes);
+}
+
+/**
+ * The same for the second iteration. A separate helper, not a `sectionFor` parameter: anchors from the first pass
+ * fail validation on the second iteration, so mixing up the two sets must be impossible.
+ */
+export function sectionForV2(planIndexes: readonly number[]): RouteSectionResult {
+    return pickStops(mediumRawResultsV2(), planIndexes);
+}
+
+function pickStops(raw: RouteRawResults, planIndexes: readonly number[]): RouteSectionResult {
+    const stops = raw.sections.flatMap((section) => section.stops);
     return {
         stops: planIndexes.map((planIndex) => {
-            const stop = sections.flatMap((section) => section.stops).find((entry) => entry.planIndex === planIndex);
+            const stop = stops.find((entry) => entry.planIndex === planIndex);
             if (stop === undefined) {
                 throw new Error(`the fixture has no section for stop ${String(planIndex)}`);
             }
@@ -102,4 +126,14 @@ export async function buildRoute(worker: FakeWorker): Promise<void> {
     const skeleton = await takeTask(worker, 'route.skeleton');
     await submit(worker, skeleton.taskId, mediumRawResults().skeleton);
     await fillSections(worker);
+}
+
+/** Rebuild after a push: the same plan with second-pass sections (F3, force-push in T15). */
+export async function buildRouteV2(worker: FakeWorker): Promise<void> {
+    const skeleton = await takeTask(worker, 'route.skeleton');
+    await submit(worker, skeleton.taskId, mediumRawResultsV2().skeleton);
+    for (let filled = 0; filled < MEDIUM_SECTION_COUNT; filled += 1) {
+        const task = await takeTask(worker, 'route.section');
+        await submit(worker, task.taskId, sectionForV2(task.planIndexes));
+    }
 }

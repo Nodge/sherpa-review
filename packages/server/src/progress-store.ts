@@ -70,9 +70,19 @@ interface RangeRow extends SqlRow {
     end_line: number;
 }
 
+/** The same row with the mark's source: null for carryover or file reading, otherwise a stop id. */
+interface SourcedRangeRow extends RangeRow {
+    source_stop_id: string | null;
+}
+
 interface StopRow extends SqlRow {
     stop_id: string;
     viewed: number;
+}
+
+/** The same row with a flag marking the stop as already counted in carryover to this snapshot. */
+interface CarriedStopRow extends StopRow {
+    carried: number;
 }
 
 interface SourceStopRow extends SqlRow {
@@ -299,19 +309,28 @@ export class ProgressStore {
      * pin. Its ranges are recorded as its own seen ranges so clearing
      * a file also clears the carried stop mark.
      *
-     * Leave a stop with an existing record in this snapshot alone: carryover does not override
-     * the reviewer's decision.
+     * An existing stop record in this snapshot is never rewritten: carryover does not override
+     * the reviewer's decision. It counts in `kept` only if covered by other ranges:
+     * while the snapshot was being filled, the tab could mark a stop covered by carryover itself,
+     * and the banner count must not depend on who wrote the row first. A decided stop's own ranges
+     * do not count in this check, otherwise "N carried over" would include stops
+     * read manually in the new iteration.
+     *
+     * `kept` counts stops credited in this pass: filling a stop freezes the snapshot again,
+     * and the caller sums the passes. A counted stop is flagged
+     * in `stop_progress.carried` so the next pass does not count it again.
      */
     carryStopsInTransaction(input: StopCarryInput): StopCarryResult {
         const index = indexDiff(input.diff);
-        const decided = new Set(
+        const decided = new Map(
             (
                 this.db
-                    .prepare('SELECT stop_id FROM stop_progress WHERE snapshot_id = ?')
-                    .all(input.snapshotId) as StopRow[]
-            ).map((row) => row.stop_id),
+                    .prepare('SELECT stop_id, viewed, carried FROM stop_progress WHERE snapshot_id = ?')
+                    .all(input.snapshotId) as CarriedStopRow[]
+            ).map((row) => [row.stop_id, { viewed: row.viewed === 1, carried: row.carried === 1 }]),
         );
-        const covered = this.coverageOf(input.diffId);
+        const rows = this.seenRangesOf(input.diffId);
+        const covered = mergeRanges(rows);
         const pinned = new Set(
             (
                 this.db
@@ -322,11 +341,23 @@ export class ProgressStore {
 
         let kept = 0;
         for (const stop of input.stops) {
-            if (decided.has(stop.id)) {
+            const required = requiredRanges(stop.anchors, index);
+            if (required.length === 0) {
                 continue;
             }
-            const required = requiredRanges(stop.anchors, index);
-            if (required.length === 0 || !coversAll(required, covered, pinned)) {
+            const already = decided.get(stop.id);
+            if (already?.carried === true) {
+                continue;
+            }
+            if (already !== undefined) {
+                const others = mergeRanges(rows.filter((row) => row.source_stop_id !== stop.id));
+                if (already.viewed && coversAll(required, others, pinned)) {
+                    this.markStopCarried(input.snapshotId, stop.id);
+                    kept += 1;
+                }
+                continue;
+            }
+            if (!coversAll(required, covered, pinned)) {
                 continue;
             }
             this.writeCarriedStop(input.snapshotId, input.diffId, stop.id, required);
@@ -606,27 +637,14 @@ export class ProgressStore {
         return { ranges: written.size, files, skipped: false };
     }
 
-    /** Viewed ranges for an iteration, grouped by file and side and merged into continuous spans. */
-    private coverageOf(diffId: HostId): Map<string, LineRange[]> {
-        const rows = this.db
+    /** Iteration seen ranges in merge order. `source_stop_id` identifies the mark's source. */
+    private seenRangesOf(diffId: HostId): SourcedRangeRow[] {
+        return this.db
             .prepare(
-                `SELECT file_id, side, start_line, end_line FROM file_seen_ranges
+                `SELECT file_id, side, start_line, end_line, source_stop_id FROM file_seen_ranges
                   WHERE diff_id = ? ORDER BY file_id, side, start_line`,
             )
-            .all(diffId) as RangeRow[];
-        const covered = new Map<string, LineRange[]>();
-        for (const row of rows) {
-            const key = `${row.file_id} ${sideOf(row.side)}`;
-            const spans = covered.get(key) ?? [];
-            const last = spans.at(-1);
-            if (last !== undefined && row.start_line <= last.end + 1) {
-                spans[spans.length - 1] = { start: last.start, end: Math.max(last.end, row.end_line) };
-            } else {
-                spans.push({ start: row.start_line, end: row.end_line });
-            }
-            covered.set(key, spans);
-        }
-        return covered;
+            .all(diffId) as SourcedRangeRow[];
     }
 
     /** A carried stop mark with its ranges, just like a manual mark. */
@@ -655,11 +673,19 @@ export class ProgressStore {
         }
         this.db
             .prepare(
-                `INSERT INTO stop_progress (snapshot_id, stop_id, viewed, updated_at) VALUES (?, ?, 1, ?)
+                `INSERT INTO stop_progress (snapshot_id, stop_id, viewed, carried, updated_at)
+                 VALUES (?, ?, 1, 1, ?)
                  ON CONFLICT(snapshot_id, stop_id) DO UPDATE SET
-                    viewed = 1, updated_at = excluded.updated_at`,
+                    viewed = 1, carried = 1, updated_at = excluded.updated_at`,
             )
             .run(snapshotId, stopId, this.now().toISOString());
+    }
+
+    /** Flags an existing mark as counted in carryover, leaving ranges and the reviewer's decision intact. */
+    private markStopCarried(snapshotId: string, stopId: string): void {
+        this.db
+            .prepare('UPDATE stop_progress SET carried = 1 WHERE snapshot_id = ? AND stop_id = ?')
+            .run(snapshotId, stopId);
     }
 }
 
@@ -702,6 +728,23 @@ function requiredRanges(anchors: readonly RouteAnchor[], index: ReadonlyMap<stri
         }
     }
     return ranges;
+}
+
+/** Ranges by file and side, merged into continuous spans. The query orders the rows. */
+function mergeRanges(rows: readonly SourcedRangeRow[]): Map<string, LineRange[]> {
+    const covered = new Map<string, LineRange[]>();
+    for (const row of rows) {
+        const key = `${row.file_id} ${sideOf(row.side)}`;
+        const spans = covered.get(key) ?? [];
+        const last = spans.at(-1);
+        if (last !== undefined && row.start_line <= last.end + 1) {
+            spans[spans.length - 1] = { start: last.start, end: Math.max(last.end, row.end_line) };
+        } else {
+            spans.push({ start: row.start_line, end: row.end_line });
+        }
+        covered.set(key, spans);
+    }
+    return covered;
 }
 
 /** Each required range lies within a merged seen range or is covered by a file pin. */

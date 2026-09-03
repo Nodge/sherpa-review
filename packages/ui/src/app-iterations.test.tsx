@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot, UiRouteState, UiState } from '@sherpa/protocol';
+import {
+    fixtureIteration,
+    MEDIUM_DIFF_ID,
+    MEDIUM_DIFF_ID_V2,
+    MEDIUM_HEAD_COMMIT,
+    MEDIUM_HEAD_COMMIT_V2,
+    routeFixtures,
+} from '@sherpa/fixtures';
+import type { Iteration, RouteSnapshot, UiRouteState, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -68,12 +75,28 @@ interface Mounted {
     readonly host: HTMLElement;
     readonly session: SessionStore;
     readonly settle: () => Promise<void>;
+    /** How often the tab called each endpoint. The diff and lenses have no revision of their own. */
+    readonly calls: (endpoint: string) => number;
+    /** A new state snapshot, as over SSE. A route change also increases `routeRevision`, which triggers a reload. */
+    readonly push: (patch: { readonly iterations?: readonly Iteration[]; readonly route?: UiRouteState }) => void;
+}
+
+/** A PR iteration in the state list. `active` is the one returned by endpoints without parameters. */
+function iteration(diffId: string, headCommit: string, status: Iteration['status']): Iteration {
+    return {
+        diffId,
+        baseCommit: READY_SNAPSHOT.baseCommit,
+        headCommit,
+        createdAt: '2026-08-21T10:00:00.000Z',
+        status,
+    };
 }
 
 function mountApp(options: {
     readonly route: UiRouteState;
     readonly view?: ViewId;
     readonly routeFilter?: RouteFilter;
+    readonly iterations?: readonly Iteration[];
 }): Mounted {
     const originalFetch = globalThis.fetch;
     const globals = globalThis as { ResizeObserver?: unknown };
@@ -90,11 +113,16 @@ function mountApp(options: {
         }
     };
 
+    // The route and state snapshot change during the test. `push` feeds the endpoint and subscription.
+    let route = options.route;
     const json = (body: unknown): Response =>
         new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    const calls = new Map<string, number>();
     globalThis.fetch = (input: RequestInfo | URL): Promise<Response> => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        switch (url.split('?')[0] ?? '') {
+        const endpoint = url.split('?')[0] ?? '';
+        calls.set(endpoint, (calls.get(endpoint) ?? 0) + 1);
+        switch (endpoint) {
             case UI_ENDPOINTS.reviewDiff:
                 return Promise.resolve(json({ diff: DATA.diff }));
             case UI_ENDPOINTS.reviewLenses:
@@ -104,7 +132,7 @@ function mountApp(options: {
             case UI_ENDPOINTS.reviewProgress:
                 return Promise.resolve(json({ files: [], stops: [], progressRevision: 1 }));
             case UI_ENDPOINTS.reviewRoute:
-                return Promise.resolve(json({ route: options.route, routeRevision: 1 }));
+                return Promise.resolve(json({ route, routeRevision: snapshot.routeRevision ?? 1 }));
             case UI_ENDPOINTS.reviewChat:
                 return Promise.resolve(json({ exchanges: [], notes: [], chatRevision: 1 }));
             default:
@@ -119,9 +147,9 @@ function mountApp(options: {
         reviewHost: 'fixture',
         pr: DATA.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
-        iterations: [],
+        iterations: [...(options.iterations ?? [])],
     };
-    const snapshot: StoreSnapshot = {
+    let snapshot: StoreSnapshot = {
         connection: 'online',
         state,
         error: null,
@@ -130,8 +158,12 @@ function mountApp(options: {
         routeRevision: 1,
         chatRevision: 1,
     };
+    const listeners = new Set<() => void>();
     const store: Store = {
-        subscribe: () => () => undefined,
+        subscribe: (listener) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
         getSnapshot: () => snapshot,
         close: () => undefined,
     };
@@ -168,7 +200,26 @@ function mountApp(options: {
         }
     };
 
-    return { host, session, settle };
+    const push = (patch: { readonly iterations?: readonly Iteration[]; readonly route?: UiRouteState }): void => {
+        if (patch.route !== undefined) {
+            route = patch.route;
+        }
+        snapshot = {
+            ...snapshot,
+            routeRevision: (snapshot.routeRevision ?? 0) + (patch.route === undefined ? 0 : 1),
+            state:
+                patch.iterations === undefined
+                    ? snapshot.state
+                    : ({ ...snapshot.state, iterations: [...patch.iterations] } as UiState),
+        };
+        act(() => {
+            for (const listener of listeners) {
+                listener();
+            }
+        });
+    };
+
+    return { host, session, settle, calls: (endpoint) => calls.get(endpoint) ?? 0, push };
 }
 
 describe('iteration banners outside the route tab', () => {
@@ -215,5 +266,76 @@ describe('validity of the "what is new" filter', () => {
         await mounted.settle();
 
         expect(mounted.session.getSnapshot().routeFilter).toBe('new');
+    });
+});
+
+/**
+ * The diff and lenses have no revision of their own. They are immutable within an iteration. Reload them
+ * when "without parameters" starts meaning a different iteration, which happens when a new
+ * skeleton is accepted, not at the push itself. The whole route remains readable on the previous iteration without anchor drift
+ * (task breakdown decision 10).
+ */
+describe('reloading the diff and lenses when the iteration changes', () => {
+    const V1_ACTIVE = iteration(MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, 'active');
+    const V1_PREVIOUS = { ...V1_ACTIVE, status: 'previous' } as const;
+    const V2_ACTIVE = iteration(MEDIUM_DIFF_ID_V2, MEDIUM_HEAD_COMMIT_V2, 'active');
+    const SNAPSHOT_V2: RouteSnapshot = {
+        ...READY_SNAPSHOT,
+        snapshotId: 'route-medium-a71d4e2',
+        diffId: MEDIUM_DIFF_ID_V2,
+        commit: MEDIUM_HEAD_COMMIT_V2,
+        previousSnapshotId: READY_SNAPSHOT.snapshotId,
+    };
+
+    it('keeps the diff on push while a route exists because the snapshot stays on the previous iteration', async () => {
+        const mounted = mountApp({ route: routeState(), iterations: [V1_ACTIVE] });
+        await mounted.settle();
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(1);
+        expect(mounted.calls(UI_ENDPOINTS.reviewLenses)).toBe(1);
+
+        mounted.push({ iterations: [V1_PREVIOUS, V2_ACTIVE], route: routeState({ stale: STALE }) });
+        await mounted.settle();
+
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(1);
+        expect(mounted.calls(UI_ENDPOINTS.reviewLenses)).toBe(1);
+    });
+
+    it('reloads the diff and lenses when the route moves to a new iteration', async () => {
+        const mounted = mountApp({ route: routeState(), iterations: [V1_ACTIVE] });
+        await mounted.settle();
+
+        mounted.push({ iterations: [V1_PREVIOUS, V2_ACTIVE], route: routeState({ stale: STALE }) });
+        await mounted.settle();
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(1);
+
+        mounted.push({ route: routeState({ snapshot: SNAPSHOT_V2 }) });
+        await mounted.settle();
+
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(2);
+        expect(mounted.calls(UI_ENDPOINTS.reviewLenses)).toBe(2);
+    });
+
+    it('moves the reader to the new iteration on push when there is no route', async () => {
+        const mounted = mountApp({
+            route: routeState({ phase: 'none', snapshot: null }),
+            iterations: [V1_ACTIVE],
+        });
+        await mounted.settle();
+
+        mounted.push({ iterations: [V1_PREVIOUS, V2_ACTIVE] });
+        await mounted.settle();
+
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(2);
+        expect(mounted.calls(UI_ENDPOINTS.reviewLenses)).toBe(2);
+    });
+
+    it('does not fetch the diff for other state changes', async () => {
+        const mounted = mountApp({ route: routeState(), iterations: [V1_ACTIVE] });
+        await mounted.settle();
+
+        mounted.push({ iterations: [V1_ACTIVE] });
+        await mounted.settle();
+
+        expect(mounted.calls(UI_ENDPOINTS.reviewDiff)).toBe(1);
     });
 });

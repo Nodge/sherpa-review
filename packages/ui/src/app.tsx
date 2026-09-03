@@ -302,6 +302,21 @@ export function App({ store, session, token }: AppProps) {
     /** The tab shows a slice between iterations (M4-T12). The diff loads through the `base`/`head` endpoint. */
     const sliceBase = resolved.slice?.base ?? null;
     const sliceHead = resolved.slice?.head ?? null;
+    /**
+     * Reload key for the diff and lenses without parameters. They have no revision of their own and learn about
+     * a push only here. While the route snapshot belongs to a previous iteration, the key keeps that diff
+     * (stop anchors address files by their own iteration's `fileId`, task breakdown decision 10) and moves
+     * when a new skeleton is accepted. Without a snapshot, it follows the active iteration in state.
+     * `activeDiffId` does not work here. Its fallback `facts.diffId` comes from the diff response itself
+     * and would trigger two requests on open. The key does not move a selected iteration, snapshot or slice.
+     */
+    const activeIterationKey = useMemo(() => {
+        if (viewDiffId !== null || sliceBase !== null) {
+            return null;
+        }
+        const active = iterations.find((iteration) => iteration.status === 'active')?.diffId ?? null;
+        return active === null ? null : (facts.snapshot?.diffId ?? active);
+    }, [facts.snapshot, iterations, sliceBase, viewDiffId]);
     const viewKey = `${reviewKey}\u0000${viewDiffId ?? ''}\u0000${viewSnapshotId ?? ''}\u0000${sliceBase ?? ''}`;
     const storedReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
     /**
@@ -600,7 +615,18 @@ export function App({ store, session, token }: AppProps) {
         return () => {
             alive = false;
         };
-    }, [reviewHost, reviewKey, reviewReady, sliceBase, sliceHead, token, viewDiffId, viewKey, viewPending]);
+    }, [
+        activeIterationKey,
+        reviewHost,
+        reviewKey,
+        reviewReady,
+        sliceBase,
+        sliceHead,
+        token,
+        viewDiffId,
+        viewKey,
+        viewPending,
+    ]);
 
     // Overview and Full diff filters need lenses, but load them independently of the raw diff.
     // A slice has no lenses. Ownership and audit scope use iteration files, while a slice has its own `fileId` values.
@@ -638,7 +664,7 @@ export function App({ store, session, token }: AppProps) {
         };
         // Include `viewKey` in dependencies for a fresh closure. A response that lags behind a selection change
         // must not overwrite the key of an already loaded diff.
-    }, [reviewHost, reviewKey, reviewReady, sliceBase, token, viewKey, viewPending]);
+    }, [activeIterationKey, reviewHost, reviewKey, reviewReady, sliceBase, token, viewKey, viewPending]);
 
     // App owns one ProgressWriter. Server snapshots go through its merge,
     // and its own write event does not trigger an extra refresh unless there is a revision gap.

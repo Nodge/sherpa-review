@@ -387,6 +387,15 @@ export const MIGRATIONS: readonly Migration[] = [
             UPDATE agent_notes SET origin_anchor = anchor, origin_commit = commit_hash;
         `,
     },
+    {
+        // Track mark carryover into a snapshot (M4-T13). Freezing a snapshot repeats when
+        // a stop is filled, while "N of M carried over" adds up across passes. Without recording
+        // that a stop has already been counted, the second pass would count it again.
+        name: '015-stop-carried',
+        sql: `
+            ALTER TABLE stop_progress ADD COLUMN carried INTEGER NOT NULL DEFAULT 0;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

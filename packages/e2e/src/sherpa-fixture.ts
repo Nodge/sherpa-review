@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { Page } from '@playwright/test';
 import { expect, test as base } from '@playwright/test';
 import { FakeWorker } from '@sherpa/cli/fake-worker';
 
@@ -56,6 +57,31 @@ export const test = base.extend<SherpaFixtures>({
 });
 
 export { expect };
+
+/** Server bearer token, stored in the fragment of the URL printed by `sherpa up`. */
+export function sherpaToken(server: SherpaServerHandle): string {
+    const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('t');
+    if (token === null || token === '') {
+        throw new Error(`no token in the fragment of ${server.url}`);
+    }
+    return token;
+}
+
+/** Headers for calling server endpoints directly, bypassing the UI and using the same token. */
+export function sherpaAuth(server: SherpaServerHandle): Record<string, string> {
+    return { Authorization: `Bearer ${sherpaToken(server)}` };
+}
+
+/**
+ * Dev endpoint `POST /api/dev/fixture/advance-iteration` (`UI_DEV_ENDPOINTS`): the fixture PR
+ * "receives a push", making the next declared iteration active. It leaves the tab alone.
+ * The iteration change reaches it over SSE.
+ */
+export async function advanceIteration(page: Page, server: SherpaServerHandle): Promise<void> {
+    const url = new URL('/api/dev/fixture/advance-iteration', server.url).href;
+    const response = await page.request.post(url, { headers: sherpaAuth(server) });
+    expect(response.status(), await response.text()).toBe(200);
+}
 
 async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): Promise<SherpaServerHandle> {
     const ownsSherpaDir = options?.sherpaDir === undefined;

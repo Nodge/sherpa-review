@@ -532,6 +532,75 @@ describe('reading progress store', () => {
                 { stopId: 's02', viewed: true },
             ]);
         });
+
+        it('counts a tab\'s mark for the same ranges as carried without rewriting it', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
+            // The tab marked the stop based on carried ranges before the snapshot was frozen.
+            store.setStopViewed('snap-2', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+
+            const carried = store.carryStopsInTransaction({
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [{ id: 's01', anchors }],
+                diff: diffWithAddedLines(),
+            });
+
+            expect(carried.kept).toBe(1);
+            expect(store.readStops('snap-2')).toEqual([{ stopId: 's01', viewed: true }]);
+        });
+
+        it('does not count a manually read stop as carried because its own mark does not count', () => {
+            const store = new ProgressStore({ db: open() });
+            // Nothing to carry over: the reviewer read the stop while the snapshot was being filled.
+            store.setStopViewed('snap-2', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+
+            const carried = store.carryStopsInTransaction({
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [{ id: 's01', anchors }],
+                diff: diffWithAddedLines(),
+            });
+
+            expect(carried.kept).toBe(0);
+            expect(store.readStops('snap-2')).toEqual([{ stopId: 's01', viewed: true }]);
+        });
+
+        it('does not count carryover again when refreezing a snapshot after filling a stop', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
+            const input = {
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [{ id: 's01', anchors }],
+                diff: diffWithAddedLines(),
+            };
+
+            expect(store.carryStopsInTransaction(input).kept).toBe(1);
+            expect(store.carryStopsInTransaction(input).kept).toBe(0);
+            expect(store.readStops('snap-2')).toEqual([{ stopId: 's01', viewed: true }]);
+        });
+
+        it('does not double-count a stop covered by a file pin when refreezing', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            store.setFileViewed(V1, fileIdOf(V1, CLOCK), true);
+            const input = {
+                snapshotId: 'snap-2',
+                diffId: V1,
+                stops: [{ id: 's01', anchors }],
+                diff: diffWithAddedLines(),
+            };
+
+            expect(store.carryStopsInTransaction(input).kept).toBe(1);
+            expect(store.carryStopsInTransaction(input).kept).toBe(0);
+        });
     });
 });
 
