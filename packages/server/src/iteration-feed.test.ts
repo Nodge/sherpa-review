@@ -589,6 +589,129 @@ describe('iteration feed', () => {
         expect(progressCarries()).toEqual([]);
     });
 
+    /**
+     * Host with a slice counter and the ability to repeat a watcher event with the same list, as when
+     * the review host polls and returns the same response twice.
+     */
+    function replayableHost(): {
+        host: ReturnType<typeof makeFixtureHost>;
+        slices: string[];
+        replay: () => void;
+    } {
+        const host = makeFixtureHost('medium');
+        const slices: string[] = [];
+        const original = host.getDiff.bind(host);
+        host.getDiff = (slice) => {
+            if (slice !== undefined) {
+                slices.push(`${slice.base} ${slice.head}`);
+            }
+            return original(slice);
+        };
+        let listener: ((iterations: Iteration[]) => void) | null = null;
+        const watch = host.watchIterations.bind(host);
+        host.watchIterations = (onChange) => {
+            listener = onChange;
+            return watch(onChange);
+        };
+        return {
+            host,
+            slices,
+            replay: () => {
+                const notify = listener;
+                if (notify === null) {
+                    throw new Error('iteration watcher is not subscribed yet');
+                }
+                void host.listIterations().then(notify);
+            },
+        };
+    }
+
+    /**
+     * Note carrier that counts effective migrations separately. Calling
+     * `migrateNotes` again for notes already carried over changes nothing and does not count.
+     */
+    function countingNotes(seed: readonly AgentNote[]): {
+        chat: ChatStore;
+        carrier: NoteCarrier;
+        effective: string[];
+    } {
+        const notes = makeNotes(seed);
+        const effective: string[] = [];
+        const carrier: NoteCarrier = {
+            adoptLegacyAnchors: (diffId) => notes.carrier.adoptLegacyAnchors(diffId),
+            read: () => notes.carrier.read(),
+            migrateNotes: (from, to, map, fileIdOf, headCommit) => {
+                const migration = notes.carrier.migrateNotes(from, to, map, fileIdOf, headCommit);
+                if (migration.moved + migration.lost > 0) {
+                    effective.push(`${from} ${to}`);
+                }
+                return migration;
+            },
+        };
+        return { chat: notes.chat, carrier, effective };
+    }
+
+    /**
+     * Both carryovers completed. Note anchors are on the new iteration, and progress is in the journal.
+     * A note on rewritten lines loses its anchor and keeps the previous one, hence `some`.
+     */
+    async function waitForBothCarries(chat: ChatStore): Promise<void> {
+        await waitFor(() => chat.read().notes.some((note) => note.anchor.diffId === V2.diffId));
+        await waitFor(() => progressCarries().length > 0);
+    }
+
+    it('a repeated event with the same iteration list does not repeat carryovers', async () => {
+        const { host, slices, replay } = replayableHost();
+        const notes = countingNotes(NOTES);
+        makeFeed(host, notes.carrier, makeProgress());
+        listen();
+        await waitFor(() => store.get(V1.diffId) !== null);
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+
+        host.advanceIteration();
+        await waitForBothCarries(notes.chat);
+
+        // Host polling returns the same list twice more. Each event restarts both
+        // carryovers, but they have no further effect because the slice is cached and the carryover pair is in the journal.
+        replay();
+        replay();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        expect(slices).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(progressCarries()).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(notes.effective).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(notes.chat.read().notes).toEqual(NOTES_AFTER_PUSH);
+    });
+
+    it('two consecutive events during carryover share one slice and one carryover', async () => {
+        const { host, slices, replay } = replayableHost();
+        const original = host.getDiff.bind(host);
+        host.getDiff = async (slice) => {
+            if (slice === undefined) {
+                return original(slice);
+            }
+            // Calculating a slice on the review host takes seconds. Later events arrive before carryover finishes.
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            return original(slice);
+        };
+        const notes = countingNotes(NOTES);
+        makeFeed(host, notes.carrier, makeProgress());
+        listen();
+        await waitFor(() => store.get(V1.diffId) !== null);
+        seedSeenRange(V1.diffId, fixtureFileId(0));
+
+        host.advanceIteration();
+        replay();
+        replay();
+
+        await waitForBothCarries(notes.chat);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        expect(slices).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(progressCarries()).toEqual([`${V1.diffId} ${V2.diffId}`]);
+        expect(notes.effective).toEqual([`${V1.diffId} ${V2.diffId}`]);
+    });
+
     it('the last listener leaving stops the host subscription', () => {
         const { host } = makeFeed();
         const release = listen();

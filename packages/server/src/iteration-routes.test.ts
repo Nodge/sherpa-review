@@ -27,9 +27,11 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { databasePathFor } from './paths.js';
+import { openDatabase } from './db.js';
+import { MIGRATIONS } from './migrations.js';
+import { databasePathFor, prStateDirOf } from './paths.js';
 import { requiredSeenRanges } from './progress-store.js';
-import { asRawText, mediumRawResults, mediumRawResultsV2 } from './route/fixture-support.js';
+import { asRawText, mediumRawResults, mediumRawResultsV2, mediumReadySnapshot } from './route/fixture-support.js';
 import type { TaskRecord } from './queue.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
@@ -738,6 +740,18 @@ describe('progress carryover between iterations', () => {
         await server.route.warmup();
         await expect.poll(() => seenRanges(V2.diffId).length).toBe(again);
         expect(db().prepare('SELECT COUNT(*) AS count FROM progress_carries').get()).toMatchObject({ count: 1 });
+
+        // The second tab subscribes to the same feed: the host subscription is already active, so opening
+        // it requests neither a new slice nor a new carryover.
+        const slicesBefore = slices.length;
+        const second = await openSse(
+            `http://127.0.0.1:${String(server.port)}${UI_ENDPOINTS.events}?token=${server.token}`,
+        );
+        streams.push(second);
+        await nextState(second);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(slices).toHaveLength(slicesBefore);
+        expect(seenRanges(V2.diffId)).toHaveLength(again);
     });
 
     it('a rebuild after a push keeps untouched stops marked as viewed', async () => {
@@ -999,6 +1013,182 @@ describe('regeneration after a push: what changed context', () => {
         const cited = snapshot?.stops.find((stop) => stop.id === 's03');
         expect(cited?.change?.threadIds).toEqual([]);
         expect(cited?.validationNotes).toContain('Link to unknown thread 4820242 removed.');
+    });
+});
+
+/**
+ * A database accumulated before M4 (M4-T15): the server starts with it, migrates the schema, and
+ * keeps working. The old snapshot is readable, progress and note anchors survive.
+ */
+describe('server on an M3 dogfooding database', () => {
+    let sherpaDir: string;
+    let servers: SherpaServer[];
+    let streams: SseStream[];
+
+    beforeEach(async () => {
+        sherpaDir = await makeTempSherpaDir();
+        servers = [];
+        streams = [];
+    });
+
+    afterEach(async () => {
+        for (const stream of streams) {
+            stream.close();
+        }
+        for (const server of servers) {
+            await server.close();
+        }
+        await removeTempSherpaDir(sherpaDir);
+    });
+
+    const AT = '2026-08-20T10:00:00.000Z';
+    /** First-iteration file untouched by the push: its progress and note carry over in full. */
+    const UNTOUCHED_PATH = 'services/orders/src/domain/edit-window.ts';
+
+    function untouchedFileId(): string {
+        const fileId = fixtureData('medium')
+            .iterations[0]?.diff.files.find((file) => file.path === UNTOUCHED_PATH)?.fileId;
+        if (fileId === undefined) {
+            throw new Error(`first iteration of medium fixture has no file ${UNTOUCHED_PATH}`);
+        }
+        return fileId;
+    }
+
+    /**
+     * The database as an M3 server would leave it: snapshot blob in `route_state`, progress without
+     * an iteration dimension, note anchor without `diffId`. The test sets the snapshot `diffId`, which
+     * determines whether the host recognizes the iteration where the reviewer left off.
+     */
+    function seedLegacyDatabase(diffId: string): string {
+        fsSync.mkdirSync(prStateDirOf(sherpaDir, PR), { recursive: true });
+        const snapshot = { ...mediumReadySnapshot(), diffId };
+        const anchor = { fileId: untouchedFileId(), path: UNTOUCHED_PATH, side: 'new', start: 24, end: 32 };
+        const beforeIterations = MIGRATIONS.slice(
+            0,
+            MIGRATIONS.findIndex((migration) => migration.name === '010-iterations'),
+        );
+
+        const db = openDatabase(databasePathFor(sherpaDir, PR), beforeIterations);
+        db.prepare(
+            `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
+             VALUES (1, 'ready', 0, ?, '[]', ?)`,
+        ).run(JSON.stringify(snapshot), AT);
+        db.prepare('INSERT INTO stop_progress (stop_id, viewed, updated_at) VALUES (?, 1, ?)').run('s01', AT);
+        db.prepare('INSERT INTO file_progress (file_id, viewed, updated_at) VALUES (?, 1, ?)').run(
+            untouchedFileId(),
+            AT,
+        );
+        db.prepare(
+            `INSERT INTO file_seen_ranges (file_id, side, start_line, end_line, source_stop_id)
+             VALUES (?, 'new', 24, 32, 's01')`,
+        ).run(untouchedFileId());
+        db.prepare(
+            `INSERT INTO chat_exchanges (
+                id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
+                created_at, updated_at
+             ) VALUES (1, 'question', ?, 'done', 'answer', NULL, NULL, NULL, ?, ?, ?)`,
+        ).run(JSON.stringify(anchor), snapshot.commit, AT, AT);
+        db.prepare(
+            `INSERT INTO agent_notes (id, exchange_id, anchor, text, commit_hash, created_at)
+             VALUES (1, 1, ?, 'answer', ?, ?)`,
+        ).run(JSON.stringify(anchor), snapshot.commit, AT);
+        db.close();
+        return snapshot.snapshotId;
+    }
+
+    /** Server on an already seeded database, with an open SSE channel: otherwise the iteration feed never starts. */
+    async function start(): Promise<{ server: SherpaServer; stream: SseStream }> {
+        const host = makeFixtureHost('medium');
+        const server = await startServer({
+            prKey: PR,
+            sherpaDir,
+            longPollSeconds: 0.3,
+            reviewHostFactory: () => ({
+                name: 'fixture',
+                host,
+                advanceIteration: () => host.advanceIteration(),
+            }),
+        });
+        servers.push(server);
+        const stream = await openSse(
+            `http://127.0.0.1:${String(server.port)}${UI_ENDPOINTS.events}?token=${server.token}`,
+        );
+        streams.push(stream);
+        await nextState(stream);
+        await server.route.warmup();
+        return { server, stream };
+    }
+
+    async function readProgress(server: SherpaServer, query = '') {
+        const response = await get(server.port, `${UI_ENDPOINTS.reviewProgress}${query}`, server.token);
+        expect(response.status).toBe(200);
+        return uiReviewProgressResponseSchema.parse(await response.json());
+    }
+
+    async function readChat(server: SherpaServer) {
+        const response = await get(server.port, UI_ENDPOINTS.reviewChat, server.token);
+        expect(response.status).toBe(200);
+        return uiChatResponseSchema.parse(await response.json());
+    }
+
+    it('snapshot, progress and note anchors survive on the active iteration', async () => {
+        const snapshotId = seedLegacyDatabase(V1.diffId);
+        const { server, stream } = await start();
+
+        // The previous server snapshot remains the current route and can be read by its id.
+        const snapshots = uiReviewSnapshotsResponseSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.reviewSnapshots, server.token)).json(),
+        ).snapshots;
+        expect(snapshots.map((snapshot) => [snapshot.snapshotId, snapshot.status])).toEqual([
+            [snapshotId, 'current'],
+        ]);
+        const past = uiReviewRouteResponseSchema.parse(
+            await (await get(server.port, `${UI_ENDPOINTS.reviewRoute}?snapshot=${snapshotId}`, server.token)).json(),
+        ).route;
+        expect(past.phase).toBe('ready');
+        expect(past.snapshot?.snapshotId).toBe(snapshotId);
+        expect(past.stale).toBeNull();
+
+        // Progress moved to the snapshot iteration, which is also active: the reviewer sees their reading progress.
+        const progress = await readProgress(server);
+        expect(progress.files.find((file) => file.fileId === untouchedFileId())?.seenRanges).toEqual([
+            { side: 'new', start: 24, end: 32 },
+        ]);
+        expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
+
+        // The note anchor named no iteration: the feed adopted it into the active one.
+        await expect.poll(async () => (await readChat(server)).notes[0]?.anchor.diffId).toBe(V1.diffId);
+
+        // Everything works as usual from here: a push carries over both progress and the anchor.
+        expect((await postJson(server.port, UI_DEV_ENDPOINTS.fixtureAdvanceIteration, {}, server.token)).status).toBe(
+            200,
+        );
+        await nextState(stream);
+        await expect
+            .poll(async () => (await readProgress(server, `?diffId=${V2.diffId}`)).files.length)
+            .toBeGreaterThan(0);
+        await expect.poll(async () => (await readChat(server)).notes[0]?.anchor.diffId).toBe(V2.diffId);
+    });
+
+    it('snapshot on an iteration absent from the host: route is readable but its progress is orphaned', async () => {
+        const snapshotId = seedLegacyDatabase('iter-missing');
+        const { server } = await start();
+
+        // The route is readable: the snapshot is immutable and lives in its own blob.
+        const route = uiReviewRouteResponseSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.reviewRoute, server.token)).json(),
+        ).route;
+        expect(route.snapshot?.snapshotId).toBe(snapshotId);
+        // The host does not know the snapshot iteration, and a different one is active: the route is stale.
+        expect(route.stale).toMatchObject({ prDiffId: V1.diffId, newIterations: 1 });
+
+        // Migration moved progress to the snapshot iteration, which the server does not know: there is
+        // no source to carry over from (`latestDiffIdWithProgress` only checks saved iterations), so the
+        // active iteration has no reading progress. A route rebuild fixes this database, migration does not.
+        expect((await readProgress(server)).files).toEqual([]);
+        expect((await readProgress(server, '?diffId=iter-missing')).files).toHaveLength(1);
+        // The note anchor named no iteration at all: the active one adopts it, so it is still there.
+        await expect.poll(async () => (await readChat(server)).notes[0]?.anchor.diffId).toBe(V1.diffId);
     });
 });
 

@@ -3,7 +3,15 @@ import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, MEDIUM_HEAD_COMMIT_V2 } from '@sher
 
 import { answerChat, buildRoute, buildRouteV2, takeTask } from './route-worker.js';
 import type { SherpaServerHandle } from './sherpa-fixture.js';
-import { advanceIteration, expect, sherpaAuth, test } from './sherpa-fixture.js';
+import {
+    advanceIteration,
+    diffOf,
+    expect,
+    fragmentParam,
+    progressOf,
+    sherpaAuth,
+    test,
+} from './sherpa-fixture.js';
 
 /**
  * F3 (brief §7): the author pushed another commit while the reviewer was reading. The route declares itself
@@ -297,14 +305,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
 
 /** The active iteration file's `fileId`: a question anchor addresses the file by it (chat contract). */
 async function fileIdOf(page: Page, server: SherpaServerHandle, path: string): Promise<string> {
-    const response = await page.request.get(new URL('/api/ui/review/diff', server.url).href, {
-        headers: sherpaAuth(server),
-    });
-    expect(response.status(), await response.text()).toBe(200);
-    const body = (await response.json()) as {
-        readonly diff: { readonly files: readonly { readonly fileId: string; readonly path: string }[] };
-    };
-    const file = body.diff.files.find((entry) => entry.path === path);
+    const file = (await diffOf(page, server)).find((entry) => entry.path === path);
     if (file === undefined) {
         throw new Error(`no file ${path} in the active iteration`);
     }
@@ -313,17 +314,6 @@ async function fileIdOf(page: Page, server: SherpaServerHandle, path: string): P
 
 /** The number of read ranges in the active iteration shows whether carryover has arrived. */
 async function seenRangeCount(page: Page, server: SherpaServerHandle): Promise<number> {
-    const response = await page.request.get(new URL('/api/ui/review/progress', server.url).href, {
-        headers: sherpaAuth(server),
-    });
-    expect(response.status(), await response.text()).toBe(200);
-    const body = (await response.json()) as {
-        readonly files: readonly { readonly seenRanges: readonly unknown[] }[];
-    };
-    return body.files.reduce((total, file) => total + file.seenRanges.length, 0);
-}
-
-/** URL fragment parameter. The UI stores iteration selection and filters there. */
-function fragmentParam(page: Page, key: string): Promise<string | null> {
-    return page.evaluate((name) => new URLSearchParams(location.hash.slice(1)).get(name), key);
+    const { files } = await progressOf(page, server);
+    return files.reduce((total, file) => total + file.seenRanges.length, 0);
 }

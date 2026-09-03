@@ -338,6 +338,97 @@ describe('storage', () => {
         }
     });
 
+    // The M3 dogfooding database migrates to iterations through the full 010…015 migration chain at once.
+    it('the migration chain upgrades an M3 database to iterations without losing data', () => {
+        const file = `${sherpaDir}/m3-to-m4.db`;
+        const at = '2026-08-25T10:00:00.000Z';
+        const snapshot = {
+            snapshotId: 'snap-m3',
+            commit: 'head-m3',
+            diffId: 'iter-m3',
+            createdAt: at,
+            provenance: { harness: 'claude-code', model: 'opus' },
+            summary: 'route built before iterations',
+            stops: [],
+            tourOrder: [],
+            contentHash: 'abcdef123456',
+        };
+        // The M3 note anchor names no iteration, since the schema had no such field yet.
+        const anchor = { fileId: 'file-1', path: 'src/main.ts', side: 'new', start: 10, end: 12 };
+
+        const before = openDatabase(file, migrationsBefore('010-iterations'));
+        before
+            .prepare(
+                `INSERT INTO route_state (id, phase, small_pr, snapshot, intents, updated_at)
+                 VALUES (1, 'ready', 0, ?, '[]', ?)`,
+            )
+            .run(JSON.stringify(snapshot), at);
+        before.prepare('INSERT INTO stop_progress (stop_id, viewed, updated_at) VALUES (?, 1, ?)').run('s01', at);
+        before.prepare('INSERT INTO stop_progress (stop_id, viewed, updated_at) VALUES (?, 1, ?)').run('s03', at);
+        before.prepare('INSERT INTO file_progress (file_id, viewed, updated_at) VALUES (?, 1, ?)').run('file-1', at);
+        before
+            .prepare(
+                `INSERT INTO file_seen_ranges (file_id, side, start_line, end_line, source_stop_id)
+                 VALUES ('file-1', 'new', 3, 7, 's01')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO chat_exchanges (
+                    id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
+                    created_at, updated_at
+                 ) VALUES (1, 'question', ?, 'done', 'answer', NULL, NULL, NULL, 'head-m3', ?, ?)`,
+            )
+            .run(JSON.stringify(anchor), at, at);
+        before
+            .prepare(
+                `INSERT INTO agent_notes (id, exchange_id, anchor, text, commit_hash, created_at)
+                 VALUES (1, 1, ?, 'answer', 'head-m3', ?)`,
+            )
+            .run(JSON.stringify(anchor), at);
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(readSchemaVersion(after)).toBe(String(MIGRATIONS.length));
+
+            // The snapshot moved as an unchanged blob and remained the current PR route.
+            const store = new RouteStore({ db: after });
+            expect(store.current()?.snapshotId).toBe('snap-m3');
+            expect(after.prepare('SELECT snapshot_json FROM route_snapshots').get()).toMatchObject({
+                snapshot_json: JSON.stringify(snapshot),
+            });
+
+            // Stop marks are keyed by snapshot, not PR. `carried` describes carryover, which
+            // these marks never underwent. The reviewer set them by hand.
+            expect(after.prepare('SELECT snapshot_id, stop_id, carried FROM stop_progress ORDER BY stop_id').all()).toEqual([
+                { snapshot_id: 'snap-m3', stop_id: 's01', carried: 0 },
+                { snapshot_id: 'snap-m3', stop_id: 's03', carried: 0 },
+            ]);
+
+            // The M3 database has no iterations, so progress moves to the snapshot iteration:
+            // the one the reviewer read. `LEGACY_DIFF_ID` is only for a database without a route.
+            expect(after.prepare('SELECT diff_id, file_id, viewed FROM file_progress').all()).toEqual([
+                { diff_id: 'iter-m3', file_id: 'file-1', viewed: 1 },
+            ]);
+            expect(
+                after.prepare('SELECT diff_id, start_line, end_line, carried_from FROM file_seen_ranges').all(),
+            ).toEqual([{ diff_id: 'iter-m3', start_line: 3, end_line: 7, carried_from: null }]);
+            expect(after.prepare('SELECT COUNT(*) AS count FROM progress_carries').get()).toMatchObject({ count: 0 });
+
+            // An anchor without an iteration reads as `LEGACY_DIFF_ID`. The feed adopts it when the host
+            // names the active iteration. The original note location is filled with a copy of the current one.
+            const chat = new ChatStore({ db: after });
+            const note = chat.read().notes[0];
+            expect(note?.anchor).toEqual({ ...anchor, diffId: 'unknown' });
+            expect(note?.origin).toEqual({ commit: 'head-m3', anchor: { ...anchor, diffId: 'unknown' } });
+            expect(note?.lostAnchor).toBe(false);
+            chat.close();
+        } finally {
+            after.close();
+        }
+    });
+
     it('includes service tables and a task queue with a scheduler index in the schema', () => {
         const db = openDatabase(`${sherpaDir}/tables.db`);
         try {

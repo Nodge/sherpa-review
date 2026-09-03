@@ -83,6 +83,92 @@ export async function advanceIteration(page: Page, server: SherpaServerHandle): 
     expect(response.status(), await response.text()).toBe(200);
 }
 
+/** URL fragment parameter. The UI stores iteration selection and filters there. */
+export function fragmentParam(page: Page, key: string): Promise<string | null> {
+    return page.evaluate((name) => new URLSearchParams(location.hash.slice(1)).get(name), key);
+}
+
+/** Diff file as seen by a test. The contract describes the full response, tests need only a few fields. */
+export interface DiffFileSummary {
+    readonly fileId: string;
+    readonly path: string;
+}
+
+/**
+ * Iteration diff fetched without the UI. Without `diffId`, use the active iteration. With it, use the named iteration's saved patch
+ * (after a force-push, this is all that remains, since the host no longer has the iteration).
+ */
+export async function diffOf(
+    page: Page,
+    server: SherpaServerHandle,
+    diffId?: string,
+): Promise<readonly DiffFileSummary[]> {
+    const url = new URL('/api/ui/review/diff', server.url);
+    if (diffId !== undefined) {
+        url.searchParams.set('diffId', diffId);
+    }
+    const response = await page.request.get(url.href, { headers: sherpaAuth(server) });
+    expect(response.status(), await response.text()).toBe(200);
+    const body = (await response.json()) as {
+        readonly diff: { readonly files: readonly DiffFileSummary[] };
+    };
+    return body.diff.files;
+}
+
+/** A read file range, with its side and line bounds named as in the contract. */
+export interface SeenRange {
+    readonly side: 'old' | 'new';
+    readonly start: number;
+    readonly end: number;
+}
+
+export interface FileProgress {
+    readonly fileId: string;
+    readonly viewed: boolean | null;
+    readonly seenRanges: readonly SeenRange[];
+}
+
+export interface ReviewProgress {
+    readonly files: readonly FileProgress[];
+    /** Stop marks from this iteration's latest snapshot. If absent, no snapshot was built for it. */
+    readonly stops: readonly { readonly stopId: string; readonly viewed: boolean }[];
+}
+
+/** Iteration reading progress fetched without the UI. Without `diffId`, use the active iteration. */
+export async function progressOf(
+    page: Page,
+    server: SherpaServerHandle,
+    diffId?: string,
+): Promise<ReviewProgress> {
+    const url = new URL('/api/ui/review/progress', server.url);
+    if (diffId !== undefined) {
+        url.searchParams.set('diffId', diffId);
+    }
+    const response = await page.request.get(url.href, { headers: sherpaAuth(server) });
+    expect(response.status(), await response.text()).toBe(200);
+    return (await response.json()) as ReviewProgress;
+}
+
+/**
+ * Read ranges of an iteration keyed by file path. Each iteration has its own `fileId`, so this is the only way
+ * to compare progress across iterations.
+ */
+export async function seenRangeKeys(
+    page: Page,
+    server: SherpaServerHandle,
+    diffId: string,
+): Promise<string[]> {
+    const paths = new Map((await diffOf(page, server, diffId)).map((file) => [file.fileId, file.path]));
+    return (await progressOf(page, server, diffId)).files
+        .flatMap((file) =>
+            file.seenRanges.map(
+                (range) =>
+                    `${paths.get(file.fileId) ?? file.fileId}:${range.side}:${String(range.start)}-${String(range.end)}`,
+            ),
+        )
+        .sort();
+}
+
 async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): Promise<SherpaServerHandle> {
     const ownsSherpaDir = options?.sherpaDir === undefined;
     const sherpaDir = options?.sherpaDir ?? (await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-')));
