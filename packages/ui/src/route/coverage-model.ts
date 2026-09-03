@@ -1,6 +1,6 @@
 import type { RouteTier } from '@sherpa/protocol';
 
-import { formatCount, plural } from '../i18n/index.js';
+import type { Translate } from '../i18n/index.js';
 import type { RouteEntry, RouteTotals } from './route-model.js';
 
 /**
@@ -18,11 +18,11 @@ export const MIN_SEGMENT_PX = 3;
 /** Segment order from left to right, with important changes first and the hatch last. */
 const TIER_ORDER: readonly RouteTier[] = ['high', 'medium', 'low', 'other'];
 
-const TIER_LABEL: Readonly<Record<RouteTier, string>> = {
+/** Contract tier names are the same in both languages. The hatch uses its own dictionary label. */
+const TIER_LABEL: Readonly<Record<Exclude<RouteTier, 'other'>, string>> = {
     high: 'high',
     medium: 'medium',
     low: 'low',
-    other: 'not explained',
 };
 
 export interface CoverageSegment {
@@ -61,9 +61,11 @@ export interface CoverageStripInput {
     readonly totals: RouteTotals;
     /** Route entries in render order supply plan numbers and jump destinations. */
     readonly entries: readonly RouteEntry[];
+    /** Legend and tooltips are resolved strings because `title` cannot take a key. */
+    readonly t: Translate;
 }
 
-export function buildCoverageStrip({ totals, entries }: CoverageStripInput): CoverageStripModel {
+export function buildCoverageStrip({ totals, entries, t }: CoverageStripInput): CoverageStripModel {
     const changed = totals.changed;
     const uncovered = totals.uncovered;
     const explained = Math.max(changed - uncovered, 0);
@@ -91,7 +93,7 @@ export function buildCoverageStrip({ totals, entries }: CoverageStripInput): Cov
             tier,
             lines,
             share: changed === 0 ? 0 : lines / changed,
-            title: segmentTitle(tier, bucket.labels, lines),
+            title: segmentTitle(t, tier, bucket.labels, lines),
             stopIds: bucket.ids,
             targetStopId: (tier === 'other' ? otherStopId : (bucket.ids[0] ?? null)) ?? null,
         });
@@ -104,26 +106,24 @@ export function buildCoverageStrip({ totals, entries }: CoverageStripInput): Cov
         percent,
         uncovered,
         legend: {
-            changed: `${formatCount(changed, 'ru')} ${plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}`,
-            explained: `${String(percent)}% explained`,
-            unexplained:
-                uncovered === 0
-                    ? null
-                    : `${formatCount(uncovered, 'ru')} ${plural(uncovered, { one: 'line not explained', few: 'lines not explained', many: 'lines not explained', other: 'lines not explained' }, 'ru')}`,
+            changed: t('coverage.legend.changed', changed),
+            explained: t('coverage.legend.explained', percent),
+            unexplained: uncovered === 0 ? null : t('coverage.legend.unexplained', uncovered),
         },
         otherStopId,
     };
 }
 
 /** "high · stops 01–02 · 196 lines" uses a calculated number range, not a manually set one. */
-function segmentTitle(tier: RouteTier, labels: readonly string[], lines: number): string {
-    const counted = `${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
+function segmentTitle(t: Translate, tier: RouteTier, labels: readonly string[], lines: number): string {
+    const label = tier === 'other' ? t('coverage.tier.other') : TIER_LABEL[tier];
     if (tier === 'other' || labels.length === 0) {
-        return `${TIER_LABEL[tier]} · ${counted}`;
+        return t('coverage.segment.tier', label, lines);
     }
     const sorted = [...labels].sort((left, right) => left.localeCompare(right));
     const first = sorted[0] ?? '';
     const last = sorted.at(-1) ?? '';
-    const stops = first === last ? `stop ${first}` : `stops ${first}–${last}`;
-    return `${TIER_LABEL[tier]} · ${stops} · ${counted}`;
+    return first === last
+        ? t('coverage.segment.stop', label, first, lines)
+        : t('coverage.segment.stops', label, first, last, lines);
 }

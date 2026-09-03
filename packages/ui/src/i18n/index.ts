@@ -3,12 +3,11 @@
  * the source of truth for keys, and the English one uses its type. Number,
  * plural and relative time formatting uses `Intl` instead of custom rules.
  *
- * A single entry point: components use `useT`/`useFormat`, pure functions use `createT` and
- * formatters with an explicit locale.
+ * There is one entry point: components use `useT`/`useFormat`, pure models take `Translate` as an argument
+ * (or return `MessageKey`), and code outside the React tree uses `activeT`.
  *
- * Files outside the first pass (M5-T2) still use Russian text and call formatters with explicit `'ru'`:
- * Russian text beside a number formatted by browser rules would be inconsistent. M5-T3 will replace these
- * calls with dictionary keys. `grep "'ru')"` in `src` shows what remains.
+ * `no-cyrillic.test.ts` checks translation completeness: no Cyrillic outside comments
+ * is allowed in `packages/ui/src`.
  */
 
 export type { Formatters } from './context.tsx';
@@ -19,4 +18,4 @@ export type { Dictionary, MessageKey } from './ru.js';
 export { ru } from './ru.js';
 export { en } from './en.js';
 export type { Translate } from './translate.js';
-export { createT, relativeTime, resolveLocale, translateKey } from './translate.js';
+export { activeT, createT, relativeTime, resolveLocale, setActiveLocale, translateKey } from './translate.js';

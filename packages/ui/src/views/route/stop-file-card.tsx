@@ -8,7 +8,7 @@ import { FileCard, shownFileModel } from '../../diff-view/file-card.tsx';
 import type { LineSelection } from '../../diff-view/selection.js';
 import type { FileExpansion } from '../../diff-view/expand.js';
 import type { DiffMode, FileCollapseReason } from '../../diff-view/store.js';
-import { formatCount, plural } from '../../i18n/index.js';
+import { useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { CardNoteActions } from '../../notes/card-notes.tsx';
 import { useCardNotes } from '../../notes/card-notes.tsx';
@@ -102,6 +102,7 @@ export function StopFileCard({
     onToggleCollapsed,
     selection,
 }: StopFileCardProps) {
+    const t = useT();
     const anchors = useMemo(
         () => anchorSpans(collapsedOpen ? [...group.anchors, ...group.collapsedAnchors] : group.anchors),
         [collapsedOpen, group.anchors, group.collapsedAnchors],
@@ -186,11 +187,9 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="updown" size={13} />
                     </span>
-                    {formatCount(group.collapsedLines, 'ru')}{' '}
-                    {plural(group.collapsedLines, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')} collapsed
-                    by the model
+                    {t('route.stopFile.collapsed', group.collapsedLines)}
                     <span className="route-stop__spacer" />
-                    <span className="route-stop__collapsed-hint">nothing is hidden — click to expand</span>
+                    <span className="route-stop__collapsed-hint">{t('route.collapsed.hint')}</span>
                 </button>
             ) : null}
             {collapseReason === null && collapsedOpen && group.collapsedLines > 0 ? (
@@ -198,7 +197,7 @@ export function StopFileCard({
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="chev-down" size={13} className="route-stop__collapsed-icon--up" />
                     </span>
-                    collapse again
+                    {t('route.stopFile.collapse')}
                 </button>
             ) : null}
         </div>

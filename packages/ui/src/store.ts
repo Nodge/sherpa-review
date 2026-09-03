@@ -1,4 +1,6 @@
 import type { UiState } from '@sherpa/protocol';
+
+import { activeT } from './i18n/index.js';
 import {
     UI_CHAT_EVENT,
     UI_ENDPOINTS,
@@ -81,9 +83,6 @@ export interface StoreOptions {
     readonly reconnectDelayMs?: number;
 }
 
-const INVALID_STATE_MESSAGE =
-    'The server sent state this UI does not understand. Update Sherpa. The skill, server and UI are distributed together.';
-
 /** Delay before a store-initiated reconnection attempt: the browser does not always retry (see `onError`). */
 const RECONNECT_DELAY_MS = 2000;
 
@@ -122,7 +121,7 @@ export function createStore(options: StoreOptions): Store {
 
             const state = parseState(data);
             if (state === null) {
-                update({ ...snapshot, connection: 'fatal', error: INVALID_STATE_MESSAGE });
+                update({ ...snapshot, connection: 'fatal', error: activeT()('error.invalidState') });
                 // The channel is no longer a source of truth. Reconnecting to it makes no sense.
                 connection?.close();
                 return;

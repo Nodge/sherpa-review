@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
-import { formatCount, plural, relativeTime } from '../i18n/index.js';
+import type { MessageKey } from '../i18n/index.js';
+import { relativeTime, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import { useShortcutRegistry } from '../shortcuts/context.tsx';
@@ -36,6 +37,8 @@ export interface PrCommentsModalProps {
 
 /** Human PR-level comments: a list of written comments and a separate composer for a new draft. */
 export function PrCommentsModal({ pr, store, transport, onClose, now, initialLayout }: PrCommentsModalProps) {
+    const t = useT();
+    const locale = useLocale();
     const shortcutRegistry = useShortcutRegistry();
     const commentIssues = pr.capabilities.commentIssues;
     const [openedAt] = useState(() => now ?? Date.now());
@@ -183,20 +186,20 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                 tabIndex={-1}
             >
                 <header className="pr-comments-modal__header">
-                    <h2 id="pr-comments-modal-title">Comments on the PR</h2>
-                    <span className="pr-comments-modal__context">outside the diff · {pr.id}</span>
+                    <h2 id="pr-comments-modal-title">{t('prComments.title')}</h2>
+                    <span className="pr-comments-modal__context">{t('prComments.context', pr.id)}</span>
                     <span className="pr-comments-modal__header-spacer" />
                     {drafts === 0 ? null : (
                         <span className="pr-comments-modal__draft-count">
-                            {formatCount(drafts, 'ru')} {plural(drafts, { one: 'draft', few: 'drafts', many: 'drafts', other: 'drafts' }, 'ru')} · published on Ship
+                            {t('prComments.drafts', drafts)}
                         </span>
                     )}
                     <button
                         ref={closeRef}
                         type="button"
                         className="pr-comments-modal__icon-button"
-                        aria-label="Close the PR comments"
-                        title="Close · Esc"
+                        aria-label={t('prComments.close')}
+                        title={t('prComments.close.title')}
                         onClick={onClose}
                     >
                         <Icon name="cross" size={14} />
@@ -207,7 +210,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                     <div ref={listRef} className="pr-comments-modal__list">
                         {comments.length === 0 ? (
                             <div className="pr-comments-modal__empty">
-                                No comments on the PR yet. What you write here goes out with the review when you Ship.
+                                {t('prComments.empty')}
                             </div>
                         ) : (
                             comments.map((thread) => {
@@ -226,17 +229,23 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                             </span>
                                             <strong>{authorName(comment)}</strong>
                                             <span className={`pr-comments-modal__chip${editing ? ' is-editing' : comment.draft ? ' is-draft' : ''}`}>
-                                                {editing ? 'editing' : comment.draft ? 'draft · publishes on ship' : 'published'}
+                                                {editing
+                                                    ? t('thread.chip.editing')
+                                                    : comment.draft
+                                                      ? t('thread.chip.draftShort')
+                                                      : t('prComments.published')}
                                             </span>
-                                            <time dateTime={comment.createdAt}>{relativeTime(comment.createdAt, openedAt, 'ru')}</time>
+                                            <time dateTime={comment.createdAt}>
+                                                {relativeTime(comment.createdAt, openedAt, locale)}
+                                            </time>
                                             <span className="pr-comments-modal__item-spacer" />
                                             {comment.draft ? (
                                                 <span className="pr-comments-modal__item-actions">
                                                     <button
                                                         type="button"
                                                         className="pr-comments-modal__icon-button"
-                                                        aria-label={`Edit draft ${comment.id}`}
-                                                        title="Edit the draft"
+                                                        aria-label={t('thread.draft.editAria', comment.id)}
+                                                        title={t('thread.draft.edit')}
                                                         disabled={editingId !== null}
                                                         onClick={() => {
                                                             startEditing(thread);
@@ -247,8 +256,8 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                                     <button
                                                         type="button"
                                                         className="pr-comments-modal__icon-button is-delete"
-                                                        aria-label={`Delete draft ${comment.id}`}
-                                                        title="Delete the draft"
+                                                        aria-label={t('thread.draft.deleteAria', comment.id)}
+                                                        title={t('thread.draft.delete')}
                                                         disabled={deletingId !== null || editingId !== null}
                                                         onClick={() => {
                                                             setDeleteErrorId(null);
@@ -266,10 +275,10 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                                 comment={comment}
                                                 store={store}
                                                 transport={transport}
-                                                contextLabel="draft editing"
-                                                placeholder="Comment on the PR"
-                                                inputLabel="Draft editing"
-                                                footerHint={<ComposerShortcutHint escapeLabel="cancel" />}
+                                                contextLabel={t('thread.composer.editContext')}
+                                                placeholder={t('prComments.placeholder')}
+                                                inputLabel={t('thread.composer.editLabel')}
+                                                footerHint={<ComposerShortcutHint escapeLabel="prComments.escape.cancel" />}
                                                 {...(initialLayout === undefined ? {} : { initialLayout })}
                                             />
                                         ) : (
@@ -282,8 +291,8 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                             <div className="pr-comments-modal__delete-confirm">
                                                 <span>
                                                     {deleteErrorId === comment.id
-                                                        ? 'Could not delete the draft. Retry?'
-                                                        : 'Delete the draft? It will not be published'}
+                                                        ? t('thread.draft.deleteFailed')
+                                                        : t('thread.draft.deleteConfirm')}
                                                 </span>
                                                 <span className="pr-comments-modal__item-spacer" />
                                                 <button
@@ -292,7 +301,9 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                                     disabled={deletingId === comment.id}
                                                     onClick={() => void deleteDraft(comment.id)}
                                                 >
-                                                    {deletingId === comment.id ? 'Deleting…' : 'Delete'}
+                                                    {deletingId === comment.id
+                                                        ? t('thread.draft.deleting')
+                                                        : t('thread.draft.deleteAction')}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -303,7 +314,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                                         setConfirmingId(null);
                                                     }}
                                                 >
-                                                    Keep
+                                                    {t('thread.draft.keep')}
                                                 </button>
                                             </div>
                                         ) : null}
@@ -324,7 +335,7 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                                 openPrComposer(store, commentIssues);
                             }}
                         >
-                            <span>Write a comment on the PR…</span>
+                            <span>{t('prComments.new')}</span>
                             <Icon name="pencil" size={13} />
                         </button>
                     ) : (
@@ -332,14 +343,14 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
                             composerKey={PR_COMPOSER_KEY}
                             store={store}
                             transport={transport}
-                            footerHint={<ComposerShortcutHint escapeLabel="close" />}
+                            footerHint={<ComposerShortcutHint escapeLabel="prComments.escape.close" />}
                             {...(initialLayout === undefined ? {} : { initialLayout })}
                             onSaveComplete={savedNewComment}
                         />
                     )}
                     <div className="pr-comments-modal__ship-note">
                         <Icon name="updown" size={13} />
-                        Drafts are published as one batch on Ship, together with the line comments
+                        {t('prComments.footer')}
                     </div>
                 </footer>
             </section>
@@ -349,10 +360,11 @@ export function PrCommentsModal({ pr, store, transport, onClose, now, initialLay
     return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
-function ComposerShortcutHint({ escapeLabel }: { escapeLabel: string }) {
+function ComposerShortcutHint({ escapeLabel }: { escapeLabel: MessageKey }) {
+    const t = useT();
     return (
         <span className="pr-comments-modal__shortcuts">
-            <kbd>⌘⏎</kbd> save <kbd>Esc</kbd> {escapeLabel}
+            <kbd>⌘⏎</kbd> {t('prComments.hint.save')} <kbd>Esc</kbd> {t(escapeLabel)}
         </span>
     );
 }

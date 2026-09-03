@@ -1,11 +1,13 @@
 import type { FileDiff, UiFileProgress, UiSeenRange } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
+import type { Translate } from '../i18n/index.js';
 
 /**
  * File reading progress (SPEC §2.12, requirements §3.1): three read-state values and tooltip counts.
  * Pure module: takes a progress record, a diff file, and (when available) changed model lines,
- * and returns state and a tooltip, without React or network calls.
+ * returns state and counts, with no React or network. The component builds the tooltip text
+ * (`readStateTooltip`) because the result is cached in the diff store and must not carry a language.
  *
  * Marks are manual only, with no viewport tracking (requirements §3.1 decision). Seen ranges arrive
  * with M2 stops. They are always empty in M1, so `partial` is reachable only in unit tests and the gallery.
@@ -42,10 +44,14 @@ export interface FileReadState {
     readonly pinned: boolean;
     /** Marked by default because the file is generated. The mark can be cleared (requirements §3.7). */
     readonly generatedDefault: boolean;
-    readonly tooltip: string;
 }
 
-const GENERATED_NOTE = 'generated — marked read by default';
+/** Progress tooltip (SPEC §2.12): numbers must match the progress box. */
+export function readStateTooltip(t: Translate, read: Pick<FileReadState, 'seen' | 'total' | 'generatedDefault'>): string {
+    const numbers = read.total === 0 ? t('progress.noChangedLines') : t('progress.seen', read.seen, read.total);
+    return read.generatedDefault ? t('progress.generatedSeen', t('progress.generatedNote'), numbers) : numbers;
+}
+
 
 /**
  * Merges sources. `true` pins `read` permanently, `false` explicitly unpins it and leaves
@@ -103,7 +109,6 @@ function pinned(total: number, generatedDefault: boolean): FileReadState {
         total,
         pinned: true,
         generatedDefault,
-        tooltip: tooltipOf(total, total, generatedDefault),
     };
 }
 
@@ -121,16 +126,7 @@ function fromCoverage(
         total,
         pinned: false,
         generatedDefault,
-        tooltip: tooltipOf(seen, total, generatedDefault),
     };
-}
-
-function tooltipOf(seen: number, total: number, generatedDefault: boolean): string {
-    const numbers =
-        total === 0
-            ? 'no changed lines in this file'
-            : `${String(seen)} of ${String(total)} changed lines seen`;
-    return generatedDefault ? `${GENERATED_NOTE} · ${numbers}` : numbers;
 }
 
 /**

@@ -8,6 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import { FilePanel } from './file-panel.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,7 +41,7 @@ const EMPTY_PCI: Lens = {
     note: 'No files of this PR are in the PCI DSS scope.',
     zones: null,
 };
-const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI] });
+const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t});
 const ACTIVE = selectFilter(FILTERS, 'all');
 
 const mounted: (() => void)[] = [];

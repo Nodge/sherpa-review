@@ -1,50 +1,31 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 /**
- * First translation pass (M5-T2): these files must have no Cyrillic in code. All text
- * goes into the dictionary. Comments stay Russian and are excluded from the check: they document
- * the code for us, rather than the reviewer interface.
+ * The entire UI uses the dictionary. No Cyrillic is allowed in `packages/ui/src` code, in labels,
+ * in `title` or messages. This test checks translation completeness (M5-T3).
  *
- * T3 will extend the list to all of `packages/ui/src`.
+ * Excluded: comments (documentation for developers, outside the reviewer interface), the Russian
+ * the `i18n/ru.ts` dictionary, tests, and `dev/**`. The gallery uses fixtures and state labels,
+ * which the reviewer never sees.
  */
-const TRANSLATED_FILES = [
-    'app.tsx',
-    'main.tsx',
-    'components/banner-slot.tsx',
-    'components/review-action-bar.tsx',
-    'components/review-action-model.ts',
-    'components/top-bar.tsx',
-    'components/view-tabs.tsx',
-    'i18n/context.tsx',
-    'i18n/en.ts',
-    'i18n/format.ts',
-    'i18n/index.ts',
-    'i18n/locale-commands.ts',
-    'i18n/translate.ts',
-    'palette/command-palette.tsx',
-    'palette/cursor.ts',
-    'palette/diff-search.ts',
-    'palette/diff-source.tsx',
-    'palette/fuzzy.ts',
-    'palette/query.ts',
-    'session/views.ts',
-    'settings/context.tsx',
-    'settings/settings-store.ts',
-    'shortcuts/context.tsx',
-    'shortcuts/registry.ts',
-    'views/view-frames.tsx',
-];
+function skipped(file: string): boolean {
+    return file.startsWith('dev/') || file.includes('.test.') || file === 'i18n/ru.ts';
+}
 
 const CYRILLIC = /[\u0400-\u04FF]/u;
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 
-describe('first translation pass', () => {
+describe('UI translation', () => {
     it('contains no Cyrillic outside comments', () => {
+        const files = sources(SRC).filter((file) => !skipped(file));
+        // Guard against silently finding nothing: a broken directory walk would make the test pass without checking anything.
+        expect(files.length, 'directory walk found nothing').toBeGreaterThan(100);
+
         const found: string[] = [];
-        for (const file of TRANSLATED_FILES) {
+        for (const file of files) {
             const source = stripComments(readFileSync(SRC + file, 'utf8'));
             source.split('\n').forEach((line, index) => {
                 if (CYRILLIC.test(line)) {
@@ -57,10 +38,10 @@ describe('first translation pass', () => {
 
     it('strips comments but preserves strings and URLs inside them', () => {
         const source = [
-            "// comment",
+            '// comment',
             "/* block */ const a = 'text';",
             "const url = 'http://host/#t=1'; // tail",
-            "{/* JSX comment */}",
+            '{/* JSX comment */}',
         ].join('\n');
 
         const stripped = stripComments(source).split('\n');
@@ -69,17 +50,44 @@ describe('first translation pass', () => {
         expect(stripped[2]).toContain("'http://host/#t=1'");
         expect(stripped[3]?.trim()).toMatch(/^\{ +\}$/u);
     });
+
+    it('does not treat a quote in a regex literal as the start of a string', () => {
+        // Without parsing the regex, a quote in the character class would open a "string" until the end of the file,
+        // and the following comment would survive stripping.
+        const source = ['const re = /["\'`]+/u;', '// comment', "const b = 'text';"].join('\n');
+
+        const stripped = stripComments(source).split('\n');
+        expect(stripped[1]?.trim()).toBe('');
+        expect(stripped[2]).toContain("'text'");
+    });
 });
+
+/** All `.ts`/`.tsx` files in the directory, with paths relative to `src`. */
+function sources(root: string, rel = ''): string[] {
+    const found: string[] = [];
+    for (const entry of readdirSync(`${root}${rel}`)) {
+        const next = `${rel}${entry}`;
+        if (statSync(`${root}${next}`).isDirectory()) {
+            found.push(...sources(root, `${next}/`));
+        } else if (/\.tsx?$/u.test(entry)) {
+            found.push(next);
+        }
+    }
+    return found;
+}
 
 /**
  * Replaces comment contents with spaces, preserving newlines so that line numbers in the report
  * stay correct. String literals (including template literals) pass through the check unchanged.
- * `//` inside a URL does not count as a comment.
+ * `//` inside a URL is not a comment. Regex literals are skipped in full: otherwise, a quote
+ * in a character class would open a string and break parsing for the rest of the file.
  */
 function stripComments(source: string): string {
     const out: string[] = [];
     let index = 0;
     let quote: string | null = null;
+    // The last significant character before `/` distinguishes a regex literal from division.
+    let significant = '';
 
     const blank = (text: string): string => text.replaceAll(/[^\n]/gu, ' ');
 
@@ -94,6 +102,7 @@ function stripComments(source: string): string {
             }
             if (char === quote) {
                 quote = null;
+                significant = char;
             }
             index += 1;
             continue;
@@ -118,8 +127,77 @@ function stripComments(source: string): string {
             index = stop;
             continue;
         }
+        if (char === '/') {
+            const end = regexEnd(source, index, significant);
+            if (end !== -1) {
+                out.push(source.slice(index, end));
+                index = end;
+                significant = '/';
+                continue;
+            }
+        }
         out.push(char);
+        if (!/\s/u.test(char)) {
+            significant = char;
+        }
         index += 1;
     }
     return out.join('');
+}
+
+/**
+ * The allowed characters deliberately exclude `<`, `>` and `}`: they begin `</div>` and
+ * `{...} />`, and no regular expression follows them.
+ */
+const REGEX_ALLOWED_BEFORE = new Set([
+    '(',
+    ',',
+    '=',
+    ':',
+    '[',
+    '!',
+    '&',
+    '|',
+    '?',
+    '+',
+    '-',
+    '*',
+    '%',
+    '^',
+    '~',
+    ';',
+    '{',
+]);
+
+/** The end of the regex literal starting at `start`, or `-1` for division or JSX. */
+function regexEnd(source: string, start: number, significant: string): number {
+    if (significant !== '' && !REGEX_ALLOWED_BEFORE.has(significant)) {
+        return -1;
+    }
+    let index = start + 1;
+    let inClass = false;
+    while (index < source.length) {
+        const char = source[index];
+        // A regex literal cannot span lines. An unclosed `/` means division.
+        if (char === '\n') {
+            return -1;
+        }
+        if (char === '\\') {
+            index += 2;
+            continue;
+        }
+        if (char === '[') {
+            inClass = true;
+        } else if (char === ']') {
+            inClass = false;
+        } else if (char === '/' && !inClass) {
+            index += 1;
+            while (/[a-z]/u.test(source[index] ?? '')) {
+                index += 1;
+            }
+            return index;
+        }
+        index += 1;
+    }
+    return -1;
 }

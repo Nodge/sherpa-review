@@ -1,3 +1,4 @@
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import './viewed-toggle.css';
@@ -25,6 +26,7 @@ export interface ViewedToggleProps {
 }
 
 export function ViewedToggle({ viewed, className, disabled = false, title, onToggle }: ViewedToggleProps) {
+    const t = useT();
     // Marks live in the active iteration: the control is visible but cannot be pressed in a previous one.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -44,7 +46,7 @@ export function ViewedToggle({ viewed, className, disabled = false, title, onTog
             <span className="viewed-toggle__box" aria-hidden="true">
                 <Icon name="check" size={9} />
             </span>
-            {viewed ? 'Viewed' : 'Mark viewed'}
+            {viewed ? t('viewed.on') : t('viewed.off')}
         </button>
     );
 }

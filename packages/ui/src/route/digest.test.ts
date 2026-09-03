@@ -6,6 +6,9 @@ import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import { anchorLabel, buildDigest, buildDigestTestCode, claimLabel, resolveAnchor } from './digest.js';
 import { buildRouteModel, stopSeenRanges } from './route-model.js';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 /**
  * Test digest on the `medium` fixture (M2-T2): stop s04 has 12 accepted assertions and 2
@@ -92,8 +95,7 @@ function digestTestCode(snapshot: RouteSnapshot) {
         digest,
         model.entries,
         entry.view.stop.id,
-        entry.view.files.map((file) => file.fileId),
-    );
+        entry.view.files.map((file) => file.fileId), t);
 }
 
 function anchorLocation(testCode: ReturnType<typeof buildDigestTestCode>) {
@@ -180,7 +182,7 @@ describe('behavioural digest', () => {
             .map((file) => file.fileId);
         expect(visibleFileIds.length).toBeGreaterThan(0);
 
-        const testCode = buildDigestTestCode(digest, model.entries, entry.view.stop.id, visibleFileIds);
+        const testCode = buildDigestTestCode(digest, model.entries, entry.view.stop.id, visibleFileIds, t);
 
         expect(testCode.hiddenFileIds.size).toBe(0);
         expect(testCode.location?.kind).toBe('hidden-by-lens');
@@ -256,12 +258,12 @@ describe('behavioural digest', () => {
         expect(digest?.footer.filter((claim) => claim.anchor === null)).toHaveLength(1);
     });
 
-    it('chip labels are English, one per category', () => {
+    it('uses dictionary keys for chip labels, one per category', () => {
         expect([claimLabel('new'), claimLabel('changed'), claimLabel('weakened'), claimLabel('uncovered')]).toEqual([
-            'new',
-            'changed',
-            'weakened',
-            'uncovered',
+            'digest.kind.new',
+            'digest.kind.changed',
+            'digest.kind.weakened',
+            'digest.kind.uncovered',
         ]);
     });
 });

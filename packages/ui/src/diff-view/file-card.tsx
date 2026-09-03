@@ -4,9 +4,11 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
-import { formatCount, plural } from '../i18n/index.js';
+import type { Translate } from '../i18n/index.js';
+import { useFormat, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
+import { readStateTooltip } from '../progress/read-state.js';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
 import type { FileExpansion } from './expand.js';
@@ -161,6 +163,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         renderAfterLine,
         actions,
     } = props;
+    const t = useT();
+    const { count } = useFormat();
     const [hint, setHint] = useState<Feedback>(initialHint);
     const [announcement, setAnnouncement] = useState('');
 
@@ -226,9 +230,12 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         },
         [actions, expansion, file.fileId, model, transform],
     );
-    const onContextExpanded = useCallback((loaded: number, hidden: number, hiddenChanged: number) => {
-        setAnnouncement(expansionAnnouncement(loaded, hidden, hiddenChanged));
-    }, []);
+    const onContextExpanded = useCallback(
+        (loaded: number, hidden: number, hiddenChanged: number) => {
+            setAnnouncement(expansionAnnouncement(loaded, hidden, hiddenChanged, t));
+        },
+        [t],
+    );
 
     return (
         <article
@@ -253,10 +260,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             >
                 <FileName file={file} />
                 <span className="file-card__counts">
-                    <span className="file-card__add">+{formatCount(counts?.additions ?? model?.additions ?? file.additions, 'ru')}</span>
-                    <span className="file-card__del">−{formatCount(counts?.deletions ?? model?.deletions ?? file.deletions, 'ru')}</span>
+                    <span className="file-card__add">
+                        +{count(counts?.additions ?? model?.additions ?? file.additions)}
+                    </span>
+                    <span className="file-card__del">
+                        −{count(counts?.deletions ?? model?.deletions ?? file.deletions)}
+                    </span>
                 </span>
-                <span className="file-card__entity">{entityText(shown)}</span>
+                <span className="file-card__entity">{entityText(shown, t)}</span>
 
                 {routeBadge}
 
@@ -292,7 +303,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 <ViewedToggle
                     className="file-card__viewed"
                     viewed={read.state === 'read'}
-                    title={read.tooltip}
+                    title={readStateTooltip(t, read)}
                     onToggle={(viewed) => {
                         run(actions.onViewed(file.fileId, viewed));
                     }}
@@ -304,7 +315,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             {threadsUnderHeader}
 
             {keptInView ? (
-                <p className="file-card__kept">kept on screen, outside current filter</p>
+                <p className="file-card__kept">{t('diff.file.kept')}</p>
             ) : null}
 
             {hint === null ? null : (
@@ -324,7 +335,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                                     }
                                 }}
                             >
-                                retry
+                                {t('diff.file.retry')}
                             </button>
                         </>
                     ) : null}
@@ -344,7 +355,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 />
             ) : parseError !== null && model === null ? (
                 <p className="file-card__notice">
-                    diff failed to parse: {parseError}
+                    {t('diff.file.parseFailed', parseError)}
                     <button
                         type="button"
                         className="file-card__action"
@@ -352,7 +363,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                             actions.onRetryParse(file.fileId);
                         }}
                     >
-                        Retry
+                        {t('diff.file.retryParse')}
                     </button>
                 </p>
             ) : sizeCollapsed ? (
@@ -363,8 +374,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         actions.onOpenFile(file.fileId);
                     }}
                 >
-                    {formatCount(changed, 'ru')} {plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}{' '}
-                    — open file
+                    {t('diff.file.sizeCollapsed', changed)}
                 </button>
             ) : (
                 <Body
@@ -406,18 +416,25 @@ function CollapsedFileSummary({
     reason: FileCollapseReason;
     onExpand: () => void;
 }) {
-    const text =
-        reason === 'viewed' ? 'viewed' : reason === 'manual' ? 'collapsed by hand' : 'generated file';
+    const t = useT();
+    const { count } = useFormat();
+    const text = t(
+        reason === 'viewed'
+            ? 'diff.file.collapsed.viewed'
+            : reason === 'manual'
+              ? 'diff.file.collapsed.manual'
+              : 'diff.file.collapsed.generated',
+    );
     return (
         <button type="button" className="file-card__collapsed file-card__collapsed--file" onClick={onExpand}>
             <span className="file-card__collapsed-mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            <span className="file-card__add">+{formatCount(counts?.additions ?? file.additions, 'ru')}</span>
-            <span className="file-card__del">−{formatCount(counts?.deletions ?? file.deletions, 'ru')}</span>
+            <span className="file-card__add">+{count(counts?.additions ?? file.additions)}</span>
+            <span className="file-card__del">−{count(counts?.deletions ?? file.deletions)}</span>
             <span>· {text}</span>
             <span className="file-card__collapsed-spacer" />
-            <span className="file-card__collapsed-hint">click to expand the lines</span>
+            <span className="file-card__collapsed-hint">{t('diff.file.collapsed.hint')}</span>
         </button>
     );
 }
@@ -446,24 +463,25 @@ function FileName({ file }: { file: FileDiff }) {
     );
 }
 
-/** Same wording as the slice gap bar (`gapLabel` in diff-rows), since both describe the same hidden lines. */
-function elsewhereLabel(changed: number): string {
-    const lines = plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru');
-    return `${formatCount(changed, 'ru')} ${lines} in other stops`;
-}
+
 
 /**
  * aria-live announcement after loading more context in a gap.
  * Keep the Full diff pair "loaded N, hidden H" unchanged because `hiddenChanged` is always 0 there.
  * In a route slice, "hidden 0" would be false, so report changed lines from other stops separately.
  */
-export function expansionAnnouncement(loaded: number, hidden: number, hiddenChanged: number): string {
-    const parts = [`${String(loaded)} lines loaded`];
+export function expansionAnnouncement(
+    loaded: number,
+    hidden: number,
+    hiddenChanged: number,
+    t: Translate,
+): string {
+    const parts = [t('diff.expand.loaded', loaded)];
     if (hidden > 0 || hiddenChanged === 0) {
-        parts.push(`${String(hidden)} hidden`);
+        parts.push(t('diff.expand.hidden', hidden));
     }
     if (hiddenChanged > 0) {
-        parts.push(elsewhereLabel(hiddenChanged));
+        parts.push(t('diff.elsewhere', hiddenChanged));
     }
     return parts.join(', ');
 }
@@ -482,6 +500,7 @@ function ExpandButton({
     noContentReason: string | undefined;
     onExpand: (gapKeys: readonly string[]) => void;
 }) {
+    const t = useT();
     const gapKeys =
         model?.content.kind === 'text'
             ? model.content.blocks.filter((block) => block.kind === 'gap').map((gap) => gapKeyOf(gap))
@@ -490,16 +509,16 @@ function ExpandButton({
     // but it cannot claim the whole file is on screen either.
     const hiddenChanged = model === null ? 0 : remainingHiddenChanged(model);
     const disabledReason = !contentAvailable
-        ? (noContentReason ?? 'the host does not provide file contents, so context cannot be expanded')
+        ? (noContentReason ?? t('diff.expand.noContent'))
         : model === null
-          ? 'the diff is still being parsed'
+          ? t('diff.expand.parsing')
           : content === null
-            ? 'this file has no content'
+            ? t('diff.expand.noFileContent')
             : remainingHiddenLines(model, content ?? null) !== 0
               ? null
               : hiddenChanged > 0
-                ? `all context is on screen; ${elsewhereLabel(hiddenChanged)}`
-                : 'the whole file is already on screen';
+                ? t('diff.expand.allShownElsewhere', t('diff.elsewhere', hiddenChanged))
+                : t('diff.expand.allShown');
 
     return (
         <span className="file-card__expand">
@@ -507,12 +526,12 @@ function ExpandButton({
                 type="button"
                 className="file-card__header-action"
                 disabled={disabledReason !== null}
-                title={disabledReason ?? 'show the entire file'}
+                title={disabledReason ?? t('diff.expand.showWholeFile')}
                 onClick={() => {
                     onExpand(gapKeys);
                 }}
             >
-                Expand file
+                {t('diff.expand.openFile')}
             </button>
         </span>
     );
@@ -520,24 +539,25 @@ function ExpandButton({
 
 /** Single-line notices from SPEC §2.14: binary, mode change, whitespace only. */
 function Notices({ model, file }: { model: DiffFileModel | null; file: FileDiff }) {
+    const t = useT();
     if (model === null) {
         return null;
     }
 
     return (
         <>
-            {model.content.kind === 'binary' ? <p className="file-card__notice">binary file not shown</p> : null}
+            {model.content.kind === 'binary' ? (
+                <p className="file-card__notice">{t('diff.notice.binary')}</p>
+            ) : null}
             {model.modeChange === null ? null : (
                 <p className="file-card__notice">
-                    mode {model.modeChange.from} → {model.modeChange.to}
+                    {t('diff.notice.mode', model.modeChange.from, model.modeChange.to)}
                 </p>
             )}
             {model.content.kind === 'none' && model.modeChange === null && !file.binary ? (
-                <p className="file-card__notice">no text changes</p>
+                <p className="file-card__notice">{t('diff.notice.noText')}</p>
             ) : null}
-            {model.malformed ? (
-                <p className="file-card__notice">part of the patch failed to parse — shown as is</p>
-            ) : null}
+            {model.malformed ? <p className="file-card__notice">{t('diff.notice.malformed')}</p> : null}
         </>
     );
 }
@@ -564,6 +584,7 @@ interface BodyProps {
 }
 
 function Body(props: BodyProps) {
+    const t = useT();
     const { model, mode, content, selection, showWhitespace, onShowWhitespace } = props;
 
     if (model === null) {
@@ -572,7 +593,7 @@ function Body(props: BodyProps) {
                 className="file-card__loading"
                 style={props.loadingMinHeight === undefined ? undefined : { minHeight: props.loadingMinHeight }}
             >
-                parsing the diff…
+                {t('diff.body.parsing')}
             </div>
         );
     }
@@ -582,7 +603,7 @@ function Body(props: BodyProps) {
     if (model.whitespaceOnly && !showWhitespace) {
         return (
             <button type="button" className="file-card__notice file-card__notice--button" onClick={onShowWhitespace}>
-                whitespace only — show
+                {t('diff.body.whitespaceOnly')}
             </button>
         );
     }
@@ -641,7 +662,7 @@ function Body(props: BodyProps) {
 }
 
 /** Entity header (SPEC §2.13): empty if the parser found nothing. Never displays "unknown". */
-function entityText(model: DiffFileModel | null): string {
+function entityText(model: DiffFileModel | null, t: Translate): string {
     if (model?.content.kind !== 'text') {
         return '';
     }
@@ -652,6 +673,8 @@ function entityText(model: DiffFileModel | null): string {
     }
 
     const { label, range } = entity;
-    const prefix = model.changeType === 'add' ? 'new file · ' : '';
-    return range === null ? `${prefix}${label}` : `${prefix}${label} · ${String(range.from)}–${String(range.to)}`;
+    if (model.changeType === 'add') {
+        return range === null ? t('diff.entity.newFile', label) : t('diff.entity.newFileRange', label, range.from, range.to);
+    }
+    return range === null ? label : `${label} · ${String(range.from)}–${String(range.to)}`;
 }

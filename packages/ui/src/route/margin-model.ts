@@ -1,7 +1,7 @@
 import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
-import { formatCount, plural } from '../i18n/index.js';
+import type { Translate } from '../i18n/index.js';
 import { stripInlineCode } from '../markdown/markdown.js';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { AnchorSpan } from './anchor-clip.js';
@@ -132,87 +132,79 @@ export function marginTargetStopId(file: RouteMarginFile, otherStopId: string | 
 }
 
 /** Number in the tree row: the first stop plus "+N" if the file belongs to several. */
-export function treeBadgeLabel(file: RouteMarginFile): string {
+export function treeBadgeLabel(file: RouteMarginFile, t: Translate): string {
     const first = file.stops[0];
     if (first === undefined) {
-        return NOT_PLACED;
+        return t('margin.notPlaced');
     }
     return file.stops.length === 1 ? first.planLabel : `${first.planLabel} +${String(file.stops.length - 1)}`;
 }
 
 /** Card badge (README §10): "explained in 02 · stop title". */
-export function marginBadgeLabel(file: RouteMarginFile): string {
+export function marginBadgeLabel(file: RouteMarginFile, t: Translate): string {
     const first = file.stops[0];
     if (first === undefined) {
-        return NOT_PLACED_CARD;
+        return t('margin.notPlacedCard');
     }
-    const extra = file.stops.length === 1 ? '' : ` +${String(file.stops.length - 1)}`;
     // The badge is a single-line chip. It cannot take markdown, so the model's backticks are stripped (M2F-T5).
-    return `explained in ${first.planLabel}${extra} · ${stripInlineCode(first.title)}`;
+    const title = stripInlineCode(first.title);
+    return file.stops.length === 1
+        ? t('margin.badge.explained', first.planLabel, title)
+        : t('margin.badge.explainedMore', first.planLabel, file.stops.length - 1, title);
 }
 
 /**
  * Badge tooltip and accessible label. For a file in multiple stops, it lists them all. The label fits
  * only the first, and the reviewer needs to know where a click will take them beforehand.
  */
-export function marginBadgeTitle(file: RouteMarginFile, jumps: boolean): string {
+export function marginBadgeTitle(file: RouteMarginFile, jumps: boolean, t: Translate): string {
     const first = file.stops[0];
     if (first === undefined) {
-        return jumps ? 'No route stop — go to "Other"' : 'No route stop';
+        return t(jumps ? 'margin.badge.notPlacedJump' : 'margin.badge.notPlaced');
     }
     const numbers = file.stops.map((stop) => stop.planLabel).join(', ');
+    const title = stripInlineCode(first.title);
     const where =
         file.stops.length === 1
-            ? `Explained in stop ${first.planLabel} · ${stripInlineCode(first.title)}`
-            : `Explained in stops ${numbers} · ${stripInlineCode(first.title)}`;
-    return jumps ? `${where} — go there` : where;
+            ? t('margin.badge.title', first.planLabel, title)
+            : t('margin.badge.titleMany', numbers, title);
+    return jumps ? t('margin.badge.titleJump', where) : where;
 }
 
 /**
  * Label for the hatched strip below the last line of an uncovered range. The old side contains
  * deleted lines, which the label must state because the two sides have different line numbers.
  */
-export function marginStripText(span: AnchorSpan): string {
+export function marginStripText(span: AnchorSpan, t: Translate): string {
     const removed = span.side === 'old';
     // Numbers match the card gutter (`diff-rows`), without digit grouping. The strip points
     // to a line, and "1 234" is hard to match visually with "1234".
     const range = span.start === span.end ? String(span.start) : `${String(span.start)}–${String(span.end)}`;
-    const noun =
-        span.start === span.end
-            ? (removed ? 'removed line' : 'line')
-            : (removed ? 'removed lines' : 'lines');
-    return `${noun} ${range} without a route stop`;
+    if (span.start === span.end) {
+        return t(removed ? 'margin.strip.lineRemoved' : 'margin.strip.line', range);
+    }
+    return t(removed ? 'margin.strip.linesRemoved' : 'margin.strip.lines', range);
 }
 
 /** Summary of ranges with no rendered line (collapsed card, "whitespace only"). */
-export function marginStripSummary(spans: readonly AnchorSpan[]): string {
-    const lines = spanLines(spans);
-    return `${formatCount(lines, 'ru')} ${plural(lines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')} without a route stop`;
+export function marginStripSummary(spans: readonly AnchorSpan[], t: Translate): string {
+    return t('margin.strip.summary', spanLines(spans));
 }
 
 /**
  * File panel footer note (README §10). Counts are computed: while patches are being parsed, the note
  * says it is counting instead of showing an intermediate total.
  */
-export function marginFooterNote(model: RouteMarginModel): string | null {
+export function marginFooterNote(model: RouteMarginModel, t: Translate): string | null {
     if (model.pendingFiles > 0) {
-        return `${HATCH_MEANING} Counting the lines…`;
+        return t('margin.footer.counting');
     }
-    const failed =
-        model.failedFiles === 0
-            ? ''
-            : ` ${formatCount(model.failedFiles, 'ru')} ${plural(model.failedFiles, { one: 'file failed to parse', few: 'files failed to parse', many: 'files failed to parse', other: 'files failed to parse' }, 'ru')}. Their lines are not counted.`;
+    const failed = model.failedFiles === 0 ? '' : t('margin.footer.failed', model.failedFiles);
     if (model.uncoveredLines === 0) {
-        return failed === '' ? null : `${HATCH_MEANING}${failed}`;
+        return failed === '' ? null : t('margin.footer.hatchOnly', failed);
     }
-    const lines = `${formatCount(model.uncoveredLines, 'ru')} ${plural(model.uncoveredLines, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
-    const files = `${formatCount(model.uncoveredFiles, 'ru')} ${plural(model.uncoveredFiles, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}`;
-    return `${HATCH_MEANING} ${lines} in ${files}.${failed}`;
+    return t('margin.footer.uncovered', model.uncoveredLines, model.uncoveredFiles, failed);
 }
-
-const HATCH_MEANING = 'The hatch means the range has no route stop.';
-const NOT_PLACED = 'outside the route';
-const NOT_PLACED_CARD = 'no route stop';
 
 /**
  * Changed file lines use the same `changedLinesOf` rule as everywhere else. Without a model,

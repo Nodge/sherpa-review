@@ -7,6 +7,9 @@ import type {
 } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { Translate } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
+
 export interface FeedbackPreviewContext {
     readonly uiVersion: string;
     readonly prKey: string;
@@ -23,6 +26,7 @@ export interface FeedbackButtonProps {
 
 /** Top bar button and feedback form that preserves text on error. */
 export function FeedbackButton({ availability, context, onSend }: FeedbackButtonProps) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const [text, setText] = useState('');
     const [includeContext, setIncludeContext] = useState(true);
@@ -91,11 +95,11 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                     : null,
             });
             if (response.outcome === 'unavailable') {
-                setServerUnavailable(response.message ?? 'The feedback channel is unavailable right now.');
+                setServerUnavailable(response.message ?? t('feedback.unavailable'));
                 return;
             }
             if (response.issueKey === null || response.issueUrl === null) {
-                setError('The server created an issue but returned no URL. Your text has been saved, try sending it again.');
+                setError(t('feedback.noLink'));
                 return;
             }
             setCreated({ key: response.issueKey, url: response.issueUrl });
@@ -112,10 +116,10 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
         }
         try {
             await navigator.clipboard.writeText(text);
-            setCopyStatus('Text copied.');
+            setCopyStatus(t('feedback.copied'));
         } catch {
             textareaRef.current?.select();
-            setCopyStatus('Could not copy automatically. The text is selected.');
+            setCopyStatus(t('feedback.copyFailed'));
         }
     };
 
@@ -137,7 +141,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                 Feedback
             </button>
             {open ? (
-                <div className="feedback-popover" role="dialog" aria-label="Send feedback">
+                <div className="feedback-popover" role="dialog" aria-label={t('feedback.aria')}>
                     {created === null ? (
                         <form
                             onSubmit={(event) => {
@@ -145,9 +149,9 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                 void submit();
                             }}
                         >
-                            <div className="feedback-popover__title">Feedback on Sherpa</div>
+                            <div className="feedback-popover__title">{t('feedback.title')}</div>
                             <label className="feedback-popover__label" htmlFor="sherpa-feedback-text">
-                                What happened or what is missing
+                                {t('feedback.placeholder')}
                             </label>
                             <textarea
                                 ref={textareaRef}
@@ -173,7 +177,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                         setIncludeContext(event.target.checked);
                                     }}
                                 />
-                                Attach the context
+                                {t('feedback.attachContext')}
                             </label>
                             <ContextPreview context={context} included={includeContext && unavailableReason === null} />
                             {unavailableReason === null ? null : (
@@ -195,41 +199,41 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                         type="submit"
                                         className="feedback-popover__primary"
                                         disabled={submitting || text.trim() === ''}
-                                        title={text.trim() === '' ? 'Write the feedback text.' : undefined}
+                                        title={text.trim() === '' ? t('feedback.send.disabled') : undefined}
                                     >
                                         {submitting ? <span className="feedback-popover__spinner" aria-hidden="true" /> : null}
-                                        <span>Send</span>
+                                        <span>{t('feedback.send')}</span>
                                     </button>
                                 ) : (
                                     <button
                                         type="button"
                                         className="feedback-popover__primary"
                                         disabled={text.trim() === ''}
-                                        title={text.trim() === '' ? 'Write the feedback text first.' : undefined}
+                                        title={text.trim() === '' ? t('feedback.copy.disabled') : undefined}
                                         onClick={() => {
                                             void copyText();
                                         }}
                                     >
-                                        Copy the text
+                                        {t('feedback.copy')}
                                     </button>
                                 )}
                                 <button type="button" className="feedback-popover__secondary" onClick={close}>
-                                    Cancel
+                                    {t('feedback.cancel')}
                                 </button>
                             </div>
                         </form>
                     ) : (
                         <div className="feedback-popover__success" role="status">
-                            <div className="feedback-popover__title">Thanks for the feedback</div>
+                            <div className="feedback-popover__title">{t('feedback.thanks')}</div>
                             <p>
-                                Issue created{' '}
+                                {t('feedback.ticket')}{' '}
                                 <a href={created.url} target="_blank" rel="noreferrer">
                                     {created.key}
                                 </a>
                                 .
                             </p>
                             <button type="button" className="feedback-popover__primary" onClick={close}>
-                                Close
+                                {t('feedback.close')}
                             </button>
                         </div>
                     )}
@@ -240,8 +244,9 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
 }
 
 function ContextPreview({ context, included }: { context: FeedbackPreviewContext; included: boolean }) {
+    const t = useT();
     return (
-        <div className="feedback-context" aria-label="Feedback context">
+        <div className="feedback-context" aria-label={t('feedback.context.aria')}>
             {included ? (
                 <>
                     <div>UI {context.uiVersion}</div>
@@ -249,19 +254,23 @@ function ContextPreview({ context, included }: { context: FeedbackPreviewContext
                     <div>
                         {context.view} · {context.routePhase}
                     </div>
-                    <div>{workerPreview(context.worker)}</div>
+                    <div>{workerPreview(context.worker, t)}</div>
                 </>
             ) : (
-                <div>No context will be attached.</div>
+                <div>{t('feedback.context.none')}</div>
             )}
         </div>
     );
 }
 
-function workerPreview(worker: WorkerStatus): string {
+function workerPreview(worker: WorkerStatus, t: Translate): string {
     if (worker.kind === 'never') {
-        return 'Worker: not registered';
+        return t('feedback.worker.none');
     }
-    const status = worker.kind === 'connected' ? 'connected' : 'disconnected';
-    return `Worker: ${worker.harness ?? 'harness unknown'} · ${worker.model ?? 'model unknown'} · ${status}`;
+    return t(
+        'feedback.worker',
+        worker.harness ?? t('feedback.worker.unknownHarness'),
+        worker.model ?? t('feedback.worker.unknownModel'),
+        t(worker.kind === 'connected' ? 'feedback.worker.connected' : 'feedback.worker.disconnected'),
+    );
 }

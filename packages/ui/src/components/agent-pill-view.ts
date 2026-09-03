@@ -1,5 +1,7 @@
 import type { UiTask, WorkerStatus } from '@sherpa/protocol';
 
+import type { Translate } from '../i18n/index.js';
+
 /**
  * Agent pill (SPEC §2.2): four states based on the actual M0 worker status.
  * Compute it outside the component so unit tests and the state gallery can use it.
@@ -36,25 +38,25 @@ function lastTaskFailed(tasks: readonly UiTask[]): boolean {
     return latestOf('failed') > latestOf('done');
 }
 
-export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[]): AgentPillView {
+export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[], t: Translate): AgentPillView {
     const pending = tasks.filter(isPending);
 
     if (worker.kind !== 'connected') {
         return {
             tone: 'disconnected',
             workerKind: worker.kind,
-            label: 'Agent disconnected',
+            label: t('agent.disconnected'),
             title:
                 worker.kind === 'never'
-                    ? 'The agent has never connected to this PR'
-                    : `${identity(worker)} · session not responding · queued: ${String(pending.length)}`,
+                    ? t('agent.neverConnected')
+                    : t('agent.notResponding', identity(worker), pending.length),
         };
     }
 
     // Session uptime uses server data instead of the browser clock, so the pill remains
     // a pure function of state, with the same rendering in the gallery and tests.
-    const uptime = formatUptime(Date.parse(worker.lastSeenAt) - Date.parse(worker.registeredAt));
-    const title = `${identity(worker)} · session uptime ${uptime} · queued: ${String(pending.length)}`;
+    const uptime = formatUptime(Date.parse(worker.lastSeenAt) - Date.parse(worker.registeredAt), t);
+    const title = t('agent.uptime', identity(worker), uptime, pending.length);
 
     // "Working" means there is work left, regardless of priority class. Route generation runs
     // in the background, but the reviewer waits for it at the screen just the same (M2-T10 decision).
@@ -62,19 +64,19 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[]): A
         return {
             tone: 'working',
             workerKind: worker.kind,
-            label: `Agent working · ${String(pending.length)} queued`,
+            label: t('agent.working', pending.length),
             title,
         };
     }
 
     if (lastTaskFailed(tasks)) {
-        return { tone: 'failed', workerKind: worker.kind, label: 'Agent · task failed', title };
+        return { tone: 'failed', workerKind: worker.kind, label: t('agent.taskFailed'), title };
     }
 
     return {
         tone: 'connected',
         workerKind: worker.kind,
-        label: `Agent · ${worker.harness ?? worker.workerId}`,
+        label: t('agent.idle', worker.harness ?? worker.workerId),
         title,
     };
 }
@@ -91,12 +93,12 @@ function identity(worker: Extract<WorkerStatus, { workerId: string }>): string {
     ].join(' · ');
 }
 
-function formatUptime(ms: number): string {
+function formatUptime(ms: number, t: Translate): string {
     const minutes = Math.max(0, Math.floor(ms / 60_000));
     if (minutes < 60) {
-        return `${String(minutes)} min`;
+        return t('agent.uptime.minutes', minutes);
     }
 
     const hours = Math.floor(minutes / 60);
-    return `${String(hours)} h ${String(minutes % 60)} min`;
+    return t('agent.uptime.hours', hours, minutes % 60);
 }

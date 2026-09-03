@@ -1,6 +1,12 @@
 export type ComposerLayout = 'visual' | 'markdown';
 export type ComposerTool = 'bold' | 'italic' | 'link' | 'code' | 'codeblock' | 'list';
 
+/** Placeholders the toolbar inserts into an empty selection: UI language, not markup. */
+export interface EditorPlaceholders {
+    readonly text: string;
+    readonly code: string;
+}
+
 export interface MarkdownEdit {
     readonly text: string;
     readonly selectionStart: number;
@@ -13,6 +19,7 @@ export function editMarkdown(
     selectionStart: number,
     selectionEnd: number,
     tool: ComposerTool,
+    placeholders: EditorPlaceholders,
 ): MarkdownEdit {
     const selected = text.slice(selectionStart, selectionEnd);
     const replace = (before: string, fallback: string, after = before): MarkdownEdit => {
@@ -27,11 +34,11 @@ export function editMarkdown(
 
     switch (tool) {
         case 'bold':
-            return replace('**', 'text');
+            return replace('**', placeholders.text);
         case 'italic':
-            return replace('*', 'text');
+            return replace('*', placeholders.text);
         case 'link': {
-            const label = selected || 'text';
+            const label = selected || placeholders.text;
             const inserted = `[${label}](https://)`;
             return {
                 text: `${text.slice(0, selectionStart)}${inserted}${text.slice(selectionEnd)}`,
@@ -40,9 +47,9 @@ export function editMarkdown(
             };
         }
         case 'code':
-            return replace('`', 'code');
+            return replace('`', placeholders.code);
         case 'codeblock': {
-            const body = selected || 'code';
+            const body = selected || placeholders.code;
             const prefix = selectionStart > 0 && text[selectionStart - 1] !== '\n' ? '\n' : '';
             const suffix = selectionEnd < text.length && text[selectionEnd] !== '\n' ? '\n' : '';
             const inserted = `${prefix}\`\`\`\n${body}\n\`\`\`${suffix}`;
@@ -54,7 +61,7 @@ export function editMarkdown(
             };
         }
         case 'list': {
-            const body = selected || 'text';
+            const body = selected || placeholders.text;
             const prefix = selectionStart > 0 && text[selectionStart - 1] !== '\n' ? '\n' : '';
             const suffix = selectionEnd < text.length && text[selectionEnd] !== '\n' ? '\n' : '';
             const listed = body

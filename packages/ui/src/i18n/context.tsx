@@ -6,7 +6,7 @@ import { useUiSettings } from '../settings/context.tsx';
 import type { PluralForms } from './format.js';
 import { formatCount, plural } from './format.js';
 import type { Translate } from './translate.js';
-import { createT, relativeTime, resolveLocale } from './translate.js';
+import { createT, relativeTime, resolveLocale, setActiveLocale } from './translate.js';
 
 /**
  * The UI language derives from the `locale` setting (`auto | ru | en`) and the agent hint,
@@ -35,6 +35,9 @@ export function LocaleProvider({
     const setting = useUiSettings().locale;
     // Explicit locale for the gallery: it has no settings and needs to show both.
     const resolved = locale ?? resolveLocale(setting, agentLang, browserLanguages());
+    // Not in an effect: child effects run before the parent effect, and the first server requests come
+    // from them. Their error messages must already use the right language.
+    setActiveLocale(resolved);
 
     useEffect(() => {
         document.documentElement.lang = resolved;

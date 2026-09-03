@@ -1,29 +1,33 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { shortCommit } from '../i18n/index.js';
+import type { MessageKey } from '../i18n/index.js';
+import { shortCommit, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import { composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { editMarkdown } from './composer-markdown.js';
-import type { ComposerLayout, ComposerTool } from './composer-markdown.js';
+import type { ComposerLayout, ComposerTool, EditorPlaceholders } from './composer-markdown.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 import type { VisualEditorHandle } from './visual-editor.js';
 
 const TOOLS: readonly {
     tool: ComposerTool;
     icon: 'bold' | 'italic' | 'link' | 'code' | 'codeblock' | 'list';
-    title: string;
+    title: MessageKey;
 }[] = [
-    { tool: 'bold', icon: 'bold', title: 'Bold · ⌘B' },
-    { tool: 'italic', icon: 'italic', title: 'Italic · ⌘I' },
-    { tool: 'link', icon: 'link', title: 'Link · ⌘K' },
-    { tool: 'code', icon: 'code', title: 'Inline code' },
-    { tool: 'codeblock', icon: 'codeblock', title: 'Code block' },
-    { tool: 'list', icon: 'list', title: 'List' },
+    { tool: 'bold', icon: 'bold', title: 'thread.tool.bold' },
+    { tool: 'italic', icon: 'italic', title: 'thread.tool.italic' },
+    { tool: 'link', icon: 'link', title: 'thread.tool.link' },
+    { tool: 'code', icon: 'code', title: 'thread.tool.code' },
+    { tool: 'codeblock', icon: 'codeblock', title: 'thread.tool.codeblock' },
+    { tool: 'list', icon: 'list', title: 'thread.tool.list' },
 ];
+
+/** Save button label: creating or editing a draft. */
+export type ComposerSaveLabel = Extract<MessageKey, 'thread.composer.saveDraft' | 'thread.composer.saveChanges'>;
 
 export interface CommentComposerProps {
     readonly composer: ComposerSnapshot;
@@ -32,7 +36,7 @@ export interface CommentComposerProps {
     readonly contextLabel: string;
     readonly placeholder: string;
     readonly inputLabel: string;
-    readonly saveLabel?: 'Save draft' | 'Save changes';
+    readonly saveLabel?: ComposerSaveLabel;
     readonly notice?: ReactNode;
     readonly footerHint?: ReactNode;
     readonly initialLayout?: ComposerLayout;
@@ -68,6 +72,12 @@ export function CommentComposer({
         () => composerControllerFor({ store, key: composer.key, transport }),
         [composer.key, store, transport],
     );
+    const t = useT();
+    // Toolbar placeholders are part of the interface, not the markup. Their language changes with the UI.
+    const placeholders = useMemo<EditorPlaceholders>(
+        () => ({ text: t('thread.placeholder.text'), code: t('thread.placeholder.code') }),
+        [t],
+    );
     const settings = useUiSettingsStore();
     // Composer layout is global (SPEC §2.8). Until the reviewer switches it in this composer,
     // it follows the settings, including those that arrive from the server after mounting.
@@ -75,7 +85,7 @@ export function CommentComposer({
     const settingsLayout = useUiSettings().composerLayout;
     const layout = chosenLayout ?? settingsLayout;
     const [visualReady, setVisualReady] = useState(false);
-    const resolvedSaveLabel = saveLabel ?? 'Save draft';
+    const resolvedSaveLabel = t(saveLabel ?? 'thread.composer.saveDraft');
     const resolvedRestoreOnCancel =
         restoreOnCancel ?? (composer.commentId === null ? undefined : (composer.originalText ?? composer.text));
     const resolvedWhileTyping = notice !== undefined;
@@ -94,11 +104,11 @@ export function CommentComposer({
     const saveDisabledReason = readOnly
         ? readOnlyReason
         : disabled
-        ? 'The draft is being deleted.'
+        ? t('thread.composer.deleting')
         : ambiguousFirstSave
-          ? 'Use the retry link in the save status.'
+          ? t('thread.composer.retryHint')
           : composer.text.trim() === ''
-            ? 'Type the comment text.'
+            ? t('thread.composer.emptyHint')
             : null;
     const save = useCallback(async (): Promise<void> => {
         if (await controller.saveNow(closeOnSave)) {
@@ -154,6 +164,7 @@ export function CommentComposer({
                 markdown: currentTextRef.current,
                 disabled: disabledRef.current,
                 ariaLabel: inputLabel,
+                placeholders,
                 onChange: controller.input,
                 onSave: () => {
                     void handlersRef.current.save();
@@ -171,7 +182,7 @@ export function CommentComposer({
             visualRef.current?.destroy();
             visualRef.current = null;
         };
-    }, [composer.key, controller, inputLabel, layout]);
+    }, [composer.key, controller, inputLabel, layout, placeholders]);
 
     useEffect(() => {
         visualRef.current?.setMarkdown(composer.text);
@@ -195,7 +206,7 @@ export function CommentComposer({
         if (textarea === null) {
             return;
         }
-        const edit = editMarkdown(composer.text, textarea.selectionStart, textarea.selectionEnd, tool);
+        const edit = editMarkdown(composer.text, textarea.selectionStart, textarea.selectionEnd, tool, placeholders);
         controller.input(edit.text);
         queueMicrotask(() => {
             textarea.focus();
@@ -211,20 +222,20 @@ export function CommentComposer({
                 {showDraftChip || composer.commentId !== null ? (
                     <span className="thread__chip thread__chip--draft" {...(pinnedCommit === null ? {} : { title: pinnedCommit })}>
                         {pinnedCommit === null
-                            ? 'draft · publishes on ship'
-                            : `draft · pinned to ${shortCommit(pinnedCommit)}`}
+                            ? t('thread.chip.draftShort')
+                            : t('thread.draft.pinned', shortCommit(pinnedCommit))}
                     </span>
                 ) : null}
             </div>
             <div className="thread-composer__editor">
-                <div className="thread-composer__toolbar" role="toolbar" aria-label="Comment formatting">
+                <div className="thread-composer__toolbar" role="toolbar" aria-label={t('thread.composer.toolbarAria')}>
                     {TOOLS.map((item) => (
                         <button
                             key={item.tool}
                             type="button"
                             className="thread-composer__tool"
-                            title={item.title}
-                            aria-label={item.title}
+                            title={t(item.title)}
+                            aria-label={t(item.title)}
                             disabled={editingDisabled || (layout === 'visual' && !visualReady)}
                             onMouseDown={(event) => {
                                 event.preventDefault();
@@ -237,7 +248,7 @@ export function CommentComposer({
                         </button>
                     ))}
                     <span className="thread-composer__toolbar-spacer" />
-                    <div className="thread-composer__layout" aria-label="Editor layout">
+                    <div className="thread-composer__layout" aria-label={t('thread.composer.layoutAria')}>
                         <button
                             type="button"
                             className={layout === 'visual' ? 'is-active' : ''}
@@ -246,7 +257,7 @@ export function CommentComposer({
                                 selectLayout('visual');
                             }}
                         >
-                            Visual
+                            {t('thread.composer.visual')}
                         </button>
                         <button
                             type="button"
@@ -319,10 +330,10 @@ export function CommentComposer({
                     type="button"
                     className="ghost-button"
                     disabled={disabled}
-                    title={disabled ? 'The draft is being deleted.' : undefined}
+                    title={disabled ? t('thread.composer.deleting') : undefined}
                     onClick={cancel}
                 >
-                    Cancel
+                    {t('thread.composer.cancel')}
                 </button>
                 {composer.issue === undefined ? null : (
                     <button
@@ -337,19 +348,19 @@ export function CommentComposer({
                         <span className="thread-composer__issue-box" aria-hidden="true">
                             {composer.issue ? <Icon name="check" size={9} /> : null}
                         </span>
-                        Open an issue
+                        {t('thread.composer.openIssue')}
                     </button>
                 )}
                 <span className="thread-composer__actions-spacer" />
                 {footerHint}
                 {composer.confirmDiscard ? (
                     <span className="thread-composer__confirm">
-                        Discard this draft?{' '}
+                        {t('thread.composer.discardAsk')}{' '}
                         <button type="button" onClick={() => void controller.confirmDiscard()}>
-                            discard
+                            {t('thread.composer.discard')}
                         </button>{' '}
                         <button type="button" onClick={controller.keepEditing}>
-                            continue
+                            {t('thread.composer.keepEditing')}
                         </button>
                     </span>
                 ) : (
@@ -377,21 +388,22 @@ function ComposerStatus({
     readOnly: boolean;
     onRetry: () => Promise<boolean>;
 }) {
+    const t = useT();
     const readOnlyReason = useReadOnlyReason();
     if (composer.status === 'discarding') {
-        return <span className="thread-composer__status">deleting…</span>;
+        return <span className="thread-composer__status">{t('thread.composer.status.discarding')}</span>;
     }
     if (ambiguousFirstSave) {
         return (
             <span className="thread-composer__status is-error">
-                could not confirm the save · retrying may create a copy ·{' '}
+                {t('thread.composer.status.uncertain')}
                 <button
                     type="button"
                     disabled={readOnly}
                     {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
                 >
-                    retry anyway
+                    {t('thread.composer.status.retryAnyway')}
                 </button>
             </span>
         );
@@ -399,31 +411,31 @@ function ComposerStatus({
     if (composer.status === 'error') {
         return (
             <span className="thread-composer__status is-error">
-                not saved — the draft stays in the field ·{' '}
+                {t('thread.composer.status.error')}
                 <button
                     type="button"
                     disabled={readOnly}
                     {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
                 >
-                    retry
+                    {t('thread.composer.status.retry')}
                 </button>
             </span>
         );
     }
     if (composer.status === 'saving') {
-        return <span className="thread-composer__status">saving…</span>;
+        return <span className="thread-composer__status">{t('thread.composer.status.saving')}</span>;
     }
     if (composer.status === 'saved') {
         return (
             <span className="thread-composer__status is-saved">
-                <Icon name="check" size={13} /> saved as a draft
+                <Icon name="check" size={13} /> {t('thread.composer.status.saved')}
                 {composer.savedAt == null ? null : <> · {formatTime(composer.savedAt)}</>}
             </span>
         );
     }
     if (composer.text !== '' || composer.commentId !== null) {
-        return <span className="thread-composer__status">not saved — ⌘⏎ or the button</span>;
+        return <span className="thread-composer__status">{t('thread.composer.status.unsaved')}</span>;
     }
     return null;
 }

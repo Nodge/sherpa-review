@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
-import { formatCount, plural } from '../i18n/index.js';
+import type { Translate } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
 import type { SessionStore } from '../session/session-store.js';
@@ -94,6 +95,7 @@ function NoteGroupView({
     readonly session: SessionStore;
     readonly actions: CardNoteActions;
 }) {
+    const t = useT();
     const stackKey = noteStackKey(group);
     const summarized = noteStackNeedsSummary(group);
     const open =
@@ -111,7 +113,7 @@ function NoteGroupView({
                 }}
             >
                 <span className="agent-note__diamond" aria-hidden="true">◆</span>
-                {formatCount(group.notes.length, 'ru')} {plural(group.notes.length, { one: 'note', few: 'notes', many: 'notes', other: 'notes' }, 'ru')} here
+                {t('note.here', group.notes.length)}
             </button>
         );
     }
@@ -127,7 +129,7 @@ function NoteGroupView({
                         session.collapseNoteStack(stackKey, group.notes.map((note) => note.id));
                     }}
                 >
-                    Collapse the list
+                    {t('note.collapseList')}
                 </button>
             ) : null}
             {group.notes.map((note) => (
@@ -154,6 +156,7 @@ function AgentNoteView({
     readonly session: SessionStore;
     readonly actions: CardNoteActions;
 }) {
+    const t = useT();
     const [deleting, setDeleting] = useState(false);
     // A note is always readable. Creating a comment draft from it requires the active iteration.
     const readOnly = useReadOnlyIteration();
@@ -172,25 +175,26 @@ function AgentNoteView({
                 }}
             >
                 <span className="agent-note__diamond" aria-hidden="true">◆</span>
-                <span className="agent-note__label">Agent note</span>
+                <span className="agent-note__label">{t('note.label')}</span>
                 <span className="agent-note__separator" aria-hidden="true">·</span>
                 <span className="agent-note__preview">{firstTextLine(note.text)}</span>
                 <span className="agent-note__separator" aria-hidden="true">·</span>
-                <span className="agent-note__count">{lineCountLabel(note.text)}</span>
+                <span className="agent-note__count">{lineCountLabel(note.text, t)}</span>
             </button>
         );
     }
 
-    const range = note.anchor.start === note.anchor.end
-        ? `asked at line ${String(note.anchor.start)}`
-        : `asked at lines ${String(note.anchor.start)}–${String(note.anchor.end)}`;
+    const range =
+        note.anchor.start === note.anchor.end
+            ? t('note.at.line', note.anchor.start)
+            : t('note.at.lines', note.anchor.start, note.anchor.end);
     return (
         <article className="agent-note agent-note--expanded" data-note={note.id} tabIndex={-1}>
             <header className="agent-note__header">
                 <span className="agent-note__diamond" aria-hidden="true">◆</span>
-                <span>Agent note · {range}</span>
+                <span>{t('note.header', range)}</span>
             </header>
-            <div className="agent-note__provenance">model answer · never published to the PR</div>
+            <div className="agent-note__provenance">{t('note.provenance')}</div>
             <div className="agent-note__body">
                 <Markdown text={note.text} profile="comment" />
             </div>
@@ -201,17 +205,17 @@ function AgentNoteView({
                         actions.onOpenInChat(note);
                     }}
                 >
-                    Open in the chat
+                    {t('note.openInChat')}
                 </button>
                 <button
                     type="button"
                     disabled={readOnly || note.lostAnchor}
-                    title={draftReason(note, readOnly, readOnlyReason)}
+                    title={draftReason(note, readOnly, readOnlyReason, t)}
                     onClick={() => {
                         actions.onTurnIntoDraft(note);
                     }}
                 >
-                    Turn into a comment draft
+                    {t('note.toDraft')}
                 </button>
                 <button
                     type="button"
@@ -219,7 +223,7 @@ function AgentNoteView({
                         session.toggleNoteExpanded(note.id);
                     }}
                 >
-                    Collapse
+                    {t('note.collapse')}
                 </button>
                 <button
                     type="button"
@@ -233,12 +237,12 @@ function AgentNoteView({
                         });
                     }}
                 >
-                    {deleting ? 'Deleting' : 'Delete'}
+                    {deleting ? t('note.deleting') : t('note.delete')}
                 </button>
             </div>
             {error === null ? null : (
                 <div className="agent-note__error" role="alert">
-                    Could not delete the note: {error}
+                    {t('note.deleteFailed', error)}
                 </div>
             )}
         </article>
@@ -246,9 +250,14 @@ function AgentNoteView({
 }
 
 /** Why a comment draft is unavailable: a lost anchor takes precedence over read-only mode because it is irreversible. */
-function draftReason(note: AgentNote, readOnly: boolean, readOnlyReason: string): string | undefined {
+function draftReason(
+    note: AgentNote,
+    readOnly: boolean,
+    readOnlyReason: string,
+    t: Translate,
+): string | undefined {
     if (note.lostAnchor) {
-        return NOTE_LOST_DRAFT_REASON;
+        return t(NOTE_LOST_DRAFT_REASON);
     }
     return readOnly ? readOnlyReason : undefined;
 }
@@ -257,9 +266,8 @@ function firstTextLine(text: string): string {
     return text.split(/\r?\n/u).find((line) => line.trim() !== '')?.trim() ?? text.trim();
 }
 
-function lineCountLabel(text: string): string {
-    const count = text.split('\n').length;
-    return `${formatCount(count, 'ru')} ${plural(count, { one: 'line', few: 'lines', many: 'lines', other: 'lines' }, 'ru')}`;
+function lineCountLabel(text: string, t: Translate): string {
+    return t('note.lines', text.split('\n').length);
 }
 
 function groupKey(group: NoteGroup): string {

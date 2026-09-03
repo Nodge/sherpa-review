@@ -1,6 +1,7 @@
 import type { RouteTier } from '@sherpa/protocol';
 
-import { formatCount, plural } from '../../i18n/index.js';
+import type { MessageKey } from '../../i18n/index.js';
+import { useT } from '../../i18n/index.js';
 import type { CoverageStripModel } from '../../route/coverage-model.js';
 import { MIN_SEGMENT_PX } from '../../route/coverage-model.js';
 
@@ -24,9 +25,9 @@ export interface CoverageStripLoading {
     readonly total: number;
 }
 
-const LOADING_TEXT: Readonly<Record<CoverageStripLoading['kind'], string>> = {
-    plan: 'coverage known after the plan',
-    diff: 'counting coverage over the diff',
+const LOADING_TEXT: Readonly<Record<CoverageStripLoading['kind'], MessageKey>> = {
+    plan: 'coverage.loading.plan',
+    diff: 'coverage.loading.diff',
 };
 
 export interface CoverageStripProps {
@@ -48,6 +49,7 @@ export function CoverageStrip({
     onJump,
     onHoverTier,
 }: CoverageStripProps) {
+    const t = useT();
     if (model === null) {
         // No denominator means no plan yet. The strip cannot be divided, so the shimmer fills the track.
         const unknown = loading === null || loading.total === 0;
@@ -69,7 +71,7 @@ export function CoverageStrip({
                     )}
                 </div>
                 <div className="coverage__legend">
-                    <span className="coverage__legend-text">{LOADING_TEXT[loading?.kind ?? 'plan']}</span>
+                    <span className="coverage__legend-text">{t(LOADING_TEXT[loading?.kind ?? 'plan'])}</span>
                     <span className="coverage__spacer" />
                     <StopCounter viewed={viewedStops} total={totalStops} />
                 </div>
@@ -79,7 +81,7 @@ export function CoverageStrip({
 
     return (
         <div className="coverage">
-            <div className="coverage__track" role="group" aria-label="Diff coverage by stops">
+            <div className="coverage__track" role="group" aria-label={t('coverage.aria')}>
                 {model.segments.map((segment) => (
                     <button
                         key={segment.tier}
@@ -139,13 +141,9 @@ export function CoverageStrip({
 
 /** "viewed 3 of 7 stops" renders README §1 "N / 7 stops viewed" in the voice of the rest of the UI. */
 function StopCounter({ viewed, total }: { viewed: number; total: number }) {
+    const t = useT();
     if (total === 0) {
         return null;
     }
-    return (
-        <span className="coverage__stops">
-            viewed {formatCount(viewed, 'ru')} of {formatCount(total, 'ru')}{' '}
-            {plural(total, { one: 'stop', few: 'stops', many: 'stops', other: 'stops' }, 'ru')}
-        </span>
-    );
+    return <span className="coverage__stops">{t('coverage.stopsViewed', viewed, total)}</span>;
 }

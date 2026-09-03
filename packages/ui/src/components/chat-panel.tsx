@@ -2,6 +2,8 @@ import type { AgentNote, ChatAnchor, ChatExchange, UiChatAskAnchor, UiTask, Work
 import type { KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { MessageKey, Translate } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { breadcrumbFromPrKey } from '../pr-key.js';
 import { Markdown } from '../markdown/markdown.tsx';
 import { NOTE_LOST_ANCHOR_REASON, noteAnchorForIteration, noteVisibleInIteration } from '../notes/model.js';
@@ -87,14 +89,14 @@ export function chatActivityState(
  * A cancelled route task uses the generic text too: generation has stopped, and the route view
  * shows cancelled stops, so "Generating the route" would contradict it.
  */
-export function queueBannerText(tasks: readonly UiTask[]): string | null {
+export function queueBannerText(tasks: readonly UiTask[]): MessageKey | null {
     const current = tasks.find((task) => task.heldByWorker);
     if (current === undefined) {
         return null;
     }
     const generating =
         current.status !== 'cancelled' && (current.type === 'route.skeleton' || current.type === 'route.section');
-    return generating ? 'Generating the route · your question is next' : 'Agent busy · your question is next';
+    return generating ? 'chat.queue.route' : 'chat.queue.busy';
 }
 
 export function sameChatAnchor(left: UiChatAskAnchor | null, right: UiChatAskAnchor | null): boolean {
@@ -137,6 +139,7 @@ export function ChatPanel(props: ChatPanelProps) {
         onNavigateToNote,
         viewDiffId = null,
     } = props;
+    const t = useT();
     const feed = useMemo(() => expandChatExchanges(exchanges, notes), [exchanges, notes]);
     const feedVersion = feed
         .map(({ exchange, note }) =>
@@ -305,15 +308,17 @@ export function ChatPanel(props: ChatPanelProps) {
     const prLabel = breadcrumbFromPrKey(props.prKey).at(-1) ?? props.prKey;
 
     return (
-        <aside className="chat-panel" aria-label="Chat with the agent">
+        <aside className="chat-panel" aria-label={t('chat.aria')}>
             <header className="chat-panel__header">
                 <div>
                     <div className="chat-panel__title">Agent</div>
-                    <div className="chat-panel__identity">{workerIdentity(worker)}</div>
+                    <div className="chat-panel__identity">{workerIdentity(worker, t)}</div>
                 </div>
                 <div className="chat-panel__header-actions">
-                    {notes.length === 0 ? null : <span className="chat-panel__notes">Notes {String(notes.length)}</span>}
-                    <button type="button" className="chat-panel__close" aria-label="Close chat" onClick={onClose}>
+                    {notes.length === 0 ? null : (
+                        <span className="chat-panel__notes">{t('chat.notes', notes.length)}</span>
+                    )}
+                    <button type="button" className="chat-panel__close" aria-label={t('app.closeChat')} onClick={onClose}>
                         ×
                     </button>
                 </div>
@@ -321,7 +326,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
             {queued === null ? null : (
                 <div className="chat-panel__queue" ref={queueRef} role="status">
-                    {queued}
+                    {t(queued)}
                 </div>
             )}
 
@@ -329,12 +334,12 @@ export function ChatPanel(props: ChatPanelProps) {
                 <div className="chat-panel__feed-content">
                     {loading && feed.length === 0 ? (
                         <p className="chat-panel__history-status" role="status">
-                            Loading the chat history…
+                            {t('chat.history.loading')}
                         </p>
                     ) : null}
                     {error === null ? null : (
                         <p className="chat-panel__history-error" role="alert">
-                            Could not load the chat history: {error}. Retrying…
+                            {t('chat.history.failed', error)}
                         </p>
                     )}
                     {!loading && error === null && activity === 'empty' ? (
@@ -363,12 +368,8 @@ export function ChatPanel(props: ChatPanelProps) {
                     ))}
                     {activity === 'disconnected' ? (
                         <div className="chat-panel__disconnected">
-                            <p>Agent disconnected. New questions are unavailable.</p>
-                            <CommandBox
-                                command={props.reconnectCommand}
-                                hint="Run it in any harness — that session becomes the worker."
-                                actionLabel="Copy"
-                            />
+                            <p>{t('chat.disconnected')}</p>
+                            <CommandBox command={props.reconnectCommand} hint={t('command.hint')} />
                         </div>
                     ) : null}
                 </div>
@@ -383,7 +384,7 @@ export function ChatPanel(props: ChatPanelProps) {
                             title={chatAnchorTitle(anchor)}
                         >
                             <span className="chat-panel__context-label">{chatAnchorLabel(anchor)}</span>
-                            <button type="button" aria-label="Remove the range from the context" onClick={onRemoveAnchor}>
+                            <button type="button" aria-label={t('chat.anchor.remove')} onClick={onRemoveAnchor}>
                                 ×
                             </button>
                         </span>
@@ -392,10 +393,10 @@ export function ChatPanel(props: ChatPanelProps) {
                 <textarea
                     ref={textareaRef}
                     className="chat-panel__textarea"
-                    aria-label="Question to the agent"
+                    aria-label={t('chat.composer.aria')}
                     value={text}
                     disabled={!connected || sending}
-                    placeholder="Ask the agent"
+                    placeholder={t('chat.composer.placeholder')}
                     onChange={(event) => {
                         setText(event.target.value);
                     }}
@@ -407,9 +408,9 @@ export function ChatPanel(props: ChatPanelProps) {
                     }}
                 />
                 <div className="chat-panel__composer-footer">
-                    <span>Enter — send · Shift+Enter — new line</span>
+                    <span>{t('chat.composer.hint')}</span>
                     <button type="button" disabled={!connected || sending || text.trim() === ''} onClick={submit}>
-                        Send
+                        {t('chat.composer.send')}
                     </button>
                 </div>
                 {composerError === null ? null : (
@@ -447,6 +448,7 @@ function ChatExchangeView({
     readonly typingVisible: boolean;
     readonly longRunning: boolean;
 }) {
+    const t = useT();
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionPending, setActionPending] = useState(false);
     const run = (action: (exchangeId: number) => Promise<void>): void => {
@@ -502,17 +504,17 @@ function ChatExchangeView({
                                 title={
                                     noteVisibleInIteration(note, viewDiffId)
                                         ? chatAnchorTitle(noteAnchorForIteration(note, viewDiffId))
-                                        : NOTE_LOST_ANCHOR_REASON
+                                        : t(NOTE_LOST_ANCHOR_REASON)
                                 }
                                 onClick={() => {
                                     onNavigateToNote(note);
                                 }}
                             >
-                                ◆ Pinned by a note at {chatAnchorLabel(noteAnchorForIteration(note, viewDiffId))}
+                                {t('chat.note.pinned', chatAnchorLabel(noteAnchorForIteration(note, viewDiffId)))}
                             </button>
                             {note.lostAnchor ? (
                                 <span className="chat-message__note-lost" title={chatAnchorTitle(note.anchor)}>
-                                    anchor lost after the push · {chatAnchorLabel(note.anchor)}
+                                    {t('chat.note.lostAnchor', chatAnchorLabel(note.anchor))}
                                 </span>
                             ) : null}
                         </div>
@@ -528,7 +530,7 @@ function ChatExchangeView({
                                 <i />
                                 <i />
                             </span>
-                            <span>{longRunning ? 'Still working' : 'Answering'}</span>
+                            <span>{longRunning ? t('chat.answering.long') : t('chat.answering')}</span>
                         </div>
                     ) : null}
                     {exchange.progressText === null ? null : (
@@ -542,14 +544,16 @@ function ChatExchangeView({
                             run(onCancel);
                         }}
                     >
-                        Stop
+                        {t('chat.stop')}
                     </button>
                 </div>
             ) : exchange.status === 'failed' || exchange.status === 'cancelled' ? (
                 <div className="chat-message chat-message--agent chat-message--failed" ref={errorRef} role="alert">
                     <div className="chat-message__author">agent</div>
                     <div className="chat-message__body chat-message__body--plain">
-                        {exchange.status === 'failed' ? (exchange.error ?? 'No answer came back.') : 'Question cancelled.'}
+                        {exchange.status === 'failed'
+                            ? (exchange.error ?? t('chat.answer.missing'))
+                            : t('chat.answer.cancelled')}
                     </div>
                     <button
                         type="button"
@@ -559,13 +563,13 @@ function ChatExchangeView({
                             run(onRetry);
                         }}
                     >
-                        Retry
+                        {t('chat.retry')}
                     </button>
                 </div>
             ) : null}
             {cancelledLease ? (
                 <p className="chat-panel__cancelled-lease" role="status">
-                    The agent is still busy with the cancelled task — it learns about the cancel on its next call
+                    {t('chat.cancelledLease')}
                 </p>
             ) : null}
             {actionError === null ? null : (
@@ -583,20 +587,21 @@ function ChatExchangeView({
  * it never offers a clickable action while the agent is disconnected.
  */
 function EmptyChat({ onPick }: { readonly onPick: (question: string) => void }) {
+    const t = useT();
     return (
         <div className="chat-panel__empty">
-            <p>Ask about the PR or select lines and ask about them</p>
+            <p>{t('chat.empty')}</p>
             <ul>
-                {CHAT_EXAMPLE_QUESTIONS.map((question) => (
-                    <li key={question}>
+                {CHAT_EXAMPLE_QUESTIONS.map((key) => (
+                    <li key={key}>
                         <button
                             type="button"
                             className="chat-panel__example"
                             onClick={() => {
-                                onPick(question);
+                                onPick(t(key));
                             }}
                         >
-                            {question}
+                            {t(key)}
                         </button>
                     </li>
                 ))}
@@ -605,9 +610,9 @@ function EmptyChat({ onPick }: { readonly onPick: (question: string) => void }) 
     );
 }
 
-function workerIdentity(worker: WorkerStatus): string {
+function workerIdentity(worker: WorkerStatus, t: Translate): string {
     if (worker.kind === 'never') {
-        return 'not connected';
+        return t('chat.worker.never');
     }
     return [worker.harness, worker.model].filter((value): value is string => value !== undefined).join(' · ') || worker.workerId;
 }

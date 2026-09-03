@@ -1189,8 +1189,9 @@ export function App({ store, session, token }: AppProps) {
                       files: currentDiff.files,
                       ownership: currentReview.lenses.ownership,
                       extra: currentReview.lenses.extra,
+                      t,
                   }),
-        [currentDiff, currentReview.lenses],
+        [currentDiff, currentReview.lenses, t],
     );
     const pci = findFilter(filters, PCI_FILTER_ID);
     const pciStats = currentDiff === null || pci === null ? null : filterStats(currentDiff.files, pci);
@@ -1898,7 +1899,7 @@ export function App({ store, session, token }: AppProps) {
             <TopBar
                 version={UI_VERSION}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
-                agent={agentPillView(state.worker, state.tasks)}
+                agent={agentPillView(state.worker, state.tasks, t)}
                 reconnectCommand={reconnectCommand(state.prKey)}
                 chatOpen={chatOpen}
                 onToggleChat={toggleChat}

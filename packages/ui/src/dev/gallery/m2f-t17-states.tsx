@@ -10,15 +10,18 @@ import {
     MINE_FILTER_ID,
     selectFilter,
 } from '../../filters/lens-filters.js';
+import { createT } from '../../i18n/index.js';
 import { readStateOf } from '../../progress/read-state.js';
 import { FilePanel } from '../../tree/file-panel.tsx';
 
 const EDGE = fixtureIteration('edge');
 const FILES = EDGE.diff.files.filter((file) => !file.generated);
+// Module-level fixture: the gallery switches language when rendering, and Russian is enough for these labels.
 const FILTERS = buildFileFilters({
     files: FILES,
     ownership: EDGE.ownership,
     extra: fixtureIteration('large').extraLenses,
+    t: createT('ru'),
 });
 const MINE = findFilter(FILTERS, MINE_FILTER_ID);
 const READ_STATE = new Map(FILES.map((file) => [file.fileId, readStateOf({ file, record: null })]));

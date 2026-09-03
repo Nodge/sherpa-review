@@ -1,5 +1,6 @@
 import type { UiRouteFailure } from '@sherpa/protocol';
 
+import { useT } from '../../i18n/index.js';
 import { CoverageStrip } from './coverage-strip.tsx';
 import { RouteFailedCard } from './generation-card.tsx';
 import { StopSkeleton } from './stop-card.tsx';
@@ -18,6 +19,7 @@ import './generation.css';
  * and the stop count is unknown (README §6, last sentence of §8).
  */
 export function RouteReadingView({ onOpenDiff }: { onOpenDiff: () => void }) {
+    const t = useT();
     return (
         <main className="route route--skeleton" id="view-route">
             <div className="route-skeleton__bar">
@@ -31,7 +33,7 @@ export function RouteReadingView({ onOpenDiff }: { onOpenDiff: () => void }) {
                             <div className="route-stop__head">
                                 <span className="route-stop__rule" />
                                 <span className="route-stop__number">— / ?</span>
-                                <span className="route-stop__badge route-stop__badge--queued">queued</span>
+                                <span className="route-stop__badge route-stop__badge--queued">{t('route.gen.plan.queued')}</span>
                             </div>
                             <div className="route-skeleton__title" />
                             <div className="route-skeleton__line" />
@@ -44,9 +46,9 @@ export function RouteReadingView({ onOpenDiff }: { onOpenDiff: () => void }) {
                 ))}
 
                 <p className="route-skeleton__note">
-                    The plan is still being built. Stop numbers, titles and count will arrive with it.
+                    {t('route.gen.planning.note')}
                     <button type="button" className="route-skeleton__link" onClick={onOpenDiff}>
-                        Read the full diff
+                        {t('route.readFullDiff')}
                     </button>
                 </p>
             </div>

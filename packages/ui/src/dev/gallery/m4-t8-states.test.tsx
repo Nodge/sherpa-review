@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { createT } from '../../i18n/index.js';
 import { CHANGE_CHIP_LABEL } from '../../views/route/route-toolbar.tsx';
 import { M4_T8_STATES } from './m4-t8-states.tsx';
 
@@ -47,7 +48,7 @@ describe('M4-T8 gallery', () => {
     it('the what is new filter leaves 3 stops and shows a chip', () => {
         const html = markup('iterations-filter-new');
 
-        expect(html).toContain(CHANGE_CHIP_LABEL);
+        expect(html).toContain(createT('ru')(CHANGE_CHIP_LABEL));
         expect([...html.matchAll(/data-stop="/g)]).toHaveLength(3);
         // The plan fixes stop numbers, so the denominator still includes every slot.
         expect(html).toContain('02 / 7');

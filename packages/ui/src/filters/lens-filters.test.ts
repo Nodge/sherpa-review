@@ -13,6 +13,9 @@ import {
     selectFilter,
     zeroResultText,
 } from './lens-filters.js';
+import { createT, ru as ruDictionary } from '../i18n/index.js';
+
+const t = createT('ru');
 
 function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
     return {
@@ -47,8 +50,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', ['src/a.ts']),
-            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])],
-        });
+            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
 
         expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'pci', 'generated']);
     });
@@ -57,8 +59,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', ['src/a.ts']),
-            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])],
-        });
+            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
 
         expect(filters.map((filter) => [filter.label, filter.count])).toEqual([
             [ruDictionary['lens.all'], 3],
@@ -72,8 +73,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('pci', 'PCI DSS', ['src/a.ts', 'src/gone.ts', 'src/also-gone.ts'])],
-        });
+            extra: [lens('pci', 'PCI DSS', ['src/a.ts', 'src/gone.ts', 'src/also-gone.ts'])], t,});
 
         expect(findFilter(filters, 'pci')?.count).toBe(1);
     });
@@ -82,8 +82,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('security-scope', 'Security scope', ['src/b.ts'])],
-        });
+            extra: [lens('security-scope', 'Security scope', ['src/b.ts'])], t,});
 
         const unknown = findFilter(filters, 'security-scope');
         expect(unknown?.label).toBe('Security scope');
@@ -95,15 +94,14 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('all', 'Everything', []), lens('generated', 'Robots', [])],
-        });
+            extra: [lens('all', 'Everything', []), lens('generated', 'Robots', [])], t,});
 
         expect(filters.map((filter) => filter.id)).toEqual(['all', 'generated']);
         expect(findFilter(filters, 'generated')?.count).toBe(1);
     });
 
     it('without an ownership lens there is no mine filter', () => {
-        const filters = buildFileFilters({ files: FILES, ownership: null, extra: [] });
+        const filters = buildFileFilters({ files: FILES, ownership: null, extra: [], t});
 
         expect(findFilter(filters, 'mine')).toBeNull();
     });
@@ -115,8 +113,7 @@ describe('buildFileFilters', () => {
                 available: false,
                 note: 'you have no CODEOWNERS zone in this PR',
             }),
-            extra: [],
-        });
+            extra: [], t,});
 
         const mine = findFilter(filters, 'mine');
         expect(mine?.available).toBe(false);
@@ -127,15 +124,14 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', FILES.map((item) => item.path)),
-            extra: [],
-        });
+            extra: [], t,});
 
         expect(findFilter(filters, 'mine')?.count).toBe(3);
         expect(selectFilter(filters, null).id).toBe(ALL_FILTER_ID);
     });
 
     it('without generated files the generated filter is excluded', () => {
-        const filters = buildFileFilters({ files: [file('src/a.ts')], ownership: null, extra: [] });
+        const filters = buildFileFilters({ files: [file('src/a.ts')], ownership: null, extra: [], t});
 
         expect(findFilter(filters, 'generated')).toBeNull();
     });
@@ -144,13 +140,11 @@ describe('buildFileFilters', () => {
         const available = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('pci', 'PCI DSS', [])],
-        });
+            extra: [lens('pci', 'PCI DSS', [])], t,});
         const unavailable = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('pci', 'PCI DSS', [], { available: false, note: 'scope unavailable' })],
-        });
+            extra: [lens('pci', 'PCI DSS', [], { available: false, note: 'scope unavailable' })], t,});
 
         expect(findFilter(available, 'pci')).toBeNull();
         expect(findFilter(unavailable, 'pci')).toBeNull();
@@ -161,8 +155,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,
-            extra: data.extraLenses,
-        });
+            extra: data.extraLenses, t,});
 
         expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'generated']);
         expect(findFilter(filters, 'pci')).toBeNull();
@@ -173,8 +166,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,
-            extra: data.extraLenses,
-        });
+            extra: data.extraLenses, t,});
 
         expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'generated']);
         expect(findFilter(filters, 'mine')).toMatchObject({
@@ -189,8 +181,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: data.diff.files,
             ownership: data.ownership,
-            extra: data.extraLenses,
-        });
+            extra: data.extraLenses, t,});
 
         expect(filters.map((filter) => filter.id)).toEqual(['all', 'mine', 'pci', 'generated']);
         expect(filters.every((filter) => filter.available)).toBe(true);
@@ -200,8 +191,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', []),
-            extra: [],
-        });
+            extra: [], t,});
 
         expect(findFilter(filters, 'mine')).toMatchObject({
             available: false,
@@ -215,8 +205,7 @@ describe('selectFilter', () => {
     const filters = buildFileFilters({
         files: FILES,
         ownership: lens('mine', 'My files', [], { available: false, note: 'no zone' }),
-        extra: [lens('pci', 'PCI DSS', ['src/b.ts'])],
-    });
+        extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
 
     it('finds a filter by id', () => {
         expect(selectFilter(filters, 'pci').id).toBe('pci');
@@ -233,8 +222,7 @@ describe('filterFiles', () => {
     const filters = buildFileFilters({
         files: FILES,
         ownership: null,
-        extra: [lens('pci', 'PCI DSS', ['src/b.ts'])],
-    });
+        extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
 
     it('All files passes the list through unchanged', () => {
         expect(filterFiles(FILES, selectFilter(filters, ALL_FILTER_ID))).toBe(FILES);
@@ -250,8 +238,7 @@ describe('filterStats', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: null,
-            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])],
-        });
+            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
 
         expect(filterStats(FILES, selectFilter(filters, 'pci'))).toEqual({
             files: 1,
@@ -283,13 +270,13 @@ describe('zeroResultText', () => {
     }
 
     it('without a host reason the UI explains in its own words', () => {
-        expect(zeroResultText(emptyFilter('pci', 'Файлы PCI DSS', null))).toBe(
+        expect(zeroResultText(emptyFilter('pci', ruDictionary['lens.audit']('PCI DSS'), null), t)).toBe(
             ruDictionary['lens.zeroResult'](ruDictionary['lens.audit']('PCI DSS')),
         );
     });
 
     it('the host note takes precedence over UI text', () => {
-        expect(zeroResultText(emptyFilter('sox', 'SOX scope', 'SOX scope for this commit has not been published yet'))).toBe(
+        expect(zeroResultText(emptyFilter('sox', 'SOX scope', 'SOX scope for this commit has not been published yet'), t)).toBe(
             'SOX scope for this commit has not been published yet',
         );
     });

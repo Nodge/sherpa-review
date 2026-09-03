@@ -14,6 +14,7 @@ import {
 } from 'react';
 
 import type { DiffFileModel } from '../diff/model.js';
+import { useT } from '../i18n/index.js';
 import type { CardNoteActions } from '../notes/card-notes.tsx';
 import { useCardNotes } from '../notes/card-notes.tsx';
 import type { FileReadState } from '../progress/read-state.js';
@@ -172,6 +173,7 @@ export function DiffFileList({
     onScroll,
     ref,
 }: DiffFileListProps) {
+    const t = useT();
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
     const composersSnapshot = useSyncExternalStore(threadStore.subscribeComposers, threadStore.getComposersSnapshot);
@@ -516,8 +518,8 @@ export function DiffFileList({
 
     const expand = useCallback(
         (fileId: string, request: ContextExpandRequest): Promise<ContextExpandResult> =>
-            expandContext({ store, fileId, request, contentAvailable, loadContent }),
-        [contentAvailable, loadContent, store],
+            expandContext({ store, fileId, request, contentAvailable, loadContent, t }),
+        [contentAvailable, loadContent, store, t],
     );
 
     const actions = useMemo<FileCardActions>(
@@ -612,7 +614,7 @@ const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_NOTE_ACTIONS: CardNoteActions = {
     onOpenInChat: () => undefined,
     onTurnIntoDraft: () => undefined,
-    onDelete: () => Promise.reject(new Error('note deletion is unavailable')),
+    onDelete: () => Promise.reject(new Error('deleting notes is unavailable here')),
 };
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set();
 const EMPTY_EXPANSION: FileExpansion = new Map();
@@ -890,11 +892,11 @@ function topFile(
 const EMPTY_THREAD_STORE = createThreadStore([], new Set());
 const EMPTY_THREAD_ACTIONS: ThreadActions = {
     transport: {
-        save: () => Promise.reject(new Error('drafts are unavailable')),
-        update: () => Promise.reject(new Error('drafts are unavailable')),
-        delete: () => Promise.reject(new Error('drafts are unavailable')),
+        save: () => Promise.reject(new Error('drafts are unavailable here')),
+        update: () => Promise.reject(new Error('drafts are unavailable here')),
+        delete: () => Promise.reject(new Error('drafts are unavailable here')),
     },
-    resolve: () => Promise.reject(new Error('resolve is unavailable')),
+    resolve: () => Promise.reject(new Error('resolve is unavailable here')),
 };
 const HIDE_THREAD = (): boolean => false;
 const NOOP = (): void => undefined;

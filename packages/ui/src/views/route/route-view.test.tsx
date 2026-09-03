@@ -12,8 +12,11 @@ import { createSessionStore, EMPTY_STOPS } from '../../session/session-store.js'
 import type { ThreadStore } from '../../threads/store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteWorkspace } from './route-view.tsx';
+import { createT } from '../../i18n/index.js';
 import { TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
 import { DIGEST_NOTE, UNCOVERED_NOTE } from './test-digest.tsx';
+
+const t = createT('en');
 
 /**
  * Route view component tests use static markup on a fixture (the same approach as
@@ -152,12 +155,12 @@ describe('route view', () => {
         const triage = render();
         const tour = render({ preset: 'tour' });
 
-        expect(triage).toContain(TRIAGE_HINT);
-        expect(triage).not.toContain(TOUR_HINT);
+        expect(triage).toContain(t(TRIAGE_HINT));
+        expect(triage).not.toContain(t(TOUR_HINT));
         expect(triage).toContain('aria-pressed="true">Triage</button>');
         expect(triage).toContain('aria-pressed="false">Full tour</button>');
-        expect(tour).toContain(TOUR_HINT);
-        expect(tour).not.toContain(TRIAGE_HINT);
+        expect(tour).toContain(t(TOUR_HINT));
+        expect(tour).not.toContain(t(TRIAGE_HINT));
         expect(tour).toContain('aria-pressed="true">Full tour</button>');
     });
 
@@ -450,7 +453,7 @@ describe('route view', () => {
         const stop = section(render(), 's04');
 
         expect(stop).toContain('Behavioural digest · 12 assertions');
-        expect(stop).toContain(DIGEST_NOTE);
+        expect(stop).toContain(t(DIGEST_NOTE));
         expect(stop).toContain('Show the test code');
         // 10 list rows plus 2 footer rows. Chips for all four categories are present.
         expect(count(stop, 'class="digest__row')).toBe(12);
@@ -466,7 +469,7 @@ describe('route view', () => {
         const stop = section(render(), 's04');
         const footer = stop.slice(stop.indexOf('digest__footer'));
 
-        expect(stop).toContain(UNCOVERED_NOTE);
+        expect(stop).toContain(t(UNCOVERED_NOTE));
         // Both footer rows are inside the footer, not in the main list.
         expect(count(footer, 'digest__chip--uncovered')).toBe(2);
         expect(stop).toContain('2 assertions dropped — the anchor found no test');
@@ -494,7 +497,7 @@ describe('route view', () => {
         expect(shown).toContain('diff-rows');
         expect(shown).toContain('Hide the test code');
         // The note about hidden test code is absent when the code is expanded.
-        expect(shown).not.toContain(DIGEST_NOTE);
+        expect(shown).not.toContain(t(DIGEST_NOTE));
     });
 
     it('an empty intersection shows a test code link instead of a toggle and an incorrect note', () => {
@@ -508,7 +511,7 @@ describe('route view', () => {
 
         expect(stop).not.toContain('Show the test code');
         expect(stop).not.toContain('Hide the test code');
-        expect(stop).not.toContain(DIGEST_NOTE);
+        expect(stop).not.toContain(t(DIGEST_NOTE));
         expect(stop).toContain('class="digest__anchor digest__location"');
         expect(stop).toContain('test code — in stop 01</button>');
         // The s04 files do not match assertion files, so no cards are hidden.

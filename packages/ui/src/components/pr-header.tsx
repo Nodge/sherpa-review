@@ -2,7 +2,8 @@ import type { FileDiff, PrChecks, PrMeta } from '@sherpa/protocol';
 import type { ReactNode, Ref } from 'react';
 
 import type { FileFilter } from '../filters/lens-filters.js';
-import { formatCount, plural, relativeTime } from '../i18n/index.js';
+import type { MessageKey } from '../i18n/index.js';
+import { relativeTime, useFormat, useLocale, useT } from '../i18n/index.js';
 import './pr-header.css';
 
 /**
@@ -76,17 +77,17 @@ export function PrHeader(props: PrHeaderProps) {
 }
 
 function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = null }: PrHeaderDefaultProps) {
+    const t = useT();
+    const { count } = useFormat();
     return (
         <header className="pr-header" ref={ref}>
             <div className="pr-header__meta">
                 {counts === null ? null : (
                     <>
-                        <span className="pr-header__add">+{formatCount(counts.additions, 'ru')}</span>
-                        <span className="pr-header__del">−{formatCount(counts.deletions, 'ru')}</span>
+                        <span className="pr-header__add">+{count(counts.additions)}</span>
+                        <span className="pr-header__del">−{count(counts.deletions)}</span>
                         <Separator />
-                        <span>
-                            {formatCount(counts.files, 'ru')} {plural(counts.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
-                        </span>
+                        <span>{t('pr.files', counts.files)}</span>
                         <Separator />
                     </>
                 )}
@@ -101,10 +102,10 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
                             type="button"
                             className={`pr-header__pci${pciActive ? ' is-active' : ''}`}
                             aria-pressed={pciActive}
-                            title="Show only files in the PCI DSS audit scope"
+                            title={t('pr.pci.title')}
                             onClick={onTogglePci}
                         >
-                            PCI DSS · {pci.count} {plural(pci.count, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
+                            {t('pr.pci.label', pci.count)}
                         </button>
                     </>
                 )}
@@ -128,6 +129,9 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
 }
 
 function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOverviewProps) {
+    const t = useT();
+    const locale = useLocale();
+    const { count } = useFormat();
     return (
         <header className="pr-header pr-header--overview" ref={ref}>
             <div className="pr-header__meta">
@@ -135,12 +139,10 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
                 {counts === null ? null : (
                     <>
                         <Separator />
-                        <span className="pr-header__add">+{formatCount(counts.additions, 'ru')}</span>
-                        <span className="pr-header__del">−{formatCount(counts.deletions, 'ru')}</span>
+                        <span className="pr-header__add">+{count(counts.additions)}</span>
+                        <span className="pr-header__del">−{count(counts.deletions)}</span>
                         <Separator />
-                        <span>
-                            {formatCount(counts.files, 'ru')} {plural(counts.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
-                        </span>
+                        <span>{t('pr.files', counts.files)}</span>
                     </>
                 )}
                 {pci === null || !pci.available || pci.count === 0 ? null : (
@@ -156,7 +158,7 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
             <div className="pr-header__author">
                 <span>{pr.author.login}</span>
                 <Separator />
-                <span>{relativeTime(pr.updatedAt, now, 'ru')}</span>
+                <span>{relativeTime(pr.updatedAt, now, locale)}</span>
                 <Separator />
                 <span className="pr-header__branches">
                     {pr.toBranch} ← {pr.fromBranch}
@@ -164,7 +166,7 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
                 {pr.checks === null ? null : (
                     <>
                         <Separator />
-                        <span className={`pr-header__checks is-${pr.checks}`}>{CHECKS_LABELS[pr.checks]}</span>
+                        <span className={`pr-header__checks is-${pr.checks}`}>{t(CHECKS_LABELS[pr.checks])}</span>
                     </>
                 )}
                 {aside === null ? null : <div className="pr-header__aside">{aside}</div>}
@@ -174,10 +176,10 @@ function OverviewHeader({ ref, pr, counts, pci, now, aside = null }: PrHeaderOve
 }
 
 /** Check status in words. The host returns three states, `null` omits the segment entirely. */
-const CHECKS_LABELS: Readonly<Record<PrChecks, string>> = {
-    passed: 'checks passed',
-    failed: 'checks failed',
-    pending: 'checks running',
+const CHECKS_LABELS: Readonly<Record<PrChecks, MessageKey>> = {
+    passed: 'pr.checks.passed',
+    failed: 'pr.checks.failed',
+    pending: 'pr.checks.pending',
 };
 
 function Separator() {

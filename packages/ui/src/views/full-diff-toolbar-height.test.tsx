@@ -8,6 +8,9 @@ import { createDiffViewStore } from '../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { DEFAULT_THREADS_SHOW } from '../session/session-store.js';
 import { FullDiffToolbar } from './full-diff.tsx';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 /** The toolbar reports its height to the view, which uses it for all full diff sticky offsets. */
 
@@ -58,8 +61,7 @@ function mount(onHeight: (value: number) => void): void {
     const filters = buildFileFilters({
         files: DATA.diff.files,
         ownership: DATA.ownership,
-        extra: DATA.extraLenses,
-    });
+        extra: DATA.extraLenses, t,});
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);

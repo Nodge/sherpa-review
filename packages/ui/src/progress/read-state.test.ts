@@ -2,8 +2,13 @@ import type { UiFileProgress, UiSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
+import { createT, ru as ruDictionary } from '../i18n/index.js';
 import type { ReadStateFile } from './read-state.js';
-import { changedLinesOf, readStateOf } from './read-state.js';
+import { changedLinesOf, readStateOf, readStateTooltip } from './read-state.js';
+
+const ru = createT('ru');
+const en = createT('en');
+const tooltip = (state: ReturnType<typeof readStateOf>): string => readStateTooltip(ru, state);
 
 /** Reading progress tri-state (SPEC §2.12) and tooltip counts. */
 
@@ -15,23 +20,17 @@ function record(viewed: boolean | null, seenRanges: UiSeenRange[] = []): UiFileP
 
 describe('file read-state', () => {
     it('returns unread with zero in the tooltip when there is no record or coverage', () => {
-        expect(readStateOf({ file: PLAIN, record: null })).toMatchObject({
-            state: 'unread',
-            seen: 0,
-            total: 60,
-            pinned: false,
-            generatedDefault: false,
-            tooltip: '0 of 60 changed lines seen',
-        });
+        const state = readStateOf({ file: PLAIN, record: null });
+        expect(state).toMatchObject({ state: 'unread', seen: 0, total: 60, pinned: false, generatedDefault: false });
+        expect(tooltip(state)).toBe(ruDictionary['progress.seen'](0, 60));
+        // Text is built where it is shown, so changing the language does not require recalculating the model.
+        expect(readStateTooltip(en, state)).toBe('0 of 60 changed lines seen');
     });
 
     it('pins the whole file to read when marked manually and matches the tooltip count to the filled box', () => {
-        expect(readStateOf({ file: PLAIN, record: record(true) })).toMatchObject({
-            state: 'read',
-            seen: 60,
-            pinned: true,
-            tooltip: '60 of 60 changed lines seen',
-        });
+        const state = readStateOf({ file: PLAIN, record: record(true) });
+        expect(state).toMatchObject({ state: 'read', seen: 60, pinned: true });
+        expect(tooltip(state)).toBe(ruDictionary['progress.seen'](60, 60));
     });
 
     it('returns read for a host mark even without a local record', () => {
@@ -43,7 +42,7 @@ describe('file read-state', () => {
         const state = readStateOf({ file: { ...PLAIN, generated: true }, record: null });
 
         expect(state).toMatchObject({ state: 'read', pinned: true, generatedDefault: true });
-        expect(state.tooltip).toBe('generated — marked read by default · 60 of 60 changed lines seen');
+        expect(tooltip(state)).toBe(ruDictionary['progress.generatedSeen'](ruDictionary['progress.generatedNote'], ruDictionary['progress.seen'](60, 60)));
     });
 
     it('preserves the generated default for a seen-only record', () => {
@@ -88,7 +87,7 @@ describe('file read-state', () => {
             changed,
         });
         expect(partial).toMatchObject({ state: 'partial', seen: 2, total: 5 });
-        expect(partial.tooltip).toBe('2 of 5 changed lines seen');
+        expect(tooltip(partial)).toBe(ruDictionary['progress.seen'](2, 5));
 
         const full = readStateOf({
             file,
@@ -135,14 +134,12 @@ describe('file read-state', () => {
     it('reports accurate counts for a file without changed lines', () => {
         const binary: ReadStateFile = { generated: false, viewed: null, additions: 0, deletions: 0 };
 
-        expect(readStateOf({ file: binary, record: null })).toMatchObject({
-            state: 'unread',
-            tooltip: 'no changed lines in this file',
-        });
-        expect(readStateOf({ file: binary, record: record(true) })).toMatchObject({
-            state: 'read',
-            tooltip: 'no changed lines in this file',
-        });
+        const unread = readStateOf({ file: binary, record: null });
+        expect(unread.state).toBe('unread');
+        expect(tooltip(unread)).toBe(ruDictionary['progress.noChangedLines']);
+        const read = readStateOf({ file: binary, record: record(true) });
+        expect(read.state).toBe('read');
+        expect(tooltip(read)).toBe(ruDictionary['progress.noChangedLines']);
     });
 
     it('takes changed lines from the model by side', () => {

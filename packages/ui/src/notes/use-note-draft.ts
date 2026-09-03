@@ -2,6 +2,7 @@ import type { AgentNote } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { findComposer, focusComposerInput, revealWhenReady } from '../diff-view/line-target.js';
+import { useT } from '../i18n/index.js';
 import type { ThreadStore } from '../threads/store.js';
 import { openNewComposer } from '../threads/thread-list.tsx';
 import { noteComposerAnchor, noteComposerKey, noteDraftText } from './note-draft.js';
@@ -33,6 +34,7 @@ export function useTurnNoteIntoDraft({
     clearSelection,
     commentIssues,
 }: TurnNoteIntoDraftOptions): (note: AgentNote) => void {
+    const t = useT();
     const stopReveal = useRef<(() => void) | null>(null);
     useEffect(
         () => () => {
@@ -45,7 +47,7 @@ export function useTurnNoteIntoDraft({
     return useCallback(
         (note: AgentNote) => {
             const key = noteComposerKey(note.anchor);
-            openNewComposer(threadStore, key, noteComposerAnchor(note.anchor), commentIssues, noteDraftText(note));
+            openNewComposer(threadStore, key, noteComposerAnchor(note.anchor), commentIssues, noteDraftText(note, t));
             clearSelection();
             stopReveal.current?.();
             stopReveal.current = revealWhenReady(() => {
@@ -58,6 +60,6 @@ export function useTurnNoteIntoDraft({
                 return true;
             }, COMPOSER_SEARCH_MS);
         },
-        [clearSelection, commentIssues, threadStore],
+        [clearSelection, commentIssues, t, threadStore],
     );
 }

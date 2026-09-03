@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { formatCount, plural } from '../../i18n/index.js';
+import { useFormat, useT } from '../../i18n/index.js';
+import { readStateTooltip } from '../../progress/read-state.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { FileReadState } from '../../progress/read-state.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
@@ -23,6 +24,7 @@ export interface FileChipsProps {
 }
 
 export function FileChips({ files, readStateOf, onOpen }: FileChipsProps) {
+    const t = useT();
     const [expanded, setExpanded] = useState(false);
     const clamped = files.length > CHIPS_LIMIT && !expanded;
     const shown = clamped ? files.slice(0, CHIPS_SHOWN) : files;
@@ -41,7 +43,7 @@ export function FileChips({ files, readStateOf, onOpen }: FileChipsProps) {
                         setExpanded(true);
                     }}
                 >
-                    {formatCount(hidden, 'ru')} more {plural(hidden, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')}
+                    {t('route.fileChips.more', hidden)}
                 </button>
             )}
         </div>
@@ -57,11 +59,13 @@ function FileChip({
     read: FileReadState;
     onOpen: (fileId: string) => void;
 }) {
+    const t = useT();
+    const { count } = useFormat();
     return (
         <button
             type="button"
             className={`route-chip${read.state === 'read' ? ' is-read' : ''}`}
-            title="Go to this file in the stop's diff"
+            title={t('route.fileChips.jump')}
             onClick={() => {
                 onOpen(group.fileId);
             }}
@@ -69,10 +73,10 @@ function FileChip({
             <span className="route-chip__name">{group.name}</span>
             <span className="route-chip__path">{group.dir}</span>
             <span className="route-chip__spacer" />
-            <span className="route-chip__add">+{formatCount(group.additions, 'ru')}</span>
-            <span className="route-chip__del">−{formatCount(group.deletions, 'ru')}</span>
+            <span className="route-chip__add">+{count(group.additions)}</span>
+            <span className="route-chip__del">−{count(group.deletions)}</span>
             {/* The three-state box uses the shared `readStateOf`. The tooltip always includes counts (SPEC §2.12). */}
-            <span className={`route-chip__read route-chip__read--${read.state}`} title={read.tooltip}>
+            <span className={`route-chip__read route-chip__read--${read.state}`} title={readStateTooltip(t, read)}>
                 {read.state === 'read' ? <Icon name="check" size={9} /> : null}
             </span>
         </button>

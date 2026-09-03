@@ -3,7 +3,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel, DiffGap, DiffLine } from '../diff/model.js';
-import { formatCount, plural } from '../i18n/index.js';
+import type { Translate } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import type { ContextExpandRequest, GapExpandResult } from './context-expansion.js';
@@ -76,6 +77,7 @@ export function DiffRows({
     initialGapError = false,
     contextAvailable = true,
 }: DiffRowsProps) {
+    const t = useT();
     // A one-sided file in split mode would leave half the card empty (README §1).
     const oneSided = model.onlyAdditions || model.onlyDeletions;
     const effective: DiffMode = mode === 'split' && !oneSided ? 'split' : 'unified';
@@ -91,7 +93,10 @@ export function DiffRows({
             data-file={model.fileId}
             title={
                 mode === 'split' && oneSided
-                    ? `shown full width — this file is only ${model.onlyAdditions ? 'additions' : 'deletions'}`
+                    ? t(
+                          'diff.oneSided',
+                          t(model.onlyAdditions ? 'diff.oneSided.additions' : 'diff.oneSided.deletions'),
+                      )
                     : undefined
             }
         >
@@ -250,19 +255,16 @@ function buildRows(model: DiffFileModel, mode: DiffMode): Row[] {
     return rows;
 }
 
-function gapLabel(gap: DiffGap, content: FileContent | null): string {
+function gapLabel(gap: DiffGap, content: FileContent | null, t: Translate): string {
     const changed = gap.hiddenChanged ?? 0;
     const hidden = hiddenLinesOf(gap, content);
-    const unchanged =
-        hidden === null
-            ? 'unchanged to the end of the file'
-            : `${formatCount(hidden, 'ru')} ${plural(hidden, { one: 'unchanged line', few: 'unchanged lines', many: 'unchanged lines', other: 'unchanged lines' }, 'ru')}`;
+    const unchanged = hidden === null ? t('diff.gap.toEndOfFile') : t('diff.gap.unchanged', hidden);
     if (changed === 0) {
         return unchanged;
     }
     // Clip to the stop anchors. Changed lines outside the slice are explained in other stops.
-    const elsewhere = `${formatCount(changed, 'ru')} ${plural(changed, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')} in other stops`;
-    return hidden === 0 ? elsewhere : `${unchanged} and ${elsewhere}`;
+    const elsewhere = t('diff.elsewhere', changed);
+    return hidden === 0 ? elsewhere : t('diff.gap.both', unchanged, elsewhere);
 }
 
 function GapRow({
@@ -282,6 +284,7 @@ function GapRow({
     initialError: boolean;
     contextAvailable: boolean;
 }) {
+    const t = useT();
     const hidden = hiddenLinesOf(gap, content);
     const directions = contextAvailable ? gapDirections(gap, hidden) : [];
     const [selected, setSelected] = useState<ExpandDirection>(directions[0] ?? 'all');
@@ -347,7 +350,7 @@ function GapRow({
                     run(active);
                 }}
             >
-                <span className="diff-gap__error-label">could not load · retry</span>
+                <span className="diff-gap__error-label">{t('diff.gap.expandFailed')}</span>
             </button>
         );
     }
@@ -368,7 +371,7 @@ function GapRow({
         }
     };
 
-    const label = loading ? 'loading…' : gapCounterLabel(gap, content, hovered);
+    const label = loading ? t('diff.gap.loading') : gapCounterLabel(gap, content, hovered, t);
     const target = (direction: ExpandDirection): ReactNode => {
         if (!directions.includes(direction)) {
             return <span className="diff-gap__empty" aria-hidden="true" />;
@@ -384,7 +387,7 @@ function GapRow({
                 tabIndex={-1}
                 disabled={pendingState}
                 aria-checked={active === direction}
-                aria-label={gapAriaLabel(direction, hidden)}
+                aria-label={gapAriaLabel(direction, hidden, t)}
                 onMouseEnter={() => {
                     setHovered(direction);
                 }}
@@ -407,7 +410,7 @@ function GapRow({
             data-edge={gap.edge}
             data-hidden={hidden ?? 'unknown'}
             role="radiogroup"
-            aria-label="direction to expand the hidden context"
+            aria-label={t('diff.gap.aria')}
             aria-activedescendant={directions.length === 0 ? undefined : targetId(active)}
             tabIndex={directions.length === 0 ? undefined : 0}
             onKeyDown={onKeyDown}
@@ -435,26 +438,36 @@ function gapDirections(gap: DiffGap, hidden: number | null): readonly ExpandDire
     return ['up', 'down'];
 }
 
-function gapCounterLabel(gap: DiffGap, content: FileContent | null, hovered: ExpandDirection | null): string {
+function gapCounterLabel(
+    gap: DiffGap,
+    content: FileContent | null,
+    hovered: ExpandDirection | null,
+    t: Translate,
+): string {
     const hidden = hiddenLinesOf(gap, content);
-    const base = gapLabel(gap, content);
+    const base = gapLabel(gap, content, t);
     // Invite expansion only when there is context to expand: a gap with only other stops' changes has no targets.
     if (hidden !== null && hidden > 0 && hidden < EXPAND_STEP) {
-        return `${base} — expand`;
+        return t('diff.gap.expandHint', base);
     }
-    if (hovered === 'up' || hovered === 'down') {
-        return `+${String(EXPAND_STEP)} lines ${hovered === 'up' ? 'up' : 'down'} · ${base}`;
+    if (hovered === 'up') {
+        return t('diff.gap.expandUp', EXPAND_STEP, base);
+    }
+    if (hovered === 'down') {
+        return t('diff.gap.expandDown', EXPAND_STEP, base);
     }
     return base;
 }
 
-function gapAriaLabel(direction: ExpandDirection, hidden: number | null): string {
+function gapAriaLabel(direction: ExpandDirection, hidden: number | null, t: Translate): string {
     const amount = hidden === null ? EXPAND_STEP : Math.min(EXPAND_STEP, hidden);
-    const hiddenLabel = hidden === null ? 'lines hidden to the end of the file' : `${String(hidden)} lines hidden`;
+    const hiddenLabel = hidden === null ? t('diff.gap.hiddenToEnd') : t('diff.gap.hiddenCount', hidden);
     if (direction === 'all') {
-        return `load ${String(amount)} lines, ${hiddenLabel}`;
+        return t('diff.gap.loadAll', amount, hiddenLabel);
     }
-    return `load ${String(amount)} lines ${direction === 'up' ? 'up' : 'down'}, ${hiddenLabel}`;
+    return direction === 'up'
+        ? t('diff.gap.loadUp', amount, hiddenLabel)
+        : t('diff.gap.loadDown', amount, hiddenLabel);
 }
 
 const UnifiedRow = memo(function UnifiedRow({
@@ -648,7 +661,7 @@ function CommentButton({
     onBlur?: (() => void) | undefined;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
 }) {
-    const sideLabel = side === 'old' ? 'old' : 'new';
+    const t = useT();
     // Only the active iteration allows comments (M4 boundaries).
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -656,7 +669,11 @@ function CommentButton({
         <button
             type="button"
             className={`diff-row__comment${selectionStart ? ' is-selection-start' : ''}`}
-            aria-label={split ? `Comment on ${sideLabel} line ${String(line)}` : `Comment on line ${String(line)}`}
+            aria-label={
+                split
+                    ? t(side === 'old' ? 'diff.row.commentOld' : 'diff.row.commentNew', line)
+                    : t('diff.row.comment', line)
+            }
             disabled={readOnly}
             title={readOnly ? readOnlyReason : undefined}
             onFocus={onFocus}
@@ -685,6 +702,7 @@ function Code({
     onFocus?: (() => void) | undefined;
     onBlur?: (() => void) | undefined;
 }) {
+    const t = useT();
     const segments = lineSegments(line);
     return (
         <code
@@ -694,10 +712,12 @@ function Code({
             tabIndex={tabIndex}
             onFocus={onFocus}
             onBlur={onBlur}
-            title={hasTabs(line) ? 'tabs are shown as four spaces' : undefined}
+            title={hasTabs(line) ? t('diff.row.tabs') : undefined}
         >
             {segments.length === 0 ? ' ' : segments.map((segment, index) => <Segment key={index} segment={segment} />)}
-            {line.noNewline === true ? <span className="diff-row__no-newline"> ⏎ no newline at the end of the file</span> : null}
+            {line.noNewline === true ? (
+                <span className="diff-row__no-newline">{t('diff.row.noNewline')}</span>
+            ) : null}
         </code>
     );
 }

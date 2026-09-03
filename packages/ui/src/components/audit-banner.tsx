@@ -1,6 +1,6 @@
 import { PCI_FILTER_ID } from '../filters/lens-filters.js';
 import type { FileFilter, FilterStats } from '../filters/lens-filters.js';
-import { formatCount, plural } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { ViewId } from '../session/views.js';
 import './audit-banner.css';
@@ -41,36 +41,35 @@ export interface AuditScopeBannerProps {
 }
 
 export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }: AuditScopeBannerProps) {
+    const t = useT();
     const listed = paths.slice(0, LISTED_PATHS).join(', ');
     const rest = paths.length - LISTED_PATHS;
-    const scope = paths.length === 0 ? '' : `Scope: ${listed}${rest > 0 ? ` and ${String(rest)} more` : ''}. `;
+    const scope =
+        paths.length === 0 ? '' : rest > 0 ? t('audit.scope.more', listed, rest) : t('audit.scope', listed);
 
     return (
         <div className="audit-banner" role="status">
             <span className="audit-banner__tag">PCI DSS</span>
             <div className="audit-banner__body">
                 <div className="audit-banner__line">
-                    Showing only {formatCount(stats.files, 'ru')}{' '}
-                    {plural(stats.files, { one: 'file', few: 'files', many: 'files', other: 'files' }, 'ru')} in the audit scope,{' '}
-                    {formatCount(stats.changedLines, 'ru')} of {formatCount(stats.totalChangedLines, 'ru')}{' '}
-                    {plural(stats.totalChangedLines, { one: 'changed line', few: 'changed lines', many: 'changed lines', other: 'changed lines' }, 'ru')}.
-                    The rest is hidden, not deleted.
+                    {t('audit.line', stats.files, stats.changedLines, stats.totalChangedLines)}
                 </div>
                 {/* README §Filters requires the scope file list and the consequence for sign-off.
                     The host's `note` adds to them and cannot replace them. */}
                 <div className="audit-banner__note">
-                    {scope}Changes here need an auditor sign-off. Without it, ship does not count.
+                    {scope}
+                    {t('audit.note')}
                 </div>
                 {filter.note === null ? null : <div className="audit-banner__note">{filter.note}</div>}
             </div>
             <button type="button" className="audit-banner__action" onClick={onShowAll}>
-                Show all files
+                {t('lens.showAll')}
             </button>
             <button
                 type="button"
                 className="audit-banner__dismiss"
-                aria-label="Hide the audit-scope banner"
-                title="Hide the banner. The filter stays on"
+                aria-label={t('audit.dismiss')}
+                title={t('audit.dismiss.title')}
                 onClick={onDismiss}
             >
                 <Icon name="cross" size={14} />

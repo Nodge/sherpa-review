@@ -158,18 +158,14 @@ describe('chat panel model', () => {
     });
 
     it('distinguishes route generation from another busy task in the banner', () => {
-        expect(queueBannerText([task(1, 'route.section', 'leased')])).toBe(
-            'Generating the route · your question is next',
-        );
-        expect(queueBannerText([task(1, 'echo', 'leased')])).toBe('Agent busy · your question is next');
-        expect(queueBannerText([task(1, 'chat', 'leased')])).toBe('Agent busy · your question is next');
+        expect(queueBannerText([task(1, 'route.section', 'leased')])).toBe('chat.queue.route');
+        expect(queueBannerText([task(1, 'echo', 'leased')])).toBe('chat.queue.busy');
+        expect(queueBannerText([task(1, 'chat', 'leased')])).toBe('chat.queue.busy');
         expect(queueBannerText([task(1, 'chat', 'done')])).toBeNull();
     });
 
     it('does not present a held cancelled route task as ongoing generation', () => {
-        expect(queueBannerText([task(1, 'route.section', 'cancelled', true)])).toBe(
-            'Agent busy · your question is next',
-        );
+        expect(queueBannerText([task(1, 'route.section', 'cancelled', true)])).toBe('chat.queue.busy');
         expect(queueBannerText([task(1, 'route.section', 'cancelled', false)])).toBeNull();
     });
 

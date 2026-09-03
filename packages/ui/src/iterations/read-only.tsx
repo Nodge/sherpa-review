@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
+import type { MessageKey } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
+
 /**
  * Read-only mode for a previous iteration (M4-T9, M4 boundaries): commenting, marking viewed
  * and shipping are allowed only in the active iteration. Context distributes the flag instead of props:
@@ -12,14 +15,14 @@ import { createContext, useContext, useMemo } from 'react';
  */
 
 /** Reason a control is disabled: one text for all locations (`title` and labels). */
-export const READ_ONLY_REASON = 'only in the active iteration';
+export const READ_ONLY_REASON: MessageKey = 'iteration.readOnly.reason';
 
 /** Slice between iterations (M4-T12): a different `fileId` namespace with nothing to write to. */
-export const SLICE_READ_ONLY_REASON = 'in a slice between iterations';
+export const SLICE_READ_ONLY_REASON: MessageKey = 'iteration.readOnly.sliceReason';
 
 interface ReadOnlyIteration {
     readonly readOnly: boolean;
-    readonly reason: string;
+    readonly reason: MessageKey;
 }
 
 const ReadOnlyIterationContext = createContext<ReadOnlyIteration>({ readOnly: false, reason: READ_ONLY_REASON });
@@ -31,7 +34,7 @@ export function ReadOnlyIterationProvider({
 }: {
     readOnly: boolean;
     /** Why controls are disabled: snapshots and slices have different reasons. */
-    reason?: string;
+    reason?: MessageKey;
     children: ReactNode;
 }) {
     // Memoize the value: the provider is at the App root and renders on every state change,
@@ -46,5 +49,5 @@ export function useReadOnlyIteration(): boolean {
 
 /** The `title` text for a disabled control depends on the selected view. */
 export function useReadOnlyReason(): string {
-    return useContext(ReadOnlyIterationContext).reason;
+    return useT()(useContext(ReadOnlyIterationContext).reason);
 }

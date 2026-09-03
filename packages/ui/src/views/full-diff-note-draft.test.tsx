@@ -10,6 +10,7 @@ import { parseFileDiff } from '../diff/parse.js';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { noteDraftText } from '../notes/note-draft.js';
 import { createSessionStore } from '../session/session-store.js';
+import { createT } from '../i18n/index.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import { createUiSettingsStore } from '../settings/settings-store.js';
 import { createThreadStore } from '../threads/store.js';
@@ -172,7 +173,7 @@ describe('comment draft from an agent note', () => {
             path: FILE.path,
             position: { side: 'new', line: 6, size: 3 },
         });
-        expect(composer?.text).toBe(noteDraftText(NOTE));
+        expect(composer?.text).toBe(noteDraftText(NOTE, createT('en')));
         // The draft is unsaved. It goes to the host only on explicit save.
         expect(composer?.commentId).toBeNull();
         expect(composer?.status).toBe('idle');

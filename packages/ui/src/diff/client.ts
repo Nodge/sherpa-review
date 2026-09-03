@@ -1,3 +1,4 @@
+import { activeT } from '../i18n/index.js';
 import type { DiffFileModel, DiffParseRequest } from './model.js';
 
 /**
@@ -43,8 +44,6 @@ export interface DiffClient {
     readonly close: () => void;
 }
 
-const CLOSED_MESSAGE = 'Diff worker closed';
-
 export function createDiffClient(options: DiffClientOptions = {}): DiffClient {
     const connect = options.connect ?? connectWorker;
     const cache = new Map<string, Promise<DiffFileModel>>();
@@ -82,7 +81,7 @@ export function createDiffClient(options: DiffClientOptions = {}): DiffClient {
     return {
         parseFile: (diffId, file) => {
             if (closed) {
-                return Promise.reject(new Error(CLOSED_MESSAGE));
+                return Promise.reject(new Error(activeT()('diff.worker.closed')));
             }
 
             // The separator is a null character, not a space: host ids are opaque, and a space would give
@@ -112,7 +111,7 @@ export function createDiffClient(options: DiffClientOptions = {}): DiffClient {
         close: () => {
             closed = true;
             for (const waiter of pending.values()) {
-                waiter.reject(new Error(CLOSED_MESSAGE));
+                waiter.reject(new Error(activeT()('diff.worker.closed')));
             }
             pending.clear();
             cache.clear();
@@ -130,10 +129,10 @@ function connectWorker(handlers: DiffWorkerHandlers): DiffWorkerConnection {
     });
     // The worker may fail to load or crash between post and reply. This is an event, not an exception.
     worker.addEventListener('error', (event: ErrorEvent) => {
-        handlers.onError(new Error(event.message.length > 0 ? event.message : 'diff worker crashed'));
+        handlers.onError(new Error(event.message.length > 0 ? event.message : activeT()('diff.worker.crashed')));
     });
     worker.addEventListener('messageerror', () => {
-        handlers.onError(new Error('diff worker response could not be structured-cloned'));
+        handlers.onError(new Error(activeT()('diff.worker.cloneFailed')));
     });
 
     return {

@@ -64,6 +64,8 @@ import {
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
+import { activeT } from './i18n/index.js';
+
 /**
  * UI actions (rpc-design §2): regular REST with a bearer token. Protocol schemas validate
  * responses. The UI consumes nothing that has not passed validation.
@@ -341,7 +343,7 @@ async function get<T>(path: string, token: string, schema: z.ZodType<T>): Promis
     try {
         response = await fetch(path, { headers: { authorization: `Bearer ${token}` } });
     } catch {
-        throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
+        throw new ApiError(activeT()('error.serverDown'));
     }
     return validate(response, schema);
 }
@@ -355,7 +357,7 @@ async function post<T>(path: string, token: string, body: unknown, schema: z.Zod
             body: JSON.stringify(body),
         });
     } catch {
-        throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
+        throw new ApiError(activeT()('error.serverDown'));
     }
     return validate(response, schema);
 }
@@ -376,7 +378,7 @@ async function patch<T>(
             ...(options.keepalive === true ? { keepalive: true } : {}),
         });
     } catch {
-        throw new ApiError('The Sherpa server is not responding. Check that it is still running and retry.');
+        throw new ApiError(activeT()('error.serverDown'));
     }
     return validate(response, schema);
 }
@@ -389,7 +391,7 @@ async function validate<T>(response: Response, schema: z.ZodType<T>): Promise<T>
 
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
-        throw new ApiError('The server response failed contract validation. Update Sherpa.');
+        throw new ApiError(activeT()('error.contract'));
     }
     return parsed.data;
 }
@@ -397,7 +399,7 @@ async function validate<T>(response: Response, schema: z.ZodType<T>): Promise<T>
 function errorMessage(payload: unknown): string {
     const parsed = rpcErrorSchema.safeParse(payload);
     if (!parsed.success) {
-        return 'The server returned an error without a clear description. Check its output in the terminal.';
+        return activeT()('error.unknown');
     }
 
     const { message, details } = parsed.data.error;

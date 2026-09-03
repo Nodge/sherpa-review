@@ -30,6 +30,21 @@ export function resolveLocale(
     return (languages[0] ?? '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
 
+/**
+ * Language for code outside the React tree: `api.ts`, the state store and the reading progress model. It is held by
+ * `LocaleProvider`. Before the first render and in tests without a provider, it stays English.
+ */
+let activeLocale: Locale = 'en';
+
+export function setActiveLocale(locale: Locale): void {
+    activeLocale = locale;
+}
+
+/** Translation where hooks are unavailable. Components use `useT`. */
+export function activeT(): Translate {
+    return createT(activeLocale);
+}
+
 const translators = new Map<Locale, Translate>();
 
 /** Translation function for a locale. One instance per locale makes it safe for hook dependencies. */

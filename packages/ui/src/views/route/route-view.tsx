@@ -40,7 +40,7 @@ import { fileCollapseReason } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { readFragmentParam } from '../../fragment.js';
-import { formatCount, plural } from '../../i18n/index.js';
+import { useT } from '../../i18n/index.js';
 import { useReadOnlyIteration } from '../../iterations/read-only.tsx';
 import { SnapshotPill } from '../../iterations/snapshot-picker.tsx';
 import type { ViewingLabel } from '../../iterations/viewing.js';
@@ -207,6 +207,7 @@ export function RouteView({
     onOpenThread,
     headerAside,
 }: RouteViewProps) {
+    const t = useT();
     const clientRef = useRef<DiffClient | null>(null);
     // One worker per view, as in the full diff. Models are cached in the shared store.
     useEffect(
@@ -290,7 +291,7 @@ export function RouteView({
     ) {
         return (
             <main className="route route--status" id="view-route">
-                <p className="route__status">{diffError ?? lensesError ?? progressError ?? 'Loading route…'}</p>
+                <p className="route__status">{diffError ?? lensesError ?? progressError ?? t('route.loading')}</p>
             </main>
         );
     }
@@ -385,6 +386,7 @@ export interface RouteWorkspaceProps {
 }
 
 export function RouteWorkspace(props: RouteWorkspaceProps) {
+    const t = useT();
     const {
         pr,
         diff,
@@ -507,14 +509,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             if (await writer.write(fileId, viewed)) {
                 return null;
             }
-            return { text: 'not saved', retry: () => mark(fileId, viewed) };
+            return { text: t('route.stop.notSaved'), retry: () => mark(fileId, viewed) };
         },
-        [writer],
+        [t, writer],
     );
 
     const filters = useMemo(
-        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
-        [diff.files, lenses],
+        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
+        [diff.files, lenses, t],
     );
     const filter = selectFilter(filters, filterId);
     const pci = findFilter(filters, PCI_FILTER_ID);
@@ -631,8 +633,9 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 request,
                 contentAvailable: pr.capabilities.fileContent,
                 loadContent,
+                t,
             }),
-        [loadContent, pr.capabilities.fileContent, store],
+        [loadContent, pr.capabilities.fileContent, store, t],
     );
 
     // Cards start line selection, and the window ends it. Same hook as in the full diff.
@@ -1239,7 +1242,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 const snapshot = stopProgress.getSnapshot();
                 const count = model.entries.filter((candidate) => snapshot.get(entryId(candidate)) === true).length;
                 setAnnouncement(
-                    `Stop ${entry.view.planLabel} ${viewed ? 'marked viewed' : 'unmarked'}, ${String(count)} of ${String(model.stopCount)}`,
+                    t(
+                        viewed ? 'route.stop.announce.viewed' : 'route.stop.announce.unviewed',
+                        entry.view.planLabel,
+                        count,
+                        model.stopCount,
+                    ),
                 );
             }
             if (!(await written)) {
@@ -1257,6 +1265,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             requestJump,
             session,
             stopProgress,
+            t,
             unfilledEntry,
             writer,
         ],
@@ -1431,8 +1440,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     // --- Coverage strip (SPEC §2.4) ---
 
     const coverage = useMemo(
-        () => buildCoverageStrip({ totals: model.totals, entries: model.entries }),
-        [model.entries, model.totals],
+        () => buildCoverageStrip({ totals: model.totals, entries: model.entries, t }),
+        [model.entries, model.totals, t],
     );
     const [hoverTier, setHoverTier] = useState<RouteTier | null>(null);
     const markedStops = useMemo<ReadonlySet<string>>(
@@ -1740,7 +1749,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             <div className="route__stops">
                 {shown.length === 0 ? (
                     <div className="route__zero">
-                        <p className="route__zero-text">{zeroResultText(filter)}</p>
+                        <p className="route__zero-text">{zeroResultText(filter, t)}</p>
                         <button
                             type="button"
                             className="route__zero-action"
@@ -1748,7 +1757,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                                 changeFilter(ALL_FILTER_ID);
                             }}
                         >
-                            Show all files
+                            {t('lens.showAll')}
                         </button>
                     </div>
                 ) : null}
@@ -1761,7 +1770,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile, iterationLayout)}
-                            changeThreads={stopChangeThreads(entry.view.stop.change, threadsById)}
+                            changeThreads={stopChangeThreads(entry.view.stop.change, threadsById, t)}
                             {...(onOpenThread === undefined ? {} : { onOpenThread })}
                             fileIds={entryId(entry) === keptStopId ? null : filter.fileIds}
                             keptInView={entryId(entry) === keptStopId}
@@ -1939,6 +1948,7 @@ function StopSection({
     anchorReachable,
     onOpenAnchor,
 }: StopSectionProps) {
+    const t = useT();
     const ref = useRef<HTMLDivElement | null>(null);
     const onScreen = useOnScreen(ref);
     const files = useMemo(
@@ -1966,8 +1976,9 @@ function StopSection({
                       entries,
                       view.stop.id,
                       files.map((group) => group.fileId),
+                      t,
                   ),
-        [digest, entries, files, view.stop.id],
+        [digest, entries, files, t, view.stop.id],
     );
     const shownFiles = useMemo(
         () =>
@@ -1988,13 +1999,13 @@ function StopSection({
         <AnchorDrift paths={view.unresolvedPaths} />
     ) : files.length === 0 && digest === null ? (
         <EmptyStop
-            text={
+            text={t(
                 status === 'failed'
-                    ? 'No hunks: the agent has not filled this stop.'
+                    ? 'route.emptyStop.unfilled'
                     : view.empty
-                      ? 'No hunks: filling did not mark any ranges.'
-                      : 'The current filter hides this stop\'s files.'
-            }
+                      ? 'route.emptyStop.noRanges'
+                      : 'route.emptyStop.filtered',
+            )}
         />
     ) : collapsed ? (
         viewed ? (
@@ -2008,7 +2019,7 @@ function StopSection({
             <CollapsedStop
                 lines={lines}
                 files={files.length}
-                reason={collapsedManually ? 'collapsed by hand' : 'low tier'}
+                reason={t(collapsedManually ? 'route.collapsed.reason.manual' : 'route.collapsed.reason.low')}
                 onExpand={onExpand}
             />
         )
@@ -2031,11 +2042,7 @@ function StopSection({
             )}
             {cards.map((group) => renderCard(view.stop.id, group))}
             {cards.length < shownFiles.length ? (
-                <p className="route-stop__lazy">
-                    {formatCount(shownFiles.length - cards.length, 'ru')} more{' '}
-                    {plural(shownFiles.length - cards.length, { one: 'card', few: 'cards', many: 'cards', other: 'cards' }, 'ru')} appear as you
-                    scroll
-                </p>
+                <p className="route-stop__lazy">{t('route.lazyMore', shownFiles.length - cards.length)}</p>
             ) : null}
         </>
     );
@@ -2118,6 +2125,7 @@ function OtherSection({
     onOpen: () => void;
     renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
 }) {
+    const t = useT();
     // The card counts the same set that expands. Otherwise the button would promise all lines
     // and show only the subset that passes the filter.
     const filtered = useMemo(() => filterOtherView(view, fileIds), [fileIds, view]);
@@ -2129,9 +2137,9 @@ function OtherSection({
             onComposeQuestion === undefined
                 ? undefined
                 : () => {
-                      onComposeQuestion(placeRangesQuestion(otherQuestionRanges(filtered)));
+                      onComposeQuestion(placeRangesQuestion(otherQuestionRanges(filtered), t));
                   },
-        [filtered, onComposeQuestion],
+        [filtered, onComposeQuestion, t],
     );
 
     return (
@@ -2238,7 +2246,7 @@ const useAnchorEffect = typeof document === 'undefined' ? useEffect : useLayoutE
 const NOOP_THREAD = (): void => undefined;
 const EMPTY_NOTES: readonly AgentNote[] = [];
 const EMPTY_OPEN_NOTE = (): void => undefined;
-const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('note deletion is unavailable'));
+const EMPTY_DELETE_NOTE = (): Promise<void> => Promise.reject(new Error('deleting notes is unavailable here'));
 const EMPTY_EXPANSION: FileExpansion = new Map();
 
 const FLASH_MS = 900;
@@ -2276,9 +2284,9 @@ const EMPTY_FILE = {
     deletions: 0,
 } as const;
 const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
-    save: () => Promise.reject(new Error('draft writing is unavailable in this state')),
-    update: () => Promise.reject(new Error('draft writing is unavailable in this state')),
-    delete: () => Promise.reject(new Error('draft writing is unavailable in this state')),
+    save: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
+    update: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
+    delete: () => Promise.reject(new Error('writing drafts is unavailable in this state')),
 };
 function routeEntryForShownLine(
     entries: readonly RouteEntry[],
@@ -2365,10 +2373,11 @@ function routeEntryForLine(
 }
 
 const EMPTY_RESOLVE = (): Promise<void> => Promise.reject(new Error('resolve is unavailable in this state'));
-const EMPTY_SET_VIEWED = (): Promise<number> => Promise.reject(new Error('marking is unavailable in this state'));
+const EMPTY_SET_VIEWED = (): Promise<number> =>
+    Promise.reject(new Error('marking viewed is unavailable in this state'));
 const EMPTY_ASK_SELECTION = (): void => undefined;
 const NO_SELECTION_PENDING = (): boolean => false;
 const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 const EMPTY_SET_STOP_VIEWED = (): Promise<number> =>
-    Promise.reject(new Error('stop marking is unavailable in this state'));
+    Promise.reject(new Error('marking a stop viewed is unavailable in this state'));
 const EMPTY_FAILURES: ReadonlyMap<string, boolean> = new Map();

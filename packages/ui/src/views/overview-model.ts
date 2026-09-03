@@ -1,5 +1,7 @@
 import type { FileDiff, Lens, LensZone, Thread } from '@sherpa/protocol';
 
+import type { Translate } from '../i18n/index.js';
+
 export type OwnershipKind = 'mine' | 'other' | 'mixed' | 'generated';
 export type OwnershipSegment = 'mine' | 'all';
 
@@ -24,15 +26,15 @@ export interface OwnershipSummary {
     readonly groups: readonly OwnershipGroup[];
 }
 
-const OUTSIDE_ZONES_PATH = 'Outside CODEOWNERS zones';
-const GENERATED_PATH = 'Generated files';
+
 
 /** Groups the diff by lens zones, with path-prefix grouping as a fallback. */
 export function ownershipSummary(
     files: readonly FileDiff[],
     ownership: Lens | null,
     segment: OwnershipSegment,
-    fallbackNote = 'The ownership zone is unavailable for this PR.',
+    t: Translate,
+    fallbackNote = t('overview.ownership.fallbackNote'),
 ): OwnershipSummary {
     const available = ownership?.available === true;
     const minePaths = new Set(available ? ownership.paths : []);
@@ -48,8 +50,8 @@ export function ownershipSummary(
         totalLines: changedLines(files),
         groups:
             ownership?.zones === null || ownership === null
-                ? groupsByPrefix(shown, available, minePaths)
-                : groupsByZones(shown, ownership.zones),
+                ? groupsByPrefix(shown, available, minePaths, t)
+                : groupsByZones(shown, ownership.zones, t),
     };
 }
 
@@ -58,7 +60,7 @@ export function ownershipGroupPath(path: string): string {
     return path.split('/').slice(0, 2).join('/');
 }
 
-function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[]): OwnershipGroup[] {
+function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[], t: Translate): OwnershipGroup[] {
     const byPath = new Map(files.map((file) => [file.path, file] as const));
     const zoned = new Set<string>();
     const groups: OwnershipGroup[] = [];
@@ -80,9 +82,7 @@ function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[]): 
                 grouped,
                 zone.mine ? 'mine' : 'other',
                 zone.owner,
-                zone.mine
-                    ? 'Your ownership zone by CODEOWNERS.'
-                    : 'Outside your CODEOWNERS zone.',
+                t(zone.mine ? 'overview.ownership.note.mineZone' : 'overview.ownership.note.otherZone'),
             ),
         );
     }
@@ -93,22 +93,22 @@ function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[]): 
     if (uncovered.length > 0) {
         groups.push(
             groupOf(
-                OUTSIDE_ZONES_PATH,
+                t('overview.ownership.outsideZones'),
                 uncovered,
                 'other',
                 null,
-                'These files are not covered by CODEOWNERS zones.',
+                t('overview.ownership.note.uncovered'),
             ),
         );
     }
     if (generated.length > 0) {
         groups.push(
             groupOf(
-                GENERATED_PATH,
+                t('overview.ownership.generatedPath'),
                 generated,
                 'generated',
                 null,
-                'Generated files are dimmed and count as read by default.',
+                t('overview.ownership.note.generated'),
             ),
         );
     }
@@ -119,6 +119,7 @@ function groupsByPrefix(
     files: readonly FileDiff[],
     available: boolean,
     minePaths: ReadonlySet<string>,
+    t: Translate,
 ): OwnershipGroup[] {
     const buckets = new Map<string, FileDiff[]>();
     for (const file of files) {
@@ -133,7 +134,7 @@ function groupsByPrefix(
 
     return [...buckets].map(([path, grouped]) => {
         const ownership = available ? ownershipOf(grouped, minePaths) : null;
-        return groupOf(path, grouped, ownership, null, prefixNote(ownership));
+        return groupOf(path, grouped, ownership, null, prefixNote(ownership, t));
     });
 }
 
@@ -156,18 +157,18 @@ function groupOf(
     };
 }
 
-function prefixNote(ownership: OwnershipKind | null): string {
+function prefixNote(ownership: OwnershipKind | null, t: Translate): string {
     switch (ownership) {
         case 'mine':
-            return 'The files of this group are your responsibility by CODEOWNERS.';
+            return t('overview.ownership.note.prefixMine');
         case 'other':
-            return 'The files of this group are outside your CODEOWNERS zone.';
+            return t('overview.ownership.note.prefixOther');
         case 'mixed':
-            return 'The group mixes files inside and outside your CODEOWNERS zone.';
+            return t('overview.ownership.note.prefixMixed');
         case 'generated':
-            return 'Generated files are dimmed and count as read by default.';
+            return t('overview.ownership.note.generated');
         case null:
-            return 'The group is built by path prefix: zone boundaries are unavailable.';
+            return t('overview.ownership.note.prefixUnknown');
     }
 }
 

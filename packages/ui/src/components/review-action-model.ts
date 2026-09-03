@@ -39,7 +39,7 @@ export interface PublicationFailure {
 /** The disabled-verdict reason is shared by buttons, shortcuts and the palette. */
 export function publishDisabledReason(input: PublishGuardInput): string | null {
     if (input.readOnlyIteration === true) {
-        return input.readOnlyReason ?? READ_ONLY_REASON;
+        return input.readOnlyReason ?? input.t(READ_ONLY_REASON);
     }
     if (input.publishing) {
         return input.t('ship.disabled.publishing');

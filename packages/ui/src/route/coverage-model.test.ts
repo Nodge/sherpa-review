@@ -6,10 +6,13 @@ import type { DiffFileModel } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import type { ChangedLines } from '../progress/read-state.js';
-import { changedLinesOf, readStateOf } from '../progress/read-state.js';
+import { changedLinesOf, readStateOf, readStateTooltip } from '../progress/read-state.js';
 import { buildCoverageStrip } from './coverage-model.js';
 import type { RouteEntry, RouteTotals } from './route-model.js';
 import { buildRouteModel, stopSeenRanges } from './route-model.js';
+import { createT } from '../i18n/index.js';
+
+const t = createT('en');
 
 /**
  * Coverage strip and stop seen ranges (SPEC §2.4, §2.10) on the `medium` fixture:
@@ -34,7 +37,7 @@ function model() {
 
 function strip() {
     const built = model();
-    return buildCoverageStrip({ totals: built.totals, entries: built.entries });
+    return buildCoverageStrip({ totals: built.totals, entries: built.entries, t});
 }
 
 /** Explicit totals keep minimum-width and zero-tier tests independent of the fixture. */
@@ -97,15 +100,14 @@ describe('coverage bar model', () => {
     it('rounds the percentage down at the boundary too', () => {
         const built = buildCoverageStrip({
             totals: totals({ changed: 1000, uncovered: 44, byTier: { high: 956, medium: 0, low: 0, other: 44 } }),
-            entries: [],
-        });
+            entries: [], t,});
 
         // 95.6% means "95%", never "96%" (SPEC §2.4).
         expect(built.percent).toBe(95);
     });
 
     it('omits the hatch and third clause when 100% is explained', () => {
-        const built = buildCoverageStrip({ totals: totals({}), entries: [] });
+        const built = buildCoverageStrip({ totals: totals({}), entries: [], t});
 
         expect(built.segments.map((segment) => segment.tier)).toEqual(['high']);
         expect(built.percent).toBe(100);
@@ -119,8 +121,7 @@ describe('coverage bar model', () => {
                 uncovered: 6,
                 byTier: { high: 54, medium: 0, low: 0, other: 6 },
             }),
-            entries: [],
-        });
+            entries: [], t,});
 
         expect(built.segments.map((segment) => segment.tier)).toEqual(['high', 'other']);
         // The 6-line chunk stays in the bar. Its width stops at the minimum instead of disappearing.
@@ -193,7 +194,7 @@ describe('read-state from a stop mark', () => {
                 expect(state.state).toBe(group.whole ? 'read' : 'partial');
                 // The tooltip must give the exact count that filled the indicator (SPEC §2.12).
                 expect(state.seen).toBe(group.additions + group.deletions);
-                expect(state.tooltip).toBe(
+                expect(readStateTooltip(createT('en'), state)).toBe(
                     `${String(state.seen)} of ${String(state.total)} changed lines seen`,
                 );
                 seen.push(`${entry.view.stop.id}:${group.fileId}`);
@@ -233,7 +234,7 @@ describe('read-state from a stop mark', () => {
             pinned: true,
             generatedDefault: true,
         });
-        expect(state.tooltip).toContain('generated file — read by default');
+        expect(readStateTooltip(createT('en'), state)).toContain('generated — marked read by default');
     });
 });
 

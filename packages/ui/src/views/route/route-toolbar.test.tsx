@@ -7,6 +7,9 @@ import { buildFileFilters, selectFilter } from '../../filters/lens-filters.js';
 import type { RoutePreset } from '../../session/session-store.js';
 import { DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
 import { PRESET_DISABLED_TITLE, RouteToolbar, TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
+import { createT } from '../../i18n/index.js';
+
+const t = createT('en');
 
 /** Toolbar preset toggle: active option, hint and disabled state (SPEC §2.5). */
 
@@ -16,8 +19,7 @@ function render(options: { preset?: RoutePreset; disabled?: boolean } = {}): str
     const filters = buildFileFilters({
         files: DATA.diff.files,
         ownership: DATA.ownership,
-        extra: DATA.extraLenses,
-    });
+        extra: DATA.extraLenses, t,});
     return renderToStaticMarkup(
         <RouteToolbar
             store={createDiffViewStore({ files: DATA.diff.files })}
@@ -41,8 +43,8 @@ describe('route toolbar', () => {
         const tour = render({ preset: 'tour' });
 
         expect(triage).toContain('class="route-preset__option is-active" aria-pressed="true"');
-        expect(triage).toContain(TRIAGE_HINT);
-        expect(tour).toContain(TOUR_HINT);
+        expect(triage).toContain(t(TRIAGE_HINT));
+        expect(tour).toContain(t(TOUR_HINT));
         expect(tour).toContain('aria-pressed="true">Full tour</button>');
         expect(tour).toContain('aria-pressed="false">Triage</button>');
     });
@@ -50,11 +52,11 @@ describe('route toolbar', () => {
     it('disables both options and explains why when there is no route', () => {
         const html = render({ disabled: true });
 
-        expect(html).toContain(`disabled="" title="${PRESET_DISABLED_TITLE}"`);
-        expect(count(html, PRESET_DISABLED_TITLE)).toBe(2);
+        expect(html).toContain(`disabled="" title="${t(PRESET_DISABLED_TITLE)}"`);
+        expect(count(html, t(PRESET_DISABLED_TITLE))).toBe(2);
         // The active option stays visible. The switch is disabled, the state remains.
         expect(html).toContain('class="route-preset__option is-active" aria-pressed="true" disabled=""');
-        expect(render()).not.toContain(PRESET_DISABLED_TITLE);
+        expect(render()).not.toContain(t(PRESET_DISABLED_TITLE));
     });
 });
 

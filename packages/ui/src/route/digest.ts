@@ -1,5 +1,6 @@
 import type { RouteStop, RouteTestClaim, RouteTestClaimKind } from '@sherpa/protocol';
 
+import type { MessageKey, Translate } from '../i18n/index.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import { anchorSpans } from './anchor-clip.js';
 import type { ContextLines, RouteEntry } from './route-model.js';
@@ -91,7 +92,7 @@ export type DigestTestCodeLocation =
       }
     | {
           readonly kind: 'hidden-by-lens';
-          readonly label: 'test code hidden by the lens';
+          readonly label: string;
           /** First anchor in the same stop. Following it resets the lens and expands test code. */
           readonly anchor: DigestAnchorView;
       };
@@ -112,6 +113,7 @@ export function buildDigestTestCode(
     entries: readonly RouteEntry[],
     fromStopId: string,
     stopFileIds: readonly string[],
+    t: Translate,
 ): DigestTestCodeModel {
     const hiddenFileIds = new Set(stopFileIds.filter((fileId) => digest.testFileIds.has(fileId)));
     if (hiddenFileIds.size > 0) {
@@ -138,7 +140,7 @@ export function buildDigestTestCode(
             location:
                 anchor === undefined || anchor === null
                     ? null
-                    : { kind: 'hidden-by-lens', label: 'test code hidden by the lens', anchor },
+                    : { kind: 'hidden-by-lens', label: t('digest.testCode.hiddenByLens'), anchor },
         };
     }
 
@@ -149,10 +151,10 @@ export function buildDigestTestCode(
     }
     const label =
         targetIds.size > 1
-            ? 'test code — in other stops'
+            ? t('digest.testCode.elsewhere')
             : targetEntry.kind === 'other'
-              ? 'test code — in "Other"'
-              : `test code — in stop ${targetEntry.view.planLabel}`;
+              ? t('digest.testCode.inOther')
+              : t('digest.testCode.inStop', targetEntry.view.planLabel);
 
     return {
         hiddenFileIds,
@@ -237,17 +239,17 @@ function sideOf(drawn: DrawnFile, line: number): 'old' | 'new' | null {
     return null;
 }
 
-/** Category chip label. English like all view copy. Semantics from README §2. */
-export function claimLabel(kind: RouteTestClaimKind): string {
+/** Category chip label key. Semantics follow README §2. */
+export function claimLabel(kind: RouteTestClaimKind): MessageKey {
     switch (kind) {
         case 'new':
-            return 'new';
+            return 'digest.kind.new';
         case 'changed':
-            return 'changed';
+            return 'digest.kind.changed';
         case 'weakened':
-            return 'weakened';
+            return 'digest.kind.weakened';
         default:
-            return 'uncovered';
+            return 'digest.kind.uncovered';
     }
 }
 

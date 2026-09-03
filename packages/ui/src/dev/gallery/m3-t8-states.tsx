@@ -2,6 +2,7 @@ import type { AgentNote, ChatAnchor, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
 
+import { useT } from '../../i18n/index.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import type { FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
@@ -91,6 +92,7 @@ export const M3_T8_STATES: readonly M3T8GalleryState[] = [
 
 /** Note stays in place, with an unsaved composer quoting it underneath. */
 function NoteDraftState() {
+    const t = useT();
     const session = useMemo(
         () =>
             createSessionStore({
@@ -105,10 +107,10 @@ function NoteDraftState() {
             noteComposerKey(NOTE.anchor),
             noteComposerAnchor(NOTE.anchor),
             true,
-            noteDraftText(NOTE),
+            noteDraftText(NOTE, t),
         );
         return created;
-    }, []);
+    }, [t]);
     const threadSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const composers = useSyncExternalStore(
         store.subscribeComposers,

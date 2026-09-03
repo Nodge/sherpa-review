@@ -1,5 +1,6 @@
 import type { FileContent } from '@sherpa/protocol';
 
+import type { Translate } from '../i18n/index.js';
 import type { ExpandDirection, FileExpansion, GapKey } from './expand.js';
 import type { DiffViewStore } from './store.js';
 
@@ -30,11 +31,13 @@ interface ExpandContextOptions {
     readonly request: ContextExpandRequest;
     readonly contentAvailable: boolean;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
+    /** A failed content load produces a ready-to-display message in the file card. */
+    readonly t: Translate;
 }
 
 /** Shared lazy content fetch and action application for Full diff and Route. */
 export async function expandContext(options: ExpandContextOptions): Promise<ContextExpandResult> {
-    const { store, fileId, request, contentAvailable, loadContent } = options;
+    const { store, fileId, request, contentAvailable, loadContent, t } = options;
     const result = (feedback: string | null): ContextExpandResult => {
         const snapshot = store.getSnapshot();
         return {
@@ -53,7 +56,7 @@ export async function expandContext(options: ExpandContextOptions): Promise<Cont
             content = await loadContent(fileId);
         } catch (error: unknown) {
             const reason = (error instanceof Error ? error.message : String(error)).replace(/\s*\.\s*$/, '');
-            return result(`Could not fetch file content: ${reason}. Try again.`);
+            return result(t('diff.contextFailed', reason));
         }
         store.setContent(fileId, content);
         if (content === null) {

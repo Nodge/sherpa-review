@@ -294,10 +294,10 @@ export function OverviewView({
             diff === null || lenses === null
                 ? null
                 : findFilter(
-                      buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra }),
+                      buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
                       PCI_FILTER_ID,
                   ),
-        [diff, lenses],
+        [diff, lenses, t],
     );
 
     const openDiff = (): void => {
@@ -474,7 +474,7 @@ function OwnershipCard({
     const fallbackNote = hostAvailable
         ? (lensesError ?? t('overview.ownership.noZone'))
         : t('overview.ownership.noHost');
-    const summary = ownershipSummary(files, ownership, segment, fallbackNote);
+    const summary = ownershipSummary(files, ownership, segment, t, fallbackNote);
 
     const title = t('overview.ownership.title');
     const header =
