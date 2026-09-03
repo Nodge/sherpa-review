@@ -493,8 +493,67 @@ describe('second-pass route', () => {
     });
 });
 
+/**
+ * Performance fixture: there are no handoff coverage numbers to compare against, and its stops
+ * follow a template. Checks only what the performance run relies on: a 25-stop plan and anchors
+ * placed exclusively on changed lines (otherwise the validator will remove them).
+ */
+describe('huge fixture route', () => {
+    const raw = routeFixtures('huge')?.rawResults;
+    const files = changedLines(fixtureIteration('huge').diff);
+
+    it('has 25 planned stops and tourOrder permutes plan numbers in a different order', () => {
+        expect(raw?.skeleton.stops.length).toBe(25);
+        expect(raw?.sections.length).toBe(25);
+        const tour = raw?.skeleton.tourOrder ?? [];
+        expect([...tour].sort((left, right) => left - right)).toEqual(
+            Array.from({ length: 25 }, (_, index) => index + 1),
+        );
+        expect(tour).not.toEqual(Array.from({ length: 25 }, (_, index) => index + 1));
+    });
+
+    it('places section anchors only on changed lines', () => {
+        for (const section of raw?.sections ?? []) {
+            for (const stop of section.stops) {
+                expect(stop.anchors.length).toBeGreaterThan(0);
+                for (const anchor of stop.anchors) {
+                    const file = files.get(anchor.path);
+                    expect(file, `anchor points outside the diff: ${anchor.path}`).toBeDefined();
+                    const changed = anchor.side === 'old' ? file?.old : file?.new;
+                    for (let line = anchor.start; line <= anchor.end; line += 1) {
+                        expect(
+                            changed?.has(line),
+                            `anchor covers an unchanged line ${anchor.path}:${anchor.side}:${String(line)}`,
+                        ).toBe(true);
+                    }
+                }
+            }
+        }
+    });
+
+    it('has filled stop texts and no anchors on generated files', () => {
+        const generated = new Set(
+            fixtureIteration('huge')
+                .diff.files.filter((file) => file.generated)
+                .map((file) => file.path),
+        );
+        for (const stop of raw?.skeleton.stops ?? []) {
+            expect(stop.title).toMatch(/\p{L}/u);
+        }
+        for (const section of raw?.sections ?? []) {
+            for (const stop of section.stops) {
+                expect(stop.paragraph).toMatch(/\p{L}/u);
+                expect(stop.paragraph.split(/(?<=\.)\s/).length).toBeGreaterThanOrEqual(2);
+                for (const anchor of stop.anchors) {
+                    expect(generated.has(anchor.path)).toBe(false);
+                }
+            }
+        }
+    });
+});
+
 describe('route fixtures: delivery', () => {
-    for (const name of ['medium', 'small', 'large', 'edge'] as const) {
+    for (const name of ['medium', 'small', 'large', 'edge', 'huge'] as const) {
         it(`${name}: is deterministic and returns a copy`, () => {
             // Two builds from scratch: comparing two cache accesses would pass even with `Date.now()` inside.
             expect(JSON.stringify(buildRouteFixtures(name))).toBe(JSON.stringify(buildRouteFixtures(name)));

@@ -70,6 +70,56 @@ describe('reading progress store', () => {
         ).run(diffId, fileId, start, end);
     }
 
+    /** This iteration's route snapshot: its anchors map paths for carryover without a patch. */
+    function insertSnapshot(
+        db: SherpaDatabase,
+        diffId: string,
+        anchors: readonly { fileId: string; path: string }[],
+        createdAt = '2026-09-01T10:00:00.000Z',
+    ): void {
+        const snapshot = {
+            snapshotId: `snap-${diffId}`,
+            diffId,
+            createdAt,
+            stops: [{ id: 's01', anchors: anchors.map((a) => ({ ...a, side: 'new', start: 1, end: 5 })) }],
+        };
+        db.prepare(
+            `INSERT INTO route_snapshots (snapshot_id, diff_id, created_at, snapshot_json)
+             VALUES (?, ?, ?, ?)`,
+        ).run(snapshot.snapshotId, diffId, createdAt, JSON.stringify(snapshot));
+    }
+
+    /**
+     * A chat note with an anchor: `anchor` is its current location, `origin` is where it was created.
+     * Note carryover rewrites the former and leaves the latter alone.
+     */
+    function insertNote(
+        db: SherpaDatabase,
+        anchor: { diffId: string; fileId: string; path: string },
+        origin: { diffId: string; fileId: string; path: string } = anchor,
+    ): void {
+        const at = '2026-09-01T10:00:00.000Z';
+        const exchange = db
+            .prepare(
+                `INSERT INTO chat_exchanges (question, anchor, status, answer, created_at, updated_at)
+                 VALUES ('question', ?, 'done', 'answer', ?, ?)`,
+            )
+            .run(JSON.stringify(origin), at, at);
+        db.prepare(
+            `INSERT INTO agent_notes (
+                exchange_id, anchor, text, commit_hash, lost_anchor, origin_anchor, origin_commit, created_at
+             ) VALUES (?, ?, 'answer', NULL, 0, ?, NULL, ?)`,
+        ).run(exchange.lastInsertRowid, JSON.stringify(anchor), JSON.stringify(origin), at);
+    }
+
+    /** Paths recorded on iteration ranges. NULL becomes an empty string. */
+    function pathsOfRanges(db: SherpaDatabase, diffId: string): string[] {
+        const rows = db
+            .prepare('SELECT path FROM file_seen_ranges WHERE diff_id = ? ORDER BY rowid')
+            .all(diffId) as { path: string | null }[];
+        return rows.map((row) => row.path ?? '');
+    }
+
     it('starts with no records and revision zero', () => {
         const store = new ProgressStore({ db: open() });
 
@@ -316,6 +366,51 @@ describe('reading progress store', () => {
             expect(carried(store, identityMap(), { start: 1, end: 5 })).toEqual([]);
         });
 
+        it('counts an author-deleted file separately from a path resolver failure', () => {
+            const db = open();
+            const logs: string[] = [];
+            const store = storeWith(
+                db,
+                iterations({ [V1]: diffOf(V1, [CLOCK]), [V2]: diffOf(V2, [ORDER]) }),
+                (message) => logs.push(message),
+            );
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+
+            // The source patch provides the path, but the file is absent from the new iteration: "no path"
+            // means a failed mapping, not an author edit.
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({
+                ranges: 0,
+                sourceRanges: 1,
+                unmappedRanges: 0,
+                missingRanges: 1,
+                touchedRanges: 0,
+            });
+            expect(logs).toContain(
+                `progress carryover ${V1} → ${V2}: carried 0 ranges out of 1 ` +
+                    '(no path: 0, absent from new iteration: 1, touched by interdiff: 0)',
+            );
+        });
+
+        it('reads a note anchor from origin_anchor after carryover has moved it to the target', () => {
+            const db = open();
+            const store = storeWith(db, iterations({ [V2]: diffOf(V2, [CLOCK]) }));
+            insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
+            // Note carryover runs alongside progress carryover and finished first: `anchor`
+            // already points to the target, and the path for the source `fileId` remains only in `origin_anchor`.
+            insertNote(
+                db,
+                { diffId: V2, fileId: fileIdOf(V2, CLOCK), path: CLOCK },
+                { diffId: V1, fileId: fileIdOf(V1, CLOCK), path: CLOCK },
+            );
+
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({
+                ranges: 1,
+                unmappedRanges: 0,
+            });
+        });
+
         it('does not inherit progress for a renamed file', () => {
             const store = storeWith(
                 open(),
@@ -385,21 +480,74 @@ describe('reading progress store', () => {
 
             // The reviewer cleared the mark in the new iteration.
             store.setFileViewed(V2, fileIdOf(V2, CLOCK), false, 'snap-2');
-            expect(store.carryRanges(V1, V2, identityMap())).toEqual({ ranges: 0, files: 0, skipped: true });
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({ ranges: 0, files: 0, skipped: true });
             expect(store.read(V2)).toEqual([{ fileId: fileIdOf(V2, CLOCK), viewed: false, seenRanges: [] }]);
         });
 
-        it('carryover without a stored iteration patch does not complete and is retried', () => {
+        it('skips carryover without the stored target iteration patch and retries it', () => {
             const store = storeWith(open(), iterations({ [V1]: diffOf(V1, [CLOCK]) }));
             store.setStopViewed('snap-1', V1, 's01', true, [
                 { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
             ]);
 
-            expect(store.carryRanges(V1, V2, identityMap())).toEqual({ ranges: 0, files: 0, skipped: true });
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({ ranges: 0, files: 0, skipped: true });
 
             // The patch has arrived, so the same call carries progress over.
             const ready = storeWith(open(), twoIterations());
             expect(ready.carryRanges(V1, V2, identityMap())).toMatchObject({ ranges: 1, skipped: false });
+        });
+
+        it('gets source file paths from snapshot anchors when the source patch is missing', () => {
+            const db = open();
+            // Exact shape of the M5-T20 finding: server 0.3.x recorded progress, with no iteration row,
+            // its patch is missing for good, so only the route snapshot knows the path for `fileId`.
+            const store = storeWith(db, iterations({ [V2]: diffOf(V2, [CLOCK]) }));
+            insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
+            insertSnapshot(db, V1, [{ fileId: fileIdOf(V1, CLOCK), path: CLOCK }]);
+
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({
+                ranges: 1,
+                sourceRanges: 1,
+                unmappedRanges: 0,
+                skipped: false,
+            });
+            expect(store.read(V2)).toEqual([
+                { fileId: fileIdOf(V2, CLOCK), viewed: null, seenRanges: [{ side: 'new', start: 1, end: 5 }] },
+            ]);
+        });
+
+        it('counts a range on a file without an anchor as unmapped and carries the rest over', () => {
+            const db = open();
+            const store = storeWith(db, iterations({ [V2]: diffOf(V2, [CLOCK, ORDER]) }));
+            insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
+            insertRange(db, V1, fileIdOf(V1, ORDER), 1, 5);
+            insertSnapshot(db, V1, [{ fileId: fileIdOf(V1, CLOCK), path: CLOCK }]);
+
+            expect(store.carryRanges(V1, V2, identityMap())).toMatchObject({
+                ranges: 1,
+                sourceRanges: 2,
+                unmappedRanges: 1,
+            });
+            expect(store.read(V2).map((progress) => progress.fileId)).toEqual([fileIdOf(V2, CLOCK)]);
+        });
+
+        it('records paths on carried rows and uses them for the next carryover', () => {
+            const db = open();
+            const store = storeWith(db, twoIterations());
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: fileIdOf(V1, CLOCK), side: 'new', start: 1, end: 5 },
+            ]);
+            store.carryRanges(V1, V2, identityMap());
+
+            expect(pathsOfRanges(db, V2)).toEqual([CLOCK]);
+
+            // The next server has neither the V2 patch nor its anchors: the record itself holds the path.
+            const next = storeWith(db, iterations({ 'iter-3': diffOf('iter-3', [CLOCK]) }));
+            expect(next.carryRanges(V2, 'iter-3', identityMap())).toMatchObject({
+                ranges: 1,
+                unmappedRanges: 0,
+            });
+            expect(pathsOfRanges(db, 'iter-3')).toEqual([CLOCK]);
         });
     });
 
@@ -460,6 +608,39 @@ describe('reading progress store', () => {
             expect(store.latestDiffIdWithProgress('iter-3')).toBe(V2);
             expect(store.latestDiffIdWithProgress('iter-3', [V2])).toBe(V1);
             expect(store.latestDiffIdWithProgress('iter-3', [V1, V2])).toBeNull();
+        });
+
+        it('also accepts an iteration without a row in iterations', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            // Server 0.3.x progress: it never saved iterations, but the marks remain (M5-T20).
+            insertRange(db, V1, 'file-1', 1, 2);
+
+            expect(store.latestDiffIdWithProgress(V2)).toBe(V1);
+        });
+
+        it('orders iterations without rows in iterations by snapshot, then by file mark', () => {
+            const db = open();
+            const store = new ProgressStore({ db, now: () => new Date('2026-09-01T10:00:00.000Z') });
+            insertRange(db, V1, 'file-1', 1, 2);
+            insertSnapshot(db, V1, [], '2026-09-01T09:00:00.000Z');
+            insertRange(db, V2, 'file-2', 1, 2);
+            insertSnapshot(db, V2, [], '2026-09-02T09:00:00.000Z');
+
+            expect(store.latestDiffIdWithProgress('iter-3')).toBe(V2);
+
+            // The third iteration has no snapshot, so its file mark time sets its place in the order.
+            const later = new ProgressStore({ db, now: () => new Date('2026-09-03T10:00:00.000Z') });
+            later.setFileViewed('iter-3', 'file-3', true);
+            expect(later.latestDiffIdWithProgress('iter-4')).toBe('iter-3');
+        });
+
+        it('never uses the legacy iteration as a source because adoptLegacy adopts it', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+            insertRange(db, 'unknown', 'file-1', 1, 2);
+
+            expect(store.latestDiffIdWithProgress(V1)).toBeNull();
         });
     });
 
@@ -669,8 +850,12 @@ function twoIterations(): { get: (diffId: string) => StoredIteration | null } {
     });
 }
 
-function storeWith(db: SherpaDatabase, store: { get: (diffId: string) => StoredIteration | null }): ProgressStore {
-    return new ProgressStore({ db, iterations: store, log: () => undefined });
+function storeWith(
+    db: SherpaDatabase,
+    store: { get: (diffId: string) => StoredIteration | null },
+    log: (message: string) => void = () => undefined,
+): ProgressStore {
+    return new ProgressStore({ db, iterations: store, log });
 }
 
 /** A map whose interdiff edits lines 12–13 of `CLOCK`. */

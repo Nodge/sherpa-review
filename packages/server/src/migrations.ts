@@ -397,9 +397,24 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
+        // File path alongside `fileId` in progress records (M5-T20). The review host's `fileId` is an
+        // opaque id, so records from two iterations can only be matched through a path.
+        // The path came from the saved source iteration patch, but iterations recorded by server
+        // 0.3.x have no patch and never will. Carryover silently returned zero.
+        //
+        // No backfill for the same reason: there is nothing to resolve old `fileId` values against. The carryover
+        // resolver handles them through fallbacks (source patch, snapshot and note anchors). New
+        // records contain the path and no longer depend on retaining the patch.
+        name: '016-progress-paths',
+        sql: `
+            ALTER TABLE file_seen_ranges ADD COLUMN path TEXT;
+            ALTER TABLE file_progress ADD COLUMN path TEXT;
+        `,
+    },
+    {
         // The language the agent speaks with the reviewer (M5-T2): a third session label beside the harness
         // and model. The UI uses it as a hint in locale selection, not an instruction.
-        name: '016-worker-lang',
+        name: '017-worker-lang',
         sql: `
             ALTER TABLE worker ADD COLUMN lang TEXT;
         `,

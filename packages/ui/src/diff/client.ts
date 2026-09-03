@@ -44,6 +44,29 @@ export interface DiffClient {
     readonly close: () => void;
 }
 
+/** Name of the worker request round-trip measure, used by the performance spec to collect parsing statistics. */
+const PARSE_MEASURE = 'sherpa:diff-parse';
+
+/**
+ * Measures one parse. `performance.measure` is not available everywhere (jsdom tests, older environments),
+ * so instrumentation is entirely optional: the client works as before without it.
+ * Cache hits are not measured, since they never reach the worker.
+ */
+function measureParse(file: DiffParseRequest, startMark: string): void {
+    if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
+        return;
+    }
+    try {
+        performance.measure(PARSE_MEASURE, {
+            start: startMark,
+            detail: { fileId: file.fileId, lines: file.patch === null ? 0 : file.patch.split('\n').length },
+        });
+    } catch {
+        // The mark may have been cleared from the buffer. Measurement must not break parsing.
+    }
+    performance.clearMarks(startMark);
+}
+
 export function createDiffClient(options: DiffClientOptions = {}): DiffClient {
     const connect = options.connect ?? connectWorker;
     const cache = new Map<string, Promise<DiffFileModel>>();
@@ -96,14 +119,23 @@ export function createDiffClient(options: DiffClientOptions = {}): DiffClient {
             const id = nextId;
             nextId += 1;
 
+            const startMark = `${PARSE_MEASURE}:${String(id)}`;
+            if (typeof performance !== 'undefined' && typeof performance.measure === 'function') {
+                performance.mark(startMark);
+            }
+
             const request = new Promise<DiffFileModel>((resolve, reject) => {
                 pending.set(id, { resolve, reject });
                 connection?.post({ id, file });
-            }).catch((error: unknown) => {
-                // Do not cache failures. The next request for this file must reach the worker.
-                cache.delete(key);
-                throw error instanceof Error ? error : new Error(String(error));
-            });
+            })
+                .finally(() => {
+                    measureParse(file, startMark);
+                })
+                .catch((error: unknown) => {
+                    // Do not cache failures: the next request for the same file must reach the worker.
+                    cache.delete(key);
+                    throw error instanceof Error ? error : new Error(String(error));
+                });
 
             cache.set(key, request);
             return request;

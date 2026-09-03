@@ -9,6 +9,7 @@ import {
 } from '@sherpa/protocol';
 
 import { makeEdgeFixture } from './edge.js';
+import { makeHugeFixture } from './huge.js';
 import { makeLargeFixture } from './large.js';
 import { makeMediumFixture } from './medium.js';
 import { makeSmallFixture } from './small.js';
@@ -25,20 +26,30 @@ export {
     MEDIUM_TOTALS,
 } from './medium.js';
 export { LARGE_FILE_COUNT, LONG_LINE_FILE_PATH, LONG_LINE_MARKER } from './large.js';
+export {
+    HUGE_CHANGED_LINE_COUNT,
+    HUGE_COLLAPSED_FILE_LINES,
+    HUGE_COLLAPSED_FILE_PATH,
+    HUGE_DIFF_ID,
+    HUGE_FILE_COUNT,
+    HUGE_PARSED_FILE_COUNT,
+    HUGE_PARSED_LINE_COUNT,
+} from './huge.js';
 export { buildChatFixtures, chatFixtures } from './chat.js';
 export type { ChatFixtures } from './chat.js';
 export { buildRouteFixtures, routeFixtures } from './route.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './route.js';
 
-export type FixtureName = 'medium' | 'small' | 'large' | 'edge';
+export type FixtureName = 'medium' | 'small' | 'large' | 'edge' | 'huge';
 
-export const FIXTURE_NAMES: readonly FixtureName[] = ['medium', 'small', 'large', 'edge'];
+export const FIXTURE_NAMES: readonly FixtureName[] = ['medium', 'small', 'large', 'edge', 'huge'];
 
 const BUILDERS: Record<FixtureName, () => FixtureData> = {
     medium: makeMediumFixture,
     small: makeSmallFixture,
     large: makeLargeFixture,
     edge: makeEdgeFixture,
+    huge: makeHugeFixture,
 };
 
 /** Iteration schema without status: the host computes status, so it is absent from the data. */

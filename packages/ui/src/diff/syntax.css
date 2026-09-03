@@ -1,0 +1,21 @@
+/*
+ * Syntax highlighting follows README §1, with exactly four categories. The classes are shared by everything
+ * that passes text through `diff/syntax.ts`: diff lines and fenced code in comments.
+ */
+
+.syntax-keyword {
+    color: var(--syntax-keyword);
+}
+
+.syntax-string {
+    color: var(--syntax-string);
+}
+
+.syntax-comment {
+    color: var(--syntax-comment);
+    font-style: italic;
+}
+
+.syntax-decorator {
+    color: var(--syntax-decorator);
+}

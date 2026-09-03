@@ -338,6 +338,19 @@ describe('old side and base changes', () => {
         const map = mapWith(PLUS_ONE, { to: 'base-d4e5f6' });
         expect(map.mapRange(OTHER, 'old', range(1, 2))).toEqual({ carried: [], touched: [range(1, 2)] });
     });
+
+    it('unknown base: old side is touched, new side carries over as usual', () => {
+        // Iteration recorded by server 0.3.x: no row in `iterations` and no snapshot with a base.
+        const map = buildIterationMap({
+            interdiff: interdiffOf([fileDiff({ path: PATH, patch: PLUS_ONE.join('\n') })]),
+            fromBaseCommit: null,
+            toBaseCommit: BASE,
+        });
+
+        expect(map.mapRange(PATH, 'old', range(10, 14))).toEqual({ carried: [], touched: [range(10, 14)] });
+        expect(map.touchedInB(PATH, 'old', range(10, 14))).toEqual([range(10, 14)]);
+        expect(mapNew(map, 20, 21)).toEqual({ carried: [range(21, 22)], touched: [] });
+    });
 });
 
 describe('mapping invariants', () => {

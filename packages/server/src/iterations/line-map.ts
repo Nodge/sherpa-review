@@ -23,8 +23,13 @@ export interface IterationMapInput {
      * `null` does not mean "nothing changed" if the base changed.
      */
     interdiff: PrDiff | null;
-    /** Iteration A's base: if it matches B's base, the `old` side maps identically. */
-    fromBaseCommit: string;
+    /**
+     * Iteration A's base. If it matches B's base, the `old` side carries over unchanged.
+     * `null` means the base is unknown (the iteration was recorded by server 0.3.x, with no row or snapshot).
+     * The entire `old` side then counts as touched, as with a base change. Substituting iteration B's base
+     * would carry over the old side using a map known to be wrong.
+     */
+    fromBaseCommit: string | null;
     /** Iteration B's base. */
     toBaseCommit: string;
 }
@@ -143,7 +148,7 @@ export function buildIterationMap(input: IterationMapInput): IterationMap {
         }
     }
 
-    const baseChanged = input.fromBaseCommit !== input.toBaseCommit;
+    const baseChanged = input.fromBaseCommit === null || input.fromBaseCommit !== input.toBaseCommit;
     const fileStatus = (path: string): FileStatus => statuses.get(path) ?? 'unchanged';
 
     const classifyPath = (path: string): MappedPath => {
