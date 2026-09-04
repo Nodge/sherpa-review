@@ -46,7 +46,7 @@ describe('route generation card', () => {
 
         expect(html).toContain('Reading the diff, planning the route');
         expect(html).toContain('~40 s');
-        expect(html).toContain('Reading all 18 files in the diff');
+        expect(html).toContain('Reading the whole diff · 18 files');
         expect(html).toContain('Deciding how many stops there will be and in what order');
         expect(html).toContain('Filling the stops one by one');
         expect(html).toContain('The plan comes first — until it lands there is nothing to count stops from');

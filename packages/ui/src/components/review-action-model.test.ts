@@ -55,7 +55,7 @@ describe('floating bar model', () => {
                 bufferedDrafts: 1,
                 publishing: false,
             }),
-        ).toBe('1 draft not yet saved to the host. ship is unavailable until saved');
+        ).toBe('1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится');
         expect(
             publishDisabledReason({
                 t,

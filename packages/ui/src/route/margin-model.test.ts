@@ -204,7 +204,7 @@ describe('route in full diff margins', () => {
         });
         expect(broken.pendingFiles).toBe(0);
         expect(broken.failedFiles).toBe(1);
-        expect(marginFooterNote(broken, t)).toContain('1 файл не разобрался — их строки в счёт не вошли.');
+        expect(marginFooterNote(broken, t)).toContain('1 file failed to parse — its lines are not counted.');
     });
 
     it('distinguishes diff sides and a single line in hatch labels', () => {

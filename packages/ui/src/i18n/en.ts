@@ -92,7 +92,7 @@ export const en: Dictionary = {
     'route.gen.eta': '~40 s',
     'route.gen.step.diff': 'Reading the whole diff',
     'route.gen.step.diffFiles': (files: number) =>
-        `Reading all ${num(files)} ${form(files, 'file', 'files')} of the diff`,
+        `Reading the whole diff · ${num(files)} ${form(files, 'file', 'files')}`,
     'route.gen.step.plan': 'Deciding how many stops there will be and in what order',
     'route.gen.step.fill': 'Filling the stops one by one',
     'route.gen.reading.note':
@@ -165,7 +165,7 @@ export const en: Dictionary = {
     'route.emptyStop.noRanges': 'No hunks: filling marked up no ranges at all.',
     'route.emptyStop.filtered': 'The files of this stop are hidden by the current filter.',
     'route.lazyMore': (cards: number) =>
-        `${num(cards)} more ${form(cards, 'card', 'cards')} — they appear as you scroll`,
+        `${num(cards)} more ${form(cards, 'card', 'cards')} — ${form(cards, 'it appears', 'they appear')} as you scroll`,
     'route.stopFile.collapsed': (lines: number) =>
         `${num(lines)} changed ${form(lines, 'line', 'lines')} collapsed by the model`,
     'route.stopFile.collapse': 'collapse again',
@@ -177,7 +177,7 @@ export const en: Dictionary = {
     'route.other.pending':
         'The diff is still being parsed — how many lines are left without a stop is unknown yet. Coverage is guaranteed structurally: whatever misses the stops collects here.',
     'route.other.counted': (lines: number, files: number) =>
-        `${num(lines)} changed ${form(lines, 'line', 'lines')} in ${num(files)} ${form(files, 'file', 'files')} ${form(lines, 'was', 'were')} left without a stop. Coverage is guaranteed structurally, so they are not lost — they collect here.`,
+        `${num(lines)} changed ${form(lines, 'line', 'lines')} in ${num(files)} ${form(files, 'file', 'files')} ${form(lines, 'was', 'were')} left without a stop. Coverage is guaranteed structurally, so ${form(lines, 'it is', 'they are')} not lost — ${form(lines, 'it collects', 'they collect')} here.`,
     'route.other.fillingNote':
         'This slot counts the remainder. While the stops are still landing, it is too early to read it as “not explained”.',
     'route.other.text.lead': 'The model did not place these ranges. They are ',
@@ -191,7 +191,7 @@ export const en: Dictionary = {
     'route.other.counting': 'Counting the uncovered lines…',
     'route.other.ask': 'Ask the agent to place them',
     'route.other.failedFiles': (files: number) =>
-        `${num(files)} ${form(files, 'file', 'files')} failed to parse — their uncovered lines are not counted.`,
+        `${num(files)} ${form(files, 'file', 'files')} failed to parse — ${form(files, 'its', 'their')} uncovered lines are not counted.`,
     'route.other.retryParse': 'Retry the parse',
     'route.regenerate.hint': 'the plan explains less than half of this diff — consider regenerating',
     'route.regenerate.action': 'Regenerate',
@@ -445,7 +445,7 @@ export const en: Dictionary = {
     'diff.file.collapsed.hint': 'click to expand the lines',
     'diff.elsewhere': (changed: number) =>
         `${num(changed)} changed ${form(changed, 'line', 'lines')} — in other stops`,
-    'diff.expand.loaded': (loaded: number) => `${num(loaded)} lines loaded`,
+    'diff.expand.loaded': (loaded: number) => `${num(loaded)} ${form(loaded, 'line', 'lines')} loaded`,
     'diff.expand.hidden': (hidden: number) => `${num(hidden)} hidden`,
     'diff.expand.noContent': 'the host does not serve file contents — there is nothing to expand from',
     'diff.expand.parsing': 'the diff is still being parsed',
@@ -473,14 +473,14 @@ export const en: Dictionary = {
     'diff.gap.expandFailed': 'could not load · retry',
     'diff.gap.loading': 'loading…',
     'diff.gap.expandHint': (base: string) => `${base} — expand`,
-    'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} lines up · ${base}`,
-    'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} lines down · ${base}`,
+    'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} ${form(step, 'line', 'lines')} up · ${base}`,
+    'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} ${form(step, 'line', 'lines')} down · ${base}`,
     'diff.gap.aria': 'direction to expand the hidden context',
     'diff.gap.hiddenToEnd': 'lines hidden to the end of the file',
-    'diff.gap.hiddenCount': (hidden: number) => `${num(hidden)} lines hidden`,
-    'diff.gap.loadAll': (amount: number, hidden: string) => `load ${num(amount)} lines, ${hidden}`,
-    'diff.gap.loadUp': (amount: number, hidden: string) => `load ${num(amount)} lines up, ${hidden}`,
-    'diff.gap.loadDown': (amount: number, hidden: string) => `load ${num(amount)} lines down, ${hidden}`,
+    'diff.gap.hiddenCount': (hidden: number) => `${num(hidden)} ${form(hidden, 'line', 'lines')} hidden`,
+    'diff.gap.loadAll': (amount: number, hidden: string) => `load ${num(amount)} ${form(amount, 'line', 'lines')}, ${hidden}`,
+    'diff.gap.loadUp': (amount: number, hidden: string) => `load ${num(amount)} ${form(amount, 'line', 'lines')} up, ${hidden}`,
+    'diff.gap.loadDown': (amount: number, hidden: string) => `load ${num(amount)} ${form(amount, 'line', 'lines')} down, ${hidden}`,
     'diff.row.comment': (line: number) => `Comment on line ${num(line)}`,
     'diff.row.commentOld': (line: number) => `Comment on old line ${num(line)}`,
     'diff.row.commentNew': (line: number) => `Comment on new line ${num(line)}`,
@@ -543,7 +543,7 @@ export const en: Dictionary = {
         `${num(lines)} ${form(lines, 'line has', 'lines have')} no route stop`,
     'margin.footer.counting': 'The hatch means the range has no route stop. Counting the lines…',
     'margin.footer.failed': (files: number) =>
-        ` ${num(files)} ${form(files, 'file', 'files')} failed to parse — their lines are not counted.`,
+        ` ${num(files)} ${form(files, 'file', 'files')} failed to parse — ${form(files, 'its', 'their')} lines are not counted.`,
     'margin.footer.hatchOnly': (failed: string) => `The hatch means the range has no route stop.${failed}`,
     'margin.footer.uncovered': (lines: number, files: number, failed: string) =>
         `The hatch means the range has no route stop. ${num(lines)} ${form(lines, 'line', 'lines')} in ${num(files)} ${form(files, 'file', 'files')}.${failed}`,
@@ -565,7 +565,7 @@ export const en: Dictionary = {
     'audit.scope': (listed: string) => `Scope: ${listed}. `,
     'audit.scope.more': (listed: string, rest: number) => `Scope: ${listed} and ${num(rest)} more. `,
     'audit.line': (files: number, changed: number, total: number) =>
-        `Showing only the ${num(files)} audit-scope ${form(files, 'file', 'files')} — ${num(changed)} of ${num(total)} changed ${form(total, 'line', 'lines')}. The rest is hidden, not deleted.`,
+        `Showing only ${num(files)} audit-scope ${form(files, 'file', 'files')} — ${num(changed)} of ${num(total)} changed ${form(total, 'line', 'lines')}. The rest is hidden, not deleted.`,
     'audit.note': 'Changes here need an auditor sign-off — without it the ship does not count.',
     'audit.dismiss': 'Hide the audit-scope banner',
     'audit.dismiss.title': 'Hide the banner; the filter stays on',
@@ -593,7 +593,7 @@ export const en: Dictionary = {
     'prComments.escape.close': 'close',
     'prComments.buffered.label': 'Drafts not saved to the host',
     'prComments.buffered.title': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'draft is', 'drafts are')} waiting for the host — ship is blocked until they are saved`,
+        `${num(drafts)} ${form(drafts, 'draft is', 'drafts are')} waiting for the host — ship is blocked until ${form(drafts, 'it is', 'they are')} saved`,
     'prComments.buffered.retry': 'Retry',
     'prComments.buffered.discard': 'Delete',
 
@@ -716,18 +716,18 @@ export const en: Dictionary = {
     'file.menu.markViewed': 'Viewed',
     'file.menu.unmarkViewed': 'Clear the mark',
     'route.stop.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'file of this stop has', 'files of this stop have')} merge conflicts: resolve them in the host. Conflicts are out of route coverage, so there are no cards here.`,
+        `${num(files)} ${form(files, 'file of this stop has', 'files of this stop have')} merge conflicts: resolve ${form(files, 'it', 'them')} in the host. Conflicts are out of route coverage, so there are no cards here.`,
     'route.other.none': 'Not a single changed line was left without a stop — the route covers the whole diff.',
     'route.other.conflictsOnly':
         'This slot is held by conflicts alone: the route does not explain them and they cannot be read here.',
     'route.other.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'file has', 'files have')} conflicts — resolve them in the host; they are out of coverage`,
+        `${num(files)} ${form(files, 'file has', 'files have')} conflicts — resolve ${form(files, 'it', 'them')} in the host; ${form(files, 'it is', 'they are')} out of coverage`,
     'route.cap.note': (covered: number, total: number) =>
         `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}`,
     'route.cap.note.machine': (covered: number, total: number, machine: number) =>
         `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}; ${num(machine)} generated ${form(machine, 'file is', 'files are')} grouped in one stop`,
     'banner.generationCap': (files: number) =>
-        `The route was built from a partial diff: ${num(files)} ${form(files, 'file', 'files')} did not fit the agent context — check them in the full diff`,
+        `The route was built from a partial diff: ${num(files)} ${form(files, 'file', 'files')} did not fit the agent context — check ${form(files, 'it', 'them')} in the full diff`,
 
     'emptyPr.title': 'Nothing to review',
     'emptyPr.text': 'This PR has no changes against the base.',
@@ -808,7 +808,7 @@ export const en: Dictionary = {
     'palette.chat.failed': 'no answer',
     'palette.chat.cancelled': 'cancelled',
     'palette.goToLine': (line: number) => `Go to line ${num(line)}`,
-    'palette.truncated': (limit: number) => `Showing the first ${num(limit)} matches`,
+    'palette.truncated': (limit: number) => `Showing the first ${num(limit)} ${form(limit, 'match', 'matches')}`,
 
     'banner.slot': 'Review status notices',
     'banner.slot.more': (count: number) => `+${num(count)} ${form(count, 'notice', 'notices')}`,
@@ -852,7 +852,7 @@ export const en: Dictionary = {
     'ship.disabled.pending': 'there is unsaved text',
     'ship.disabled.retry': 'retry the previous publication first',
     'ship.disabled.buffered': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'draft is', 'drafts are')} not saved to the host yet — ship is blocked until they are`,
+        `${num(drafts)} ${form(drafts, 'draft is', 'drafts are')} not saved to the host yet — ship is blocked until ${form(drafts, 'it is', 'they are')}`,
     'ship.verdict.banner': (who: string, when: string) =>
         `${who} shipped this PR ${when} — your comments will still be published.`,
     'ship.verdict.dismiss': 'Dismiss the notice about someone else’s ship',

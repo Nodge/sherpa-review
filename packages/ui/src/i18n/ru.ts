@@ -83,7 +83,7 @@ export const ru = {
         `Маршрут готов · ${num(stops)} ${form(stops, 'остановка', 'остановки', 'остановок')}`,
     'route.gen.open': 'Открыть маршрут',
     'route.gen.filling.title': 'Заполняю маршрут',
-    'route.gen.filling.counter': (ready: number, total: number) => `${num(ready)} из ${num(total)} готовы`,
+    'route.gen.filling.counter': (ready: number, total: number) => `${num(ready)} из ${num(total)} ${form(ready, 'готова', 'готовы', 'готовы')}`,
     'route.gen.filling.note':
         'План зафиксирован — остановки валидируются независимо и загораются не по порядку.',
     'route.gen.filling.hint': (ready: number, rest: number) =>
@@ -98,7 +98,7 @@ export const ru = {
     'route.gen.eta': '~40 c',
     'route.gen.step.diff': 'Читаю дифф целиком',
     'route.gen.step.diffFiles': (files: number) =>
-        `Читаю все ${num(files)} ${form(files, 'файл', 'файла', 'файлов')} диффа`,
+        `Читаю весь дифф · ${num(files)} ${form(files, 'файл', 'файла', 'файлов')}`,
     'route.gen.step.plan': 'Решаю, сколько будет остановок и в каком порядке',
     'route.gen.step.fill': 'Заполняю остановки по одной',
     'route.gen.reading.note':
@@ -123,7 +123,7 @@ export const ru = {
     'route.failed.banner.title': 'Маршрут не построился.',
     'route.failed.banner.title.rebuild': 'Новый маршрут не построился.',
     'route.filling.banner': (ready: number, total: number) =>
-        `Заполняю маршрут · ${num(ready)} из ${num(total)} ${form(total, 'остановка готова', 'остановки готовы', 'остановок готовы')} · остановки появляются не по порядку`,
+        `Заполняю маршрут · ${num(ready)} из ${num(total)} ${form(total, 'остановки', 'остановок', 'остановок')} ${form(ready, 'готова', 'готовы', 'готовы')} · остановки появляются не по порядку`,
     'route.filling.readDiff': 'Пока можно читать полный дифф →',
     'route.regenerating.text': 'Строю новый маршрут — отметки остановок уйдут, когда он приедет',
     'route.actionFailed.aria': 'Действие с маршрутом не выполнено',
@@ -171,9 +171,9 @@ export const ru = {
     'route.emptyStop.noRanges': 'Ханков нет: заполнение не разметило ни одного диапазона.',
     'route.emptyStop.filtered': 'Файлы этой остановки скрыты текущим фильтром.',
     'route.lazyMore': (cards: number) =>
-        `ещё ${num(cards)} ${form(cards, 'карточка', 'карточки', 'карточек')} — появятся при прокрутке`,
+        `ещё ${num(cards)} ${form(cards, 'карточка', 'карточки', 'карточек')} — ${form(cards, 'появится', 'появятся', 'появятся')} при прокрутке`,
     'route.stopFile.collapsed': (lines: number) =>
-        `${num(lines)} ${form(lines, 'изменённая строка', 'изменённые строки', 'изменённых строк')} свёрнуты моделью`,
+        `${num(lines)} ${form(lines, 'изменённая строка', 'изменённые строки', 'изменённых строк')} ${form(lines, 'свёрнута', 'свёрнуты', 'свёрнуто')} моделью`,
     'route.stopFile.collapse': 'свернуть обратно',
     'route.fileChips.more': (files: number) => `ещё ${num(files)} ${form(files, 'файл', 'файла', 'файлов')}`,
     'route.fileChips.jump': 'Перейти к этому файлу в диффе остановки',
@@ -183,7 +183,7 @@ export const ru = {
     'route.other.pending':
         'Дифф ещё разбирается — сколько строк осталось без остановки, пока неизвестно. Покрытие гарантировано структурно: что не попало в остановки, соберётся здесь.',
     'route.other.counted': (lines: number, files: number) =>
-        `${num(lines)} ${form(lines, 'изменённая строка', 'изменённые строки', 'изменённых строк')} в ${num(files)} ${form(files, 'файле', 'файлах', 'файлах')} остались без остановки. Покрытие гарантировано структурно, поэтому они не пропали, а собрались здесь.`,
+        `${num(lines)} ${form(lines, 'изменённая строка', 'изменённые строки', 'изменённых строк')} в ${num(files)} ${form(files, 'файле', 'файлах', 'файлах')} ${form(lines, 'осталась', 'остались', 'остались')} без остановки. Покрытие гарантировано структурно, поэтому ${form(lines, 'она не пропала, а собралась', 'они не пропали, а собрались', 'они не пропали, а собрались')} здесь.`,
     'route.other.fillingNote':
         'Этот слот считает остаток. Пока остановки приземляются, читать его как «не объяснено» рано.',
     'route.other.text.lead': 'Модель не разместила эти диапазоны. Они ',
@@ -197,7 +197,7 @@ export const ru = {
     'route.other.counting': 'Считаю непокрытые строки…',
     'route.other.ask': 'Попросить агента разложить их',
     'route.other.failedFiles': (files: number) =>
-        `${num(files)} ${form(files, 'файл не разобрался', 'файла не разобрались', 'файлов не разобрались')} — их непокрытые строки в счёт не вошли.`,
+        `${num(files)} ${form(files, 'файл не разобрался', 'файла не разобрались', 'файлов не разобрались')} — ${form(files, 'его', 'их', 'их')} непокрытые строки в счёт не вошли.`,
     'route.other.retryParse': 'Повторить разбор',
     'route.regenerate.hint': 'план объясняет меньше половины этого диффа — стоит перегенерировать',
     'route.regenerate.action': 'Перегенерировать',
@@ -221,7 +221,7 @@ export const ru = {
         `${num(changed)} ${form(changed, 'изменённая строка', 'изменённые строки', 'изменённых строк')}`,
     'coverage.legend.explained': (percent: number) => `${num(percent)}% объяснено`,
     'coverage.legend.unexplained': (uncovered: number) =>
-        `${num(uncovered)} ${form(uncovered, 'строка не объяснена', 'строки не объяснены', 'строк не объяснены')}`,
+        `${num(uncovered)} ${form(uncovered, 'строка не объяснена', 'строки не объяснены', 'строк не объяснено')}`,
     'coverage.segment.tier': (tier: string, lines: number) =>
         `${tier} · ${num(lines)} ${form(lines, 'строка', 'строки', 'строк')}`,
     'coverage.segment.stop': (tier: string, stop: string, lines: number) =>
@@ -452,7 +452,7 @@ export const ru = {
     'diff.file.collapsed.hint': 'нажмите, чтобы раскрыть строки',
     'diff.elsewhere': (changed: number) =>
         `${num(changed)} ${form(changed, 'изменённая строка', 'изменённые строки', 'изменённых строк')} — в других остановках`,
-    'diff.expand.loaded': (loaded: number) => `догружено ${num(loaded)} строк`,
+    'diff.expand.loaded': (loaded: number) => `догружено ${num(loaded)} ${form(loaded, 'строка', 'строки', 'строк')}`,
     'diff.expand.hidden': (hidden: number) => `скрыто ${num(hidden)}`,
     'diff.expand.noContent': 'хост не отдаёт содержимое файлов — расширять контекст нечем',
     'diff.expand.parsing': 'дифф ещё разбирается',
@@ -480,14 +480,14 @@ export const ru = {
     'diff.gap.expandFailed': 'не удалось догрузить · повторить',
     'diff.gap.loading': 'догружаю…',
     'diff.gap.expandHint': (base: string) => `${base} — раскрыть`,
-    'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} строк вверх · ${base}`,
-    'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} строк вниз · ${base}`,
+    'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} ${form(step, 'строка', 'строки', 'строк')} вверх · ${base}`,
+    'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} ${form(step, 'строка', 'строки', 'строк')} вниз · ${base}`,
     'diff.gap.aria': 'направление раскрытия скрытого контекста',
     'diff.gap.hiddenToEnd': 'строк скрыто до конца файла',
-    'diff.gap.hiddenCount': (hidden: number) => `${num(hidden)} строк скрыто`,
-    'diff.gap.loadAll': (amount: number, hidden: string) => `догрузить ${num(amount)} строк, ${hidden}`,
-    'diff.gap.loadUp': (amount: number, hidden: string) => `догрузить ${num(amount)} строк вверх, ${hidden}`,
-    'diff.gap.loadDown': (amount: number, hidden: string) => `догрузить ${num(amount)} строк вниз, ${hidden}`,
+    'diff.gap.hiddenCount': (hidden: number) => `${num(hidden)} ${form(hidden, 'строка скрыта', 'строки скрыты', 'строк скрыто')}`,
+    'diff.gap.loadAll': (amount: number, hidden: string) => `догрузить ${num(amount)} ${form(amount, 'строку', 'строки', 'строк')}, ${hidden}`,
+    'diff.gap.loadUp': (amount: number, hidden: string) => `догрузить ${num(amount)} ${form(amount, 'строку', 'строки', 'строк')} вверх, ${hidden}`,
+    'diff.gap.loadDown': (amount: number, hidden: string) => `догрузить ${num(amount)} ${form(amount, 'строку', 'строки', 'строк')} вниз, ${hidden}`,
     'diff.row.comment': (line: number) => `Комментировать строку ${num(line)}`,
     'diff.row.commentOld': (line: number) => `Комментировать старую строку ${num(line)}`,
     'diff.row.commentNew': (line: number) => `Комментировать новую строку ${num(line)}`,
@@ -551,7 +551,7 @@ export const ru = {
         `${num(lines)} ${form(lines, 'строка', 'строки', 'строк')} без остановки маршрута`,
     'margin.footer.counting': 'Штриховка — у диапазона нет остановки маршрута. Считаю строки…',
     'margin.footer.failed': (files: number) =>
-        ` ${num(files)} ${form(files, 'файл не разобрался', 'файла не разобрались', 'файлов не разобрались')} — их строки в счёт не вошли.`,
+        ` ${num(files)} ${form(files, 'файл не разобрался', 'файла не разобрались', 'файлов не разобрались')} — ${form(files, 'его', 'их', 'их')} строки в счёт не вошли.`,
     'margin.footer.hatchOnly': (failed: string) =>
         `Штриховка — у диапазона нет остановки маршрута.${failed}`,
     'margin.footer.uncovered': (lines: number, files: number, failed: string) =>
@@ -574,7 +574,7 @@ export const ru = {
     'audit.scope': (listed: string) => `Скоуп: ${listed}. `,
     'audit.scope.more': (listed: string, rest: number) => `Скоуп: ${listed} и ещё ${num(rest)}. `,
     'audit.line': (files: number, changed: number, total: number) =>
-        `Показаны только ${num(files)} ${form(files, 'файл', 'файла', 'файлов')} аудит-скоупа — ${num(changed)} из ${num(total)} ${form(total, 'изменённой строки', 'изменённых строк', 'изменённых строк')}. Остальное скрыто, не удалено.`,
+        `${form(files, 'Показан', 'Показаны', 'Показаны')} только ${num(files)} ${form(files, 'файл', 'файла', 'файлов')} аудит-скоупа — ${num(changed)} из ${num(total)} ${form(total, 'изменённой строки', 'изменённых строк', 'изменённых строк')}. Остальное скрыто, не удалено.`,
     'audit.note': 'Изменения здесь требуют аудиторского сайнофа — без него шип не засчитан.',
     'audit.dismiss': 'Скрыть баннер аудит-скоупа',
     'audit.dismiss.title': 'Скрыть баннер; фильтр останется включённым',
@@ -589,7 +589,7 @@ export const ru = {
     'prComments.title': 'Комментарии к PR',
     'prComments.context': (prId: string) => `вне диффа · ${prId}`,
     'prComments.drafts': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} · уйдут при Ship`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} · ${form(drafts, 'уйдёт', 'уйдут', 'уйдут')} при Ship`,
     'prComments.close': 'Закрыть комментарии к PR',
     'prComments.close.title': 'Закрыть · Esc',
     'prComments.empty': 'Комментариев к PR пока нет. Написанное здесь уйдёт вместе с ревью при Ship.',
@@ -602,7 +602,7 @@ export const ru = {
     'prComments.escape.close': 'закрыть',
     'prComments.buffered.label': 'Черновики, не сохранённые в хост',
     'prComments.buffered.title': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ждёт', 'ждут', 'ждут')} связи с хостом — ship недоступен, пока не сохранятся`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ждёт', 'ждут', 'ждут')} связи с хостом — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
     'prComments.buffered.retry': 'Повторить',
     'prComments.buffered.discard': 'Удалить',
 
@@ -642,13 +642,13 @@ export const ru = {
     'complete.diffSeen.value': (percent: number, lines: number) => `${num(percent)}% из ${num(lines)} строк`,
     'complete.outsideRoute': 'Из них прочитано вне маршрута',
     'complete.outsideRoute.value': (lines: number) =>
-        `${num(lines)} ${form(lines, 'строка', 'строки', 'строк')}, которые модель не разместила`,
+        `${num(lines)} ${form(lines, 'строка', 'строки', 'строк')}, ${form(lines, 'которую', 'которые', 'которые')} модель не разместила`,
     'complete.published': 'Комментариев опубликовано',
     'complete.published.value': (published: number, replies: number) =>
         `${num(published)} (из них ${num(replies)} ${form(replies, 'ответ', 'ответа', 'ответов')})`,
     'complete.snapshot': 'Подписан снапшот',
     'complete.openThreads': (threads: number) =>
-        `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыты')} — это не блокирует шип, но остаётся в вашем списке`,
+        `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыто')} — это не блокирует шип, но остаётся в вашем списке`,
     'complete.openThread': 'Открыть тред',
     'complete.verdict.requestChanges': 'Запрошены изменения',
     'complete.verdict.shipped': 'Shipped',
@@ -728,18 +728,18 @@ export const ru = {
     'file.menu.markViewed': 'Просмотрено',
     'file.menu.unmarkViewed': 'Снять отметку',
     'route.stop.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'файл этой остановки', 'файла этой остановки', 'файлов этой остановки')} в конфликте: разрешите их в хосте. В покрытие маршрута конфликты не входят, поэтому карточек здесь нет.`,
+        `${num(files)} ${form(files, 'файл этой остановки', 'файла этой остановки', 'файлов этой остановки')} в конфликте: разрешите ${form(files, 'его', 'их', 'их')} в хосте. В покрытие маршрута конфликты не входят, поэтому карточек здесь нет.`,
     'route.other.none': 'Без остановки не осталось ни одной изменённой строки — весь дифф разобран маршрутом.',
     'route.other.conflictsOnly':
         'Этот слот держат только конфликты: маршрут их не объясняет и прочитать их здесь нельзя.',
     'route.other.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'файл с конфликтом', 'файла с конфликтами', 'файлов с конфликтами')} — разрешите их в хосте, в покрытие они не входят`,
+        `${num(files)} ${form(files, 'файл с конфликтом', 'файла с конфликтами', 'файлов с конфликтами')} — ${form(files, 'разрешите его в хосте, в покрытие он не входит', 'разрешите их в хосте, в покрытие они не входят', 'разрешите их в хосте, в покрытие они не входят')}`,
     'route.cap.note': (covered: number, total: number) =>
         `план покрывает ${num(covered)} ${form(covered, 'файл', 'файла', 'файлов')} из ${num(total)}`,
     'route.cap.note.machine': (covered: number, total: number, machine: number) =>
         `план покрывает ${num(covered)} ${form(covered, 'файл', 'файла', 'файлов')} из ${num(total)}; ${num(machine)} ${form(machine, 'машинный', 'машинных', 'машинных')} — одной остановкой`,
     'banner.generationCap': (files: number) =>
-        `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте их в Полном диффе`,
+        `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте ${form(files, 'его', 'их', 'их')} в Полном диффе`,
 
     'emptyPr.title': 'Нечего ревьюить',
     'emptyPr.text': 'В этом PR нет изменений относительно базы.',
@@ -760,7 +760,7 @@ export const ru = {
     'overview.ownership.title': 'Файлы по зонам ответственности',
     'overview.ownership.segments': 'Файлы по зоне ответственности',
     'overview.ownership.stats': (mineFiles: number, totalFiles: number, mineLines: number, totalLines: number) =>
-        `CODEOWNERS · ${num(mineFiles)} из ${num(totalFiles)} файлов · ${num(mineLines)} из ${num(totalLines)} строк — ваши`,
+        `CODEOWNERS · ${num(mineFiles)} из ${num(totalFiles)} ${form(totalFiles, 'файла', 'файлов', 'файлов')} · ${num(mineLines)} из ${num(totalLines)} ${form(totalLines, 'строки', 'строк', 'строк')} — ваши`,
     'overview.ownership.statsUnavailable': 'CODEOWNERS · зона ответственности недоступна',
     'overview.ownership.mine': (files: number) => `Моя зона ${num(files)}`,
     'overview.ownership.all': (files: number) => `Все ${num(files)}`,
@@ -821,7 +821,7 @@ export const ru = {
     'palette.chat.failed': 'без ответа',
     'palette.chat.cancelled': 'отменён',
     'palette.goToLine': (line: number) => `Перейти к строке ${num(line)}`,
-    'palette.truncated': (limit: number) => `Показаны первые ${num(limit)} совпадений`,
+    'palette.truncated': (limit: number) => `Показаны первые ${num(limit)} ${form(limit, 'совпадение', 'совпадения', 'совпадений')}`,
 
     'banner.slot': 'Уведомления о состоянии ревью',
     'banner.slot.more': (count: number) =>
@@ -848,9 +848,9 @@ export const ru = {
     'ship.openThreads': (threads: number) =>
         `${num(threads)} ${form(threads, 'нерешённый тред', 'нерешённых треда', 'нерешённых тредов')}`,
     'ship.guard.stops': (stops: number) =>
-        `${num(stops)} ${form(stops, 'остановка не просмотрена', 'остановки не просмотрено', 'остановок не просмотрено')} — всё равно шипнуть?`,
+        `${num(stops)} ${form(stops, 'остановка не просмотрена', 'остановки не просмотрены', 'остановок не просмотрено')} — всё равно шипнуть?`,
     'ship.guard.files': (files: number) =>
-        `${num(files)} ${form(files, 'файл не просмотрен', 'файла не просмотрено', 'файлов не просмотрено')} — всё равно шипнуть?`,
+        `${num(files)} ${form(files, 'файл не просмотрен', 'файла не просмотрены', 'файлов не просмотрено')} — всё равно шипнуть?`,
     'ship.mode.ship': 'Ship',
     'ship.mode.sticky': 'Sticky ship',
     'ship.mode.ship.description': 'Одобряет только этот снапшот. Новый пуш снимает одобрение и спросит снова.',
@@ -867,7 +867,7 @@ export const ru = {
     'ship.disabled.pending': 'есть несохранённый текст',
     'ship.disabled.retry': 'сначала повторите предыдущую публикацию',
     'ship.disabled.buffered': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ещё не сохранён', 'ещё не сохранены', 'ещё не сохранены')} в хост — ship недоступен, пока не сохранятся`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ещё не сохранён', 'ещё не сохранены', 'ещё не сохранены')} в хост — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
     'ship.verdict.banner': (who: string, when: string) =>
         `${who} отшипил(а) этот PR ${when} — ваши комментарии всё равно опубликуются.`,
     'ship.verdict.dismiss': 'Скрыть сообщение о чужом шипе',

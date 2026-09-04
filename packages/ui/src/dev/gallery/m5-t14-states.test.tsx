@@ -62,7 +62,7 @@ describe('M5-T14 gallery', () => {
         const html = markup('conflict-stop-notice');
 
         expect(html).toContain('route-conflicts');
-        expect(html).toContain('merge conflicts: resolve them in the host');
+        expect(html).toContain('в конфликте: разрешите его в хосте');
         expect(html).not.toContain('that are no longer in the diff');
     });
 

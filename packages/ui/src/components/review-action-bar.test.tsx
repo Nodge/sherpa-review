@@ -340,7 +340,7 @@ describe('floating review bar', () => {
 
         expect(html).toContain(`${String(drafts + 1)} draft`);
         expect(html).toContain('1 not yet saved to the host');
-        expect(html).toContain('1 draft not yet saved to the host. ship is unavailable until saved');
+        expect(html).toContain('1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится');
         expect(html).toContain('<button type="button" class="review-action-bar__ship-primary" disabled=""');
     });
 
@@ -353,7 +353,7 @@ describe('floating review bar', () => {
 
         expect(html).toContain(`${String(drafts)} draft`);
         expect(html).toContain('1 not yet saved to the host');
-        expect(html).toContain('ship is unavailable until saved');
+        expect(html).toContain('ship is blocked until it is');
     });
 
     // Ship summary (SPEC §4.5): informational, does not block publishing.
