@@ -108,6 +108,8 @@ export interface DiffFileListProps {
     readonly threadActions?: ThreadActions | undefined;
     readonly threadVisible?: ((thread: Thread) => boolean) | undefined;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    /** File comment without a line: image card menu item (M5-T24). */
+    readonly onCommentFile?: ((fileId: string) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
     readonly onFocusThread?: ((threadId: string | null) => void) | undefined;
@@ -158,6 +160,7 @@ export function DiffFileList({
     threadActions = EMPTY_THREAD_ACTIONS,
     threadVisible = HIDE_THREAD,
     onCommentLine = NOOP_LINE,
+    onCommentFile = NOOP_FILE,
     onLineFocus = NOOP_LINE,
     onLineBlur = NOOP,
     onFocusThread = NOOP_THREAD,
@@ -540,10 +543,11 @@ export function DiffFileList({
             },
             onSelectExtend: store.extendSelection,
             onCommentLine,
+            onCommentFile,
             onLineFocus,
             onLineBlur,
         }),
-        [expand, onCommentLine, onLineBlur, onLineFocus, onViewed, retryParse, store],
+        [expand, onCommentFile, onCommentLine, onLineBlur, onLineFocus, onViewed, retryParse, store],
     );
 
     return (
@@ -901,6 +905,7 @@ const EMPTY_THREAD_ACTIONS: ThreadActions = {
 const HIDE_THREAD = (): boolean => false;
 const NOOP = (): void => undefined;
 const NOOP_LINE = (): void => undefined;
+const NOOP_FILE = (): void => undefined;
 const NOOP_THREAD = (): void => undefined;
 
 function countGeneratedCollapsed(

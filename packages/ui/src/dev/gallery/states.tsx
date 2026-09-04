@@ -46,6 +46,7 @@ import { M5_T15_STATES } from './m5-t15-states.tsx';
 import { M5_T16_STATES } from './m5-t16-states.tsx';
 import { M5_T17_STATES } from './m5-t17-states.tsx';
 import { M5_T22_STATES } from './m5-t22-states.tsx';
+import { M5_T24_STATES } from './m5-t24-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
@@ -270,6 +271,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...M5_T17_STATES.map((state) => ({
         id: state.id,
         group: 'Files',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M5_T24_STATES.map((state) => ({
+        id: state.id,
+        group: 'Images',
         title: state.title,
         render: state.render,
     })),

@@ -41,7 +41,7 @@ interface Mounted {
     readonly rowKeys: string[];
 }
 
-function mount(file: FileMenuTarget = FILE, viewed = false): Mounted {
+function mount(file: FileMenuTarget = FILE, viewed = false, onCommentFile?: () => void): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -55,6 +55,7 @@ function mount(file: FileMenuTarget = FILE, viewed = false): Mounted {
                 viewed={viewed}
                 onToggleViewed={onToggleViewed}
                 onRowKey={(key) => rowKeys.push(key)}
+                {...(onCommentFile === undefined ? {} : { onCommentFile })}
             />,
         );
     });
@@ -80,11 +81,13 @@ function Harness({
     file,
     viewed,
     onToggleViewed,
+    onCommentFile,
     onRowKey,
 }: {
     file: FileMenuTarget;
     viewed: boolean;
     onToggleViewed: () => void;
+    onCommentFile?: (() => void) | undefined;
     onRowKey: (key: string) => void;
 }) {
     const menu = useContextMenu();
@@ -105,6 +108,7 @@ function Harness({
                     file={file}
                     viewed={viewed}
                     onToggleViewed={onToggleViewed}
+                    {...(onCommentFile === undefined ? {} : { onCommentFile })}
                     anchor={menu.anchor}
                     onClose={menu.close}
                     toggleRef={menu.toggleRef}
@@ -155,6 +159,27 @@ describe('file context menu', () => {
             'Viewed',
         ]);
         expect(document.activeElement).toBe(items()[0]);
+    });
+
+    it('adds "Comment on file" before the viewed mark for an image card', () => {
+        const onCommentFile = vi.fn();
+        const { trigger } = mount(FILE, false, onCommentFile);
+
+        act(() => {
+            trigger.click();
+        });
+        expect(items().map((item) => item.textContent)).toEqual([
+            'Copy path',
+            'Copy file link',
+            'Open on the web',
+            'Comment on the file',
+            'Viewed',
+        ]);
+
+        act(() => {
+            items()[3]?.click();
+        });
+        expect(onCommentFile).toHaveBeenCalledTimes(1);
     });
 
     it('opens the same menu on a right click on the row', () => {

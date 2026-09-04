@@ -73,7 +73,7 @@ import type { ThreadSourceCounts } from '../threads/model.js';
 import { authorDisplayName, countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { createThreadActions } from '../threads/actions.js';
-import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
+import { openFileComposer, openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
 import type { FileOutlineModel, OutlineEntry } from '../tree/file-panel.tsx';
@@ -1183,6 +1183,16 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [diff.files, pr.capabilities.commentIssues, snapshot, store, threadStore],
     );
 
+    const commentFile = useCallback(
+        (fileId: string) => {
+            const file = diff.files.find((candidate) => candidate.fileId === fileId);
+            if (file !== undefined) {
+                openFileComposer(threadStore, fileId, file.path, pr.capabilities.commentIssues);
+            }
+        },
+        [diff.files, pr.capabilities.commentIssues, threadStore],
+    );
+
     useShortcut({
         id: 'thread.commentLine',
         keys: ['c'],
@@ -1461,6 +1471,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                         threadActions={threadActions}
                         threadVisible={threadVisible}
                         onCommentLine={commentLine}
+                        onCommentFile={commentFile}
                         onLineFocus={focusLine}
                         onLineBlur={blurLine}
                         onFocusThread={setFocusedThreadId}

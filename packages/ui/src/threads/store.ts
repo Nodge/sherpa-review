@@ -63,7 +63,10 @@ export interface ThreadStoreSnapshot {
 }
 
 export interface ComposerLayoutSnapshot {
-    /** Only anchored composers for new comments. Text is intentionally not published here. */
+    /**
+     * Composers anchored to a file, with or without a line (image comment, M5-T24,
+     * placed below the header by the card). Text is deliberately not published here.
+     */
     readonly byFile: ReadonlyMap<string, readonly ComposerSnapshot[]>;
     /**
      * Threads with an open reply or draft edit composer. These composers have no anchor,
@@ -217,9 +220,7 @@ export function createThreadStore(
             composersSnapshot = { byFile: composersSnapshot.byFile, openThreadIds };
         } else {
             const byFile = new Map(composersSnapshot.byFile);
-            const next = [...composers.values()].filter(
-                (composer) => composer.anchor?.fileId === fileId && composer.anchor.position !== null,
-            );
+            const next = [...composers.values()].filter((composer) => composer.anchor?.fileId === fileId);
             if (next.length === 0) {
                 byFile.delete(fileId);
             } else {

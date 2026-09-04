@@ -7,6 +7,7 @@ import type { Locale } from '@sherpa/protocol';
  */
 
 const numberFormats = new Map<Locale, Intl.NumberFormat>();
+const decimalFormats = new Map<Locale, Intl.NumberFormat>();
 const pluralRules = new Map<Locale, Intl.PluralRules>();
 const relativeFormats = new Map<Locale, Intl.RelativeTimeFormat>();
 const dateTimeFormats = new Map<Locale, Intl.DateTimeFormat>();
@@ -21,6 +22,16 @@ export function formatCount(value: number, locale: Locale): string {
         new Intl.NumberFormat(locale, { useGrouping: true }),
     ).format(value);
     return locale === 'ru' ? formatted.replaceAll(/\s/gu, '\u00a0') : formatted;
+}
+
+/**
+ * A number with one decimal place according to the locale: "12,4" in Russian, "12.4" in English.
+ * An integer stays an integer: "1 MB", not "1.0 MB".
+ */
+export function formatDecimal(value: number, locale: Locale): string {
+    return formatter(decimalFormats, locale, () =>
+        new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 1 }),
+    ).format(value);
 }
 
 /**

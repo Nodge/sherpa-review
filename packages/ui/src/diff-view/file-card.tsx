@@ -11,8 +11,11 @@ import { useFormat, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { FileReadState } from '../progress/read-state.js';
 import { readStateTooltip } from '../progress/read-state.js';
+import { useBlobLoader } from './blob-loader.tsx';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
+import type { ImageBodyState } from './image-card.tsx';
+import { ImageBody } from './image-card.tsx';
 import type { FileExpansion } from './expand.js';
 import {
     expandFileContext,
@@ -61,6 +64,8 @@ export interface FileCardActions {
     readonly onSelectStart: (fileId: string, key: LineKey, side: 'old' | 'new', extend: boolean) => void;
     readonly onSelectExtend: (fileId: string, key: LineKey, side: 'old' | 'new') => void;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
+    /** File comment without a line: the menu item exists only on image cards (M5-T24). */
+    readonly onCommentFile?: ((fileId: string) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
 }
@@ -100,6 +105,8 @@ export interface FileCardProps {
     readonly initialHint?: Feedback;
     /** Gallery only: deterministic error state for the first gap bar. */
     readonly initialGapError?: boolean;
+    /** Gallery only: initial image card mode. */
+    readonly initialImage?: ImageBodyState | undefined;
     /**
      * Post-process the model before rendering, after context expansion. Route uses this
      * to clip the model to stop anchors, so "Expand context" keeps working. Expansion
@@ -168,6 +175,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         loadingMinHeight,
         initialHint = null,
         initialGapError = false,
+        initialImage,
         transform,
         shownModel,
         counts,
@@ -181,6 +189,10 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     } = props;
     const t = useT();
     const { count } = useFormat();
+    // A host without `capabilities.blobs` supplies no transport, so the image keeps a regular notice.
+    const loadBlob = useBlobLoader();
+    const image = file.image;
+    const showImage = image !== null && loadBlob !== null;
     const [hint, setHint] = useState<Feedback>(initialHint);
     const [announcement, setAnnouncement] = useState('');
     const menu = useContextMenu();
@@ -259,6 +271,30 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             setAnnouncement(expansionAnnouncement(loaded, hidden, hiddenChanged, t));
         },
         [t],
+    );
+
+    // Diff rows serve as both the regular card body and the image card "Text" mode (svg).
+    const body = (
+        <Body
+            model={shown}
+            mode={mode}
+            content={content ?? null}
+            contextAvailable={contentAvailable && content !== null}
+            loadingMinHeight={loadingMinHeight}
+            selection={selection}
+            focusedThreadRange={focusedThreadRange}
+            showWhitespace={showWhitespace}
+            onShowWhitespace={onShowWhitespace}
+            onSelectStart={onSelectStart}
+            onSelectExtend={onSelectExtend}
+            renderAfterLine={renderAfterLine}
+            onCommentLine={onCommentLine}
+            onLineFocus={onLineFocus}
+            onLineBlur={actions.onLineBlur}
+            onExpandContext={onExpandContext}
+            onContextExpanded={onContextExpanded}
+            initialGapError={initialGapError}
+        />
     );
 
     return (
@@ -350,6 +386,13 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     anchor={menu.anchor}
                     onClose={menu.close}
                     toggleRef={menu.toggleRef}
+                    {...(showImage && actions.onCommentFile !== undefined
+                        ? {
+                              onCommentFile: () => {
+                                  actions.onCommentFile?.(file.fileId);
+                              },
+                          }
+                        : {})}
                 />
             )}
 
@@ -385,7 +428,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 </p>
             )}
 
-            {collapseReason === null ? <Notices model={shown} file={file} /> : null}
+            {collapseReason === null ? <Notices model={shown} file={file} hideBinary={showImage} /> : null}
 
             {collapseReason !== null ? (
                 <CollapsedFileSummary
@@ -419,27 +462,19 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 >
                     {t('diff.file.sizeCollapsed', changed)}
                 </button>
-            ) : (
-                <Body
-                    model={shown}
-                    mode={mode}
-                    content={content ?? null}
-                    contextAvailable={contentAvailable && content !== null}
-                    loadingMinHeight={loadingMinHeight}
-                    selection={selection}
-                    focusedThreadRange={focusedThreadRange}
-                    showWhitespace={showWhitespace}
-                    onShowWhitespace={onShowWhitespace}
-                    onSelectStart={onSelectStart}
-                    onSelectExtend={onSelectExtend}
-                    renderAfterLine={renderAfterLine}
-                    onCommentLine={onCommentLine}
-                    onLineFocus={onLineFocus}
-                    onLineBlur={actions.onLineBlur}
-                    onExpandContext={onExpandContext}
-                    onContextExpanded={onContextExpanded}
-                    initialGapError={initialGapError}
+            ) : image !== null && loadBlob !== null ? (
+                // Key by file: mode and scale are card state, and must reset when the list
+                // moves to a different file.
+                <ImageBody
+                    key={file.fileId}
+                    file={file}
+                    image={image}
+                    loadBlob={loadBlob}
+                    textBody={file.patch === null ? null : body}
+                    initial={initialImage}
                 />
+            ) : (
+                body
             )}
             <span className="visually-hidden" aria-live="polite">
                 {announcement}
@@ -607,8 +642,12 @@ function ExpandButton({
     );
 }
 
-/** Single-line notices from SPEC §2.14: binary, mode change, whitespace only. */
-function Notices({ model, file }: { model: DiffFileModel | null; file: FileDiff }) {
+/**
+ * Single-line notices from SPEC §2.14: binary, mode change, whitespace only. With `hideBinary`, the card
+ * shows the image itself (M5-T24), so "binary file not shown" would be false. The other
+ * notices (permission changes, malformed patch) still apply there.
+ */
+function Notices({ model, file, hideBinary = false }: { model: DiffFileModel | null; file: FileDiff; hideBinary?: boolean }) {
     const t = useT();
     if (model === null) {
         return null;
@@ -616,7 +655,7 @@ function Notices({ model, file }: { model: DiffFileModel | null; file: FileDiff 
 
     return (
         <>
-            {model.content.kind === 'binary' ? (
+            {model.content.kind === 'binary' && !hideBinary ? (
                 <p className="file-card__notice">{t('diff.notice.binary')}</p>
             ) : null}
             {model.modeChange === null ? null : (

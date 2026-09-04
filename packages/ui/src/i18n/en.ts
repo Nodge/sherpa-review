@@ -1,4 +1,4 @@
-import { formatCount, plural } from './format.js';
+import { formatCount, formatDecimal, plural } from './format.js';
 import type { Dictionary } from './ru.js';
 
 /**
@@ -7,6 +7,8 @@ import type { Dictionary } from './ru.js';
  */
 
 const num = (value: number): string => formatCount(value, 'en');
+/** Fractional number: kilobytes and megabytes in an image size. */
+const dec = (value: number): string => formatDecimal(value, 'en');
 /** Tour card counter: both parts have leading zeros (onboarding spec §1). */
 const pad = (value: number): string => String(value).padStart(2, '0');
 /** English plural forms: `one` and everything else. */
@@ -399,6 +401,8 @@ export const en: Dictionary = {
     'thread.composer.newContext': (range: string) => `new comment · ${range}`,
     'thread.composer.prPlaceholder': 'A general remark on the PR — not tied to a line',
     'thread.composer.codePlaceholder': 'Comment on the code line',
+    'thread.composer.fileContext': (name: string) => `comment on the file · ${name}`,
+    'thread.composer.filePlaceholder': 'A remark on the whole file — not tied to a line',
     'thread.composer.newLabel': 'New comment',
     'thread.composer.saveDraft': 'Save draft',
     'thread.composer.saveChanges': 'Save changes',
@@ -489,6 +493,38 @@ export const en: Dictionary = {
     'diff.row.tabs': 'tabs are shown as four spaces',
     'diff.row.noNewline': ' ⏎ no newline at the end of the file',
     'diff.contextFailed': (reason: string) => `Could not fetch the file contents: ${reason}. Try again.`,
+
+    'image.mode.aria': 'How to show the image',
+    'image.mode.twoUp': '2-up',
+    'image.mode.swipe': 'Swipe',
+    'image.mode.onion': 'Onion Skin',
+    'image.mode.diff': 'Diff',
+    'image.mode.text': 'Text',
+    'image.mode.diffLater': 'the pixel diff is coming later',
+    'image.mode.needBothSides': 'both sides are needed',
+    'image.fit.toActual': '1:1',
+    'image.fit.toFit': 'Fit',
+    'image.fit.toActualTitle': 'show at 1:1 scale',
+    'image.fit.toFitTitle': 'fit into the column width',
+    'image.side.before': 'Before',
+    'image.side.after': 'After',
+    'image.side.empty': 'none',
+    'image.download': 'Download',
+    'image.dimensions': (width: number, height: number) => `${num(width)} × ${num(height)}`,
+    'image.size.bytes': (value: number) => `${num(value)} B`,
+    'image.size.kilobytes': (value: number) => `${dec(value)} KB`,
+    'image.size.megabytes': (value: number) => `${dec(value)} MB`,
+    'image.loading': 'loading…',
+    'image.missing': 'the host does not have it',
+    'image.failed': (reason: string) => `failed to load: ${reason}`,
+    'image.retry': 'Retry',
+    'image.tooLarge': (size: string) => `too large: ${size}`,
+    'image.openAtHost': 'Open at the host',
+    'image.alt.before': (path: string) => `${path} — before`,
+    'image.alt.after': (path: string) => `${path} — after`,
+    'image.swipe.aria': 'Comparison divider',
+    'image.onion.label': 'Opacity',
+    'image.onion.value': (percent: number) => `${num(percent)} %`,
 
     'fullDiff.subtitle': 'The classic reader. The route no longer sets the order — it stays in the margin.',
     'fullDiff.sliceEmpty': (base: string, head: string) =>
@@ -715,6 +751,7 @@ export const en: Dictionary = {
     'file.menu.copyLink': 'Copy file link',
     'file.menu.copyLinkUnavailable': 'the host has no web link for this file',
     'file.menu.openWeb': 'Open on the web',
+    'file.menu.commentFile': 'Comment on the file',
     'file.menu.markViewed': 'Viewed',
     'file.menu.unmarkViewed': 'Clear the mark',
     'route.stop.conflicts': (files: number) =>

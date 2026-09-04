@@ -10,8 +10,10 @@ import './context-menu.css';
 
 /**
  * File context menu (SPEC §2.11, amended 2026-09-03): opens on right-clicking the
- * card header or tree row, or their "⋯" button. Four items in a fixed order,
+ * card header or tree row, or through their "⋯" button. Item order is fixed.
  * Unavailable items stay disabled so the menu does not change shape between files.
+ * The only optional item is "Comment on the file" for image cards (M5-T24):
+ * comments on other files attach to a line.
  *
  * The menu uses a portal in `body`. Cards clip their contents with `overflow`, and tree rows
  * are virtualized, so a menu inside them would only survive until the next scroll.
@@ -307,6 +309,11 @@ export interface FileContextMenuProps {
     readonly file: FileMenuTarget;
     readonly viewed: boolean;
     readonly onToggleViewed: () => void;
+    /**
+     * File comment without a line (M5-T24): an image card has no lines, but can still be discussed.
+     * Without a handler, the item is absent from the menu.
+     */
+    readonly onCommentFile?: (() => void) | undefined;
     readonly anchor: ContextMenuAnchor;
     readonly onClose: (returnFocus: boolean) => void;
     readonly toggleRef?: RefObject<HTMLElement | null> | undefined;
@@ -317,7 +324,15 @@ export interface FileContextMenuProps {
  * can change only in the active iteration (M4 boundaries), so read-only mode disables the last item
  * with the same reason as the viewed checkbox.
  */
-export function FileContextMenu({ file, viewed, onToggleViewed, anchor, onClose, toggleRef }: FileContextMenuProps) {
+export function FileContextMenu({
+    file,
+    viewed,
+    onToggleViewed,
+    onCommentFile,
+    anchor,
+    onClose,
+    toggleRef,
+}: FileContextMenuProps) {
     const t = useT();
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -355,18 +370,33 @@ export function FileContextMenu({ file, viewed, onToggleViewed, anchor, onClose,
                 return null;
             },
         },
-        {
-            id: 'viewed',
-            label: viewed ? t('file.menu.unmarkViewed') : t('file.menu.markViewed'),
+    ];
+
+    if (onCommentFile !== undefined) {
+        items.push({
+            id: 'comment-file',
+            label: t('file.menu.commentFile'),
             disabled: readOnly,
             title: readOnly ? readOnlyReason : undefined,
             separatorBefore: true,
             onSelect: () => {
-                onToggleViewed();
+                onCommentFile();
                 return null;
             },
+        });
+    }
+
+    items.push({
+        id: 'viewed',
+        label: viewed ? t('file.menu.unmarkViewed') : t('file.menu.markViewed'),
+        disabled: readOnly,
+        title: readOnly ? readOnlyReason : undefined,
+        separatorBefore: onCommentFile === undefined,
+        onSelect: () => {
+            onToggleViewed();
+            return null;
         },
-    ];
+    });
 
     return <ContextMenu items={items} anchor={anchor} label={file.path} onClose={onClose} toggleRef={toggleRef} />;
 }

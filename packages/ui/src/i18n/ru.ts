@@ -1,4 +1,4 @@
-import { formatCount, plural } from './format.js';
+import { formatCount, formatDecimal, plural } from './format.js';
 
 /**
  * The Russian dictionary is the source of truth for keys: the `Dictionary` type is derived from it,
@@ -10,6 +10,8 @@ import { formatCount, plural } from './format.js';
  */
 
 const num = (value: number): string => formatCount(value, 'ru');
+/** Fractional number: kilobytes and megabytes in an image size. */
+const dec = (value: number): string => formatDecimal(value, 'ru');
 /** Tour card counter: both parts have leading zeros (onboarding spec §1). */
 const pad = (value: number): string => String(value).padStart(2, '0');
 /** Russian word forms: `other` matches `many` ("5 files"). */
@@ -406,6 +408,8 @@ export const ru = {
     'thread.composer.newContext': (range: string) => `новый комментарий · ${range}`,
     'thread.composer.prPlaceholder': 'Общее замечание по PR — не привязано к строке',
     'thread.composer.codePlaceholder': 'Комментарий к строке кода',
+    'thread.composer.fileContext': (name: string) => `комментарий к файлу · ${name}`,
+    'thread.composer.filePlaceholder': 'Замечание по файлу целиком — не привязано к строке',
     'thread.composer.newLabel': 'Новый комментарий',
     'thread.composer.saveDraft': 'Сохранить черновик',
     'thread.composer.saveChanges': 'Сохранить изменения',
@@ -497,6 +501,38 @@ export const ru = {
     'diff.row.noNewline': ' ⏎ нет перевода строки в конце файла',
     'diff.contextFailed': (reason: string) =>
         `Не удалось получить содержимое файла: ${reason}. Попробуй ещё раз.`,
+
+    'image.mode.aria': 'Как показывать картинку',
+    'image.mode.twoUp': '2-up',
+    'image.mode.swipe': 'Swipe',
+    'image.mode.onion': 'Onion Skin',
+    'image.mode.diff': 'Diff',
+    'image.mode.text': 'Текст',
+    'image.mode.diffLater': 'попиксельная разница появится позже',
+    'image.mode.needBothSides': 'нужны обе стороны',
+    'image.fit.toActual': '1:1',
+    'image.fit.toFit': 'Вписать',
+    'image.fit.toActualTitle': 'показать в масштабе 1:1',
+    'image.fit.toFitTitle': 'вписать в ширину колонки',
+    'image.side.before': 'Было',
+    'image.side.after': 'Стало',
+    'image.side.empty': 'нет',
+    'image.download': 'Скачать',
+    'image.dimensions': (width: number, height: number) => `${num(width)} × ${num(height)}`,
+    'image.size.bytes': (value: number) => `${num(value)} Б`,
+    'image.size.kilobytes': (value: number) => `${dec(value)} КБ`,
+    'image.size.megabytes': (value: number) => `${dec(value)} МБ`,
+    'image.loading': 'загружается…',
+    'image.missing': 'нет у хоста',
+    'image.failed': (reason: string) => `не загрузилось: ${reason}`,
+    'image.retry': 'Повторить',
+    'image.tooLarge': (size: string) => `слишком большая: ${size}`,
+    'image.openAtHost': 'Открыть у хоста',
+    'image.alt.before': (path: string) => `${path} — было`,
+    'image.alt.after': (path: string) => `${path} — стало`,
+    'image.swipe.aria': 'Разделитель сравнения',
+    'image.onion.label': 'Непрозрачность',
+    'image.onion.value': (percent: number) => `${num(percent)} %`,
 
     'fullDiff.subtitle': 'Классическая читалка. Маршрут больше не задаёт порядок — он остаётся на полях.',
     'fullDiff.sliceEmpty': (base: string, head: string) =>
@@ -727,6 +763,7 @@ export const ru = {
     'file.menu.copyLink': 'Скопировать ссылку на файл',
     'file.menu.copyLinkUnavailable': 'у хоста нет веб-ссылки',
     'file.menu.openWeb': 'Открыть в вебе',
+    'file.menu.commentFile': 'Комментарий к файлу',
     'file.menu.markViewed': 'Просмотрено',
     'file.menu.unmarkViewed': 'Снять отметку',
     'route.stop.conflicts': (files: number) =>

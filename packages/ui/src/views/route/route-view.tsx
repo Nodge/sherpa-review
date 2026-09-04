@@ -92,7 +92,7 @@ import type { ComposerTransport } from '../../threads/composer.js';
 import { createComposerTransport } from '../../threads/transport.js';
 import { countThreadSources, threadIsVisible } from '../../threads/model.js';
 import type { ThreadStore } from '../../threads/store.js';
-import { openNewComposer, openReply, OutsideThreads } from '../../threads/thread-list.tsx';
+import { openFileComposer, openNewComposer, openReply, OutsideThreads } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
 import { commentPosition } from '../full-diff.tsx';
 import { CoverageStrip } from './coverage-strip.tsx';
@@ -1551,6 +1551,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             threadStore,
         ],
     );
+    const commentFile = useCallback(
+        (fileId: string) => {
+            const file = diff.files.find((candidate) => candidate.fileId === fileId);
+            if (file !== undefined) {
+                openFileComposer(threadStore, fileId, file.path, pr.capabilities.commentIssues);
+            }
+        },
+        [diff.files, pr.capabilities.commentIssues, threadStore],
+    );
     useShortcut({
         id: 'route.commentLine',
         keys: ['c'],
@@ -1764,6 +1773,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             },
             onSelectExtend: store.extendSelection,
             onCommentLine: commentLine,
+            onCommentFile: commentFile,
             onLineFocus: (fileId, side, line) => {
                 setFocusedLine({ fileId, side, line });
             },
@@ -1771,7 +1781,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 setFocusedLine(null);
             },
         }),
-        [commentLine, expand, markFileViewed, retryParse, store],
+        [commentFile, commentLine, expand, markFileViewed, retryParse, store],
     );
 
     const cardFor = useCallback(
@@ -1787,6 +1797,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             );
             const cardActions: FileCardActions = {
                 ...actions,
+                // A composer without a line renders only where the entry explains the whole file
+                // (`composersForGroup`). In other cards the menu item would open a draft
+                // that is invisible everywhere, so hide it. A comment on such a file can be added
+                // in Full diff.
+                onCommentFile: group.whole ? actions.onCommentFile : undefined,
                 onSelectStart: (fileId, lineKey, side, extend) => {
                     setSelectionCard({ stopId, group });
                     actions.onSelectStart(fileId, lineKey, side, extend);

@@ -458,7 +458,10 @@ export function NewCommentComposer({
     if (composer === null) {
         return null;
     }
-    const position = composer.anchor?.position;
+    // Three cases: no anchor means a PR comment, an anchor without a line means the whole file (image,
+    // M5-T24), and an anchor with a line means a code range.
+    const anchor = composer.anchor;
+    const position = anchor?.position ?? null;
     return (
         <CommentComposer
             composer={composer}
@@ -466,13 +469,19 @@ export function NewCommentComposer({
             transport={transport}
             contextLabel={
                 contextLabel ??
-                (position == null
+                (anchor === null
                     ? t('thread.composer.prContext')
-                    : t('thread.composer.newContext', lineRangeLabel(position, t)))
+                    : position === null
+                      ? t('thread.composer.fileContext', fileNameOf(anchor.path))
+                      : t('thread.composer.newContext', lineRangeLabel(position, t)))
             }
             placeholder={
                 placeholder ??
-                (position == null ? t('thread.composer.prPlaceholder') : t('thread.composer.codePlaceholder'))
+                (anchor === null
+                    ? t('thread.composer.prPlaceholder')
+                    : position === null
+                      ? t('thread.composer.filePlaceholder')
+                      : t('thread.composer.codePlaceholder'))
             }
             inputLabel={t('thread.composer.newLabel')}
             saveLabel={
@@ -654,6 +663,20 @@ export function openNewComposer(
         confirmDiscard: false,
         resolvedAtOpen: false,
     });
+}
+
+/** Filename in the composer label: the full path does not fit in the narrow header. */
+function fileNameOf(path: string): string {
+    const cut = path.lastIndexOf('/');
+    return cut === -1 ? path : path.slice(cut + 1);
+}
+
+/**
+ * File comment composer without a line (M5-T24): an anchor with `position: null` places it below
+ * the card header, alongside threads that lost their line.
+ */
+export function openFileComposer(store: ThreadStore, fileId: string, path: string, commentIssues: boolean): void {
+    openNewComposer(store, `new:${fileId}:file`, { fileId, path, position: null }, commentIssues);
 }
 
 export function openReply(store: ThreadStore, thread: Thread, draft: Comment | null = replyDraft(thread)): void {

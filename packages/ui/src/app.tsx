@@ -27,6 +27,7 @@ import {
     askReviewChat,
     cancelReviewChat,
     cancelTask,
+    fetchBlob,
     fetchDraftBuffer,
     fetchReviewChat,
     fetchReviewDiff,
@@ -68,6 +69,7 @@ import { ReviewComplete } from './components/review-complete.tsx';
 import { selectionAskDisabled } from './components/selection-popover.tsx';
 import { ShortcutCheatsheet } from './components/shortcut-cheatsheet.tsx';
 import { TopBar } from './components/top-bar.tsx';
+import { BlobLoaderProvider } from './diff-view/blob-loader.tsx';
 import { expandFileContext } from './diff-view/expand.js';
 import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
 import { createDiffViewStore } from './diff-view/store.js';
@@ -423,6 +425,12 @@ export function App({ store, session, token }: AppProps) {
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
     /** The host provides slices between iterations. Otherwise hide this picker section (M4-T4). */
     const interdiffAvailable = state?.pr?.capabilities.iterations === true;
+    /** Image bytes (M5-T24): without `capabilities.blobs`, image cards do not render at all. */
+    const blobsAvailable = state?.pr?.capabilities.blobs === true;
+    const loadBlob = useMemo(
+        () => (blobsAvailable ? (blobId: string) => fetchBlob(token, blobId) : null),
+        [blobsAvailable, token],
+    );
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const settings = useUiSettingsStore();
@@ -2184,6 +2192,7 @@ export function App({ store, session, token }: AppProps) {
     });
 
     return (
+        <BlobLoaderProvider loadBlob={loadBlob}>
         <ReadOnlyIterationProvider
             readOnly={readOnly}
             {...(sliceBase === null ? {} : { reason: SLICE_READ_ONLY_REASON })}
@@ -2495,6 +2504,7 @@ export function App({ store, session, token }: AppProps) {
             ) : null}
             </ThreadPinProvider>
         </ReadOnlyIterationProvider>
+        </BlobLoaderProvider>
     );
 }
 

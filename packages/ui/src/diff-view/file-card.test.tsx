@@ -8,6 +8,7 @@ import { parseFileDiff } from '../diff/parse.js';
 import { readStateOf } from '../progress/read-state.js';
 import type { AnchorSpan } from '../route/anchor-clip.js';
 import { clipModelToAnchors } from '../route/anchor-clip.js';
+import { BlobLoaderProvider } from './blob-loader.tsx';
 import type { FileCardActions } from './file-card.tsx';
 import { expansionAnnouncement, FileCard } from './file-card.tsx';
 import { createT } from '../i18n/index.js';
@@ -126,10 +127,74 @@ describe('file card', () => {
             throw new Error('edge fixture needs a binary file');
         }
 
+        expect(file.image).toBeNull();
         const html = render(file);
 
         expect(html).toContain('<p class="file-card__notice">binary file not shown</p>');
         expect(html).not.toContain('Open in editor');
+    });
+
+    it('image without blob transport keeps the same notice and becomes an image card with transport', () => {
+        const file = fixtureIteration('medium').diff.files.find((candidate) => candidate.image !== null);
+        if (file === undefined) {
+            throw new Error('medium fixture needs an image');
+        }
+
+        // A host without `capabilities.blobs` supplies no transport, so the card behaves as before.
+        expect(render(file)).toContain('binary file not shown');
+
+        const withBlobs = renderToStaticMarkup(
+            <BlobLoaderProvider loadBlob={() => Promise.resolve(null)}>
+                <FileCard
+                    file={file}
+                    model={parseFileDiff(toParseRequest(file))}
+                    mode="unified"
+                    content={null}
+                    contentAvailable={false}
+                    expansion={new Map()}
+                    read={readStateOf({ file, record: null })}
+                    opened={false}
+                    showWhitespace={false}
+                    selection={null}
+                    actions={ACTIONS}
+                />
+            </BlobLoaderProvider>,
+        );
+
+        expect(withBlobs).not.toContain('binary file not shown');
+        expect(withBlobs).toContain('image-card__modes');
+    });
+
+    it('image card hides the binary notice but preserves file permission changes', () => {
+        const svg = fixtureIteration('medium').diff.files.find(
+            (candidate) => candidate.image !== null && candidate.patch !== null,
+        );
+        if (svg === undefined) {
+            throw new Error('medium fixture needs an svg image with a patch');
+        }
+        const withMode: FileDiff = { ...svg, patch: `old mode 100644\nnew mode 100755\n${svg.patch ?? ''}` };
+
+        const html = renderToStaticMarkup(
+            <BlobLoaderProvider loadBlob={() => Promise.resolve(null)}>
+                <FileCard
+                    file={withMode}
+                    model={parseFileDiff(toParseRequest(withMode))}
+                    mode="unified"
+                    content={null}
+                    contentAvailable={false}
+                    expansion={new Map()}
+                    read={readStateOf({ file: withMode, record: null })}
+                    opened={false}
+                    showWhitespace={false}
+                    selection={null}
+                    actions={ACTIONS}
+                />
+            </BlobLoaderProvider>,
+        );
+
+        expect(html).toContain('image-card__modes');
+        expect(html).not.toContain('binary file not shown');
+        expect(html).toContain(t('diff.notice.mode', '100644', '100755'));
     });
 });
 

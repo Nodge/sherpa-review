@@ -8,6 +8,7 @@ import { parseFileDiff } from '../diff/parse.js';
 import { useCardThreads } from './card-threads.tsx';
 import type { IterationLayout } from './model.js';
 import { createThreadStore } from './store.js';
+import { openFileComposer } from './thread-list.tsx';
 
 /**
  * Where a file card puts a thread pinned to a previous iteration (M4-T10). In the active
@@ -84,5 +85,41 @@ describe('thread placement in a file card', () => {
         const alien: IterationLayout = { ...V1_LAYOUT, diffId: 'another-iteration' };
 
         expect(underHeader(V1, alien)).toContain(`thread-${OUTDATED.id}`);
+    });
+
+    /** M5-T24: an image comment uses an anchor without a line and goes in the same place. */
+    it('places a composer with an anchor without a line below the header, away from the lines', () => {
+        const file = fileOf(V2, PATH);
+        const store = createThreadStore([], new Set([file.fileId]));
+        openFileComposer(store, file.fileId, file.path, false);
+        const composer = store.getComposersSnapshot().byFile.get(file.fileId) ?? [];
+
+        function Harness() {
+            const { threadsUnderHeader, renderAfterLine } = useCardThreads({
+                model: parseFileDiff(toParseRequest(file)),
+                rowsShown: true,
+                threads: [],
+                composers: composer,
+                store,
+                actions: ACTIONS,
+                now: NOW,
+                onFocusThread: () => undefined,
+            });
+            return (
+                <div>
+                    <div data-slot="header">{threadsUnderHeader}</div>
+                    <div data-slot="line">{renderAfterLine('new', 1)}</div>
+                </div>
+            );
+        }
+
+        const html = renderToStaticMarkup(<Harness />);
+        const header = html.slice(html.indexOf('data-slot="header"'), html.indexOf('data-slot="line"'));
+
+        expect(composer).toHaveLength(1);
+        expect(composer[0]?.anchor?.position).toBeNull();
+        expect(header).toContain('thread-composer');
+        expect(header).toContain('комментарий к файлу · handlers.ts');
+        expect(html.slice(html.indexOf('data-slot="line"'))).not.toContain('thread-composer');
     });
 });
