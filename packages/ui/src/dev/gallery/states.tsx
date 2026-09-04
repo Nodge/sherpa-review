@@ -38,6 +38,8 @@ import { M4_T10_STATES } from './m4-t10-states.tsx';
 import { M4_T11_STATES } from './m4-t11-states.tsx';
 import { M4_T12_STATES } from './m4-t12-states.tsx';
 import { M5_T5_STATES } from './m5-t5-states.tsx';
+import { M5_T9_STATES } from './m5-t9-states.tsx';
+import { M5_T14_STATES } from './m5-t14-states.tsx';
 import { M5_T15_STATES } from './m5-t15-states.tsx';
 import { M5_T22_STATES } from './m5-t22-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
@@ -228,6 +230,18 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...PALETTE_STATES.map((state) => ({
         id: state.id,
         group: 'Command palette',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M5_T9_STATES.map((state) => ({
+        id: state.id,
+        group: 'Update',
+        title: state.title,
+        render: state.render,
+    })),
+    ...M5_T14_STATES.map((state) => ({
+        id: state.id,
+        group: 'Limits and reduced functionality',
         title: state.title,
         render: state.render,
     })),

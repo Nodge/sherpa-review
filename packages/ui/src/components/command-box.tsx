@@ -8,17 +8,17 @@ export interface CommandBoxProps {
     readonly command: string;
     readonly hint?: string;
     readonly actionLabel?: string;
+    /** Screen reader field label. Defaults to the Sherpa launch command. */
+    readonly inputLabel?: string;
 }
 
 /** How long visible feedback stays after a click, in ms. */
 const FEEDBACK_MS = 2000;
 
-
-
 type Feedback = 'copied' | 'manual';
 
-/** Copyable launch command with text selection as a fallback when Clipboard API is unavailable. */
-export function CommandBox({ command, hint, actionLabel }: CommandBoxProps) {
+/** Copyable command with text selection as a fallback when Clipboard API is unavailable. */
+export function CommandBox({ command, hint, actionLabel, inputLabel }: CommandBoxProps) {
     const t = useT();
     const label = actionLabel ?? t('command.copy');
     const inputRef = useRef<HTMLInputElement | null>(null);
@@ -72,7 +72,7 @@ export function CommandBox({ command, hint, actionLabel }: CommandBoxProps) {
                     className="command-box__command"
                     value={command}
                     readOnly
-                    aria-label={t('command.aria')}
+                    aria-label={inputLabel ?? t('command.aria')}
                     onFocus={(event) => {
                         event.currentTarget.select();
                     }}

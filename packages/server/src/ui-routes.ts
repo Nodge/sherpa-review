@@ -11,6 +11,7 @@ import type {
     UiRouteEvent,
     UiState,
     UiTask,
+    UiUpdate,
 } from '@sherpa/protocol';
 import {
     UI_CHAT_EVENT,
@@ -22,6 +23,7 @@ import {
     uiCancelRequestSchema,
     uiEnqueueRequestSchema,
     uiTaskSchema,
+    uiUpdateCheckResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
@@ -36,6 +38,7 @@ import type { TaskQueue, TaskRecord } from './queue.js';
 import type { ReviewFeed } from './review-feed.js';
 import type { RouteStore } from './route-store.js';
 import type { UiPresence } from './ui-presence.js';
+import type { UpdateForceResult } from './update-check.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 /**
@@ -48,6 +51,18 @@ export interface PrMetaSource {
     subscribe: (listener: () => void) => () => void;
 }
 
+/**
+ * Synchronous source for "a new version is available": like PR metadata, snapshots are assembled
+ * without network requests. Implemented by `UpdateChecker`.
+ */
+export interface UpdateSource {
+    /** null means no check, a failed check, an up-to-date version or a dismissed version. */
+    get: () => UiUpdate | null;
+    subscribe: (listener: () => void) => () => void;
+    /** Recheck bypassing TTL, the command palette action "Check for updates". */
+    force: () => Promise<UpdateForceResult>;
+}
+
 export interface UiRoutesOptions {
     readonly prKey: string;
     readonly queue: TaskQueue;
@@ -56,6 +71,8 @@ export interface UiRoutesOptions {
     readonly reviewHost: string | null;
     /** PR metadata for the snapshot: updates also wake SSE clients. */
     readonly prMeta: PrMetaSource;
+    /** A new version in main also wakes SSE clients. */
+    readonly update: UpdateSource;
     /** Feedback channel availability depends only on credentials in the environment. */
     readonly feedback: UiFeedbackAvailability;
     /** Thread revision for SSE. null means this server never has review events. */
@@ -113,6 +130,19 @@ export function createUiRoutes(options: UiRoutesOptions): Route[] {
                 const request = await readUiRequest(ctx, uiCancelRequestSchema);
                 const body: UiCancelResponse = { outcome: options.queue.cancel(request.taskId) };
                 return { status: 200, body };
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.updateCheck,
+            handle: handlingRpcFailures(async () => {
+                const result = await options.update.force();
+                // A failed check cannot be reported as "no updates": the command palette tells them apart
+                // only by response code, and reads `{update: null}` as "up to date".
+                if (result.failure !== null) {
+                    throw new RpcFailure('host_unavailable', `Failed to check for updates: ${result.failure}`);
+                }
+                return { status: 200, body: uiUpdateCheckResponseSchema.parse({ update: result.update }) };
             }),
         },
         {
@@ -214,6 +244,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     const unsubscribeQueue = options.queue.subscribeChanges(schedule);
     const unsubscribeWorker = options.registry.subscribe(schedule);
     const unsubscribePrMeta = options.prMeta.subscribe(schedule);
+    const unsubscribeUpdate = options.update.subscribe(schedule);
     // Thread subscription starts with the first SSE client and stops with the last (see ReviewFeed).
     // It starts after the first state snapshot so that the channel begins with `state`.
     let unsubscribeReview: (() => void) | null = null;
@@ -227,6 +258,7 @@ function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
         unsubscribeQueue();
         unsubscribeWorker();
         unsubscribePrMeta();
+        unsubscribeUpdate();
         unsubscribeReview?.();
         unsubscribeIterations?.();
         unsubscribeProgress?.();
@@ -298,9 +330,8 @@ function buildState(options: UiRoutesOptions): UiState {
         pr: options.prMeta.get(),
         feedback: options.feedback,
         iterations: options.iterationFeed?.iterations() ?? [],
-        // Filled by M5-T9 and M5-T14.
-        update: null,
-        generationCap: null,
+        update: options.update.get(),
+        generationCap: options.route.currentGenerationCap(),
     };
 }
 

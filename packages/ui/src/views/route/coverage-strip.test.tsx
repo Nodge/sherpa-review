@@ -18,6 +18,7 @@ function totals(patch: Partial<RouteTotals>): RouteTotals {
         byTier: { high: 100, medium: 0, low: 0, other: 0 },
         pendingFiles: 0,
         failedFiles: 0,
+        conflictFiles: 0,
         ...patch,
     };
 }

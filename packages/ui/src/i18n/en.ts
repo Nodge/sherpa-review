@@ -24,6 +24,10 @@ export const en: Dictionary = {
 
     'command.hint': 'Run it in any harness — that session becomes the worker.',
     'command.copy': 'Copy',
+    'command.copied': 'Copied',
+    'command.copied.status': 'Command copied',
+    'command.manual': 'The command is selected — copy it manually',
+    'command.aria': 'Sherpa launch command',
 
     'topbar.breadcrumb': 'Pull request',
     'topbar.search': 'Search',
@@ -31,6 +35,20 @@ export const en: Dictionary = {
     'topbar.agent.connect': 'Connect the agent',
     'topbar.agent.offline':
         'The reader works in full — diff, search, comments and ship are available. The AI areas stay read-only.',
+    'topbar.update': (latest: string) => `Version ${latest} is available`,
+
+    'update.kicker': 'Update',
+    'update.title': (latest: string) => `Sherpa ${latest} is available`,
+    'update.current': (current: string) => `you have ${current}`,
+    'update.how': 'How to update',
+    'update.later': 'Later',
+    'update.dismiss': (latest: string) => `Don’t remind me about ${latest}`,
+    'update.command.aria': 'Update command',
+    'update.copyDir': (dir: string) => `Copy the directory again: ${dir}`,
+    'update.readme': 'Installation guide',
+    'update.status.none': (current: string) => `No updates — ${current} is the latest`,
+    'update.status.available': (latest: string) => `${latest} is available`,
+    'update.status.failed': 'Could not check for updates',
 
     'view.overview': 'Overview',
     'view.route': 'Route',
@@ -667,11 +685,6 @@ export const en: Dictionary = {
     'selection.comment': 'Comment',
     'selection.copyLink': 'Copy link',
 
-    'command.copied': 'Copied',
-    'command.copied.status': 'Command copied',
-    'command.manual': 'The command is selected — copy it by hand',
-    'command.aria': 'Sherpa launch command',
-
     'viewed.on': 'Viewed',
     'viewed.off': 'Mark viewed',
 
@@ -685,6 +698,24 @@ export const en: Dictionary = {
     'error.unknown': 'The server returned an error with no readable description. Check its terminal output.',
     'error.invalidState':
         'The server sent a state this UI does not understand. Update Sherpa — the skill, the server and the UI ship together.',
+
+    'file.conflict': 'conflict',
+    'route.stop.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'file of this stop has', 'files of this stop have')} merge conflicts: resolve them in the host. Conflicts are out of route coverage, so there are no cards here.`,
+    'route.other.none': 'Not a single changed line was left without a stop — the route covers the whole diff.',
+    'route.other.conflictsOnly':
+        'This slot is held by conflicts alone: the route does not explain them and they cannot be read here.',
+    'route.other.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'file has', 'files have')} conflicts — resolve them in the host; they are out of coverage`,
+    'route.cap.note': (covered: number, total: number) =>
+        `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}`,
+    'route.cap.note.machine': (covered: number, total: number, machine: number) =>
+        `the plan covers ${num(covered)} of ${num(total)} ${form(total, 'file', 'files')}; ${num(machine)} generated ${form(machine, 'file is', 'files are')} grouped in one stop`,
+    'banner.generationCap': (files: number) =>
+        `The route was built from a partial diff: ${num(files)} ${form(files, 'file', 'files')} did not fit the agent context — check them in the full diff`,
+
+    'emptyPr.title': 'Nothing to review',
+    'emptyPr.text': 'This PR has no changes against the base.',
 
     'overview.slice.title': 'No overview for a slice',
     'overview.slice.text': (baseCommit: string, headCommit: string) =>
@@ -830,6 +861,8 @@ export const en: Dictionary = {
     'shortcut.route.generate': 'Build the route',
     'shortcut.route.regenerate': 'Regenerate the route',
     'shortcut.route.generate.consequence': 'clears the stop marks once the new route arrives',
+    'shortcut.update.check': 'Check for updates',
+    'shortcut.update.check.consequence': 'checks for a new release',
     'shortcut.locale.ru': 'Interface language: Russian',
     'shortcut.locale.en': 'Interface language: English',
     'shortcut.locale.auto': 'Language: auto (from the agent or the browser)',

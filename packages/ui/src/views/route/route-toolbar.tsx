@@ -1,3 +1,4 @@
+import type { UiGenerationCap } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
 
@@ -50,6 +51,11 @@ export interface RouteToolbarProps {
     /** Second toolbar row: coverage strip (SPEC §2.4). */
     readonly strip: ReactNode;
     /**
+     * Generation cap (SPEC §4.1): the payload budget kept part of the diff out of the agent's context.
+     * null means no truncation or a route built before M5-T14.
+     */
+    readonly generationCap?: UiGenerationCap | null;
+    /**
      * Measured toolbar height. The view uses it for the sticky offset of the stops column.
      * The toolbar measures itself so layout changes cannot silently diverge from the offset.
      */
@@ -70,6 +76,7 @@ export function RouteToolbar({
     changeFilterOn = false,
     onClearChangeFilter,
     strip,
+    generationCap = null,
     onHeight,
 }: RouteToolbarProps) {
     const t = useT();
@@ -142,6 +149,29 @@ export function RouteToolbar({
                 </div>
             ) : null}
             <div className="route-toolbar__strip">{strip}</div>
+            <GenerationCapNote cap={generationCap} />
+        </div>
+    );
+}
+
+/**
+ * Cap row below the coverage bar (SPEC §4.1): what limits the plan. Stays silent while
+ * the entire diff fits in context. The coverage bar already has a way to say that everything is covered.
+ *
+ * Mention the generated group only when it exists. Without one, saying "0 generated files in one stop"
+ * would be false. Always print the denominator, or the row counts will not add up to the diff,
+ * and the remainder mentioned by the banner would seem to come from nowhere.
+ */
+function GenerationCapNote({ cap }: { cap: UiGenerationCap | null }) {
+    const t = useT();
+    if (cap === null || cap.filesCovered >= cap.filesTotal) {
+        return null;
+    }
+    return (
+        <div className="route-toolbar__cap">
+            {cap.machineFiles > 0
+                ? t('route.cap.note.machine', cap.filesCovered, cap.filesTotal, cap.machineFiles)
+                : t('route.cap.note', cap.filesCovered, cap.filesTotal)}
         </div>
     );
 }

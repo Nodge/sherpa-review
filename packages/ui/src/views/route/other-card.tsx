@@ -81,6 +81,9 @@ export function OtherCard({
     const t = useT();
     const { lines } = view;
     const files = view.files.length;
+    // Only conflicts occupy the slot: there are no uncovered ranges to read or place. The card
+    // describes only conflicts, without "0 lines in 0 files" or enabled buttons acting on nothing.
+    const conflictsOnly = !filling && !pending && files === 0 && view.conflictFiles > 0;
 
     return (
         <section
@@ -110,13 +113,15 @@ export function OtherCard({
                 <h2 className="route-stop__title">
                     <Markdown text={view.stop.title} profile="route" />
                 </h2>
-                <p className="route-stop__paragraph">
-                    {filling
-                        ? t('route.other.filling')
-                        : pending
-                          ? t('route.other.pending')
-                          : t('route.other.counted', lines, files)}
-                </p>
+                {filling ? (
+                    <p className="route-stop__paragraph">{t('route.other.filling')}</p>
+                ) : pending ? (
+                    <p className="route-stop__paragraph">{t('route.other.pending')}</p>
+                ) : conflictsOnly ? (
+                    <p className="route-stop__paragraph">{t('route.other.none')}</p>
+                ) : (
+                    <p className="route-stop__paragraph">{t('route.other.counted', lines, files)}</p>
+                )}
                 {keptInView ? <p className="route-stop__kept">{t('route.stop.kept')}</p> : null}
             </div>
 
@@ -126,6 +131,8 @@ export function OtherCard({
                     <p className="route-other__text">
                         {filling ? (
                             t('route.other.fillingNote')
+                        ) : conflictsOnly ? (
+                            t('route.other.conflictsOnly')
                         ) : (
                             <>
                                 {t('route.other.text.lead')}
@@ -136,35 +143,44 @@ export function OtherCard({
                             </>
                         )}
                     </p>
-                    <div className="route-other__actions">
-                        <button
-                            type="button"
-                            className="route-other__action"
-                            disabled={pending || filling}
-                            onClick={onOpen}
-                        >
-                            {filling
-                                ? t('route.other.waitFilling')
-                                : pending
-                                  ? t('route.other.counting')
-                                  : opened
-                                    ? t('route.other.collapse')
-                                    : t('route.other.open', lines)}
-                        </button>
-                        {onAskToPlace === undefined ? null : (
+                    {conflictsOnly ? null : (
+                        <div className="route-other__actions">
                             <button
                                 type="button"
-                                className="route-other__action route-other__action--secondary"
-                                disabled={pending || filling || !agentConnected}
-                                title={askToPlaceTitle(t, { pending, filling, agentConnected })}
-                                onClick={onAskToPlace}
+                                className="route-other__action"
+                                disabled={pending || filling}
+                                onClick={onOpen}
                             >
-                                {t('route.other.ask')}
+                                {filling
+                                    ? t('route.other.waitFilling')
+                                    : pending
+                                      ? t('route.other.counting')
+                                      : opened
+                                        ? t('route.other.collapse')
+                                        : t('route.other.open', lines)}
                             </button>
-                        )}
-                    </div>
-                    {onAskToPlace === undefined ? null : (
+                            {onAskToPlace === undefined ? null : (
+                                <button
+                                    type="button"
+                                    className="route-other__action route-other__action--secondary"
+                                    disabled={pending || filling || !agentConnected}
+                                    title={askToPlaceTitle(t, { pending, filling, agentConnected })}
+                                    onClick={onAskToPlace}
+                                >
+                                    {t('route.other.ask')}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {conflictsOnly || onAskToPlace === undefined ? null : (
                         <p className="route-other__honest">{t('chat.ask.answerInChat')}</p>
+                    )}
+                    {/* Conflicts are outside coverage (SPEC §4.1): they cannot be explained or read
+                        here, so the reviewer's only useful action is in the review host. */}
+                    {view.conflictFiles === 0 ? null : (
+                        <p className="route-other__conflicts" role="status">
+                            {t('route.other.conflicts', view.conflictFiles)}
+                        </p>
                     )}
                     {failedFiles === 0 ? null : (
                         <p className="route-other__failed" role="status">

@@ -61,6 +61,7 @@ import type { StaticAssets } from './static.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
 import type { UpdateCheckOptions } from './update-check.js';
+import { UpdateChecker } from './update-check.js';
 import { SERVER_VERSION } from './version.js';
 import { writeWorkerIdFile } from './worker-id-file.js';
 import { WorkerRegistry } from './worker-registry.js';
@@ -261,6 +262,16 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             store: new DraftBufferStore(options.now === undefined ? { db } : { db, now: options.now }),
             reviewFeed,
         });
+        // Settings are global: both the settings endpoint and update checker read them (`dismissedVersion`).
+        const settingsStore = new SettingsStore(sherpaDir);
+        // Check for a new version in main (M5-T9). Disabled on the fixture host, where the version
+        // comes from a dev endpoint instead of the review host.
+        const updateChecker = new UpdateChecker({
+            ...options.updateCheck,
+            sherpaDir,
+            settings: settingsStore,
+            enabled: reviewHost?.name !== 'fixture',
+        });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
         // Notes are created before the feed, which carries their anchors to the new iteration (M4-T11).
@@ -327,6 +338,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 reviewFeed,
                 iterationFeed,
                 prMeta,
+                update: updateChecker,
                 feedback: feedbackAvailability(options.feedback?.env ?? process.env),
                 progress,
                 route: routeStore,
@@ -352,7 +364,13 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ...options.feedback,
             }),
             // Settings are global. The endpoint depends on neither the review host nor this PR's state.
-            ...createSettingsRoutes({ settings: new SettingsStore(sherpaDir) }),
+            ...createSettingsRoutes({
+                settings: settingsStore,
+                // The dismissed version lives in settings. Patching them must rebuild the snapshot.
+                onChange: () => {
+                    updateChecker.settingsChanged();
+                },
+            }),
             // This PR's UI state (folds, palette history) is local and doesn't need a review host.
             ...createPrStateRoutes({
                 prState: new PrStateStore(options.now === undefined ? { db } : { db, now: options.now }),
@@ -364,6 +382,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 ? []
                 : createDevRoutes({
                       advanceIteration,
+                      update: updateChecker,
                       ...(reviewHost?.setFailDraftWrites === undefined
                           ? {}
                           : { setFailDraftWrites: reviewHost.setFailDraftWrites }),
@@ -386,6 +405,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             iterationFeed,
             prMeta,
             draftBuffer,
+            updateChecker,
             progress,
             routeStore,
             routeOrchestrator,
@@ -400,6 +420,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         prMeta.start();
         // Queue retries for drafts that weren't delivered during the previous run.
         draftBuffer.start();
+        // The version check also runs in the background, after listen. Server startup doesn't wait for it.
+        updateChecker.start();
         // Arm automatic shutdown last. Before this point, there's nothing to stop.
         idleWatch.arm(() => {
             options.onIdleStop?.(idleSeconds);
@@ -484,6 +506,7 @@ function createHandle(parts: {
     iterationFeed: IterationFeed | null;
     prMeta: PrMetaCache;
     draftBuffer: DraftBufferWriter;
+    updateChecker: UpdateChecker;
     progress: ProgressStore;
     routeStore: RouteStore;
     routeOrchestrator: RouteOrchestrator;
@@ -518,6 +541,7 @@ function createHandle(parts: {
                 parts.prMeta.close();
                 // The same applies to draft buffer retries. The next run will pick them up.
                 parts.draftBuffer.close();
+                parts.updateChecker.close();
                 parts.progress.close();
                 // Stop the route state machine before closing storage. Its delayed warmup must not
                 // wake up with the database already closed.

@@ -36,6 +36,13 @@ export interface CommandPaletteProps {
     readonly onOpen: () => void;
     readonly onClose: () => void;
     readonly initialQuery?: string;
+    /**
+     * Reply from a command that left the palette open (`keepOpen`), such as "Check for
+     * updates". Replaces the usual hint until the query changes or the palette closes.
+     */
+    readonly status?: string | null;
+    /** The status line is no longer relevant: the query changed or the palette closed. */
+    readonly onStatusHandled?: () => void;
 }
 
 interface PaletteItem {
@@ -72,6 +79,8 @@ export function CommandPalette({
     onOpen,
     onClose,
     initialQuery = '',
+    status = null,
+    onStatusHandled,
 }: CommandPaletteProps) {
     const t = useT();
     const locale = useLocale();
@@ -225,10 +234,11 @@ export function CommandPalette({
             detail: null,
             commandId: shortcut.id,
             keepOpen:
-                shortcut.id === 'palette.goToFile' ||
-                shortcut.id === 'palette.findFile' ||
-                shortcut.id === 'palette.searchDiff' ||
-                shortcut.id === 'palette.iterations',
+                shortcut.keepOpen ??
+                (shortcut.id === 'palette.goToFile' ||
+                    shortcut.id === 'palette.findFile' ||
+                    shortcut.id === 'palette.searchDiff' ||
+                    shortcut.id === 'palette.iterations'),
             action: shortcut.action,
         });
         const itemFromFile = (file: PaletteDiffSource['files'][number]): PaletteItem => ({
@@ -424,9 +434,11 @@ export function CommandPalette({
     const items = result.items;
     const hasRecentItems = items.some((item) => item.group === 'palette.group.recent');
     const activeCursor = items.length === 0 ? -1 : Math.min(Math.max(cursor, 0), items.length - 1);
-    const announcement = result.nothingFound
-        ? t('palette.notice.nothing')
-        : (result.notice ?? t('palette.results.count', items.length));
+    // The command response takes precedence over the usual hint: it's why the palette stayed open.
+    const notice = status ?? result.notice;
+    const announcement =
+        status ??
+        (result.nothingFound ? t('palette.notice.nothing') : (result.notice ?? t('palette.results.count', items.length)));
 
     useLayoutEffect(() => {
         if (!open || activeCursor < 0 || cursorOrigin.current === 'mouse') {
@@ -435,14 +447,18 @@ export function CommandPalette({
         scrollPaletteCursor(resultsRef.current, activeCursor);
     }, [activeCursor, open]);
 
-    const close = useCallback((restoreFocus: boolean): void => {
-        onClose();
-        if (restoreFocus) {
-            requestAnimationFrame(() => {
-                triggerRef.current?.focus();
-            });
-        }
-    }, [onClose]);
+    const close = useCallback(
+        (restoreFocus: boolean): void => {
+            onStatusHandled?.();
+            onClose();
+            if (restoreFocus) {
+                requestAnimationFrame(() => {
+                    triggerRef.current?.focus();
+                });
+            }
+        },
+        [onClose, onStatusHandled],
+    );
     // The palette is the top layer in the Esc order: it closes before the selection beneath it.
     useEscapeLayer('palette', () => {
         close(true);
@@ -520,6 +536,7 @@ export function CommandPalette({
                             activeCursor < 0 ? undefined : `command-palette-option-${String(activeCursor)}`
                         }
                         onChange={(event) => {
+                            onStatusHandled?.();
                             setQuery(event.currentTarget.value);
                             setCursor(0);
                             cursorOrigin.current = 'programmatic';
@@ -538,7 +555,7 @@ export function CommandPalette({
                             <div className="command-palette__empty-recent">{t('palette.recent.empty')}</div>
                         </div>
                     ) : null}
-                    {result.notice === null ? null : <div className="command-palette__notice">{result.notice}</div>}
+                    {notice === null ? null : <div className="command-palette__notice">{notice}</div>}
                     <div id="command-palette-listbox" role="listbox" aria-label={t('palette.results')}>
                         {groups.map((group) => (
                             <div

@@ -422,6 +422,9 @@ function FileRow({
             <Label label={row.label} title={row.path} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}
+            {row.conflict ? (
+                <span className="file-tree__tag file-tree__tag--conflict">{t('file.conflict')}</span>
+            ) : null}
             {row.route === null ? null : (
                 <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
             )}

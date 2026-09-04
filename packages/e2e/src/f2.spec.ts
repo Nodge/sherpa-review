@@ -195,6 +195,8 @@ async function dragSelectLines(page: Page, fromKey: string, toKey: string): Prom
 
 /** A note at its range: clicking the collapsed row expands it and names the same lines. */
 async function expectNoteAtLines(page: Page): Promise<void> {
+    // A distant stop's diff column is removed from the DOM (M5-T13). Scroll to the section as the reviewer does.
+    await stop(page).scrollIntoViewIfNeeded();
     const collapsed = card(page).locator('.agent-note--collapsed');
     await expect(collapsed).toContainText('Agent note');
     await collapsed.click();

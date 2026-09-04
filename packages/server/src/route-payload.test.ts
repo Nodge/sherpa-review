@@ -9,7 +9,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IterationMap } from './iterations/index.js';
 import { buildIterationMap, identityMap } from './iterations/index.js';
 import type { RegenerationBudgets, RoutePayloadContext } from './route-payload.js';
-import { CONTEXT_BUDGET_BYTES, prDiffContext, RoutePayloadWriter, sectionPlanContext } from './route-payload.js';
+import {
+    CONTEXT_BUDGET_BYTES,
+    prDiffContext,
+    prDiffPayload,
+    RoutePayloadWriter,
+    sectionPlanContext,
+} from './route-payload.js';
 import type { RouteRegenerationContext } from './route-regeneration.js';
 import { indexDiff } from './route/diff-index.js';
 import {
@@ -292,6 +298,38 @@ describe('single truncation policy for the shared diff', () => {
 
         expect(omitted.filter((file) => file.includes('__tests__'))).toEqual([]);
         expect(omitted).toEqual(['pnpm-lock.yaml']);
+    });
+});
+
+describe('generation cap (M5-T14)', () => {
+    it('covers everything without truncation when the entire diff fits', () => {
+        const cap = prDiffPayload(context(), CONTEXT_BUDGET_BYTES).cap;
+
+        expect(cap.filesTotal).toBe(mediumDiff().files.length);
+        expect(cap.filesCovered).toBe(cap.filesTotal);
+        expect(cap.machineFiles).toBe(0);
+        expect(cap.truncated).toBe(false);
+    });
+
+    it('counts the only dropped generated file as generated, without truncation', () => {
+        // The generated lockfile is the first truncation candidate. The budget is short by exactly its size.
+        const budget = fullSize() - 1;
+        const cap = prDiffPayload(context(), budget).cap;
+
+        expect(omittedPaths(prDiffContext(context(), budget))).toEqual(['pnpm-lock.yaml']);
+        expect(cap.filesCovered).toBe(cap.filesTotal - 1);
+        expect(cap.machineFiles).toBe(1);
+        expect(cap.truncated).toBe(false);
+    });
+
+    it('builds the plan from a partial diff when a non-generated file is truncated', () => {
+        const budget = 20_000;
+        const cap = prDiffPayload(context(), budget).cap;
+        const omitted = omittedPaths(prDiffContext(context(), budget));
+
+        expect(cap.filesCovered).toBe(cap.filesTotal - omitted.length);
+        expect(cap.machineFiles).toBeLessThan(omitted.length);
+        expect(cap.truncated).toBe(true);
     });
 });
 

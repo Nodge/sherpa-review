@@ -21,6 +21,9 @@ const SETTINGS_FIELDS = [
     'shipMode',
     'composerLayout',
     'locale',
+    // Nested object: "same value" compares by reference here, so the patch is always sent.
+    // One place writes it: "don't remind me about this version" in the update toast.
+    'updates',
 ] as const satisfies readonly (keyof UiSettings)[];
 
 export interface UiSettingsStore {

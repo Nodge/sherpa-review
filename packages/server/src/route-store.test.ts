@@ -220,6 +220,29 @@ describe('route store: snapshot history', () => {
         }
     });
 
+    it('stores the generation cap in meta by snapshot and preserves it across database reopen', () => {
+        const cap = { filesCovered: 120, filesTotal: 500, machineFiles: 380, truncated: false };
+        const store = new RouteStore({ db: open() });
+        store.acceptSkeleton(accepted('snap-1', null, 'iter-1'));
+
+        expect(store.currentGenerationCap()).toBeNull();
+        store.setGenerationCap('snap-1', cap);
+        expect(store.currentGenerationCap()).toEqual(cap);
+
+        const reopened = new RouteStore({ db: open() });
+        expect(reopened.currentGenerationCap()).toEqual(cap);
+        expect(reopened.generationCap('no such snapshot')).toBeNull();
+    });
+
+    it('reads a corrupt cap record as absent', () => {
+        const db = open();
+        const store = new RouteStore({ db });
+        store.acceptSkeleton(accepted('snap-1', null, 'iter-1'));
+        db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('generation_cap:snap-1', '{not json');
+
+        expect(store.currentGenerationCap()).toBeNull();
+    });
+
     it('a pre-M4 snapshot without a stored iteration has an unknown base', () => {
         const db = open();
         insertLegacySnapshot(db, 'iter-forgotten');

@@ -32,6 +32,7 @@ import type {
     UiSnapshotSummary,
     UiStopSeenRange,
     UiTask,
+    UiUpdate,
     UiUpdateDraftResponse,
     UiViewedMirrorRequest,
     Verdict,
@@ -64,6 +65,7 @@ import {
     uiSetFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
     uiSettingsResponseSchema,
+    uiUpdateCheckResponseSchema,
     uiUpdateDraftResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
@@ -330,6 +332,14 @@ export async function openInEditor(token: string, path: string, line?: number): 
 /** Sends feedback. On failure, forms keep their text and retry the same request. */
 export async function sendFeedback(token: string, request: UiFeedbackRequest): Promise<UiFeedbackResponse> {
     return post(UI_ENDPOINTS.feedback, token, request, uiFeedbackResponseSchema);
+}
+
+/**
+ * Forced check for a new version (M5-T9), ignoring cache TTL. `null` means no update.
+ * A check that could not reach the review host returns an error instead of "no updates".
+ */
+export async function updateCheck(token: string): Promise<UiUpdate | null> {
+    return (await post(UI_ENDPOINTS.updateCheck, token, {}, uiUpdateCheckResponseSchema)).update;
 }
 
 /** Endpoint parameters. Empty values (`undefined`/`null`) stay out of the URL. */

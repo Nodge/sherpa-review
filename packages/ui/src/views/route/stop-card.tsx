@@ -1,5 +1,5 @@
 import type { RouteStopChange, Thread } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
@@ -43,6 +43,8 @@ export interface StopCardProps {
     readonly onFillStop?: (planIndex: number) => void;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
+    /** Expose the diff column so the view can measure its height and reserve space when it leaves the DOM. */
+    readonly diffRef?: RefObject<HTMLDivElement | null>;
     /** Accent line flash above the diff column after jumping to a file (README Interactions). */
     readonly flash?: boolean;
     /** Threads from `change.threadIds` that caused the change, reduced to links with unknown ids removed. */
@@ -103,6 +105,7 @@ export function StopCard({
     onFillStop,
     chips,
     diff,
+    diffRef,
     flash = false,
     changeThreads = EMPTY_CHANGE_THREADS,
     onOpenThread,
@@ -217,7 +220,7 @@ export function StopCard({
                 {chips}
             </div>
 
-            <div className="route-stop__diff">
+            <div className="route-stop__diff" ref={diffRef}>
                 {flash ? <div className="route-stop__flash" aria-hidden="true" /> : null}
                 {diff}
             </div>
@@ -451,6 +454,25 @@ export function AnchorDrift({ paths, partial = false }: { paths: readonly string
                     ))}
                 </ul>
             )}
+        </div>
+    );
+}
+
+/**
+ * The stop's anchors point to conflicted files (SPEC §4.1): the diff has lines, but the file is outside
+ * route coverage. There is nothing to read or mark here. Resolve the conflict in the host.
+ * This is not drift, so prompting regeneration would be misleading.
+ */
+export function StopConflicts({ paths }: { paths: readonly string[] }) {
+    const t = useT();
+    return (
+        <div className="route-conflicts" role="note">
+            <p className="route-conflicts__text">{t('route.stop.conflicts', paths.length)}</p>
+            <ul className="route-conflicts__paths">
+                {paths.map((path) => (
+                    <li key={path}>{path}</li>
+                ))}
+            </ul>
         </div>
     );
 }

@@ -10,15 +10,24 @@ export interface ReviewProgressSummary {
     readonly percentSeen: number;
 }
 
-/** Shared totals for the bar and Review complete, from the same read-state model the tree renders. */
+/**
+ * Shared panel and Review complete counts use the same read-state model as the tree.
+ * Conflicted files (SPEC §4.1) are excluded from both numerator and denominator: they are resolved
+ * in the review host, so requiring them to be read before ship would be unfair.
+ */
 export function reviewProgressSummary(
     files: readonly FileDiff[],
     readState: ReadonlyMap<string, FileReadState>,
 ): ReviewProgressSummary {
     let filesSeen = 0;
+    let filesTotal = 0;
     let linesSeen = 0;
     let linesTotal = 0;
     for (const file of files) {
+        if (file.changeType === 'conflict') {
+            continue;
+        }
+        filesTotal += 1;
         const state = readState.get(file.fileId);
         if (state?.state === 'read') {
             filesSeen += 1;
@@ -28,7 +37,7 @@ export function reviewProgressSummary(
     }
     return {
         filesSeen,
-        filesTotal: files.length,
+        filesTotal,
         linesSeen,
         linesTotal,
         percentSeen: linesTotal === 0 ? 100 : Math.floor((linesSeen / linesTotal) * 100),

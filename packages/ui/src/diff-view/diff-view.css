@@ -123,6 +123,19 @@
     color: var(--diff-del-text);
 }
 
+/* Conflict badge in the card header (SPEC §2.14): a monospace chip using the warning token group. */
+.file-card__badge--conflict {
+    flex: none;
+    padding: 0 5px;
+    border: 1px solid var(--attention-border-strong);
+    border-radius: var(--radius-mark);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-tag);
+    line-height: 16px;
+    color: var(--attention-text-dim);
+    white-space: nowrap;
+}
+
 .file-card__entity {
     flex: 1;
     font-family: var(--font-mono);
@@ -265,9 +278,13 @@
 }
 
 /* The skeleton takes the space estimated by the list (M2F-T3). Text stays at the top edge,
-   in a card several screens tall, no one would find it in the middle. */
+   where it can be found even in a card several screens tall.
+
+   The slot is empty for the first 200 ms (SPEC §3): line height is reserved here, otherwise the indicator
+   would shift cards for which the list supplied no height estimate. */
 .file-card__loading {
     align-items: flex-start;
+    min-height: calc(var(--font-size-meta) * var(--line-height-body) + 14px);
 }
 
 .file-card__collapsed,

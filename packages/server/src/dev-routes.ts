@@ -2,13 +2,16 @@ import type { Iteration } from '@sherpa/protocol';
 import {
     UI_DEV_ENDPOINTS,
     uiDevFixtureFailDraftWritesRequestSchema,
+    uiDevUpdateAvailableRequestSchema,
     uiReviewWriteAckSchema,
+    uiUpdateCheckResponseSchema,
 } from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
 import type { Route } from './http.js';
 import { handlingRpcFailures } from './http.js';
 import { readRequest, respond } from './review-routes.js';
+import type { UpdateChecker } from './update-check.js';
 
 /**
  * Server dev endpoints (`UI_DEV_ENDPOINTS`) provide an operation no real host can offer:
@@ -24,6 +27,8 @@ export interface DevRoutesOptions {
     readonly advanceIteration: () => Iteration;
     /** Fixture draft write failure: e2e uses it to test the buffer (M5-T15). */
     readonly setFailDraftWrites?: (fail: boolean) => void;
+    /** Version check for this server. The dev endpoint supplies its result for the fixture. */
+    readonly update: UpdateChecker;
 }
 
 export function createDevRoutes(options: DevRoutesOptions): Route[] {
@@ -58,5 +63,20 @@ export function createDevRoutes(options: DevRoutesOptions): Route[] {
                       }),
                   },
               ]),
+        {
+            method: 'POST',
+            path: UI_DEV_ENDPOINTS.updateAvailable,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiDevUpdateAvailableRequestSchema, 'new version');
+                // Leave the disk cache alone. The supplied version must not survive a restart.
+                const update = options.update.setLatest({
+                    version: request.version,
+                    builtFrom: null,
+                    releasedAt: request.releasedAt,
+                    whatsNew: request.whatsNew,
+                });
+                return respond(uiUpdateCheckResponseSchema, { update }, 'local');
+            }),
+        },
     ];
 }

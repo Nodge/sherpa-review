@@ -875,7 +875,7 @@ export const UI_DEV_ENDPOINTS = {
     fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
     /** POST `uiDevFixtureFailDraftWritesRequestSchema` → `uiReviewWriteAckSchema`: fixture refuses draft writes (buffer, M5-T15). */
     fixtureFailDraftWrites: '/api/dev/fixture/fail-draft-writes',
-    /** POST `uiDevUpdateAvailableRequestSchema` → `uiReviewWriteAckSchema`: inject a "new version" into `uiState.update`. */
+    /** POST `uiDevUpdateAvailableRequestSchema` → `uiUpdateCheckResponseSchema`: inject a "new version" into `uiState.update`. */
     updateAvailable: '/api/dev/update-available',
 } as const;
 

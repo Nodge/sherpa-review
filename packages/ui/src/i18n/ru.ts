@@ -29,6 +29,10 @@ export const ru = {
 
     'command.hint': 'Запусти в любом харнесе — сессия станет воркером.',
     'command.copy': 'Скопировать',
+    'command.copied': 'Скопировано',
+    'command.copied.status': 'Команда скопирована',
+    'command.manual': 'Команда выделена — скопируй вручную',
+    'command.aria': 'Команда запуска Шерпы',
 
     'topbar.breadcrumb': 'Пул-реквест',
     'topbar.search': 'Поиск',
@@ -36,6 +40,20 @@ export const ru = {
     'topbar.agent.connect': 'Подключить агента',
     'topbar.agent.offline':
         'Читалка работает полностью — дифф, поиск, комментарии и шип доступны. ИИ-зоны остались только для чтения.',
+    'topbar.update': (latest: string) => `Доступна версия ${latest}`,
+
+    'update.kicker': 'Обновление',
+    'update.title': (latest: string) => `Шерпа ${latest} доступна`,
+    'update.current': (current: string) => `у вас ${current}`,
+    'update.how': 'Как обновить',
+    'update.later': 'Позже',
+    'update.dismiss': (latest: string) => `Не напоминать про ${latest}`,
+    'update.command.aria': 'Команда обновления',
+    'update.copyDir': (dir: string) => `Скопируйте каталог заново: ${dir}`,
+    'update.readme': 'Инструкция по установке',
+    'update.status.none': (current: string) => `Обновлений нет — ${current} последняя`,
+    'update.status.available': (latest: string) => `Доступна ${latest}`,
+    'update.status.failed': 'Не удалось проверить обновления',
 
     'view.overview': 'Обзор',
     'view.route': 'Маршрут',
@@ -678,11 +696,6 @@ export const ru = {
     'selection.comment': 'Комментировать',
     'selection.copyLink': 'Скопировать ссылку',
 
-    'command.copied': 'Скопировано',
-    'command.copied.status': 'Команда скопирована',
-    'command.manual': 'Команда выделена — скопируй вручную',
-    'command.aria': 'Команда запуска Шерпы',
-
     'viewed.on': 'Просмотрено',
     'viewed.off': 'Отметить просмотренным',
 
@@ -697,6 +710,24 @@ export const ru = {
     'error.unknown': 'Сервер вернул ошибку без понятного описания. Посмотри его вывод в терминале.',
     'error.invalidState':
         'Сервер прислал состояние, которого этот UI не понимает. Обнови Шерпу — скилл, сервер и UI ставятся одной поставкой.',
+
+    'file.conflict': 'conflict',
+    'route.stop.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'файл этой остановки', 'файла этой остановки', 'файлов этой остановки')} в конфликте: разрешите их в хосте. В покрытие маршрута конфликты не входят, поэтому карточек здесь нет.`,
+    'route.other.none': 'Без остановки не осталось ни одной изменённой строки — весь дифф разобран маршрутом.',
+    'route.other.conflictsOnly':
+        'Этот слот держат только конфликты: маршрут их не объясняет и прочитать их здесь нельзя.',
+    'route.other.conflicts': (files: number) =>
+        `${num(files)} ${form(files, 'файл с конфликтом', 'файла с конфликтами', 'файлов с конфликтами')} — разрешите их в хосте, в покрытие они не входят`,
+    'route.cap.note': (covered: number, total: number) =>
+        `план покрывает ${num(covered)} ${form(covered, 'файл', 'файла', 'файлов')} из ${num(total)}`,
+    'route.cap.note.machine': (covered: number, total: number, machine: number) =>
+        `план покрывает ${num(covered)} ${form(covered, 'файл', 'файла', 'файлов')} из ${num(total)}; ${num(machine)} ${form(machine, 'машинный', 'машинных', 'машинных')} — одной остановкой`,
+    'banner.generationCap': (files: number) =>
+        `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте их в Полном диффе`,
+
+    'emptyPr.title': 'Нечего ревьюить',
+    'emptyPr.text': 'В этом PR нет изменений относительно базы.',
 
     'overview.slice.title': 'Для среза обзор не собирается',
     'overview.slice.text': (baseCommit: string, headCommit: string) =>
@@ -845,6 +876,8 @@ export const ru = {
     'shortcut.route.generate': 'Построить маршрут',
     'shortcut.route.regenerate': 'Перегенерировать маршрут',
     'shortcut.route.generate.consequence': 'сбросит отметки остановок, когда новый маршрут приедет',
+    'shortcut.update.check': 'Проверить обновления',
+    'shortcut.update.check.consequence': 'проверит наличие нового релиза',
     'shortcut.locale.ru': 'Язык интерфейса: русский',
     'shortcut.locale.en': 'Язык интерфейса: английский',
     'shortcut.locale.auto': 'Язык: авто (от агента или браузера)',

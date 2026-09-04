@@ -54,6 +54,8 @@ export interface Shortcut {
     readonly consequenceArg?: string | number;
     /** Palette group. Without one, the command goes into the general "Commands" group. */
     readonly group?: MessageKey;
+    /** Keep the palette open after running: the command returns a status line to it. */
+    readonly keepOpen?: boolean;
     /** The command is active only when this returns true. Without it, the command is always active. */
     readonly when?: () => boolean;
     readonly action: () => void;

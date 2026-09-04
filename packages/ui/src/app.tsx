@@ -51,6 +51,7 @@ import { BANNER_PRIORITY, BannerSlot } from './components/banner-slot.tsx';
 import type { ChatScrollTarget } from './components/chat-panel.tsx';
 import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
 import { useChatDock } from './components/dock.js';
+import { generationCapBannerVisible, GenerationCapBanner } from './components/generation-cap-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -58,6 +59,8 @@ import {
     ReviewActionBar,
     ReviewActionBarLoading,
 } from './components/review-action-bar.tsx';
+import { useUpdateCheckCommand, useUpdateToast } from './components/update-state.js';
+import { UpdateToast } from './components/update-toast.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { selectionAskDisabled } from './components/selection-popover.tsx';
 import { ShortcutCheatsheet } from './components/shortcut-cheatsheet.tsx';
@@ -258,6 +261,14 @@ export function App({ store, session, token }: AppProps) {
     }, [shortcutRegistry, view]);
     const state = snapshot.state;
     const reviewReady = state !== null;
+    // Update toast (M5-T9): state and the "Check for updates" palette command.
+    const updateToast = useUpdateToast(state?.update ?? null);
+    const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
+    useUpdateCheckCommand({
+        token,
+        current: state?.update?.current ?? UI_VERSION,
+        onStatus: setPaletteStatus,
+    });
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
@@ -1454,6 +1465,11 @@ export function App({ store, session, token }: AppProps) {
     /** The Route tab renders any live snapshot, including the old one during a rebuild. */
     const routeViewSnapshot = routeKind === 'workspace' && !resolved.routeless ? (route?.snapshot ?? null) : null;
     /**
+     * Generation cap (SPEC §4.1). The server calculates it from the active snapshot, so it stays
+     * silent when reading a previous iteration because the displayed route belongs to another iteration.
+     */
+    const generationCap = readOnly ? null : (state?.generationCap ?? null);
+    /**
      * The second-pass banner is dismissed for this snapshot. It describes a filter, so it is dismissible
      * (SPEC §2.21). Dismissal lives in the tab session and resets when a new snapshot arrives.
      */
@@ -1669,6 +1685,12 @@ export function App({ store, session, token }: AppProps) {
                         }}
                     />
                 ),
+        },
+        {
+            id: 'generation-cap',
+            priority: BANNER_PRIORITY.generationCap,
+            active: () => generationCapBannerVisible(generationCap),
+            render: () => (generationCap === null ? null : <GenerationCapBanner cap={generationCap} />),
         },
         {
             id: 'audit-scope',
@@ -2041,6 +2063,8 @@ export function App({ store, session, token }: AppProps) {
             <ThreadPinProvider value={threadPin}>
             <TopBar
                 version={UI_VERSION}
+                update={state.update}
+                onOpenUpdate={updateToast.reopen}
                 breadcrumb={breadcrumbFor(state.prKey, state.pr)}
                 agent={agentPillView(state.worker, state.tasks, t)}
                 reconnectCommand={reconnectCommand(state.prKey)}
@@ -2166,6 +2190,7 @@ export function App({ store, session, token }: AppProps) {
                     onRouteSummary={reportRouteSummary}
                     onOpenThread={openThreadInDiff}
                     headerAside={snapshotPill}
+                    generationCap={generationCap}
                 />
             ) : view === 'route' && routeKind === 'reading' ? (
                 <RouteReadingView
@@ -2282,6 +2307,10 @@ export function App({ store, session, token }: AppProps) {
                 source={paletteSource}
                 iterations={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
                 sourceError={currentReview.diffError}
+                status={paletteStatus}
+                onStatusHandled={() => {
+                    setPaletteStatus(null);
+                }}
                 onOpen={() => {
                     session.setPaletteOpen(true);
                 }}
@@ -2289,6 +2318,14 @@ export function App({ store, session, token }: AppProps) {
                     session.setPaletteOpen(false);
                 }}
             />
+
+            {updateToast.visible && state.update !== null ? (
+                <UpdateToast
+                    update={state.update}
+                    onLater={updateToast.later}
+                    onDismissVersion={updateToast.dismissVersion}
+                />
+            ) : null}
 
             {showReviewActionBar ? (
                 reviewActionBarDataReady && reviewHost !== null && state.pr !== null ? (

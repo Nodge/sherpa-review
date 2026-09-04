@@ -8,9 +8,10 @@ import type {
     RouteSnapshot,
     RouteStop,
     RouteStopStatus,
+    UiGenerationCap,
     UiRouteState,
 } from '@sherpa/protocol';
-import { routeSnapshotSchema, uiRouteStateSchema } from '@sherpa/protocol';
+import { routeSnapshotSchema, uiGenerationCapSchema, uiRouteStateSchema } from '@sherpa/protocol';
 
 import type { SherpaDatabase, SqlRow } from './db.js';
 import { transaction } from './db.js';
@@ -28,6 +29,11 @@ const SLOT_ID = 1;
  * It cannot support comparisons, but an unrelated commit would be worse than "unknown".
  */
 export const UNKNOWN_BASE_COMMIT = 'unknown';
+
+/** Generation cap key in `meta`. One row per snapshot, with no migration needed. */
+function generationCapKey(snapshotId: string): string {
+    return `generation_cap:${snapshotId}`;
+}
 
 /** Content hash length in hex characters, displayed in the snapshot selector ("snapshot 3f2a… · current"). */
 const CONTENT_HASH_LENGTH = 12;
@@ -341,6 +347,42 @@ export class RouteStore {
     /** No generation now or in the past. Prompts the reviewer to run the skill. */
     reset(): void {
         this.commit({ ...this.state, phase: 'none', snapshot: null, failure: null }, new Map());
+    }
+
+    /**
+     * Snapshot generation cap (M5-T14): how much of the diff the skeleton saw in full. Lives in `meta`
+     * under the snapshot key, outside the snapshot itself. The snapshot is a UI contract without a payload
+     * metric. Written on skeleton acceptance and read when assembling state.
+     */
+    setGenerationCap(snapshotId: string, cap: UiGenerationCap): void {
+        this.db
+            .prepare(
+                `INSERT INTO meta (key, value) VALUES (?, ?)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+            )
+            .run(generationCapKey(snapshotId), JSON.stringify(cap));
+    }
+
+    /** Current snapshot cap. null means no snapshot or generation before M5-T14. */
+    currentGenerationCap(): UiGenerationCap | null {
+        const snapshotId = this.state.snapshot?.snapshotId;
+        return snapshotId === undefined ? null : this.generationCap(snapshotId);
+    }
+
+    /** A specific snapshot's cap. A corrupt record is read as absent (principle 3). */
+    generationCap(snapshotId: string): UiGenerationCap | null {
+        const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(generationCapKey(snapshotId)) as
+            | { value: string }
+            | undefined;
+        if (row === undefined) {
+            return null;
+        }
+        try {
+            const parsed = uiGenerationCapSchema.safeParse(JSON.parse(row.value));
+            return parsed.success ? parsed.data : null;
+        } catch {
+            return null;
+        }
     }
 
     /** Maps a generation task to the stops it fills. Does not change UI state, so the revision stays unchanged. */

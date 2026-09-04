@@ -53,6 +53,18 @@ function render(file: FileDiff, hint = false): string {
 }
 
 describe('file card', () => {
+    it('a conflicted file gets a badge in the header (SPEC §2.14, §4.1)', () => {
+        const conflict = DATA.diff.files.find((file) => file.changeType === 'conflict');
+        const plain = DATA.diff.files.find((file) => file.changeType === 'modify' && !file.binary);
+        if (conflict === undefined || plain === undefined) {
+            throw new Error('edge fixture needs a conflicting file and a regular file');
+        }
+
+        expect(render(conflict)).toContain('file-card__badge--conflict');
+        expect(render(conflict)).toContain('>conflict</span>');
+        expect(render(plain)).not.toContain('file-card__badge--conflict');
+    });
+
     it('collapsed card summary uses the supplied slice counters', () => {
         const file = DATA.diff.files.find(
             (candidate) => !candidate.binary && candidate.additions !== 3 && candidate.deletions !== 2,

@@ -6,7 +6,7 @@ import type { Iteration, ReviewHost } from '@sherpa/protocol';
 
 /**
  * Select a host adapter by PR key (`<host>-<pr>`, rpc-design §8):
- * `fixture-<medium|small|large|edge>` selects deterministic
+ * `github-quillmart--quillmart--<number>` uses the live review host, `fixture-<name from FIXTURE_NAMES>` uses deterministic
  * fixtures (UI development and e2e F5). Anything else has no host, so review endpoints return `no_review_host`.
  *
  * The fixture host is intentionally connected to the server. Otherwise development mode and e2e would need a live

@@ -58,10 +58,16 @@ function render(
         onFillStop?: (planIndex: number) => void;
         /** The tab shows a previous iteration. Route writes are unavailable (M4 scope). */
         readOnly?: boolean;
+        /** Files marked conflicted by the host (SPEC §4.1): outside route coverage. */
+        conflicts?: readonly string[];
     } = {},
 ): string {
+    const conflicts = new Set(options.conflicts ?? []);
+    const files = DATA.diff.files.map((file) =>
+        conflicts.has(file.fileId) ? { ...file, changeType: 'conflict' as const } : file,
+    );
     const store = createDiffViewStore({
-        files: DATA.diff.files,
+        files,
         ...(options.progress === undefined ? {} : { progress: options.progress }),
         ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
     });
@@ -69,7 +75,7 @@ function render(
         store.setDiffMode(options.mode);
     }
     if (options.parsed !== false) {
-        for (const file of DATA.diff.files) {
+        for (const file of files) {
             store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
     }
@@ -77,7 +83,7 @@ function render(
         <ReadOnlyIterationProvider readOnly={options.readOnly ?? false}>
         <RouteWorkspace
             pr={DATA.pr}
-            diff={DATA.diff}
+            diff={{ ...DATA.diff, files }}
             lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
             snapshot={options.snapshot ?? SNAPSHOT}
             session={
@@ -297,6 +303,21 @@ describe('route view', () => {
         });
 
         expect(html).toContain('This stop pointed at lines that are no longer in the diff.');
+    });
+
+    it('shows a conflict notice when anchors move into conflicted files, rather than a drift notice (SPEC §4.1)', () => {
+        const target = SNAPSHOT.stops.find((stop) => stop.id === 's01');
+        if (target === undefined) {
+            throw new Error('the fixture needs stop s01');
+        }
+        const html = render({ conflicts: target.anchors.map((anchor) => anchor.fileId) });
+        const stop = section(html, 's01');
+
+        expect(stop).toContain('route-conflicts');
+        expect(stop).toContain('в конфликте: разрешите их в хосте');
+        expect(stop).not.toContain('no longer in the diff');
+        // Name the anchor paths so the reviewer knows what needs resolving.
+        expect(stop).toContain(target.anchors[0]?.path ?? '');
     });
 
     it('when some anchors drift, a notice appears above the remaining cards', () => {

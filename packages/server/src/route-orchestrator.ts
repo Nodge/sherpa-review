@@ -359,15 +359,18 @@ export class RouteOrchestrator {
             kind: 'accepted',
             onCommitted: () => {
                 const previous = this.store.current();
+                const snapshotId = randomUUID();
                 // Do not calculate mark carryover yet. Stops have no anchors, and `carried` with zero
                 // would make the banner say "0 of 7". Counts appear when the snapshot is frozen (`markReady`).
                 this.store.acceptSkeleton({
                     skeleton,
                     diff,
                     provenance,
-                    snapshotId: randomUUID(),
+                    snapshotId,
                     previousSnapshotId: previous?.snapshotId ?? null,
                 });
+                // The generation cap belongs to the snapshot, not the task. The snapshot id is only available here.
+                this.store.setGenerationCap(snapshotId, this.payload.generationCap({ diff, meta: this.meta }));
                 this.reconcile();
             },
         };

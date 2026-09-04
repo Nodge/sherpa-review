@@ -12,16 +12,25 @@ import { directoryAssets } from './static.js';
 async function main(argv: readonly string[]): Promise<number> {
     const prKey = readOption(argv, '--pr');
     if (prKey === null) {
-        process.stderr.write('Usage: dev --pr <PR key> [--sherpa-dir <path>] [--ui <dist path>]\n');
+        process.stderr.write(
+            'Usage: dev --pr <PR key> [--sherpa-dir <path>] [--ui <path to dist>] [--install-dir <path>]\n',
+        );
         return 1;
     }
 
     const sherpaDir = readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR;
     const uiDir = await resolveUiDir(readOption(argv, '--ui'));
+    // As in the bundle: the gallery and e2e also need install classification for the update toast (M5-T9).
+    const installDir = readOption(argv, '--install-dir');
 
     // Idle shutdown is disabled. The dev server holds the developer terminal open,
     // and dying unexpectedly during coding would get in the way. Ctrl+C stops it.
-    const base = { prKey, sherpaDir, idleSeconds: 0 };
+    const base = {
+        prKey,
+        sherpaDir,
+        idleSeconds: 0,
+        updateCheck: installDir === null ? {} : { installDir },
+    };
 
     let server: SherpaServer;
     try {

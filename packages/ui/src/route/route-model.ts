@@ -92,6 +92,11 @@ export interface RouteStopView {
     readonly changedLines: number;
     /** Paths of anchors with no matching file or changed lines in the current diff. */
     readonly unresolvedPaths: readonly string[];
+    /**
+     * Anchor paths in conflict files. The lines are still there, but the file is outside route
+     * coverage (SPEC §4.1). This is not drift, so regeneration changes nothing here.
+     */
+    readonly conflictPaths: readonly string[];
     /** Anchors exist but none resolve in the diff: anchor drift (SPEC §2.9). */
     readonly drift: boolean;
     /** No anchors at all: the stop was not filled, or filling placed no anchors. */
@@ -133,6 +138,8 @@ export interface RouteOtherView {
     readonly planLabel: string;
     readonly files: readonly RouteUncoveredFile[];
     readonly lines: number;
+    /** Conflicted file count: outside coverage, but "Other" must report them (SPEC §4.1). */
+    readonly conflictFiles: number;
 }
 
 export interface RouteTotals {
@@ -147,6 +154,8 @@ export interface RouteTotals {
      * finish counting without a retry, so the reviewer sees this count too.
      */
     readonly failedFiles: number;
+    /** Conflicted files: their lines are absent from both `changed` and `uncovered` (SPEC §4.1). */
+    readonly conflictFiles: number;
 }
 
 export type RouteEntry =
@@ -192,12 +201,22 @@ export interface RouteModelInput {
 
 export function buildRouteModel({
     snapshot,
-    files,
+    files: allFiles,
     models,
     failed = EMPTY_FAILED,
     preset = 'triage',
     filling = false,
 }: RouteModelInput): RouteModel {
+    // Conflicted files are excluded entirely from coverage calculations (SPEC §4.1). Their lines
+    // count as neither changed nor uncovered, and the coverage bar omits them. A separate row
+    // in "Other" reports the conflict itself.
+    const files = allFiles.filter((file) => file.changeType !== 'conflict');
+    // The agent sees conflicted files with patches and places anchors on them as usual. Such an anchor
+    // has not drifted. It must be distinguished from a path missing from the diff entirely.
+    const conflicts = new Set(
+        allFiles.filter((file) => file.changeType === 'conflict').map((file) => file.fileId),
+    );
+    const conflictFiles = conflicts.size;
     const byId = new Map(files.map((file) => [file.fileId, file]));
     const planned = snapshot.stops.filter((stop) => stop.tier !== 'other');
     const otherStop = snapshot.stops.find((stop) => stop.tier === 'other') ?? null;
@@ -217,7 +236,9 @@ export function buildRouteModel({
     // comment never appears in two route entries at once.
     const takenContext = new Map<string, ContextLines>();
     const orphans = orphanWhitespace(planned, files, models, claimed);
-    const views = planned.map((stop) => stopView(stop, byId, models, failed, claimed, takenContext, orphans));
+    const views = planned.map((stop) =>
+        stopView(stop, byId, conflicts, models, failed, claimed, takenContext, orphans),
+    );
     const byTier: Record<RouteTier, number> = { high: 0, medium: 0, low: 0, other: 0 };
     for (const view of views) {
         byTier[view.stop.tier] += view.changedLines;
@@ -261,19 +282,21 @@ export function buildRouteModel({
 
     const uncovered = uncoveredFiles.reduce((total, file) => total + file.lines, 0);
     byTier.other = uncovered;
-    const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles };
+    const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles, conflictFiles };
 
     // Hide "Other" only when there really are no uncovered lines (SPEC §4.3). While the diff
     // is being parsed, uncovered lines have not been counted yet. Keep the slot with "counting…",
     // otherwise card numbers and the counter would jump from 6 to 7 during parsing.
+    // Conflicts also keep the slot: their row is the only place that reports them.
     const other: RouteOtherView | null =
-        otherStop === null || (uncovered === 0 && pendingFiles === 0)
+        otherStop === null || (uncovered === 0 && pendingFiles === 0 && conflictFiles === 0)
             ? null
             : {
                   stop: otherStop,
                   planLabel: planLabel(otherStop.planIndex),
                   files: uncoveredFiles,
                   lines: uncovered,
+                  conflictFiles,
               };
     const promoted = !filling && other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
     const entries =
@@ -353,6 +376,7 @@ function inTourOrder(entries: readonly RouteEntry[], ids: readonly string[]): re
 function stopView(
     stop: RouteStop,
     byId: ReadonlyMap<string, FileDiff>,
+    conflicts: ReadonlySet<string>,
     models: ReadonlyMap<string, DiffFileModel>,
     failed: ReadonlySet<string>,
     claimed: ReadonlyMap<string, readonly AnchorSpan[]>,
@@ -361,12 +385,20 @@ function stopView(
 ): RouteStopView {
     const groups = new Map<string, { shown: RouteAnchor[]; collapsed: RouteAnchor[] }>();
     const unresolved: string[] = [];
+    const conflictPaths: string[] = [];
     const markUnresolved = (path: string): void => {
         if (!unresolved.includes(path)) {
             unresolved.push(path);
         }
     };
     for (const anchor of stop.anchors) {
+        // The file has a conflict. Its lines are present, but there will be no card because the file is outside coverage.
+        if (conflicts.has(anchor.fileId)) {
+            if (!conflictPaths.includes(anchor.path)) {
+                conflictPaths.push(anchor.path);
+            }
+            continue;
+        }
         if (!byId.has(anchor.fileId)) {
             markUnresolved(anchor.path);
             continue;
@@ -421,7 +453,10 @@ function stopView(
         files,
         changedLines,
         unresolvedPaths: unresolved,
-        drift: stop.anchors.length > 0 && files.length === 0,
+        conflictPaths,
+        // The entire stop now consists of conflicted files. This is not drift because the lines are present,
+        // and regenerating the route will not bring them back.
+        drift: stop.anchors.length > 0 && files.length === 0 && conflictPaths.length === 0,
         empty: stop.anchors.length === 0,
         pending,
         parseFailed,
@@ -697,6 +732,46 @@ export function lazyCards(files: readonly RouteFileGroup[]): readonly RouteFileG
         hunks += group.hunks;
     }
     return head;
+}
+
+/**
+ * Stop state that determines whether its diff column can be removed from the DOM (M5-T13).
+ * The route is not virtualized as a whole. The section stays in place with its narrative,
+ * chips and viewed toggle. Only the right column is removed, with a placeholder
+ * of its measured height holding its place.
+ */
+export interface StopDiffMountState {
+    /** The stop is still within the far hysteresis boundary of `useNearViewport`. */
+    readonly nearViewport: boolean;
+    /** Last measured column height. `null` means it has never been measured, so there is no replacement height. */
+    readonly measuredHeight: number | null;
+    /** First route stop: the reviewer's entry point and tour anchor (M5-T8). */
+    readonly first: boolean;
+    /**
+     * The column renders file cards. An unfilled slot's skeleton, anchor drift, "no hunks"
+     * and a collapsed summary each take one row. There is nothing to remove, and e2e also counts plan skeletons.
+     */
+    readonly rendersCards: boolean;
+    /** The stop flashes after a jump or is the target of a jump still in progress. */
+    readonly jumping: boolean;
+    /** A file in the stop contains a selection, an open composer or line focus. */
+    readonly busy: boolean;
+}
+
+/**
+ * Whether the stop's diff column can be removed from the DOM. Exceptions account for what
+ * unmounting loses: local context bridge state, the comment editor instance,
+ * line focus and `data-file` anchors for navigation after marking viewed.
+ */
+export function canUnmountStopDiff(state: StopDiffMountState): boolean {
+    return (
+        !state.nearViewport &&
+        state.measuredHeight !== null &&
+        !state.first &&
+        state.rendersCards &&
+        !state.jumping &&
+        !state.busy
+    );
 }
 
 /**

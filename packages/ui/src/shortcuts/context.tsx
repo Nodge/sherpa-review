@@ -47,7 +47,8 @@ export function useShortcut(shortcut: Shortcut): void {
         latest.current = shortcut;
     });
 
-    const { id, label, labelArg, scope, section, worksInInputs, consequence, consequenceArg, group } = shortcut;
+    const { id, label, labelArg, scope, section, worksInInputs, consequence, consequenceArg, group, keepOpen } =
+        shortcut;
     const keys = shortcut.keys.join('\n');
     useEffect(() => {
         if (registry === null) {
@@ -64,6 +65,7 @@ export function useShortcut(shortcut: Shortcut): void {
             ...(consequence === undefined ? {} : { consequence }),
             ...(consequenceArg === undefined ? {} : { consequenceArg }),
             ...(group === undefined ? {} : { group }),
+            ...(keepOpen === undefined ? {} : { keepOpen }),
             when: () => latest.current.when?.() ?? true,
             action: () => {
                 latest.current.action();
@@ -81,6 +83,7 @@ export function useShortcut(shortcut: Shortcut): void {
         consequence,
         consequenceArg,
         group,
+        keepOpen,
     ]);
 }
 

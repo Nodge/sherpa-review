@@ -7,8 +7,9 @@ import './banner-slot.css';
 /**
  * Slot priority order (SPEC §2.21): generation failure → failed route action →
  * rebuild → stale route → read-only mode for a previous iteration → second pass →
- * under-explained route → route filling → notes without anchors → audit scope. Numbers live
- * here instead of being scattered across source declarations. Their order is a product decision.
+ * underexplained route → route filling → notes with lost anchors → audit scope →
+ * generation cap. The numbers live here instead of being scattered across source declarations. The order is a
+ * a product decision.
  *
  * Failure of the button just clicked sits immediately below generation failure. The reviewer is waiting
  * for the result of their action, but a failed generation is more significant.
@@ -32,6 +33,12 @@ export const BANNER_PRIORITY = {
     notesLost: 120,
     auditScope: 100,
     shipVerdict: 50,
+    /**
+     * The generation cap sits below audit scope. Audit scope describes a filter the reviewer
+     * enabled and expects to see confirmed right now, while the cap is a background condition
+     * of the completed plan that persists and requires no response.
+     */
+    generationCap: 90,
 } as const;
 
 export interface BannerSource {

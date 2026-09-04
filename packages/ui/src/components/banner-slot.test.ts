@@ -55,6 +55,21 @@ describe('banner slot', () => {
         expect(BANNER_PRIORITY.routeSecondPass).toBe(220);
     });
 
+    it('places the generation cap below audit scope at the bottom of the order', () => {
+        const selection = selectBanners([
+            source('audit-scope', BANNER_PRIORITY.auditScope),
+            source('generation-cap', BANNER_PRIORITY.generationCap),
+            source('notes-lost', BANNER_PRIORITY.notesLost),
+        ]);
+
+        expect([selection.primary?.id, ...selection.hidden.map((item) => item.id)]).toEqual([
+            'notes-lost',
+            'audit-scope',
+            'generation-cap',
+        ]);
+        expect(BANNER_PRIORITY.generationCap).toBeLessThan(BANNER_PRIORITY.auditScope);
+    });
+
     it('shows the action reason at the top of the slot when an endpoint fails with a live agent', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),

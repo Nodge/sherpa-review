@@ -7,9 +7,10 @@ import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { changedLinesOf, readStateOf } from '../progress/read-state.js';
-import type { RouteFileGroup, RouteModel, RouteTotals } from './route-model.js';
+import type { RouteFileGroup, RouteModel, RouteTotals, StopDiffMountState } from './route-model.js';
 import {
     buildRouteModel,
+    canUnmountStopDiff,
     changeFilterAvailable,
     composersForGroup,
     countStopComments,
@@ -51,6 +52,7 @@ const EMPTY_TOTALS: RouteTotals = {
     byTier: { high: 0, medium: 0, low: 0, other: 0 },
     pendingFiles: 0,
     failedFiles: 0,
+    conflictFiles: 0,
 };
 
 function build(snapshot: RouteSnapshot = SNAPSHOT, files: readonly FileDiff[] = DATA.diff.files) {
@@ -217,6 +219,69 @@ describe('route model', () => {
         // The "01 / N" denominator, toolbar counter and guardrail count the same set of slots.
         expect(model.stopCount).toBe(model.entries.length);
         expect(model.stopCount).toBe(everything.stops.length - 1);
+    });
+
+    it('a conflicted file is outside coverage calculations and named in the "Other" row (SPEC §4.1)', () => {
+        const first = DATA.diff.files[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one file');
+        }
+        const base = build();
+        // The same diff, but the first file has a conflict. Its lines must be excluded from every count.
+        const withConflict = DATA.diff.files.map((file) =>
+            file.fileId === first.fileId ? { ...file, changeType: 'conflict' as const } : file,
+        );
+        const model = buildRouteModel({ snapshot: SNAPSHOT, files: withConflict, models: MODELS });
+        // Compare with the same diff without that file. A conflict must produce the same counts.
+        const without = buildRouteModel({
+            snapshot: SNAPSHOT,
+            files: DATA.diff.files.filter((file) => file.fileId !== first.fileId),
+            models: MODELS,
+        });
+
+        expect(model.totals.conflictFiles).toBe(1);
+        expect(model.totals.changed).toBe(without.totals.changed);
+        expect(model.totals.changed).toBeLessThan(base.totals.changed);
+        expect(model.totals.uncovered).toBe(without.totals.uncovered);
+        expect(
+            model.entries.some(
+                (entry) => entry.kind === 'stop' && entry.view.files.some((group) => group.fileId === first.fileId),
+            ),
+        ).toBe(false);
+    });
+
+    it('puts anchors in conflict files into conflictPaths without marking drift', () => {
+        const first = SNAPSHOT.stops[0];
+        if (first === undefined) {
+            throw new Error('fixture needs at least one stop');
+        }
+        // All files in the first stop have conflicts. Their lines still exist, but the files are outside coverage.
+        const stopFiles = new Set(first.anchors.map((anchor) => anchor.fileId));
+        const withConflict = DATA.diff.files.map((file) =>
+            stopFiles.has(file.fileId) ? { ...file, changeType: 'conflict' as const } : file,
+        );
+        const entry = buildRouteModel({ snapshot: SNAPSHOT, files: withConflict, models: MODELS }).entries.find(
+            (item) => item.kind === 'stop' && item.view.stop.id === first.id,
+        );
+        if (entry?.kind !== 'stop') {
+            throw new Error('stop disappeared from the route');
+        }
+
+        expect(entry.view.drift).toBe(false);
+        expect(entry.view.unresolvedPaths).toEqual([]);
+        expect(entry.view.conflictPaths.length).toBeGreaterThan(0);
+        expect(entry.view.files).toEqual([]);
+        expect(entry.view.changedLines).toBe(0);
+    });
+
+    it('keeps Other for conflicts even without uncovered lines', () => {
+        const conflictsOnly = DATA.diff.files.map((file) => ({ ...file, changeType: 'conflict' as const }));
+        const model = buildRouteModel({ snapshot: SNAPSHOT, files: conflictsOnly, models: MODELS });
+        const other = model.entries.find((entry) => entry.kind === 'other');
+
+        expect(model.totals.changed).toBe(0);
+        expect(model.totals.uncovered).toBe(0);
+        expect(other?.kind === 'other' ? other.view.conflictFiles : 0).toBe(conflictsOnly.length);
     });
 
     it('keeps Other as a slot while parsing the diff: numbers do not jump from 6 to 7', () => {
@@ -589,6 +654,29 @@ describe('route model', () => {
         // Above the threshold, the first cards add up to five hunks. The rest wait for scrolling.
         expect(lazyCards(big).map((file) => file.fileId)).toEqual(['a', 'b']);
         expect(lazyCards([group(40, 'one'), group(1, 'two')]).map((file) => file.fileId)).toEqual(['one']);
+    });
+
+    it('removes the diff column from the DOM only for a distant stop with a measured height', () => {
+        const far: StopDiffMountState = {
+            nearViewport: false,
+            measuredHeight: 640,
+            first: false,
+            rendersCards: true,
+            jumping: false,
+            busy: false,
+        };
+        expect(canUnmountStopDiff(far)).toBe(true);
+
+        // Each exception on its own keeps the column in place.
+        expect(canUnmountStopDiff({ ...far, nearViewport: true })).toBe(false);
+        // Without a measured height, the placeholder cannot reserve space and the document would shrink.
+        expect(canUnmountStopDiff({ ...far, measuredHeight: null })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, first: true })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, rendersCards: false })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, jumping: true })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, busy: true })).toBe(false);
+        // Zero height is still a measurement. An empty stop can be removed like the others.
+        expect(canUnmountStopDiff({ ...far, measuredHeight: 0 })).toBe(true);
     });
 
     it('counts threads whose positions are within the stop anchors', () => {

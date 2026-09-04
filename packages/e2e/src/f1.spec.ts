@@ -258,6 +258,9 @@ async function expectSummary(page: Page): Promise<void> {
 
 /** A draft on a stop line uses the same composer as the full diff. */
 async function addDraft(page: Page, stopId: string, text: string): Promise<void> {
+    // A distant stop's diff column is removed from the DOM (M5-T13), so scroll to the section first,
+    // as the reviewer does. The section stays in place, cards return near the viewport.
+    await stop(page, stopId).scrollIntoViewIfNeeded();
     const button = stop(page, stopId).getByRole('button', { name: /Comment on line \d+/ }).first();
     await button.locator('..').hover();
     await button.click();

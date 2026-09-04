@@ -2,7 +2,7 @@ import fsSync from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { makeFixtureHost } from '@sherpa/fixtures';
-import type { PrDiff, RouteSectionResult, TaskCompleteResponse, UiReviewRouteResponse } from '@sherpa/protocol';
+import type { PrDiff, RouteSectionResult, TaskCompleteResponse, UiReviewRouteResponse, UiState } from '@sherpa/protocol';
 import {
     LEASE_TTL_SECONDS,
     rpcErrorSchema,
@@ -13,6 +13,7 @@ import {
     uiRouteEventSchema,
     uiRouteFillStopResponseSchema,
     uiRouteGenerateResponseSchema,
+    uiStateSchema,
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -97,6 +98,12 @@ describe('route orchestration', () => {
         const response = await get(server.port, UI_ENDPOINTS.reviewRoute, server.token);
         expect(response.status).toBe(200);
         return uiReviewRouteResponseSchema.parse(await response.json());
+    }
+
+    async function readState(server: SherpaServer): Promise<UiState> {
+        const response = await get(server.port, UI_ENDPOINTS.state, server.token);
+        expect(response.status).toBe(200);
+        return uiStateSchema.parse(await response.json());
     }
 
     function routeTasks(server: SherpaServer, type: 'route.skeleton' | 'route.section'): number[] {
@@ -232,6 +239,22 @@ describe('route orchestration', () => {
         expect(route.route.phase).toBe('reading');
         expect(route.route.smallPr).toBe(false);
         expect(route.routeRevision).toBeGreaterThan(0);
+    });
+
+    it('generation cap reaches UI state and survives a database reread', async () => {
+        const server = await startWithWorker();
+        expect((await readState(server)).generationCap).toBeNull();
+
+        completeTask(server, routeTasks(server, 'route.skeleton')[0] ?? 0, mediumRawResults().skeleton);
+
+        // The whole `medium` diff fits the budget: nothing was truncated, and the cap records that too.
+        const cap = { filesCovered: mediumDiff().files.length, filesTotal: mediumDiff().files.length, machineFiles: 0, truncated: false };
+        expect((await readState(server)).generationCap).toEqual(cap);
+
+        // Restart over the same database: the cap lives in `meta`, not process memory.
+        await server.close();
+        const restarted = await start();
+        expect((await readState(restarted)).generationCap).toEqual(cap);
     });
 
     it('re-registering the agent and repeating warmup creates no duplicates', async () => {

@@ -16,7 +16,7 @@ const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa.mjs');
 const START_TIMEOUT_MS = 20_000;
 const STOP_TIMEOUT_MS = 10_000;
 
-type FixturePrKey = 'fixture-medium' | 'fixture-large' | 'fixture-huge';
+type FixturePrKey = 'fixture-medium' | 'fixture-large' | 'fixture-huge' | 'fixture-empty';
 
 export interface SherpaServerHandle {
     readonly prKey: FixturePrKey;
@@ -33,6 +33,8 @@ export interface LaunchOptions {
      * apply across all PRs. The test creates and removes the directory. The fixture leaves it alone.
      */
     readonly sherpaDir?: string;
+    /** Distribution directory (`--install-dir`): determines the update command in the toast (M5-T9). */
+    readonly installDir?: string;
 }
 
 type LaunchSherpa = (prKey: FixturePrKey, options?: LaunchOptions) => Promise<SherpaServerHandle>;
@@ -80,6 +82,20 @@ export function sherpaAuth(server: SherpaServerHandle): Record<string, string> {
 export async function advanceIteration(page: Page, server: SherpaServerHandle): Promise<void> {
     const url = new URL('/api/dev/fixture/advance-iteration', server.url).href;
     const response = await page.request.post(url, { headers: sherpaAuth(server) });
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/**
+ * Dev endpoint `POST /api/dev/update-available` (`UI_DEV_ENDPOINTS`): the fixture server "learns"
+ * about a new version in main. No network calls are made, since checks are disabled for fixtures.
+ */
+export async function announceUpdate(
+    page: Page,
+    server: SherpaServerHandle,
+    update: { version: string; whatsNew: string | null; releasedAt: string | null },
+): Promise<void> {
+    const url = new URL('/api/dev/update-available', server.url).href;
+    const response = await page.request.post(url, { headers: sherpaAuth(server), data: update });
     expect(response.status(), await response.text()).toBe(200);
 }
 
@@ -185,6 +201,7 @@ async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): 
             sherpaDir,
             '--ui',
             UI_DIST,
+            ...(options?.installDir === undefined ? [] : ['--install-dir', options.installDir]),
         ],
         {
             cwd: REPO_ROOT,
