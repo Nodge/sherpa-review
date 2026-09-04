@@ -489,6 +489,7 @@ describe('route orchestration', () => {
                 viewed: null,
                 blameUrl: null,
                 hostFileUrl: null,
+                image: null,
             })),
         });
 

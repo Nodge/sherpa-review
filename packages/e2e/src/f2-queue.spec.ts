@@ -101,7 +101,7 @@ test('F2 queue: a question during generation waits one step, the UI shows the qu
         await fillSections(worker, 5);
 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '860 changed lines · 96% explained · 32 lines not explained',
+            '866 changed lines · 95% explained · 38 lines not explained',
         );
         await expect(page.locator('.route-skeleton-card')).toHaveCount(0);
     });

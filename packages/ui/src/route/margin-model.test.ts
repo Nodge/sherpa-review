@@ -22,8 +22,8 @@ import { createT } from '../i18n/index.js';
 const t = createT('en');
 
 /**
- * Route margins count the same lines as the route view: 32 uncovered lines in 3 files
- * in the `medium` fixture (.github/CODEOWNERS 5, .github/workflows/ci.yml 12, psp-schema.ts tail 15, with 2 empty tail lines
+ * Route margins use the same counts as the route view: 38 uncovered lines in four files
+ * in the `medium` fixture (CODEOWNERS 5, ci.yml 12, countdown-icon.svg 6, end of psp-schema.ts 15, with two blank lines at the end
  * excluded by the whitespace rule, decision log 2026-08-26). If the counts drift,
  * this test catches it before anyone has to spot it in a screenshot.
  */
@@ -58,11 +58,11 @@ function fileOf(path: string): RouteMarginFile {
 }
 
 describe('route in full diff margins', () => {
-    it('uncovered counts match the route: 32 lines in 3 files', () => {
+    it('uncovered counts match the route: 38 lines in four files', () => {
         const model = build();
 
-        expect(model.uncoveredLines).toBe(32);
-        expect(model.uncoveredFiles).toBe(3);
+        expect(model.uncoveredLines).toBe(38);
+        expect(model.uncoveredFiles).toBe(4);
         expect(model.pendingFiles).toBe(0);
         expect(model.failedFiles).toBe(0);
 
@@ -75,6 +75,7 @@ describe('route in full diff margins', () => {
             ['psp-schema.ts', 15],
             ['CODEOWNERS', 5],
             ['ci.yml', 12],
+            ['countdown-icon.svg', 6],
         ]);
     });
 
@@ -173,7 +174,7 @@ describe('route in full diff margins', () => {
 
     it('counts lines and files in the footer note and says it is counting until parsing finishes', () => {
         expect(marginFooterNote(build(), t)).toBe(
-            'The hatch means the range has no route stop. 32 lines in 3 files.',
+            'The hatch means the range has no route stop. 38 lines in 4 files.',
         );
 
         const pending = build(SNAPSHOT, new Map());
@@ -241,6 +242,7 @@ describe('route in full diff margins', () => {
             viewed: null,
             blameUrl: null,
             hostFileUrl: null,
+            image: null,
         };
         const first = SNAPSHOT.stops.find((stop) => stop.id === 's01');
         if (first === undefined) {
@@ -285,6 +287,7 @@ describe('route in full diff margins', () => {
             viewed: null,
             blameUrl: null,
             hostFileUrl: null,
+            image: null,
         };
         const margin = buildRouteMargin({
             snapshot: { ...SNAPSHOT, stops: SNAPSHOT.stops.filter((stop) => stop.tier === 'other') },

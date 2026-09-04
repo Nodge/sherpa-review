@@ -29,7 +29,7 @@ import {
 import { SharedPayloadStore } from './shared-payload.js';
 
 /**
- * Payload for route generation tasks (M2-T5) on the `medium` fixture diff: 18 files, 862
+ * Route generation task payloads (M2-T5) on the `medium` fixture diff: 21 files, 868
  * changed lines, including a generated lockfile and 3 test files. These are exactly the roles
  * that budget truncation distinguishes.
  */
@@ -45,7 +45,7 @@ const META: PrMeta = {
     statusLabel: 'Awaiting review',
     checks: null,
     updatedAt: '2026-08-20T10:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
+    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false, blobs: false },
     verdicts: [],
 };
 
@@ -108,7 +108,7 @@ describe('shared diff context', () => {
         expect(text).toContain('- Author: alice (Alice Ingram)');
         expect(text).toContain('- Branches: alice/edit-window -> main');
         expect(text).toContain(`- Diff: base ${diff.baseCommit} -> head ${diff.headCommit}`);
-        expect(text).toContain('- Volume: 18 files, +806 / -56 lines');
+        expect(text).toContain('- Volume: 21 files, +812 / -56 lines');
 
         for (const file of diff.files) {
             expect(text).toContain(`\`${file.path}\``);
@@ -160,7 +160,7 @@ describe('shared diff context', () => {
         const text = prDiffContext({ diff: mediumDiff(), meta: null }, CONTEXT_BUDGET_BYTES);
 
         expect(text).toContain('no pull request metadata');
-        expect(text).toContain('- Volume: 18 files');
+        expect(text).toContain('- Volume: 21 files');
         expect(omittedPaths(text)).toEqual([]);
     });
 
@@ -215,7 +215,8 @@ describe('shared diff context', () => {
         const diff = mediumDiff();
         const text = prDiffContext(context(diff), 10);
 
-        expect(omittedPaths(text)).toHaveLength(diff.files.length);
+        // Binary files have no patch, so there is nothing to truncate.
+        expect(omittedPaths(text)).toHaveLength(diff.files.filter((file) => file.patch !== null).length);
         expect(text).toContain('| `pnpm-lock.yaml` |');
     });
 });
@@ -373,7 +374,7 @@ describe('writing payload to disk', () => {
         expect(pr?.startsWith(sharedDir)).toBe(true);
         expect(path.basename(pr ?? '')).toBe('pr-diff.md');
         expect(fs.readFileSync(guide ?? '', 'utf8')).toContain('# Task: plan the review route');
-        expect(fs.readFileSync(pr ?? '', 'utf8')).toContain('## Changed files (18, complete list)');
+        expect(fs.readFileSync(pr ?? '', 'utf8')).toContain('## Changed files (21, complete list)');
         expect(input.instructions).toContain('Plan the review route');
         // The skeleton has no context of its own. The generation directory holds only the result schema.
         expect(fs.readdirSync(path.dirname(input.resultSchemaFile ?? ''))).toEqual([

@@ -31,6 +31,7 @@ function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
         viewed: null,
         blameUrl: null,
         hostFileUrl: null,
+        image: null,
         ...patch,
     };
 }

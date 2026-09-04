@@ -21,10 +21,12 @@ import { MEDIUM_BASE_COMMIT, MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium
  * 07 is synthetic "Other" (decision logged on 2026-08-25: id `other`, tier `other`, empty anchors,
  * with its contents, the uncovered ranges, computed by the UI).
  *
- * Coverage matches the handoff bar ("862 changed lines · 96% explained · 34 lines not
- * explained"): anchors cover 828 changed lines out of 862, leaving exactly 34 uncovered lines
- * in 3 files: `CODEOWNERS` (5), `ci.yml` (12) and the tail of generated `psp-schema.ts` (17).
- * UI coverage counts 32 of them (`psp-schema.ts` 15): the whitespace rule excludes 2 empty lines at its tail outside
+ * The handoff bar ("862 changed lines · 96% explained · 34 lines not explained") predates the images
+ * from T23: anchors still cover the same 828 changed lines, but the added `countdown-icon.svg`
+ * is invisible to the route (images always go to "Other"), leaving its 6 patch lines uncovered. Total: 868
+ * changed lines, with 40 uncovered in four files: `CODEOWNERS` (5), `ci.yml` (12), the end of
+ * generated `psp-schema.ts` (17), and the SVG (6).
+ * UI coverage statistics count 38 of these (`psp-schema.ts` 15): two blank lines at its end outside
  * the anchors from the count (decision log, 2026-08-26).
  * By tier: high 196, medium 327, low 305 lines (the design counts 188/348/292 have the same bar proportions).
  * The `route.test.ts` test recalculates every count from diff patches rather than taking them on trust.

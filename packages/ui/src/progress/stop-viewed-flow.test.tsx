@@ -445,7 +445,7 @@ describe('marking a stop updates its file read-state boxes', () => {
     it('updates without reloading after ranges are sent and the progress snapshot reaches the file store', async () => {
         const view = mount();
         await view.settle();
-        expect(filesRead(view.host)).toBe('4 / 18 files');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
 
         act(() => {
             viewedToggle(stopSection(view.host, 's01')).click();
@@ -454,16 +454,16 @@ describe('marking a stop updates its file read-state boxes', () => {
 
         // Stop 01 explains two whole files, so its own record must cover them.
         expect(new Set(view.progress.rangesForStop('s01').map((range) => range.fileId)).size).toBe(2);
-        expect(filesRead(view.host)).toBe('6 / 18 files');
+        expect(filesRead(view.host)).toBe('6 / 21 files');
     });
 
     it.each([
-        ['s03', 'services/orders/src/payments/generated/psp-schema.ts', '8 / 18 files'],
-        ['s06', 'pnpm-lock.yaml', '4 / 18 files'],
+        ['s03', 'services/orders/src/payments/generated/psp-schema.ts', '8 / 21 files'],
+        ['s06', 'pnpm-lock.yaml', '4 / 21 files'],
     ])('seen-only progress %s preserves the generated default', async (stopId, path, expectedFilesRead) => {
         const view = mount();
         await view.settle();
-        expect(filesRead(view.host)).toBe('4 / 18 files');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
 
         act(() => {
             viewedToggle(stopSection(view.host, stopId)).click();
@@ -497,14 +497,14 @@ describe('marking a stop updates its file read-state boxes', () => {
     it('refreshes without waiting for a progress event from the channel', async () => {
         const view = mount({ silentProgressEvents: true });
         await view.settle();
-        expect(filesRead(view.host)).toBe('4 / 18 files');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
 
         act(() => {
             viewedToggle(stopSection(view.host, 's01')).click();
         });
         await view.settle();
 
-        expect(filesRead(view.host)).toBe('6 / 18 files');
+        expect(filesRead(view.host)).toBe('6 / 21 files');
     });
 
     it('clearing the mark returns files to unread', async () => {
@@ -521,7 +521,7 @@ describe('marking a stop updates its file read-state boxes', () => {
         await view.settle();
 
         expect(view.progress.rangesForStop('s01')).toEqual([]);
-        expect(filesRead(view.host)).toBe('4 / 18 files');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
     });
 
     it('refreshes even when a server restart resets the revision', async () => {
@@ -539,7 +539,7 @@ describe('marking a stop updates its file read-state boxes', () => {
             });
             await view.settle();
         }
-        expect(filesRead(view.host)).toBe('4 / 18 files');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
 
         view.restartServer();
         act(() => {
@@ -547,7 +547,7 @@ describe('marking a stop updates its file read-state boxes', () => {
         });
         await view.settle();
 
-        expect(filesRead(view.host)).toBe('6 / 18 files');
+        expect(filesRead(view.host)).toBe('6 / 21 files');
     });
 
     it('marking the last files automatically marks and collapses the stop without duplicate writes', async () => {

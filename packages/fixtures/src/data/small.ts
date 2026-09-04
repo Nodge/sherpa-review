@@ -89,7 +89,7 @@ export function makeSmallFixture(): FixtureData {
             statusLabel: 'waiting_for_review',
             checks: 'pending',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
+            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(diff, threads, UPDATED_AT),

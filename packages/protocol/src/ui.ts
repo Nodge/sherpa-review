@@ -220,6 +220,16 @@ export type UiReviewFileContentRequest = z.infer<typeof uiReviewFileContentReque
 export const uiReviewFileContentResponseSchema = z.object({ content: fileContentSchema.nullable() });
 export type UiReviewFileContentResponse = z.infer<typeof uiReviewFileContentResponseSchema>;
 
+/**
+ * Image bytes by `ImageSide.blobId` (`FileDiff.image`). The UI calls this endpoint only with
+ * `capabilities.blobs`. The response is not JSON. The body contains raw bytes, `Content-Type` follows the magic
+ * bytes (`image/*`, otherwise `application/octet-stream`), `Cache-Control: private, immutable`
+ * with a one-year `max-age`, since the id addresses content. 404 (`not_found`) if the host does not know the blob
+ * or the side exceeds `IMAGE_BLOB_MAX_BYTES`.
+ */
+export const uiReviewBlobRequestSchema = z.object({ blobId: hostIdSchema });
+export type UiReviewBlobRequest = z.infer<typeof uiReviewBlobRequestSchema>;
+
 /** File filter lenses: ownership ("mine") is separate from additional lenses (PCI DSS). */
 export const uiReviewLensesResponseSchema = z.object({
     ownership: lensSchema.nullable(),
@@ -805,6 +815,8 @@ export const UI_ENDPOINTS = {
     reviewLenses: '/api/ui/review/lenses',
     /** GET `?fileId=` (`uiReviewFileContentRequestSchema`) → `uiReviewFileContentResponseSchema`. */
     reviewFileContent: '/api/ui/review/file-content',
+    /** GET `?blobId=` (`uiReviewBlobRequestSchema`) → raw bytes (see the request schema). */
+    reviewBlob: '/api/ui/review/blob',
     /** GET `?diffId=` (`uiReviewProgressRequestSchema`) → `uiReviewProgressResponseSchema`. Available without a review host too, progress is local. */
     reviewProgress: '/api/ui/review/progress',
     /** POST `uiSetFileViewedRequestSchema` → `uiSetFileViewedResponseSchema`. */

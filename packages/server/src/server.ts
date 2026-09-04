@@ -4,6 +4,7 @@ import type { ServerManifest } from '@sherpa/protocol';
 import { LONG_POLL_DEFAULT_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
 
 import { createToken } from './auth.js';
+import { BlobCache } from './blob-cache.js';
 import { ChatOrchestrator } from './chat-orchestrator.js';
 import { createChatRoutes } from './chat-routes.js';
 import { ChatStore } from './chat-store.js';
@@ -31,6 +32,7 @@ import {
 } from './manifest.js';
 import {
     assertValidPrKey,
+    blobsDirOf,
     chatPayloadDirOf,
     databasePathFor,
     DEFAULT_SHERPA_DIR,
@@ -356,6 +358,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 draftBuffer,
                 iterations: iterationStore,
                 iterationFeed,
+                blobs: new BlobCache(sherpaDir, blobsDirOf(sherpaDir, prKey)),
             }),
             ...createFeedbackRoutes({
                 prKey,

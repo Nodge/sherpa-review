@@ -39,7 +39,7 @@ export function makeEmptyFixture(): FixtureData {
             statusLabel: 'waiting_for_review',
             checks: 'pending',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(diff, [], UPDATED_AT),

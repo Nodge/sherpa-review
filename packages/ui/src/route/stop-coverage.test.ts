@@ -20,6 +20,7 @@ function file(fileId: string): FileDiff {
         viewed: null,
         blameUrl: null,
         hostFileUrl: null,
+        image: null,
     };
 }
 

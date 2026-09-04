@@ -51,7 +51,7 @@ describe('PR header in Overview', () => {
         expect(html).toContain('PR 4821');
         expect(html).toContain(`+${String(sum('additions'))}`);
         expect(html).toContain(`−${String(sum('deletions'))}`);
-        expect(html).toContain(`${String(DATA.diff.files.length)} files`);
+        expect(html).toContain(`${String(DATA.diff.files.length)} file`);
         expect(html).toContain('PCI DSS');
     });
 

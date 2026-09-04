@@ -1,4 +1,4 @@
-import type { FileChangeType, FileDiff, HostId } from '@sherpa/protocol';
+import type { FileChangeType, FileDiff, FileImage, HostId, ImageMime, ImageSide } from '@sherpa/protocol';
 
 /**
  * Builds unified diffs for fixtures. Uses the `git diff` format (file header, `@@ -a,b +c,d @@`,
@@ -34,13 +34,69 @@ export interface FileSpec {
     /** Link to the file in the PR on the host website, absent by default. */
     hostFileUrl?: string;
     hunks?: readonly HunkSpec[];
+    /**
+     * Image file: sides are base64 (`before` is absent for add, `after` for delete).
+     * `makeFileDiff` computes `blobId` and `size` from the bytes themselves.
+     */
+    image?: ImageSpec;
     /** File mode in the git header, defaults to a regular file. */
     mode?: string;
     /** Previous mode: if different from `mode`, the patch includes `old mode`/`new mode` lines. */
     oldMode?: string;
 }
 
+/** File image: side bytes in base64, as stored in fixture data. */
+export interface ImageSpec {
+    mime: ImageMime;
+    /** Absent means no side: `before` for add, `after` for delete. */
+    before?: string;
+    after?: string;
+}
+
 const DEFAULT_MODE = '100644';
+
+/**
+ * Image side bytes by `blobId`, returned by `FixtureHost.getBlob`. Populated when fixture files
+ * are built: the data stores base64, and the id is computed from it here, in one place.
+ */
+const blobs = new Map<string, Uint8Array>();
+
+/** Fixture blob bytes. null means no built fixture has declared this id. */
+export function fixtureBlob(blobId: HostId): Uint8Array | null {
+    return blobs.get(blobId) ?? null;
+}
+
+/** base64 → bytes without `Buffer`: the fixture package also loads in the browser. */
+export function decodeBase64(value: string): Uint8Array {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+}
+
+/** Image side with a content-based id: equal bytes give equal ids, as on a real host. */
+function imageSide(base64: string | undefined): ImageSide | null {
+    if (base64 === undefined) {
+        return null;
+    }
+    const bytes = decodeBase64(base64);
+    const blobId = `blob:${hashHex(base64, 40)}`;
+    blobs.set(blobId, bytes);
+    return { blobId, size: bytes.length };
+}
+
+function imageOf(spec: FileSpec): FileImage | null {
+    if (spec.image === undefined) {
+        return null;
+    }
+    return {
+        mime: spec.image.mime,
+        before: imageSide(spec.image.before),
+        after: imageSide(spec.image.after),
+    };
+}
 
 /**
  * FNV-1a: stable "blob hashes" and path-based ids keep fixtures independent of build order.
@@ -187,6 +243,7 @@ export function makeFileDiff(diffId: HostId, spec: FileSpec): FileDiff {
         viewed: spec.viewed === undefined ? false : spec.viewed,
         blameUrl: spec.blameUrl ?? null,
         hostFileUrl: spec.hostFileUrl ?? null,
+        image: imageOf(spec),
     };
 }
 

@@ -191,7 +191,7 @@ describe('fixtures: shared invariants', () => {
 describe('medium fixture', () => {
     const data = fixtureIteration('medium');
 
-    it('matches the handoff header: 18 files, +806 −56', () => {
+    it('matches the handoff header plus images: 21 files, +812 −56', () => {
         expect(data.diff.files.length).toBe(MEDIUM_TOTALS.files);
         expect(totalChanges(data.diff.files)).toEqual({
             additions: MEDIUM_TOTALS.additions,
@@ -199,7 +199,7 @@ describe('medium fixture', () => {
         });
     });
 
-    it('ownership gives 12 of 18 files and 570 of 862 lines, generated files stay outside zones', () => {
+    it('assigns ownership to 12 of 21 files and 570 of 868 lines, leaving generated files outside zones', () => {
         const mine = new Set(data.ownership?.paths ?? []);
         const mineLines = data.diff.files.reduce(
             (total, file) => total + (mine.has(file.path) ? file.additions + file.deletions : 0),
@@ -209,7 +209,7 @@ describe('medium fixture', () => {
 
         expect(mine.size).toBe(12);
         expect(mineLines).toBe(570);
-        expect(totalChanges(data.diff.files)).toEqual({ additions: 806, deletions: 56 });
+        expect(totalChanges(data.diff.files)).toEqual({ additions: 812, deletions: 56 });
         expect(data.diff.files.filter((file) => file.generated).every((file) => !zoned.has(file.path))).toBe(true);
     });
 

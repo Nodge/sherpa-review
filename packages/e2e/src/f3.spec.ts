@@ -182,7 +182,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         await expect(page.locator('.coverage__stops')).toHaveText('3 of 7 stops viewed');
         // The diff was reread on the new iteration. Second-pass anchors match its code again.
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '871 changed lines · 95% explained · 41 lines not explained',
+            '877 changed lines · 94% explained · 47 lines not explained',
         );
         // A distant stop's diff column is removed from the DOM (M5-T13). Scroll to the unmarked
         // stop to inspect it. Cards return near the viewport.

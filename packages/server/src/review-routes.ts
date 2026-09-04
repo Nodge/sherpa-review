@@ -1,6 +1,9 @@
+import type { ServerResponse } from 'node:http';
+
 import type { PrDiff, ReviewHost } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
+    uiReviewBlobRequestSchema,
     uiDeleteDraftRequestSchema,
     uiDraftBufferEntryRequestSchema,
     uiDraftBufferResponseSchema,
@@ -28,10 +31,11 @@ import {
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
+import type { BlobCache } from './blob-cache.js';
 import type { DraftBufferWriter } from './draft-buffer.js';
 import { RpcFailure } from './errors.js';
-import type { JsonResponse, RequestContext, Route } from './http.js';
-import { handlingRpcFailures, readJsonBody } from './http.js';
+import type { JsonResponse, RequestContext, Route, StreamContext } from './http.js';
+import { handlingRpcFailures, readJsonBody, rpcFailureResponse, sendJson } from './http.js';
 import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
@@ -71,6 +75,8 @@ export interface ReviewRoutesOptions {
     readonly iterations?: IterationStore | null;
     /** PR iterations: endpoints use these to tell whether a request concerns the active iteration or a previous one. */
     readonly iterationFeed?: IterationFeed | null;
+    /** On-disk image byte cache. If absent, every request goes to the host (tests without state). */
+    readonly blobs?: BlobCache | null;
 }
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
@@ -248,6 +254,13 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             }),
         },
         {
+            // Image bytes are not JSON: the endpoint writes the response itself (type from magic bytes,
+            // permanent immutable cache, 304 for `If-None-Match`).
+            method: 'GET',
+            path: UI_ENDPOINTS.reviewBlob,
+            stream: (ctx) => serveBlob(options, ctx),
+        },
+        {
             // Progress is scoped to an iteration: without a parameter, return the active one and its current snapshot,
             // with `diffId`, return the stored iteration as is (old snapshots are readable, not editable).
             method: 'GET',
@@ -345,6 +358,140 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             }),
         },
     ];
+}
+
+/**
+ * Image side bytes by `ImageSide.blobId`. The order is cache, host, cache write: the blob addresses
+ * content, so a second pass and a slice do not call the host. Host misses (`null`) are not cached:
+ * they describe the host's current state, not a property of the content.
+ */
+async function serveBlob(options: ReviewRoutesOptions, ctx: StreamContext): Promise<void> {
+    try {
+        await writeBlob(options, ctx);
+    } catch (error) {
+        const failure =
+            error instanceof RpcFailure
+                ? error
+                : new RpcFailure('internal', `Could not retrieve image bytes: ${messageOf(error)}`);
+        sendJson(ctx.res, rpcFailureResponse(failure));
+    }
+}
+
+async function writeBlob(options: ReviewRoutesOptions, ctx: StreamContext): Promise<void> {
+    const request = uiReviewBlobRequestSchema.safeParse({
+        blobId: ctx.url.searchParams.get('blobId') ?? '',
+    });
+    if (!request.success) {
+        throw new RpcFailure('bad_request', 'The image byte request is missing the blobId parameter.');
+    }
+    const blobId = request.data.blobId;
+    const etag = etagOf(blobId);
+
+    if (ctx.req.headers['if-none-match'] === etag) {
+        // The contents at this ID cannot change, so no body is needed.
+        ctx.res.writeHead(304, cacheHeaders(etag));
+        ctx.res.end();
+        return;
+    }
+
+    const cached = (await options.blobs?.read(blobId)) ?? null;
+    if (cached !== null) {
+        sendBytes(ctx.res, cached, etag);
+        return;
+    }
+
+    const host = hostOf(options);
+    const getBlob = host.getBlob?.bind(host);
+    if (getBlob === undefined) {
+        // The UI does not call this with `capabilities.blobs: false`. A request means the versions are out of sync.
+        throw new RpcFailure(
+            'bad_request',
+            'This host cannot provide file bytes. Images in the diff are unavailable.',
+        );
+    }
+
+    const bytes = await call(() => getBlob(blobId));
+    if (bytes === null) {
+        throw new RpcFailure('not_found', 'The host has no such blob, or the side is too large.');
+    }
+    await options.blobs?.write(blobId, bytes);
+    sendBytes(ctx.res, bytes, etag);
+}
+
+function sendBytes(res: ServerResponse, bytes: Uint8Array, etag: string): void {
+    res.writeHead(200, {
+        'content-type': sniffImageMime(bytes),
+        'content-length': String(bytes.byteLength),
+        ...cacheHeaders(etag),
+    });
+    res.end(bytes);
+}
+
+function cacheHeaders(etag: string): Record<string, string> {
+    return {
+        // The blob is content-addressed: there is nothing to revalidate, and no reason to do so.
+        'cache-control': 'private, max-age=31536000, immutable',
+        etag,
+        'x-content-type-options': 'nosniff',
+    };
+}
+
+/** ETag from an opaque ID: quotes and backslashes inside the value are escaped. */
+function etagOf(blobId: string): string {
+    return `"${blobId.replace(/["\\]/g, '\\$&')}"`;
+}
+
+/**
+ * Image type from magic bytes. Do not trust the path extension: the type goes to the browser, and
+ * the contents must identify themselves. Unrecognized content is `application/octet-stream`.
+ */
+export function sniffImageMime(bytes: Uint8Array): string {
+    if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47])) {
+        return 'image/png';
+    }
+    if (startsWith(bytes, [0xff, 0xd8, 0xff])) {
+        return 'image/jpeg';
+    }
+    if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) {
+        return 'image/gif';
+    }
+    if (startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) && startsWith(bytes.subarray(8), [0x57, 0x45, 0x42, 0x50])) {
+        return 'image/webp';
+    }
+    if (startsWith(bytes, [0x42, 0x4d])) {
+        return 'image/bmp';
+    }
+    if (startsWith(bytes, [0x00, 0x00, 0x01, 0x00])) {
+        return 'image/x-icon';
+    }
+    return looksLikeSvg(bytes) ? 'image/svg+xml' : 'application/octet-stream';
+}
+
+function startsWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
+    return prefix.every((byte, index) => bytes[index] === byte);
+}
+
+/** XML prolog and comments before the root tag: enough text to find `<svg`. */
+const SVG_PROLOG_MAX_CHARS = 4096;
+
+/** Text whose first tag is `<svg`: skips a prolog, comments and BOM before it. */
+function looksLikeSvg(bytes: Uint8Array): boolean {
+    let text: string;
+    try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, SVG_PROLOG_MAX_CHARS));
+    } catch {
+        return false;
+    }
+
+    let rest = text.replace(/^\ufeff/, '').trimStart();
+    while (rest.startsWith('<?') || rest.startsWith('<!')) {
+        const end = rest.startsWith('<!--') ? rest.indexOf('-->') + 3 : rest.indexOf('>') + 1;
+        if (end <= 0) {
+            return false;
+        }
+        rest = rest.slice(end).trimStart();
+    }
+    return /^<svg[\s>/]/i.test(rest);
 }
 
 /**

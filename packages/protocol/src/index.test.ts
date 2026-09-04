@@ -8,7 +8,9 @@ import {
     commentSchema,
     DISTRIBUTION_WHATS_NEW_MAX_CHARS,
     distributionVersionSchema,
+    fileDiffSchema,
     generateJsonSchemas,
+    imageMimeOf,
     iterationSchema,
     lensZoneSchema,
     LONG_POLL_CEILING_SECONDS,
@@ -455,6 +457,27 @@ describe('M5 contracts (locale, onboarding, update)', () => {
         expect(routeProvenanceSchema.safeParse({ harness: null, model: null, locale: 'fr' }).success).toBe(false);
     });
 
+    it('diff file: image is optional on input (diffs before T23) and null on output', () => {
+        const file = {
+            fileId: 'f1',
+            path: 'src/index.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            generated: false,
+            additions: 1,
+            deletions: 0,
+            patch: '@@ -1 +1,2 @@\n a\n+b\n',
+            viewed: null,
+            blameUrl: null,
+            hostFileUrl: null,
+        };
+        expect(fileDiffSchema.parse(file)).toEqual({ ...file, image: null });
+        expect(fileDiffSchema.safeParse({ ...file, image: { mime: 'image/tiff', before: null, after: null } }).success).toBe(
+            false,
+        );
+    });
+
     it('version.json: release fields are nullable, whatsNew is bounded', () => {
         const built = { version: '0.5.0', builtFrom: 'b1e4515-dirty', releasedAt: null, whatsNew: null };
         expect(distributionVersionSchema.parse(built)).toEqual(built);
@@ -503,5 +526,24 @@ describe('JSON schemas', () => {
             expect(schema, name).toBeDefined();
             expect(schema?.$schema, name).toContain('json-schema.org');
         }
+    });
+});
+
+describe('imageMimeOf', () => {
+    it('recognizes images by extension regardless of case', () => {
+        expect(imageMimeOf('assets/logo.PNG')).toBe('image/png');
+        expect(imageMimeOf('a/b/c.jpg')).toBe('image/jpeg');
+        expect(imageMimeOf('a/b/c.jpeg')).toBe('image/jpeg');
+        expect(imageMimeOf('icon.svg')).toBe('image/svg+xml');
+        expect(imageMimeOf('favicon.ico')).toBe('image/x-icon');
+    });
+
+    it('does not treat anything else as an image', () => {
+        expect(imageMimeOf('src/index.ts')).toBeNull();
+        expect(imageMimeOf('README')).toBeNull();
+        // A dot in a directory name does not become a file extension.
+        expect(imageMimeOf('assets.png/readme')).toBeNull();
+        // A file starting with a dot has a name, not an extension.
+        expect(imageMimeOf('.png')).toBeNull();
     });
 });

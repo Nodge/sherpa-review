@@ -20,6 +20,7 @@ function file(patch: string | null): FileDiff {
         viewed: null,
         blameUrl: null,
         hostFileUrl: null,
+        image: null,
     };
 }
 

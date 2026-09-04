@@ -34,7 +34,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         await expect(page.getByRole('button', { name: 'Agent disconnected', exact: true })).toBeVisible();
 
         await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
-        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
+        await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '21');
         await expect(page.locator('.diff-row').first()).toBeVisible();
     });
 
@@ -81,18 +81,18 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
 
     await test.step('route ready: coverage bar and stop counter agree', async () => {
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '860 changed lines · 96% explained · 32 lines not explained',
+            '866 changed lines · 95% explained · 38 lines not explained',
         );
         await expect(page.locator('.route-skeleton-card')).toHaveCount(0);
         await expect(page.locator('.coverage__stops')).toHaveText('0 of 7 stops viewed');
-        // The same 32 lines as in the legend: Other promises exactly what it will expand.
-        await expect(stop(page, 'other')).toContainText('Open 32 lines');
-        // Bar segments use the fixture tiers and add up to the same 860 lines
-        // (the patches contain 862: 2 empty lines outside anchors are excluded from the counts).
+        // Same 38 lines as in the legend. Other promises exactly what it will expand.
+        await expect(stop(page, 'other')).toContainText('Open 38 lines');
+        // Bar segments follow the fixture tiers and add up to its 866 lines
+        // (the patches have 868: two blank lines outside the anchors do not count).
         await expect(segment(page, 'high')).toHaveAttribute('aria-label', 'high · stops 01–02 · 196 lines');
         await expect(segment(page, 'medium')).toHaveAttribute('aria-label', 'medium · stops 03–04 · 327 lines');
         await expect(segment(page, 'low')).toHaveAttribute('aria-label', 'low · stops 05–06 · 305 lines');
-        await expect(segment(page, 'other')).toHaveAttribute('aria-label', 'not explained · 32 lines');
+        await expect(segment(page, 'other')).toHaveAttribute('aria-label', 'not explained · 38 lines');
 
         await page.getByRole('tab', { name: 'Overview', exact: true }).click();
         await expectSummary(page);
@@ -164,9 +164,9 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         // Review complete counters (README §13) agree with the actions taken by hand.
         await expect(counter(page, 'Stops viewed')).toHaveText('4 of 7');
         await expect(counter(page, 'Comments published')).toHaveText('2 (0 of them replies)');
-        // 90% versus 39% at the start. The marks on exactly 4 stops account for the difference.
+        // 89% compared with the start. The difference comes exactly from marking 4 stops.
         // The generated default for psp-schema.ts survives partial coverage by stop s03.
-        await expect(counter(page, 'Diff seen')).toHaveText('90% of 862 lines');
+        await expect(counter(page, 'Diff seen')).toHaveText('89% of 868 lines');
         // "Other" is unmarked, so the line about reading outside the route must be absent.
         await expect(page.getByText('Of it read outside the route', { exact: true })).toHaveCount(0);
     });
@@ -221,7 +221,7 @@ test('F1 failure: a broken plan fails generation, Retry finishes the route', asy
         await fillSections(worker);
 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
-            '860 changed lines · 96% explained · 32 lines not explained',
+            '866 changed lines · 95% explained · 38 lines not explained',
         );
         expect(await stopOrder(page)).toEqual(PLAN_ORDER);
     });

@@ -338,7 +338,7 @@ export interface FullDiffGalleryState {
 export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     {
         id: 'full-diff-tree',
-        title: 'tree and filters, 18 files',
+        title: 'tree and filters, 21 files',
         render: () => <WorkspaceState fixture="medium" viewed={MEDIUM_VIEWED} />,
     },
     {

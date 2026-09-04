@@ -147,6 +147,7 @@ describe('"Expand file" in a route slice', () => {
         viewed: null,
         blameUrl: null,
         hostFileUrl: null,
+        image: null,
     };
     const CLIP_CONTENT: FileContent = {
         oldText: 'alpha\nomega\n',

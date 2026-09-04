@@ -41,6 +41,7 @@ function diffOf(diffId: string, paths: readonly string[] = []): PrDiff {
             viewed: false,
             blameUrl: null,
             hostFileUrl: null,
+            image: null,
         })),
     };
 }

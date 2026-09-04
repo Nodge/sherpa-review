@@ -30,7 +30,7 @@ const META: PrMeta = {
     statusLabel: 'Awaiting review',
     checks: null,
     updatedAt: '2026-08-20T10:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false },
+    capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false, blobs: false },
     verdicts: [],
 };
 

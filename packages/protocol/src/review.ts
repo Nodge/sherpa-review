@@ -39,6 +39,11 @@ export const hostCapabilitiesSchema = z.object({
      * after a push. The UI only shows "route is stale".
      */
     iterations: z.boolean(),
+    /**
+     * The host returns file bytes by content (`getBlob`). Without it, the image card
+     * is not shown, and the binary file remains a "binary file not shown" notice.
+     */
+    blobs: z.boolean(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -86,6 +91,59 @@ export type PrMeta = z.infer<typeof prMetaSchema>;
 export const fileChangeTypeSchema = z.enum(['add', 'modify', 'delete', 'copy', 'move', 'conflict']);
 export type FileChangeType = z.infer<typeof fileChangeTypeSchema>;
 
+/** Image types the UI shows as cards, determined by the host from the path extension. */
+export const imageMimeSchema = z.enum([
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'image/bmp',
+    'image/x-icon',
+]);
+export type ImageMime = z.infer<typeof imageMimeSchema>;
+
+/** Path extension → image type, the only criterion the host uses to mark a file as an image. */
+const IMAGE_MIME_BY_EXTENSION = new Map<string, ImageMime>([
+    ['png', 'image/png'],
+    ['jpg', 'image/jpeg'],
+    ['jpeg', 'image/jpeg'],
+    ['gif', 'image/gif'],
+    ['webp', 'image/webp'],
+    ['svg', 'image/svg+xml'],
+    ['bmp', 'image/bmp'],
+    ['ico', 'image/x-icon'],
+]);
+
+/** Image type from the path extension. null means the file is not considered an image. */
+export function imageMimeOf(path: string): ImageMime | null {
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const dot = name.lastIndexOf('.');
+    if (dot <= 0) {
+        return null;
+    }
+    return IMAGE_MIME_BY_EXTENSION.get(name.slice(dot + 1).toLowerCase()) ?? null;
+}
+
+/**
+ * One side of an image. `blobId` addresses content rather than a file: equal ids mean equal bytes
+ * (the review host supplies its own blob hash), so the server caches bytes by id without expiry.
+ * `size` is the side's byte count. The UI refuses to load a side larger than `IMAGE_BLOB_MAX_BYTES`.
+ */
+export const imageSideSchema = z.object({
+    blobId: hostIdSchema,
+    size: z.number().int().min(0),
+});
+export type ImageSide = z.infer<typeof imageSideSchema>;
+
+/** Image in the diff: null sides for add (no before) and delete (no after). */
+export const fileImageSchema = z.object({
+    mime: imageMimeSchema,
+    before: imageSideSchema.nullable(),
+    after: imageSideSchema.nullable(),
+});
+export type FileImage = z.infer<typeof fileImageSchema>;
+
 /**
  * One diff file. Content is a raw unified diff (`patch`), parsed into a line model
  * by the UI in a worker (requirements §1/C3). The server and adapter do not interpret the text.
@@ -116,6 +174,13 @@ export const fileDiffSchema = z.object({
      * outside Sherpa (decision 2026-09-03). null means the host has no web UI (fixtures) or file link.
      */
     hostFileUrl: z.string().nullable(),
+    /**
+     * The file is an image (by extension, set by the host only with `capabilities.blobs`).
+     * null means it is not an image. The UI renders an image card instead of the binary notice. The text
+     * `patch` (svg) remains available in a separate mode.
+     * Optional on input with a null default: diffs saved before T23 load without migration.
+     */
+    image: fileImageSchema.nullable().default(null),
 });
 export type FileDiff = z.infer<typeof fileDiffSchema>;
 

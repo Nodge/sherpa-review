@@ -4,11 +4,13 @@ import { anchor, bot, comment, human, lens, thread } from '../builders.js';
 import { lockLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff, totalChanges } from '../patch.js';
+import { PNG_AFTER_BASE64, PNG_BEFORE_BASE64, PNG_DELETED_BASE64, SVG_BASE64, SVG_LINES } from './images.js';
 import type { FixtureData, FixtureInterdiff, FixtureIteration } from './types.js';
 
 /**
  * Main fixture: PR from the design handoff, "Enforce the 30-minute edit window for scheduled
- * deliveries", 18 files, `+806 −56` (README §1). The screen proportions depend on these exact numbers,
+ * deliveries", 18 files, `+806 −56` (README §1), plus three M5-T23 images: the added SVG
+ * contributes 6 lines, so the declared count is `+812 −56`. The screen proportions depend on these exact numbers,
  * so a test checks the total, and the lockfile fills the remainder up to the target (see `lockfile`).
  */
 
@@ -17,8 +19,8 @@ const DIFF_ID = '182734';
 const BASE_COMMIT = '4c1f0b7a9d3e5f2b8c6a1d4e7f0b3c5a9d2e6f81';
 const HEAD_COMMIT = '9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316';
 
-/** Declared PR size: numbers from the handoff README. */
-export const MEDIUM_TOTALS = { files: 18, additions: 806, deletions: 56 } as const;
+/** Declared PR size: numbers from the handoff README plus three images (M5-T23). */
+export const MEDIUM_TOTALS = { files: 21, additions: 812, deletions: 56 } as const;
 
 /** Iteration for the route in `route-medium.ts`: anchors and the snapshot must reference it. */
 export { BASE_COMMIT as MEDIUM_BASE_COMMIT, DIFF_ID as MEDIUM_DIFF_ID, HEAD_COMMIT as MEDIUM_HEAD_COMMIT };
@@ -88,6 +90,32 @@ function rolloutChecklistLines(): string[] {
         ...ROLLOUT_CHECKS.flatMap((check) => [`+- [ ] ${check}`, '+  Evidence: #2281.', '+']),
     ];
 }
+
+/**
+ * PR images (M5-T23): a PNG change with transparency, an added SVG (it also has a text
+ * patch, the entire file as added lines), and a deleted PNG. The raster sides are binary,
+ * so they have no patch at all.
+ */
+const IMAGES: readonly FileSpec[] = [
+    {
+        path: 'services/orders/src/ui/assets/edit-window-banner.png',
+        changeType: 'modify',
+        binary: true,
+        image: { mime: 'image/png', before: PNG_BEFORE_BASE64, after: PNG_AFTER_BASE64 },
+    },
+    {
+        path: 'services/orders/src/ui/assets/countdown-icon.svg',
+        changeType: 'add',
+        image: { mime: 'image/svg+xml', after: SVG_BASE64 },
+        hunks: [{ oldStart: 0, newStart: 1, lines: SVG_LINES.map((line) => `+${line}`) }],
+    },
+    {
+        path: 'services/orders/src/ui/assets/legacy-window-badge.png',
+        changeType: 'delete',
+        binary: true,
+        image: { mime: 'image/png', before: PNG_DELETED_BASE64 },
+    },
+];
 
 /** Hand-written files. The lockfile is added separately at the end. */
 const HAND_WRITTEN: readonly FileSpec[] = [
@@ -1054,10 +1082,11 @@ const HAND_WRITTEN: readonly FileSpec[] = [
             },
         ],
     },
+    ...IMAGES,
 ];
 
 /**
- * The lockfile brings the PR up to the declared `+806 −56`: a real `pnpm-lock.yaml` in such a PR
+ * The lockfile brings the PR up to its declared size: a real `pnpm-lock.yaml` in such a PR does
  * does contain hundreds of generated lines, and the header counts must match the handoff.
  */
 function lockCounts(rest: readonly FileDiff[]): { additions: number; deletions: number } {
@@ -1810,7 +1839,7 @@ function threads(diffId: HostId, second = false): Thread[] {
     ];
 }
 
-/** Ownership: 12 of 18 files are mine. Zones at different depths mirror CODEOWNERS rules. */
+/** Ownership: 12 "my" files out of 21. Zones at different depths follow the `.github/CODEOWNERS` rules. */
 const MY_FILES = [
     'services/orders/src/domain/edit-window.ts',
     'services/orders/src/domain/order.ts',
@@ -1878,7 +1907,7 @@ export function makeMediumFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'passed',
             updatedAt: CREATED_AT_V1,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: true },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: true, blobs: true },
             verdicts: [],
         },
         iterations: iterations(),

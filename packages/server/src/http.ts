@@ -20,6 +20,7 @@ const HTTP_STATUS_BY_CODE: Record<RpcErrorCode, number> = {
     version_incompatible: 409,
     bad_request: 400,
     unknown_task: 404,
+    not_found: 404,
     lease_not_held: 409,
     worker_conflict: 409,
     result_too_large: 413,

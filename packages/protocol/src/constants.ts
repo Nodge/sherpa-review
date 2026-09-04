@@ -38,6 +38,12 @@ export const LEASE_TTL_SECONDS = { interactive: 600, background: 1800 } as const
 /** Attempts per task. Exhausting them fails the task with a UI-visible error. */
 export const MAX_TASK_ATTEMPTS = 3;
 
+/**
+ * Diff image side limit (`ImageSide.size`): above it, the UI does not load the side and offers
+ * a download from the host, while the host's `getBlob` returns null. Same policy as for file text content.
+ */
+export const IMAGE_BLOB_MAX_BYTES = 10_000_000;
+
 /** `task progress` text limit: a status line for the UI, not a result. */
 export const PROGRESS_TEXT_MAX_CHARS = 500;
 

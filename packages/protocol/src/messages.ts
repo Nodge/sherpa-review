@@ -154,6 +154,8 @@ export const rpcErrorCodeSchema = z.enum([
     'bad_request',
     /** No task with this id. */
     'unknown_task',
+    /** The requested entity does not exist (image blob). Neither a host error nor a request error. */
+    'not_found',
     /** The task is not leased to this worker. */
     'lease_not_held',
     /** Another (newer) live session holds the worker slot. The caller must stop the loop. */

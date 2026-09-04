@@ -125,6 +125,7 @@ describe('card height estimate', () => {
         viewed: null,
         blameUrl: null,
         hostFileUrl: null,
+        image: null,
         ...patch,
     });
 

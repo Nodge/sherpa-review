@@ -14,8 +14,8 @@ const HUNK_HEADER = /^@@ -(\d+),\d+ \+(\d+),\d+ @@/;
 /** Target coverage bar shares from README §1 (862 lines: 188 / 348 / 292 + 34 unplaced). */
 const TIER_TARGETS: Record<'high' | 'medium' | 'low', number> = { high: 188, medium: 348, low: 292 };
 const TIER_TOLERANCE = 25;
-const UNEXPLAINED_LINES = 34;
-const UNEXPLAINED_FILES = 3;
+const UNEXPLAINED_LINES = 40;
+const UNEXPLAINED_FILES = 4;
 
 interface ChangedFile {
     fileId: string;
@@ -147,15 +147,18 @@ describe('medium fixture route', () => {
     const coverage = coverageByTier(snapshot, files);
 
     it('counts the same changed lines as the PR header', () => {
-        expect(totalChangedLines(files)).toBe(862);
+        expect(totalChangedLines(files)).toBe(868);
     });
 
-    it('leaves exactly 34 lines in exactly 3 files unexplained', () => {
+    // The route ignores images entirely (M5-T23 decision): the added SVG lines are correctly
+    // remain unexplained, shown as "Other" in the UI.
+    it('leaves exactly 40 lines in exactly 4 files unexplained', () => {
         expect(coverage.unexplained).toBe(UNEXPLAINED_LINES);
         expect([...coverage.unexplainedFiles].sort()).toEqual([
             '.github/CODEOWNERS',
             '.github/workflows/ci.yml',
             'services/orders/src/payments/generated/psp-schema.ts',
+            'services/orders/src/ui/assets/countdown-icon.svg',
         ]);
         expect(coverage.unexplainedFiles.size).toBe(UNEXPLAINED_FILES);
     });

@@ -28,9 +28,9 @@ import {
 
 /**
  * Route counts come from anchors and diff models, not the snapshot. The reference is
- * the `medium` fixture, whose coverage matches the handoff bar (860 / 828 / 32, tiers
+ * the `medium` fixture, whose coverage matches the handoff bar (866 / 828 / 38, tiers
  * 196 / 327 / 305). This test catches any mismatch. The patches contain
- * 862. The 2 empty lines in psp-schema.ts outside anchors are excluded from coverage counts
+ * 868. Two blank lines in psp-schema.ts outside anchors do not count toward coverage
  * (decision log, 2026-08-26).
  */
 
@@ -93,12 +93,12 @@ function stopOf(id: string): RouteStop {
 }
 
 describe('route model', () => {
-    it('coverage matches the handoff bar: 860 changed, 828 explained, 32 not explained', () => {
+    it('coverage matches the handoff bar: 866 changed, 828 explained, 38 unexplained', () => {
         const { totals } = build();
 
-        expect(totals.changed).toBe(860);
+        expect(totals.changed).toBe(866);
         expect(totals.covered).toBe(828);
-        expect(totals.uncovered).toBe(32);
+        expect(totals.uncovered).toBe(38);
         expect(totals.pendingFiles).toBe(0);
         expect(totals.covered + totals.uncovered).toBe(totals.changed);
     });
@@ -106,11 +106,11 @@ describe('route model', () => {
     it('matches fixture line counts by tier', () => {
         const { totals } = build();
 
-        expect(totals.byTier).toEqual({ high: 196, medium: 327, low: 305, other: 32 });
+        expect(totals.byTier).toEqual({ high: 196, medium: 327, low: 305, other: 38 });
         expect(totals.byTier.high + totals.byTier.medium + totals.byTier.low).toBe(totals.covered);
     });
 
-    it('uncovered lines are in exactly three fixture files', () => {
+    it('places uncovered lines in exactly four fixture files', () => {
         const model = build();
         const other = model.entries.find((entry) => entry.kind === 'other');
 
@@ -124,8 +124,10 @@ describe('route model', () => {
             ['psp-schema.ts', 15],
             ['CODEOWNERS', 5],
             ['ci.yml', 12],
+            // The route does not see images, so the added svg lines go to Other.
+            ['countdown-icon.svg', 6],
         ]);
-        expect(other.view.lines).toBe(32);
+        expect(other.view.lines).toBe(38);
     });
 
     it('renders in snapshot Triage order with Other last and numbers fixed by the plan', () => {
@@ -388,8 +390,8 @@ describe('route model', () => {
 
         expect(model.totals.pendingFiles).toBe(DATA.diff.files.length);
         // Patch counts still include whitespace lines, which are only identifiable in parsed models,
-        // still 862, including them. Counts are marked unfinished while `pendingFiles` is above zero.
-        expect(model.totals.changed).toBe(862);
+        // so the count is still 868 here. Counts remain incomplete while `pendingFiles` is greater than zero.
+        expect(model.totals.changed).toBe(868);
         expect(model.totals.covered).toBe(0);
         expect(model.totals.uncovered).toBe(0);
     });
@@ -756,6 +758,7 @@ const WHITESPACE_FILE: FileDiff = {
     viewed: null,
     blameUrl: null,
     hostFileUrl: null,
+    image: null,
 };
 
 /** Snapshot with one stop containing the given anchors, plus Other. */

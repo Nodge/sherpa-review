@@ -52,7 +52,7 @@ const RU: Strings = {
     agentDisconnected: '\u0410\u0433\u0435\u043d\u0442 \u043e\u0442\u043a\u043b\u044e\u0447\u0451\u043d',
     commandBox: '\u041a\u043e\u043c\u0430\u043d\u0434\u0430 \u0437\u0430\u043f\u0443\u0441\u043a\u0430 \u0428\u0435\u0440\u043f\u044b',
     fileTree: '\u0414\u0435\u0440\u0435\u0432\u043e \u0444\u0430\u0439\u043b\u043e\u0432',
-    allFiles: 'Все 18',
+    allFiles: '\u0412\u0441\u0435 21',
     myFiles: '\u041c\u043e\u0438 12',
     filterFiles: '\u0424\u0438\u043b\u044c\u0442\u0440 \u0444\u0430\u0439\u043b\u043e\u0432 \u043f\u043e \u0438\u043c\u0435\u043d\u0438',
     markViewed: '\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u043f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0435\u043d\u043d\u044b\u043c',
@@ -64,12 +64,12 @@ const RU: Strings = {
     saveDraft: '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a',
     draftChip: 'черновик · уйдёт при шипе',
     draftsCounter: '1 черновик уйдёт при шипе',
-    progressBefore: '4 / 18 файлов',
-    progressAfter: '5 / 18 файлов',
+    progressBefore: '4 / 21 \u0444\u0430\u0439\u043b\u043e\u0432',
+    progressAfter: '5 / 21 \u0444\u0430\u0439\u043b\u043e\u0432',
     shipped: 'Shipped · PR 4821',
     publishedBatch: '1 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d \u043e\u0434\u043d\u0438\u043c \u043f\u0430\u043a\u0435\u0442\u043e\u043c',
-    stopsOrFiles: '5 из 18',
-    diffSeen: /\d+% из 862 строк/,
+    stopsOrFiles: '5 \u0438\u0437 21',
+    diffSeen: /\d+% \u0438\u0437 868 \u0441\u0442\u0440\u043e\u043a/,
     publishedWithReplies: '1 (\u0438\u0437 \u043d\u0438\u0445 0 \u043e\u0442\u0432\u0435\u0442\u043e\u0432)',
     toFullDiff: '\u041a \u043f\u043e\u043b\u043d\u043e\u043c\u0443 \u0434\u0438\u0444\u0444\u0443',
     people: 'Люди 5',
@@ -84,7 +84,7 @@ const EN: Strings = {
     agentDisconnected: 'Agent disconnected',
     commandBox: 'Sherpa launch command',
     fileTree: 'File tree',
-    allFiles: 'All 18',
+    allFiles: 'All 21',
     myFiles: 'Mine 12',
     filterFiles: 'Filter files by name',
     markViewed: 'Mark viewed',
@@ -96,12 +96,12 @@ const EN: Strings = {
     saveDraft: 'Save draft',
     draftChip: 'draft · publishes on ship',
     draftsCounter: '1 draft goes out on ship',
-    progressBefore: '4 / 18 files',
-    progressAfter: '5 / 18 files',
+    progressBefore: '4 / 21 files',
+    progressAfter: '5 / 21 files',
     shipped: 'Shipped · PR 4821',
     publishedBatch: '1 comment published as one batch',
-    stopsOrFiles: '5 of 18',
-    diffSeen: /\d+% of 862 lines/,
+    stopsOrFiles: '5 of 21',
+    diffSeen: /\d+% of 868 lines/,
     publishedWithReplies: '1 (0 of them replies)',
     toFullDiff: 'To the full diff',
     people: 'People 5',
@@ -141,7 +141,7 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
             await expect(page.locator('.full-diff')).toBeVisible();
             await expect(page.getByRole('tree', { name: s.fileTree })).toBeVisible();
             await expect(page.getByRole('button', { name: s.allFiles, exact: true })).toBeVisible();
-            await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
+            await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '21');
             await expect(page.locator('.file-card').first()).toBeVisible();
             await expect(page.locator('.diff-row').first()).toBeVisible();
             // Relative time in the thread metadata uses `Intl`, in the UI language.
@@ -157,7 +157,7 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
             await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '12');
 
             await page.getByRole('button', { name: s.allFiles, exact: true }).click();
-            await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '18');
+            await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '21');
 
             const filterInput = page.getByRole('searchbox', { name: s.filterFiles });
             const pciAuditFile = page.locator(

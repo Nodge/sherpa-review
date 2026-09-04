@@ -192,6 +192,28 @@ export async function fetchFileContent(token: string, fileId: string): Promise<F
 }
 
 /**
+ * Bytes for one image side (`FileDiff.image`). Called only with `capabilities.blobs`.
+ * `null` means the host does not know the blob or the side exceeds the contract limit.
+ */
+export async function fetchBlob(token: string, blobId: string): Promise<Blob | null> {
+    const path = `${UI_ENDPOINTS.reviewBlob}?blobId=${encodeURIComponent(blobId)}`;
+    let response: Response;
+    try {
+        response = await fetch(path, { headers: { authorization: `Bearer ${token}` } });
+    } catch {
+        throw new ApiError(activeT()('error.serverDown'));
+    }
+
+    if (response.status === 404) {
+        return null;
+    }
+    if (!response.ok) {
+        throw new ApiError(errorMessage(await response.json().catch(() => null)), response.status);
+    }
+    return response.blob();
+}
+
+/**
  * PR reading progress (T8): explicit marks and seen ranges. The endpoint is local, so it also works when
  * the PR has no review host.
  */

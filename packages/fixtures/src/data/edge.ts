@@ -195,7 +195,7 @@ export function makeEdgeFixture(): FixtureData {
             statusLabel: 'needs_work',
             checks: null,
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, iterations: false },
+            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

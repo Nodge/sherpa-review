@@ -1,6 +1,8 @@
 import type { Comment, Iteration, ReviewHost, Thread } from '@sherpa/protocol';
 import {
     fileContentSchema,
+    fileImageSchema,
+    IMAGE_BLOB_MAX_BYTES,
     iterationSchema,
     lensSchema,
     prDiffSchema,
@@ -222,6 +224,45 @@ export function describeReviewHostContract<H extends ReviewHost>(
             expect(newLines.length).toBeGreaterThan(0);
             for (const context of patchContextLines(text.patch)) {
                 expect(newLines[context.line - 1], `${text.path}:${String(context.line)}`).toBe(context.text);
+            }
+        });
+
+        it('getBlob agrees with capabilities.blobs', async () => {
+            const host = makeHost();
+            const pr = await host.getPr();
+            const getBlob = host.getBlob?.bind(host);
+
+            if (!pr.capabilities.blobs) {
+                expect(getBlob).toBeUndefined();
+                // Images cannot be displayed without bytes, so a host without them never marks files as images.
+                expect((await host.getDiff()).files.every((file) => file.image === null)).toBe(true);
+                return;
+            }
+            if (getBlob === undefined) {
+                throw new Error('host declared blobs but did not provide getBlob');
+            }
+
+            expect(await getBlob('no-such-blob')).toBeNull();
+
+            for (const file of (await host.getDiff()).files) {
+                if (file.image === null) {
+                    continue;
+                }
+                expect(() => fileImageSchema.parse(file.image)).not.toThrow();
+                for (const side of [file.image.before, file.image.after]) {
+                    if (side === null) {
+                        continue;
+                    }
+                    const bytes = await getBlob(side.blobId);
+                    if (side.size > IMAGE_BLOB_MAX_BYTES) {
+                        expect(bytes, `${file.path}: side exceeds the limit`).toBeNull();
+                        continue;
+                    }
+                    if (bytes === null) {
+                        throw new Error(`host did not return bytes for the image side ${file.path}`);
+                    }
+                    expect(bytes.length, `${file.path}: byte length disagrees with size`).toBe(side.size);
+                }
             }
         });
 

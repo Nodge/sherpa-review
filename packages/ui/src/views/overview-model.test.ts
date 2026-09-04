@@ -146,7 +146,7 @@ describe('Overview: files by ownership', () => {
             0,
         );
 
-        expect(summary).toMatchObject({ mineFiles: 12, totalFiles: 18, mineLines: 570, totalLines: 862 });
+        expect(summary).toMatchObject({ mineFiles: 12, totalFiles: 21, mineLines: 570, totalLines: 868 });
         expect(mineLines).toBe(570);
         expect(DATA.ownership?.zones?.filter((zone) => zone.mine).flatMap((zone) => zone.paths)).toEqual(
             DATA.ownership?.paths,

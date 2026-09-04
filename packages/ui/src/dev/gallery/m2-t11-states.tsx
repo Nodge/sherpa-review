@@ -12,7 +12,7 @@ import type { RouteGalleryState } from './m2-t6-states.tsx';
 
 /**
  * Route in the full diff margins (M2-T11, README §10): badges in the tree and card headers,
- * a footer note with calculated fixture counts (32 lines in 3 files) and hatched bars
+ * a footer note with calculated fixture counts (38 lines in 4 files), and hatched strips
  * for uncovered ranges. The second state is the same reader without a route, with no margins at all.
  */
 

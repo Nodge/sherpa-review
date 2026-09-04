@@ -11,7 +11,7 @@ import type { RouteMarginFile } from '../route/margin-model.js';
  * the prepared rows.
  *
  * Directory chains with a single child collapse into one row (`services/orders`,
- * `api/v3`), so a tree of 18 files fits in the panel instead of taking one row
+ * `api/v3`), so a tree of two dozen files fits the panel instead of taking one row
  * per path segment.
  */
 

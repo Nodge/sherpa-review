@@ -12,11 +12,12 @@ import type {
     Thread,
     Verdict,
 } from '@sherpa/protocol';
-import { commentDraftSchema, verdictSchema } from '@sherpa/protocol';
+import { commentDraftSchema, IMAGE_BLOB_MAX_BYTES, verdictSchema } from '@sherpa/protocol';
 
 import type { FixtureData, FixtureIteration, FixtureName } from './data/index.js';
 import { fixtureData } from './data/index.js';
 import { fileContentOf } from './file-content.js';
+import { fixtureBlob } from './patch.js';
 
 /**
  * Third `ReviewHost` implementation (requirements §1/C4), with deterministic fixtures. Used for
@@ -133,6 +134,9 @@ export class FixtureHost implements ReviewHost {
     /** Present only when the fixture host supports file content (`capabilities.fileContent`). */
     getFileContent?: (fileId: HostId) => Promise<FileContent | null>;
 
+    /** Present only when the fixture host supports image bytes (`capabilities.blobs`). */
+    getBlob?: (blobId: HostId) => Promise<Uint8Array | null>;
+
     constructor(name: FixtureName, options: FixtureHostOptions = {}) {
         this.data = fixtureData(name);
         this.failPublishFor = new Set(options.failPublishFor ?? []);
@@ -148,6 +152,9 @@ export class FixtureHost implements ReviewHost {
         }
         if (this.data.pr.capabilities.fileContent) {
             this.getFileContent = (fileId) => this.loadFileContent(fileId);
+        }
+        if (this.data.pr.capabilities.blobs) {
+            this.getBlob = (blobId) => this.loadBlob(blobId);
         }
     }
 
@@ -422,13 +429,26 @@ export class FixtureHost implements ReviewHost {
         return found;
     }
 
-    /** An unknown file is a host error. A known file without content (binary) returns null. */
+    /** An unknown file is a host error. A known file without content (binary, image) returns null. */
     private loadFileContent(fileId: HostId): Promise<FileContent | null> {
         const file = this.activeData().diff.files.find((candidate) => candidate.fileId === fileId);
         if (file === undefined) {
             return Promise.reject(new Error(`file ${fileId} not found in the diff`));
         }
-        return Promise.resolve(fileContentOf(file));
+        return Promise.resolve(file.image === null ? fileContentOf(file) : null);
+    }
+
+    /**
+     * Image side bytes. Blobs are content-addressed and live outside iterations: an id from a slice or
+     * a previous iteration works just like one from the active iteration. An oversized side returns `null`,
+     * as it does on a real host (contract limit).
+     */
+    private loadBlob(blobId: HostId): Promise<Uint8Array | null> {
+        const bytes = fixtureBlob(blobId);
+        if (bytes === null || bytes.length > IMAGE_BLOB_MAX_BYTES) {
+            return Promise.resolve(null);
+        }
+        return Promise.resolve(bytes.slice());
     }
 
     private applyFileViewed(fileId: HostId, viewed: boolean): Promise<void> {

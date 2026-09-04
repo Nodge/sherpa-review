@@ -94,6 +94,14 @@ export interface ReviewHost {
     getFileContent?(fileId: HostId): Promise<FileContent | null>;
 
     /**
+     * Bytes by `ImageSide.blobId`, for the image card. Method presence must match
+     * `capabilities.blobs` (checked by the contract suite). null means the host does not know this
+     * blob or the side exceeds `IMAGE_BLOB_MAX_BYTES`. The host does not validate the byte format:
+     * the server determines the response type from the magic bytes itself.
+     */
+    getBlob?(blobId: HostId): Promise<Uint8Array | null>;
+
+    /**
      * The "My files" lens (CODEOWNERS). null means the host has no ownership concept.
      * The lens's `zones` includes all PR zones with boundaries and owners (not just the
      * reviewer's). null means the implementation only distinguishes "mine/not mine" membership.

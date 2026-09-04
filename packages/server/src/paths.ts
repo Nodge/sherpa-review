@@ -50,6 +50,11 @@ export function manifestPathFor(sherpaDir: string, prKey: string): string {
     return path.join(serversDirOf(sherpaDir), `${assertValidPrKey(prKey)}.json`);
 }
 
+/** Diff image byte cache: content-addressed blobs for this PR (M5-T23). */
+export function blobsDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'blobs');
+}
+
 export function databasePathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'sherpa.db');
 }

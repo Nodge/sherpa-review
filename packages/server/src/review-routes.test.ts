@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
@@ -27,7 +29,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { selectReviewHost } from './hosts/select.js';
-import { databasePathFor } from './paths.js';
+import { blobsDirOf, databasePathFor } from './paths.js';
+import { sniffImageMime } from './review-routes.js';
 import { asRawText, mediumRawResults } from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
@@ -231,6 +234,135 @@ describe('server review endpoints', () => {
             const response = await get(server.port, UI_ENDPOINTS.reviewFileContent, server.token);
 
             expect(response.status).toBe(400);
+        });
+    });
+
+    describe('image bytes', () => {
+        /** The first side of the first image in the `medium` fixture is a PNG with transparency. */
+        async function firstImage(): Promise<{ blobId: string; size: number }> {
+            const diff = await makeFixtureHost('medium').getDiff();
+            const side = diff.files.flatMap((file) => (file.image?.after === undefined ? [] : [file.image.after]))[0];
+            if (side == null) {
+                throw new Error('the medium fixture has no images');
+            }
+            return side;
+        }
+
+        function blobPath(blobId: string): string {
+            return `${UI_ENDPOINTS.reviewBlob}?blobId=${encodeURIComponent(blobId)}`;
+        }
+
+        it('returns bytes, a type detected from magic bytes and a permanent immutable cache', async () => {
+            const server = await start(FIXTURE_PR);
+            const side = await firstImage();
+
+            const response = await get(server.port, blobPath(side.blobId), server.token);
+
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-type')).toBe('image/png');
+            expect(response.headers.get('content-length')).toBe(String(side.size));
+            expect(response.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+            expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+            expect(new Uint8Array(await response.arrayBuffer()).length).toBe(side.size);
+        });
+
+        it('detects svg by its text instead of the path extension', async () => {
+            const server = await start(FIXTURE_PR);
+            const diff = await makeFixtureHost('medium').getDiff();
+            const svg = diff.files.find((file) => file.image?.mime === 'image/svg+xml')?.image?.after;
+
+            const response = await get(server.port, blobPath(svg?.blobId ?? ''), server.token);
+
+            expect(response.headers.get('content-type')).toBe('image/svg+xml');
+            expect(await response.text()).toContain('<svg');
+        });
+
+        it('a second request reads bytes from the disk cache without calling the host', async () => {
+            const host = makeFixtureHost('medium');
+            const side = await firstImage();
+            let calls = 0;
+            const original = host.getBlob?.bind(host);
+            host.getBlob = (blobId) => {
+                calls += 1;
+                return original?.(blobId) ?? Promise.resolve(null);
+            };
+            const server = await start(FIXTURE_PR, host);
+
+            await get(server.port, blobPath(side.blobId), server.token);
+            const second = await get(server.port, blobPath(side.blobId), server.token);
+
+            expect(second.status).toBe(200);
+            expect(new Uint8Array(await second.arrayBuffer()).length).toBe(side.size);
+            expect(calls).toBe(1);
+            expect(existsSync(path.join(blobsDirOf(sherpaDir, FIXTURE_PR), Buffer.from(side.blobId).toString('base64url')))).toBe(true);
+        });
+
+        it('If-None-Match returns 304 with no body', async () => {
+            const server = await start(FIXTURE_PR);
+            const side = await firstImage();
+
+            const first = await get(server.port, blobPath(side.blobId), server.token);
+            const etag = first.headers.get('etag') ?? '';
+            const second = await fetch(`http://127.0.0.1:${String(server.port)}${blobPath(side.blobId)}`, {
+                headers: { authorization: `Bearer ${server.token}`, 'if-none-match': etag },
+            });
+
+            expect(etag).toBe(`"${side.blobId}"`);
+            expect(second.status).toBe(304);
+            expect(await second.text()).toBe('');
+        });
+
+        it('an unknown blob returns not_found and the miss is not cached', async () => {
+            const server = await start(FIXTURE_PR);
+
+            const response = await get(server.port, blobPath('no-such-blob'), server.token);
+
+            expect(response.status).toBe(404);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('not_found');
+            expect(existsSync(path.join(blobsDirOf(sherpaDir, FIXTURE_PR), Buffer.from('no-such-blob').toString('base64url')))).toBe(false);
+        });
+
+        it('an image side over the contract limit also returns not_found', async () => {
+            const host = makeFixtureHost('medium');
+            // The fixture returns `null` for anything over the limit. The host imitates that here.
+            host.getBlob = () => Promise.resolve(null);
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await get(server.port, blobPath((await firstImage()).blobId), server.token);
+
+            expect(response.status).toBe(404);
+        });
+
+        it('a host without getBlob returns bad_request with a readable message', async () => {
+            const server = await start('fixture-edge');
+
+            const response = await get(server.port, blobPath('any'), server.token);
+
+            expect(response.status).toBe(400);
+            expect(rpcErrorSchema.parse(await response.json()).error.message).toContain('Images');
+        });
+
+        it('returns bad_request without blobId', async () => {
+            const server = await start(FIXTURE_PR);
+
+            expect((await get(server.port, UI_ENDPOINTS.reviewBlob, server.token)).status).toBe(400);
+        });
+
+        it('a host failure returns host_unavailable instead of 404', async () => {
+            const host = makeFixtureHost('medium');
+            host.getBlob = () => Promise.reject(new Error('host is down'));
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await get(server.port, blobPath((await firstImage()).blobId), server.token);
+
+            expect(response.status).toBe(502);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('host_unavailable');
+        });
+
+        it('the bytes endpoint requires a token', async () => {
+            const server = await start(FIXTURE_PR);
+
+            expect((await get(server.port, blobPath('any'))).status).toBe(401);
         });
     });
 
@@ -1143,3 +1275,33 @@ function parseSseEvent(raw: string): SseEvent {
     }
     return { event, data: data.join('\n') };
 }
+
+/**
+ * The image type comes from its contents, not its extension: the bytes go to the browser, and
+ * `nosniff` prevents it from correcting our mistake.
+ */
+describe('sniffImageMime', () => {
+    const cases: [string, number[] | string][] = [
+        ['image/png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]],
+        ['image/jpeg', [0xff, 0xd8, 0xff, 0xe0]],
+        ['image/gif', [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
+        ['image/bmp', [0x42, 0x4d, 0x36, 0x00]],
+        ['image/x-icon', [0x00, 0x00, 0x01, 0x00, 0x01]],
+        ['image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"></svg>'],
+        ['image/svg+xml', '﻿<?xml version="1.0"?>\n<!-- drawing -->\n<svg></svg>'],
+        ['application/octet-stream', [0x00, 0x01, 0x02, 0x03]],
+        ['application/octet-stream', '<html><body>not an image</body></html>'],
+    ];
+
+    it.each(cases)('%s', (mime, source) => {
+        const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : Uint8Array.from(source);
+        expect(sniffImageMime(bytes)).toBe(mime);
+    });
+
+    it('recognizes webp by the RIFF…WEBP pair, not RIFF alone', () => {
+        const riff = [0x52, 0x49, 0x46, 0x46, 0x10, 0x00, 0x00, 0x00];
+
+        expect(sniffImageMime(Uint8Array.from([...riff, 0x57, 0x45, 0x42, 0x50]))).toBe('image/webp');
+        expect(sniffImageMime(Uint8Array.from([...riff, 0x57, 0x41, 0x56, 0x45]))).toBe('application/octet-stream');
+    });
+});
