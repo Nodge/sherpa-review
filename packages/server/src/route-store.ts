@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type {
     HostId,
+    Locale,
     PrDiff,
     RouteCarried,
     RouteProvenance,
@@ -11,7 +12,7 @@ import type {
     UiGenerationCap,
     UiRouteState,
 } from '@sherpa/protocol';
-import { routeSnapshotSchema, uiGenerationCapSchema, uiRouteStateSchema } from '@sherpa/protocol';
+import { localeSchema, routeSnapshotSchema, uiGenerationCapSchema, uiRouteStateSchema } from '@sherpa/protocol';
 
 import type { SherpaDatabase, SqlRow } from './db.js';
 import { transaction } from './db.js';
@@ -34,6 +35,9 @@ export const UNKNOWN_BASE_COMMIT = 'unknown';
 function generationCapKey(snapshotId: string): string {
     return `generation_cap:${snapshotId}`;
 }
+
+/** Fixed `meta` key for the latest started generation's language. A PR has one generation. */
+const GENERATION_LOCALE_KEY = 'generation_locale';
 
 /** Content hash length in hex characters, displayed in the snapshot selector ("snapshot 3f2a… · current"). */
 const CONTENT_HASH_LENGTH = 12;
@@ -383,6 +387,33 @@ export class RouteStore {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Language of the latest generation started (M5-T4). Stored in `meta`, outside process memory, since the
+     * task and its binding survive a server restart. Result acceptance must know
+     * the language actually sent in the prompt. Otherwise the snapshot gets the wrong `provenance.locale`
+     * and sections in different languages.
+     */
+    setGenerationLocale(locale: Locale): void {
+        this.db
+            .prepare(
+                `INSERT INTO meta (key, value) VALUES (?, ?)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+            )
+            .run(GENERATION_LOCALE_KEY, locale);
+    }
+
+    /** Latest generation language. null means no generation or a corrupt record (principle 3). */
+    generationLocale(): Locale | null {
+        const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(GENERATION_LOCALE_KEY) as
+            | { value: string }
+            | undefined;
+        if (row === undefined) {
+            return null;
+        }
+        const parsed = localeSchema.safeParse(row.value);
+        return parsed.success ? parsed.data : null;
     }
 
     /** Maps a generation task to the stops it fills. Does not change UI state, so the revision stays unchanged. */

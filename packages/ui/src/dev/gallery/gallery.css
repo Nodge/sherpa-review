@@ -529,3 +529,11 @@
 .update-toast-frame .update-toast {
     position: static;
 }
+
+/* Route language (M5-T4): provenance pill and banner in one column. */
+.route-locale-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-inner-tight);
+    max-width: 900px;
+}

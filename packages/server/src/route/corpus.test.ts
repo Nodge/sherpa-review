@@ -1,7 +1,7 @@
 import type { RouteAnchor, RouteStop } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { asRawText, mediumDiff, mediumRawResults } from './fixture-support.js';
+import { asRawText, mediumDiff, mediumRawResults, mediumRawResultsEn } from './fixture-support.js';
 import { routeStrings, validateSection as validateSectionIn, validateSkeleton as validateSkeletonIn } from './index.js';
 import type { RouteValidation } from './types.js';
 import { bannedPhrases } from './voice.js';
@@ -22,6 +22,15 @@ function plan(): RouteStop[] {
     const skeleton = validateSkeleton(asRawText(mediumRawResults().skeleton));
     if (!skeleton.ok) {
         throw new Error(`fixture skeleton rejected: ${skeleton.errors.join(' | ')}`);
+    }
+    return skeleton.value.stops;
+}
+
+const validateSkeleton = (rawText: string, locale: 'ru' | 'en' = 'ru') => validateSkeletonIn(rawText, locale);
+function planEn(): RouteStop[] {
+    const skeleton = validateSkeleton(asRawText(mediumRawResultsEn().skeleton), 'en');
+    if (!skeleton.ok) {
+        throw new Error(`English fixture skeleton rejected: ${skeleton.errors.join(' | ')}`);
     }
     return skeleton.value.stops;
 }
@@ -323,6 +332,70 @@ const CASES: readonly Case[] = [
             ),
         errors: [
             `section.stops[0].changeReason: drop the filler phrase "${String(bannedPhrases('ru')[4])}" and state the fact directly (see Voice in the methodology).`,
+        ],
+    },
+    {
+        name: 'en: filler phrase in summary',
+        run: () =>
+            validateSkeleton(
+                asRawText({
+                    ...mediumRawResultsEn().skeleton,
+                    summary: 'It should be noted that the pull request adds an edit window.',
+                }),
+                'en',
+            ),
+        errors: [
+            'skeleton.summary: drop the filler phrase "it should be noted" and state the fact directly (see Voice in the methodology).',
+        ],
+    },
+    {
+        name: 'en: emoji in stop title',
+        run: () => {
+            const skeleton = mediumRawResultsEn().skeleton;
+            const stops = skeleton.stops.map((stop, index) =>
+                index === 0 ? { ...stop, title: `${stop.title} 🚀` } : stop,
+            );
+            return validateSkeleton(asRawText({ ...skeleton, stops }), 'en');
+        },
+        errors: [
+            'skeleton.stops[0].title: contains emoji — route texts are plain prose (see Voice in the methodology).',
+        ],
+    },
+    {
+        name: 'en: filler phrase in paragraph',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        paragraph: 'As we can see, the handler was rewritten.',
+                    }),
+                ]),
+                planEn(),
+                [1],
+                mediumDiff(),
+                { locale: 'en' },
+            ),
+        errors: [
+            'section.stops[0].paragraph: drop the filler phrase "as we can see" and state the fact directly (see Voice in the methodology).',
+        ],
+    },
+    {
+        name: 'en: filler phrase in change reason',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        paragraph: 'The handler was rewritten around the window.',
+                        changeReason: 'Needless to say, the author rewrote the window computation.',
+                    }),
+                ]),
+                planEn(),
+                [1],
+                mediumDiff(),
+                { locale: 'en' },
+            ),
+        errors: [
+            'section.stops[0].changeReason: drop the filler phrase "needless to say" and state the fact directly (see Voice in the methodology).',
         ],
     },
 ];
@@ -628,5 +701,42 @@ describe('route validator: reduced functionality', () => {
             expect(result.value[0]?.anchors.length).toBe(2);
             expect(result.value[0]?.validationNotes).toEqual([]);
         }
+    });
+});
+
+/**
+ * The stop list belongs to the generation locale (M5-T4). A phrase in another language is not a violation,
+ * so the validator does not reject a quotation from a discussion.
+ */
+describe('route validator: voice stop list in another language', () => {
+    it('accepts a Russian filler phrase in English text', () => {
+        const result = validateSection(
+            section([
+                anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                    paragraph: `The reviewer note said «${String(bannedPhrases('ru')[0])}» and the handler was rewritten.`,
+                }),
+            ]),
+            planEn(),
+            [1],
+            mediumDiff(),
+            { locale: 'en' },
+        );
+
+        expect(result.ok).toBe(true);
+    });
+
+    it('accepts an English filler phrase in Russian text', () => {
+        const result = validateSection(
+            section([
+                anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                    paragraph: 'The author comment «it is worth noting» stayed in the code unchanged.',
+                }),
+            ]),
+            plan(),
+            [1],
+            mediumDiff(),
+        );
+
+        expect(result.ok).toBe(true);
     });
 });

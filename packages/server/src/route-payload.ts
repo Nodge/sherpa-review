@@ -2,12 +2,12 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { FileDiff, PrDiff, PrMeta, RouteStop, UiGenerationCap } from '@sherpa/protocol';
+import type { FileDiff, Locale, PrDiff, PrMeta, RouteStop, UiGenerationCap } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 
 import type { EnqueueInput } from './queue.js';
 import type { RegenerationContextFiles } from './route-prompts.js';
-import { SECTION_GUIDE, sectionInstructions, SKELETON_GUIDE, skeletonInstructions } from './route-prompts.js';
+import { promptLocale, sectionGuide, sectionInstructions, skeletonGuide, skeletonInstructions } from './route-prompts.js';
 import type { RouteRegenerationContext } from './route-regeneration.js';
 import {
     PREVIOUS_ROUTE_FILE,
@@ -26,7 +26,8 @@ import { diffKeyOf } from './shared-payload.js';
  * Each task is self-contained. The agent session may have died and reconnected, so the payload
  * includes everything needed: the guide, PR diff and (for sections) route plan. The unchanged part (guide and
  * diff) lives at a stable path in the shared directory (`shared-payload.ts`). The generation directory holds
- * only its own data. Text is English because the model reads it. The model writes result text in Russian.
+ * only its own data. Texts are English because the model reads them. The generation locale sets the result language
+ * (M5-T4). The instructions filename includes a content hash, so 2 locales do not compete for one file.
  *
  * Priority is background. Route generation takes minutes and must not run ahead of work the reviewer
  * is waiting for on screen (rpc-design §5).
@@ -76,6 +77,11 @@ export interface RoutePayloadContext {
     readonly regeneration?: RouteRegenerationContext | null;
 }
 
+/** Route task context: the same PR plus the language the task requests for its result. */
+export interface RouteTaskContext extends RoutePayloadContext {
+    readonly locale: Locale;
+}
+
 export interface RoutePayloadWriterOptions {
     /** Isolated route directory. Each generation gets a subdirectory here. */
     readonly payloadDir: string;
@@ -119,16 +125,21 @@ export class RoutePayloadWriter {
     }
 
     /** The `route.skeleton` task returns the summary, stop plan and Full tour order in one result. */
-    skeletonTask(context: RoutePayloadContext): EnqueueInput {
+    skeletonTask(context: RouteTaskContext): EnqueueInput {
         // Write the PR diff first. It starts collecting shared keys, then the slice adds to that collection.
         const prDiff = this.prDiff(context);
         const regeneration = this.regenerationFiles(context);
+        const locale = context.locale;
         return {
             type: 'route.skeleton',
             priority: 'background',
-            instructions: skeletonInstructions(regeneration.present),
+            instructions: skeletonInstructions(locale, regeneration.present),
             // The skeleton has no context of its own. Both the guide and diff use shared paths.
-            contextFiles: [this.shared.guide('skeleton-guide', SKELETON_GUIDE), prDiff.file, ...regeneration.files],
+            contextFiles: [
+                this.shared.guide('skeleton-guide', skeletonGuide(locale)),
+                prDiff.file,
+                ...regeneration.files,
+            ],
             resultSchemaFile: this.writeSchema('skeleton'),
         };
     }
@@ -148,21 +159,22 @@ export class RoutePayloadWriter {
      * "Other" has no sections. The skeleton synthesized it, and the UI computes its contents.
      */
     sectionTask(
-        context: RoutePayloadContext,
+        context: RouteTaskContext,
         planIndexes: readonly number[],
         stops: readonly RouteStop[],
         intents: ReadonlyMap<number, string>,
     ): EnqueueInput {
+        const locale = context.locale;
         const name = `section-${planIndexes.map(pad2).join('-')}-plan.md`;
-        const plan = this.writeFile(name, sectionPlanContext(planIndexes, stops, intents));
+        const plan = this.writeFile(name, sectionPlanContext(planIndexes, stops, intents, locale));
         const prDiff = this.prDiff(context);
         const regeneration = this.regenerationFiles(context);
         return {
             type: 'route.section',
             priority: 'background',
-            instructions: sectionInstructions(planIndexes, regeneration.present),
+            instructions: sectionInstructions(locale, planIndexes, regeneration.present),
             contextFiles: [
-                this.shared.guide('section-guide', SECTION_GUIDE),
+                this.shared.guide('section-guide', sectionGuide(locale)),
                 prDiff.file,
                 ...regeneration.files,
                 plan,
@@ -362,8 +374,9 @@ export function sectionPlanContext(
     planIndexes: readonly number[],
     stops: readonly RouteStop[],
     intents: ReadonlyMap<number, string>,
+    locale: Locale = 'en',
 ): string {
-    return `${planBlock(planIndexes, stops, intents)}\n`;
+    return `${planBlock(planIndexes, stops, intents, locale)}\n`;
 }
 
 /**
@@ -624,6 +637,7 @@ function planBlock(
     planIndexes: readonly number[],
     stops: readonly RouteStop[],
     intents: ReadonlyMap<number, string>,
+    locale: Locale,
 ): string {
     const targets = new Set(planIndexes);
     const ordered = [...stops].sort((left, right) => left.planIndex - right.planIndex);
@@ -638,7 +652,7 @@ function planBlock(
             [
                 `### Stop ${String(stop.planIndex)} — ${stop.tier} — ${stop.title}`,
                 '',
-                'Intent, written for you by the planner (Russian, the reviewer never sees it):',
+                `Intent, written for you by the planner (${promptLocale(locale).inLanguage}, the reviewer never sees it):`,
                 '',
                 ...(intents.get(stop.planIndex) ?? '(the planner left no intent — go by the title)')
                     .split('\n')

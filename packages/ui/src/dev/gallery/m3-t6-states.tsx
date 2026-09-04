@@ -47,6 +47,7 @@ function exchange(
         answer: status === 'done' ? 'The check separates a **cache hit** from loading. This keeps the fast path.' : null,
         progressText: status === 'running' ? 'Checking callers' : null,
         error: status === 'failed' ? 'The model finished the task without an answer.' : null,
+        locale: null,
         createdAt: `2026-09-01T10:00:0${String(id)}.000Z`,
         updatedAt: `2026-09-01T10:00:0${String(id)}.000Z`,
         ...overrides,

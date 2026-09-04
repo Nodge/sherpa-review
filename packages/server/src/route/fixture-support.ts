@@ -1,6 +1,6 @@
-import type { RouteRawResults } from '@sherpa/fixtures';
+import type { RouteRawResultsEn, RouteRawResults } from '@sherpa/fixtures';
 import { fixtureData, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { PrDiff, RouteSnapshot, Thread } from '@sherpa/protocol';
+import type { Locale, PrDiff, RouteSnapshot, Thread } from '@sherpa/protocol';
 
 /**
  * Access to route fixtures for the golden corpus: `routeFixtures` returns `null` when
@@ -17,6 +17,23 @@ export function mediumRawResults(): RouteRawResults {
         throw new Error('the medium fixture has no raw model outputs');
     }
     return raw;
+}
+
+/** English output set for the same fixture (M5-T4). */
+export function mediumRawResultsEn(): RouteRawResultsEn {
+    const raw = routeFixtures('medium')?.rawResultsEn;
+    if (raw === null || raw === undefined) {
+        throw new Error('the medium fixture has no English raw model outputs');
+    }
+    return raw;
+}
+
+/**
+ * Model outputs in the requested locale: the golden tests run the same pipeline in both languages.
+ * English has no broken set, since the negative corpus breaks semantics, which do not depend on language.
+ */
+export function mediumRawResultsOf(locale: Locale): RouteRawResultsEn {
+    return locale === 'ru' ? mediumRawResults() : mediumRawResultsEn();
 }
 
 /** The fixture diff for the second iteration: the same PR after a push. */

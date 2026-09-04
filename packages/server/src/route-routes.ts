@@ -14,13 +14,14 @@ import {
     uiReviewSnapshotsResponseSchema,
     uiRouteFillStopRequestSchema,
     uiRouteFillStopResponseSchema,
+    uiRouteGenerateRequestSchema,
     uiRouteGenerateResponseSchema,
 } from '@sherpa/protocol';
 import type { z } from 'zod';
 
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
-import { handlingRpcFailures, readJsonBody } from './http.js';
+import { handlingRpcFailures, readJsonBody, readOptionalJsonBody } from './http.js';
 import type { IterationFeed } from './iteration-feed.js';
 import { routeRevisionOf, withStale } from './iteration-feed.js';
 import { optionalParam, parseQuery, respond } from './review-routes.js';
@@ -82,8 +83,12 @@ export function createRouteRoutes(options: RouteRoutesOptions): Route[] {
         {
             method: 'POST',
             path: UI_ENDPOINTS.reviewRouteGenerate,
-            handle: handlingRpcFailures(async () => {
-                const body: UiRouteGenerateResponse = { outcome: await options.orchestrator.generate() };
+            handle: handlingRpcFailures(async (ctx) => {
+                // The body may be absent: auto-start and pre-M5 clients do not specify a language.
+                const request = await readOptionalRouteRequest(ctx, uiRouteGenerateRequestSchema);
+                const body: UiRouteGenerateResponse = {
+                    outcome: await options.orchestrator.generate(request.locale),
+                };
                 return respond(uiRouteGenerateResponseSchema, body, 'local');
             }),
         },
@@ -149,6 +154,23 @@ function statusOf(
     }
     const iteration = iterations.find((candidate) => candidate.diffId === snapshot.diffId);
     return iteration === undefined || iteration.status === 'gone' ? 'gone' : 'stale';
+}
+
+/**
+ * An optional request body. An empty body is an empty object, not an error
+ * (POST `route/generate` without fields is a valid call from an older client).
+ */
+async function readOptionalRouteRequest<T>(ctx: RequestContext, schema: z.ZodType<T>): Promise<T> {
+    const raw = await readOptionalJsonBody(ctx.req);
+    const parsed = schema.safeParse(raw ?? {});
+    if (!parsed.success) {
+        throw new RpcFailure(
+            'bad_request',
+            'The route request failed contract validation.',
+            parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+        );
+    }
+    return parsed.data;
 }
 
 /** Route request body. Invalid input cannot pass through. */

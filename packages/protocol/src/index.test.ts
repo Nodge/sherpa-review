@@ -349,7 +349,10 @@ describe('chat and notes (M3)', () => {
     };
 
     it('exchange: with and without an anchor (Ask AI about the PR), all lifecycle statuses', () => {
-        expect(chatExchangeSchema.parse(exchange)).toEqual(exchange);
+        // Response language (M5-T4) is absent in pre-M5 exchanges, so the schema supplies `null`.
+        expect(chatExchangeSchema.parse(exchange)).toEqual({ ...exchange, locale: null });
+        expect(chatExchangeSchema.parse({ ...exchange, locale: 'en' }).locale).toBe('en');
+        expect(chatExchangeSchema.safeParse({ ...exchange, locale: 'de' }).success).toBe(false);
         expect(chatExchangeSchema.safeParse({ ...exchange, anchor: null }).success).toBe(true);
         expect(chatExchangeSchema.safeParse({ ...exchange, taskId: null }).success).toBe(true);
         for (const status of ['queued', 'running', 'done', 'failed', 'cancelled']) {

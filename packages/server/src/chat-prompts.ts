@@ -1,10 +1,42 @@
+import type { Locale } from '@sherpa/protocol';
+
+import { bannedPhrases, quoted } from './route/voice.js';
+
 /*
- * Chat task guide. The text is English because the model reads it. The answer is always Russian for the
- * reviewer. Payload and file layout live separately in `chat-payload.ts`.
+ * Chat task instructions. The text is English because the model reads it. The exchange locale sets the response language
+ * (M5-T4), which the reviewer reads. Payload and file layout live separately in `chat-payload.ts`.
  */
 
+/** Locale-specific part of the chat guide. */
+interface ChatLocale {
+    readonly writeIn: string;
+    /** How to say "there is no evidence" honestly in the answer language. */
+    readonly noEvidence: string;
+    readonly plainWords: string;
+    readonly numbersExample: string;
+}
+
+const LOCALES: Record<Locale, ChatLocale> = {
+    ru: {
+        writeIn: 'Write in Russian.',
+        noEvidence: '«в этом диффе не видно»',
+        plainWords: 'Use plain Russian. Do not transliterate English jargon when a direct description is clearer.',
+        numbersExample: '«3 дополнительных запроса», not «заметно дороже»',
+    },
+    en: {
+        writeIn: 'Write in English.',
+        noEvidence: '"this diff does not show it"',
+        plainWords: 'Use plain words. Describe the thing instead of naming it with jargon.',
+        numbersExample: '"3 extra requests", not "noticeably more expensive"',
+    },
+};
+
 /** Guide for answering the reviewer question. The result is Markdown without a structured schema. */
-export const CHAT_GUIDE = `# Task: answer the reviewer question
+export function chatGuide(locale: Locale): string {
+    const text = LOCALES[locale];
+    // Include the full list. The wording below is exhaustive, so omissions would mislead the model.
+    const filler = bannedPhrases(locale).map(quoted(locale)).join(', ');
+    return `# Task: answer the reviewer question
 
 ## Goal
 
@@ -13,22 +45,21 @@ a findings list, or a summary of the whole pull request unless the reviewer aske
 
 Use only evidence available in the attached diff, file context, route and chat history. A few targeted
 look-ups are allowed when they answer a specific missing fact. Do not guess. If the requested fact is
-not established by the supplied diff or a targeted look-up, say "not visible in this diff" and name the
+not established by the supplied diff or a targeted look-up, say ${text.noEvidence} and name the
 missing evidence.
 
 ## Language and voice
 
-Write in Russian. Keep identifiers, paths and API names exactly as they appear in code.
+${text.writeIn} Keep identifiers, paths and API names exactly as they appear in code.
 
 - Talk to an experienced engineer as a peer. Skip fundamentals.
 - Be extremely concise. One thought per sentence; at most 25 words per sentence.
 - Answer the asked question first. Add context only when it changes the answer.
-- Use facts and numbers instead of adjectives: "3 additional requests", not "noticeably more expensive".
-- Use plain Russian. Do not transliterate English jargon when a direct description is clearer.
+- Use facts and numbers instead of adjectives: ${text.numbersExample}.
+- ${text.plainWords}
 - No praise, selling, rhetorical questions, decorative em dashes, or closing summary paragraph.
 - No emoji. The server rejects them.
-- No filler phrases. The server rejects "it is important to note", "it is worth noting", "it is important to understand",
-  "it is worth understanding", "as we can see" and "one cannot fail to note".
+- No filler phrases. The server rejects ${filler}.
 
 ## Context files
 
@@ -64,11 +95,13 @@ again.
 
 Never end silently. If answering is truly impossible, use the printed \`sherpa task fail\` command with a
 concrete reason. Do not install validators or packages in the reviewer's environment.`;
+}
 
 /** Short hint in stdout. The shared `formatTask` appends commands with IDs. */
-export function chatInstructions(): string {
+export function chatInstructions(locale: Locale): string {
+    const language = locale === 'ru' ? 'Russian' : 'English';
     return [
-        'Answer the reviewer’s exact question in Russian Markdown.',
+        `Answer the reviewer’s exact question in ${language} Markdown.`,
         'Read the guide first, then every context file; paths under `shared/` do not change between tasks,',
         'so read each of them once per session, while the rest are new.',
         'Unavailable or truncated markers are evidence limits, so do not guess past them.',

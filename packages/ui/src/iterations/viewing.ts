@@ -1,4 +1,4 @@
-import type { Iteration, RouteSnapshot, UiRouteState, UiSnapshotSummary } from '@sherpa/protocol';
+import type { Iteration, Locale, RouteSnapshot, UiRouteState, UiSnapshotSummary } from '@sherpa/protocol';
 
 /**
  * What the tab displays (M4-T9): current PR state, a previous route snapshot, an iteration
@@ -349,6 +349,8 @@ export interface PickerRow {
     readonly createdAt: string | null;
     readonly model: string | null;
     readonly harness: string | null;
+    /** Snapshot generation language. null means an iteration without a route or a pre-M5 snapshot. */
+    readonly locale: Locale | null;
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
     /** Slice head (active iteration commit). Null for other rows. */
     readonly toCommit: string | null;
@@ -390,6 +392,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             createdAt: summary.createdAt,
             model: summary.provenance.model,
             harness: summary.provenance.harness,
+            locale: summary.provenance.locale,
             status: summary.status,
             toCommit: null,
             viewing: { kind: 'snapshot', snapshotId: summary.snapshotId },
@@ -408,6 +411,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
                 createdAt: iteration.createdAt,
                 model: null,
                 harness: null,
+                locale: null,
                 status:
                     iteration.status === 'active'
                         ? 'activeIteration'
@@ -430,6 +434,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             createdAt: null,
             model: null,
             harness: null,
+            locale: null,
             status: 'activeIteration',
             toCommit: null,
             viewing: { kind: 'diff', diffId: active.diffId },
@@ -467,6 +472,7 @@ function sliceRows(input: PickerRowsInput): readonly PickerRow[] {
                 createdAt: iteration.createdAt,
                 model: null,
                 harness: null,
+                locale: null,
                 status: 'slice',
                 toCommit: active.commit,
                 viewing: { kind: 'slice', base: iteration.diffId, head: active.diffId },

@@ -1,0 +1,54 @@
+/* Route language banner, M5-T4. Uses the same amber token group as iteration banners. */
+
+.route-locale-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-control);
+    padding: 11px var(--space-control);
+    border: 1px solid var(--attention-border-alt);
+    border-radius: var(--radius-card);
+    background: var(--attention-surface-alt);
+}
+
+.route-locale-banner__text {
+    min-width: 0;
+    flex: 1;
+    font-size: var(--font-size-ui);
+    color: var(--attention-text-soft);
+}
+
+.route-locale-banner__action {
+    flex: none;
+    height: 28px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: var(--radius-button);
+    background: var(--attention);
+    font-size: var(--font-size-secondary);
+    color: var(--attention-ink);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.route-locale-banner__action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.route-locale-banner__secondary {
+    flex: none;
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--attention-border);
+    border-radius: var(--radius-button);
+    background: transparent;
+    font-size: var(--font-size-secondary);
+    color: var(--attention-text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--motion-hover) var(--motion-hover-ease);
+}
+
+.route-locale-banner__secondary:hover {
+    background: var(--attention-surface);
+}

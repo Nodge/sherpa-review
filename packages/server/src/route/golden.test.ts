@@ -10,13 +10,14 @@ import {
     mediumDiffV2,
     mediumInterdiffV1V2,
     mediumRawResults,
+    mediumRawResultsEn,
     mediumRawResultsV2,
     mediumReadySnapshot,
     mediumThreadsV2,
 } from './fixture-support.js';
-import type { SectionRegenerationContext } from './section.js';
+import { type SectionContext, validateSection } from './section.js';
 import { otherStopTitle, validateSkeleton } from './skeleton.js';
-import { validateSkeleton } from './skeleton.js';
+import { routeStrings } from './strings.js';
 import { applyFilling, type RouteStopFilling } from './types.js';
 import { bannedPhrases } from './voice.js';
 
@@ -167,7 +168,7 @@ describe('route validator: second pass after a push', () => {
         stops: RouteStop[],
         section: RouteSectionResult,
         allowed: readonly number[],
-        context: SectionRegenerationContext,
+        context: SectionContext,
     ): RouteStop[] {
         const result = validateSection(asRawText(section), stops, allowed, mediumDiffV2(), context);
         if (!result.ok) {
@@ -176,7 +177,7 @@ describe('route validator: second pass after a push', () => {
         return merge(stops, result.value);
     }
 
-    function fillAll(context: SectionRegenerationContext): RouteStop[] {
+    function fillAll(context: SectionContext): RouteStop[] {
         let stops = planV2();
         for (const section of mediumRawResultsV2().sections) {
             const planIndex = section.stops[0]?.planIndex ?? 0;
@@ -298,7 +299,7 @@ describe('route validator: second pass after a push', () => {
     function accept(
         section: RouteSectionResult,
         allowed: readonly number[],
-        context: SectionRegenerationContext,
+        context: SectionContext,
     ): RouteStopFilling[] {
         const result = validateSection(asRawText(section), planV2(), allowed, mediumDiffV2(), context);
         if (!result.ok) {
@@ -306,4 +307,91 @@ describe('route validator: second pass after a push', () => {
         }
         return result.value;
     }
+});
+
+/**
+ * The same pipeline with English generation (M5-T4): language changes model text and server strings,
+ * but leaves anchors and numbers intact. This test checks that so locale cannot silently break validation.
+ */
+describe('route validator: English generation', () => {
+    const raw = mediumRawResultsEn();
+
+    function planEn(): RouteStop[] {
+        const skeleton = validateSkeleton(asRawText(raw.skeleton), 'en');
+        if (!skeleton.ok) {
+            throw new Error(`English skeleton rejected: ${skeleton.errors.join(' | ')}`);
+        }
+        return skeleton.value.stops;
+    }
+
+    it('gives the synthetic stop an English title and the plan the same numbers', () => {
+        const stops = planEn();
+        expect(stops.map((stop) => stop.planIndex)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(stops.at(-1)?.id).toBe('other');
+        expect(stops.at(-1)?.title).toBe('Other — lines the model did not place');
+        expect(stops.at(-1)?.title).not.toBe(otherStopTitle('ru'));
+    });
+
+    it('accepts sections with the same anchors as the Russian ones', () => {
+        let stops = planEn();
+        for (const section of raw.sections) {
+            const planIndex = section.stops[0]?.planIndex ?? 0;
+            const result = validateSection(asRawText(section), stops, [planIndex], mediumDiff(), { locale: 'en' });
+            expect(result.ok).toBe(true);
+            if (!result.ok) {
+                return;
+            }
+            stops = merge(stops, result.value);
+        }
+
+        const ruStops = mediumReadySnapshot().stops;
+        for (const planIndex of [1, 2, 4]) {
+            const actual = stops.find((stop) => stop.planIndex === planIndex);
+            const expected = ruStops.find((stop) => stop.planIndex === planIndex);
+            expect(actual?.anchors).toEqual(expected?.anchors);
+        }
+    });
+
+    it('writes validator digest notes in English', () => {
+        const section = raw.sections.find((candidate) => candidate.stops[0]?.planIndex === 4);
+        const result = validateSection(asRawText(section), planEn(), [4], mediumDiff(), { locale: 'en' });
+        expect(result.ok).toBe(true);
+        if (!result.ok) {
+            return;
+        }
+
+        const [filling] = result.value;
+        expect(filling?.tests.length).toBe(12);
+        expect(filling?.droppedClaims).toBe(2);
+        expect(filling?.validationNotes).toEqual([
+            '2 claims dropped: the anchor pointed at `services/orders/src/domain/__tests__/factories.ts`, which is not in this diff.',
+        ]);
+    });
+
+    it('allows a Russian filler phrase in English text', () => {
+        const skeleton = validateSkeleton(
+            asRawText({ ...raw.skeleton, summary: `${String(bannedPhrases('ru')[0])}. ${raw.skeleton.summary}` }),
+            'en',
+        );
+        expect(skeleton.ok).toBe(true);
+    });
+
+    it('rejects English filler phrases and emoji', () => {
+        const filler = validateSkeleton(
+            asRawText({ ...raw.skeleton, summary: 'It is worth noting that the window is 30 minutes.' }),
+            'en',
+        );
+        expect(filler.ok).toBe(false);
+        if (!filler.ok) {
+            expect(filler.errors).toEqual([
+                'skeleton.summary: drop the filler phrase "it is worth noting" and state the fact directly (see Voice in the methodology).',
+            ]);
+        }
+
+        const stops = raw.skeleton.stops.map((stop, index) =>
+            index === 0 ? { ...stop, title: `${stop.title} 🚀` } : stop,
+        );
+        const emoji = validateSkeleton(asRawText({ ...raw.skeleton, stops }), 'en');
+        expect(emoji.ok).toBe(false);
+    });
 });

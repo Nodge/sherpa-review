@@ -6,6 +6,7 @@ import { useLocale, useT } from '../i18n/index.js';
 import { relativeTime } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
+import { localeNameKey } from '../route/generation.js';
 import type { PickerRow, PickerRows, Viewing, ViewingLabel } from './viewing.js';
 import { sameViewing } from './viewing.js';
 import './snapshot-picker.css';
@@ -83,9 +84,14 @@ export function rowText(row: PickerRow, now: number, t: Translate, locale: Local
     return parts.join(' · ');
 }
 
-/** Snapshot provenance in words: "claude-code · sonnet-5 · 9f3c1ab" (README §13). */
-export function provenanceText(row: PickerRow): string {
-    return join([row.harness, row.model, shortCommit(row.commit)]);
+/**
+ * Snapshot provenance in words: "claude-code · sonnet-5 · 9f3c1ab" (README §13). Route language
+ * is appended under the same rule as in the Overview pill: only when it differs from the language
+ * of the tab (M5-T4).
+ */
+export function provenanceText(row: PickerRow, t: Translate, uiLocale: Locale): string {
+    const locale = row.locale ?? 'en';
+    return join([row.harness, row.model, shortCommit(row.commit), locale === uiLocale ? null : t(localeNameKey(locale))]);
 }
 
 /** The tooltip shows the same text with the full commit so the reviewer can compare it with the host. */
@@ -355,7 +361,9 @@ export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMen
                         >
                             <span className="snapshot-list__line">{rowText(row, now, t, locale)}</span>
                             {row.kind === 'snapshot' ? (
-                                <span className="snapshot-list__provenance">{provenanceText(row)}</span>
+                                <span className="snapshot-list__provenance">
+                                    {provenanceText(row, t, locale)}
+                                </span>
                             ) : null}
                         </button>
                     </li>

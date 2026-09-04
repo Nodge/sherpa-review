@@ -714,6 +714,17 @@ export const en: Dictionary = {
     'banner.generationCap': (files: number) =>
         `The route was built from a partial diff: ${num(files)} ${form(files, 'file', 'files')} did not fit the agent context — check them in the full diff`,
 
+    'route.locale.name.ru': 'Russian',
+    'route.locale.name.en': 'English',
+    'route.locale.on.ru': 'Russian',
+    'route.locale.on.en': 'English',
+    'route.locale.banner.aria': 'Route language',
+    'route.locale.banner.title': (routeLanguage: string, uiLanguage: string) =>
+        `The route was built in ${routeLanguage} — rebuild it in ${uiLanguage}?`,
+    'route.locale.rebuild': (uiLanguage: string) => `Rebuild in ${uiLanguage}`,
+    'route.locale.keep': 'Keep it',
+    'route.locale.rebuild.unavailable': 'The route cannot be rebuilt while it is still being filled.',
+
     'emptyPr.title': 'Nothing to review',
     'emptyPr.text': 'This PR has no changes against the base.',
 

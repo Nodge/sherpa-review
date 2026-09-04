@@ -35,6 +35,7 @@ function exchange(id: number, question: string, overrides: Partial<ChatExchange>
         answer: null,
         progressText: null,
         error: null,
+        locale: null,
         createdAt: '2026-09-01T10:00:00.000Z',
         updatedAt: '2026-09-01T10:00:00.000Z',
         ...overrides,

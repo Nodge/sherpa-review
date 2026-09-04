@@ -1,5 +1,6 @@
-import type { RouteSnapshot, RouteStopStatus, UiRouteState, UiTask } from '@sherpa/protocol';
+import type { Locale, RouteProvenance, RouteSnapshot, RouteStopStatus, UiRouteState, UiTask } from '@sherpa/protocol';
 
+import type { MessageKey, Translate } from '../i18n/index.js';
 import type { ViewId } from '../session/views.js';
 import { planLabel } from './route-model.js';
 
@@ -152,9 +153,35 @@ export function summaryParagraphs(summary: string): readonly string[] {
         .filter((paragraph) => paragraph !== '');
 }
 
-/** Snapshot provenance on one line: "claude-code · sonnet-5 · 9f3c1ab" (README §6). */
-export function provenanceLine(snapshot: RouteSnapshot): string {
-    return [snapshot.provenance.harness, snapshot.provenance.model, snapshot.commit.slice(0, 7)]
+/**
+ * Language used to build the route (M5-T4). Pre-M5 snapshots carry `null` in provenance,
+ * and are in Russian.
+ */
+export function snapshotLocale(provenance: RouteProvenance): Locale {
+    return provenance.locale ?? 'en';
+}
+
+/** Route language name in the UI dictionary: nominative for the pill, prepositional for the phrase. */
+export function localeNameKey(locale: Locale): MessageKey {
+    return locale === 'ru' ? 'route.locale.name.ru' : 'route.locale.name.en';
+}
+
+export function localeOnKey(locale: Locale): MessageKey {
+    return locale === 'ru' ? 'route.locale.on.ru' : 'route.locale.on.en';
+}
+
+/**
+ * Snapshot provenance in one line: "claude-code · sonnet-5 · 9f3c1ab" (README §6).
+ * The language appears only when it differs from the tab's language. A match needs no label.
+ */
+export function provenanceLine(snapshot: RouteSnapshot, t: Translate, uiLocale: Locale): string {
+    const locale = snapshotLocale(snapshot.provenance);
+    return [
+        snapshot.provenance.harness,
+        snapshot.provenance.model,
+        snapshot.commit.slice(0, 7),
+        locale === uiLocale ? null : t(localeNameKey(locale)),
+    ]
         .filter((part): part is string => part !== null && part !== '')
         .join(' · ');
 }

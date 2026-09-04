@@ -53,6 +53,7 @@ import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
 import { useChatDock } from './components/dock.js';
 import { generationCapBannerVisible, GenerationCapBanner } from './components/generation-cap-banner.tsx';
 import { usePrCommentsGate } from './components/pr-comments-gate.js';
+import { RouteLocaleBanner, routeLocaleBannerVisible } from './components/route-locale-banner.tsx';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -79,7 +80,7 @@ import {
 } from './filters/lens-filters.js';
 import { updateFragment } from './fragment.js';
 import type { Translate } from './i18n/index.js';
-import { useT } from './i18n/index.js';
+import { useLocale, useT } from './i18n/index.js';
 import { useLocaleCommands } from './i18n/locale-commands.js';
 import { ReadOnlyIterationProvider, SLICE_READ_ONLY_REASON } from './iterations/read-only.tsx';
 import { ThreadPinProvider } from './iterations/thread-pin.tsx';
@@ -109,6 +110,7 @@ import {
     routeActionErrorInPlace,
     routeGenerationAvailable,
     routeViewKind,
+    snapshotLocale,
 } from './route/generation.js';
 import type { ReportedRouteSummary, RouteSummary } from './route/route-summary.js';
 import { routeFactsForSnapshot } from './route/route-summary.js';
@@ -241,6 +243,8 @@ interface ReviewState {
 
 export function App({ store, session, token }: AppProps) {
     const t = useT();
+    /** The tab's effective language also sets the route and chat response language (M5-T4). */
+    const uiLocale = useLocale();
     // Language changes use palette commands in the "Sherpa" group. The design has no separate settings popover.
     useLocaleCommands();
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
@@ -1365,7 +1369,7 @@ export function App({ store, session, token }: AppProps) {
         generationFrom.current = routePhase;
         setGenerating(true);
         setRouteActionFailure(null);
-        void generateReviewRoute(token).then(
+        void generateReviewRoute(token, uiLocale).then(
             (outcome) => {
                 // Generation has started. The SSE phase change releases the button, not the endpoint response.
                 if (outcome !== 'started') {
@@ -1380,7 +1384,7 @@ export function App({ store, session, token }: AppProps) {
                 setRouteActionFailure({ phase: routePhase, message: errorMessage(error) });
             },
         );
-    }, [route?.smallPr, routePhase, stopGenerating, t, token]);
+    }, [route?.smallPr, routePhase, stopGenerating, t, token, uiLocale]);
     const fillStop = useCallback(
         (planIndex: number) => {
             const snapshotId = route?.snapshot?.snapshotId;
@@ -1555,6 +1559,24 @@ export function App({ store, session, token }: AppProps) {
     /** "Show" navigates to the first note with a lost anchor, in chat feed order. */
     const firstLostNote = lostNotes[0];
     const [dismissedNotesLost, setDismissedNotesLost] = useState<string | null>(null);
+    /**
+     * "Keep it" on the route language banner (M5-T4): tab-local memory, keyed by snapshot id.
+     * A new snapshot in a different language asks again.
+     */
+    const [keptRouteLocale, setKeptRouteLocale] = useState<string | null>(null);
+    const routeLocaleVisible = routeLocaleBannerVisible({
+        route,
+        uiLocale,
+        generating,
+        keptSnapshotId: keptRouteLocale,
+        readOnly,
+    });
+    /** Why "Rebuild" is unavailable. `undefined` means it is available. */
+    const routeLocaleRebuildBlocked = generateAvailable
+        ? undefined
+        : route?.smallPr === true
+          ? t('route.smallPr.notGenerated')
+          : t('route.locale.rebuild.unavailable');
 
     const bannerSources: readonly BannerSource[] = [
         {
@@ -1692,6 +1714,24 @@ export function App({ store, session, token }: AppProps) {
             priority: BANNER_PRIORITY.generationCap,
             active: () => generationCapBannerVisible(generationCap),
             render: () => (generationCap === null ? null : <GenerationCapBanner cap={generationCap} />),
+        },
+        {
+            id: 'route-locale-mismatch',
+            priority: BANNER_PRIORITY.routeLocaleMismatch,
+            active: () => routeLocaleVisible,
+            render: () =>
+                route?.snapshot == null ? null : (
+                    <RouteLocaleBanner
+                        routeLocale={snapshotLocale(route.snapshot.provenance)}
+                        {...(routeLocaleRebuildBlocked === undefined
+                            ? {}
+                            : { rebuildDisabledReason: routeLocaleRebuildBlocked })}
+                        onRebuild={startGeneration}
+                        onKeep={() => {
+                            setKeptRouteLocale(route.snapshot?.snapshotId ?? null);
+                        }}
+                    />
+                ),
         },
         {
             id: 'audit-scope',
@@ -1872,7 +1912,7 @@ export function App({ store, session, token }: AppProps) {
     }, []);
     const askChat = useCallback(
         async (text: string, anchor?: UiChatAskAnchor) => {
-            const exchange = await askReviewChat(token, text, anchor);
+            const exchange = await askReviewChat(token, text, anchor, uiLocale);
             setChatState((current) => {
                 const next = chatStateForKey(current, chatKey);
                 const data = next.data ?? EMPTY_CHAT_RESPONSE;
@@ -1888,7 +1928,7 @@ export function App({ store, session, token }: AppProps) {
             });
             return exchange;
         },
-        [chatKey, token],
+        [chatKey, token, uiLocale],
     );
     const cancelChat = useCallback(
         async (exchangeId: number): Promise<void> => {

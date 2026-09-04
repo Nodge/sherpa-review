@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { agentNoteIdSchema, agentNoteSchema, chatAnchorSchema, chatExchangeIdSchema, chatExchangeSchema } from './chat.js';
 import { distributionVersionSchema } from './distribution.js';
 import { draftBufferEntrySchema } from './draft-buffer.js';
-import { localeSettingSchema } from './locale.js';
+import { localeSchema, localeSettingSchema } from './locale.js';
 import { prKeySchema } from './manifest.js';
 import { workerStatusSchema } from './messages.js';
 import {
@@ -345,6 +345,16 @@ export type UiReviewSnapshotsResponse = z.infer<typeof uiReviewSnapshotsResponse
  * `already_running` only applies to `reading`/`filling` (generation already in progress).
  * `small_pr` means refusal: this endpoint does not bypass the threshold (requirements §3.6).
  */
+export const uiRouteGenerateRequestSchema = z.object({
+    /**
+     * Generation language, the effective UI locale resolved in order "setting → agent `--lang` → browser"
+     * (M5, task breakdown decision 2). Without it (old client, server auto-start), the server resolves it
+     * itself: `settings.locale` ≠ `auto` → `worker.lang` → `ru`.
+     */
+    locale: localeSchema.optional(),
+});
+export type UiRouteGenerateRequest = z.infer<typeof uiRouteGenerateRequestSchema>;
+
 export const uiRouteGenerateResponseSchema = z.object({
     outcome: z.enum(['started', 'already_running', 'small_pr']),
 });
@@ -393,6 +403,8 @@ export const uiChatAskRequestSchema = z.object({
     text: z.string().min(1).max(4000),
     /** If absent, the question concerns the entire PR (Ask AI). */
     anchor: uiChatAskAnchorSchema.optional(),
+    /** Response language uses the same fallback order as `uiRouteGenerateRequestSchema.locale`. */
+    locale: localeSchema.optional(),
 });
 export type UiChatAskRequest = z.infer<typeof uiChatAskRequestSchema>;
 
@@ -840,7 +852,7 @@ export const UI_ENDPOINTS = {
     reviewRoute: '/api/ui/review/route',
     /** GET → `uiReviewSnapshotsResponseSchema`. */
     reviewSnapshots: '/api/ui/review/snapshots',
-    /** POST without a body → `uiRouteGenerateResponseSchema`. */
+    /** POST `uiRouteGenerateRequestSchema` (body may be empty) → `uiRouteGenerateResponseSchema`. */
     reviewRouteGenerate: '/api/ui/review/route/generate',
     /** POST `uiRouteFillStopRequestSchema` → `uiRouteFillStopResponseSchema`. */
     reviewRouteFillStop: '/api/ui/review/route/fill-stop',

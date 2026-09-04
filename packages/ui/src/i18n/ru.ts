@@ -726,6 +726,19 @@ export const ru = {
     'banner.generationCap': (files: number) =>
         `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте их в Полном диффе`,
 
+    // Route language (M5-T4). The language name needs 2 forms: nominative for the pill
+    // of provenance, prepositional for the phrase "built in English".
+    'route.locale.name.ru': 'русский',
+    'route.locale.name.en': 'английский',
+    'route.locale.on.ru': 'русском',
+    'route.locale.on.en': 'английском',
+    'route.locale.banner.aria': 'Язык маршрута',
+    'route.locale.banner.title': (routeLanguage: string, uiLanguage: string) =>
+        `Маршрут построен на ${routeLanguage} — перестроить на ${uiLanguage}?`,
+    'route.locale.rebuild': (uiLanguage: string) => `Перестроить на ${uiLanguage}`,
+    'route.locale.keep': 'Оставить',
+    'route.locale.rebuild.unavailable': 'Пока маршрут заполняется, перестроить его нельзя.',
+
     'emptyPr.title': 'Нечего ревьюить',
     'emptyPr.text': 'В этом PR нет изменений относительно базы.',
 

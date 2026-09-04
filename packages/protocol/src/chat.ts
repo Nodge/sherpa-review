@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { localeSchema } from './locale.js';
 import { hostIdSchema } from './review.js';
 import { taskIdSchema } from './task.js';
 
@@ -63,6 +64,8 @@ export const chatExchangeSchema = z.object({
     progressText: z.string().nullable(),
     /** Reason readable by the reviewer, only for `failed`, otherwise null. */
     error: z.string().nullable(),
+    /** Requested response language (M5-T4). null means a pre-M5 exchange with a Russian answer. */
+    locale: localeSchema.nullable().default(null),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
 });

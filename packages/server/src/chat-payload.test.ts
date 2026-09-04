@@ -73,6 +73,7 @@ function exchange(id: number, answer = `Answer ${String(id)}`): ChatExchange {
         answer,
         progressText: null,
         error: null,
+        locale: null,
         createdAt: `2026-09-01T10:${String(id).padStart(2, '0')}:00.000Z`,
         updatedAt: `2026-09-01T10:${String(id).padStart(2, '0')}:01.000Z`,
     };

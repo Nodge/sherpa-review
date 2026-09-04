@@ -5,6 +5,7 @@ import type {
     ChatAnchor,
     ChatExchange,
     FileContent,
+    Locale,
     PrDiff,
     PrMeta,
     ReviewHost,
@@ -16,6 +17,7 @@ import type {
 import { buildChatPayload, materializeChatPayload, questionDirIn } from './chat-payload.js';
 import type { ChatStore, StoredChatExchange } from './chat-store.js';
 import { RpcFailure } from './errors.js';
+import { resolveGenerationLocale } from './generation-locale.js';
 import type { IterationFeed } from './iteration-feed.js';
 import type { IterationStore } from './iteration-store.js';
 import { rememberIterationDiff } from './iteration-store.js';
@@ -23,8 +25,10 @@ import { LEGACY_DIFF_ID } from './iterations/index.js';
 import type { EnqueueInput, TaskQueue, TaskRecord, TaskResultAcceptance } from './queue.js';
 import type { RouteStore } from './route-store.js';
 import { voiceErrors } from './route/voice.js';
+import type { SettingsStore } from './settings-store.js';
 import type { SharedPayloadStore } from './shared-payload.js';
 import { holdsPayload } from './shared-payload.js';
+import type { WorkerRegistry } from './worker-registry.js';
 
 export interface ChatOrchestratorOptions {
     readonly store: ChatStore;
@@ -38,6 +42,10 @@ export interface ChatOrchestratorOptions {
     readonly iterationFeed?: IterationFeed | null;
     /** Shared question context: guide, PR diff and file contents at stable paths. */
     readonly shared: SharedPayloadStore;
+    /** UI settings supply the response language when the request omits it (M5-T4). */
+    readonly settings?: Pick<SettingsStore, 'read'> | null;
+    /** Worker registry: the `--lang` hint is the penultimate language fallback. */
+    readonly registry?: Pick<WorkerRegistry, 'status'> | null;
 }
 
 /**
@@ -53,6 +61,8 @@ export class ChatOrchestrator {
     private readonly iterations: IterationStore | null;
     private readonly iterationFeed: IterationFeed | null;
     private readonly shared: SharedPayloadStore;
+    private readonly settings: Pick<SettingsStore, 'read'> | null;
+    private readonly registry: Pick<WorkerRegistry, 'status'> | null;
     /**
      * Directories for questions whose tasks have not been enqueued: an await between writing the payload and enqueueing
      * lets cleanup run, which uses queued tasks and would delete the new directory.
@@ -73,6 +83,8 @@ export class ChatOrchestrator {
         this.iterations = options.iterations ?? null;
         this.iterationFeed = options.iterationFeed ?? null;
         this.shared = options.shared;
+        this.settings = options.settings ?? null;
+        this.registry = options.registry ?? null;
     }
 
     start(): void {
@@ -87,14 +99,20 @@ export class ChatOrchestrator {
         this.unsubscribeQueue?.();
     }
 
-    async ask(question: string, requested: UiChatAskAnchor | null): Promise<ChatExchange> {
+    /** `requestedLocale` is the tab's effective language. Without it, use the fallback order (M5-T4). */
+    async ask(
+        question: string,
+        requested: UiChatAskAnchor | null,
+        requestedLocale?: Locale,
+    ): Promise<ChatExchange> {
         const context = await this.loadPrContext(requested);
         const anchor = resolveAskAnchor(requested, context.diff);
+        const locale = this.resolveLocale(requestedLocale);
         const taskDir = questionDirIn(this.payloadDir);
         this.reservedDirs.add(taskDir);
         try {
-            const input = await this.materialize(taskDir, question, anchor, context);
-            return this.store.ask(question, anchor, context.headCommit, () =>
+            const input = await this.materialize(taskDir, question, anchor, context, locale);
+            return this.store.ask(question, anchor, context.headCommit, locale, () =>
                 this.queue.enqueueInTransaction(input),
             );
         } finally {
@@ -130,6 +148,8 @@ export class ChatOrchestrator {
                 stored.exchange.question,
                 stored.exchange.anchor,
                 context,
+                // Retry uses the original question's language, so the answer does not switch languages midway through the feed.
+                localeOf(stored.exchange),
             );
             return this.store.retry(exchangeId, context.headCommit, () => this.queue.enqueueInTransaction(input))
                 ? 'retried'
@@ -145,6 +165,7 @@ export class ChatOrchestrator {
         question: string,
         anchor: ChatAnchor | null,
         context: PrContext,
+        locale: Locale,
     ): Promise<EnqueueInput> {
         return materializeChatPayload(
             taskDir,
@@ -157,8 +178,19 @@ export class ChatOrchestrator {
                 fileContent: context.fileContent,
                 route: this.route.read(),
                 history: this.store.read().exchanges,
+                locale,
             }),
         );
+    }
+
+    /** Answer language fallback order: tab request → settings → agent hint → English. */
+    private resolveLocale(requested: Locale | undefined): Locale {
+        const status = this.registry?.status();
+        return resolveGenerationLocale({
+            requested,
+            setting: this.settings?.read().locale,
+            agentLang: status === undefined || status.kind === 'never' ? undefined : status.lang,
+        });
     }
 
     /** Other task types return `null`: the composite result handler in `server.ts` continues dispatching. */
@@ -178,7 +210,7 @@ export class ChatOrchestrator {
             };
         }
 
-        const errors = chatResultErrors(result);
+        const errors = chatResultErrors(result, localeOf(stored.exchange));
         if (errors.length > 0) {
             return { kind: 'rejected', errors };
         }
@@ -312,7 +344,7 @@ export class ChatOrchestrator {
                 return;
             case 'done': {
                 const result = task.result ?? '';
-                const errors = chatResultErrors(result);
+                const errors = chatResultErrors(result, localeOf(stored.exchange));
                 if (errors.length > 0) {
                     this.store.failExchange(
                         stored.exchange.id,
@@ -420,11 +452,16 @@ interface PrContext {
     readonly headCommit: string | null;
 }
 
-function chatResultErrors(result: string): string[] {
+function chatResultErrors(result: string, locale: Locale): string[] {
     if (result.trim() === '') {
         return ['The chat answer is empty. Return a non-empty Markdown answer.'];
     }
-    return voiceErrors('answer', result);
+    return voiceErrors('answer', result, locale);
+}
+
+/** Exchange language. Exchanges from before migration 020 have `null`, which is read as English. */
+function localeOf(exchange: ChatExchange): Locale {
+    return exchange.locale ?? 'en';
 }
 
 /** Question directory that owns the path. `null` means the path is outside question directories (a shared file). */

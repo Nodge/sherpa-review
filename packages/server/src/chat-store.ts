@@ -4,6 +4,7 @@ import type {
     ChatExchange,
     ChatExchangeStatus,
     HostId,
+    Locale,
     UiChatResponse,
 } from '@sherpa/protocol';
 import { agentNoteSchema, chatAnchorSchema, chatExchangeSchema, uiChatResponseSchema } from '@sherpa/protocol';
@@ -32,6 +33,8 @@ interface ExchangeRow extends SqlRow {
     error: string | null;
     task_id: number | null;
     head_commit: string | null;
+    /** Response language (migration 020). NULL means a pre-M5 exchange in Russian. */
+    locale: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -74,6 +77,7 @@ export class ChatStore {
         question: string,
         anchor: ChatAnchor | null,
         headCommit: string | null,
+        locale: Locale,
         enqueue: () => TransactionalEnqueue,
     ) => { exchange: ChatExchange; enqueued: TransactionalEnqueue };
     private readonly txRetry: (
@@ -97,8 +101,8 @@ export class ChatStore {
     constructor(options: ChatStoreOptions) {
         this.db = options.db;
         this.now = options.now ?? ((): Date => new Date());
-        this.txAsk = transaction(this.db, (question, anchor, headCommit, enqueue) =>
-            this.askInTransaction(question, anchor, headCommit, enqueue),
+        this.txAsk = transaction(this.db, (question, anchor, headCommit, locale, enqueue) =>
+            this.askInTransaction(question, anchor, headCommit, locale, enqueue),
         );
         this.txRetry = transaction(this.db, (exchangeId, headCommit, enqueue) =>
             this.retryInTransaction(exchangeId, headCommit, enqueue),
@@ -151,10 +155,11 @@ export class ChatStore {
         question: string,
         anchor: ChatAnchor | null,
         headCommit: string | null,
+        locale: Locale,
         enqueue: () => TransactionalEnqueue,
     ): ChatExchange {
         const parsedAnchor = anchor === null ? null : chatAnchorSchema.parse(anchor);
-        const result = this.txAsk(question, parsedAnchor, headCommit, enqueue);
+        const result = this.txAsk(question, parsedAnchor, headCommit, locale, enqueue);
         this.bump();
         result.enqueued.onCommitted();
         return result.exchange;
@@ -309,6 +314,7 @@ export class ChatStore {
         question: string,
         anchor: ChatAnchor | null,
         headCommit: string | null,
+        locale: Locale,
         enqueue: () => TransactionalEnqueue,
     ): { exchange: ChatExchange; enqueued: TransactionalEnqueue } {
         const enqueued = enqueue();
@@ -317,10 +323,18 @@ export class ChatStore {
             .prepare(
                 `INSERT INTO chat_exchanges (
                     question, anchor, status, answer, progress_text, error, task_id, head_commit,
-                    created_at, updated_at
-                 ) VALUES (?, ?, 'queued', NULL, NULL, NULL, ?, ?, ?, ?)`,
+                    locale, created_at, updated_at
+                 ) VALUES (?, ?, 'queued', NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
             )
-            .run(question, anchor === null ? null : JSON.stringify(anchor), enqueued.record.id, headCommit, now, now);
+            .run(
+                question,
+                anchor === null ? null : JSON.stringify(anchor),
+                enqueued.record.id,
+                headCommit,
+                locale,
+                now,
+                now,
+            );
         return { exchange: this.requireExchange(Number(info.lastInsertRowid)).exchange, enqueued };
     }
 
@@ -470,6 +484,7 @@ function toStoredExchange(row: ExchangeRow): StoredChatExchange {
         answer: row.answer,
         progressText: row.progress_text,
         error: row.error,
+        locale: row.locale,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     });

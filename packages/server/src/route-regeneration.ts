@@ -8,7 +8,7 @@ import { byteLength, fitText, unavailableBlock } from './payload-budget.js';
  * added since then. The shared patch printer (`route-payload.ts`) prints the interdiff.
  * This module covers only what the first generation never has.
  *
- * Text is in English for the model. Previous route text arrives in Russian and stays as received.
+ * Texts are English because the model reads them. Texts from the previous route keep their original language.
  */
 
 /** What the server knows about the previous pass when generation starts. */

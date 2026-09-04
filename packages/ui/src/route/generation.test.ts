@@ -2,6 +2,7 @@ import { routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot, UiRouteState, UiTask } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { createT, ru } from '../i18n/index.js';
 import {
     generationCardKind,
     generationIsLong,
@@ -13,6 +14,7 @@ import {
     routeGenerationAvailable,
     routeViewKind,
     snapshotFilling,
+    snapshotLocale,
     summaryParagraphs,
 } from './generation.js';
 
@@ -193,7 +195,7 @@ describe('summary and provenance', () => {
     });
 
     it('provenance contains the harness, model and short commit', () => {
-        expect(provenanceLine(snapshotOf('ready'))).toBe(
+        expect(provenanceLine(snapshotOf('ready'), createT('en'), 'en')).toBe(
             `claude-code · claude-opus-5 · ${snapshotOf('ready').commit.slice(0, 7)}`,
         );
     });
@@ -201,6 +203,22 @@ describe('summary and provenance', () => {
     it('leaves no dangling separators for empty provenance', () => {
         const snapshot = { ...snapshotOf('ready'), provenance: { harness: null, model: null, locale: null } };
 
-        expect(provenanceLine(snapshot)).toBe(snapshot.commit.slice(0, 7));
+        expect(provenanceLine(snapshot, createT('en'), 'en')).toBe(snapshot.commit.slice(0, 7));
+    });
+
+    it('appends route language only when it differs from the tab language (M5-T4)', () => {
+        const ready = snapshotOf('ready');
+        const english = { ...ready, provenance: { ...ready.provenance, locale: 'en' as const } };
+
+        // A pre-M5 snapshot (`locale: null`) is read as Russian.
+        expect(provenanceLine(ready, createT('ru'), 'ru')).toBe(provenanceLine(english, createT('ru'), 'ru'));
+        expect(provenanceLine(ready, createT('en'), 'en')).not.toContain('English');
+        expect(provenanceLine(english, createT('ru'), 'ru')).toContain(ru['route.locale.name.en']);
+        expect(provenanceLine(english, createT('en'), 'en')).not.toContain('English');
+    });
+
+    it('treats null snapshot locale as English', () => {
+        expect(snapshotLocale({ harness: null, model: null, locale: null })).toBe('en');
+        expect(snapshotLocale({ harness: null, model: null, locale: 'ru' })).toBe('ru');
     });
 });

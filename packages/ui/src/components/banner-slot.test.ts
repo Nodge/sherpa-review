@@ -70,6 +70,22 @@ describe('banner slot', () => {
         expect(BANNER_PRIORITY.generationCap).toBeLessThan(BANNER_PRIORITY.auditScope);
     });
 
+    it('places route language between the generation cap and a ship from someone else', () => {
+        const selection = selectBanners([
+            source('ship-verdict', BANNER_PRIORITY.shipVerdict),
+            source('route-locale-mismatch', BANNER_PRIORITY.routeLocaleMismatch),
+            source('generation-cap', BANNER_PRIORITY.generationCap),
+        ]);
+
+        expect([selection.primary?.id, ...selection.hidden.map((item) => item.id)]).toEqual([
+            'generation-cap',
+            'route-locale-mismatch',
+            'ship-verdict',
+        ]);
+        expect(BANNER_PRIORITY.routeLocaleMismatch).toBeLessThan(BANNER_PRIORITY.generationCap);
+        expect(BANNER_PRIORITY.routeLocaleMismatch).toBeGreaterThan(BANNER_PRIORITY.shipVerdict);
+    });
+
     it('shows the action reason at the top of the slot when an endpoint fails with a live agent', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),

@@ -39,7 +39,7 @@ export {
 export { buildChatFixtures, chatFixtures } from './chat.js';
 export type { ChatFixtures } from './chat.js';
 export { buildRouteFixtures, routeFixtures } from './route.js';
-export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './route.js';
+export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './route.js';
 
 export type FixtureName = 'medium' | 'small' | 'large' | 'edge' | 'huge' | 'empty';
 
