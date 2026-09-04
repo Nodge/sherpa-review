@@ -154,8 +154,10 @@
     transition: opacity var(--motion-hover) var(--motion-hover-ease);
 }
 
+/* The open menu lives in a portal. The card loses :hover, so the trigger button must stay in place. */
 .file-card:hover .file-card__actions,
-.file-card__actions:focus-within {
+.file-card__actions:focus-within,
+.file-card__actions:has([aria-expanded='true']) {
     opacity: 1;
 }
 

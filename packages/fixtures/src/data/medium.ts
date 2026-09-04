@@ -1103,9 +1103,21 @@ const LOCK_OFFSET_V2 = 137;
 /** Lockfile counts come from the first iteration: later pushes rebuild it without making it longer. */
 const LOCK_COUNTS = lockCounts(HAND_WRITTEN.map((spec) => makeFileDiff(DIFF_ID, spec)));
 
+/**
+ * Host web file link (`hostFileUrl`), using a file URL at the iteration head
+ * with the path relative to the repository root, without encoding. Every fixture file has one:
+ * the "Copy file link" menu item cannot be tested without it.
+ */
+function withHostFileUrl(spec: FileSpec, headCommit: string): FileSpec {
+    return {
+        ...spec,
+        hostFileUrl: `https://github.com/quillmart/quillmart/blob/${headCommit}/${spec.path}`,
+    };
+}
+
 function files(): FileDiff[] {
-    const written = HAND_WRITTEN.map((spec) => makeFileDiff(DIFF_ID, spec));
-    return [...written, makeFileDiff(DIFF_ID, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V1))];
+    const specs = [...HAND_WRITTEN, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V1)];
+    return specs.map((spec) => makeFileDiff(DIFF_ID, withHostFileUrl(spec, HEAD_COMMIT)));
 }
 
 /*
@@ -1353,16 +1365,20 @@ function replaceSpecs(base: readonly FileSpec[], replacements: readonly FileSpec
 }
 
 /** Iteration files after the push: edits over the first, minus the removed file, plus the new file and lockfile. */
-function filesAfterPush(diffId: HostId, replacements: readonly FileSpec[]): FileDiff[] {
+function filesAfterPush(
+    diffId: HostId,
+    headCommit: string,
+    replacements: readonly FileSpec[],
+): FileDiff[] {
     const specs = [
         ...replaceSpecs(
             HAND_WRITTEN.filter((spec) => spec.path !== DEPARTED_PATH),
             replacements,
         ),
         REJECTION_STATUS_V2,
+        lockSpec(LOCK_COUNTS, LOCK_OFFSET_V2),
     ];
-    const written = specs.map((spec) => makeFileDiff(diffId, spec));
-    return [...written, makeFileDiff(diffId, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V2))];
+    return specs.map((spec) => makeFileDiff(diffId, withHostFileUrl(spec, headCommit)));
 }
 
 /**
@@ -1382,7 +1398,7 @@ function slice(
             diffId: head.diffId,
             baseCommit: base.headCommit,
             headCommit: head.headCommit,
-            files: specs.map((spec) => makeFileDiff(key, spec)),
+            files: specs.map((spec) => makeFileDiff(key, withHostFileUrl(spec, head.headCommit))),
         },
     };
 }
@@ -1547,7 +1563,7 @@ function iterations(): FixtureIteration[] {
                 diffId: DIFF_ID_V2,
                 baseCommit: BASE_COMMIT,
                 headCommit: HEAD_COMMIT_V2,
-                files: filesAfterPush(DIFF_ID_V2, [EDIT_POLICY_V2, HANDLERS_V2]),
+                files: filesAfterPush(DIFF_ID_V2, HEAD_COMMIT_V2, [EDIT_POLICY_V2, HANDLERS_V2]),
             },
             threads: threads(DIFF_ID_V2, true),
             replaces: null,
@@ -1563,7 +1579,7 @@ function iterations(): FixtureIteration[] {
                 diffId: DIFF_ID_V3,
                 baseCommit: BASE_COMMIT,
                 headCommit: HEAD_COMMIT_V3,
-                files: filesAfterPush(DIFF_ID_V3, [EDIT_POLICY_V2, HANDLERS_V2, README_V3]),
+                files: filesAfterPush(DIFF_ID_V3, HEAD_COMMIT_V3, [EDIT_POLICY_V2, HANDLERS_V2, README_V3]),
             },
             threads: threads(DIFF_ID_V3, true),
             // Force-push: the second iteration disappears from the host list, and the server marks it `gone`.

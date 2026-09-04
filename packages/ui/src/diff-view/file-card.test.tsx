@@ -98,7 +98,7 @@ describe('file card', () => {
         expect(summary).not.toContain(`+${String(file.additions)}`);
         expect(summary).not.toContain(`−${String(file.deletions)}`);
     });
-    it('keeps Blame and context expansion as buttons, without copy/open actions', () => {
+    it('header has a menu button and context expansion, blame is in the menu and no editor action appears', () => {
         const source = DATA.diff.files.find((file) => !file.binary);
         if (source === undefined) {
             throw new Error('edge fixture needs a text file');
@@ -106,11 +106,17 @@ describe('file card', () => {
 
         const html = render({ ...source, blameUrl: 'https://example.test/blame' }, true);
 
+        // The header accepts focus so the menu can return focus here after a right click.
+        expect(html).toContain('class="file-card__header" tabindex="-1"');
         expect(html).toContain('class="file-card__header-action"');
-        expect(html).toContain('>Blame</a>');
+        expect(html).toContain('aria-label="File actions"');
         expect(html).toContain('>Expand the file</button>');
-        expect(html).not.toContain('Copy file link');
+        // The blame link now lives in the menu instead of a separate header control.
+        expect(html).not.toContain('>Blame</a>');
+        expect(html).not.toContain('https://example.test/blame');
         expect(html).not.toContain('Open in editor');
+        // The menu is closed, so its items are absent from the markup.
+        expect(html).not.toContain('Copy file link');
         expect(html).toContain('class="file-card__action">retry</button>');
     });
 

@@ -9,6 +9,7 @@ import { useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { selectionLinkHash } from '../selection-link.js';
 import { ASK_SELECTION_DISABLED_TITLE } from './chat-prompts.js';
+import { copyText } from './clipboard.js';
 import './selection-popover.css';
 
 const POPOVER_GAP = 8;
@@ -273,15 +274,14 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     }
 
     const copyLink = (): void => {
-        const clipboard = (navigator as unknown as { readonly clipboard?: Pick<Clipboard, 'writeText'> }).clipboard;
-        if (clipboard === undefined) {
-            setError(t('selection.clipboardUnavailable'));
-            return;
-        }
         const url = new URL(window.location.href);
         url.hash = selectionLinkHash(url.hash, anchor);
-        void clipboard.writeText(url.toString()).catch(() => {
-            setError(t('selection.copyFailed'));
+        void copyText(url.toString()).then((outcome) => {
+            if (outcome === 'unavailable') {
+                setError(t('selection.clipboardUnavailable'));
+            } else if (outcome === 'failed') {
+                setError(t('selection.copyFailed'));
+            }
         });
     };
     const style =

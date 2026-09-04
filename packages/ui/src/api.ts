@@ -15,7 +15,6 @@ import type {
     UiEnqueueResponse,
     UiFeedbackRequest,
     UiFeedbackResponse,
-    UiOpenInEditorResponse,
     UiPrState,
     UiPrStatePatch,
     UiReviewLensesResponse,
@@ -48,7 +47,6 @@ import {
     uiDraftBufferResponseSchema,
     uiEnqueueResponseSchema,
     uiFeedbackResponseSchema,
-    uiOpenInEditorResponseSchema,
     uiPrStateResponseSchema,
     uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
@@ -318,15 +316,6 @@ export async function retryReviewChat(
 
 export async function deleteReviewChatNote(token: string, noteId: number): Promise<void> {
     await post(UI_ENDPOINTS.reviewChatNoteDelete, token, { noteId }, uiReviewWriteAckSchema);
-}
-
-export async function openInEditor(token: string, path: string, line?: number): Promise<UiOpenInEditorResponse> {
-    return post(
-        UI_ENDPOINTS.openInEditor,
-        token,
-        line === undefined ? { path } : { path, line },
-        uiOpenInEditorResponseSchema,
-    );
 }
 
 /** Sends feedback. On failure, forms keep their text and retry the same request. */

@@ -278,6 +278,41 @@
     color: var(--text-dim-strong);
 }
 
+/*
+ * Row menu button (SPEC §2.11): always reserves its width, becomes visible on hover
+ * and focus, so the row layout does not jump under the pointer.
+ */
+.file-tree__more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-mark);
+    background: none;
+    font-size: var(--font-size-control);
+    line-height: 1;
+    color: var(--text-dim-strong);
+    opacity: 0;
+    cursor: pointer;
+}
+
+.file-tree__row:hover .file-tree__more,
+.file-tree__row.is-cursor .file-tree__more,
+.file-tree__more.is-open,
+.file-tree__more:focus {
+    opacity: 1;
+}
+
+.file-tree__more:hover,
+.file-tree__more.is-open {
+    background: var(--surface-selected);
+    color: var(--text-secondary);
+}
+
 .file-tree__tag {
     flex: none;
     padding: 0 4px;

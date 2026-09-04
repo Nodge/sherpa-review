@@ -708,6 +708,13 @@ export const en: Dictionary = {
         'The server sent a state this UI does not understand. Update Sherpa — the skill, the server and the UI ship together.',
 
     'file.conflict': 'conflict',
+    'file.menu.more': 'File actions',
+    'file.menu.copyPath': 'Copy path',
+    'file.menu.copyLink': 'Copy file link',
+    'file.menu.copyLinkUnavailable': 'the host has no web link for this file',
+    'file.menu.openWeb': 'Open on the web',
+    'file.menu.markViewed': 'Viewed',
+    'file.menu.unmarkViewed': 'Clear the mark',
     'route.stop.conflicts': (files: number) =>
         `${num(files)} ${form(files, 'file of this stop has', 'files of this stop have')} merge conflicts: resolve them in the host. Conflicts are out of route coverage, so there are no cards here.`,
     'route.other.none': 'Not a single changed line was left without a stop — the route covers the whole diff.',

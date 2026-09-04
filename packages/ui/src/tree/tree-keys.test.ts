@@ -30,6 +30,8 @@ function file(path: string, depth: number): TreeRow {
         additions: 1,
         deletions: 0,
         generated: false,
+        hostFileUrl: null,
+        blameUrl: null,
         conflict: false,
         pci: false,
         read: readStateOf({ file: { generated: false, viewed: null, additions: 1, deletions: 0 }, record: null }),
