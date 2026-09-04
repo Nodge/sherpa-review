@@ -8,8 +8,8 @@ import './banner-slot.css';
  * Slot priority order (SPEC §2.21): generation failure → failed route action →
  * rebuild → stale route → read-only mode for a previous iteration → second pass →
  * underexplained route → route filling → notes with lost anchors → audit scope →
- * generation cap. The numbers live here instead of being scattered across source declarations. The order is a
- * a product decision.
+ * generation cap → route language → a ship from someone else. Keep the numbers here instead of scattering them across
+ * source declarations. This order is a product decision.
  *
  * Failure of the button just clicked sits immediately below generation failure. The reviewer is waiting
  * for the result of their action, but a failed generation is more significant.
@@ -39,6 +39,11 @@ export const BANNER_PRIORITY = {
      * of the completed plan that persists and requires no response.
      */
     generationCap: 90,
+    /**
+     * Route language sits below the generation cap. The cap means the plan is incomplete, while language means
+     * the plan is complete but in the wrong language. It sits above a ship from someone else because language has an action and ship has none.
+     */
+    routeLocaleMismatch: 80,
 } as const;
 
 export interface BannerSource {

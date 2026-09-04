@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { PrDiff, PrMeta, Thread } from '@sherpa/protocol';
+import type { Locale, PrDiff, PrMeta, Thread } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { IterationMap } from './iterations/index.js';
 import { buildIterationMap, identityMap } from './iterations/index.js';
-import type { RegenerationBudgets, RoutePayloadContext } from './route-payload.js';
+import type { RegenerationBudgets, RouteTaskContext } from './route-payload.js';
 import {
     CONTEXT_BUDGET_BYTES,
     prDiffContext,
@@ -49,9 +49,9 @@ const META: PrMeta = {
     verdicts: [],
 };
 
-/** Builder context: fixture diff plus PR metadata. */
-function context(diff: PrDiff = mediumDiff()): RoutePayloadContext {
-    return { diff, meta: META };
+/** Builder context: fixture diff and PR metadata. The default generation language is Russian. */
+function context(diff: PrDiff = mediumDiff(), locale: Locale = 'ru'): RouteTaskContext {
+    return { diff, meta: META, locale };
 }
 
 /** Stop intents from the raw fixture skeleton, matching `RouteStore.stopIntents`. */
@@ -509,8 +509,8 @@ describe('regeneration context after a push', () => {
     }
 
     /** Task context for the second iteration. The diff is new, and regeneration starts from the previous snapshot. */
-    function contextV2(overrides: Partial<RouteRegenerationContext> = {}): RoutePayloadContext {
-        return { diff: mediumDiffV2(), meta: META, regeneration: regeneration(overrides) };
+    function contextV2(overrides: Partial<RouteRegenerationContext> = {}): RouteTaskContext {
+        return { diff: mediumDiffV2(), meta: META, locale: 'ru', regeneration: regeneration(overrides) };
     }
 
     function read(file: string | undefined): string {
@@ -546,7 +546,7 @@ describe('regeneration context after a push', () => {
     it('builds tasks as for the first generation when there is no previous snapshot', () => {
         const builder = writer();
         builder.beginGeneration();
-        const skeleton = builder.skeletonTask({ diff: mediumDiffV2(), meta: META });
+        const skeleton = builder.skeletonTask({ diff: mediumDiffV2(), meta: META, locale: 'ru' });
 
         expect(skeleton.contextFiles).toHaveLength(2);
         expect(skeleton.instructions).not.toContain('previous-route.md');
@@ -705,7 +705,7 @@ describe('regeneration context after a push', () => {
 
         // Generation context died with the process. The slice was restored from cache, and threads are absent.
         const after = writer().sectionTask(
-            { diff: mediumDiffV2(), meta: META, regeneration: regeneration({ threads: null }) },
+            { diff: mediumDiffV2(), meta: META, locale: 'ru', regeneration: regeneration({ threads: null }) },
             [2],
             mediumReadySnapshot().stops,
             intents(),

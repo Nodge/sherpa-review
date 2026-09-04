@@ -117,6 +117,94 @@ describe('chat and notes', () => {
         return path.dirname(own ?? '');
     }
 
+    /** Response language (M5-T4): fallback order, exchange snapshot and retry prompt. */
+    describe('answer language', () => {
+        function guideOf(server: SherpaServer, taskId: number): string {
+            const guide = server.queue.getTask(taskId)?.contextFiles[0];
+            return guide === undefined ? '' : fsSync.readFileSync(guide, 'utf8');
+        }
+
+        it('passes the request locale to the exchange, prompt and task instructions', async () => {
+            const server = await start();
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewChatAsk,
+                { text: 'Why is the cache dropped here?', locale: 'en' },
+                server.token,
+            );
+            expect(response.status).toBe(200);
+            const exchange = uiChatAskResponseSchema.parse(await response.json()).exchange;
+
+            expect(exchange.locale).toBe('en');
+            const taskId = exchange.taskId ?? 0;
+            expect(server.queue.getTask(taskId)?.instructions).toContain('in English Markdown');
+            expect(guideOf(server, taskId)).toContain('Write in English.');
+        });
+
+        it('retries in the original question language regardless of the current selection', async () => {
+            const server = await start();
+            const asked = uiChatAskResponseSchema.parse(
+                await (
+                    await postJson(
+                        server.port,
+                        UI_ENDPOINTS.reviewChatAsk,
+                        { text: 'Why is the cache dropped here?', locale: 'en' },
+                        server.token,
+                    )
+                ).json(),
+            ).exchange;
+            const firstTask = leaseChat(server);
+            server.queue.fail(WORKER, firstTask, 'not enough context');
+
+            const retry = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewChatRetry,
+                { exchangeId: asked.id },
+                server.token,
+            );
+            expect(uiChatRetryResponseSchema.parse(await retry.json()).outcome).toBe('retried');
+
+            const retried = (await readChat(server)).exchanges[0];
+            expect(retried?.locale).toBe('en');
+            expect(server.queue.getTask(retried?.taskId ?? 0)?.instructions).toContain('in English Markdown');
+        });
+
+        it('uses the explicit settings choice when the request has no locale', async () => {
+            fsSync.writeFileSync(`${sherpaDir}/settings.json`, JSON.stringify({ locale: 'ru' }));
+            const server = await start();
+
+            expect((await ask(server, 'Question')).locale).toBe('ru');
+        });
+
+        it('defaults to English when no language is specified', async () => {
+            const server = await start();
+
+            expect((await ask(server, 'Question')).locale).toBe('en');
+        });
+
+        it('uses the exchange locale for the voice stop list', async () => {
+            const server = await start();
+            const exchange = uiChatAskResponseSchema.parse(
+                await (
+                    await postJson(
+                        server.port,
+                        UI_ENDPOINTS.reviewChatAsk,
+                        { text: 'Why is the cache dropped here?', locale: 'en' },
+                        server.token,
+                    )
+                ).json(),
+            ).exchange;
+            const taskId = leaseChat(server);
+            expect(taskId).toBe(exchange.taskId);
+
+            // A Russian filler phrase is not a violation in an English exchange.
+            const rejected = complete(server, taskId, 'It is worth noting that the cache is dropped first.');
+            expect(rejected.kind).toBe('rejected');
+            const accepted = complete(server, taskId, `${String(bannedPhrases('ru')[0])}. The cache is dropped before the write.`);
+            expect(accepted.kind).toBe('accepted');
+        });
+    });
+
     it('ask atomically creates a queued exchange and an interactive task with the full payload', async () => {
         const server = await start();
         const exchange = await ask(server, 'Explain the write order', ANCHOR);

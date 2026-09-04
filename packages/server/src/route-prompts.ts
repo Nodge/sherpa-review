@@ -1,8 +1,14 @@
+import type { Locale } from '@sherpa/protocol';
+
+import { bannedPhrases, quoted } from './route/voice.js';
+
 /**
  * Prompts for route generation tasks (requirements §1/C5).
  *
- * The text here is English because the model reads it. The model must write result text in Russian
- * for the reviewer (the "prompt language and route language" decision in the log).
+ * Texts here are English because the model reads them. The model does not choose the result language.
+ * The instructions set it to the generation locale (M5-T4, task breakdown decision 2): Russian or
+ * English, with no third option. Only the required response language and its examples change. The prompt
+ * always stays in English.
  *
  * This module holds only text. `route-payload.ts` builds payloads and writes files. This separation
  * lets reviewers read and edit prompt methodology separately from the code that distributes it
@@ -13,8 +19,112 @@
  * (rpc-design §4: large context in files).
  */
 
+/**
+ * Everything in the guide that depends on the response language. Kept together because conflicting
+ * requirements contradict each other for the model, such as "write in English" beside a Russian example.
+ */
+export interface PromptLocale {
+    /** The "in Russian" / "in English" suffix on a result field. */
+    readonly inLanguage: string;
+    /** The response-language rule in "Voice". */
+    readonly writeIn: string;
+    /** A telegraphic phrase example in the response language. */
+    readonly conciseExample: string;
+    /** The "plain words" rule. Russian adds a rule against transliterated jargon. */
+    readonly plainWords: readonly string[];
+    /** Promotional words that must not appear in the text. */
+    readonly praiseWords: string;
+    /** An example of "numbers instead of impressions". */
+    readonly numbersExample: string;
+    /** An example of a bridge to the next stop. */
+    readonly bridgeExample: string;
+    /** An example of a behavioural digest assertion. */
+    readonly claimExample: string;
+    /** Names the model might give its own version of the server's synthetic stop. */
+    readonly catchAllTitles: string;
+}
+
+const RU: PromptLocale = {
+    inLanguage: 'in Russian',
+    writeIn: '**Write in Russian.** Identifiers, paths and other names from the code stay as they are.',
+    conciseExample: '«правка только в тестах, прод не тронут»',
+    plainWords: [
+        'Plain words. No "artifact", "surface", "primitive", no rhetorical flourish. No English',
+        '  jargon transliterated into Russian («коалесинг», «сёрфейс», «примитив») — describe the',
+        '  thing in plain Russian; identifiers and API names are not affected. Not «нарушает инвариант',
+        '  коалесинга» but «код рассчитывает, что флаг стоит только после уведомления, а здесь флаг',
+        '  ставится без уведомления».',
+    ],
+    praiseWords: '"элегантный", "надёжный", "просто", "критически важно"',
+    numbersExample: '"на 40 строк короче", not "заметно проще"',
+    bridgeExample: '("дальше — места вызова, которые пришлось переписать под новую подпись")',
+    claimExample: '("отклоняет редактирование позже 30-минутного окна")',
+    catchAllTitles: 'No "Everything else", no "Прочее", no "Остальные правки".',
+};
+
+const EN: PromptLocale = {
+    inLanguage: 'in English',
+    writeIn: '**Write in English.** Identifiers, paths and other names from the code stay as they are.',
+    conciseExample: '"tests only, production untouched"',
+    plainWords: [
+        'Plain words. No "artifact", "surface", "primitive", no rhetorical flourish. Describe the',
+        '  thing instead of naming it with jargon: not "violates the coalescing invariant" but "the',
+        '  code expects the flag to be set only after a notify, and here it is set without one".',
+    ],
+    praiseWords: '"elegant", "robust", "simply", "critically important"',
+    numbersExample: '"40 lines shorter", not "noticeably simpler"',
+    bridgeExample: '("next come the call sites that had to be rewritten for the new signature")',
+    claimExample: '("rejects an edit later than the 30-minute window")',
+    catchAllTitles: 'No "Everything else", no "Miscellaneous", no "The rest of the changes".',
+};
+
+const LOCALES: Record<Locale, PromptLocale> = { ru: RU, en: EN };
+
+/** The language-dependent part of the guide. */
+export function promptLocale(locale: Locale): PromptLocale {
+    return LOCALES[locale];
+}
+
+/**
+ * The whole "Voice" block: response language, brevity, plain words and banned filler phrases. The phrases come
+ * from the validator. The guide must name exactly the phrases the server rejects.
+ */
+function voiceBlock(locale: Locale): string {
+    const text = promptLocale(locale);
+    const filler = bannedPhrases(locale).slice(0, 3).map(quoted(locale)).join(', ');
+    return [
+        '## Voice',
+        '',
+        'Every text you produce is read by a human reviewer. Assume a middle engineer and talk as a',
+        'peer, so:',
+        '',
+        '- **Audience.** Fundamentals are solid — never explain the basics. Breadth across adjacent',
+        '  areas and harder concepts is not guaranteed: when a stop leans on one, unpack it in one',
+        '  plain sentence instead of dropping the bare term. No hedging — state what you established',
+        '  directly; a genuine unknown is said plainly, not softened.',
+        `- ${text.writeIn}`,
+        '- **Extremely concise — sacrifice grammar for concision.** Clipped, telegraphic sentences are',
+        `  welcome: ${text.conciseExample}. Drop words that carry no fact; never`,
+        '  drop the fact itself or its precision.',
+        '- At most 25 words per sentence. One thought — one sentence. No trailing "and that gives…" /',
+        '  "which affects…" clauses: if the consequence matters, it is its own sentence.',
+        `- ${text.plainWords.join('\n')}`,
+        '- Names from the code go in backticks, at most two per sentence.',
+        `- No praise and no selling: no ${text.praiseWords}.`,
+        `  Facts and numbers instead of impressions: ${text.numbersExample}.`,
+        `- No filler phrases: ${filler} and the like —`,
+        '  start with the fact itself. The server rejects texts containing these.',
+        '- No rhetorical questions, no "not just X, but Y", no lists of three for rhythm, no summary',
+        '  paragraph at the end.',
+        '- No emoji (the server rejects them), no em dashes as decoration.',
+        '- Say what the diff cannot say by itself: motivation, and the non-obvious decision in the form',
+        '  "X instead of Y, because Z". Retelling the code back to the reviewer is wasted text.',
+    ].join('\n');
+}
+
 /** Shared part of both guides: role, investigation budget, voice and language. */
-const COMMON_GUIDE = `## Your role
+function commonGuide(locale: Locale): string {
+    return `## Your role
 
 You are a senior engineer who understands this change and lays it out as a **reading route**:
 an ordered set of stops that a reviewer walks through to understand a large diff in one sitting.
@@ -39,36 +149,8 @@ making a third exploratory tool call, stop and write the route with what you hav
 
 A slow route is a failed route: the reviewer is sitting in front of an empty screen waiting.
 
-## Voice
-
-Every text you produce is read by a human reviewer. Assume a middle engineer and talk as a
-peer, so:
-
-- **Audience.** Fundamentals are solid — never explain the basics. Breadth across adjacent
-  areas and harder concepts is not guaranteed: when a stop leans on one, unpack it in one
-  plain sentence instead of dropping the bare term. No hedging — state what you established
-  directly; a genuine unknown is said plainly, not softened.
-- **Write in Russian.** Identifiers, paths and other names from the code stay as they are.
-- **Extremely concise — sacrifice grammar for concision.** Clipped, telegraphic sentences are
-  welcome: "the change is only in tests, production is untouched". Drop words that carry no fact. Never
-  drop the fact itself or its precision.
-- At most 25 words per sentence. One thought, one sentence. No trailing "which gives…" /
-  "which affects…" clauses: if the consequence matters, it is its own sentence.
-- Plain words. No "artifact", "surface", "primitive", no rhetorical flourish. No English
-  jargon transliterated into Russian ("coalescing", "surface", "primitive"). Describe the
-  thing in plain Russian. Identifiers and API names are not affected. Not "violates the coalescing
-  invariant" but "the code expects the flag to be set only after notification, but here the flag
-  is set without notification".
-- Names from the code go in backticks, at most two per sentence.
-- No praise and no selling: no "elegant", "reliable", "simply", "critically important".
-  Facts and numbers instead of impressions: "40 lines shorter", not "much simpler".
-- No filler phrases: "important to note", "worth noting", "as we can see" and the like. Instead,
-  start with the fact itself. The server rejects texts containing these.
-- No rhetorical questions, no "not just X, but Y", no lists of three for rhythm, no summary
-  paragraph at the end.
-- No emoji (the server rejects them), no em dashes as decoration.
-- Say what the diff cannot say by itself: motivation, and the non-obvious decision in the form
-  "X instead of Y, because Z". Retelling the code back to the reviewer is wasted text.`;
+${voiceBlock(locale)}`;
+}
 
 /** Result submission instructions shared by both guides. */
 const COMMON_RESULT = `## Result
@@ -91,13 +173,15 @@ A result you keep to yourself leaves the reviewer waiting in front of an empty s
 Return JSON only: no prose around it, no markdown fence, no comments inside.`;
 
 /** Guide for a `route.skeleton` task covering the whole route plan. */
-export const SKELETON_GUIDE = `# Task: plan the review route
+export function skeletonGuide(locale: Locale): string {
+    const text = promptLocale(locale);
+    return `# Task: plan the review route
 
-${COMMON_GUIDE}
+${commonGuide(locale)}
 
 ## What you produce
 
-- \`summary\` — an overview of the whole pull request, a short paragraph in Russian: what this
+- \`summary\` — an overview of the whole pull request, a short paragraph ${text.inLanguage}: what this
   change does and why it exists. This is the first thing the reviewer reads.
 - \`stops\` — the plan, **in triage order** (most important first).
 - \`tourOrder\` — the same stops renumbered into narrative reading order.
@@ -109,11 +193,11 @@ one stop. Unrelated pieces of work never share a stop.
 
 Each stop carries:
 
-- \`title\` — conceptual, in Russian, never a rephrased file name.
+- \`title\` — conceptual, ${text.inLanguage}, never a rephrased file name.
 - \`tier\` — \`high\` / \`medium\` / \`low\`: how much reviewer attention it deserves.
   **Importance is not size.** A dangerous pull request is often a three-line config change,
   while a thousand-line rename deserves \`low\`.
-- \`intent\` — one or two sentences in Russian, addressed to whoever fills this stop in later:
+- \`intent\` — one or two sentences ${text.inLanguage}, addressed to whoever fills this stop in later:
   which files and which changes it covers, and what its story is. The reviewer never sees this.
 
 Typically 2–6 stops, never more than 10.
@@ -157,7 +241,7 @@ in it refers to the previous one.
 
 ## What you must not do
 
-- **Do not create a catch-all stop.** No "Everything else", no "Other", no "Remaining changes".
+- **Do not create a catch-all stop.** ${text.catchAllTitles}
   Whatever you leave unplaced, the server collects itself into a synthetic last stop and marks it
   honestly as "not sorted out". A catch-all stop from you would sit next to that synthetic one as a
   second junk drawer — it adds nothing and steals the reviewer's attention.
@@ -166,11 +250,14 @@ in it refers to the previous one.
 - Do not invent stops for files that are not in the diff.
 
 ${COMMON_RESULT}`;
+}
 
 /** Guide for a `route.section` task filling specific planned stops. */
-export const SECTION_GUIDE = `# Task: fill in stops of the review route
+export function sectionGuide(locale: Locale): string {
+    const text = promptLocale(locale);
+    return `# Task: fill in stops of the review route
 
-${COMMON_GUIDE}
+${commonGuide(locale)}
 
 ## What you produce
 
@@ -183,11 +270,11 @@ For each target stop:
 - \`planIndex\` — the stop number from the attached plan, as a plain JSON number: stop 3 is
   \`"planIndex": 3\`. Never a string, never zero-padded, never a number of your own. The \`file #\`
   column of the changed files list is a different numbering — do not take stop numbers from it.
-- \`paragraph\` — 2 to 4 sentences in Russian, in the shape **"what changed → what follows from
+- \`paragraph\` — 2 to 4 sentences ${text.inLanguage}, in the shape **"what changed → what follows from
   it"**: what the change actually does, its motivation and the non-obvious decisions, and the
   consequences for behaviour, contracts, performance or operations.
-- \`bridge\` — optional, one sentence in Russian: the link to the next stop in triage order
-  ("next come the call sites that had to be rewritten for the new signature").
+- \`bridge\` — optional, one sentence ${text.inLanguage}: the link to the next stop in triage order
+  ${text.bridgeExample}.
 - \`anchors\` — the line ranges this stop covers.
 - \`tests\` — the behavioural digest, when this stop changes tested behaviour.
 
@@ -213,12 +300,12 @@ Rules the server enforces:
 - One range belongs to exactly one stop. If two of your stops claim the same lines, the later one
   loses them ("range moved").
 - Cover the changed lines of every file your stops are about. Whatever no stop anchors ends up in
-  the synthetic "Other" stop, which is honest but useless to the reviewer.
+  the synthetic last stop of the server, which is honest but useless to the reviewer.
 
 ## Why this stop changed
 
 Tasks that carry \`interdiff.md\` are a rebuild after a push. For a stop whose lines that push
-touched, add \`changeReason\`: 1 to 3 sentences in Russian — what the author changed and why, when
+touched, add \`changeReason\`: 1 to 3 sentences ${text.inLanguage} — what the author changed and why, when
 \`threads-since.md\` shows the why. The server classifies the stop itself (\`new\` or \`changed\`)
 from your anchors; you never declare the kind, only the reason.
 
@@ -235,8 +322,8 @@ from your anchors; you never declare the kind, only the reason.
 
 Test code is hidden from the reviewer by default: it is machine text, there is nothing to review
 there. Instead the stop states the **contract in human language** — one claim per line of
-behaviour, in Russian, phrased the way a person would say it out loud
-("rejects edits after the 30-minute window").
+behaviour, ${text.inLanguage}, phrased the way a person would say it out loud
+${text.claimExample}.
 
 Each claim has a \`kind\`:
 
@@ -259,6 +346,7 @@ code that is left unchecked, or be omitted entirely.
 Do not phrase claims as test names, and do not invent tests that are not in the diff.
 
 ${COMMON_RESULT}`;
+}
 
 /**
  * Regeneration files included with the task. Instructions list the context actually present
@@ -321,10 +409,13 @@ function listPhrase(items: readonly string[]): string {
 }
 
 /** Short skeleton task instructions describing the task and where to find the rest. */
-export function skeletonInstructions(files: RegenerationContextFiles = NO_REGENERATION): string {
+export function skeletonInstructions(
+    locale: Locale,
+    files: RegenerationContextFiles = NO_REGENERATION,
+): string {
     return [
         'Plan the review route for this pull request: a summary, the stops in triage order, and the',
-        'narrative order of the full tour.',
+        `narrative order of the full tour. Write every reviewer-facing text ${promptLocale(locale).inLanguage}.`,
         '',
         'The first context file is the methodology — read it first, it defines what a stop is, how to',
         'order the stops and how to write. The second one is the pull request itself: metadata, the',
@@ -342,6 +433,7 @@ export function skeletonInstructions(files: RegenerationContextFiles = NO_REGENE
 
 /** Short section task instructions with target plan numbers here and details in the context files. */
 export function sectionInstructions(
+    locale: Locale,
     planIndexes: readonly number[],
     files: RegenerationContextFiles = NO_REGENERATION,
 ): string {
@@ -349,6 +441,7 @@ export function sectionInstructions(
     const plural = planIndexes.length === 1 ? 'this stop' : 'these stops';
     return [
         `Fill in ${plural} of the review route: ${targets}.`,
+        `Write every reviewer-facing text ${promptLocale(locale).inLanguage}.`,
         '',
         'The first context file is the methodology — read it first, it defines the prose, the anchors',
         'and the behavioural test digest. The second one is the pull request itself: metadata, the',

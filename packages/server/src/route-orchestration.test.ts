@@ -23,10 +23,16 @@ import { MAX_RESULT_REJECTIONS } from './queue.js';
 import { requiredSeenRanges } from './progress-store.js';
 import { DEFAULT_ROUTE_CONFIG, isSmallPr, MAX_SKELETON_TASKS } from './route-orchestrator.js';
 import { contentHashOf } from './route-store.js';
-import { asRawText, mediumDiff, mediumRawResults, mediumReadySnapshot } from './route/fixture-support.js';
+import {
+    asRawText,
+    mediumDiff,
+    mediumRawResults,
+    mediumRawResultsEn,
+    mediumReadySnapshot,
+} from './route/fixture-support.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Route orchestration (M2-T4) on the fixture host: automatic enqueueing, result acceptance
@@ -303,7 +309,7 @@ describe('route orchestration', () => {
         expect(ready.snapshot?.summary).toBe(mediumReadySnapshot().summary);
         expect(ready.snapshot?.tourOrder).toEqual(mediumReadySnapshot().tourOrder);
         expect(ready.snapshot?.contentHash).toMatch(/^[0-9a-f]{12}$/);
-        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5', locale: null });
+        expect(ready.snapshot?.provenance).toEqual({ harness: 'claude-code', model: 'opus-5', locale: 'ru' });
         expect(ready.snapshot?.commit).toBe(mediumReadySnapshot().commit);
     });
 
@@ -711,6 +717,106 @@ describe('route orchestration', () => {
             expect(response.status).toBe(404);
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
             expect((await readRoute(server)).route.phase).toBe('none');
+        });
+    });
+
+    /**
+     * Generation language (M5-T4): fallback order "tab request → settings → agent hint → Russian"
+     * and a snapshot written entirely in one language.
+     */
+    describe('generation language', () => {
+        async function generateWith(server: SherpaServer, body: unknown): Promise<string> {
+            const response = await postJson(server.port, UI_ENDPOINTS.reviewRouteGenerate, body, server.token);
+            expect(response.status).toBe(200);
+            return uiRouteGenerateResponseSchema.parse(await response.json()).outcome;
+        }
+
+        function skeletonInstructionsOf(server: SherpaServer): string {
+            const task = server.queue.listTasks().find((candidate) => candidate.type === 'route.skeleton');
+            return task?.instructions ?? '';
+        }
+
+        function guideOf(server: SherpaServer, type: 'route.skeleton' | 'route.section'): string {
+            const task = server.queue
+                .listTasks()
+                .filter((candidate) => candidate.type === type && candidate.status !== 'cancelled')
+                .at(-1);
+            const guide = task?.contextFiles.find((file) => file.includes('-guide-'));
+            return guide === undefined ? '' : fsSync.readFileSync(guide, 'utf8');
+        }
+
+        it('request locale reaches prompts, provenance and the synthetic stop', async () => {
+            // No agent: warmup must not start generation before the endpoint does.
+            const server = await start();
+
+            expect(await generateWith(server, { locale: 'en' })).toBe('started');
+            expect(skeletonInstructionsOf(server)).toContain('in English');
+            expect(guideOf(server, 'route.skeleton')).toContain('**Write in English.**');
+
+            const skeletonId = routeTasks(server, 'route.skeleton').at(-1) ?? 0;
+            completeTask(server, skeletonId, mediumRawResultsEn().skeleton);
+
+            const route = (await readRoute(server)).route;
+            expect(route.snapshot?.provenance.locale).toBe('en');
+            expect(route.snapshot?.stops.at(-1)?.title).toBe('Other — lines the model did not place');
+            // Sections continue the skeleton: their guide uses the same language.
+            expect(guideOf(server, 'route.section')).toContain('**Write in English.**');
+        });
+
+        it('generation locale survives a restart and the skeleton is accepted in its task language', async () => {
+            const first = await start();
+            expect(await generateWith(first, { locale: 'en' })).toBe('started');
+            const skeletonId = routeTasks(first, 'route.skeleton').at(-1) ?? 0;
+            await first.close();
+
+            fsSync.writeFileSync(`${sherpaDir}/settings.json`, JSON.stringify({ locale: 'ru' }));
+            const second = await start();
+            expect(completeTask(second, skeletonId, mediumRawResultsEn().skeleton).kind).toBe('accepted');
+
+            const route = (await readRoute(second)).route;
+            expect(route.snapshot?.provenance.locale).toBe('en');
+            expect(route.snapshot?.stops.at(-1)?.title).toBe('Other — lines the model did not place');
+            expect(guideOf(second, 'route.section')).toContain('**Write in English.**');
+        });
+
+        it('uses the explicit settings choice when the request has no locale', async () => {
+            fsSync.writeFileSync(`${sherpaDir}/settings.json`, JSON.stringify({ locale: 'en' }));
+            const server = await start();
+
+            expect(await generateWith(server, {})).toBe('started');
+            expect(skeletonInstructionsOf(server)).toContain('in English');
+        });
+
+        it('the `auto` setting leaves the choice to the agent hint', async () => {
+            const server = await start();
+            server.workerRegistry.register(WORKER, 'claude-code', 'opus-5', 'en');
+            // Automatic warmup enqueuing follows the same fallback order: no language was specified for it.
+            await server.route.warmup();
+
+            expect(routeTasks(server, 'route.skeleton')).toHaveLength(1);
+            expect(skeletonInstructionsOf(server)).toContain('in English');
+        });
+
+        it('defaults to English when no language is specified, with an optional request body', async () => {
+            const server = await start();
+
+            const response = await postRaw(server.port, UI_ENDPOINTS.reviewRouteGenerate, '', server.token);
+            expect(response.status).toBe(200);
+            expect(uiRouteGenerateResponseSchema.parse(await response.json()).outcome).toBe('started');
+            expect(skeletonInstructionsOf(server)).toContain('in English');
+        });
+
+        it('rejects an unsupported locale in the body under the contract', async () => {
+            const server = await start();
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewRouteGenerate,
+                { locale: 'de' },
+                server.token,
+            );
+            expect(response.status).toBe(400);
+            expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('bad_request');
         });
     });
 

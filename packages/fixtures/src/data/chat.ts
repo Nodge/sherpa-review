@@ -1,4 +1,4 @@
-import type { AgentNote, ChatAnchor, ChatExchange, ChatExchangeStatus } from '@sherpa/protocol';
+import type { AgentNote, ChatAnchor, ChatExchange, ChatExchangeStatus, Locale } from '@sherpa/protocol';
 import { agentNoteSchema, chatExchangeSchema } from '@sherpa/protocol';
 
 import { makeFileId } from '../patch.js';
@@ -130,6 +130,8 @@ interface ExchangeSpec {
     answer?: string;
     progressText?: string;
     error?: string;
+    /** Response language. Without it, the fixture exchange is English, like the whole `medium` set. */
+    locale?: Locale;
     createdAt: string;
     updatedAt?: string;
 }
@@ -145,6 +147,7 @@ function exchange(spec: ExchangeSpec): ChatExchange {
         answer: spec.answer ?? null,
         progressText: spec.progressText ?? null,
         error: spec.error ?? null,
+        locale: spec.locale ?? 'en',
         createdAt: spec.createdAt,
         updatedAt: spec.updatedAt ?? spec.createdAt,
     };

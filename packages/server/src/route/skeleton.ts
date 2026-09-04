@@ -1,7 +1,8 @@
-import type { RouteStop } from '@sherpa/protocol';
+import type { Locale, RouteStop } from '@sherpa/protocol';
 import { routeSkeletonResultSchema } from '@sherpa/protocol';
 
 import { parseResult } from './raw-result.js';
+import { routeStrings } from './strings.js';
 import type { AcceptedSkeleton, RouteValidation } from './types.js';
 import { voiceErrors } from './voice.js';
 
@@ -13,16 +14,25 @@ import { voiceErrors } from './voice.js';
  * The server assigns stop IDs and synthetic "Other" (decision logged on 2026-08-25).
  */
 
-/** Synthetic stop ID and title: the model knows nothing about it, the server adds it. */
+/** Synthetic stop id: the model does not know about it, the server adds it. */
 export const OTHER_STOP_ID = 'other';
-export const OTHER_STOP_TITLE = 'Other — lines the model did not place';
+
+/** Synthetic stop title in the generation language (`strings.ts`). */
+export function otherStopTitle(locale: Locale): string {
+    return routeStrings(locale).otherStopTitle;
+}
 
 /** Planned stop id convention: `s01`..`sNN` by plan number. */
 export function stopId(planIndex: number): string {
     return `s${String(planIndex).padStart(2, '0')}`;
 }
 
-export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkeleton> {
+/**
+ * `locale` is the generation language of the model result (which selects the voice stop list)
+ * voice) and the synthetic stop title. Defaults to Russian, as generation did
+ * before M5, which is also how `provenance.locale: null` is read for snapshots from that time.
+ */
+export function validateSkeleton(rawText: string, locale: Locale = 'en'): RouteValidation<AcceptedSkeleton> {
     const parsed = parseResult(rawText, routeSkeletonResultSchema, 'skeleton');
     if (!parsed.ok) {
         return parsed;
@@ -33,8 +43,10 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
     // Voice checks apply only to reviewer-facing text. `intent` goes to the section model.
     const errors = [
         ...(tourError === null ? [] : [tourError]),
-        ...voiceErrors('skeleton.summary', result.summary),
-        ...result.stops.flatMap((stop, index) => voiceErrors(`skeleton.stops[${String(index)}].title`, stop.title)),
+        ...voiceErrors('skeleton.summary', result.summary, locale),
+        ...result.stops.flatMap((stop, index) =>
+            voiceErrors(`skeleton.stops[${String(index)}].title`, stop.title, locale),
+        ),
     ];
     if (errors.length > 0) {
         return { ok: false, errors };
@@ -61,7 +73,7 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
         ok: true,
         value: {
             summary: result.summary,
-            stops: [...stops, otherStop(stops.length + 1)],
+            stops: [...stops, otherStop(stops.length + 1, locale)],
             tourOrder: [...result.tourOrder.map(stopId), OTHER_STOP_ID],
             intents: new Map(result.stops.map((stop, index) => [index + 1, stop.intent])),
         },
@@ -72,12 +84,12 @@ export function validateSkeleton(rawText: string): RouteValidation<AcceptedSkele
  * "Other" has nothing to fill. Its status is `ready` immediately, with no anchors. The UI computes its content (uncovered
  * ranges). The UI hides the stop when there are no uncovered lines (SPEC §4.3).
  */
-function otherStop(planIndex: number): RouteStop {
+function otherStop(planIndex: number, locale: Locale): RouteStop {
     return {
         id: OTHER_STOP_ID,
         planIndex,
         tier: 'other',
-        title: OTHER_STOP_TITLE,
+        title: otherStopTitle(locale),
         status: 'ready',
         paragraph: null,
         bridge: null,

@@ -381,6 +381,38 @@ describe('storage', () => {
         }
     });
 
+    // Exchange language (M5-T4) starts as an empty column. Existing exchanges stay Russian.
+    it('creates the chat language column and reads old exchanges as Russian during migration', () => {
+        const file = `${sherpaDir}/chat-locale.db`;
+        const at = '2026-09-04T10:00:00.000Z';
+
+        const before = openDatabase(file, migrationsBefore('020-chat-locale'));
+        before
+            .prepare(
+                `INSERT INTO chat_exchanges (
+                    id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
+                    created_at, updated_at
+                 ) VALUES (1, 'question before M5', NULL, 'done', 'answer', NULL, NULL, NULL, 'head-1', ?, ?)`,
+            )
+            .run(at, at);
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(readSchemaVersion(after)).toBe(String(MIGRATIONS.length));
+            expect(after.prepare('SELECT id, locale FROM chat_exchanges').all()).toEqual([
+                { id: 1, locale: null },
+            ]);
+
+            const store = new ChatStore({ db: after });
+            // `null` in the column means a pre-M5 exchange, which the contract returns as "unknown language".
+            expect(store.read().exchanges[0]?.locale).toBeNull();
+            store.close();
+        } finally {
+            after.close();
+        }
+    });
+
     // The M3 dogfooding database migrates to iterations through the full 010…015 migration chain at once.
     it('the migration chain upgrades an M3 database to iterations without losing data', () => {
         const file = `${sherpaDir}/m3-to-m4.db`;

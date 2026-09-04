@@ -565,3 +565,39 @@ describe('route fixtures: delivery', () => {
         });
     }
 });
+
+describe('route fixtures: English output set (M5-T4)', () => {
+    const en = routeFixtures('medium')?.rawResultsEn;
+    const ru = routeFixtures('medium')?.rawResults;
+
+    it('matches the Russian set in stop count, tiers and tour order', () => {
+        expect(en?.skeleton.stops).toHaveLength(ru?.skeleton.stops.length ?? 0);
+        expect(en?.skeleton.stops.map((stop) => stop.tier)).toEqual(ru?.skeleton.stops.map((stop) => stop.tier));
+        expect(en?.skeleton.tourOrder).toEqual([1, 2, 3, 4, 5, 6]);
+    });
+
+    it('has English texts: no Cyrillic in the plan or sections', () => {
+        const texts = [
+            en?.skeleton.summary ?? '',
+            ...(en?.skeleton.stops.flatMap((stop) => [stop.title, stop.intent]) ?? []),
+            ...(en?.sections.flatMap((section) =>
+                section.stops.flatMap((stop) => [
+                    stop.paragraph,
+                    stop.bridge ?? '',
+                    ...(stop.tests ?? []).map((claim) => claim.text),
+                ]),
+            ) ?? []),
+        ];
+        for (const text of texts) {
+            expect(text).not.toMatch(/[\u0430-\u044f\u0451]/iu);
+        }
+    });
+
+    it('has the same section anchors as the Russian set: language does not shift lines', () => {
+        for (const section of en?.sections ?? []) {
+            const planIndex = section.stops[0]?.planIndex ?? 0;
+            const mirror = ru?.sections.find((candidate) => candidate.stops[0]?.planIndex === planIndex);
+            expect(section.stops[0]?.anchors).toEqual(mirror?.stops[0]?.anchors);
+        }
+    });
+});

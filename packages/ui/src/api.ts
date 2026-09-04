@@ -3,12 +3,14 @@ import type {
     CommentDraft,
     DraftBufferEntry,
     FileContent,
+    Locale,
     PrDiff,
     PriorityClass,
     PublishResult,
     Thread,
     UiCancelResponse,
     UiChatAskAnchor,
+    UiChatAskRequest,
     UiChatCancelResponse,
     UiChatResponse,
     UiChatRetryResponse,
@@ -22,6 +24,7 @@ import type {
     UiReviewProgressResponse,
     UiRouteFillStopRequest,
     UiRouteFillStopResponse,
+    UiRouteGenerateRequest,
     UiRouteGenerateResponse,
     UiReviewRouteResponse,
     UiSaveDraftResponse,
@@ -255,13 +258,18 @@ export async function fetchReviewSnapshots(token: string): Promise<readonly UiSn
 
 /**
  * Start or restart route generation: "Retry" on the failure card (README §12)
- * and the palette command. The request has no body because the server knows what to generate.
+ * and the palette command. The server knows what to generate. The body carries only the language (M5-T4),
+ * the tab's effective locale, so the route is generated in the same language as the interface.
  */
-export async function generateReviewRoute(token: string): Promise<UiRouteGenerateResponse['outcome']> {
+export async function generateReviewRoute(
+    token: string,
+    locale: Locale,
+): Promise<UiRouteGenerateResponse['outcome']> {
+    const request: UiRouteGenerateRequest = { locale };
     const body: UiRouteGenerateResponse = await post(
         UI_ENDPOINTS.reviewRouteGenerate,
         token,
-        {},
+        request,
         uiRouteGenerateResponseSchema,
     );
     return body.outcome;
@@ -286,16 +294,18 @@ export async function fetchReviewChat(token: string): Promise<UiChatResponse> {
     return get(UI_ENDPOINTS.reviewChat, token, uiChatResponseSchema);
 }
 
-/** Enqueues a question about the selection or the whole PR. Shows the created exchange optimistically. */
-export async function askReviewChat(token: string, text: string, anchor?: UiChatAskAnchor): Promise<ChatExchange> {
-    return (
-        await post(
-            UI_ENDPOINTS.reviewChatAsk,
-            token,
-            anchor === undefined ? { text } : { text, anchor },
-            uiChatAskResponseSchema,
-        )
-    ).exchange;
+/**
+ * Queues a question about the selection or the whole PR. Shows the new exchange optimistically.
+ * `locale` is the response language, the same effective tab locale used for route generation.
+ */
+export async function askReviewChat(
+    token: string,
+    text: string,
+    anchor: UiChatAskAnchor | undefined,
+    locale: Locale,
+): Promise<ChatExchange> {
+    const request: UiChatAskRequest = { text, locale, ...(anchor === undefined ? {} : { anchor }) };
+    return (await post(UI_ENDPOINTS.reviewChatAsk, token, request, uiChatAskResponseSchema)).exchange;
 }
 
 export async function cancelReviewChat(

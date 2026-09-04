@@ -9,7 +9,7 @@ import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
 import { buildFileFilters, findFilter, PCI_FILTER_ID } from '../filters/lens-filters.js';
-import { shortCommit, useFormat, useT } from '../i18n/index.js';
+import { shortCommit, useFormat, useLocale, useT } from '../i18n/index.js';
 import type { SnapshotMenu } from '../iterations/snapshot-picker.tsx';
 import { SnapshotsCard } from '../iterations/snapshot-picker.tsx';
 import type { SessionStore } from '../session/session-store.js';
@@ -391,6 +391,7 @@ function SummaryCard({
     onReadDiff: () => void;
 }) {
     const t = useT();
+    const uiLocale = useLocale();
     const snapshot = route?.snapshot ?? null;
     if (snapshot !== null) {
         return (
@@ -400,7 +401,7 @@ function SummaryCard({
                         <Markdown text={paragraph} profile="route" />
                     </p>
                 ))}
-                <p className="summary-card__provenance">{provenanceLine(snapshot)}</p>
+                <p className="summary-card__provenance">{provenanceLine(snapshot, t, uiLocale)}</p>
             </OverviewCard>
         );
     }

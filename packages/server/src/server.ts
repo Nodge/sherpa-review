@@ -302,6 +302,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             shared: sharedPayload,
             progress,
             iterations: iterationStore,
+            // Generation language: settings follow the tab request in the fallback order (M5-T4).
+            settings: settingsStore,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
         const chatOrchestrator = new ChatOrchestrator({
@@ -313,6 +315,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             iterations: iterationStore,
             iterationFeed,
             shared: sharedPayload,
+            settings: settingsStore,
+            registry: workerRegistry,
         });
         queue.setResultAcceptor(
             (task, result) =>

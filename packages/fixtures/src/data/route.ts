@@ -8,6 +8,7 @@ import {
     makeMediumSkeletonResult,
     makeMediumRouteStates,
 } from './route-medium.js';
+import { makeMediumSectionResultsEn, makeMediumSkeletonResultEn } from './route-medium-en.js';
 import { makeHugeRawResults } from './route-huge.js';
 import {
     makeMediumBrokenResultsV2,
@@ -41,6 +42,16 @@ export interface RouteRawResults {
     broken: RouteBrokenResults;
 }
 
+/**
+ * English model outputs (M5-T4): the same anchors, a different language. There is no broken set here,
+ * since the negative corpus breaks semantics, which do not depend on language.
+ */
+export interface RouteRawResultsEn {
+    skeleton: RouteSkeletonResult;
+    /** Part of the plan. The en golden test checks text language, not full diff coverage. */
+    sections: RouteSectionResult[];
+}
+
 export interface RouteFixtures {
     /** One state per phase. The key matches the `phase` value. */
     states: Partial<Record<UiRoutePhase, UiRouteState>>;
@@ -48,6 +59,8 @@ export interface RouteFixtures {
     rawResults: RouteRawResults | null;
     /** Model outputs for the second iteration: the same stops plus "why this stop changed". */
     rawResultsV2: RouteRawResults | null;
+    /** English output set. null means the fixture has none. */
+    rawResultsEn: RouteRawResultsEn | null;
     /** Ready route for the second pass (README §9). null means the fixture has no second iteration. */
     secondPass: UiRouteState | null;
 }
@@ -95,6 +108,10 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
             sections: makeMediumSectionResultsV2(),
             broken: makeMediumBrokenResultsV2(),
         },
+        rawResultsEn: {
+            skeleton: makeMediumSkeletonResultEn(),
+            sections: makeMediumSectionResultsEn(),
+        },
         secondPass: makeMediumSecondPassState(),
     }),
     // PR below the route threshold: no generation task is enqueued (requirements §3.6).
@@ -102,12 +119,14 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
         states: { none: { phase: 'none', smallPr: true, snapshot: null, failure: null, stale: null } },
         rawResults: null,
         rawResultsV2: null,
+        rawResultsEn: null,
         secondPass: null,
     }),
     edge: () => ({
         states: { failed: edgeFailedState() },
         rawResults: null,
         rawResultsV2: null,
+        rawResultsEn: null,
         secondPass: null,
     }),
     // No route: `large` is used in UI virtualization tests, and no one has run generation for it.
@@ -115,6 +134,7 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
         states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
         rawResults: null,
         rawResultsV2: null,
+        rawResultsEn: null,
         secondPass: null,
     }),
     // Performance fixture: no prepared states. e2e builds a 25-stop route through the fake worker.
@@ -122,6 +142,7 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
         states: { none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null } },
         rawResults: makeHugeRawResults(),
         rawResultsV2: null,
+        rawResultsEn: null,
         secondPass: null,
     }),
 };
@@ -144,8 +165,18 @@ function validate(fixtures: RouteFixtures): RouteFixtures {
         states,
         rawResults: validateRaw(fixtures.rawResults),
         rawResultsV2: validateRaw(fixtures.rawResultsV2),
+        rawResultsEn: validateRawEn(fixtures.rawResultsEn),
         secondPass: fixtures.secondPass === null ? null : uiRouteStateSchema.parse(fixtures.secondPass),
     };
+}
+
+function validateRawEn(raw: RouteRawResultsEn | null): RouteRawResultsEn | null {
+    return raw === null
+        ? null
+        : {
+              skeleton: routeSkeletonResultSchema.parse(raw.skeleton),
+              sections: raw.sections.map((section) => routeSectionResultSchema.parse(section)),
+          };
 }
 
 /** Invalid outputs skip `parse` because they are invalid on purpose. */

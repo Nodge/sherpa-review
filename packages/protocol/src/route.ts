@@ -89,7 +89,7 @@ export type RouteProvenance = z.infer<typeof routeProvenanceSchema>;
  */
 export const routeStopChangeSchema = z.object({
     kind: z.enum(['new', 'changed']),
-    /** "Why this stop changed" in the model's words (Russian). null means the model gave no explanation. */
+    /** "Why this stop changed" in the model's words, in the snapshot language. null if the model gave no explanation. */
     reason: z.string().nullable(),
     threadIds: z.array(hostIdSchema),
 });
@@ -101,7 +101,7 @@ export type RouteStopChange = z.infer<typeof routeStopChangeSchema>;
  * and promoting "Other" reorder rendering but leave the numbers unchanged.
  *
  * The synthetic "Other" stop has `id: 'other'`, `tier: 'other'`, and the last
- * `planIndex`. The server sets its title (Russian, for the reviewer).
+ * `planIndex`. The server sets its title in the generation language (reviewer-facing).
  * It has `status: 'ready'` immediately, since there is nothing to fill. The UI computes its contents
  * itself. The UI hides it when there are no uncovered lines (SPEC §4.3).
  */
@@ -120,7 +120,7 @@ export const routeStopSchema = z.object({
     tests: z.array(routeTestClaimSchema),
     /** Number of digest assertions the validator dropped ("2 claims dropped — no matching test"). */
     droppedClaims: z.number().int().min(0),
-    /** Validator notes for the reviewer (Russian): "the range moved to stop 02", etc. */
+    /** Reviewer-facing validator notes in the snapshot language: "range moved to stop 02", etc. */
     validationNotes: z.array(z.string()),
     /** Section provenance if it differs from the snapshot (agent changed mid-generation, SPEC §4.4). */
     provenance: routeProvenanceSchema.nullable(),
@@ -174,7 +174,7 @@ export type RouteSnapshot = z.infer<typeof routeSnapshotSchema>;
  * Stops use triage order. The server assigns ids and "Other" after validation.
  */
 export const routeSkeletonResultSchema = z.object({
-    /** PR summary: Markdown, Russian (for the reviewer). */
+    /** PR summary: markdown in the generation language, read by the reviewer. */
     summary: z.string().min(1).max(20_000),
     stops: z
         .array(

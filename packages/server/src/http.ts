@@ -124,6 +124,27 @@ export async function readJsonBody(req: IncomingMessage, maxBytes = REQUEST_BODY
     return parsed;
 }
 
+/**
+ * The same, but an empty body is valid input and returns `null`. Used by endpoints where all fields
+ * are optional (`route/generate`: a pre-M5 client sends POST with no body at all).
+ */
+export async function readOptionalJsonBody(
+    req: IncomingMessage,
+    maxBytes = REQUEST_BODY_MAX_BYTES,
+): Promise<unknown> {
+    const raw = await readBody(req, maxBytes);
+    if (raw.trim() === '') {
+        return null;
+    }
+
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'cannot be parsed';
+        throw new RpcFailure('bad_request', `The request body is not JSON: ${message}`);
+    }
+}
+
 function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         const chunks: Buffer[] = [];

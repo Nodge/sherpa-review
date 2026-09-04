@@ -234,6 +234,24 @@ describe('route store: snapshot history', () => {
         expect(reopened.generationCap('no such snapshot')).toBeNull();
     });
 
+    it('stores generation language in meta and preserves it across database reopen', () => {
+        const store = new RouteStore({ db: open() });
+
+        expect(store.generationLocale()).toBeNull();
+        store.setGenerationLocale('en');
+        expect(store.generationLocale()).toBe('en');
+
+        expect(new RouteStore({ db: open() }).generationLocale()).toBe('en');
+    });
+
+    it('reads a corrupt generation language record as absent', () => {
+        const db = open();
+        const store = new RouteStore({ db });
+        db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('generation_locale', 'de');
+
+        expect(store.generationLocale()).toBeNull();
+    });
+
     it('reads a corrupt cap record as absent', () => {
         const db = open();
         const store = new RouteStore({ db });

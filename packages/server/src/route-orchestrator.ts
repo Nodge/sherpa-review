@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
     HostId,
     Iteration,
+    Locale,
     PrDiff,
     PrMeta,
     ReviewHost,
@@ -15,6 +16,7 @@ import type {
 } from '@sherpa/protocol';
 
 import { RpcFailure } from './errors.js';
+import { resolveGenerationLocale } from './generation-locale.js';
 import type { IterationStore } from './iteration-store.js';
 import type { IterationMap } from './iterations/index.js';
 import { buildIterationMap, identityMap } from './iterations/index.js';
@@ -28,7 +30,9 @@ import type {
     RouteTaskBinding,
     SnapshotAcceptance,
 } from './route-store.js';
-import { validateSection, validateSkeleton } from './route/index.js';
+import type { RouteStrings } from './route/index.js';
+import { routeStrings, validateSection, validateSkeleton } from './route/index.js';
+import type { SettingsStore } from './settings-store.js';
 import type { SharedPayloadStore } from './shared-payload.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
@@ -111,6 +115,11 @@ export interface RouteOrchestratorOptions {
     readonly progress?: StopProgressCarry | null;
     /** Local storage for iteration patches. `null` means there is nowhere to save the generation diff (tests without a DB). */
     readonly iterations?: IterationStore | null;
+    /**
+     * Global UI settings supply the generation language when the request omits it
+     * (M5-T4). `null` means no settings, so the fallback order reaches the agent hint and Russian.
+     */
+    readonly settings?: Pick<SettingsStore, 'read'> | null;
     readonly config?: Partial<RouteConfig>;
     /** Warmup delay after startup. Tests call warmup explicitly (`warmup`). */
     readonly warmupDelayMs?: number;
@@ -124,6 +133,7 @@ export class RouteOrchestrator {
     private readonly payload: RoutePayloadWriter;
     private readonly progress: StopProgressCarry | null;
     private readonly iterations: IterationStore | null;
+    private readonly settings: Pick<SettingsStore, 'read'> | null;
     private readonly config: RouteConfig;
     private readonly warmupDelayMs: number;
 
@@ -160,6 +170,7 @@ export class RouteOrchestrator {
         this.payload = new RoutePayloadWriter({ payloadDir: options.payloadDir, shared: options.shared });
         this.progress = options.progress ?? null;
         this.iterations = options.iterations ?? null;
+        this.settings = options.settings ?? null;
         this.config = resolveConfig(options.config);
         this.warmupDelayMs = options.warmupDelayMs ?? WARMUP_DELAY_MS;
     }
@@ -245,15 +256,19 @@ export class RouteOrchestrator {
         if (this.isClosed() || this.store.read().phase !== 'none' || this.hasOpenRouteTask()) {
             return;
         }
-        this.startSkeleton(context);
+        // The server initiated automatic enqueueing without a locale, so the fallback order applies.
+        this.startSkeleton(context, this.resolveLocale(undefined));
     }
 
     /**
      * The `review/route/generate` endpoint starts and restarts generation. From `ready`, the old route
      * remains readable until the new skeleton is accepted, and its progress carries over to the new snapshot
      * during acceptance.
+     *
+     * `requestedLocale` is the effective language of the tab whose button was clicked (M5-T4). Without it,
+     * `resolveGenerationLocale` chooses the language using the fallback order.
      */
-    async generate(): Promise<UiRouteGenerateResponse['outcome']> {
+    async generate(requestedLocale?: Locale): Promise<UiRouteGenerateResponse['outcome']> {
         if (this.host === null) {
             throw new RpcFailure(
                 'no_review_host',
@@ -278,7 +293,7 @@ export class RouteOrchestrator {
         if (phaseNow === 'reading' || phaseNow === 'filling') {
             return 'already_running';
         }
-        this.startSkeleton(context);
+        this.startSkeleton(context, this.resolveLocale(requestedLocale));
         return 'started';
     }
 
@@ -348,13 +363,14 @@ export class RouteOrchestrator {
             return this.deferUntilDiff();
         }
 
-        const validation = validateSkeleton(result);
+        const locale = this.skeletonLocale();
+        const validation = validateSkeleton(result, locale);
         if (!validation.ok) {
             return { kind: 'rejected', errors: validation.errors };
         }
 
         const skeleton = validation.value;
-        const provenance = provenanceOf(this.registry.status());
+        const provenance = provenanceOf(this.registry.status(), locale);
         return {
             kind: 'accepted',
             onCommitted: () => {
@@ -389,7 +405,10 @@ export class RouteOrchestrator {
         }
 
         const generation = this.acceptanceContext(diff, snapshot.previousSnapshotId);
+        // Sections use the skeleton language, so the entire snapshot has one language.
+        const locale = snapshotLocale(snapshot);
         const validation = validateSection(result, snapshot.stops, binding.planIndexes, diff, {
+            locale,
             map: generation.map,
             knownThreadIds: new Set((generation.threads ?? []).map((thread) => thread.id)),
         });
@@ -398,7 +417,7 @@ export class RouteOrchestrator {
         }
 
         const fillings = validation.value;
-        const provenance = provenanceOf(this.registry.status());
+        const provenance = provenanceOf(this.registry.status(), locale);
         return {
             kind: 'accepted',
             onCommitted: () => {
@@ -470,6 +489,7 @@ export class RouteOrchestrator {
         }
 
         const snapshot = state.snapshot;
+        const strings = routeStrings(snapshotLocale(snapshot));
         const tasks = this.routeTasks();
         const sectionOf = new Map<number, TaskRecord>();
         for (const { record, binding } of tasks) {
@@ -494,7 +514,7 @@ export class RouteOrchestrator {
                 updates.set(stop.planIndex, { status: 'queued' });
                 continue;
             }
-            updates.set(stop.planIndex, stopStatusOf(task));
+            updates.set(stop.planIndex, stopStatusOf(task, strings));
         }
         this.store.setStopStatuses(updates);
 
@@ -608,7 +628,7 @@ export class RouteOrchestrator {
             return;
         }
         if (last.status === 'failed') {
-            this.store.fail(skeletonFailureMessage(last), last.result);
+            this.store.fail(skeletonFailureMessage(last, routeStrings(this.skeletonLocale())), last.result);
             return;
         }
         if (last.status === 'cancelled') {
@@ -629,8 +649,7 @@ export class RouteOrchestrator {
     private restartSkeletonTask(alreadyEnqueued: number, rawOutput: string | null): void {
         if (alreadyEnqueued >= MAX_SKELETON_TASKS) {
             this.store.fail(
-                `The route did not come together: the server queued the plan ${String(MAX_SKELETON_TASKS)} times and never ` +
-                    'managed to apply the result.',
+                routeStrings(this.skeletonLocale()).skeletonNotApplied(MAX_SKELETON_TASKS),
                 rawOutput,
             );
             return;
@@ -639,8 +658,10 @@ export class RouteOrchestrator {
     }
 
     /** New generation cancels previous tasks and keeps the live snapshot until a new one is accepted. */
-    private startSkeleton(context: GenerationContext): void {
+    private startSkeleton(context: GenerationContext, locale: Locale): void {
         this.generation = context;
+        // Store the language in storage, not a field. The next process may accept the skeleton task.
+        this.store.setGenerationLocale(locale);
         this.cancelOpenRouteTasks();
         this.store.clearBindings();
         this.store.beginSkeleton();
@@ -791,6 +812,7 @@ export class RouteOrchestrator {
             this.payload.skeletonTask({
                 diff,
                 meta: this.meta,
+                locale: this.skeletonLocale(),
                 regeneration: this.regenerationOf(this.generation),
             }),
         );
@@ -816,6 +838,8 @@ export class RouteOrchestrator {
         const context = {
             diff,
             meta: this.meta,
+            // Sections continue the skeleton, using the snapshot language instead of the current tab selection.
+            locale: snapshotLocale(snapshot),
             regeneration: this.regenerationOf(this.acceptanceContext(diff, snapshot.previousSnapshotId)),
         };
         const ordered = [...planIndexes].sort((left, right) => left - right);
@@ -899,6 +923,31 @@ export class RouteOrchestrator {
         });
     }
 
+    /**
+     * Language of the generation enqueueing the plan, as sent in its prompt. A server restart
+     * does not lose it. Only a DB that has never had a generation lacks the stored record.
+     */
+    private skeletonLocale(): Locale {
+        return this.store.generationLocale() ?? this.resolveLocale(undefined);
+    }
+
+    /** Generation language fallback order: tab request → settings → agent hint → English. */
+    private resolveLocale(requested: Locale | undefined): Locale {
+        const status = this.registry.status();
+        return resolveGenerationLocale({
+            requested,
+            setting: this.settings?.read().locale,
+            agentLang: status.kind === 'never' ? undefined : status.lang,
+        });
+    }
+
+    /** The iteration patch is lost. Explain why in the language of the affected route. */
+    private lostDiffMessage(diffId: HostId): string {
+        const snapshot = this.store.read().snapshot;
+        const locale = snapshot === null ? this.skeletonLocale() : snapshotLocale(snapshot);
+        return routeStrings(locale).lostDiff(diffId);
+    }
+
     /** Iteration diff from process memory, or from local patch storage. */
     private diffOf(diffId: HostId): PrDiff | null {
         for (const candidate of [this.generation?.diff ?? null, this.activeDiff]) {
@@ -924,7 +973,7 @@ export class RouteOrchestrator {
         await this.loadDiff();
         const loaded = this.diffOf(diffId);
         if (loaded === null) {
-            throw new RpcFailure('host_unavailable', lostDiffMessage(diffId));
+            throw new RpcFailure('host_unavailable', this.lostDiffMessage(diffId));
         }
         return loaded;
     }
@@ -940,7 +989,7 @@ export class RouteOrchestrator {
             this.warmupInBackground();
             return;
         }
-        this.store.fail(lostDiffMessage(diffId), null);
+        this.store.fail(this.lostDiffMessage(diffId), null);
     }
 
     /**
@@ -1030,12 +1079,12 @@ export class RouteOrchestrator {
     }
 }
 
-/** Iteration patch unavailable: the host cannot provide a full previous iteration and no local copy remains. */
-function lostDiffMessage(diffId: HostId): string {
-    return (
-        `The diff for iteration ${diffId}, on which this route was built, is unavailable: the host no longer ` +
-        'serves it and there is no local copy left. Build the route again.'
-    );
+/**
+ * Snapshot language. Skeleton acceptance sets `provenance.locale`, while snapshots in the old format carry `null`
+ * from before M5, which are in Russian.
+ */
+function snapshotLocale(snapshot: RouteSnapshot): Locale {
+    return snapshot.provenance.locale ?? 'en';
 }
 
 function messageOf(error: unknown): string {
@@ -1067,26 +1116,20 @@ function resolveConfig(overrides: Partial<RouteConfig> | undefined): RouteConfig
     return { ...config, sectionBatchSize: Math.max(1, Math.trunc(config.sectionBatchSize)) };
 }
 
-/** Stop status from the state of the task filling it. */
-function stopStatusOf(task: TaskRecord): RouteStopStatusUpdate {
+/** Stop status from the state of the task filling it. Notes use the snapshot language. */
+function stopStatusOf(task: TaskRecord, strings: RouteStrings): RouteStopStatusUpdate {
     switch (task.status) {
         case 'queued':
             return { status: 'queued' };
         case 'leased':
             return { status: 'filling' };
         case 'cancelled':
-            return { status: 'failed', note: 'Filling this stop was cancelled.' };
+            return { status: 'failed', note: strings.stopFillCancelled };
         case 'failed':
-            return {
-                status: 'failed',
-                note: `The stop was not filled: ${task.failReason ?? 'the agent gave no reason'}`,
-            };
+            return { status: 'failed', note: strings.stopFillFailed(task.failReason) };
         default:
             // The task finished successfully but the slot is empty. The model submitted a result without this stop.
-            return {
-                status: 'failed',
-                note: 'The agent submitted a result without this stop. The slot was not filled.',
-            };
+            return { status: 'failed', note: strings.stopMissingInResult };
     }
 }
 
@@ -1104,18 +1147,14 @@ function zeroCarryReason(kept: number, progress: StopProgressCarry, diffId: Host
         : ' — the carried ranges do not cover any stops';
 }
 
-/** Generation failure reason for the red card in README §12, in one Russian sentence. */
-function skeletonFailureMessage(task: TaskRecord): string {
-    const reason = (task.failReason ?? '').trim();
-    return reason === ''
-        ? 'The agent did not build a route plan and gave no reason.'
-        : `The agent did not build a route plan: ${reason}`;
+/** Generation failure reason for the red card in README §12, one sentence in the route language. */
+function skeletonFailureMessage(task: TaskRecord, strings: RouteStrings): string {
+    return strings.skeletonFailed((task.failReason ?? '').trim());
 }
 
-function provenanceOf(status: WorkerStatus): RouteProvenance {
-    // M5-T4 will set the generation language.
+function provenanceOf(status: WorkerStatus, locale: Locale): RouteProvenance {
     if (status.kind === 'never') {
-        return { harness: null, model: null, locale: null };
+        return { harness: null, model: null, locale };
     }
-    return { harness: status.harness ?? null, model: status.model ?? null, locale: null };
+    return { harness: status.harness ?? null, model: status.model ?? null, locale };
 }

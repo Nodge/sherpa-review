@@ -1,5 +1,6 @@
 import type {
     HostId,
+    Locale,
     PrDiff,
     RouteAnchor,
     RouteSectionResult,
@@ -16,6 +17,8 @@ import { indexDiff, touchesChangedLines } from './diff-index.js';
 import { parseResult } from './raw-result.js';
 import type { LineRange } from './ranges.js';
 import { rangesOverlap, subtractRanges } from './ranges.js';
+import type { RouteStrings } from './strings.js';
+import { routeStrings } from './strings.js';
 import type { RouteStopFilling, RouteValidation } from './types.js';
 import { voiceErrors } from './voice.js';
 
@@ -41,17 +44,22 @@ interface OccupiedRange extends LineRange {
 type Occupancy = Map<string, OccupiedRange[]>;
 
 /**
- * Regeneration context for section acceptance (M4-T7): how the server classifies stops and which
- * threads it knows. The first route generation needs none of this.
+ * Section acceptance context: generation language and the data the server uses to classify stops (M4-T7).
+ * The first route generation uses default values.
  */
-export interface SectionRegenerationContext {
+export interface SectionContext {
+    /**
+     * Generation language used for the model result (voice stop list) and validator notes
+     * stored in the snapshot. Defaults to English, the server's fallback generation language.
+     */
+    readonly locale?: Locale;
     /** Line mapping from the previous snapshot iteration to the generation iteration. null means no classification. */
-    readonly map: IterationMap | null;
+    readonly map?: IterationMap | null;
     /** Threads fetched at generation start. References to any others are removed from the text. */
-    readonly knownThreadIds: ReadonlySet<HostId>;
+    readonly knownThreadIds?: ReadonlySet<HostId>;
 }
 
-const NO_REGENERATION: SectionRegenerationContext = { map: null, knownThreadIds: new Set() };
+const NO_THREADS: ReadonlySet<HostId> = new Set();
 
 /** Maximum change-reason threads per stop (`routeSectionResultSchema.changeThreadIds` contract). */
 const MAX_CHANGE_THREADS = 20;
@@ -72,8 +80,10 @@ export function validateSection(
     plan: readonly RouteStop[],
     allowedPlanIndexes: readonly number[],
     diff: PrDiff,
-    regeneration: SectionRegenerationContext = NO_REGENERATION,
+    context: SectionContext = {},
 ): RouteValidation<RouteStopFilling[]> {
+    const locale = context.locale ?? 'en';
+    const strings = routeStrings(locale);
     const parsed = parseResult(rawText, routeSectionResultSchema, 'section');
     if (!parsed.ok) {
         return parsed;
@@ -119,11 +129,11 @@ export function validateSection(
         }
 
         const voice = [
-            ...voiceErrors(`${at}.paragraph`, stop.paragraph),
-            ...voiceErrors(`${at}.bridge`, stop.bridge),
-            ...voiceErrors(`${at}.changeReason`, stop.changeReason),
+            ...voiceErrors(`${at}.paragraph`, stop.paragraph, locale),
+            ...voiceErrors(`${at}.bridge`, stop.bridge, locale),
+            ...voiceErrors(`${at}.changeReason`, stop.changeReason, locale),
             ...(stop.tests ?? []).flatMap((claim, position) =>
-                voiceErrors(`${at}.tests[${String(position)}].text`, claim.text),
+                voiceErrors(`${at}.tests[${String(position)}].text`, claim.text, locale),
             ),
         ];
         if (voice.length > 0) {
@@ -137,7 +147,7 @@ export function validateSection(
             return;
         }
 
-        const outcome = resolveAnchors(stop, index, occupancy);
+        const outcome = resolveAnchors(stop, index, occupancy, strings);
         if (outcome.anchors.length === 0) {
             errors.push(
                 `${at}: every anchor of stop ${String(stop.planIndex)} was dropped (${outcome.dropReasons.join('; ')}). Re-anchor the stop to lines this diff actually changes and call complete again.`,
@@ -146,8 +156,8 @@ export function validateSection(
         }
         occupy(occupancy, stop.planIndex, outcome.anchors);
 
-        const digest = resolveClaims(stop.tests ?? [], index);
-        const change = resolveChange(stop, outcome.anchors, regeneration);
+        const digest = resolveClaims(stop.tests ?? [], index, strings);
+        const change = resolveChange(stop, outcome.anchors, context, strings);
         fillings.push({
             planIndex: stop.planIndex,
             paragraph: change.paragraph,
@@ -179,19 +189,21 @@ interface ChangeOutcome {
 function resolveChange(
     raw: RawSectionStop,
     anchors: readonly RouteAnchor[],
-    regeneration: SectionRegenerationContext,
+    context: SectionContext,
+    strings: RouteStrings,
 ): ChangeOutcome {
-    const known = regeneration.knownThreadIds;
+    const known = context.knownThreadIds ?? NO_THREADS;
     const notes: string[] = [];
     const unknown = new Set<HostId>();
     const paragraph = stripThreadTokens(raw.paragraph, known, unknown);
-    const kind = regeneration.map === null ? null : classifyStop({ anchors: [...anchors] }, regeneration.map);
+    const map = context.map ?? null;
+    const kind = map === null ? null : classifyStop({ anchors: [...anchors] }, map);
 
     if (kind === null) {
         if (raw.changeReason !== undefined) {
-            notes.push(CHANGE_REASON_DROPPED);
+            notes.push(strings.changeReasonDropped);
         }
-        return { change: null, paragraph, notes: [...notes, ...unknownThreadNotes(unknown)] };
+        return { change: null, paragraph, notes: [...notes, ...unknownThreadNotes(unknown, strings)] };
     }
 
     const stripped = raw.changeReason === undefined ? null : stripThreadTokens(raw.changeReason, known, unknown);
@@ -214,15 +226,12 @@ function resolveChange(
     return {
         change: { kind, reason, threadIds },
         paragraph,
-        notes: [...notes, ...unknownThreadNotes(unknown)],
+        notes: [...notes, ...unknownThreadNotes(unknown, strings)],
     };
 }
 
-/** Note for the reviewer: a reason without a change describes the previous pass, not this one. */
-const CHANGE_REASON_DROPPED = 'Change reason dropped: this stop did not move since the previous route.';
-
-function unknownThreadNotes(ids: ReadonlySet<HostId>): string[] {
-    return [...ids].map((id) => `Link to unknown thread ${id} removed.`);
+function unknownThreadNotes(ids: ReadonlySet<HostId>, strings: RouteStrings): string[] {
+    return [...ids].map((id) => strings.unknownThread(id));
 }
 
 function threadTokensOf(text: string): HostId[] {
@@ -301,7 +310,12 @@ function brokenRanges(anchors: readonly RawAnchor[], at: string, planIndex: numb
  * Anchors that partially overlap context stay intact because real model outputs include
  * ranges with context, while coverage counts only their intersection with changed lines.
  */
-function resolveAnchors(stop: RawSectionStop, index: DiffIndex, occupancy: Occupancy): AnchorOutcome {
+function resolveAnchors(
+    stop: RawSectionStop,
+    index: DiffIndex,
+    occupancy: Occupancy,
+    strings: RouteStrings,
+): AnchorOutcome {
     const anchors: RouteAnchor[] = [];
     const notes: string[] = [];
     const dropReasons: string[] = [];
@@ -310,28 +324,24 @@ function resolveAnchors(stop: RawSectionStop, index: DiffIndex, occupancy: Occup
         const where = `anchor ${String(position + 1)} ("${raw.path}" ${raw.side} ${String(raw.start)}-${String(raw.end)})`;
         const file = index.get(raw.path);
         if (file === undefined) {
-            notes.push(`Anchor on \`${raw.path}\` dropped: the file is not in this diff.`);
+            notes.push(strings.anchorFileMissing(raw.path));
             dropReasons.push(`${where}: the file is not in this diff`);
             return;
         }
         if (!touchesChangedLines(file, raw.side, raw.start, raw.end)) {
-            notes.push(
-                `Anchor on \`${raw.path}\` (lines ${lineSpan(raw)}) dropped: nothing changed in that range.`,
-            );
+            notes.push(strings.anchorNotChanged(raw.path, lineSpan(raw)));
             dropReasons.push(`${where}: it covers no line changed on the ${raw.side} side`);
             return;
         }
 
         const rest = surviving(raw, file, occupancy);
         if (rest.pieces.length === 0) {
-            notes.push(`Range \`${raw.path}\` ${lineSpan(raw)} is already explained by stop ${stopLabel(rest.owner)}.`);
+            notes.push(strings.rangeTaken(raw.path, lineSpan(raw), stopLabel(rest.owner)));
             dropReasons.push(`${where}: the range is already explained by stop ${stopLabel(rest.owner)}`);
             return;
         }
         if (rest.trimmed) {
-            notes.push(
-                `Part of range \`${raw.path}\` ${lineSpan(raw)} is already explained by stop ${stopLabel(rest.owner)} — the anchor was trimmed.`,
-            );
+            notes.push(strings.rangeTrimmed(raw.path, lineSpan(raw), stopLabel(rest.owner)));
         }
         for (const piece of rest.pieces) {
             anchors.push({
@@ -387,7 +397,7 @@ interface DigestOutcome {
  * The path is not checked for being a test file. The repository defines that, not the validator,
  * and a false rejection would cost more than a missed check. The reviewer still reads the assertion with its anchor.
  */
-function resolveClaims(raws: readonly RawClaim[], index: DiffIndex): DigestOutcome {
+function resolveClaims(raws: readonly RawClaim[], index: DiffIndex, strings: RouteStrings): DigestOutcome {
     const claims: RouteTestClaim[] = [];
     const missingFiles: string[] = [];
     let anchorless = 0;
@@ -411,33 +421,10 @@ function resolveClaims(raws: readonly RawClaim[], index: DiffIndex): DigestOutco
     }
 
     const notes = [
-        ...(missingFiles.length > 0 ? [missingFileClaimsNote(missingFiles)] : []),
-        ...(anchorless > 0 ? [`${droppedClaimsPrefix(anchorless)}: no test anchor given.`] : []),
+        ...(missingFiles.length > 0 ? [strings.claimsMissingFiles(missingFiles)] : []),
+        ...(anchorless > 0 ? [strings.claimsAnchorless(anchorless)] : []),
     ];
     return { claims, dropped: missingFiles.length + anchorless, notes };
-}
-
-function missingFileClaimsNote(paths: readonly string[]): string {
-    const unique = [...new Set(paths)];
-    const list = unique.map((path) => `\`${path}\``).join(', ');
-    const tail = unique.length === 1 ? `which is not in this diff` : `those files are not in this diff`;
-    const lead = unique.length === 1 ? 'the anchor pointed at' : 'the anchors pointed at';
-    return `${droppedClaimsPrefix(paths.length)}: ${lead} ${list}, ${tail}.`;
-}
-
-/** Russian count wording for reviewer notes: "Two claims dropped", "7 claims dropped". */
-function droppedClaimsPrefix(count: number): string {
-    const words = ['', 'One', 'Two', 'Three', 'Four'];
-    const head = words[count] ?? String(count);
-    const teen = count % 100 >= 11 && count % 100 <= 14;
-    const last = count % 10;
-    if (!teen && last === 1) {
-        return `${head} assertion dropped`;
-    }
-    if (!teen && last >= 2 && last <= 4) {
-        return `${head} assertions dropped`;
-    }
-    return `${head} assertions dropped`;
 }
 
 function lineSpan(raw: RawAnchor): string {

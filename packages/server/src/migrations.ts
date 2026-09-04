@@ -455,6 +455,15 @@ export const MIGRATIONS: readonly Migration[] = [
             );
         `,
     },
+    {
+        // Requested response language (M5-T4): the retry prompt must use the language of
+        // the original question, or the answer would change language mid-feed. NULL means a pre-M5 exchange,
+        // so its language was not recorded. There is no backfill. The reader interprets NULL as `en`.
+        name: '020-chat-locale',
+        sql: `
+            ALTER TABLE chat_exchanges ADD COLUMN locale TEXT;
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

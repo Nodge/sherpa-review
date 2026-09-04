@@ -45,6 +45,7 @@ function exchange(id: number, status: ChatExchange['status'], overrides: Partial
         answer: status === 'done' ? 'Answer from the **agent**.' : null,
         progressText: status === 'running' ? 'Reading related calls' : null,
         error: status === 'failed' ? 'The model returned no answer.' : null,
+        locale: null,
         createdAt: `2026-09-01T10:00:0${String(id)}.000Z`,
         updatedAt: `2026-09-01T10:00:0${String(id)}.000Z`,
         ...overrides,

@@ -44,7 +44,11 @@ export function createChatRoutes(options: ChatRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readChatRequest(ctx, uiChatAskRequestSchema);
                 const body: UiChatAskResponse = {
-                    exchange: await options.orchestrator.ask(request.text, request.anchor ?? null),
+                    exchange: await options.orchestrator.ask(
+                        request.text,
+                        request.anchor ?? null,
+                        request.locale,
+                    ),
                 };
                 return respond(uiChatAskResponseSchema, body, 'local');
             }),

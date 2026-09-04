@@ -32,7 +32,7 @@ export { chatFixtures } from './data/index.js';
 export type { ChatFixtures } from './data/index.js';
 /** Route (M2): generation states for the gallery and prepared model outputs for e2e. */
 export { routeFixtures } from './data/index.js';
-export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './data/index.js';
+export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './data/index.js';
 /** File text on both sides: the state gallery needs it without a server or host. */
 export { fileContentOf } from './file-content.js';
 export type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView, FixtureName } from './data/index.js';

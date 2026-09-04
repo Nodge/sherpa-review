@@ -7,6 +7,7 @@ import type {
     ChatExchange,
     FileContent,
     FileDiff,
+    Locale,
     PrDiff,
     PrMeta,
     RouteSnapshot,
@@ -14,7 +15,7 @@ import type {
     UiRouteState,
 } from '@sherpa/protocol';
 
-import { CHAT_GUIDE, chatInstructions } from './chat-prompts.js';
+import { chatGuide, chatInstructions } from './chat-prompts.js';
 import type { PayloadFileSpec } from './payload-budget.js';
 import { byteLength, fitPayloadFiles, fitText, truncateUtf8, unavailableBlock } from './payload-budget.js';
 import type { EnqueueInput } from './queue.js';
@@ -44,6 +45,8 @@ export interface ChatPayloadContext {
     readonly fileContent: FileContent | null;
     readonly route: UiRouteState;
     readonly history: readonly ChatExchange[];
+    /** Response language (M5-T4). Defaults to Russian, as pre-M5 exchanges did. */
+    readonly locale?: Locale;
 }
 
 export interface ChatPayloadOptions {
@@ -85,12 +88,14 @@ export interface ChatPayload {
 export function buildChatPayload(context: ChatPayloadContext, options: ChatPayloadOptions = {}): ChatPayload {
     const budgetBytes = options.budgetBytes ?? CHAT_PAYLOAD_BUDGET_BYTES;
     const sharedBudgetBytes = options.sharedBudgetBytes ?? CONTEXT_BUDGET_BYTES;
-    const guide: SharedChatContext = { kind: 'guide', name: 'chat-guide', content: CHAT_GUIDE };
+    const locale = context.locale ?? 'en';
+    // The shared guide filename includes a content hash, so Russian and English do not compete for one file.
+    const guide: SharedChatContext = { kind: 'guide', name: 'chat-guide', content: chatGuide(locale) };
 
     if (context.anchor === null) {
         const diff = sharedPrDiff(context, sharedBudgetBytes);
         return {
-            instructions: chatInstructions(),
+            instructions: chatInstructions(locale),
             shared: diff === null ? [guide] : [guide, diff],
             files: fitOwnFiles(prPayloadSpecs(context), budgetBytes),
         };
@@ -98,7 +103,7 @@ export function buildChatPayload(context: ChatPayloadContext, options: ChatPaylo
 
     const file = sharedAnchorFile(context, context.anchor, sharedBudgetBytes);
     return {
-        instructions: chatInstructions(),
+        instructions: chatInstructions(locale),
         shared: file === null ? [guide] : [guide, file],
         files: fitOwnFiles(anchoredPayloadSpecs(context, context.anchor, file === null), budgetBytes),
     };
