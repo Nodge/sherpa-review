@@ -35,6 +35,7 @@ function exchange(spec: Partial<ChatExchange> & { id: number; question: string }
         answer: null,
         progressText: null,
         error: null,
+        locale: null,
         createdAt: `2026-08-20T09:${String(spec.id).padStart(2, '0')}:00.000Z`,
         updatedAt: `2026-08-20T09:${String(spec.id).padStart(2, '0')}:00.000Z`,
         ...spec,

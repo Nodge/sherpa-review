@@ -14,6 +14,19 @@ interface GapGeometry {
     readonly counterBottom: number;
 }
 
+/** Hidden-line count label with English plural forms, matching `diff.gap.hiddenCount` in the UI dictionary. */
+function hiddenLabel(count: number): string {
+    const one = new Intl.PluralRules('en-US').select(count) === 'one';
+    // English has two forms: `one` for 1 and `other` for zero and every count above one.
+    if (one) {
+        return `${String(count)} line hidden`;
+    }
+    if (count === 0) {
+        return `${String(count)} lines hidden`;
+    }
+    return `${String(count)} lines hidden`;
+}
+
 for (const mode of ['unified', 'split'] as const) {
     test(`gap expands context in the chosen direction without moving the grid or scroll position: ${mode}`, async ({
         page,
@@ -59,7 +72,7 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
 
     await expect(target).toHaveAttribute(
         'aria-label',
-        `load 20 lines ${direction === 'up' ? 'up' : 'down'}, ${String(initialHidden)} lines hidden`,
+        `load 20 lines ${direction === 'up' ? 'up' : 'down'}, ${hiddenLabel(initialHidden)}`,
     );
     await expect(target).toHaveCSS('width', '46px');
     await expect(target).toHaveCSS('height', '24px');

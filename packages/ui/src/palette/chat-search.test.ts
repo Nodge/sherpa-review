@@ -13,6 +13,7 @@ function exchange(id: number, question: string, answer: string | null, createdAt
         answer,
         progressText: null,
         error: null,
+        locale: null,
         createdAt,
         updatedAt: createdAt,
     };

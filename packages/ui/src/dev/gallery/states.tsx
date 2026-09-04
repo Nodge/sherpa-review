@@ -264,6 +264,9 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...M5_T16_STATES.map((state) => ({
         id: state.id,
         group: 'Discussion on Overview',
+        title: state.title,
+        render: state.render,
+    })),
     ...M5_T17_STATES.map((state) => ({
         id: state.id,
         group: 'Files',
