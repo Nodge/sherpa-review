@@ -1,6 +1,6 @@
 import type { RouteAnchor } from '@sherpa/protocol';
 
-import type { DiffBlock, DiffFileModel, DiffHunk, DiffLine } from '../diff/model.js';
+import type { DiffBlock, DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
 import type { FileExpansion } from '../diff-view/expand.js';
 import { FILE_EXPANSION_KEY, gapKeyOf } from '../diff-view/expand.js';
 
@@ -10,9 +10,10 @@ import { FILE_EXPANSION_KEY, gapKeyOf } from '../diff-view/expand.js';
  *
  * This pure function uses the original model. UI state is a set of anchors, and each calculation starts
  * from scratch. Within a hunk, `ANCHOR_CONTEXT` unchanged lines remain around each range. Every
- * A gap between slices gives accurate counts of unchanged
- * lines and changed lines explained by other stops (brief principle 3: nothing
- * is hidden silently).
+ * omission becomes a gap with accurate counts of unchanged lines and
+ * changed lines explained by other stops (brief principle 3: nothing is hidden silently).
+ * File edges are gaps too. Without them, the slice would silently drop the file start and end, and the card
+ * would assume there was nothing to expand.
  */
 
 /** Unchanged lines around an anchor range within a hunk. */
@@ -215,8 +216,8 @@ export function clipModelToAnchors(
         if (lines.length === 0) {
             return;
         }
-        if (blocks.length > 0 && skipped.context + skipped.changed > 0) {
-            blocks.push(gapOf(lines[0], skipped));
+        if (anythingSkipped(skipped)) {
+            blocks.push(gapOf(blocks.length === 0 ? 'leading' : 'inner', startOfGap(lines[0]), skipped));
         }
         skipped = { context: 0, changed: 0 };
         blocks.push(hunkOf(source, lines));
@@ -229,6 +230,7 @@ export function clipModelToAnchors(
             skipped = {
                 ...skipped,
                 context: skipped.context + (block.hiddenLines ?? 0),
+                ...(block.hiddenLines === null ? { toEndOfFile: true } : {}),
                 key: skipped.key ?? gapKeyOf(block),
             };
             continue;
@@ -258,7 +260,17 @@ export function clipModelToAnchors(
         flush(run, block);
     }
 
+    const tail = blocks.at(-1);
+    if (tail?.kind === 'hunk' && anythingSkipped(skipped)) {
+        blocks.push(gapOf('trailing', startAfterHunk(tail), skipped));
+    }
+
     return { model: { ...model, content: { kind: 'text', blocks } }, changedLines, hunks };
+}
+
+/** Whether a gap has hidden lines or an unknown tail from the original gap to report. */
+function anythingSkipped(skipped: SkippedLines): boolean {
+    return skipped.context + skipped.changed > 0 || skipped.toEndOfFile === true;
 }
 
 interface KeepPlan {
@@ -269,7 +281,15 @@ interface KeepPlan {
 interface SkippedLines {
     readonly context: number;
     readonly changed: number;
+    /** The gap reaches the file end. Content supplies its length, as in the original model. */
+    readonly toEndOfFile?: true;
     readonly key?: string;
+}
+
+/** Line number in each version. */
+interface Sides {
+    readonly old: number;
+    readonly new: number;
 }
 
 /**
@@ -316,7 +336,8 @@ function keepPlan(
             index += 1;
         }
         const end = index - 1;
-        if (start === 0 || end === lines.length - 1) {
+        // A fully hidden chunk has no neighbours, so its expansion has nowhere to grow.
+        if (start === 0 && end === lines.length - 1) {
             continue;
         }
 
@@ -336,8 +357,12 @@ function keepPlan(
         }
         const up = state.all ? Number.MAX_SAFE_INTEGER : state.up;
         const down = state.all ? Number.MAX_SAFE_INTEGER : state.down;
-        revealContext(mask, lines, start, 1, up);
-        revealContext(mask, lines, end, -1, down);
+        // At a hunk edge there is one neighbour and one gap target. Expand towards it,
+        // whichever of the two controls was clicked.
+        const above = start > 0;
+        const below = end < lines.length - 1;
+        revealContext(mask, lines, start, 1, above ? (below ? up : Math.max(up, down)) : 0);
+        revealContext(mask, lines, end, -1, below ? (above ? down : Math.max(up, down)) : 0);
     }
 
     return { mask, gapKeys };
@@ -363,17 +388,26 @@ function lineBoundary(line: DiffLine | undefined): string {
     return line === undefined ? 'none' : `${line.kind}:${String(line.oldLine ?? 0)}:${String(line.newLine ?? 0)}`;
 }
 
-function gapOf(next: DiffLine | undefined, skipped: SkippedLines): DiffBlock {
+function gapOf(edge: DiffGap['edge'], start: Sides, skipped: SkippedLines): DiffGap {
     return {
         kind: 'gap',
-        edge: 'inner',
-        hiddenLines: skipped.context,
+        edge,
+        hiddenLines: skipped.toEndOfFile === true ? null : skipped.context,
         ...(skipped.changed === 0 ? {} : { hiddenChanged: skipped.changed }),
         ...(skipped.key === undefined ? {} : { sourceKey: skipped.key }),
-        // The gap starts where its following content does. A gap has no line numbers of its own.
-        oldStart: next?.oldLine ?? 0,
-        newStart: next?.newLine ?? 0,
+        oldStart: start.old,
+        newStart: start.new,
     };
+}
+
+/** A gap starts at what follows it because it has no line numbers of its own. */
+function startOfGap(next: DiffLine | undefined): Sides {
+    return { old: next?.oldLine ?? 0, new: next?.newLine ?? 0 };
+}
+
+/** A trailing gap has no next line. It starts at the end of the last hunk. */
+function startAfterHunk(previous: DiffHunk): Sides {
+    return { old: previous.oldStart + previous.oldCount, new: previous.newStart + previous.newCount };
 }
 
 /** A chunk of the original hunk as a standalone hunk, with boundaries and counts from its actual lines. */

@@ -57,6 +57,11 @@ function gapsOf(clipped: ClippedModel): DiffGap[] {
         : [];
 }
 
+/** Gaps at one edge of the slice. Only `edge` distinguishes edge gaps from internal ones. */
+function gapsAt(clipped: ClippedModel, edge: DiffGap['edge']): DiffGap[] {
+    return gapsOf(clipped).filter((gap) => gap.edge === edge);
+}
+
 const POLICY = 'services/orders/src/domain/policies/edit-policy.ts';
 const WINDOW = 'services/orders/src/domain/edit-window.ts';
 
@@ -129,6 +134,47 @@ describe('clipping the model by anchors', () => {
         expect(clipped.changedLines).toBe(2);
     });
 
+    it('keeps file edges as gaps instead of silently dropping the start and end', () => {
+        // Matches a real README with a single hunk in the middle of the file and an additions-only anchor.
+        const fileLines = Array.from({ length: 17 }, (_, index) => `line-${String(index + 1)}`);
+        const content: FileContent = {
+            oldText: fileLines.slice(0, 12).join('\n'),
+            newText: fileLines.join('\n'),
+        };
+        const model = parseFileDiff({
+            fileId: 'route-edges',
+            path: 'README.md',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            patch: [
+                '@@ -10,3 +10,8 @@',
+                ' line-10',
+                ' line-11',
+                ' line-12',
+                '+line-13',
+                '+line-14',
+                '+line-15',
+                '+line-16',
+                '+line-17',
+                '',
+            ].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [{ side: 'new', start: 13, end: 17 }];
+        const clipped = clipModelToAnchors(model, anchors);
+
+        expect(gapsAt(clipped, 'leading')[0]).toMatchObject({ hiddenLines: 9 });
+        // The patch cannot give the file tail length. Content supplies it, as in Full diff.
+        expect(gapsAt(clipped, 'trailing')[0]).toMatchObject({ hiddenLines: null });
+        expect(remainingHiddenLines(clipped.model, content)).toBe(9);
+
+        // "Expand file" uses the original model and expands the whole file, leaving no edges.
+        const expansion = expandAllGaps(model, new Map());
+        const whole = clipModelToAnchors(expandFileContext(model, content, expansion), anchors, ANCHOR_CONTEXT, expansion);
+        expect(lines(whole.model)).toHaveLength(17);
+        expect(remainingHiddenLines(whole.model, content)).toBe(0);
+    });
+
     it('expands only the selected slice gap and preserves its key', () => {
         const context = Array.from({ length: 17 }, (_, index) => ` line-${String(index + 3)}`);
         const model = parseFileDiff({
@@ -144,14 +190,14 @@ describe('clipping the model by anchors', () => {
             { side: 'new', start: 20, end: 20 },
         ];
         const initial = clipModelToAnchors(model, anchors);
-        const gap = gapsOf(initial)[0];
+        const gap = gapsAt(initial, 'inner')[0];
         if (gap === undefined) {
             throw new Error('slice has no gap');
         }
         const key = gapKeyOf(gap);
         const expansion = expandGap(new Map(), key, 'up', 2);
         const expanded = clipModelToAnchors(model, anchors, ANCHOR_CONTEXT, expansion);
-        const nextGap = gapsOf(expanded)[0];
+        const nextGap = gapsAt(expanded, 'inner')[0];
 
         expect(lines(expanded.model).filter((line) => line.kind === 'context')).toHaveLength(
             lines(initial.model).filter((line) => line.kind === 'context').length + 2,
@@ -210,12 +256,16 @@ describe('clipping the model by anchors', () => {
         const twice = show(twiceExpansion);
 
         expect(visibleNewLines(once)).toBe(visibleNewLines(initial) + 20);
-        expect(gapsOf(once)[0]?.sourceKey).toBe(key);
-        expect(gapsOf(twice)[0]?.sourceKey).toBe(key);
+        expect(gapsAt(once, 'inner')[0]?.sourceKey).toBe(key);
+        expect(gapsAt(twice, 'inner')[0]?.sourceKey).toBe(key);
 
         const fullyExpanded = show(expandGap(twiceExpansion, key, 'up'));
         expect(visibleNewLines(fullyExpanded)).toBe(visibleNewLines(initial) + 46);
-        expect(gapsOf(fullyExpanded)[0]).toMatchObject({ sourceKey: key, hiddenLines: 0, hiddenChanged: 1 });
+        expect(gapsAt(fullyExpanded, 'inner')[0]).toMatchObject({
+            sourceKey: key,
+            hiddenLines: 0,
+            hiddenChanged: 1,
+        });
 
         const allExpansion = expandAllGaps(model, new Map());
         const all = show(allExpansion);
@@ -297,11 +347,12 @@ describe('clipping the model by anchors', () => {
             patch: ['@@ -1,2 +1,6 @@', ' alpha', '+one', '+', '+two', '+three', ' omega', ''].join('\n'),
         });
         // The slice contains new lines 2 and 5. Empty new line 3 and text new line 4 remain between them.
-        const gaps = gapsOf(
+        const gaps = gapsAt(
             clipModelToAnchors(model, [
                 { side: 'new', start: 2, end: 2 },
                 { side: 'new', start: 5, end: 5 },
             ]),
+            'inner',
         );
 
         expect(gaps).toHaveLength(1);
@@ -318,11 +369,12 @@ describe('clipping the model by anchors', () => {
             binary: false,
             patch: ['@@ -1,2 +1,5 @@', ' alpha', '+one', '+', '+two', ' omega', ''].join('\n'),
         });
-        const gaps = gapsOf(
+        const gaps = gapsAt(
             clipModelToAnchors(model, [
                 { side: 'new', start: 2, end: 2 },
                 { side: 'new', start: 4, end: 4 },
             ]),
+            'inner',
         );
 
         expect(gaps).toHaveLength(1);
