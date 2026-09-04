@@ -130,12 +130,23 @@ export const routeStopSchema = z.object({
 export type RouteStop = z.infer<typeof routeStopSchema>;
 
 /**
- * Progress carryover result from the previous snapshot (second-pass banner, README §9):
- * how many marked stops from the previous route remain marked in the new one.
+ * Why mark carryover yielded zero (M5-T21). The reason uses the source iteration: `no_marks` means
+ * it had no viewed marks to carry over. `no_overlap` means it had marks, but no
+ * stop survived in full. `no_interdiff` means it had marks, but the host returned no interdiff.
+ */
+export const routeCarriedZeroReasonSchema = z.enum(['no_interdiff', 'no_marks', 'no_overlap']);
+export type RouteCarriedZeroReason = z.infer<typeof routeCarriedZeroReasonSchema>;
+
+/**
+ * Result of carrying viewed marks from the previous snapshot (second-pass banner, README §9).
+ * `total` counts stops eligible for carryover, those with anchors. Synthetic "Other" and stops
+ * without anchors are excluded from the denominator because they cannot appear in the numerator.
  */
 export const routeCarriedSchema = z.object({
     kept: z.number().int().min(0),
     total: z.number().int().min(0),
+    /** null when `kept > 0`. Snapshots before M5-T21 lack this field, which reads as null. */
+    zeroReason: routeCarriedZeroReasonSchema.nullable().default(null),
 });
 export type RouteCarried = z.infer<typeof routeCarriedSchema>;
 

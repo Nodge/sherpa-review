@@ -2,6 +2,7 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { FileContextMenu, useContextMenu } from '../components/context-menu.tsx';
 import { useDelayedPending } from '../components/use-delayed-pending.js';
 import { ViewedToggle } from '../components/viewed-toggle.tsx';
 import type { DiffFileModel } from '../diff/model.js';
@@ -182,6 +183,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     const { count } = useFormat();
     const [hint, setHint] = useState<Feedback>(initialHint);
     const [announcement, setAnnouncement] = useState('');
+    const menu = useContextMenu();
 
     // Model with context already expanded. Expansion is a pure function of the original model.
     const shown = useMemo(
@@ -267,6 +269,9 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         >
             <header
                 className={`file-card__header${onToggleCollapse === undefined ? '' : ' file-card__header--collapsible'}`}
+                // Outside tab order but accepts focus: focus returns here when a menu
+                // opened by right-clicking the header is closed with the keyboard.
+                tabIndex={-1}
                 onClick={(event) => {
                     const target = event.target;
                     if (
@@ -279,6 +284,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     }
                     onToggleCollapse();
                 }}
+                onContextMenu={menu.openAtPointer}
             >
                 <FileName file={file} />
                 <ConflictBadge file={file} />
@@ -294,18 +300,19 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
                 {routeBadge}
 
-                {file.blameUrl === null ? null : (
-                    <span className="file-card__actions">
-                        <a
-                            className="file-card__header-action"
-                            href={file.blameUrl}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                        >
-                            Blame
-                        </a>
-                    </span>
-                )}
+                {/* The blame link moved into the menu ("Open on the web"). "⋯" takes its place in the header. */}
+                <span className="file-card__actions">
+                    <button
+                        type="button"
+                        className="file-card__header-action"
+                        aria-haspopup="menu"
+                        aria-expanded={menu.open}
+                        aria-label={t('file.menu.more')}
+                        onClick={menu.openAtButton}
+                    >
+                        ⋯
+                    </button>
+                </span>
 
                 <ExpandButton
                     model={shown}
@@ -332,6 +339,19 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     }}
                 />
             </header>
+
+            {menu.anchor === null ? null : (
+                <FileContextMenu
+                    file={file}
+                    viewed={read.state === 'read'}
+                    onToggleViewed={() => {
+                        run(actions.onViewed(file.fileId, read.state !== 'read'));
+                    }}
+                    anchor={menu.anchor}
+                    onClose={menu.close}
+                    toggleRef={menu.toggleRef}
+                />
+            )}
 
             {collapseReason === null ? routeStrips : null}
 

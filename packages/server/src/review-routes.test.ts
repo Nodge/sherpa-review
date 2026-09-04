@@ -1,5 +1,3 @@
-import { writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { FixtureHost, makeFixtureHost } from '@sherpa/fixtures';
@@ -12,7 +10,6 @@ import {
     UI_PROGRESS_EVENT,
     UI_REVIEW_EVENT,
     UI_STATE_EVENT,
-    uiOpenInEditorResponseSchema,
     uiProgressEventSchema,
     uiPublishResponseSchema,
     uiReviewDiffResponseSchema,
@@ -32,7 +29,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { selectReviewHost } from './hosts/select.js';
 import { databasePathFor } from './paths.js';
 import { asRawText, mediumRawResults } from './route/fixture-support.js';
-import type { EditorOptions } from './review-routes.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
@@ -72,13 +68,12 @@ describe('server review endpoints', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    async function start(prKey: string, host?: FixtureHost, editor?: EditorOptions): Promise<SherpaServer> {
+    async function start(prKey: string, host?: FixtureHost): Promise<SherpaServer> {
         const server = await startServer({
             prKey,
             sherpaDir,
             longPollSeconds: 0.3,
             ...(host === undefined ? {} : { reviewHostFactory: () => ({ name: 'fixture', host }) }),
-            ...(editor === undefined ? {} : { editor }),
         });
         servers.push(server);
         return server;
@@ -236,88 +231,6 @@ describe('server review endpoints', () => {
             const response = await get(server.port, UI_ENDPOINTS.reviewFileContent, server.token);
 
             expect(response.status).toBe(400);
-        });
-    });
-
-    describe('open in external editor', () => {
-        it('starts the editor command for a file on disk and returns opened', async () => {
-            const launched: { command: string; args: readonly string[] }[] = [];
-            const server = await start(FIXTURE_PR, undefined, {
-                cwd: sherpaDir,
-                command: 'my-editor --goto {file}:{line}',
-                launch: (command, args) => {
-                    launched.push({ command, args });
-                    return Promise.resolve();
-                },
-            });
-            await writeFile(path.join(sherpaDir, 'open-me.ts'), 'export const x = 1;\n');
-
-            const body = uiOpenInEditorResponseSchema.parse(
-                await (
-                    await postJson(
-                        server.port,
-                        UI_ENDPOINTS.openInEditor,
-                        { path: 'open-me.ts', line: 12 },
-                        server.token,
-                    )
-                ).json(),
-            );
-
-            expect(body).toEqual({ outcome: 'opened', message: null });
-            expect(launched).toEqual([
-                { command: 'my-editor', args: ['--goto', `${path.join(sherpaDir, 'open-me.ts')}:12`] },
-            ]);
-        });
-
-        it('returns unavailable with a reason for a missing file, without an error', async () => {
-            const server = await start(FIXTURE_PR, undefined, { cwd: sherpaDir, launch: () => Promise.resolve() });
-
-            const response = await postJson(
-                server.port,
-                UI_ENDPOINTS.openInEditor,
-                { path: 'services/orders/src/domain/order.ts' },
-                server.token,
-            );
-
-            expect(response.status).toBe(200);
-            const body = uiOpenInEditorResponseSchema.parse(await response.json());
-            expect(body.outcome).toBe('unavailable');
-            expect(body.message).toContain('not on disk');
-        });
-
-        it('returns unavailable with the failure message when the editor fails to start', async () => {
-            const server = await start(FIXTURE_PR, undefined, {
-                cwd: sherpaDir,
-                launch: () => Promise.reject(new Error('spawn ENOENT')),
-            });
-            await writeFile(path.join(sherpaDir, 'open-me.ts'), 'export const x = 1;\n');
-
-            const body = uiOpenInEditorResponseSchema.parse(
-                await (
-                    await postJson(server.port, UI_ENDPOINTS.openInEditor, { path: 'open-me.ts' }, server.token)
-                ).json(),
-            );
-
-            expect(body.outcome).toBe('unavailable');
-            expect(body.message).toContain('spawn ENOENT');
-        });
-
-        it('rejects a path outside the checkout', async () => {
-            const server = await start(FIXTURE_PR, undefined, { cwd: sherpaDir, launch: () => Promise.resolve() });
-
-            const body = uiOpenInEditorResponseSchema.parse(
-                await (
-                    await postJson(
-                        server.port,
-                        UI_ENDPOINTS.openInEditor,
-                        { path: '../../etc/hosts' },
-                        server.token,
-                    )
-                ).json(),
-            );
-
-            expect(body.outcome).toBe('unavailable');
-            expect(body.message).toContain('outside the checkout');
         });
     });
 

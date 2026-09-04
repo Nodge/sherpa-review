@@ -29,6 +29,9 @@ export interface TreeFileRow {
     readonly additions: number;
     readonly deletions: number;
     readonly generated: boolean;
+    /** Host links for the file menu (SPEC §2.11). null when the host has nothing to offer. */
+    readonly hostFileUrl: string | null;
+    readonly blameUrl: string | null;
     /** The file is unmerged: a `conflict` row tag and exclusion from coverage (SPEC §4.1). */
     readonly conflict: boolean;
     /** The file belongs to the extra `pci` lens, shown as a row tag (README §10). */
@@ -154,6 +157,8 @@ export function buildFileTree(input: FileTreeInput): FileTree {
             additions: file.additions,
             deletions: file.deletions,
             generated: file.generated,
+            hostFileUrl: file.hostFileUrl,
+            blameUrl: file.blameUrl,
             conflict: file.changeType === 'conflict',
             pci: input.pciFileIds.has(file.fileId),
             read,

@@ -220,25 +220,6 @@ export type UiReviewFileContentRequest = z.infer<typeof uiReviewFileContentReque
 export const uiReviewFileContentResponseSchema = z.object({ content: fileContentSchema.nullable() });
 export type UiReviewFileContentResponse = z.infer<typeof uiReviewFileContentResponseSchema>;
 
-/**
- * "Open in external editor" (MUST in the brief). The path matches the diff. The server resolves
- * it relative to its cwd (inherited from `sherpa up` in the checkout). The editor command is
- * `SHERPA_EDITOR` (a template with `{file}` and `{line}`), defaulting to `code -g {file}:{line}`.
- * Failure (file missing on disk, editor failed to start) returns `unavailable` with a reason:
- * reduced functionality with an inline hint, not a UI error state.
- */
-export const uiOpenInEditorRequestSchema = z.object({
-    path: z.string().min(1),
-    line: z.number().int().positive().optional(),
-});
-export type UiOpenInEditorRequest = z.infer<typeof uiOpenInEditorRequestSchema>;
-
-export const uiOpenInEditorResponseSchema = z.object({
-    outcome: z.enum(['opened', 'unavailable']),
-    message: z.string().nullable(),
-});
-export type UiOpenInEditorResponse = z.infer<typeof uiOpenInEditorResponseSchema>;
-
 /** File filter lenses: ownership ("mine") is separate from additional lenses (PCI DSS). */
 export const uiReviewLensesResponseSchema = z.object({
     ownership: lensSchema.nullable(),
@@ -866,8 +847,6 @@ export const UI_ENDPOINTS = {
     reviewChatRetry: '/api/ui/review/chat/retry',
     /** POST `uiChatNoteDeleteRequestSchema` → `uiReviewWriteAckSchema`. */
     reviewChatNoteDelete: '/api/ui/review/chat/note-delete',
-    /** POST `uiOpenInEditorRequestSchema` → `uiOpenInEditorResponseSchema`. */
-    openInEditor: '/api/ui/open-in-editor',
     /** POST `uiFeedbackRequestSchema` → `uiFeedbackResponseSchema`. Available without a review host too. */
     feedback: '/api/ui/feedback',
     /** POST without a body → `uiUpdateCheckResponseSchema`. Available without a review host too. */

@@ -7,6 +7,7 @@ import type {
     PrDiff,
     PrMeta,
     ReviewHost,
+    RouteCarriedZeroReason,
     RouteProvenance,
     RouteSnapshot,
     Thread,
@@ -80,7 +81,7 @@ const ROUTE_TASK_PREFIX = 'route.';
 const WARMUP_DELAY_MS = 200;
 
 /** The part of `ProgressStore` the orchestrator needs: carrying marks over to a new snapshot. */
-export type StopProgressCarry = Pick<ProgressStore, 'carryStopsInTransaction' | 'carriedRangeCount'>;
+export type StopProgressCarry = Pick<ProgressStore, 'carryStopsInTransaction' | 'hasViewedMarks'>;
 
 /**
  * Ongoing generation: its iteration and everything needed to carry progress over to its snapshot.
@@ -571,7 +572,9 @@ export class RouteOrchestrator {
 
     /**
      * Carry progress over to the snapshot within its write transaction. `carried` counts marked
-     * stops out of all stops in the snapshot (README §9: "4 of 7").
+     * stops against stops with anchors (second-pass banner, README §9):
+     * Carryover cannot cover the synthetic "Other" stop or unfilled stops, so they do not belong
+     * in the denominator. When carryover is zero, include the reason.
      */
     private carryProgressInto(
         snapshot: RouteSnapshot,
@@ -579,7 +582,7 @@ export class RouteOrchestrator {
         map: IterationMap | null,
     ): SnapshotAcceptance {
         const progress = this.progress;
-        const total = snapshot.stops.length;
+        const total = snapshot.stops.filter((stop) => stop.anchors.length > 0).length;
         if (previous === null || progress === null) {
             // First snapshot of the PR. There is no source for carryover.
             return { carried: null };
@@ -590,7 +593,10 @@ export class RouteOrchestrator {
             process.stderr.write(
                 `sherpa-server: cannot carry over marks: no interdiff ${previous.diffId}→${snapshot.diffId}\n`,
             );
-            return { carried: { kept: snapshot.carried?.kept ?? 0, total } };
+            const keptBefore = snapshot.carried?.kept ?? 0;
+            // A missing slice matters only where there were marks to carry over.
+            const zeroReason = zeroCarryReason(keptBefore, progress, previous.diffId, 'no_interdiff');
+            return { carried: { kept: keptBefore, total, zeroReason } };
         }
 
         const carried = progress.carryStopsInTransaction({
@@ -601,14 +607,15 @@ export class RouteOrchestrator {
         });
         // Marks may have carried over in several passes (freezing, filling a stop).
         const kept = (snapshot.carried?.kept ?? 0) + carried.kept;
+        const zeroReason = zeroCarryReason(kept, progress, previous.diffId, 'no_overlap');
         return {
-            carried: { kept, total },
+            carried: { kept, total, zeroReason },
             afterCommit: () => {
                 carried.afterCommit();
                 process.stderr.write(
                     `sherpa-server: snapshot ${snapshot.snapshotId}: carried over ${String(kept)} of ` +
                         `${String(total)} stops from ${previous.snapshotId}` +
-                        `${zeroCarryReason(kept, progress, snapshot.diffId)}\n`,
+                        `${zeroCarryNote(zeroReason)}\n`,
                 );
             },
         };
@@ -1135,16 +1142,37 @@ function stopStatusOf(task: TaskRecord, strings: RouteStrings): RouteStopStatusU
 
 /**
  * Why mark carryover yielded zero. "Carried over 0 of 8" reads as "everything changed", but
- * there are two distinct reasons: no viewed ranges reached the iteration, or
- * they arrived without covering a single stop (M5-T20).
+ * there are 2 distinct reasons: the reviewer marked nothing in the previous iteration, or marked stops
+ * but no stop stayed fully viewed (M5-T20, M5-T21).
+ *
+ * Query the source iteration, not the destination. Carryover may have preserved no lines (the interdiff
+ * touched every range, conservative mode, or regeneration on the same iteration), and "there were
+ * no marks" would be false for a reviewer who had marked stops.
  */
-function zeroCarryReason(kept: number, progress: StopProgressCarry, diffId: HostId): string {
+function zeroCarryReason(
+    kept: number,
+    progress: StopProgressCarry,
+    sourceDiffId: HostId,
+    whenMarked: RouteCarriedZeroReason,
+): RouteCarriedZeroReason | null {
     if (kept > 0) {
-        return '';
+        return null;
     }
-    return progress.carriedRangeCount(diffId) === 0
-        ? ' — no viewed marks were carried over to the iteration'
-        : ' — the carried ranges do not cover any stops';
+    return progress.hasViewedMarks(sourceDiffId) ? whenMarked : 'no_marks';
+}
+
+/** The same reason in words, appended to the carryover line in stderr. */
+function zeroCarryNote(reason: RouteCarriedZeroReason | null): string {
+    switch (reason) {
+        case null:
+            return '';
+        case 'no_marks':
+            return ': there were no viewed marks in the previous iteration';
+        case 'no_overlap':
+            return ': marks from the previous iteration did not fully cover any stop';
+        case 'no_interdiff':
+            return ': there is no interdiff between iterations';
+    }
 }
 
 /** Generation failure reason for the red card in README §12, one sentence in the route language. */

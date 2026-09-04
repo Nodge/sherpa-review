@@ -110,12 +110,13 @@ describe('command box', () => {
         expect(liveRegion(host).textContent).toBe('');
     });
 
-    it('selects the command without Clipboard API and shows a visible fallback line', () => {
+    it('selects the command and shows the fallback line without the Clipboard API', async () => {
         setClipboard(undefined);
         const { host, button } = mount();
 
-        act(() => {
+        await act(async () => {
             button.click();
+            await Promise.resolve();
         });
 
         const input = host.querySelector<HTMLInputElement>('.command-box__command');

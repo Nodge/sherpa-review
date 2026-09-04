@@ -155,6 +155,105 @@ describe('FilePanel viewed checkboxes', () => {
     });
 });
 
+describe('tree file menu', () => {
+    it('opens the menu with the row "⋯" button without opening the file', () => {
+        const { host, onOpenFile } = mount();
+        const more = host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__more');
+
+        expect(more?.tabIndex).toBe(-1);
+        act(() => {
+            more?.click();
+        });
+
+        const menu = document.body.querySelector('[role="menu"]');
+        expect(menu?.querySelectorAll('[role="menuitem"]')).toHaveLength(4);
+        expect(more?.getAttribute('aria-expanded')).toBe('true');
+        expect(onOpenFile).not.toHaveBeenCalled();
+    });
+
+    it('opens the same menu on row right-click and moves the cursor to that row', () => {
+        const { host, onOpenFile } = mount();
+        const row = host.querySelector<HTMLElement>('.file-tree__row--file');
+
+        act(() => {
+            row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 44 }));
+        });
+
+        expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
+        expect(row?.classList.contains('is-cursor')).toBe(true);
+        expect(onOpenFile).not.toHaveBeenCalled();
+    });
+
+    it('uses the same path for Viewed from the menu as for the viewed checkbox', () => {
+        const { host, onToggleViewed } = mount();
+        const more = host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__more');
+        act(() => {
+            more?.click();
+        });
+
+        const items = [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+        expect(items[3]?.textContent).toBe('Viewed');
+        act(() => {
+            items[3]?.click();
+        });
+
+        expect(onToggleViewed).toHaveBeenCalledTimes(1);
+        expect(document.body.querySelector('[role="menu"]')).toBeNull();
+    });
+
+    it('keeps menu keys out of the tree so ⏎ does not open a file and arrows do not move the cursor', () => {
+        const { host, onOpenFile } = mount();
+        const tree = host.querySelector<HTMLElement>('[role="tree"]');
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__more')?.click();
+        });
+        const cursor = tree?.getAttribute('aria-activedescendant');
+        const item = document.body.querySelector<HTMLButtonElement>('[role="menuitem"]');
+
+        act(() => {
+            item?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+            item?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        });
+
+        expect(onOpenFile).not.toHaveBeenCalled();
+        expect(tree?.getAttribute('aria-activedescendant')).toBe(cursor);
+    });
+
+    it('closes the menu on a second click of the row "⋯" button', () => {
+        const { host } = mount();
+        const more = host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__more');
+
+        // `click()` does not send mousedown, and the toggle relies on a mousedown + click pair.
+        const press = (): void => {
+            act(() => {
+                more?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                more?.click();
+            });
+        };
+        press();
+        press();
+
+        expect(document.body.querySelector('[role="menu"]')).toBeNull();
+        expect(more?.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('disables the menu mark in a previous iteration', () => {
+        const { host, onToggleViewed } = mount(true);
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.file-tree__row--file .file-tree__more')?.click();
+        });
+
+        const viewed = [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')][3];
+        expect(viewed?.getAttribute('aria-disabled')).toBe('true');
+        expect(viewed?.title).toBe('only in the active iteration');
+
+        act(() => {
+            viewed?.click();
+        });
+        expect(onToggleViewed).not.toHaveBeenCalled();
+    });
+});
+
 describe('read-only viewed checkboxes', () => {
     it('disables the checkbox in a previous iteration and explains why', () => {
         const { host, onToggleViewed } = mount(true);

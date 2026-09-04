@@ -427,7 +427,7 @@ describe('second-pass route', () => {
         expect(snapshot.diffId).toBe(second.diff.diffId);
         expect(snapshot.commit).toBe(second.diff.headCommit);
         expect(snapshot.previousSnapshotId).toBe(mediumSnapshot().snapshotId);
-        expect(snapshot.carried).toEqual({ kept: 4, total: 7 });
+        expect(snapshot.carried).toEqual({ kept: 3, total: 6, zeroReason: null });
         expect(snapshot.contentHash).toMatch(/^[0-9a-f]{16}$/);
     });
 
@@ -435,8 +435,11 @@ describe('second-pass route', () => {
         const changed = snapshot.stops.filter((stop) => stop.change !== null);
         expect(changed.map((stop) => stop.id)).toEqual(['s02', 's03', 's06']);
         expect(changed.map((stop) => stop.change?.kind)).toEqual(['changed', 'changed', 'new']);
-        // Progress carryover must match the number of untouched stops.
-        expect(snapshot.stops.length - changed.length).toBe(snapshot.carried?.kept);
+        // Progress carryover and the unchanged stop count must agree: count stops
+        // with anchors. Carryover cannot cover "Other", so it is excluded from the denominator.
+        const anchored = snapshot.stops.filter((stop) => stop.anchors.length > 0);
+        expect(anchored.length).toBe(snapshot.carried?.total);
+        expect(anchored.length - changed.length).toBe(snapshot.carried?.kept);
         for (const stop of changed) {
             expect(stop.change?.reason ?? '').toMatch(/\p{L}/u);
         }

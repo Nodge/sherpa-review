@@ -5,7 +5,11 @@ import { parsePaletteQuery } from './query.js';
 describe('parsePaletteQuery', () => {
     it('keeps plain text as a fuzzy query', () => {
         expect(parsePaletteQuery(' handlers ')).toEqual({ kind: 'browse', text: 'handlers' });
-        expect(parsePaletteQuery('@alice')).toEqual({ kind: 'browse', text: '@alice' });
+    });
+
+    it('@ enables chat history search', () => {
+        expect(parsePaletteQuery('@ window ')).toEqual({ kind: 'chat', text: 'window' });
+        expect(parsePaletteQuery('@')).toEqual({ kind: 'chat', text: '' });
     });
 
     it('/ enables diff content search', () => {

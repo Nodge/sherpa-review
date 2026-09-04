@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '../i18n/index.js';
+import { copyText } from './clipboard.js';
 
 import './command-box.css';
 
@@ -52,14 +53,13 @@ export function CommandBox({ command, hint, actionLabel, inputLabel }: CommandBo
     };
 
     const copy = (): void => {
-        const clipboard = (navigator as unknown as { readonly clipboard?: Pick<Clipboard, 'writeText'> }).clipboard;
-        if (clipboard === undefined) {
-            selectCommand();
-            return;
-        }
-        void clipboard.writeText(command).then(() => {
-            show('copied');
-        }, selectCommand);
+        void copyText(command).then((outcome) => {
+            if (outcome === 'copied') {
+                show('copied');
+            } else {
+                selectCommand();
+            }
+        });
     };
 
     const copied = feedback === 'copied';

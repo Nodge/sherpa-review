@@ -43,7 +43,7 @@ function secondPass(changed: readonly string[]): RouteSnapshot {
     return {
         ...READY_SNAPSHOT,
         previousSnapshotId: 'route-medium-9f3c1ab',
-        carried: { kept: 4, total: 7 },
+        carried: { kept: 4, total: 7, zeroReason: null },
         stops: READY_SNAPSHOT.stops.map((stop) =>
             changed.includes(stop.id) ? { ...stop, change: { kind: 'changed', reason: null, threadIds: [] } } : stop,
         ),

@@ -31,7 +31,7 @@ import {
 /**
  * Route for the same `medium` fixture after the second push (README §9): the plan is unchanged, but 3 stops are
  * rebuilt. Stops 02 and 03 changed, and 06 is entirely new. Progress was carried over from the first snapshot:
- * 4 stops out of 7 stayed as they were.
+ * three of the six stops with anchors remain viewed.
  *
  * Anchors recalculated for the second iteration: `edit-policy.ts` and `handlers.ts` gained a few
  * lines, `card-token.ts` left the PR, and `api/rejection-status.ts` appeared.
@@ -40,8 +40,11 @@ import {
 const SNAPSHOT_ID_V2 = 'route-medium-a71d4e2';
 const CREATED_AT_V2 = '2026-08-21T11:12:40.000Z';
 
-/** How many marked stops from the first pass survived the push (README §9: "4 of 7"). */
-const CARRIED = { kept: 4, total: 7 } as const;
+/**
+ * How many marked stops from the first pass survived the push. The denominator counts stops with anchors:
+ * six model stops. Carryover cannot cover "Other". Three changed, leaving three.
+ */
+const CARRIED = { kept: 3, total: 6, zeroReason: null } as const;
 
 /**
  * Second-pass summary: only the external-contract paragraph was rebuilt, with the new rejection-body

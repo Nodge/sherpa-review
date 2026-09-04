@@ -1,15 +1,9 @@
-import { spawn } from 'node:child_process';
-import { stat } from 'node:fs/promises';
-import path from 'node:path';
-
-import type { PrDiff, ReviewHost, UiOpenInEditorResponse } from '@sherpa/protocol';
+import type { PrDiff, ReviewHost } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
     uiDeleteDraftRequestSchema,
     uiDraftBufferEntryRequestSchema,
     uiDraftBufferResponseSchema,
-    uiOpenInEditorRequestSchema,
-    uiOpenInEditorResponseSchema,
     uiReviewDiffRequestSchema,
     uiReviewDiffResponseSchema,
     uiReviewFileContentRequestSchema,
@@ -61,18 +55,6 @@ import type { RouteStore } from './route-store.js';
  * Its endpoints never return `no_review_host`.
  */
 
-/** Default editor command: VS Code with a jump to the line. */
-const DEFAULT_EDITOR_COMMAND = 'code -g {file}:{line}';
-
-export interface EditorOptions {
-    /** Root for resolving diff paths. Defaults to the server's cwd (the checkout). */
-    readonly cwd?: string;
-    /** Command template. Defaults to `SHERPA_EDITOR`, then `DEFAULT_EDITOR_COMMAND`. */
-    readonly command?: string;
-    /** Command runner. Tests replace it to avoid opening an editor. */
-    readonly launch?: (command: string, args: readonly string[]) => Promise<void>;
-}
-
 export interface ReviewRoutesOptions {
     readonly host: ReviewHost | null;
     /** Thread revision: a successful local write wakes SSE clients immediately. */
@@ -89,7 +71,6 @@ export interface ReviewRoutesOptions {
     readonly iterations?: IterationStore | null;
     /** PR iterations: endpoints use these to tell whether a request concerns the active iteration or a previous one. */
     readonly iterationFeed?: IterationFeed | null;
-    readonly editor?: EditorOptions;
 }
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
@@ -264,15 +245,6 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
 
                 const content = await call(() => getContent(request.data.fileId));
                 return respond(uiReviewFileContentResponseSchema, { content });
-            }),
-        },
-        {
-            method: 'POST',
-            path: UI_ENDPOINTS.openInEditor,
-            handle: handlingRpcFailures(async (ctx) => {
-                const request = await readRequest(ctx, uiOpenInEditorRequestSchema, '"open in editor"');
-                const body = await openInEditor(request.path, request.line, options.editor ?? {});
-                return respond(uiOpenInEditorResponseSchema, body);
             }),
         },
         {
@@ -557,70 +529,6 @@ function createViewedMirror(host: ReviewHost | null): (fileId: string, viewed: b
             }
         });
     };
-}
-
-/**
- * Opens a file in an external editor (MUST in the brief). Every failure returns `unavailable`
- * with a reason, shown as an inline hint rather than a UI error.
- */
-async function openInEditor(
-    filePath: string,
-    line: number | undefined,
-    options: EditorOptions,
-): Promise<UiOpenInEditorResponse> {
-    const cwd = options.cwd ?? process.cwd();
-    const absolute = path.resolve(cwd, filePath);
-    // The path comes from the host diff and must stay within the checkout.
-    const relative = path.relative(cwd, absolute);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        return { outcome: 'unavailable', message: `Path ${filePath} points outside the checkout ${cwd}.` };
-    }
-
-    const exists = await stat(absolute).then(
-        (info) => info.isFile(),
-        () => false,
-    );
-    if (!exists) {
-        return {
-            outcome: 'unavailable',
-            message: `File ${relative} is not on disk: the server runs in ${cwd}, and the file is not there.`,
-        };
-    }
-
-    const template = options.command ?? process.env.SHERPA_EDITOR ?? DEFAULT_EDITOR_COMMAND;
-    const parts = template
-        .split(/\s+/)
-        .filter((part) => part !== '')
-        .map((part) => part.replaceAll('{file}', absolute).replaceAll('{line}', String(line ?? 1)));
-    const [command, ...args] = parts;
-    if (command === undefined) {
-        return { outcome: 'unavailable', message: 'The editor command is empty: check SHERPA_EDITOR.' };
-    }
-
-    try {
-        await (options.launch ?? launchDetached)(command, args);
-    } catch (error) {
-        return {
-            outcome: 'unavailable',
-            message: `Could not start "${template}": ${messageOf(error)}.`,
-        };
-    }
-    return { outcome: 'opened', message: null };
-}
-
-/**
- * Starts the editor separately from the server. It outlives Sherpa and does not keep it running.
- * The promise waits only until it is clear whether the process started.
- */
-function launchDetached(command: string, args: readonly string[]): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        const child = spawn(command, [...args], { detached: true, stdio: 'ignore' });
-        child.once('error', reject);
-        child.once('spawn', () => {
-            child.unref();
-            resolve();
-        });
-    });
 }
 
 function hostOf(options: ReviewRoutesOptions): ReviewHost {

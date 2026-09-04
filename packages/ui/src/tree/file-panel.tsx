@@ -1,8 +1,9 @@
 import type { FileDiff } from '@sherpa/protocol';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
-import type { KeyboardEvent, RefObject } from 'react';
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { FileContextMenu, useContextMenu } from '../components/context-menu.tsx';
 import type { FileFilter } from '../filters/lens-filters.js';
 import type { MessageKey } from '../i18n/index.js';
 import { useFormat, useT } from '../i18n/index.js';
@@ -207,6 +208,9 @@ function FileTreeView({
     );
 
     const [cursor, setCursor] = useState(-1);
+    // One menu per tree. Its target row is stored separately from the anchor point.
+    const menu = useContextMenu();
+    const [menuRow, setMenuRow] = useState<TreeFileRow | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const virtualizer = useVirtualizer({
         count: tree.rows.length,
@@ -327,6 +331,14 @@ function FileTreeView({
                                     onOpenFile(row.fileId);
                                 }
                             }}
+                            onContextMenu={(event) => {
+                                if (row.kind !== 'file') {
+                                    return;
+                                }
+                                setCursor(item.index);
+                                setMenuRow(row);
+                                menu.openAtPointer(event);
+                            }}
                         >
                             {row.kind === 'dir' ? (
                                 <DirRow row={row} />
@@ -335,6 +347,12 @@ function FileTreeView({
                                     row={row}
                                     otherStopId={route?.otherStopId ?? null}
                                     onJumpToStop={onJumpToStop}
+                                    menuOpen={menu.open && menuRow?.fileId === row.fileId}
+                                    onMenu={(event) => {
+                                        setCursor(item.index);
+                                        setMenuRow(row);
+                                        menu.openAtButton(event);
+                                    }}
                                     onToggleViewed={(fileId) => {
                                         setCursor(item.index);
                                         onToggleViewed(fileId);
@@ -345,6 +363,19 @@ function FileTreeView({
                     );
                 })}
             </div>
+
+            {menu.anchor === null || menuRow === null ? null : (
+                <FileContextMenu
+                    file={menuRow}
+                    viewed={menuRow.read.state === 'read'}
+                    onToggleViewed={() => {
+                        onToggleViewed(menuRow.fileId);
+                    }}
+                    anchor={menu.anchor}
+                    onClose={menu.close}
+                    toggleRef={menu.toggleRef}
+                />
+            )}
         </div>
     );
 }
@@ -387,11 +418,15 @@ function FileRow({
     row,
     otherStopId,
     onJumpToStop,
+    menuOpen,
+    onMenu,
     onToggleViewed,
 }: {
     row: TreeFileRow;
     otherStopId: string | null;
     onJumpToStop?: ((stopId: string) => void) | undefined;
+    menuOpen: boolean;
+    onMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
     onToggleViewed: (fileId: string) => void;
 }) {
     const t = useT();
@@ -428,6 +463,21 @@ function FileRow({
             {row.route === null ? null : (
                 <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
             )}
+            {/* The menu button stays out of the tab order, like the read-state checkbox. Arrow keys navigate the tree. */}
+            <button
+                type="button"
+                className={`file-tree__more${menuOpen ? ' is-open' : ''}`}
+                tabIndex={-1}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={t('file.menu.more')}
+                onMouseDown={(event) => {
+                    event.preventDefault();
+                }}
+                onClick={onMenu}
+            >
+                ⋯
+            </button>
             <Counts additions={row.additions} deletions={row.deletions} />
         </>
     );

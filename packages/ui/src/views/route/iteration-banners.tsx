@@ -239,12 +239,33 @@ export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent
     );
 }
 
+/**
+ * Sentence about viewed-mark carryover. The `carried` counts describe carryover only: how many
+ * stops stayed viewed out of those eligible for carryover. Zero carryover
+ * is explained by the reason from the server. Snapshots before M5-T21 lack it, so show only the count.
+ */
+function carriedNote(carried: RouteCarried, t: Translate): string {
+    if (carried.kept > 0) {
+        return t('iteration.secondPass.carried.kept', carried.kept, carried.total);
+    }
+    switch (carried.zeroReason) {
+        case 'no_marks':
+            return t('iteration.secondPass.carried.noMarks');
+        case 'no_overlap':
+            return t('iteration.secondPass.carried.noOverlap');
+        case 'no_interdiff':
+            return t('iteration.secondPass.carried.noInterdiff');
+        case null:
+            return t('iteration.secondPass.carried.none', carried.total);
+    }
+}
+
 export interface RouteSecondPassBannerProps {
     readonly commit: string;
-    /** Progress carryover result. null means there was nothing to carry over from, so the sentence is omitted. */
+    /** Viewed-mark carryover result. null means there was nothing to carry over from, so the sentence is omitted. */
     readonly carried: RouteCarried | null;
-    /** The snapshot has classified stops. Without them, the filter has nothing to show. */
-    readonly hasChanges: boolean;
+    /** Number of stops classified as changed. Without them, the filter has nothing to act on. */
+    readonly changedStops: number;
     readonly onShowNew: () => void;
     readonly onDismiss: () => void;
 }
@@ -252,11 +273,12 @@ export interface RouteSecondPassBannerProps {
 export function RouteSecondPassBanner({
     commit,
     carried,
-    hasChanges,
+    changedStops,
     onShowNew,
     onDismiss,
 }: RouteSecondPassBannerProps) {
     const t = useT();
+    const hasChanges = changedStops > 0;
     return (
         <div className="iteration-banner" role="status" aria-label={t('iteration.secondPass.aria')}>
             <div className="iteration-banner__body">
@@ -268,9 +290,9 @@ export function RouteSecondPassBanner({
                     .
                 </div>
                 <div className="iteration-banner__note">
-                    {carried === null ? '' : t('iteration.secondPass.carried', carried.kept, carried.total)}
+                    {carried === null ? '' : carriedNote(carried, t)}
                     {hasChanges
-                        ? t('iteration.secondPass.hasChanges')
+                        ? t('iteration.secondPass.changed', changedStops)
                         : t('iteration.secondPass.noChanges')}
                 </div>
             </div>

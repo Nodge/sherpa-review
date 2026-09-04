@@ -1,13 +1,17 @@
 export type PaletteQuery =
     | { readonly kind: 'browse'; readonly text: string }
     | { readonly kind: 'diff'; readonly text: string }
+    | { readonly kind: 'chat'; readonly text: string }
     | { readonly kind: 'line'; readonly line: number | null };
 
-/** Parses palette prefixes. `@` remains an ordinary query until M5. */
+/** Parses palette prefixes: `/` for diff content, `@` for chat history, `:` for a line. */
 export function parsePaletteQuery(query: string): PaletteQuery {
     const trimmed = query.trim();
     if (trimmed.startsWith('/')) {
         return { kind: 'diff', text: trimmed.slice(1).trim() };
+    }
+    if (trimmed.startsWith('@')) {
+        return { kind: 'chat', text: trimmed.slice(1).trim() };
     }
     if (trimmed.startsWith(':')) {
         const value = trimmed.slice(1).trim();

@@ -1,4 +1,4 @@
-import type { RouteSnapshot, RouteStop, UiRouteStale } from '@sherpa/protocol';
+import type { RouteCarried, RouteSnapshot, RouteStop, UiRouteStale } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -55,7 +55,7 @@ function snapshot(patch: Partial<RouteSnapshot> = {}): RouteSnapshot {
         createdAt: '2026-09-01T10:00:00.000Z',
         provenance: { harness: 'claude-code', model: 'opus-5', locale: null },
         previousSnapshotId: 'route-medium-9f3c1ab',
-        carried: { kept: 4, total: 7 },
+        carried: { kept: 4, total: 7, zeroReason: null },
         summary: '',
         stops: [...STOPS],
         tourOrder: STOPS.map((item) => item.id),
@@ -124,48 +124,64 @@ describe('stale route banner', () => {
 });
 
 describe('second pass banner', () => {
-    it('prints progress carryover counts and offers the filter', () => {
-        const html = renderToStaticMarkup(
+    function secondPass(carried: RouteCarried | null, changedStops = 3): string {
+        return renderToStaticMarkup(
             <RouteSecondPassBanner
                 commit={PR_COMMIT}
-                carried={{ kept: 4, total: 7 }}
-                hasChanges
+                carried={carried}
+                changedStops={changedStops}
                 onShowNew={() => undefined}
                 onDismiss={() => undefined}
             />,
         );
+    }
+
+    it('prints mark carryover counts and offers a filter', () => {
+        const html = secondPass({ kept: 3, total: 6, zeroReason: null });
 
         expect(html).toContain('The route was rebuilt for');
-        expect(html).toContain('Progress carried over: 4 of 7 stops have not changed and remain viewed.');
-        expect(html).toContain('Comments on changed ranges are pinned to the old commit');
+        expect(html).toContain('3 of 6 stops stayed viewed.');
+        expect(html).toContain('3 stops have changed; comments on changed ranges are pinned');
         expect(html).toContain('What is new since the last pass');
     });
 
-    it('omits the middle sentence when there was nothing to carry over from', () => {
-        const html = renderToStaticMarkup(
-            <RouteSecondPassBanner
-                commit={PR_COMMIT}
-                carried={null}
-                hasChanges
-                onShowNew={() => undefined}
-                onDismiss={() => undefined}
-            />,
+    it('pluralizes both carried-over and changed stops', () => {
+        expect(secondPass({ kept: 1, total: 6, zeroReason: null }, 1)).toContain(
+            '1 of 6 stops stayed viewed.',
         );
+        expect(secondPass({ kept: 1, total: 6, zeroReason: null }, 1)).toContain('1 stop has changed;');
+        expect(secondPass({ kept: 5, total: 6, zeroReason: null }, 6)).toContain(
+            '5 of 6 stops stayed viewed.',
+        );
+        expect(secondPass({ kept: 5, total: 6, zeroReason: null }, 6)).toContain('6 stops have changed;');
+    });
 
-        expect(html).not.toContain('Progress carried over');
-        expect(html).toContain('Comments on changed ranges are pinned to the old commit');
+    it('explains zero carryover without presenting it as an absence of changes', () => {
+        expect(secondPass({ kept: 0, total: 6, zeroReason: 'no_marks' })).toContain(
+            'There were no viewed marks from the previous pass — nothing to carry over.',
+        );
+        expect(secondPass({ kept: 0, total: 6, zeroReason: 'no_overlap' })).toContain(
+            'There were viewed marks from the previous pass, but no stop stayed fully viewed.',
+        );
+        expect(secondPass({ kept: 0, total: 6, zeroReason: 'no_interdiff' })).toContain(
+            'Перенести отметки просмотра не вышло: хост не отдал разницу между итерациями.',
+        );
+        // Snapshot before M5-T21: no reason is stored, so show only the count.
+        expect(secondPass({ kept: 0, total: 6, zeroReason: null })).toContain(
+            'None of the 6 stops stayed viewed.',
+        );
+    });
+
+    it('omits the carryover sentence when there was nothing to carry over from', () => {
+        const html = secondPass(null);
+
+        expect(html).not.toContain('stayed viewed');
+        expect(html).not.toContain('stayed');
+        expect(html).toContain('3 stops have changed; comments on changed ranges are pinned');
     });
 
     it('omits the primary button when no stops changed and there is nothing to filter', () => {
-        const html = renderToStaticMarkup(
-            <RouteSecondPassBanner
-                commit={PR_COMMIT}
-                carried={{ kept: 7, total: 7 }}
-                hasChanges={false}
-                onShowNew={() => undefined}
-                onDismiss={() => undefined}
-            />,
-        );
+        const html = secondPass({ kept: 6, total: 6, zeroReason: null }, 0);
 
         expect(html).toContain('No changes in the stops');
         expect(html).not.toContain('What is new since the last pass');
@@ -177,7 +193,7 @@ describe('second pass banner', () => {
             <RouteSecondPassBanner
                 commit={PR_COMMIT}
                 carried={null}
-                hasChanges
+                changedStops={3}
                 onShowNew={() => undefined}
                 onDismiss={onDismiss}
             />,

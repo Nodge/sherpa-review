@@ -583,13 +583,19 @@ describe('progress carryover between iterations', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    /** Server with an open SSE channel: without it, the iteration feed and carryover do not start. */
-    async function start(): Promise<{ server: SherpaServer; stream: SseStream }> {
+    /**
+     * Server with an open SSE channel: without it, the iteration feed never starts and carryover is never called.
+     * `failSlices` simulates a host that never returns interdiffs.
+     */
+    async function start(options: { failSlices?: boolean } = {}): Promise<{ server: SherpaServer; stream: SseStream }> {
         const host = makeFixtureHost('medium');
         const getDiff = host.getDiff.bind(host);
         host.getDiff = (slice) => {
             if (slice !== undefined) {
                 slices.push(`${slice.base}→${slice.head}`);
+                if (options.failSlices === true) {
+                    return Promise.reject(new Error('interdiff is unavailable'));
+                }
             }
             return getDiff(slice);
         };
@@ -774,7 +780,7 @@ describe('progress carryover between iterations', () => {
         const snapshot = await readRouteSnapshot(server);
         expect(snapshot?.diffId).toBe(V2.diffId);
         expect(snapshot?.previousSnapshotId).toBe(first);
-        expect(snapshot?.carried).toEqual({ kept: 3, total: 7 });
+        expect(snapshot?.carried).toEqual({ kept: 3, total: 6, zeroReason: null });
         expect(second).not.toBe(first);
 
         const active = await readProgress(server);
@@ -786,6 +792,51 @@ describe('progress carryover between iterations', () => {
         // Previous iteration progress stayed with that iteration.
         const past = await readProgress(server, `?diffId=${V1.diffId}`);
         expect(past.stops.map((stop) => stop.stopId)).toEqual(['s01', 's02', 's04', 's05']);
+    });
+
+    it('marks arrived but covered no stops: reports no overlap', async () => {
+        const { server, stream } = await start();
+        await completeRoute(server);
+        const v1Diff = fixtureData('medium').iterations[0]?.diff;
+        if (v1Diff === undefined) {
+            throw new Error('medium fixture has no first iteration');
+        }
+        // Marked exactly the stop touched by the push: some of its ranges will carry over,
+        // but it will no longer be fully viewed on the new iteration.
+        await markStop(server, 's02', v1Diff);
+
+        await advance(server, stream);
+        await waitForCarry(V1.diffId, V2.diffId);
+        expect(await server.route.generate()).toBe('started');
+        await completeRoute(server);
+
+        expect(seenRanges(V2.diffId).filter((row) => row.carried_from !== null).length).toBeGreaterThan(0);
+        expect((await readRouteSnapshot(server))?.carried).toEqual({
+            kept: 0,
+            total: 6,
+            zeroReason: 'no_overlap',
+        });
+    });
+
+    it('host returned no slice: carryover failed and the banner receives that exact reason', async () => {
+        const { server, stream } = await start({ failSlices: true });
+        await completeRoute(server);
+        const v1Diff = fixtureData('medium').iterations[0]?.diff;
+        if (v1Diff === undefined) {
+            throw new Error('medium fixture has no first iteration');
+        }
+        await markStop(server, 's01', v1Diff);
+
+        await advance(server, stream);
+        expect(await server.route.generate()).toBe('started');
+        await completeRoute(server);
+
+        expect(seenRanges(V2.diffId)).toHaveLength(0);
+        expect((await readRouteSnapshot(server))?.carried).toEqual({
+            kept: 0,
+            total: 6,
+            zeroReason: 'no_interdiff',
+        });
     });
 
     it('a force-push carries progress over from the latest iteration and marks the missing one gone', async () => {

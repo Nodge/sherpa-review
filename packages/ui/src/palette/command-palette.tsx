@@ -1,9 +1,11 @@
+import type { AgentNote, ChatExchange, ChatExchangeStatus } from '@sherpa/protocol';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { chatAnchorLabel } from '../components/chat-panel.tsx';
 import { Icon } from '../icons/icon.tsx';
-import { translateKey, useLocale, useT } from '../i18n/index.js';
-import type { MessageKey } from '../i18n/index.js';
+import { translateKey, useFormat, useLocale, useT } from '../i18n/index.js';
+import type { Formatters, MessageKey, Translate } from '../i18n/index.js';
 import { usePrState, usePrStateStore } from '../pr-state/context.tsx';
 import { addRecentCommand, PALETTE_RECENT_LIMIT } from '../pr-state/pr-state-store.js';
 import { useEscapeLayer, useShortcut, useShortcutList } from '../shortcuts/context.tsx';
@@ -11,6 +13,7 @@ import type { Shortcut } from '../shortcuts/registry.js';
 import { formatKeys } from '../shortcuts/registry.js';
 import { isRowSelected, menuSections, rowText, rowTitle } from '../iterations/snapshot-picker.tsx';
 import type { PickerRows, Viewing } from '../iterations/viewing.js';
+import { searchChat } from './chat-search.js';
 import { movePaletteCursor, scrollPaletteCursor } from './cursor.js';
 import type { PaletteDiffSource } from './diff-source.tsx';
 import { lineSideInDiff, searchDiff } from './diff-search.js';
@@ -28,10 +31,25 @@ export interface PaletteIterations {
     readonly onSelect: (viewing: Viewing) => void;
 }
 
+/** `@` mode: this PR's chat history (SPEC §2.18), all exchanges from all iterations, filtered on the client. */
+export interface PaletteChat {
+    readonly exchanges: readonly ChatExchange[];
+    readonly notes: readonly AgentNote[];
+    /** Files in the viewed iteration, used to decide whether an anchor is alive. */
+    readonly liveFileIds: ReadonlySet<string>;
+    /** Reference time for relative timestamps, to keep the gallery deterministic. */
+    readonly now: number;
+    /** History is still loading: an empty list does not mean there is no history. */
+    readonly loading?: boolean;
+    readonly error?: string | null;
+    readonly onSelect: (exchange: ChatExchange, anchorAlive: boolean) => void;
+}
+
 export interface CommandPaletteProps {
     readonly open: boolean;
     readonly source: PaletteDiffSource | null;
     readonly iterations?: PaletteIterations;
+    readonly chat?: PaletteChat | undefined;
     readonly sourceError?: string | null;
     readonly onOpen: () => void;
     readonly onClose: () => void;
@@ -75,6 +93,7 @@ export function CommandPalette({
     open,
     source,
     iterations,
+    chat,
     sourceError = null,
     onOpen,
     onClose,
@@ -84,6 +103,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
     const t = useT();
     const locale = useLocale();
+    const format = useFormat();
     const [query, setQuery] = useState(initialQuery);
     // SPEC has no file prefix. The command switches the internal results to files only.
     const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
@@ -147,6 +167,23 @@ export function CommandPalette({
             requestedQuery.current = '/';
             setBrowseMode('all');
             setQuery('/');
+            setCursor(0);
+            cursorOrigin.current = 'programmatic';
+            onOpen();
+        },
+    });
+    useShortcut({
+        id: 'palette.chatHistory',
+        keys: [],
+        label: 'shortcut.palette.chatHistory',
+        group: 'palette.group.sherpa',
+        scope: 'global',
+        section: 'agent',
+        when: () => chat !== undefined,
+        action: () => {
+            requestedQuery.current = '@';
+            setBrowseMode('all');
+            setQuery('@');
             setCursor(0);
             cursorOrigin.current = 'programmatic';
             onOpen();
@@ -238,6 +275,7 @@ export function CommandPalette({
                 (shortcut.id === 'palette.goToFile' ||
                     shortcut.id === 'palette.findFile' ||
                     shortcut.id === 'palette.searchDiff' ||
+                    shortcut.id === 'palette.chatHistory' ||
                     shortcut.id === 'palette.iterations'),
             action: shortcut.action,
         });
@@ -323,6 +361,52 @@ export function CommandPalette({
                 nothingFound: found.matches.length === 0,
                 truncated: found.truncated,
             };
+        }
+
+        if (parsed.kind === 'chat') {
+            // Nothing to show. First distinguish "not loaded" from "empty", and only treat a nonempty
+            // query as a search with no results. Don't offer "search the diff":
+            // the query wasn't about the diff.
+            const nothing = (): PaletteResult => {
+                if (chat?.error != null) {
+                    return emptyResult(t('palette.notice.chatFailed', chat.error));
+                }
+                if (chat?.loading === true) {
+                    return emptyResult(t('palette.notice.chatLoading'));
+                }
+                if (parsed.text === '') {
+                    return emptyResult(t('palette.chat.empty'));
+                }
+                return {
+                    items: [],
+                    notice: t('palette.notice.nothingFor', parsed.text),
+                    nothingFound: true,
+                    truncated: false,
+                };
+            };
+            if (chat === undefined) {
+                return nothing();
+            }
+            const found = searchChat(chat.exchanges, parsed.text, SEARCH_LIMIT);
+            const items = found.exchanges.map((exchange): PaletteItem => {
+                const anchorAlive = exchange.anchor !== null && chat.liveFileIds.has(exchange.anchor.fileId);
+                return {
+                    id: `chat:${String(exchange.id)}`,
+                    group: 'palette.group.chat',
+                    label: exchange.question,
+                    keyHint: null,
+                    consequence: chatConsequence(exchange, anchorAlive, chat, format.relativeTime, t),
+                    detail: null,
+                    commandId: null,
+                    keepOpen: false,
+                    action: () => {
+                        chat.onSelect(exchange, anchorAlive);
+                    },
+                };
+            });
+            return items.length === 0
+                ? nothing()
+                : { items, notice: null, nothingFound: false, truncated: found.truncated };
         }
 
         if (browseMode === 'iterations') {
@@ -611,6 +695,43 @@ export function CommandPalette({
         </div>
     );
 }
+
+/**
+ * The right side of a history row: "when · where" and labels explaining why jumping to the anchor
+ * won't work as the reviewer expects.
+ */
+function chatConsequence(
+    exchange: ChatExchange,
+    anchorAlive: boolean,
+    chat: PaletteChat,
+    relativeTime: Formatters['relativeTime'],
+    t: Translate,
+): string {
+    const parts = [
+        relativeTime(exchange.createdAt, chat.now),
+        exchange.anchor === null ? t('palette.chat.wholePr') : chatAnchorLabel(exchange.anchor),
+    ];
+    if (exchange.anchor !== null && !anchorAlive) {
+        parts.push(t('palette.chat.anchorGone'));
+    }
+    if (chat.notes.some((note) => note.exchangeId === exchange.id && note.lostAnchor)) {
+        parts.push(t('palette.chat.noteLost'));
+    }
+    const status = CHAT_STATUS_MARK[exchange.status];
+    if (status !== null) {
+        parts.push(t(status));
+    }
+    return parts.join(' · ');
+}
+
+/** Status label for an unfinished exchange. Accepted answers have none. */
+const CHAT_STATUS_MARK: Readonly<Record<ChatExchangeStatus, MessageKey | null>> = {
+    queued: 'palette.chat.pending',
+    running: 'palette.chat.pending',
+    done: null,
+    failed: 'palette.chat.failed',
+    cancelled: 'palette.chat.cancelled',
+};
 
 function SearchSnippet({ match }: { match: DiffSearchMatch }) {
     return (

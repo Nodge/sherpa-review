@@ -1,5 +1,5 @@
 import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot, RouteStopChange, UiRouteStale } from '@sherpa/protocol';
+import type { RouteCarried, RouteSnapshot, RouteStopChange, UiRouteStale } from '@sherpa/protocol';
 import { useMemo } from 'react';
 
 import type { BannerSource } from '../../components/banner-slot.tsx';
@@ -52,8 +52,14 @@ const DEFAULT_CHANGES: Readonly<Record<string, RouteStopChange>> = {
     s06: { kind: 'new', reason: null, threadIds: [] },
 };
 
-/** Second-pass snapshot: 2 changed stops, 1 new stop, carried-over progress. */
-function secondPassSnapshot(changes: Readonly<Record<string, RouteStopChange>> = DEFAULT_CHANGES): RouteSnapshot {
+/**
+ * Second pass snapshot: 2 changed stops, one new stop, progress carried over.
+ * The carryover denominator is 6 stops with anchors. Carryover cannot cover Other.
+ */
+function secondPassSnapshot(
+    changes: Readonly<Record<string, RouteStopChange>> = DEFAULT_CHANGES,
+    carried: RouteCarried = { kept: 3, total: 6, zeroReason: null },
+): RouteSnapshot {
     const snapshot = readySnapshot();
     return {
         ...snapshot,
@@ -61,7 +67,7 @@ function secondPassSnapshot(changes: Readonly<Record<string, RouteStopChange>> =
         commit: PR_COMMIT,
         diffId: PR_DIFF_ID,
         previousSnapshotId: snapshot.snapshotId,
-        carried: { kept: 4, total: 7 },
+        carried,
         stops: snapshot.stops.map((stop) => ({ ...stop, change: changes[stop.id] ?? null })),
     };
 }
@@ -153,7 +159,7 @@ function secondPassBanners(snapshot: RouteSnapshot): readonly BannerSource[] {
                 <RouteSecondPassBanner
                     commit={snapshot.commit}
                     carried={snapshot.carried}
-                    hasChanges={snapshot.stops.some((stop) => stop.change !== null)}
+                    changedStops={snapshot.stops.filter((stop) => stop.change !== null).length}
                     onShowNew={() => undefined}
                     onDismiss={() => undefined}
                 />
@@ -181,6 +187,14 @@ export const M4_T8_STATES: readonly RouteGalleryState[] = [
         title: 'second pass: progress carried over, filter offered',
         render: () => {
             const snapshot = secondPassSnapshot();
+            return <IterationState snapshot={snapshot} banners={secondPassBanners(snapshot)} />;
+        },
+    },
+    {
+        id: 'iterations-second-pass-zero-carry',
+        title: 'second pass: zero carryover, some stops changed',
+        render: () => {
+            const snapshot = secondPassSnapshot(DEFAULT_CHANGES, { kept: 0, total: 6, zeroReason: 'no_overlap' });
             return <IterationState snapshot={snapshot} banners={secondPassBanners(snapshot)} />;
         },
     },

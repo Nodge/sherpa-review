@@ -48,7 +48,6 @@ import { PrStateStore } from './pr-state-store.js';
 import { ProgressStore } from './progress-store.js';
 import { TaskQueue } from './queue.js';
 import { ReviewFeed } from './review-feed.js';
-import type { EditorOptions } from './review-routes.js';
 import { createReviewRoutes } from './review-routes.js';
 import type { RouteConfig } from './route-orchestrator.js';
 import { RouteOrchestrator } from './route-orchestrator.js';
@@ -108,8 +107,6 @@ export interface StartServerOptions {
     reviewHostFactory?: ReviewHostFactory;
     /** Feedback channel transport and environment. Tests replace fetch and credentials without a live issue service. */
     feedback?: FeedbackIntegrationOptions;
-    /** "Open in external editor" settings. Defaults to the server's cwd and `SHERPA_EDITOR`. */
-    editor?: EditorOptions;
     /**
      * Route thresholds and section batching (`DEFAULT_ROUTE_CONFIG`). Internal server policy:
      * neither the UI nor the CLI knows about it. The M2-T12 latency measurement adjusts section batches here.
@@ -359,7 +356,6 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 draftBuffer,
                 iterations: iterationStore,
                 iterationFeed,
-                ...(options.editor === undefined ? {} : { editor: options.editor }),
             }),
             ...createFeedbackRoutes({
                 prKey,

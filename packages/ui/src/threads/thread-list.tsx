@@ -2,6 +2,7 @@ import type { Comment, FileAnchor, Locale, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { copyText } from '../components/clipboard.js';
 import { updateFragment } from '../fragment.js';
 import type { Translate } from '../i18n/index.js';
 import { relativeTime, shortCommit, useLocale, useT } from '../i18n/index.js';
@@ -707,5 +708,5 @@ function initials(name: string): string {
 async function copyThreadLink(threadId: string): Promise<void> {
     const url = new URL(window.location.href);
     url.hash = updateFragment(window.location.hash, { thread: threadId, file: null });
-    await navigator.clipboard.writeText(url.toString());
+    await copyText(url.toString());
 }
