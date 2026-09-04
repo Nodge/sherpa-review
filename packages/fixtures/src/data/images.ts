@@ -11,6 +11,13 @@ export const PNG_BEFORE_BASE64 =
 export const PNG_AFTER_BASE64 =
     'iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAAM0lEQVR42u3PQQkAAAgAMQOazNIaQj/CBhfgIgCAx7qyLzNgwIABAwYMGDBgwMCfAYCVASMKiS40cqcGAAAAAElFTkSuQmCC';
 
+/**
+ * Small 24×16 PNG: absent from `medium`, needed only by the state gallery
+ * to show Diff mode with sides of different sizes.
+ */
+export const PNG_SMALL_BASE64 =
+    'iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAIElEQVR42mNgGAWkAqWjh/6Tg0ctGLVg1AISLBgFdAcAy6JOwBEFpxUAAAAASUVORK5CYII=';
+
 /** Deleted PNG: only one side, and the file has no `after` at all. */
 export const PNG_DELETED_BASE64 =
     'iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAAOklEQVR42u3PUQkAMAhAQaMvgPms474NIAx2D16Ai5A0yjr98gAAAAAAAAAAAAAAAAAAAAAAOwDpsy6QMcxX9xvYOgAAAABJRU5ErkJggg==';

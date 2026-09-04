@@ -7,7 +7,9 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BlobLoader } from './blob-loader.tsx';
+import type { ComputeDiff, Rasterize } from './image-card.tsx';
 import { ImageBody } from './image-card.tsx';
+import type { ImageDiffResult } from './image-diff.js';
 
 /**
  * Image card: mode availability for each side, object URL lifetime and failure
@@ -16,6 +18,9 @@ import { ImageBody } from './image-card.tsx';
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no canvas and logs "Not implemented" on every call, so provide our own response.
+HTMLCanvasElement.prototype.getContext = (() => null) as HTMLCanvasElement['getContext'];
 
 const DATA = fixtureIteration('medium');
 
@@ -112,6 +117,24 @@ function mode(host: HTMLElement, label: string): HTMLButtonElement {
     return found;
 }
 
+/** Diff mode mocks. jsdom has no canvas, and there is no need to start a worker. */
+const RASTERIZE: Rasterize = (image) => ({
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+    data: new Uint8ClampedArray(image.naturalWidth * image.naturalHeight * 4),
+});
+
+function diffResult(changed: number, total: number, sizeMismatch = false): ImageDiffResult {
+    return { width: 48, height: 32, data: new Uint8ClampedArray(48 * 32 * 4), changed, total, sizeMismatch };
+}
+
+/** Both 2-up sides measured. Diff mode refuses to compute without natural dimensions. */
+function measureBothSides(host: HTMLElement): void {
+    const images = [...host.querySelectorAll<HTMLImageElement>('img.image-card__image')];
+    measure(images[0], 48, 32);
+    measure(images[1], 48, 32);
+}
+
 describe('image card', () => {
     it('offers overlays for a file with two sides, but not for a one-sided file', async () => {
         const both = render(<ImageBody file={MODIFIED.file} image={MODIFIED.image} loadBlob={okLoader()} />);
@@ -120,11 +143,11 @@ describe('image card', () => {
 
         expect(mode(both.host, 'Swipe').disabled).toBe(false);
         expect(mode(both.host, 'Onion Skin').disabled).toBe(false);
+        expect(mode(both.host, 'Diff').disabled).toBe(false);
         expect(mode(single.host, 'Swipe').disabled).toBe(true);
         expect(mode(single.host, 'Swipe').title).toBe('both sides are needed');
-        // `Diff` is disabled in both cards: the mode arrives in T25.
-        expect(mode(both.host, 'Diff').disabled).toBe(true);
-        expect(mode(both.host, 'Diff').title).toBe('попиксельная разница появится позже');
+        expect(mode(single.host, 'Diff').disabled).toBe(true);
+        expect(mode(single.host, 'Diff').title).toBe('both sides are needed');
     });
 
     it('offers Text only for an image with a text patch', async () => {
@@ -282,5 +305,141 @@ describe('image card', () => {
         const clip = host.querySelector<HTMLElement>('.image-card__clip');
         expect(clip?.style.clipPath).toBe('inset(0 65% 0 0)');
         expect(clip?.querySelector('.image-card__layer')).not.toBeNull();
+    });
+    it('computes Diff only after selecting the mode and displays a summary', async () => {
+        let calls = 0;
+        const computeDiff: ComputeDiff = () => {
+            calls += 1;
+            return Promise.resolve(diffResult(384, 1536));
+        };
+        const { host } = render(
+            <ImageBody
+                file={MODIFIED.file}
+                image={MODIFIED.image}
+                loadBlob={okLoader()}
+                initial={{ rasterize: RASTERIZE, computeDiff }}
+            />,
+        );
+        await settle();
+        measureBothSides(host);
+
+        // The card opened in 2-up, so the worker has not been used.
+        expect(calls).toBe(0);
+
+        act(() => {
+            mode(host, 'Diff').click();
+        });
+        await settle();
+
+        expect(calls).toBe(1);
+        expect(host.querySelector('canvas.image-card__diff')).not.toBeNull();
+        expect(host.textContent).toContain('25 % of pixels changed');
+        expect(host.textContent).toContain('384');
+    });
+
+    it('does not recompute the same pair when leaving Diff and returning', async () => {
+        let calls = 0;
+        let release: ((result: ImageDiffResult) => void) | null = null;
+        const computeDiff: ComputeDiff = () => {
+            calls += 1;
+            return new Promise<ImageDiffResult>((resolve) => {
+                release = resolve;
+            });
+        };
+        const { host } = render(
+            <ImageBody
+                file={MODIFIED.file}
+                image={MODIFIED.image}
+                loadBlob={okLoader()}
+                initial={{ mode: 'diff', rasterize: RASTERIZE, computeDiff }}
+            />,
+        );
+        await settle();
+        const sources = [...host.querySelectorAll<HTMLImageElement>('img.image-card__source')];
+        measure(sources[0], 48, 32);
+        measure(sources[1], 48, 32);
+        await settle();
+        expect(calls).toBe(1);
+
+        // Still computing. Leave for 2-up and return, and the same request must wait for its response.
+        act(() => {
+            mode(host, '2-up').click();
+        });
+        act(() => {
+            mode(host, 'Diff').click();
+        });
+        await settle();
+        expect(calls).toBe(1);
+
+        act(() => {
+            release?.(diffResult(384, 1536));
+        });
+        await settle();
+        expect(host.textContent).toContain('25 % of pixels changed');
+
+        // The completed result survives switching too, without rasterization or worker calls.
+        act(() => {
+            mode(host, 'Onion Skin').click();
+        });
+        act(() => {
+            mode(host, 'Diff').click();
+        });
+        await settle();
+        expect(calls).toBe(1);
+        expect(host.textContent).toContain('25 % of pixels changed');
+    });
+
+    it('shows a size notice in Diff when side dimensions differ', async () => {
+        const computeDiff: ComputeDiff = () => Promise.resolve(diffResult(1000, 1536, true));
+        const { host } = render(
+            <ImageBody
+                file={MODIFIED.file}
+                image={MODIFIED.image}
+                loadBlob={okLoader()}
+                initial={{ mode: 'diff', rasterize: RASTERIZE, computeDiff }}
+            />,
+        );
+        await settle();
+
+        const sources = [...host.querySelectorAll<HTMLImageElement>('img.image-card__source')];
+        measure(sources[0], 48, 32);
+        measure(sources[1], 24, 16);
+        await settle();
+
+        expect(host.textContent).toContain('sizes differ: 48 × 32 → 24 × 16');
+    });
+
+    it('shows the reason for a computation failure and recomputes on Retry', async () => {
+        let calls = 0;
+        let fail = true;
+        const computeDiff: ComputeDiff = () => {
+            calls += 1;
+            return fail ? Promise.reject(new Error('worker crashed')) : Promise.resolve(diffResult(0, 1536));
+        };
+        const { host } = render(
+            <ImageBody
+                file={MODIFIED.file}
+                image={MODIFIED.image}
+                loadBlob={okLoader()}
+                initial={{ mode: 'diff', rasterize: RASTERIZE, computeDiff }}
+            />,
+        );
+        await settle();
+        const sources = [...host.querySelectorAll<HTMLImageElement>('img.image-card__source')];
+        measure(sources[0], 48, 32);
+        measure(sources[1], 48, 32);
+        await settle();
+
+        expect(calls).toBe(1);
+        expect(host.textContent).toContain('could not compute the difference: worker crashed');
+
+        fail = false;
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.image-card__retry')?.click();
+        });
+        await settle();
+
+        expect(calls).toBe(2);
+        expect(host.textContent).toContain('0 % of pixels changed');
     });
 });

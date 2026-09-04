@@ -24,6 +24,9 @@ describe('M5-T24 gallery', () => {
             'image-two-up-delete',
             'image-swipe',
             'image-onion',
+            'image-diff',
+            'image-diff-busy',
+            'image-diff-size-mismatch',
             'image-text-svg',
             'image-actual-size',
             'image-too-large',
@@ -39,9 +42,7 @@ describe('M5-T24 gallery', () => {
         expect(html).toContain('>2-up</button>');
         expect(html).toContain('>Swipe</button>');
         expect(html).toContain('>Onion Skin</button>');
-        // `Diff` arrives in T25: the button is present but disabled.
-        expect(html).toContain('disabled=""');
-        expect(html).toContain('попиксельная разница появится позже');
+        expect(html).toContain('>Diff</button>');
         // Raster images have no text patch, so they have no Text mode either.
         expect(html).not.toContain('>Text</button>');
         expect(html).toContain('>Before</p>');
@@ -75,6 +76,12 @@ describe('M5-T24 gallery', () => {
 
         expect(html).toContain('too large: 11,4 MB');
         expect(html).toContain('Открыть у хоста');
+    });
+
+    it('Diff shows the same side statuses as 2-up before bytes arrive', () => {
+        // Server rendering runs no effects, so there is no rasterization or worker here.
+        // The frame therefore shows side statuses, rather than the difference itself.
+        expect(markup('image-diff')).toContain('loading…');
     });
 
     it('both sides show a loading status while bytes are in transit', () => {

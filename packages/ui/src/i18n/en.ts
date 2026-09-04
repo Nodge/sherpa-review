@@ -500,8 +500,8 @@ export const en: Dictionary = {
     'image.mode.onion': 'Onion Skin',
     'image.mode.diff': 'Diff',
     'image.mode.text': 'Text',
-    'image.mode.diffLater': 'the pixel diff is coming later',
     'image.mode.needBothSides': 'both sides are needed',
+    'image.mode.noSize': 'the image has no intrinsic size',
     'image.fit.toActual': '1:1',
     'image.fit.toFit': 'Fit',
     'image.fit.toActualTitle': 'show at 1:1 scale',
@@ -525,6 +525,19 @@ export const en: Dictionary = {
     'image.swipe.aria': 'Comparison divider',
     'image.onion.label': 'Opacity',
     'image.onion.value': (percent: number) => `${num(percent)} %`,
+    'image.diff.alt': (path: string) => `${path} — pixel diff`,
+    'image.diff.busy': 'computing the difference…',
+    'image.diff.noCanvas': 'the browser gave no canvas to rasterize into',
+    'image.diff.failed': (reason: string) => `could not compute the difference: ${reason}`,
+    'image.diff.summary': (percent: number, changed: number, total: number) =>
+        `${dec(percent)} % of pixels changed (${num(changed)} of ${num(total)})`,
+    'image.diff.sizeMismatch': (
+        beforeWidth: number,
+        beforeHeight: number,
+        afterWidth: number,
+        afterHeight: number,
+    ) =>
+        `sizes differ: ${num(beforeWidth)} × ${num(beforeHeight)} → ${num(afterWidth)} × ${num(afterHeight)}`,
 
     'fullDiff.subtitle': 'The classic reader. The route no longer sets the order — it stays in the margin.',
     'fullDiff.sliceEmpty': (base: string, head: string) =>

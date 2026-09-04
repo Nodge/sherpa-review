@@ -1,11 +1,13 @@
 import type { FileDiff, FileImage, ImageSide } from '@sherpa/protocol';
 import { IMAGE_BLOB_MAX_BYTES } from '@sherpa/protocol';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, SyntheticEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, SyntheticEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Translate } from '../i18n/index.js';
-import { useT } from '../i18n/index.js';
+import { activeT, useT } from '../i18n/index.js';
 import type { BlobLoader } from './blob-loader.tsx';
+import { sharedImageDiffClient } from './image-diff-client.js';
+import type { DiffPixelsOptions, ImageDiffResult, PixelSurface } from './image-diff.js';
 import './image-card.css';
 
 /**
@@ -20,7 +22,23 @@ import './image-card.css';
 export type ImageMode = 'two-up' | 'swipe' | 'onion' | 'diff' | 'text';
 export type ImageFit = 'fit' | 'actual';
 
-/** Initial card state, gallery only: reviewers switch modes by clicking. */
+/**
+ * Side rasterization for Diff mode uses canvas in the browser and a mock in jsdom and the gallery.
+ * The browser version waits for a loaded `<img>`, so the result can also be a promise.
+ */
+export type Rasterize = (image: HTMLImageElement) => PixelSurface | Promise<PixelSurface>;
+
+/** Diff computation uses the tab's worker in the browser and a direct `diffPixels` call in tests. */
+export type ComputeDiff = (
+    before: PixelSurface,
+    after: PixelSurface,
+    options: DiffPixelsOptions,
+) => Promise<ImageDiffResult>;
+
+/**
+ * Initial card frame for the gallery and tests only. Reviewers switch modes by clicking.
+ * Rasterization and computation mocks live here too, keeping Diff frames independent of canvas and the worker.
+ */
 export interface ImageBodyState {
     readonly mode?: ImageMode;
     readonly fit?: ImageFit;
@@ -28,6 +46,8 @@ export interface ImageBodyState {
     readonly swipe?: number;
     /** Onion Skin top side opacity as a percentage. */
     readonly onion?: number;
+    readonly rasterize?: Rasterize;
+    readonly computeDiff?: ComputeDiff;
 }
 
 export interface ImageBodyProps {
@@ -63,20 +83,24 @@ export function ImageBody({ file, image, loadBlob, textBody = null, initial }: I
     const [fit, setFit] = useState<ImageFit>(initial?.fit ?? 'fit');
     const [swipe, setSwipe] = useState(initial?.swipe ?? 50);
     const [onion, setOnion] = useState(initial?.onion ?? 50);
+    const diff = useDiffCache();
 
     const bothSides = image.before !== null && image.after !== null;
     const hasText = textBody !== null;
     // Show raster upscaling in 1:1 as pixels. Doing this to svg only creates jagged edges.
     const pixelated = image.mime !== 'image/svg+xml';
+    // Nothing to rasterize while either side lacks natural dimensions (svg without
+    // width/height). That `<img>` would produce an empty canvas instead of a diff.
+    const noSize = before.natural !== null && after.natural !== null && (before.natural.width === 0 || after.natural.width === 0);
     const options = MODE_OPTIONS.filter((option) => option.id !== 'text' || hasText).map((option) => ({
         ...option,
-        // `Diff` belongs to T25: keep its button here so the mode row does not shift when it arrives.
-        reason:
-            option.id === 'diff'
-                ? t('image.mode.diffLater')
-                : (option.id === 'swipe' || option.id === 'onion') && !bothSides
-                  ? t('image.mode.needBothSides')
-                  : null,
+        reason: !bothSides
+            ? option.id === 'swipe' || option.id === 'onion' || option.id === 'diff'
+                ? t('image.mode.needBothSides')
+                : null
+            : option.id === 'diff' && noSize
+              ? t('image.mode.noSize')
+              : null,
     }));
 
     return (
@@ -117,6 +141,18 @@ export function ImageBody({ file, image, loadBlob, textBody = null, initial }: I
 
             {mode === 'text' ? (
                 textBody
+            ) : mode === 'diff' ? (
+                <PixelDiff
+                    file={file}
+                    image={image}
+                    fit={fit}
+                    pixelated={pixelated}
+                    before={before}
+                    after={after}
+                    cache={diff}
+                    rasterize={initial?.rasterize}
+                    computeDiff={initial?.computeDiff}
+                />
             ) : mode === 'swipe' || mode === 'onion' ? (
                 <Overlay
                     file={file}
@@ -505,6 +541,291 @@ function Overlay({
             ) : null}
         </div>
     );
+}
+
+/**
+ * Computation result for a pair of object URLs. The key separates a fresh result from a response for old bytes.
+ * There is no separate "computing" state here. It is a key with no result yet.
+ */
+type DiffJob =
+    | { readonly key: string; readonly state: 'ready'; readonly result: ImageDiffResult }
+    | { readonly key: string; readonly state: 'error'; readonly error: string };
+
+/**
+ * Diff computation that survives leaving Diff mode, including both completed results and pending requests.
+ * Lives in `ImageBody`, because `PixelDiff` unmounts when leaving the mode while the side
+ * bytes stay the same.
+ */
+interface DiffCache {
+    /** Attempt number. Retry changes the key, sending the pair for computation again. */
+    readonly attempt: number;
+    readonly job: DiffJob | null;
+    readonly setJob: (job: DiffJob) => void;
+    readonly requestRef: RefObject<{ readonly key: string; readonly promise: Promise<ImageDiffResult> } | null>;
+    readonly retry: () => void;
+}
+
+function useDiffCache(): DiffCache {
+    const [attempt, setAttempt] = useState(0);
+    const [job, setJob] = useState<DiffJob | null>(null);
+    const requestRef = useRef<{ readonly key: string; readonly promise: Promise<ImageDiffResult> } | null>(null);
+    const retry = useCallback(() => {
+        setAttempt((value) => value + 1);
+    }, []);
+    return { attempt, job, setJob, requestRef, retry };
+}
+
+/**
+ * Diff mode rasterizes both sides into `ImageData` and sends them to a worker. The result
+ * renders in the same box as Swipe layers. Computation is lazy, so a 2-up card starts no worker.
+ */
+function PixelDiff({
+    file,
+    image,
+    fit,
+    pixelated,
+    before,
+    after,
+    cache,
+    rasterize,
+    computeDiff,
+}: {
+    file: FileDiff;
+    image: FileImage;
+    fit: ImageFit;
+    pixelated: boolean;
+    before: SideView;
+    after: SideView;
+    cache: DiffCache;
+    rasterize: Rasterize | undefined;
+    computeDiff: ComputeDiff | undefined;
+}) {
+    const t = useT();
+    const beforeRef = useRef<HTMLImageElement | null>(null);
+    const afterRef = useRef<HTMLImageElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const { attempt, job, setJob, requestRef, retry } = cache;
+
+    const beforeNatural = before.natural;
+    const afterNatural = after.natural;
+    const noSize = beforeNatural !== null && afterNatural !== null && (beforeNatural.width === 0 || afterNatural.width === 0);
+    const sized = beforeNatural !== null && afterNatural !== null && !noSize;
+    // Keep the result while the object URLs stay the same. There is no reason to recompute the same bytes
+    // on every return to Diff. Retry changes the key and starts computation again.
+    const key = `${String(attempt)} ${before.url ?? ''} ${after.url ?? ''}`;
+    const current = job?.key === key ? job : null;
+
+    useEffect(() => {
+        const beforeImage = beforeRef.current;
+        const afterImage = afterRef.current;
+        if (!sized || beforeImage === null || afterImage === null) {
+            return;
+        }
+
+        let cancelled = false;
+        // Wait for a pending computation of the same pair. Leaving for 2-up and returning
+        // to Diff must not cost another rasterization and another worker round trip.
+        let pending = requestRef.current?.key === key ? requestRef.current.promise : null;
+        if (pending === null) {
+            // Rasterization waits for the loaded element and can throw (if the browser provides no canvas).
+            // The async wrapper sends its failure through the same path as a worker failure.
+            pending = (async (): Promise<ImageDiffResult> => {
+                const read = rasterize ?? rasterizeWithCanvas;
+                const compute = computeDiff ?? sharedImageDiffClient().compute;
+                const [beforeSurface, afterSurface] = await Promise.all([read(beforeImage), read(afterImage)]);
+                return compute(beforeSurface, afterSurface, { accent: accentColor() });
+            })();
+            requestRef.current = { key, promise: pending };
+        }
+
+        pending.then(
+            (result) => {
+                if (!cancelled) {
+                    setJob({ key, state: 'ready', result });
+                }
+            },
+            (error: unknown) => {
+                if (!cancelled) {
+                    setJob({ key, state: 'error', error: messageOf(error) });
+                }
+            },
+        );
+
+        // Do not write a cancelled request's response anywhere. The worker is shared, and interrupting it for one
+        // unmounted card costs more than letting it finish. The result will wait in `requestRef`.
+        return () => {
+            cancelled = true;
+        };
+    }, [key, sized, rasterize, computeDiff, requestRef, setJob]);
+
+    const result = current?.state === 'ready' ? current.result : null;
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (canvas === null || result === null) {
+            return;
+        }
+        canvas.width = result.width;
+        canvas.height = result.height;
+        const context = canvas.getContext('2d');
+        if (context === null) {
+            return;
+        }
+        // Use `createImageData`, since jsdom has no global `ImageData` constructor.
+        const frame = context.createImageData(result.width, result.height);
+        frame.data.set(result.data);
+        context.putImageData(frame, 0, 0);
+    }, [result]);
+
+    // Nothing to compute until both sides arrive. Until then, show the same
+    // status columns as 2-up.
+    if (before.state !== 'ready' || after.state !== 'ready') {
+        return (
+            <div className="image-card__pair">
+                <SideColumn file={file} side="before" model={image.before} view={before} fit={fit} pixelated={pixelated} />
+                <SideColumn file={file} side="after" model={image.after} view={after} fit={fit} pixelated={pixelated} />
+            </div>
+        );
+    }
+
+    // Use the larger side dimensions, as overlays do. The diff is computed over the same rectangle.
+    const width = Math.max(beforeNatural?.width ?? 0, afterNatural?.width ?? 0);
+    const height = Math.max(beforeNatural?.height ?? 0, afterNatural?.height ?? 0);
+    const size = width === 0 || height === 0 ? undefined : { width, aspectRatio: `${String(width)} / ${String(height)}` };
+    const percent = result === null || result.total === 0 ? 0 : (result.changed / result.total) * 100;
+
+    return (
+        <div
+            className={`image-card__overlay${fit === 'actual' ? ' image-card__overlay--actual' : ''}${
+                pixelated ? ' image-card__overlay--pixelated' : ''
+            }`}
+        >
+            <div
+                className={`image-card__stage${size === undefined ? ' image-card__stage--unsized' : ''}`}
+                style={size}
+            >
+                {/* Rasterization sources. `drawImage` needs a loaded element, but showing it
+                    alongside the diff would be wrong, so keep the pair hidden. */}
+                <img
+                    ref={beforeRef}
+                    className="image-card__source"
+                    src={before.url ?? undefined}
+                    alt=""
+                    aria-hidden
+                    onLoad={before.onLoad}
+                />
+                <img
+                    ref={afterRef}
+                    className="image-card__source"
+                    src={after.url ?? undefined}
+                    alt=""
+                    aria-hidden
+                    onLoad={after.onLoad}
+                />
+                {result === null ? null : (
+                    <canvas
+                        ref={canvasRef}
+                        className="image-card__layer image-card__diff"
+                        role="img"
+                        aria-label={t('image.diff.alt', file.path)}
+                    />
+                )}
+            </div>
+
+            <p className="image-card__meta" role="status">
+                {noSize ? (
+                    <span>{t('image.mode.noSize')}</span>
+                ) : current === null ? (
+                    <span>{t('image.diff.busy')}</span>
+                ) : current.state === 'error' ? (
+                    <>
+                        <span>{t('image.diff.failed', current.error)}</span>
+                        <button type="button" className="image-card__retry" onClick={retry}>
+                            {t('image.retry')}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <span>{t('image.diff.summary', percent, current.result.changed, current.result.total)}</span>
+                        {current.result.sizeMismatch && beforeNatural !== null && afterNatural !== null ? (
+                            <span>
+                                {t(
+                                    'image.diff.sizeMismatch',
+                                    beforeNatural.width,
+                                    beforeNatural.height,
+                                    afterNatural.width,
+                                    afterNatural.height,
+                                )}
+                            </span>
+                        ) : null}
+                    </>
+                )}
+            </p>
+        </div>
+    );
+}
+
+/** Canvas rasterization, the only part of the card that needs a browser. */
+async function rasterizeWithCanvas(image: HTMLImageElement): Promise<PixelSurface> {
+    await whenDrawable(image);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (context === null) {
+        throw new Error(activeT()('image.diff.noCanvas'));
+    }
+    context.drawImage(image, 0, 0);
+    const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+    return { width: frame.width, height: frame.height, data: frame.data };
+}
+
+/**
+ * Wait for a frame before `drawImage`. It silently draws nothing for an unloaded element, which
+ * would give a zero diff instead of an error. Usually the same bytes were just shown in 2-up, so
+ * there is nothing to wait for. A decode failure becomes a computation error with Retry.
+ */
+async function whenDrawable(image: HTMLImageElement): Promise<void> {
+    if (image.complete && image.naturalWidth > 0) {
+        return;
+    }
+    await image.decode();
+}
+
+/** Fallback accent. The diff must stay visible even when the token cannot be read. */
+const FALLBACK_ACCENT: readonly [number, number, number] = [255, 138, 61];
+
+/** Changed pixels use the computed `--accent` token, so the theme sets the diff color. */
+function accentColor(): [number, number, number] {
+    if (typeof document === 'undefined') {
+        return [...FALLBACK_ACCENT];
+    }
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    return parseColor(raw) ?? [...FALLBACK_ACCENT];
+}
+
+/** `#abc`, `#aabbcc`, `rgb(…)`/`rgba(…)` are the forms browsers return for the computed token. */
+export function parseColor(raw: string): [number, number, number] | null {
+    const hex = /^#([\da-f]{3}|[\da-f]{6})$/iu.exec(raw);
+    if (hex !== null) {
+        const digits = hex[1] ?? '';
+        const step = digits.length === 3 ? 1 : 2;
+        const channel = (index: number): number => {
+            const part = digits.slice(index * step, index * step + step);
+            return Number.parseInt(step === 1 ? part + part : part, 16);
+        };
+        return [channel(0), channel(1), channel(2)];
+    }
+
+    const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/iu.exec(raw);
+    if (rgb === null) {
+        return null;
+    }
+    const channels: [number, number, number] = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+    return channels.some((value) => Number.isNaN(value)) ? null : channels;
+}
+
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /** Divider keyboard controls: ←/→ by 2 %, Home/End to the edges. `null` means an unrelated key. */

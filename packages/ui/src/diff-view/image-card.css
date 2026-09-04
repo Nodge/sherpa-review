@@ -266,3 +266,24 @@
     font-family: var(--font-mono);
     color: var(--text-dim);
 }
+
+/*
+ * Diff mode (M5-T25): the original sides are only inputs for rasterization. `drawImage`
+ * works on hidden elements too, leaving a single diff canvas on screen.
+ */
+.image-card__source {
+    display: none;
+}
+
+.image-card__diff {
+    width: 100%;
+    height: auto;
+}
+
+.image-card__overlay--actual .image-card__diff {
+    width: auto;
+}
+
+.image-card__overlay--actual.image-card__overlay--pixelated .image-card__diff {
+    image-rendering: pixelated;
+}

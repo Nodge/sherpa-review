@@ -39,6 +39,8 @@ export { routeFixtures } from './data/index.js';
 export { anchor, bot, comment, human, lens, singleIteration, thread } from './builders.js';
 export type { CommentSpec, LensSpec, ThreadSpec } from './builders.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './data/index.js';
+/** Image outside `medium`: the gallery needs a second side with different dimensions (M5-T25). */
+export { PNG_SMALL_BASE64 } from './data/images.js';
 /** File text on both sides: the state gallery needs it without a server or host. */
 export { fileContentOf } from './file-content.js';
 export type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView, FixtureName } from './data/index.js';

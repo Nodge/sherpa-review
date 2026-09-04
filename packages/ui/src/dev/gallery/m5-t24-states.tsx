@@ -1,4 +1,4 @@
-import { fixtureIteration, makeFixtureHost } from '@sherpa/fixtures';
+import { fixtureIteration, makeFixtureHost, PNG_SMALL_BASE64 } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 
@@ -8,14 +8,17 @@ import type { BlobLoader } from '../../diff-view/blob-loader.tsx';
 import { BlobLoaderProvider } from '../../diff-view/blob-loader.tsx';
 import type { FileCardActions } from '../../diff-view/file-card.tsx';
 import { FileCard } from '../../diff-view/file-card.tsx';
-import type { ImageBodyState } from '../../diff-view/image-card.tsx';
+import type { ComputeDiff, ImageBodyState } from '../../diff-view/image-card.tsx';
 import { readStateOf } from '../../progress/read-state.js';
 import '../../diff-view/diff-view.css';
 
 /**
- * M5-T24: image cards using images from the `medium` fixture. Bytes come from `FixtureHost`.
+ * M5-T24 and M5-T25: image cards using images from the `medium` fixture. Bytes come from `FixtureHost`.
  * The gallery needs no server or token. Loading and error states use transports that
  * stay pending for loading and fail for errors, so the frames are deterministic without timers.
+ *
+ * Diff frames use the real worker and canvas. Input bytes are fixed,
+ * so the result stays the same across runs.
  */
 
 const MEDIUM = fixtureIteration('medium');
@@ -54,9 +57,30 @@ function fixtureLoader(mime: string): BlobLoader {
 }
 
 const PNG_LOADER = fixtureLoader('image/png');
+
+/**
+ * Sides of different sizes: `after` is replaced with a small png outside `medium`, so the
+ * fixture contents stay independent of the gallery and Diff mode gets a real `sizeMismatch`.
+ */
+const SMALL_BLOB_ID = 'blob:png-small';
+const SMALL_PNG = Uint8Array.from(atob(PNG_SMALL_BASE64), (char) => char.codePointAt(0) ?? 0);
+
+const MIXED_SIZES: FileDiff = {
+    ...PNG,
+    image: PNG.image === null ? null : { ...PNG.image, after: { blobId: SMALL_BLOB_ID, size: SMALL_PNG.length } },
+};
+
+const MIXED_LOADER: BlobLoader = (blobId) =>
+    blobId === SMALL_BLOB_ID
+        ? Promise.resolve(new Blob([SMALL_PNG], { type: 'image/png' }))
+        : PNG_LOADER(blobId);
+
 const SVG_LOADER = fixtureLoader('image/svg+xml');
 const FAILING_LOADER: BlobLoader = () => Promise.reject(new Error('the blob endpoint returned 500'));
 const PENDING_LOADER: BlobLoader = () => new Promise(() => undefined);
+
+/** A calculation that never finishes: a "calculating the difference…" frame without timers. */
+const PENDING_DIFF: ComputeDiff = () => new Promise(() => undefined);
 
 const ACTIONS: FileCardActions = {
     onViewed: () => Promise.resolve(null),
@@ -128,6 +152,23 @@ export const M5_T24_STATES: readonly {
         id: 'image-onion',
         title: 'Onion Skin: 50 % opacity',
         render: () => <ImageCardState file={PNG} loadBlob={PNG_LOADER} initial={{ mode: 'onion', onion: 50 }} />,
+    },
+    {
+        id: 'image-diff',
+        title: 'Diff: pixel-level difference for a png change',
+        render: () => <ImageCardState file={PNG} loadBlob={PNG_LOADER} initial={{ mode: 'diff' }} />,
+    },
+    {
+        id: 'image-diff-busy',
+        title: 'Diff: calculating the difference',
+        render: () => (
+            <ImageCardState file={PNG} loadBlob={PNG_LOADER} initial={{ mode: 'diff', computeDiff: PENDING_DIFF }} />
+        ),
+    },
+    {
+        id: 'image-diff-size-mismatch',
+        title: 'Diff: sides of different sizes',
+        render: () => <ImageCardState file={MIXED_SIZES} loadBlob={MIXED_LOADER} initial={{ mode: 'diff' }} />,
     },
     {
         id: 'image-text-svg',

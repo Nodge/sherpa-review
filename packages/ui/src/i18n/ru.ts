@@ -508,8 +508,8 @@ export const ru = {
     'image.mode.onion': 'Onion Skin',
     'image.mode.diff': 'Diff',
     'image.mode.text': 'Текст',
-    'image.mode.diffLater': 'попиксельная разница появится позже',
     'image.mode.needBothSides': 'нужны обе стороны',
+    'image.mode.noSize': 'нет размера картинки',
     'image.fit.toActual': '1:1',
     'image.fit.toFit': 'Вписать',
     'image.fit.toActualTitle': 'показать в масштабе 1:1',
@@ -533,6 +533,19 @@ export const ru = {
     'image.swipe.aria': 'Разделитель сравнения',
     'image.onion.label': 'Непрозрачность',
     'image.onion.value': (percent: number) => `${num(percent)} %`,
+    'image.diff.alt': (path: string) => `${path} — попиксельная разница`,
+    'image.diff.busy': 'считаем разницу…',
+    'image.diff.noCanvas': 'браузер не дал холст для растеризации',
+    'image.diff.failed': (reason: string) => `не удалось посчитать разницу: ${reason}`,
+    'image.diff.summary': (percent: number, changed: number, total: number) =>
+        `изменено ${dec(percent)} % пикселей (${num(changed)} из ${num(total)})`,
+    'image.diff.sizeMismatch': (
+        beforeWidth: number,
+        beforeHeight: number,
+        afterWidth: number,
+        afterHeight: number,
+    ) =>
+        `размеры различаются: ${num(beforeWidth)} × ${num(beforeHeight)} → ${num(afterWidth)} × ${num(afterHeight)}`,
 
     'fullDiff.subtitle': 'Классическая читалка. Маршрут больше не задаёт порядок — он остаётся на полях.',
     'fullDiff.sliceEmpty': (base: string, head: string) =>
