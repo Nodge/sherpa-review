@@ -52,6 +52,7 @@ import type { ChatScrollTarget } from './components/chat-panel.tsx';
 import { ChatPanel, sameChatAnchor } from './components/chat-panel.tsx';
 import { useChatDock } from './components/dock.js';
 import { generationCapBannerVisible, GenerationCapBanner } from './components/generation-cap-banner.tsx';
+import { usePrCommentsGate } from './components/pr-comments-gate.js';
 import { reconnectCommand } from './components/reconnect-command.js';
 import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
@@ -2020,6 +2021,8 @@ export function App({ store, session, token }: AppProps) {
         },
         [session],
     );
+    // PR comments modal, opened by the action panel and discussion card (§1e item 5).
+    const prComments = usePrCommentsGate();
     const threadPin = useMemo<ThreadPinContextValue>(
         () => ({ activeDiffId, viewingDiffId: currentDiff?.diffId ?? null, openAtPin: openThreadAtIteration }),
         [activeDiffId, currentDiff, openThreadAtIteration],
@@ -2228,6 +2231,9 @@ export function App({ store, session, token }: AppProps) {
                     {...(threadStore === null ? {} : { threadStore })}
                     picker={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
                     {...(snapshotPill === null ? {} : { headerAside: snapshotPill })}
+                    {...(showReviewActionBar && reviewActionBarDataReady
+                        ? { onWritePrComment: prComments.openModal }
+                        : {})}
                     generation={{
                         route,
                         longRunning,
@@ -2341,6 +2347,7 @@ export function App({ store, session, token }: AppProps) {
                         draftBuffer={draftBuffer}
                         onPublish={publishHere}
                         onComplete={completeReview}
+                        prComments={prComments}
                         chatOpen={chatOpen}
                     />
                 ) : (

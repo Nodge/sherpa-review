@@ -42,6 +42,8 @@
     --pr-comments-delete-surface: #170f0f;
     --pr-comments-delete-button-surface: #3a1f1e;
     --pr-comments-delete-button-hover: #4a2725;
+    /* SPEC additions §1e: code block inside an "outside the diff" thread card. */
+    --surface-code-inset: #0b0c0e;
 
     /* --- Borders --- */
     --border-hairline: #1a1d21;

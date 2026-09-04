@@ -13,6 +13,7 @@ import {
     prLevelHumanThreads,
     threadAtLines,
     threadFileId,
+    threadHasAuthor,
     threadIsVisible,
 } from './model.js';
 
@@ -176,6 +177,27 @@ describe('thread model', () => {
         expect(counts).toEqual({ people: 4, bots: 2, resolved: 1 });
         expect(threads.filter((thread) => threadIsVisible(thread, { people: true, bots: false, resolved: false })))
             .toHaveLength(4);
+    });
+
+    it('keeps threads where the login wrote the root or any reply under the author lens', () => {
+        const threads = fixtureIteration('medium').threads;
+        const all = { people: true, bots: true, resolved: true };
+        const root = threads[0];
+        if (root === undefined) {
+            throw new Error('fixture has no threads');
+        }
+        const replyAuthor = root.root.replies[0]?.author.login ?? null;
+        if (replyAuthor === null || replyAuthor === root.root.author.login) {
+            throw new Error('test needs a thread with a reply by another author');
+        }
+
+        expect(threadHasAuthor(root, replyAuthor)).toBe(true);
+        expect(threadIsVisible(root, all, replyAuthor)).toBe(true);
+        expect(threadIsVisible(root, all, 'nobody')).toBe(false);
+        // Source chips apply on top of the lens, rather than replacing it.
+        expect(threadIsVisible(root, { people: false, bots: false, resolved: false }, root.root.author.login)).toBe(
+            false,
+        );
     });
 });
 

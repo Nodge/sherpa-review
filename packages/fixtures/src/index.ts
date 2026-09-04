@@ -33,6 +33,12 @@ export type { ChatFixtures } from './data/index.js';
 /** Route (M2): generation states for the gallery and prepared model outputs for e2e. */
 export { routeFixtures } from './data/index.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults } from './data/index.js';
+/**
+ * Domain object builders: the gallery and tests use them to build thread sets missing from the
+ * ready-made fixtures (scale §1e: 86 threads from 85 bots).
+ */
+export { anchor, bot, comment, human, lens, singleIteration, thread } from './builders.js';
+export type { CommentSpec, LensSpec, ThreadSpec } from './builders.js';
 /** File text on both sides: the state gallery needs it without a server or host. */
 export { fileContentOf } from './file-content.js';
 export type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView, FixtureName } from './data/index.js';

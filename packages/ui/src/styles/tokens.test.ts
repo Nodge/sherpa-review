@@ -48,6 +48,8 @@ const EXPECTED: Record<string, string> = {
     '--pr-comments-delete-surface': '#170f0f',
     '--pr-comments-delete-button-surface': '#3a1f1e',
     '--pr-comments-delete-button-hover': '#4a2725',
+    // SPEC additions §1e: code block in an "outside the diff" thread card in Overview.
+    '--surface-code-inset': '#0b0c0e',
     '--pr-comments-list-fade': 'linear-gradient(180deg,rgba(15,16,18,0) 0%,#0f1012 92%)',
 
     // Borders — hairline `#1a1d21`, `#1e2126`, `#191c20`; standard `#22252b`, `#24272d`,

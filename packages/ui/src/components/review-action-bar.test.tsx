@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
 import type { DraftBufferEntry, Thread, UiSettings, Verdict } from '@sherpa/protocol';
-import { act } from 'react';
+import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import { countDraftComments } from '../progress/summary.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import { createUiSettingsStore } from '../settings/settings-store.js';
 import { createThreadStore } from '../threads/store.js';
+import { usePrCommentsGate } from './pr-comments-gate.js';
 import type { RouteProgress } from './review-action-bar.tsx';
 import {
     reviewActionBarVisible,
@@ -173,7 +174,87 @@ describe('PR comments modal', () => {
         expect(document.activeElement).toBe(commentButton);
         expect(document.body.style.overflow).toBe('');
     });
+
+    it('opens from outside the bar and returns focus to the triggering button', async () => {
+        const { outside } = mountSharedGate();
+
+        act(() => {
+            outside.click();
+        });
+
+        expect(document.querySelector('.pr-comments-modal')).not.toBeNull();
+
+        const close = document.querySelector<HTMLButtonElement>('[aria-label="Close the PR comments"]');
+        await act(async () => {
+            close?.click();
+            await Promise.resolve();
+        });
+
+        expect(document.querySelector('.pr-comments-modal')).toBeNull();
+        expect(document.activeElement).toBe(outside);
+    });
 });
+
+/**
+ * Bar with shared modal state (M5-T16): the discussion card can open it too,
+ * and focus must return to wherever it was opened from.
+ */
+function mountSharedGate(): { readonly outside: HTMLButtonElement } {
+    const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+
+    function Harness() {
+        const gate = usePrCommentsGate();
+        const ref = useRef<HTMLButtonElement | null>(null);
+        return (
+            <SettingsProvider store={settings}>
+                <button
+                    type="button"
+                    ref={ref}
+                    className="outside-opener"
+                    onClick={() => {
+                        gate.openModal(() => {
+                            ref.current?.focus();
+                        });
+                    }}
+                >
+                    Write a PR comment
+                </button>
+                <ReviewActionBar
+                    pr={DATA.pr}
+                    diff={DATA.diff}
+                    diffStore={createDiffViewStore({ files: DATA.diff.files })}
+                    threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
+                    connection="online"
+                    hostName="FixtureHost"
+                    composerTransport={TRANSPORT}
+                    onPublish={() => Promise.reject(new Error('the test does not publish'))}
+                    onComplete={() => undefined}
+                    prComments={gate}
+                    route={null}
+                />
+            </SettingsProvider>
+        );
+    }
+
+    act(() => {
+        root.render(<Harness />);
+    });
+    mounted.push(() => {
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    const outside = host.querySelector<HTMLButtonElement>('.outside-opener');
+    if (outside === null) {
+        throw new Error('the test has no external button');
+    }
+    return { outside };
+}
 
 /** Live bar for checking ship mode writes: publishing always succeeds. */
 function mountShipBar(options: { readonly shipMode: UiSettings['shipMode']; readonly sticky: boolean; readonly menu?: boolean }): {

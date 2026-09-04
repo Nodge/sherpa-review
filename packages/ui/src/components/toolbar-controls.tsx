@@ -18,6 +18,7 @@ export function ToolbarRightCluster({
     threadsShow,
     threadCounts,
     onThreadsShow,
+    authorLens = null,
 }: {
     readonly store: DiffViewStore;
     readonly filters: readonly FileFilter[];
@@ -26,6 +27,8 @@ export function ToolbarRightCluster({
     readonly threadsShow: ThreadsShow;
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
+    /** Author lens from the discussion card (M5-T16). `null` means no lens and no chip. */
+    readonly authorLens?: AuthorLens | null;
 }) {
     const t = useT();
     return (
@@ -35,7 +38,29 @@ export function ToolbarRightCluster({
             <span className="toolbar-right-cluster__divider" aria-hidden="true" />
             <span className="toolbar-right-cluster__label">{t('toolbar.comments')}</span>
             <CommentSources show={threadsShow} counts={threadCounts} onChange={onThreadsShow} />
+            {authorLens === null ? null : <AuthorLensChip lens={authorLens} />}
         </div>
+    );
+}
+
+/** Threads by one participant: the discussion card sets the lens, this chip clears it. */
+export interface AuthorLens {
+    readonly name: string;
+    readonly onClear: () => void;
+}
+
+function AuthorLensChip({ lens }: { lens: AuthorLens }) {
+    const t = useT();
+    return (
+        <button
+            type="button"
+            className="thread-chip thread-chip--author is-on"
+            title={t('overview.discussion.lens.clear', lens.name)}
+            onClick={lens.onClear}
+        >
+            {t('overview.discussion.lens.chip', lens.name)}
+            <Icon name="cross" size={9} />
+        </button>
     );
 }
 
@@ -113,7 +138,7 @@ export function CommentSources({
     );
 }
 
-function CommentSourceChips({
+export function CommentSourceChips({
     show,
     counts,
     onChange,

@@ -102,6 +102,12 @@ export interface SessionState {
     readonly routeFilter: RouteFilter;
     /** Additive thread sources. They live only in the current tab session. */
     readonly threadsShow: ThreadsShow;
+    /**
+     * "Threads by one author" lens in Full diff (M5-T16): the login of the participant selected
+     * in the discussion card. Stored in the tab, never written to the URL. Survives PR and iteration
+     * changes, but not a reload.
+     */
+    readonly threadAuthor: string | null;
     /** The command palette is open over the current view. */
     readonly paletteOpen: boolean;
     /** Chat is open in the third column, only for the current tab session. */
@@ -136,6 +142,8 @@ export interface SessionStore {
      */
     readonly setViewing: (viewing: Viewing, fragment?: Readonly<Record<string, string | null>>) => void;
     readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
+    /** `null` clears the author lens. */
+    readonly setThreadAuthor: (login: string | null) => void;
     readonly setPaletteOpen: (open: boolean) => void;
     readonly setChatOpen: (open: boolean) => void;
     readonly toggleNoteExpanded: (noteId: number | string) => void;
@@ -160,8 +168,9 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter' | 'viewing'> & {
+    readonly initial: Omit<SessionState, 'threadsShow' | 'threadAuthor' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter' | 'viewing'> & {
         readonly threadsShow?: ThreadsShow;
+        readonly threadAuthor?: string | null;
         readonly routeFilter?: RouteFilter;
         readonly viewing?: Viewing;
         readonly paletteOpen?: boolean;
@@ -188,6 +197,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     let state: SessionState = {
         ...options.initial,
         threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
+        threadAuthor: options.initial.threadAuthor ?? null,
         paletteOpen: options.initial.paletteOpen ?? false,
         chatOpen: options.initial.chatOpen ?? false,
         notesExpanded: options.initial.notesExpanded ?? EMPTY_NOTES_EXPANDED,
@@ -311,6 +321,11 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
                 threadsShow.resolved !== state.threadsShow.resolved
             ) {
                 update({ ...state, threadsShow });
+            }
+        },
+        setThreadAuthor: (threadAuthor) => {
+            if (threadAuthor !== state.threadAuthor) {
+                update({ ...state, threadAuthor });
             }
         },
         setPaletteOpen: (paletteOpen) => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { Iteration, RouteSnapshot, UiRouteState, UiState } from '@sherpa/protocol';
+import type { Iteration, RouteSnapshot, Thread, UiRouteState, UiState } from '@sherpa/protocol';
 import { UI_ENDPOINTS } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -16,7 +16,8 @@ import type { Store, StoreSnapshot } from './store.js';
 
 /**
  * "View at the old commit" navigation (M4-T10): a thread pinned to a previous iteration
- * opens its full diff focused on the thread. The iteration selection and `thread` go into the fragment
+ * pinned to, with focus on that thread. The entry point is the "outside the diff" fold in the
+ * Discussion card in Overview (SPEC additions §1e), since there is nowhere else to read such a thread. The iteration choice and `thread` go into the fragment
  * in one patch, or changing iterations would clear `thread` as an anchor from another diff.
  */
 
@@ -25,7 +26,10 @@ import type { Store, StoreSnapshot } from './store.js';
 const V1 = fixtureIteration('medium', 0);
 const V2 = fixtureIteration('medium', 1);
 
-/** A thread on a file removed from the PR by the second push appears in the "outside diff" group on Overview. */
+/**
+ * A thread on a file removed from the PR in the second push. It is in the "outside the diff" fold on Overview.
+ * The author is replaced with a human because the discussion card never expands bot threads (§1e item 3).
+ */
 const OUTSIDE_THREAD = (() => {
     const v2FileIds = new Set(V2.diff.files.map((file) => file.fileId));
     const thread = V2.threads.find(
@@ -34,8 +38,15 @@ const OUTSIDE_THREAD = (() => {
     if (thread?.pinnedTo == null) {
         throw new Error('the medium fixture needs a pinned thread on a removed file');
     }
-    return thread;
+    return {
+        ...thread,
+        root: { ...thread.root, author: { login: 'morgan', displayName: 'Morgan Price', bot: false } },
+    };
 })();
+
+const THREADS: readonly Thread[] = V2.threads.map((thread) =>
+    thread.id === OUTSIDE_THREAD.id ? OUTSIDE_THREAD : thread,
+);
 
 const READY_SNAPSHOT: RouteSnapshot = (() => {
     const snapshot = routeFixtures('medium')?.states.ready?.snapshot ?? null;
@@ -115,7 +126,7 @@ function mountApp(): Mounted {
             case UI_ENDPOINTS.reviewLenses:
                 return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses }));
             case UI_ENDPOINTS.reviewThreads:
-                return Promise.resolve(json({ threads: V2.threads }));
+                return Promise.resolve(json({ threads: THREADS }));
             case UI_ENDPOINTS.reviewProgress:
                 return Promise.resolve(json({ files: [], stops: [], progressRevision: 1 }));
             case UI_ENDPOINTS.reviewRoute:
@@ -205,13 +216,13 @@ function click(host: HTMLElement, selector: string): void {
 }
 
 describe('showing a thread on an old commit', () => {
-    it('the outside-diff group on Overview names removed files and has a pin chip', async () => {
+    it('expands the "outside the diff" fold on Overview to show the thread with its pin chip', async () => {
         const mounted = mountApp();
         await mounted.settle();
 
-        expect(mounted.host.textContent).toContain('on files no longer in this PR');
+        expect(mounted.host.textContent).toContain('Off the diff');
 
-        click(mounted.host, '.thread-outside__toggle');
+        click(mounted.host, '.discussion-card__outside-toggle');
 
         expect(mounted.host.textContent).toContain(
             `pinned to ${(OUTSIDE_THREAD.pinnedTo?.commit ?? '').slice(0, 7)}`,
@@ -222,7 +233,7 @@ describe('showing a thread on an old commit', () => {
     it('opens the pinned iteration in the full diff and keeps `thread` in the fragment', async () => {
         const mounted = mountApp();
         await mounted.settle();
-        click(mounted.host, '.thread-outside__toggle');
+        click(mounted.host, '.discussion-card__outside-toggle');
         click(mounted.host, '.thread__pin-action');
         await mounted.settle();
 
@@ -236,7 +247,7 @@ describe('showing a thread on an old commit', () => {
     it('opens a previous iteration read-only and without a route', async () => {
         const mounted = mountApp();
         await mounted.settle();
-        click(mounted.host, '.thread-outside__toggle');
+        click(mounted.host, '.discussion-card__outside-toggle');
         click(mounted.host, '.thread__pin-action');
         await mounted.settle();
 

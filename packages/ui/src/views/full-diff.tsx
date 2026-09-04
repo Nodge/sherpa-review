@@ -21,6 +21,7 @@ import { placeRangeQuestion } from '../components/chat-prompts.js';
 import type { PrHeaderCounts } from '../components/pr-header.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { chatAnchorFromSelection, SelectionPopover } from '../components/selection-popover.tsx';
+import type { AuthorLens } from '../components/toolbar-controls.tsx';
 import { ToolbarRightCluster } from '../components/toolbar-controls.tsx';
 import type { DiffClient } from '../diff/client.js';
 import { createDiffClient } from '../diff/client.js';
@@ -69,7 +70,7 @@ import { neighbourId, unreadNeighbourId } from '../shortcuts/navigation.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createComposerTransport } from '../threads/transport.js';
 import type { ThreadSourceCounts } from '../threads/model.js';
-import { countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
+import { authorDisplayName, countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { createThreadActions } from '../threads/actions.js';
 import { openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
@@ -588,7 +589,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         () => ({ onOpenInChat: onOpenNoteInChat, onTurnIntoDraft: turnNoteIntoDraft, onDelete: onDeleteNote }),
         [onDeleteNote, onOpenNoteInChat, turnNoteIntoDraft],
     );
-    const { filter: filterId, threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const { filter: filterId, threadsShow, threadAuthor } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
         () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
         [diff.files, lenses, t],
@@ -1327,8 +1328,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
 
     const threadCounts = countThreadSources(threadSnapshot.threads);
     const threadVisible = useCallback(
-        (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadsShow),
-        [initialThreadId, threadsShow],
+        (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadsShow, threadAuthor),
+        [initialThreadId, threadAuthor, threadsShow],
     );
     const outsideThreads = threadSnapshot.outside.filter(
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
@@ -1378,6 +1379,16 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 threadsShow={threadsShow}
                 threadCounts={threadCounts}
                 onThreadsShow={session.setThreadsShow}
+                authorLens={
+                    threadAuthor === null
+                        ? null
+                        : {
+                              name: authorDisplayName(threadSnapshot.threads, threadAuthor),
+                              onClear: () => {
+                                  session.setThreadAuthor(null);
+                              },
+                          }
+                }
                 smallPr={props.smallPr ?? false}
                 onHeight={setToolbarHeight}
             />
@@ -1511,6 +1522,7 @@ export function FullDiffToolbar({
     threadsShow,
     threadCounts,
     onThreadsShow,
+    authorLens = null,
     smallPr,
     onHeight,
 }: {
@@ -1521,6 +1533,7 @@ export function FullDiffToolbar({
     threadsShow: ThreadsShow;
     threadCounts: ThreadSourceCounts;
     onThreadsShow: (show: ThreadsShow) => void;
+    authorLens?: AuthorLens | null;
     smallPr: boolean;
     onHeight?: ((height: number) => void) | undefined;
 }) {
@@ -1559,6 +1572,7 @@ export function FullDiffToolbar({
                 threadsShow={threadsShow}
                 threadCounts={threadCounts}
                 onThreadsShow={onThreadsShow}
+                authorLens={authorLens}
             />
         </div>
     );

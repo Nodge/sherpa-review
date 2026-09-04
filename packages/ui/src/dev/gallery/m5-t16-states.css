@@ -1,0 +1,4 @@
+/* Overview right column: the same 360px width as in the design in §1e. */
+.gallery-discussion-column {
+    width: 360px;
+}

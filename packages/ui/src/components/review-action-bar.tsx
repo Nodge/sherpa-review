@@ -23,6 +23,8 @@ import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadStore } from '../threads/store.js';
 import { discussionStats } from '../views/overview-model.js';
 import { chatOverlaysContent } from './dock.js';
+import type { PrCommentsGate } from './pr-comments-gate.js';
+import { usePrCommentsGate } from './pr-comments-gate.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 import {
     availableShipMode,
@@ -89,6 +91,11 @@ export interface ReviewActionBarProps {
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
+    /**
+     * Shared PR comments modal state: both the bar and the Discussion card in Overview open it
+     * in Overview (SPEC additions §1e). Without it, the bar keeps its own state, as in the gallery.
+     */
+    readonly prComments?: PrCommentsGate;
     readonly initialFailure?: PublicationFailure | null;
     /**
      * Whether chat is open: while it is an overlay (<1280), the bar sits under its scrim. The mouse cannot
@@ -198,6 +205,7 @@ export function ReviewActionBar({
     onPublish,
     onComplete,
     defaultMenuOpen = false,
+    prComments,
     initialFailure = null,
     chatOpen = false,
 }: ReviewActionBarProps) {
@@ -217,7 +225,9 @@ export function ReviewActionBar({
     const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
     const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
     const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
-    const [prCommentsOpen, setPrCommentsOpen] = useState(false);
+    const ownPrComments = usePrCommentsGate();
+    const prCommentsGate = prComments ?? ownPrComments;
+    const prCommentsOpen = prCommentsGate.open;
     const [publishing, setPublishing] = useState<Verdict | null>(null);
     const [failure, setFailure] = useState<PublicationFailure | null>(initialFailure);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -477,7 +487,9 @@ export function ReviewActionBar({
                 aria-expanded={prCommentsOpen}
                 aria-haspopup="dialog"
                 onClick={() => {
-                    setPrCommentsOpen(true);
+                    prCommentsGate.openModal(() => {
+                        commentButtonRef.current?.focus();
+                    });
                     setMenuOpen(false);
                 }}
             >
@@ -520,7 +532,7 @@ export function ReviewActionBar({
                         } else {
                             setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
                             setMenuOpen(true);
-                            setPrCommentsOpen(false);
+                            prCommentsGate.close();
                         }
                     }}
                     onKeyDown={(event) => {
@@ -594,12 +606,7 @@ export function ReviewActionBar({
                     store={threadStore}
                     transport={composerTransport}
                     draftBuffer={draftBuffer}
-                    onClose={() => {
-                        setPrCommentsOpen(false);
-                        queueMicrotask(() => {
-                            commentButtonRef.current?.focus();
-                        });
-                    }}
+                    onClose={prCommentsGate.close}
                 />
             ) : null}
         </div>

@@ -66,6 +66,10 @@
     font-weight: 500;
 }
 
+.thread-chip--author {
+    gap: 5px;
+}
+
 .thread-chip:disabled {
     opacity: var(--disabled-opacity);
     cursor: default;

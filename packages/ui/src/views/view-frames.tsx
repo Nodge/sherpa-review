@@ -2,9 +2,6 @@ import type { PrDiff, PrMeta, Thread, UiReviewLensesResponse, UiRouteState } fro
 import type { ReactNode } from 'react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
-import {
-    setReviewThreadResolved,
-} from '../api.js';
 import { CommandBox } from '../components/command-box.tsx';
 import { PrHeader, prHeaderCounts } from '../components/pr-header.tsx';
 import { reconnectCommand } from '../components/reconnect-command.js';
@@ -16,16 +13,14 @@ import type { SessionStore } from '../session/session-store.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createComposerTransport } from '../threads/transport.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
-import { threadResolvedWriterFor } from '../threads/resolved-writer.js';
-import type { ThreadActions } from '../threads/thread-list.tsx';
-import { OutsideThreads } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
 import { Markdown } from '../markdown/markdown.tsx';
 import { provenanceLine, summaryParagraphs } from '../route/generation.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
-import { discussionStats, ownershipSummary } from './overview-model.js';
+import { ownershipSummary } from './overview-model.js';
+import { OverviewDiscussion } from './overview-discussion.tsx';
 import { GenerationCard } from './route/generation-card.tsx';
 import './view-frames.css';
 
@@ -69,6 +64,11 @@ export interface ViewFrameProps {
     readonly picker?: Omit<SnapshotMenu, 'initialOpen'>;
     /** Right edge of the PR header: the snapshot pill (README §1). */
     readonly headerAside?: ReactNode;
+    /**
+     * Open the PR comments modal from the discussion card (SPEC additions §1e item 5).
+     * The argument restores focus to the button that opened it.
+     */
+    readonly onWritePrComment?: (returnFocus: () => void) => void;
 }
 
 /**
@@ -228,6 +228,7 @@ export function OverviewView({
     generation,
     picker,
     headerAside,
+    onWritePrComment,
 }: ViewFrameProps) {
     const t = useT();
     const [segment, setSegment] = useState<OwnershipSegment>('all');
@@ -253,30 +254,6 @@ export function OverviewView({
     const transport = useMemo<ComposerTransport>(
         () => (token === undefined ? EMPTY_THREAD_TRANSPORT : createComposerTransport(token)),
         [token],
-    );
-    const resolveThread = useMemo(
-        () =>
-            token === undefined
-                ? EMPTY_RESOLVE
-                : (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
-        [token],
-    );
-    const resolvedWriter = useMemo(
-        () =>
-            threadResolvedWriterFor(threadStore, {
-                read: (threadId) =>
-                    threadStore.getSnapshot().threads.find((thread) => thread.id === threadId)?.resolved ?? false,
-                readConfirmed: threadStore.getServerResolved,
-                apply: threadStore.setResolved,
-                rollback: threadStore.restoreResolved,
-                shouldRollback: threadStore.hasResolvedOverride,
-                send: resolveThread,
-            }),
-        [resolveThread, threadStore],
-    );
-    const threadActions = useMemo<ThreadActions>(
-        () => ({ transport, resolve: resolvedWriter.write }),
-        [resolvedWriter, transport],
     );
     const [now] = useState(() => threadNow ?? Date.now());
     // Audit scope chip in the header: the same set of lenses that feeds Full diff filters.
@@ -356,14 +333,16 @@ export function OverviewView({
                             onCancel={generation?.onCancel ?? NOOP}
                         />
                     )}
-                    <DiscussionCard
+                    <OverviewDiscussion
                         threads={reviewHostAvailable && threads !== null ? threadSnapshot.threads : null}
-                        outside={reviewHostAvailable && threads !== null ? threadSnapshot.outside : EMPTY_THREADS}
+                        fileIds={fileIds}
+                        session={session}
                         store={threadStore}
-                        actions={threadActions}
+                        transport={transport}
                         now={now}
                         loading={reviewHostAvailable && threadsLoading}
                         error={threadsError}
+                        onWritePrComment={onWritePrComment}
                     />
                     {picker === undefined ? null : (
                         <OverviewCard title={t('overview.snapshots')}>
@@ -580,61 +559,6 @@ function OwnershipChip({ kind, owner }: { kind: OwnershipKind; owner: string | n
     return <span className={`ownership-chip ownership-chip--${kind}`}>{label}</span>;
 }
 
-function DiscussionCard({
-    threads,
-    outside,
-    store,
-    actions,
-    now,
-    loading,
-    error,
-}: {
-    threads: readonly Thread[] | null;
-    outside: readonly Thread[];
-    store: ThreadStore;
-    actions: ThreadActions;
-    now: number;
-    loading: boolean;
-    error: string | null;
-}) {
-    const t = useT();
-    if (threads === null) {
-        return (
-            <OverviewCard title={t('overview.discussion')}>
-                <p className="overview-card__empty">
-                    {loading ? t('overview.discussion.loading') : (error ?? t('overview.discussion.empty'))}
-                </p>
-            </OverviewCard>
-        );
-    }
-    const counts = discussionStats(threads);
-    return (
-        <OverviewCard title={t('overview.discussion')}>
-            <div className="discussion-counts">
-                <DiscussionCount value={counts.open} label={t('overview.discussion.open')} />
-                <DiscussionCount value={counts.resolved} label={t('overview.discussion.resolved')} />
-                <DiscussionCount value={counts.bots} label={t('overview.discussion.bots')} />
-            </div>
-            {outside.length === 0 ? (
-                <p className="overview-card__empty">{t('overview.discussion.noOutside')}</p>
-            ) : (
-                // Collapsed: the Overview discussion card is a summary, not a feed (dogfooding #5).
-                <OutsideThreads threads={outside} store={store} actions={actions} now={now} />
-            )}
-        </OverviewCard>
-    );
-}
-
-function DiscussionCount({ value, label }: { value: number; label: string }) {
-    const format = useFormat();
-    return (
-        <div className="discussion-count">
-            <strong>{format.count(value)}</strong>
-            <span>{label}</span>
-        </div>
-    );
-}
-
 function OverviewCard({
     title,
     header,
@@ -663,5 +587,3 @@ const EMPTY_THREAD_TRANSPORT: ComposerTransport = {
     update: () => Promise.reject(new Error(GALLERY_WRITE)),
     delete: () => Promise.reject(new Error(GALLERY_WRITE)),
 };
-const EMPTY_RESOLVE = (): Promise<void> =>
-    Promise.reject(new Error('Sherpa gallery: resolving threads is not available'));

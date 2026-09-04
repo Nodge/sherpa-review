@@ -151,11 +151,38 @@ export function countThreadSources(threads: readonly Thread[]): ThreadSourceCoun
     return { people, bots, resolved };
 }
 
-export function threadIsVisible(thread: Thread, show: ThreadVisibility): boolean {
+/**
+ * `author` is the participant lens from the discussion card (M5-T16): a thread stays if this
+ * login wrote the root or any reply. Source chips apply on top of the lens, rather than replacing it.
+ */
+export function threadIsVisible(thread: Thread, show: ThreadVisibility, author: string | null = null): boolean {
+    if (author !== null && !threadHasAuthor(thread, author)) {
+        return false;
+    }
     if (thread.resolved) {
         return show.resolved;
     }
     return thread.root.author.bot ? show.bots : show.people;
+}
+
+/** The login appears in the thread root or any reply at any depth. */
+export function threadHasAuthor(thread: Thread, login: string): boolean {
+    const visit = (comment: Comment): boolean =>
+        comment.author.login === login || comment.replies.some(visit);
+    return visit(thread.root);
+}
+
+/** Author name by login from loaded threads. An unknown login stays as a login. */
+export function authorDisplayName(threads: readonly Thread[], login: string): string {
+    for (const thread of threads) {
+        const rows = flattenThread(thread.root);
+        for (const row of rows) {
+            if (row.comment.author.login === login) {
+                return row.comment.author.displayName ?? login;
+            }
+        }
+    }
+    return login;
 }
 
 export function authorName(comment: Comment): string {

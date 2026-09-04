@@ -359,7 +359,7 @@ function ThreadBlock({
 }
 
 /** Pin chip and navigation: the label shows a short commit, the tooltip has the full hash (README §13). */
-function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
+export function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
     const t = useT();
     return (
         <>
