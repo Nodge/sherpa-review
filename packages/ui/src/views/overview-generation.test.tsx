@@ -46,7 +46,7 @@ describe('Overview during generation', () => {
 
         expect(html).toContain('summary-skeleton');
         expect(html).toContain('Reading the diff, planning the route');
-        expect(html).toContain('Reading all 18 files in the diff');
+        expect(html).toContain('Reading the whole diff · 18 files');
         // No caret: summary arrives whole with the skeleton (M2-T1 decision).
         expect(html).not.toContain('caret');
     });

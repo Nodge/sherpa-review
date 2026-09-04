@@ -114,3 +114,62 @@ describe('formatting', () => {
         expect(relativeTime(new Date(now + 60_000).toISOString(), now, 'en')).toBe('just now');
     });
 });
+
+/**
+ * Plural forms: a predicate, pronoun or counting unit used to keep a fixed form that disagreed with the count.
+ * Russian cases count the words that differ, position by position, between the singular and another count.
+ */
+const changedWords = (a: string, b: string): number => a.split(' ').filter((word, i) => word !== b.split(' ')[i]).length;
+describe('agreement with the count', () => {
+    const t = createT('ru');
+    const e = createT('en');
+
+    it('Russian templates agree in the singular', () => {
+        expect(changedWords(t('route.gen.filling.counter', 1, 7), t('route.gen.filling.counter', 2, 7))).toBe(2);
+        expect(changedWords(t('route.filling.banner', 1, 7), t('route.filling.banner', 2, 7))).toBe(2);
+        expect(changedWords(t('route.gen.step.diffFiles', 1), t('route.gen.step.diffFiles', 2))).toBe(2);
+        expect(changedWords(t('route.lazyMore', 1), t('route.lazyMore', 2))).toBe(3);
+        expect(changedWords(t('route.stopFile.collapsed', 1), t('route.stopFile.collapsed', 2))).toBe(4);
+        expect(changedWords(t('route.other.counted', 1, 1), t('route.other.counted', 2, 1))).toBe(7);
+        expect(changedWords(t('route.other.counted', 1, 1), t('route.other.counted', 21, 1))).toBe(1);
+        expect(changedWords(t('route.other.failedFiles', 1), t('route.other.failedFiles', 2))).toBe(4);
+        expect(changedWords(t('margin.footer.failed', 1), t('margin.footer.failed', 2))).toBe(4);
+        expect(changedWords(t('diff.expand.loaded', 1), t('diff.expand.loaded', 2))).toBe(2);
+        expect(changedWords(t('diff.gap.hiddenCount', 1), t('diff.gap.hiddenCount', 2))).toBe(3);
+        expect(changedWords(t('diff.gap.loadAll', 1, '…'), t('diff.gap.loadAll', 2, '…'))).toBe(2);
+        expect(changedWords(t('audit.line', 1, 1, 2), t('audit.line', 2, 1, 2))).toBe(3);
+        expect(t('prComments.drafts', 1)).toBe('1 черновик · уйдёт при Ship');
+        expect(changedWords(t('prComments.buffered.title', 1), t('prComments.buffered.title', 2))).toBe(4);
+        expect(changedWords(t('ship.disabled.buffered', 1), t('ship.disabled.buffered', 2))).toBe(4);
+        expect(changedWords(t('complete.outsideRoute.value', 1), t('complete.outsideRoute.value', 2))).toBe(3);
+        expect(t('route.stop.conflicts', 1)).toContain('разрешите его в хосте');
+        expect(t('route.other.conflicts', 1)).toContain('разрешите его в хосте, в покрытие он не входит');
+        expect(changedWords(t('banner.generationCap', 1), t('banner.generationCap', 2))).toBe(4);
+        expect(t('overview.ownership.stats', 1, 1, 5, 21)).toBe('CODEOWNERS · 1 of 1 file · 5 of 21 lines are yours');
+        expect(changedWords(t('palette.truncated', 21), t('palette.truncated', 1))).toBe(1);
+    });
+
+    it('Russian impersonal predicates keep the invariant form for unexplained lines', () => {
+        expect(changedWords(t('coverage.legend.unexplained', 5), t('coverage.legend.unexplained', 2))).toBe(3);
+        expect(changedWords(t('complete.openThreads', 5), t('complete.openThreads', 2))).toBe(3);
+        expect(changedWords(t('ship.guard.stops', 2), t('ship.guard.stops', 5))).toBe(3);
+        expect(changedWords(t('ship.guard.files', 2), t('ship.guard.files', 5))).toBe(3);
+    });
+
+    it('English templates agree in the singular', () => {
+        expect(e('route.gen.step.diffFiles', 1)).toBe('Reading the whole diff · 1 file');
+        expect(e('route.lazyMore', 1)).toBe('1 more card — it appears as you scroll');
+        expect(e('route.other.counted', 1, 1)).toContain('so it is not lost — it collects here');
+        expect(e('route.other.failedFiles', 1)).toContain('— its uncovered lines');
+        expect(e('margin.footer.failed', 1)).toContain('— its lines');
+        expect(e('diff.expand.loaded', 1)).toBe('1 line loaded');
+        expect(e('diff.gap.hiddenCount', 1)).toBe('1 line hidden');
+        expect(e('audit.line', 1, 1, 2)).toMatch(/^Showing only 1 audit-scope file/u);
+        expect(e('prComments.buffered.title', 1)).toContain('until it is saved');
+        expect(e('ship.disabled.buffered', 1)).toContain('until it is');
+        expect(e('route.stop.conflicts', 1)).toContain('resolve it in the host');
+        expect(e('route.other.conflicts', 1)).toContain('resolve it in the host; it is out of coverage');
+        expect(e('banner.generationCap', 1)).toContain('check it in the full diff');
+        expect(e('palette.truncated', 1)).toBe('Showing the first 1 match');
+    });
+});

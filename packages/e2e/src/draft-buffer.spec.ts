@@ -40,7 +40,7 @@ test('draft buffer: host failure → buffered text → reload → retry', async 
         await expect(page.locator('.review-action-bar__ship-primary')).toBeDisabled();
         await expect(page.locator('.review-action-bar__ship-primary')).toHaveAttribute(
             'title',
-            '1 draft not yet saved to the host. ship is unavailable until saved',
+            '1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится',
         );
     });
 
