@@ -1,6 +1,7 @@
 import type {
     AgentNote,
     ChatAnchor,
+    ChatExchange,
     DraftBufferEntry,
     Iteration,
     PrDiff,
@@ -93,6 +94,7 @@ import {
 } from './iterations/viewing.js';
 import { noteAnchorForIteration, notesForIteration, noteVisibleInIteration } from './notes/model.js';
 import { CommandPalette } from './palette/command-palette.tsx';
+import type { PaletteChat } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
 import { usePrStateStore } from './pr-state/context.tsx';
@@ -184,10 +186,14 @@ export interface ChatScrollRequest {
     readonly target: ChatScrollTarget;
 }
 
-/** Opens the panel and returns an explicit feed target for the linked exchange. */
-export function openNoteInChatRequest(session: SessionStore, note: AgentNote, id: number): ChatScrollRequest {
+/** Opens the panel and returns an explicit feed target for the exchange. */
+export function openExchangeInChatRequest(
+    session: SessionStore,
+    exchangeId: number,
+    id: number,
+): ChatScrollRequest {
     session.setChatOpen(true);
-    return { id, target: { kind: 'exchange', exchangeId: note.exchangeId } };
+    return { id, target: { kind: 'exchange', exchangeId } };
 }
 
 interface ChatComposerContext {
@@ -1542,7 +1548,7 @@ export function App({ store, session, token }: AppProps) {
     const openNoteInChat = useCallback(
         (note: AgentNote) => {
             chatScrollRequestId.current += 1;
-            setChatScrollRequest(openNoteInChatRequest(session, note, chatScrollRequestId.current));
+            setChatScrollRequest(openExchangeInChatRequest(session, note.exchangeId, chatScrollRequestId.current));
         },
         [session],
     );
@@ -1967,6 +1973,41 @@ export function App({ store, session, token }: AppProps) {
         },
         [navigateChatAnchor, notesDiffId, session],
     );
+    /** Chat history item in the palette: scroll the panel to the exchange and, for a live anchor, to the code too. */
+    const openExchangeFromPalette = useCallback(
+        (exchange: ChatExchange, anchorAlive: boolean) => {
+            chatScrollRequestId.current += 1;
+            setChatScrollRequest(openExchangeInChatRequest(session, exchange.id, chatScrollRequestId.current));
+            if (anchorAlive && exchange.anchor !== null) {
+                navigateChatAnchor(exchange.anchor);
+            }
+        },
+        [navigateChatAnchor, session],
+    );
+    const paletteChat = useMemo<PaletteChat | undefined>(
+        () =>
+            reviewHost === null
+                ? undefined
+                : {
+                      exchanges: chatData.exchanges,
+                      notes: chatData.notes,
+                      liveFileIds: new Set((currentDiff?.files ?? []).map((file) => file.fileId)),
+                      now,
+                      loading: currentChat.loading,
+                      error: currentChat.error,
+                      onSelect: openExchangeFromPalette,
+                  },
+        [
+            chatData.exchanges,
+            chatData.notes,
+            currentChat.error,
+            currentChat.loading,
+            currentDiff,
+            now,
+            openExchangeFromPalette,
+            reviewHost,
+        ],
+    );
     useEffect(() => {
         if (noteFocusRequest === null || (view !== 'route' && view !== 'diff')) {
             return;
@@ -2308,6 +2349,7 @@ export function App({ store, session, token }: AppProps) {
                 open={paletteOpen}
                 source={paletteSource}
                 iterations={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+                chat={paletteChat}
                 sourceError={currentReview.diffError}
                 status={paletteStatus}
                 onStatusHandled={() => {

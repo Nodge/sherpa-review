@@ -6,7 +6,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, mergeChatResponse, openNoteInChatRequest, withoutChatNote } from './app.tsx';
+import { App, mergeChatResponse, openExchangeInChatRequest, withoutChatNote } from './app.tsx';
 import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
@@ -203,7 +203,7 @@ describe('note and chat integration in App', () => {
     it('opens the panel and builds a target for the linked exchange', () => {
         const session = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
 
-        const request = openNoteInChatRequest(session, NOTE, 9);
+        const request = openExchangeInChatRequest(session, NOTE.exchangeId, 9);
 
         expect(session.getSnapshot().chatOpen).toBe(true);
         expect(request).toEqual({ id: 9, target: { kind: 'exchange', exchangeId: NOTE.exchangeId } });
