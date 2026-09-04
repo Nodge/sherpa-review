@@ -14,14 +14,6 @@ import { useShortcut } from '../shortcuts/context.tsx';
 /** Delay after `uiState.update` arrives: the toast must not pop up while the screen is loading. */
 const TOAST_DELAY_MS = 1500;
 
-/**
- * Whether the onboarding tour is running. The tour takes priority: the toast never appears over it.
- * M5-T8 (tour) has not been merged into this tree yet, so the flag is stubbed until then.
- */
-function tourActive(): boolean {
-    return false;
-}
-
 export interface UpdateToastState {
     readonly visible: boolean;
     /** "Later": until the tab reloads or the version in the top bar is clicked. */
@@ -32,7 +24,11 @@ export interface UpdateToastState {
     readonly dismissVersion: () => void;
 }
 
-export function useUpdateToast(update: UiUpdate | null): UpdateToastState {
+/**
+ * `tourActive` indicates whether the onboarding tour is running (M5-T8). The tour takes priority, so the toast
+ * never appears on top of it, and the delay timer does not start beneath it.
+ */
+export function useUpdateToast(update: UiUpdate | null, tourActive = false): UpdateToastState {
     const settings = useUiSettingsStore();
     const latest = update?.latest ?? null;
     /** Version whose delay has elapsed. null means the timer is still running or there is no update. */
@@ -43,7 +39,7 @@ export function useUpdateToast(update: UiUpdate | null): UpdateToastState {
     // `update` disappeared (version dismissed, server checked again). The timer is cleared with
     // the effect, and `latest === null` hides the toast.
     useEffect(() => {
-        if (latest === null || tourActive()) {
+        if (latest === null || tourActive) {
             return;
         }
         const timer = window.setTimeout(() => {
@@ -52,10 +48,10 @@ export function useUpdateToast(update: UiUpdate | null): UpdateToastState {
         return () => {
             window.clearTimeout(timer);
         };
-    }, [latest]);
+    }, [latest, tourActive]);
 
     return {
-        visible: latest !== null && readyFor === latest && laterFor !== latest && !tourActive(),
+        visible: latest !== null && readyFor === latest && laterFor !== latest && !tourActive,
         later: () => {
             setLaterFor(latest);
         },

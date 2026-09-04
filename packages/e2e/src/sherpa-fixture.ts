@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,12 @@ export interface LaunchOptions {
     readonly sherpaDir?: string;
     /** Distribution directory (`--install-dir`): determines the update command in the toast (M5-T9). */
     readonly installDir?: string;
+    /**
+     * The onboarding tour (M5-T8) starts for users who have not completed it, which means
+     * any clean state root. It would interfere with specs for everything else, so by default
+     * the fixture marks the tour complete. `'pending'` leaves the clean root as is.
+     */
+    readonly onboarding?: 'done' | 'pending';
 }
 
 type LaunchSherpa = (prKey: FixturePrKey, options?: LaunchOptions) => Promise<SherpaServerHandle>;
@@ -188,6 +194,9 @@ export async function seenRangeKeys(
 async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): Promise<SherpaServerHandle> {
     const ownsSherpaDir = options?.sherpaDir === undefined;
     const sherpaDir = options?.sherpaDir ?? (await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-')));
+    if (options?.onboarding !== 'pending') {
+        await seedOnboardingDone(sherpaDir);
+    }
     const workDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-work-'));
     const child = spawn(
         'pnpm',
@@ -239,6 +248,24 @@ async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): 
         }
         await rm(workDir, { recursive: true, force: true });
         throw error;
+    }
+}
+
+/**
+ * Mark the tour complete in `<sherpaDir>/settings.json`. Leave an existing file alone, since this is a second
+ * server for the same "user", and the first server wrote its settings.
+ */
+async function seedOnboardingDone(sherpaDir: string): Promise<void> {
+    const settings = { onboarding: { completedAt: '2026-01-01T00:00:00.000Z', step: 0 } };
+    try {
+        await writeFile(path.join(sherpaDir, 'settings.json'), `${JSON.stringify(settings, null, 4)}\n`, {
+            flag: 'wx',
+            mode: 0o600,
+        });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+            throw error;
+        }
     }
 }
 

@@ -157,6 +157,23 @@ describe('route view', () => {
         expect(html).toContain('Open 32 lines');
     });
 
+    it('tour step 02 anchors to the first rendered fold rather than the first low stop', () => {
+        expect(render()).toContain('data-tour="fold-s05"');
+
+        // The first low stop is not filled yet. It has a skeleton, so there is nothing to outline.
+        const queued = render({
+            snapshot: {
+                ...SNAPSHOT,
+                stops: SNAPSHOT.stops.map((stop) =>
+                    stop.id === 's05' ? { ...stop, status: 'queued' as const } : stop,
+                ),
+            },
+        });
+
+        expect(queued).not.toContain('data-tour="fold-s05"');
+        expect(queued).toContain('data-tour="fold-s06"');
+    });
+
     it('the preset switch shows the active option and its tooltip', () => {
         const triage = render();
         const tour = render({ preset: 'tour' });

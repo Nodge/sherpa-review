@@ -50,6 +50,11 @@ export interface StopCardProps {
     /** Threads from `change.threadIds` that caused the change, reduced to links with unknown ids removed. */
     readonly changeThreads?: readonly StopChangeThread[];
     readonly onOpenThread?: (threadId: string) => void;
+    /**
+     * Onboarding tour anchors (M5-T8): `narrative` for the narrative column,
+     * `stopdiff` for the diff column. Set on the first route stop and the tour skeleton placeholder.
+     */
+    readonly tourAnchors?: boolean;
 }
 
 /** Link to a thread that caused the change, in "why this stop changed" (README §1 item 4). */
@@ -109,6 +114,7 @@ export function StopCard({
     flash = false,
     changeThreads = EMPTY_CHANGE_THREADS,
     onOpenThread,
+    tourAnchors = false,
 }: StopCardProps) {
     const t = useT();
     const { count } = useFormat();
@@ -127,7 +133,7 @@ export function StopCard({
             role="region"
             aria-label={t('route.stop.aria', view.planLabel, stopCount, stripInlineCode(stop.title))}
         >
-            <div className="route-stop__side">
+            <div className="route-stop__side" {...(tourAnchors ? { 'data-tour': 'narrative' } : {})}>
                 <div className="route-stop__head">
                     <span className={`route-stop__rule route-stop__rule--${tier}`} aria-hidden="true" />
                     <span className="route-stop__number">
@@ -220,7 +226,7 @@ export function StopCard({
                 {chips}
             </div>
 
-            <div className="route-stop__diff" ref={diffRef}>
+            <div className="route-stop__diff" ref={diffRef} {...(tourAnchors ? { 'data-tour': 'stopdiff' } : {})}>
                 {flash ? <div className="route-stop__flash" aria-hidden="true" /> : null}
                 {diff}
             </div>
@@ -359,25 +365,32 @@ function Paragraph({ text }: { text: string }) {
     );
 }
 
-/** Collapsed low-tier stop card (README §2). */
+/**
+ * Collapsed low-stop card (README §2). The view builds the label with its line count, since the
+ * placeholder has nothing to count and must not invent numbers.
+ */
 export function CollapsedStop({
-    lines,
-    files,
-    reason,
+    label,
+    dataTour,
     onExpand,
 }: {
-    lines: number;
-    files: number;
-    reason: string;
+    label: string;
+    /** Onboarding tour anchor: `fold-<stopId>` (M5-T8). */
+    dataTour?: string;
     onExpand: () => void;
 }) {
     const t = useT();
     return (
-        <button type="button" className="route-collapsed" onClick={onExpand}>
+        <button
+            type="button"
+            className="route-collapsed"
+            {...(dataTour === undefined ? {} : { 'data-tour': dataTour })}
+            onClick={onExpand}
+        >
             <span className="route-collapsed__mark" aria-hidden="true">
                 <Icon name="chev-down" size={13} />
             </span>
-            {t('route.collapsed', lines, files, reason)}
+            {label}
             <span className="route-stop__spacer" />
             <span className="route-collapsed__hint">{t('route.collapsed.hint')}</span>
         </button>

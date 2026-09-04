@@ -50,12 +50,20 @@ export function CoverageStrip({
     onHoverTier,
 }: CoverageStripProps) {
     const t = useT();
+    /*
+     * Tour step 04's anchor (M5-T8) sits on the viewed-stop counter, which the step explains.
+     * Until the counter exists (no plan yet, unknown denominator), the whole strip holds the anchor:
+     * the step needs an outlined target even above the tour skeleton.
+     */
+    const counterAnchored = totalStops > 0;
+    const stripAnchor = counterAnchored ? {} : { 'data-tour': 'progress' };
+
     if (model === null) {
         // No denominator means no plan yet. The strip cannot be divided, so the shimmer fills the track.
         const unknown = loading === null || loading.total === 0;
         const ready = unknown ? 0 : loading.ready / loading.total;
         return (
-            <div className="coverage">
+            <div className="coverage" {...stripAnchor}>
                 <div className="coverage__track" aria-hidden="true">
                     {unknown || ready > 0 ? (
                         <span
@@ -73,14 +81,14 @@ export function CoverageStrip({
                 <div className="coverage__legend">
                     <span className="coverage__legend-text">{t(LOADING_TEXT[loading?.kind ?? 'plan'])}</span>
                     <span className="coverage__spacer" />
-                    <StopCounter viewed={viewedStops} total={totalStops} />
+                    <StopCounter viewed={viewedStops} total={totalStops} anchored={counterAnchored} />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="coverage">
+        <div className="coverage" {...stripAnchor}>
             <div className="coverage__track" role="group" aria-label={t('coverage.aria')}>
                 {model.segments.map((segment) => (
                     <button
@@ -133,17 +141,21 @@ export function CoverageStrip({
                     )}
                 </span>
                 <span className="coverage__spacer" />
-                <StopCounter viewed={viewedStops} total={totalStops} />
+                <StopCounter viewed={viewedStops} total={totalStops} anchored={counterAnchored} />
             </div>
         </div>
     );
 }
 
 /** "viewed 3 of 7 stops" renders README §1 "N / 7 stops viewed" in the voice of the rest of the UI. */
-function StopCounter({ viewed, total }: { viewed: number; total: number }) {
+function StopCounter({ viewed, total, anchored }: { viewed: number; total: number; anchored: boolean }) {
     const t = useT();
     if (total === 0) {
         return null;
     }
-    return <span className="coverage__stops">{t('coverage.stopsViewed', viewed, total)}</span>;
+    return (
+        <span className="coverage__stops" {...(anchored ? { 'data-tour': 'progress' } : {})}>
+            {t('coverage.stopsViewed', viewed, total)}
+        </span>
+    );
 }

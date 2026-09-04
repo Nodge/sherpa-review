@@ -1942,6 +1942,24 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
     /** First planned stop. Its diff column stays in the DOM as the entry point and onboarding tour anchor. */
     const firstStopId = shown.find((entry) => entry.kind === 'stop')?.view.stop.id ?? null;
+    /**
+     * The first low-stop fold anchors tour step 02 (M5-T8). Selection follows the
+     * rendering conditions: viewed stops show a summary row, unfilled stops a skeleton, and stops
+     * with drift or no files have their own row. Otherwise the anchor would go to a stop that does not
+     * render a fold, and the step would needlessly use fallback placement despite real folds below.
+     */
+    const tourFoldStopId = useMemo(
+        () =>
+            shown.find(
+                (entry) =>
+                    entry.kind === 'stop' &&
+                    entry.view.stop.tier === 'low' &&
+                    stopViewed.get(entry.view.stop.id) !== true &&
+                    collapsedOf(entry.view) &&
+                    collapsedStopShown(entry.view, entryId(entry) === keptStopId ? null : filter.fileIds),
+            )?.view.stop.id ?? null,
+        [collapsedOf, filter.fileIds, keptStopId, shown, stopViewed],
+    );
 
     const outsideThreads = threadSnapshot.outside.filter(
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
@@ -2036,6 +2054,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                             key={entry.view.stop.id}
                             view={entry.view}
                             first={entry.view.stop.id === firstStopId}
+                            tourFold={entry.view.stop.id === tourFoldStopId}
                             busyFileIds={busyFileIds}
                             layoutKeyOf={stopLayoutKey}
                             jumping={jumpStopId === entry.view.stop.id}
@@ -2153,6 +2172,8 @@ interface StopSectionProps {
     readonly view: RouteStopView;
     /** First route stop: its diff column stays in the DOM (M5-T13). */
     readonly first: boolean;
+    /** First collapsed low stop: its fold holds the tour anchor `fold-<stopId>` (M5-T8). */
+    readonly tourFold: boolean;
     /** Files with an active selection, open composer or focused row, across the whole route. */
     readonly busyFileIds: ReadonlySet<string>;
     /** Column layout key. Changing it resets measured height. `null` means it is too early to measure. */
@@ -2198,9 +2219,22 @@ interface StopSectionProps {
     readonly onOpenAnchor: (fileId: string, line: number) => void;
 }
 
+/**
+ * Whether a stop renders a fold. Same conditions the diff column in `StopSection`
+ * uses to choose `collapsed`: stop filled, anchors intact, files present after applying the lens.
+ */
+function collapsedStopShown(view: RouteStopView, fileIds: ReadonlySet<string> | null): boolean {
+    if (view.stop.status === 'queued' || view.stop.status === 'filling' || view.drift) {
+        return false;
+    }
+    const files = fileIds === null ? view.files : view.files.filter((group) => fileIds.has(group.fileId));
+    return files.length > 0 || buildDigest(view.stop) !== null;
+}
+
 function StopSection({
     view,
     first,
+    tourFold,
     busyFileIds,
     layoutKeyOf,
     jumping,
@@ -2388,9 +2422,13 @@ function StopSection({
             />
         ) : (
             <CollapsedStop
-                lines={lines}
-                files={files.length}
-                reason={t(collapsedManually ? 'route.collapsed.reason.manual' : 'route.collapsed.reason.low')}
+                label={t(
+                    'route.collapsed',
+                    lines,
+                    files.length,
+                    t(collapsedManually ? 'route.collapsed.reason.manual' : 'route.collapsed.reason.low'),
+                )}
+                {...(tourFold ? { dataTour: `fold-${view.stop.id}` } : {})}
                 onExpand={onExpand}
             />
         )
@@ -2423,6 +2461,7 @@ function StopSection({
         <div ref={ref} data-stop={view.stop.id}>
             <StopCard
                 view={view}
+                tourAnchors={first}
                 stopCount={stopCount}
                 comments={comments}
                 changeThreads={changeThreads}

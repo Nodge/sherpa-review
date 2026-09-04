@@ -7,6 +7,8 @@ import type { Dictionary } from './ru.js';
  */
 
 const num = (value: number): string => formatCount(value, 'en');
+/** Tour card counter: both parts have leading zeros (onboarding spec §1). */
+const pad = (value: number): string => String(value).padStart(2, '0');
 /** English plural forms: `one` and everything else. */
 const form = (value: number, one: string, other: string): string => plural(value, { one, other }, 'en');
 
@@ -924,6 +926,47 @@ export const en: Dictionary = {
     'shortcut.agent.ask': 'Ask the agent about the selection',
     'shortcut.agent.ask.consequence': 'will open the chat panel',
     'shortcut.help.cheatsheet': 'Keyboard shortcuts',
+    'shortcut.tour.next': 'Next step of the tour',
+    'shortcut.tour.back': 'Previous step of the tour',
+    'shortcut.tour.replay': 'Replay the onboarding tour',
+    'shortcut.tour.replay.consequence': (steps: number) => `${num(steps)} ${form(steps, 'step', 'steps')}`,
+
+    // Onboarding tour (M5-T8): titles and bodies verbatim from onboarding spec §2.
+    'tour.kicker': 'HOW SHERPA WORKS',
+    'tour.counter': (index: number, total: number) => `${pad(index)} / ${pad(total)}`,
+    'tour.live': (index: number, total: number, title: string) => `step ${num(index)} of ${num(total)}, ${title}`,
+    'tour.skip': 'Skip tour',
+    'tour.back': 'Back',
+    'tour.next': 'Next',
+    'tour.start': 'Start reviewing',
+    'tour.step.narrative.title': 'The route decides what you read first',
+    'tour.step.narrative.body':
+        'Stops are ordered by how much they can hurt — the heart of the change, then its consequences, then the wiring. You may stop after any of them: the important part is already behind you.',
+    'tour.step.fold.title': 'Low-risk stops arrive folded',
+    'tour.step.fold.body':
+        'Every stop carries a tier. Low ones start folded, with their line count on the fold — nothing is ever hidden from you silently, and one click opens the code.',
+    'tour.step.stopdiff.title': 'Inside every stop is the real diff',
+    'tour.step.stopdiff.body':
+        'Not a retelling of the code — the diff itself, with comments, viewed marks, search and context expansion. If the route vanished, this would still be your reader.',
+    'tour.step.progress.title': 'Progress counts two different things',
+    'tour.step.progress.body':
+        'The counter says where you are; the viewed marks say what you actually read. Viewed stops dim and fold, so the page gets shorter as you move. Progress is yours alone.',
+    'tour.step.presets.title': 'Two orders of the same review',
+    'tour.step.presets.body':
+        'Triage sorts by importance. Full tour follows the reading flow — entry point, definitions, consequences, verification. Same stops, same comments, same marks; only the order changes.',
+    'tour.step.chat.title': 'Ask about the lines in front of you',
+    'tour.step.chat.body':
+        'Select code anywhere and ask. The answer streams in here and stays pinned to those lines as a foldable note — one click turns a note into a comment draft.',
+    'tour.step.fulldiff.title': 'The classic reader stays one click away',
+    'tour.step.fulldiff.body':
+        'Full diff shows every file in plain order — nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing.',
+    'tour.step.ship.title': 'Nothing reaches the author until you say so',
+    'tour.step.ship.body':
+        'Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you.',
+    'tour.stub.title': 'The first stop of the route will appear here',
+    'tour.stub.body':
+        'While there is no route yet, the tour shows how it is built: the narrative of a stop on the left, its diff on the right. The first stop takes this place as soon as the agent hands it over.',
+    'tour.stub.fold': 'a folded low-tier stop will sit here',
 
     'help.cheatsheet.title': 'Keyboard shortcuts',
     'help.cheatsheet.close': 'Close the shortcuts sheet',

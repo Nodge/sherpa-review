@@ -308,7 +308,8 @@ export function ChatPanel(props: ChatPanelProps) {
     const prLabel = breadcrumbFromPrKey(props.prKey).at(-1) ?? props.prKey;
 
     return (
-        <aside className="chat-panel" aria-label={t('chat.aria')}>
+        // `data-tour="chat"` is the anchor for onboarding tour step 06 (M5-T8).
+        <aside className="chat-panel" aria-label={t('chat.aria')} data-tour="chat">
             <header className="chat-panel__header">
                 <div>
                     <div className="chat-panel__title">Agent</div>

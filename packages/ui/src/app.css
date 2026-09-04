@@ -26,6 +26,8 @@
 }
 
 .app-workspace__content {
+    /* Tour scaffold coordinate system (M5-T8): it sits above the view without moving it. */
+    position: relative;
     display: flex;
     flex: 1;
     flex-direction: column;

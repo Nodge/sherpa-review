@@ -14,7 +14,7 @@ import { createUiPrStateStore } from './pr-state/pr-state-store.js';
 import type { Viewing } from './iterations/viewing.js';
 import { parseViewing } from './iterations/viewing.js';
 import { sessionFragmentPatch } from './session/session-fragment.js';
-import type { SessionState } from './session/session-store.js';
+import type { SessionState, SessionStore } from './session/session-store.js';
 import {
     createSessionStore,
     DEFAULT_PRESET,
@@ -89,59 +89,78 @@ if (token === null) {
         readFragmentParam(window.location.hash, 'base'),
         readFragmentParam(window.location.hash, 'head'),
     );
-    const session = createSessionStore({
-        // A view from the URL is the reviewer's choice: a small PR will not override it (SPEC §4.1).
-        viewPinned: viewFromUrl !== null,
-        initial: {
-            view: viewFromUrl ?? DEFAULT_VIEW,
-            // The filter model validates the id, since only it knows which lenses the host provides.
-            filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
-            preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
-            routeFilter:
-                parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ?? DEFAULT_ROUTE_FILTER,
-            viewing: persistedViewing,
-            threadsShow: DEFAULT_THREADS_SHOW,
-            paletteOpen: false,
-        },
-        persist: (state: SessionState, fragment?: Readonly<Record<string, string | null>>) => {
-            const patch = sessionFragmentPatch(state, persistedViewing, fragment);
-            persistedViewing = state.viewing;
-            // Use replaceState instead of assigning hash, so switching tabs does not fill browser history.
-            history.replaceState(null, '', updateFragment(window.location.hash, patch));
-        },
-    });
-
     // The only keyboard listener on the page. Commands are declared only here (requirements §3.3).
     const shortcuts = createShortcutRegistry();
-    VIEWS.forEach((view, index) => {
-        shortcuts.register({
-            id: `view.${view.id}`,
-            // The `g o`/`g r`/`g d` chord is a second binding for the same command (SPEC §5).
-            keys: [String(index + 1), `g ${VIEW_CHORD[view.id]}`],
-            label: view.command,
-            scope: 'global',
-            section: 'navigation',
-            action: () => {
-                session.setView(view.id);
+    attachShortcuts(window, shortcuts);
+
+    /**
+     * Create the session store and its commands after server state loads: the initial view
+     * depends on whether the onboarding tour is complete (M5-T8), a field in global settings.
+     */
+    const startSession = (defaultView: ViewId): SessionStore => {
+        const session = createSessionStore({
+            // A view from the URL is the reviewer's choice. A small PR does not override it (SPEC §4.1).
+            viewPinned: viewFromUrl !== null,
+            initial: {
+                view: viewFromUrl ?? defaultView,
+                // The filter model validates the id: only it knows which lenses the host provides.
+                filter: readFragmentParam(window.location.hash, 'filter') ?? ALL_FILTER_ID,
+                preset: parsePreset(readFragmentParam(window.location.hash, 'preset')) ?? DEFAULT_PRESET,
+                routeFilter:
+                    parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ??
+                    DEFAULT_ROUTE_FILTER,
+                viewing: persistedViewing,
+                threadsShow: DEFAULT_THREADS_SHOW,
+                paletteOpen: false,
+            },
+            persist: (state: SessionState, fragment?: Readonly<Record<string, string | null>>) => {
+                const patch = sessionFragmentPatch(state, persistedViewing, fragment);
+                persistedViewing = state.viewing;
+                // Use replaceState instead of assigning hash so switching tabs does not fill browser history.
+                history.replaceState(null, '', updateFragment(window.location.hash, patch));
             },
         });
-    });
-    shortcuts.register({
-        id: 'palette.open',
-        keys: ['mod+k'],
-        label: 'shortcut.palette.open',
-        scope: 'global',
-        section: 'navigation',
-        worksInInputs: true,
-        action: () => {
-            session.setPaletteOpen(true);
-        },
-    });
-    attachShortcuts(window, shortcuts);
+
+        VIEWS.forEach((view, index) => {
+            shortcuts.register({
+                id: `view.${view.id}`,
+                // The `g o`/`g r`/`g d` chord is a second binding for the same command (SPEC §5), not a new one.
+                keys: [String(index + 1), `g ${VIEW_CHORD[view.id]}`],
+                label: view.command,
+                scope: 'global',
+                section: 'navigation',
+                action: () => {
+                    session.setView(view.id);
+                },
+            });
+        });
+        shortcuts.register({
+            id: 'palette.open',
+            keys: ['mod+k'],
+            label: 'shortcut.palette.open',
+            scope: 'global',
+            section: 'navigation',
+            worksInInputs: true,
+            action: () => {
+                session.setPaletteOpen(true);
+            },
+        });
+        return session;
+    };
 
     // Wait for server state until the timeout. A stalled endpoint must not leave the reviewer
     // on an empty page. Render defaults, then load the response into the stores when it arrives.
     void Promise.race([Promise.all([settingsReady, prStateReady]), delay(SETTINGS_BOOT_TIMEOUT_MS)]).then(() => {
+        /*
+         * An incomplete tour opens the tab on Route: its first three steps describe the
+         * route, so starting on Overview serves no purpose. This changes the default during loading.
+         * A view from the URL takes priority, and the tour does not switch views while running (onboarding spec §2).
+         * Settings arriving after the timeout have no say here. They do not start the tour
+         * either, since defaults would make it appear incomplete for everyone.
+         */
+        const tourPending =
+            settings.isLoaded() && settings.getSnapshot().onboarding.completedAt === null;
+        const session = startSession(tourPending ? 'route' : DEFAULT_VIEW);
         root.render(
             <StrictMode>
                 <IconSprite />

@@ -46,6 +46,8 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
                     role="tab"
                     className="view-tabs__tab"
                     aria-selected={item.id === view}
+                    // Anchor for onboarding tour step 07 (M5-T8).
+                    {...(item.id === 'diff' ? { 'data-tour': 'fulldiff' } : {})}
                     // Roving tabindex: Tab enters the control once, then arrow keys move within it.
                     tabIndex={item.id === view ? 0 : -1}
                     onClick={() => {

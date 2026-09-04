@@ -160,7 +160,23 @@ describe('global UI settings', () => {
         await loadUiSettings(store, () => Promise.reject(new Error('server is not responding')));
 
         expect(store.getSnapshot()).toEqual(DEFAULT_UI_SETTINGS);
+        // No response arrived. Defaults remain defaults and cannot be used to make decisions.
+        expect(store.isLoaded()).toBe(false);
         expect(warn).toHaveBeenCalled();
         warn.mockRestore();
+    });
+
+    it('sets the loaded flag and notifies subscribers on a server response even when it matches the defaults', async () => {
+        const store = createUiSettingsStore();
+        let notified = 0;
+        store.subscribe(() => {
+            notified += 1;
+        });
+
+        expect(store.isLoaded()).toBe(false);
+        await loadUiSettings(store, () => Promise.resolve({ ...DEFAULT_UI_SETTINGS }));
+
+        expect(store.isLoaded()).toBe(true);
+        expect(notified).toBe(1);
     });
 });
