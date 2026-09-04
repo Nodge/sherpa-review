@@ -55,6 +55,11 @@ export interface ThreadStoreSnapshot {
 export interface ComposerLayoutSnapshot {
     /** Only anchored composers for new comments. Text is intentionally not published here. */
     readonly byFile: ReadonlyMap<string, readonly ComposerSnapshot[]>;
+    /**
+     * Threads with an open reply or draft edit composer. These composers have no anchor,
+     * so they do not affect line layout, but their file is in use and must stay in the DOM.
+     */
+    readonly openThreadIds: ReadonlySet<string>;
 }
 
 export interface ComposerGuardSnapshot {
@@ -128,7 +133,7 @@ export function createThreadStore(
     const composers = new Map<string, ComposerSnapshot>();
     const draftDeletions = new Map<string, number>();
     let snapshot = buildSnapshot(null);
-    let composersSnapshot: ComposerLayoutSnapshot = { byFile: new Map() };
+    let composersSnapshot: ComposerLayoutSnapshot = { byFile: new Map(), openThreadIds: new Set() };
     let composerGuardSnapshot: ComposerGuardSnapshot = { pending: false };
 
     function buildSnapshot(previous: ThreadStoreSnapshot | null): ThreadStoreSnapshot {
@@ -179,19 +184,31 @@ export function createThreadStore(
     };
 
     const publishComposerLayout = (fileId: string | null): void => {
+        const openThreadIds = new Set<string>();
+        for (const composer of composers.values()) {
+            if (composer.threadId !== null) {
+                openThreadIds.add(composer.threadId);
+            }
+        }
         if (fileId === null) {
-            return;
-        }
-        const byFile = new Map(composersSnapshot.byFile);
-        const next = [...composers.values()].filter(
-            (composer) => composer.anchor?.fileId === fileId && composer.anchor.position !== null,
-        );
-        if (next.length === 0) {
-            byFile.delete(fileId);
+            // A composer without an anchor does not affect line layout. Notify subscribers only when
+            // the set of threads with open composers changes, and leave `byFile` unchanged.
+            if (sameSet(composersSnapshot.openThreadIds, openThreadIds)) {
+                return;
+            }
+            composersSnapshot = { byFile: composersSnapshot.byFile, openThreadIds };
         } else {
-            byFile.set(fileId, next);
+            const byFile = new Map(composersSnapshot.byFile);
+            const next = [...composers.values()].filter(
+                (composer) => composer.anchor?.fileId === fileId && composer.anchor.position !== null,
+            );
+            if (next.length === 0) {
+                byFile.delete(fileId);
+            } else {
+                byFile.set(fileId, next);
+            }
+            composersSnapshot = { byFile, openThreadIds };
         }
-        composersSnapshot = { byFile };
         for (const listener of [...composerListeners]) {
             listener();
         }

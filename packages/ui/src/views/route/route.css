@@ -647,6 +647,11 @@
     min-width: 0;
 }
 
+/* Placeholder for the diff column removed from the DOM (M5-T13), using its last measured height. */
+.route-stop__placeholder {
+    flex: none;
+}
+
 .route-stop__card {
     display: flex;
     flex-direction: column;

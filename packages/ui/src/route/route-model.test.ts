@@ -7,9 +7,10 @@ import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import type { FileReadState } from '../progress/read-state.js';
 import { changedLinesOf, readStateOf } from '../progress/read-state.js';
-import type { RouteFileGroup, RouteModel, RouteTotals } from './route-model.js';
+import type { RouteFileGroup, RouteModel, RouteTotals, StopDiffMountState } from './route-model.js';
 import {
     buildRouteModel,
+    canUnmountStopDiff,
     changeFilterAvailable,
     composersForGroup,
     countStopComments,
@@ -654,6 +655,29 @@ describe('route model', () => {
         // Above the threshold, the first cards add up to five hunks. The rest wait for scrolling.
         expect(lazyCards(big).map((file) => file.fileId)).toEqual(['a', 'b']);
         expect(lazyCards([group(40, 'one'), group(1, 'two')]).map((file) => file.fileId)).toEqual(['one']);
+    });
+
+    it('removes the diff column from the DOM only for a distant stop with a measured height', () => {
+        const far: StopDiffMountState = {
+            nearViewport: false,
+            measuredHeight: 640,
+            first: false,
+            rendersCards: true,
+            jumping: false,
+            busy: false,
+        };
+        expect(canUnmountStopDiff(far)).toBe(true);
+
+        // Each exception on its own keeps the column in place.
+        expect(canUnmountStopDiff({ ...far, nearViewport: true })).toBe(false);
+        // Without a measured height, the placeholder cannot reserve space and the document would shrink.
+        expect(canUnmountStopDiff({ ...far, measuredHeight: null })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, first: true })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, rendersCards: false })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, jumping: true })).toBe(false);
+        expect(canUnmountStopDiff({ ...far, busy: true })).toBe(false);
+        // Zero height is still a measurement. An empty stop can be removed like the others.
+        expect(canUnmountStopDiff({ ...far, measuredHeight: 0 })).toBe(true);
     });
 
     it('counts threads whose positions are within the stop anchors', () => {

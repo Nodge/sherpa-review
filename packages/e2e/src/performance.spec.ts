@@ -14,14 +14,21 @@ const P95_BUDGET_MS = 33;
 const SCROLL_STEP_PX = 300;
 
 /**
- * The frame-time budget on `fixture-huge` does not fail the run yet: T12 only measures. T13 adds optimizations
- * (line virtualization, a worker pool, card unmounting). The spec reports
- * `within budget` / `over budget` and fails only on breakage: the diff did not parse or the route
- * did not build. Switching to `true` is T13's task.
+ * The spec §7 budget for `fixture-huge` fails the run starting with T13: a distant stop's diff column is removed
+ * from the DOM, and the route keeps the same frame intervals as the virtualized full diff.
+ * The checks measure intervals between rAF calls, rather than "frame work": our synchronous share was already
+ * 0.08 ms. Browser layout and painting were what exceeded the budget (T12 report).
  */
-// The type is widened to boolean on purpose. Otherwise the literal narrows to `false` and the linter treats
-// budget checks as dead code.
-const HUGE_BUDGET_ENFORCED = false as boolean;
+// The type is deliberately widened to boolean: otherwise the literal would narrow to `true` and the linter would
+// consider the check redundant. Disabling the budget for investigation must still take just one edit.
+const HUGE_BUDGET_ENFORCED = true as boolean;
+
+/**
+ * Route DOM node limit after scrolling through all 25 stops. T13 measured 30 433 nodes
+ * (149 086 before unmounting). The rounded threshold = measurement × 1.3 catches a return
+ * to "the whole route in the DOM", rather than fluctuations of a couple of cards.
+ */
+const HUGE_ROUTE_DOM_BUDGET = 40_000;
 
 test('fixture-large meets the frame-time budget when scrolling the full diff', async ({ page, launchSherpa }) => {
     const server = await launchSherpa('fixture-large');
@@ -104,8 +111,8 @@ test('fixture-huge: full diff first frame, worker parsing and scroll frame time'
     expect(warm.frames).toBeGreaterThan(20);
     expect(parse.count).toBe(HUGE_PARSED_FILE_COUNT);
     if (HUGE_BUDGET_ENFORCED) {
-        expect(warm.average).toBeLessThanOrEqual(AVERAGE_BUDGET_MS);
-        expect(warm.p95).toBeLessThanOrEqual(P95_BUDGET_MS);
+        expectWithinBudget(cold);
+        expectWithinBudget(warm);
     }
 });
 
@@ -142,10 +149,19 @@ test('fixture-huge: building a 25-stop route and scroll frame time', async ({ pa
     expect(cold.frames).toBeGreaterThan(5);
     expect(warm.frames).toBeGreaterThan(5);
     if (HUGE_BUDGET_ENFORCED) {
-        expect(warm.average).toBeLessThanOrEqual(AVERAGE_BUDGET_MS);
-        expect(warm.p95).toBeLessThanOrEqual(P95_BUDGET_MS);
+        expectWithinBudget(cold);
+        expectWithinBudget(warm);
+        expect(domNodes).toBeLessThanOrEqual(HUGE_ROUTE_DOM_BUDGET);
     }
 });
+
+/** Spec §7 budget for one scroll pass: both frame intervals and our work within each frame. */
+function expectWithinBudget(metrics: FrameMetrics): void {
+    expect(metrics.intervalAverage).toBeLessThanOrEqual(AVERAGE_BUDGET_MS);
+    expect(metrics.intervalP95).toBeLessThanOrEqual(P95_BUDGET_MS);
+    expect(metrics.average).toBeLessThanOrEqual(AVERAGE_BUDGET_MS);
+    expect(metrics.p95).toBeLessThanOrEqual(P95_BUDGET_MS);
+}
 
 interface FrameMetrics {
     readonly average: number;
@@ -157,6 +173,8 @@ interface FrameMetrics {
     readonly intervalP95: number;
     readonly intervalMax: number;
     readonly elapsedMs: number;
+    /** The pass hit the frame limit before the end of the document: the numbers are incomplete. */
+    readonly capped: boolean;
 }
 
 /**
@@ -170,6 +188,7 @@ interface FrameMetrics {
  */
 function scrollFrames(scroller: Locator): Promise<FrameMetrics> {
     return scroller.evaluate(async (element, step): Promise<FrameMetrics> => {
+        const frameCap = 5000;
         const samples: number[] = [];
         const intervals: number[] = [];
         element.scrollTop = 0;
@@ -180,8 +199,8 @@ function scrollFrames(scroller: Locator): Promise<FrameMetrics> {
         });
 
         const startedPass = performance.now();
+        let capped = false;
         await new Promise<void>((resolve) => {
-            const maxScroll = element.scrollHeight - element.clientHeight;
             let previousFrameAt: number | null = null;
             const frame = (): void => {
                 const startedAt = performance.now();
@@ -190,13 +209,20 @@ function scrollFrames(scroller: Locator): Promise<FrameMetrics> {
                 }
                 previousFrameAt = startedAt;
 
+                // The boundary is live: document height grows as cards render, and a snapshot
+                // of the boundary would cut the pass short, so configurations would measure different amounts
+                // of work. The frame limit protects against infinite growth.
+                const maxScroll = element.scrollHeight - element.clientHeight;
                 element.scrollTop = Math.min(element.scrollTop + step, maxScroll);
                 element.getBoundingClientRect();
                 samples.push(performance.now() - startedAt);
 
-                // Capture the bound once: on a cold list, height grows as cards are measured,
-                // so a loop using the live height would never finish.
                 if (element.scrollTop >= maxScroll) {
+                    resolve();
+                    return;
+                }
+                if (samples.length >= frameCap) {
+                    capped = true;
                     resolve();
                     return;
                 }
@@ -225,6 +251,7 @@ function scrollFrames(scroller: Locator): Promise<FrameMetrics> {
             intervalP95: interval.p95,
             intervalMax: interval.max,
             elapsedMs: performance.now() - startedPass,
+            capped,
         };
     }, SCROLL_STEP_PX);
 }
@@ -233,7 +260,8 @@ function frameLine(label: string, metrics: FrameMetrics): string {
     return (
         `${label} avg=${metrics.average.toFixed(2)}, p95=${metrics.p95.toFixed(2)}, max=${metrics.max.toFixed(2)}, ` +
         `frames=${String(metrics.frames)}; rAF interval avg=${metrics.intervalAverage.toFixed(2)}, ` +
-        `p95=${metrics.intervalP95.toFixed(2)}, max=${metrics.intervalMax.toFixed(2)}; pass=${(metrics.elapsedMs / 1000).toFixed(1)} s`
+        `p95=${metrics.intervalP95.toFixed(2)}, max=${metrics.intervalMax.toFixed(2)}; pass=${(metrics.elapsedMs / 1000).toFixed(1)} s` +
+        (metrics.capped ? ' (hit the frame limit)' : '')
     );
 }
 
@@ -283,8 +311,8 @@ function usedHeapMb(page: Page): Promise<string | null> {
 }
 
 function budgetVerdict(metrics: FrameMetrics): string {
-    const within = metrics.average <= AVERAGE_BUDGET_MS && metrics.p95 <= P95_BUDGET_MS;
-    return `${within ? 'within budget' : 'over budget'} (avg ≤ ${String(AVERAGE_BUDGET_MS)} ms, p95 ≤ ${String(P95_BUDGET_MS)} ms)`;
+    const within = metrics.intervalAverage <= AVERAGE_BUDGET_MS && metrics.intervalP95 <= P95_BUDGET_MS;
+    return `${within ? 'within budget' : 'over budget'} (rAF interval avg ≤ ${String(AVERAGE_BUDGET_MS)} ms, p95 ≤ ${String(P95_BUDGET_MS)} ms)`;
 }
 
 function report(label: string, lines: readonly string[]): void {

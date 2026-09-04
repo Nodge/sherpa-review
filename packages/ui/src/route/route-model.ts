@@ -735,6 +735,46 @@ export function lazyCards(files: readonly RouteFileGroup[]): readonly RouteFileG
 }
 
 /**
+ * Stop state that determines whether its diff column can be removed from the DOM (M5-T13).
+ * The route is not virtualized as a whole. The section stays in place with its narrative,
+ * chips and viewed toggle. Only the right column is removed, with a placeholder
+ * of its measured height holding its place.
+ */
+export interface StopDiffMountState {
+    /** The stop is still within the far hysteresis boundary of `useNearViewport`. */
+    readonly nearViewport: boolean;
+    /** Last measured column height. `null` means it has never been measured, so there is no replacement height. */
+    readonly measuredHeight: number | null;
+    /** First route stop: the reviewer's entry point and tour anchor (M5-T8). */
+    readonly first: boolean;
+    /**
+     * The column renders file cards. An unfilled slot's skeleton, anchor drift, "no hunks"
+     * and a collapsed summary each take one row. There is nothing to remove, and e2e also counts plan skeletons.
+     */
+    readonly rendersCards: boolean;
+    /** The stop flashes after a jump or is the target of a jump still in progress. */
+    readonly jumping: boolean;
+    /** A file in the stop contains a selection, an open composer or line focus. */
+    readonly busy: boolean;
+}
+
+/**
+ * Whether the stop's diff column can be removed from the DOM. Exceptions account for what
+ * unmounting loses: local context bridge state, the comment editor instance,
+ * line focus and `data-file` anchors for navigation after marking viewed.
+ */
+export function canUnmountStopDiff(state: StopDiffMountState): boolean {
+    return (
+        !state.nearViewport &&
+        state.measuredHeight !== null &&
+        !state.first &&
+        state.rendersCards &&
+        !state.jumping &&
+        !state.busy
+    );
+}
+
+/**
  * The stop is classified relative to the previous pass. Only these pass the
  * "what is new" filter (README §9). The synthetic "Other" has no classification and disappears along
  * with unchanged stops.

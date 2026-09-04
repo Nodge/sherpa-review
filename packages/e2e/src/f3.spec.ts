@@ -184,7 +184,11 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
             '871 changed lines · 95% explained · 41 lines not explained',
         );
-        await expect(page.locator('.file-card[data-file]').first()).toBeVisible();
+        // A distant stop's diff column is removed from the DOM (M5-T13). Scroll to the unmarked
+        // stop to inspect it. Cards return near the viewport.
+        const changed = page.locator(`[data-stop="${CHANGED_STOPS[0]}"]`);
+        await changed.scrollIntoViewIfNeeded();
+        await expect(changed.locator('.file-card[data-file]').first()).toBeVisible();
     });
 
     await test.step('"What is new since the last pass" leaves 3 stops on screen', async () => {

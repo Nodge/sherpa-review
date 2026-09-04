@@ -1,5 +1,5 @@
 import type { RouteStopChange, Thread } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
@@ -42,6 +42,8 @@ export interface StopCardProps {
     readonly onFillStop?: (planIndex: number) => void;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
+    /** Expose the diff column so the view can measure its height and reserve space when it leaves the DOM. */
+    readonly diffRef?: RefObject<HTMLDivElement | null>;
     /** Accent line flash above the diff column after jumping to a file (README Interactions). */
     readonly flash?: boolean;
     /** Threads from `change.threadIds` that caused the change, reduced to links with unknown ids removed. */
@@ -101,6 +103,7 @@ export function StopCard({
     onFillStop,
     chips,
     diff,
+    diffRef,
     flash = false,
     changeThreads = EMPTY_CHANGE_THREADS,
     onOpenThread,
@@ -213,7 +216,7 @@ export function StopCard({
                 {chips}
             </div>
 
-            <div className="route-stop__diff">
+            <div className="route-stop__diff" ref={diffRef}>
                 {flash ? <div className="route-stop__flash" aria-hidden="true" /> : null}
                 {diff}
             </div>

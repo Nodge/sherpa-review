@@ -68,6 +68,7 @@ import type { RouteSummary } from '../../route/route-summary.js';
 import { stopCoveredByProgress } from '../../route/stop-coverage.js';
 import {
     buildRouteModel,
+    canUnmountStopDiff,
     changeFilterAvailable,
     composersForGroup,
     countStopComments,
@@ -120,7 +121,7 @@ import {
 } from './stop-card.tsx';
 import { StopFileCard, stopFileShownModel } from './stop-file-card.tsx';
 import { TestDigest } from './test-digest.tsx';
-import { useOnScreen } from './use-on-screen.js';
+import { useNearViewport, useOnScreen } from './use-on-screen.js';
 import './route.css';
 
 /**
@@ -657,6 +658,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const settling = useRef(0);
     const [keptStopId, setKeptStopId] = useState<string | null>(props.initialKeptStopId ?? null);
     const [flashStopId, setFlashStopId] = useState<string | null>(null);
+    /** The target of an unfinished jump: its diff column must stay in the DOM while the staged search runs inside it. */
+    const [jumpStopId, setJumpStopId] = useState<string | null>(null);
     const [otherOpen, setOtherOpen] = useState(false);
     /** Toolbar measurement: the sticky column offset uses the `route.css` fallback until the first measurement. */
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
@@ -735,6 +738,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             clearTimeout(timer);
         }
         settling.current = Math.max(0, settling.current - 1);
+        setJumpStopId(null);
     }, []);
 
     /**
@@ -766,6 +770,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             }
 
             settling.current += 1;
+            // Keep the jump target mounted while the staged search looks for its card and line.
+            setJumpStopId(stopId);
             const run: JumpRun = { cancel: () => undefined, timers: [], frame: null, reached: 'none' };
             running.current = run;
             const deadline = Date.now() + JUMP_SEARCH_MS;
@@ -810,6 +816,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         if (running.current === run) {
                             running.current = null;
                             settling.current = Math.max(0, settling.current - 1);
+                            setJumpStopId(null);
                         }
                     }, JUMP_DURATION + SETTLE_TAIL),
                 );
@@ -990,7 +997,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             revealTarget(target.entry, initialSelectionTarget.fileId);
             if (target.collapsedAnchor) {
                 setOpenedCollapsed((previous) =>
-                    new Set(previous).add(`${target.entry.view.stop.id}\u0000${initialSelectionTarget.fileId}`),
+                    new Set(previous).add(collapsedKey(target.entry.view.stop.id, initialSelectionTarget.fileId)),
                 );
             }
             store.openFile(initialSelectionTarget.fileId);
@@ -1490,7 +1497,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         if (selectionCard === null || diffSnapshot.selection?.fileId !== selectionCard.group.fileId) {
             return null;
         }
-        const key = `${selectionCard.stopId}\u0000${selectionCard.group.fileId}`;
+        const key = collapsedKey(selectionCard.stopId, selectionCard.group.fileId);
         return stopFileShownModel(
             selectionCard.group,
             diffSnapshot.models.get(selectionCard.group.fileId) ?? null,
@@ -1594,7 +1601,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
     const cardFor = useCallback(
         (stopId: string, group: RouteFileGroup) => {
-            const key = `${stopId}\u0000${group.fileId}`;
+            const key = collapsedKey(stopId, group.fileId);
             const collapseReason = fileCollapseReason(diffSnapshot, group.file);
             const shownModel = stopFileShownModel(
                 group,
@@ -1674,6 +1681,92 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             visibleThreads,
         ],
     );
+
+    /**
+     * Files that keep a stop in the DOM: unmounting would lose the live
+     * selection, the comment editor instance with its caret and undo history, and line focus.
+     */
+    const busyFileIds = useMemo(() => {
+        const ids = new Set<string>(composersSnapshot.byFile.keys());
+        // Replies and draft edits open without an anchor, so their file is found through the thread.
+        if (composersSnapshot.openThreadIds.size > 0) {
+            for (const [fileId, threads] of threadSnapshot.byFile) {
+                if (threads.some((thread) => composersSnapshot.openThreadIds.has(thread.id))) {
+                    ids.add(fileId);
+                }
+            }
+        }
+        if (diffSnapshot.selection !== null) {
+            ids.add(diffSnapshot.selection.fileId);
+        }
+        if (focusedLine !== null) {
+            ids.add(focusedLine.fileId);
+        }
+        return ids;
+    }, [
+        composersSnapshot.byFile,
+        composersSnapshot.openThreadIds,
+        diffSnapshot.selection,
+        focusedLine,
+        threadSnapshot.byFile,
+    ]);
+
+    /**
+     * Layout marker for one stop's diff column: while the marker is unchanged, the measured
+     * placeholder height remains valid. The marker uses the stop's own files. A global marker
+     * would reset on every gap expansion and remount the whole route
+     * just to remeasure it. Include the entire file list: a lens leaves only some of the stop's
+     * cards, so the old height would be wrong by the difference.
+     *
+     * `null` means the layout has not settled: a file has no parsed model yet, and its place holds
+     * a parsing skeleton, which cannot be used to measure the card's height.
+     */
+    const stopLayoutKey = useCallback(
+        (stopId: string, files: readonly RouteFileGroup[]): string | null => {
+            const threads =
+                (threadsShow.people ? 'p' : '') +
+                (threadsShow.bots ? 'b' : '') +
+                (threadsShow.resolved ? 'r' : '');
+            const parts: string[] = [diffSnapshot.effectiveMode, preset, threads];
+            for (const group of files) {
+                const model = diffSnapshot.models.get(group.fileId) ?? null;
+                if (model === null) {
+                    return null;
+                }
+                const state =
+                    (diffSnapshot.whitespaceShown.has(group.fileId) ? 'w' : '') +
+                    (diffSnapshot.collapseExpanded.has(group.fileId) ? 'e' : '') +
+                    (diffSnapshot.collapseExpandedViewed.has(group.fileId) ? 'v' : '') +
+                    (diffSnapshot.collapseCollapsed.has(group.fileId) ? 'c' : '') +
+                    (diffSnapshot.opened.has(group.fileId) ? 'o' : '') +
+                    (openedCollapsed.has(collapsedKey(stopId, group.fileId)) ? 'k' : '');
+                parts.push(
+                    group.fileId,
+                    // Use patch size instead of the model itself: reparsing the same file yields
+                    // the same lines, so there is no reason to reset the measured height.
+                    `${String(model.additions)}+${String(model.deletions)}${state}`,
+                    expansionKey(diffSnapshot.expansion.get(group.fileId)),
+                );
+            }
+            return parts.join('|');
+        },
+        [
+            diffSnapshot.collapseCollapsed,
+            diffSnapshot.collapseExpanded,
+            diffSnapshot.collapseExpandedViewed,
+            diffSnapshot.effectiveMode,
+            diffSnapshot.expansion,
+            diffSnapshot.models,
+            diffSnapshot.opened,
+            diffSnapshot.whitespaceShown,
+            openedCollapsed,
+            preset,
+            threadsShow,
+        ],
+    );
+
+    /** First planned stop. Its diff column stays in the DOM as the entry point and onboarding tour anchor. */
+    const firstStopId = shown.find((entry) => entry.kind === 'stop')?.view.stop.id ?? null;
 
     const outsideThreads = threadSnapshot.outside.filter(
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
@@ -1767,6 +1860,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         <StopSection
                             key={entry.view.stop.id}
                             view={entry.view}
+                            first={entry.view.stop.id === firstStopId}
+                            busyFileIds={busyFileIds}
+                            layoutKeyOf={stopLayoutKey}
+                            jumping={jumpStopId === entry.view.stop.id}
                             entries={model.entries}
                             stopCount={model.stopCount}
                             comments={countStopComments(entry.view, visibleByFile, iterationLayout)}
@@ -1879,6 +1976,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
 
 interface StopSectionProps {
     readonly view: RouteStopView;
+    /** First route stop: its diff column stays in the DOM (M5-T13). */
+    readonly first: boolean;
+    /** Files with an active selection, open composer or focused row, across the whole route. */
+    readonly busyFileIds: ReadonlySet<string>;
+    /** Column layout key. Changing it resets measured height. `null` means it is too early to measure. */
+    readonly layoutKeyOf: (stopId: string, files: readonly RouteFileGroup[]) => string | null;
+    /** Stop targeted by a jump still in progress. */
+    readonly jumping: boolean;
     readonly entries: readonly RouteEntry[];
     readonly stopCount: number;
     readonly comments: number;
@@ -1920,6 +2025,10 @@ interface StopSectionProps {
 
 function StopSection({
     view,
+    first,
+    busyFileIds,
+    layoutKeyOf,
+    jumping,
     entries,
     stopCount,
     comments,
@@ -1949,7 +2058,12 @@ function StopSection({
     onOpenAnchor,
 }: StopSectionProps) {
     const ref = useRef<HTMLDivElement | null>(null);
+    const diffRef = useRef<HTMLDivElement | null>(null);
     const onScreen = useOnScreen(ref);
+    const nearViewport = useNearViewport(ref, {
+        mountMargin: MOUNT_MARGIN,
+        unmountMargin: UNMOUNT_MARGIN,
+    });
     const files = useMemo(
         () => (fileIds === null ? view.files : view.files.filter((group) => fileIds.has(group.fileId))),
         [fileIds, view.files],
@@ -1989,16 +2103,95 @@ function StopSection({
     const lines = files.reduce((total, group) => total + group.additions + group.deletions, 0);
     const cards = onScreen ? shownFiles : lazyCards(shownFiles);
 
+    /**
+     * Layout key for this column. Computed from rendered files, so the lens, test-code toggle
+     * and edits in neighbouring stops do not leak into it.
+     */
+    const layoutKey = useMemo(() => {
+        const key = layoutKeyOf(view.stop.id, shownFiles);
+        return key === null ? null : `${key}|${testCodeShown ? 'test' : ''}`;
+    }, [layoutKeyOf, shownFiles, testCodeShown, view.stop.id]);
+
+    /**
+     * Diff column height measured for the current layout while the column is mounted.
+     * The placeholder keeps that exact height, so removal from the DOM does not shift the document or disturb scrolling.
+     */
+    const [measured, setMeasured] = useState<{ readonly key: string; readonly height: number } | null>(null);
+    const measuredHeight = measured !== null && measured.key === layoutKey ? measured.height : null;
+    const busy = view.files.some((group) => busyFileIds.has(group.fileId));
+
     const status = view.stop.status;
-    const diff = status === 'queued' || status === 'filling' ? (
+    /** Diff column content. Everything except `cards` fits in a skeleton or a single row. */
+    const content: 'skeleton' | 'drift' | 'conflicts' | 'empty' | 'collapsed' | 'cards' =
+        status === 'queued' || status === 'filling'
+            ? 'skeleton'
+            : view.drift
+              ? 'drift'
+              : files.length === 0 && digest === null
+                ? view.conflictPaths.length > 0
+                    ? // The entire stop falls in conflicted files, so "no hunks" would be misleading.
+                      'conflicts'
+                    : 'empty'
+                : collapsed
+                  ? 'collapsed'
+                  : 'cards';
+
+    const unmounted = canUnmountStopDiff({
+        nearViewport,
+        measuredHeight,
+        first,
+        rendersCards: content === 'cards',
+        jumping: jumping || flash,
+        busy,
+    });
+
+    /**
+     * Only measure the column in full. A stop that has not yet appeared on
+     * screen renders only the head of its list (`lazyCards`), and cards may be replaced with
+     * skeletons or single-row summaries. Measuring these would put the placeholder hundreds of pixels off.
+     */
+    const measurable = !unmounted && layoutKey !== null && onScreen && content === 'cards';
+
+    useEffect(() => {
+        const element = diffRef.current;
+        if (layoutKey === null || !measurable || element === null) {
+            return;
+        }
+        const record = (): void => {
+            const height = element.offsetHeight;
+            setMeasured((previous) =>
+                previous !== null && previous.key === layoutKey && Math.abs(previous.height - height) < 1
+                    ? previous
+                    : { key: layoutKey, height },
+            );
+        };
+        // Take the first measurement manually. Layout changes do not always change height, but still require a new measurement.
+        record();
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        const observer = new ResizeObserver(record);
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+        };
+    }, [layoutKey, measurable]);
+
+    const diff = unmounted ? (
+        // Column removed from the DOM. Its last measured height reserves space so the document stays still.
+        <div
+            className="route-stop__placeholder"
+            style={{ height: `${String(measuredHeight ?? 0)}px` }}
+            aria-hidden="true"
+        />
+    ) : content === 'skeleton' ? (
         // Planned slot awaiting filling. Show a skeleton because there is nothing to explain yet, not "no hunks".
         <StopSkeleton />
-    ) : view.drift ? (
+    ) : content === 'drift' ? (
         <AnchorDrift paths={view.unresolvedPaths} />
-    ) : files.length === 0 && digest === null && view.conflictPaths.length > 0 ? (
-        // The entire stop moved into conflicted files. "No hunks" would be misleading here.
+    ) : content === 'conflicts' ? (
         <StopConflicts paths={view.conflictPaths} />
-    ) : files.length === 0 && digest === null ? (
+    ) : content === 'empty' ? (
         <EmptyStop
             text={
                 status === 'failed'
@@ -2008,7 +2201,7 @@ function StopSection({
                       : 'The current filter hides this stop\'s files.'
             }
         />
-    ) : collapsed ? (
+    ) : content === 'collapsed' ? (
         viewed ? (
             <ViewedSummary
                 lines={lines}
@@ -2080,6 +2273,7 @@ function StopSection({
                         }}
                     />
                 }
+                diffRef={diffRef}
                 diff={diff}
             />
         </div>
@@ -2190,6 +2384,21 @@ function pillLabelOf(snapshot: RouteSnapshot): ViewingLabel {
     return { kind: 'snapshot', commit: snapshot.commit, status: 'current' };
 }
 
+/** Key for manually expanding a collapsed card. The same file in different stops gets different keys. */
+function collapsedKey(stopId: string, fileId: string): string {
+    return `${stopId}\u0000${fileId}`;
+}
+
+/** Expanded file gaps in the layout key determine how many lines the card holds. */
+function expansionKey(expansion: FileExpansion | undefined): string {
+    if (expansion === undefined || expansion.size === 0) {
+        return '';
+    }
+    return [...expansion]
+        .map(([gap, value]) => `${gap}:${String(value.up)}:${String(value.down)}:${value.all ? 'a' : ''}`)
+        .join(',');
+}
+
 /** Stop sections in markup order. Lazy measurement stops at the first visible section when selecting an anchor. */
 function* stopBoxes(container: HTMLElement): Generator<StopBox> {
     for (const section of container.querySelectorAll<HTMLElement>('[data-stop]')) {
@@ -2259,6 +2468,14 @@ const FLASH_MS = 900;
 const SETTLE_TAIL = 50;
 const BACKGROUND_PARSE_DELAY = 300;
 
+/**
+ * Hysteresis boundaries for restoring a stop's diff column to the DOM and removing it
+ * (M5-T13). Mount one screen ahead so cards render before they arrive in view. Unmount
+ * much further away so a stop edge sitting on the boundary does not flicker every frame.
+ */
+const MOUNT_MARGIN = 1200;
+const UNMOUNT_MARGIN = 2500;
+
 interface JumpRun {
     /** Cancel the current scroll: the next stage takes over halfway through. */
     cancel: () => void;
@@ -2307,7 +2524,7 @@ function routeEntryForShownLine(
             if (group.fileId !== fileId) {
                 continue;
             }
-            const key = `${entry.view.stop.id}\u0000${fileId}`;
+            const key = collapsedKey(entry.view.stop.id, fileId);
             const shown = stopFileShownModel(
                 group,
                 snapshot.models.get(fileId) ?? null,
