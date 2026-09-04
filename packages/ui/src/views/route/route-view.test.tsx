@@ -402,6 +402,30 @@ describe('route view', () => {
         expect(reading).toContain('only in the active iteration');
     });
 
+    it('the validator note appears only on an unfilled stop', () => {
+        const note = 'The stop was left unfilled: the agent gave no reason';
+        const failed = withStops((snapshot) =>
+            snapshot.stops.map((stop) =>
+                stop.id === 's01'
+                    ? {
+                          ...stop,
+                          status: 'failed' as const,
+                          paragraph: null,
+                          bridge: null,
+                          validationNotes: [note],
+                      }
+                    : stop,
+            ),
+        );
+        const ready = withStops((snapshot) =>
+            snapshot.stops.map((stop) => (stop.id === 's01' ? { ...stop, validationNotes: [note] } : stop)),
+        );
+
+        // The note is the only explanation in an empty slot. A filled slot needs that space more.
+        expect(section(render({ snapshot: failed }), 's01')).toContain(note);
+        expect(section(render({ snapshot: ready }), 's01')).not.toContain(note);
+    });
+
     it('a stop without anchors shows a dashed card instead of an empty space', () => {
         const html = render({
             snapshot: withStops((snapshot) =>
@@ -510,8 +534,8 @@ describe('route view', () => {
         // Both footer rows are inside the footer, not in the main list.
         expect(count(footer, 'digest__chip--uncovered')).toBe(2);
         expect(stop).toContain('2 assertions dropped — the anchor found no test');
-        // The validator note keeps its own row in the left column. The counter does not duplicate it.
-        expect(stop).toContain('2 claims dropped: the anchor pointed at');
+        // The footer count is the only mention. A filled stop does not render the validator note.
+        expect(stop).not.toContain('Two assertions dropped: the anchor led to');
     });
 
     it('an anchor without a route target explains why it cannot be clicked', () => {

@@ -211,7 +211,13 @@ export function StopCard({
                     </p>
                 )}
 
-                {stop.validationNotes.length === 0 ? null : (
+                {/*
+                 * Validator notes only appear on unfilled stops, where they explain
+                 * the empty slot. On filled stops, they cost more space than they help. The reviewer
+                 * cannot move the anchor anyway, and missing coverage is visible in the bar and "Other"
+                 * (Alice Ingram's decision, 2026-09-04).
+                 */}
+                {!unfilled || stop.validationNotes.length === 0 ? null : (
                     <ul className="route-stop__validation">
                         {stop.validationNotes.map((note) => (
                             <li key={note}>
