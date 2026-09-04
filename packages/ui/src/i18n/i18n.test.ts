@@ -51,6 +51,19 @@ describe('dictionaries', () => {
         expect(createT('ru')('ship.progress', 12, 2412)).toContain(`12 / ${formatCount(2412, 'ru')} `);
         expect(createT('en')('ship.progress', 12, 2412)).toBe('12 / 2,412 files');
     });
+
+    it('the second-pass note agrees with the count in both languages', () => {
+        // "N of M stops": the noun follows M, not the carried-over count.
+        expect(createT('en')('iteration.secondPass.carried.kept', 1, 6)).toBe('1 of 6 stops stayed viewed. ');
+        expect(createT('en')('iteration.secondPass.carried.kept', 1, 1)).toBe('1 of 1 stop stayed viewed. ');
+        expect(createT('en')('iteration.secondPass.carried.none', 1)).toBe('None of the 1 stop stayed viewed. ');
+        expect(changedWords(createT('ru')('iteration.secondPass.carried.kept', 1, 6), createT('ru')('iteration.secondPass.carried.kept', 3, 6))).toBe(
+            4,
+        );
+        expect(changedWords(createT('ru')('iteration.secondPass.carried.kept', 3, 6), createT('ru')('iteration.secondPass.carried.kept', 4, 6))).toBe(
+            1,
+        );
+    });
 });
 
 describe('formatting', () => {

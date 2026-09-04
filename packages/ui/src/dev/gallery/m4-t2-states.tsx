@@ -53,7 +53,7 @@ export const M4_T2_STATES = [
         render: () => (
             <Draft owner="M4-T8" what="banner for changes since the last pass">
                 <Line
-                    label="progress carryover"
+                    label="stayed viewed"
                     value={`${String(SECOND_PASS?.carried?.kept ?? 0)} of ${String(SECOND_PASS?.carried?.total ?? 0)}`}
                 />
                 <Line label="previous snapshot" value={SECOND_PASS?.previousSnapshotId ?? '—'} />

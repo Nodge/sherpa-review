@@ -696,12 +696,41 @@ describe('route orchestration', () => {
             await completeGeneration(server);
 
             const route = (await readRoute(server)).route;
-            expect(route.snapshot?.carried).toEqual({ kept: 1, total: route.snapshot?.stops.length });
+            // The denominator counts stops with anchors: carryover cannot cover the synthetic "Other" stop.
+            expect(route.snapshot?.stops).toHaveLength(7);
+            expect(route.snapshot?.stops.filter((stop) => stop.anchors.length > 0)).toHaveLength(6);
+            expect(route.snapshot?.carried).toEqual({ kept: 1, total: 6, zeroReason: null });
             const progress = uiReviewProgressResponseSchema.parse(
                 await (await get(server.port, UI_ENDPOINTS.reviewProgress, server.token)).json(),
             );
             expect(progress.stops).toEqual([{ stopId: 's01', viewed: true }]);
             expect(progress.files).toContainEqual({ fileId: 'file-2', viewed: true, seenRanges: [] });
+        });
+
+        it('carryover with no marks yields zero and gives "nothing to carry over" as the reason', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+
+            expect(await generate(server)).toBe('started');
+            await completeGeneration(server);
+
+            const route = (await readRoute(server)).route;
+            expect(route.snapshot?.carried).toEqual({ kept: 0, total: 6, zeroReason: 'no_marks' });
+        });
+
+        it('marks that cover no complete stop do not mean "nothing to carry over"', async () => {
+            const server = await startWithWorker();
+            await completeRoute(server);
+            // Only part of the stop's ranges: the stop does not count as fully viewed.
+            await markStop(server, 's01');
+
+            expect(await generate(server)).toBe('started');
+            await completeGeneration(server);
+
+            const route = (await readRoute(server)).route;
+            // Regeneration uses the same iteration: by construction it has no carried lines,
+            // but the reviewer has marks, so the reason is computed from the source iteration.
+            expect(route.snapshot?.carried).toEqual({ kept: 0, total: 6, zeroReason: 'no_overlap' });
         });
 
         it('returns no_review_host without a review host while route state stays readable', async () => {

@@ -162,11 +162,11 @@ describe('route store: snapshot history', () => {
         });
     }
 
-    function insertLegacySnapshot(db: SherpaDatabase, diffId: string): void {
+    function insertLegacySnapshot(db: SherpaDatabase, diffId: string, json = legacySnapshotJson(diffId)): void {
         db.prepare(
             `INSERT INTO route_snapshots (snapshot_id, diff_id, created_at, previous_snapshot_id, snapshot_json, content_hash)
              VALUES (?, ?, ?, NULL, ?, ?)`,
-        ).run('snap-legacy', diffId, '2026-08-25T10:00:00.000Z', legacySnapshotJson(diffId), 'abcdef123456');
+        ).run('snap-legacy', diffId, '2026-08-25T10:00:00.000Z', json, 'abcdef123456');
         db.prepare(
             `INSERT INTO route_state (id, phase, small_pr, current_snapshot_id, intents, updated_at)
              VALUES (1, 'ready', 0, 'snap-legacy', '[]', '2026-08-25T10:00:00.000Z')`,
@@ -189,6 +189,25 @@ describe('route store: snapshot history', () => {
         expect(snapshot?.previousSnapshotId).toBeNull();
         expect(snapshot?.carried).toBeNull();
         expect(snapshot?.stops[0]?.change).toBeNull();
+    });
+
+    it('reads carried without a zero-carryover reason, defaulting the reason to null', () => {
+        const db = open();
+        db.prepare(
+            `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
+             VALUES ('iter-legacy', 'base-of-iter', 'head-legacy', '2026-08-25T09:00:00.000Z', 'active', '{}', '2026-08-25T09:00:00.000Z')`,
+        ).run();
+        // `carried` before M5-T21: carryover counts only.
+        insertLegacySnapshot(
+            db,
+            'iter-legacy',
+            JSON.stringify({
+                ...(JSON.parse(legacySnapshotJson('iter-legacy')) as Record<string, unknown>),
+                carried: { kept: 2, total: 5 },
+            }),
+        );
+
+        expect(new RouteStore({ db }).current()?.carried).toEqual({ kept: 2, total: 5, zeroReason: null });
     });
 
     // Defaults apply only to new M4 fields: filling in `stops` would turn

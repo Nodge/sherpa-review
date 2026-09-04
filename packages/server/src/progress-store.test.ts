@@ -644,6 +644,25 @@ describe('reading progress store', () => {
         });
     });
 
+    describe('whether an iteration has viewed marks', () => {
+        it('counts ranges and file pins but not cleared pins', () => {
+            const db = open();
+            const store = new ProgressStore({ db });
+
+            expect(store.hasViewedMarks(V1)).toBe(false);
+
+            store.setFileViewed(V1, 'file-1', false);
+            expect(store.hasViewedMarks(V1)).toBe(false);
+
+            insertRange(db, V1, 'file-1', 1, 2);
+            expect(store.hasViewedMarks(V1)).toBe(true);
+            expect(store.hasViewedMarks(V2)).toBe(false);
+
+            store.setFileViewed(V2, 'file-2', true);
+            expect(store.hasViewedMarks(V2)).toBe(true);
+        });
+    });
+
     describe('carrying stop marks over to a new snapshot', () => {
         const anchors: RouteAnchor[] = [
             { fileId: fileIdOf(V1, CLOCK), path: CLOCK, side: 'new', start: 1, end: 5, collapsed: false },

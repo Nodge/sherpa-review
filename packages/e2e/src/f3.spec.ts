@@ -163,8 +163,8 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         const banner = page.locator('.banner-slot .iteration-banner[aria-label="Route rebuilt"]');
         await expect(banner.locator('.iteration-banner__line')).toHaveText(`The route was rebuilt for ${V2_SHORT}.`);
         await expect(banner.locator('.iteration-banner__note')).toHaveText(
-            'Progress carried over: 3 of 7 stops are unchanged and remain viewed. ' +
-                'Comments on changed ranges are pinned to the old commit',
+            '3 of 6 stops stayed viewed. ' +
+                '3 stops have changed; comments on changed ranges are pinned to the old commit',
         );
 
         for (const stopId of ['s01', 's04', 's05']) {

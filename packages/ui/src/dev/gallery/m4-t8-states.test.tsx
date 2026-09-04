@@ -18,6 +18,7 @@ describe('M4-T8 gallery', () => {
         expect(M4_T8_STATES.map((state) => state.id)).toEqual([
             'iterations-stale-banner',
             'iterations-second-pass-banner',
+            'iterations-second-pass-zero-carry',
             'iterations-filter-new',
             'iterations-stop-changed',
             'iterations-stop-new',
@@ -40,9 +41,19 @@ describe('M4-T8 gallery', () => {
         const html = markup('iterations-second-pass-banner');
 
         expect(html).toContain('The route was rebuilt for');
-        expect(html).toContain('4 of 7 stops have not changed and remain viewed');
-        expect(html).toContain('Comments on changed ranges are pinned to the old commit');
+        expect(html).toContain('3 of 6 stops stayed viewed.');
+        expect(html).toContain('3 stops have changed; comments on changed ranges');
         expect(html).toContain('What is new since the last pass');
+    });
+
+    it('zero carryover states the reason and does not claim nothing changed', () => {
+        const html = markup('iterations-second-pass-zero-carry');
+
+        expect(html).toContain(
+            'There were viewed marks from the previous pass, but no stop stayed fully viewed.',
+        );
+        expect(html).toContain('3 stops have changed;');
+        expect(html).not.toContain('No changes in the stops');
     });
 
     it('the what is new filter leaves 3 stops and shows a chip', () => {

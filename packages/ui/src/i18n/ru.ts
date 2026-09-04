@@ -321,9 +321,17 @@ export const ru = {
     'iteration.toCurrent': 'К текущему',
     'iteration.secondPass.aria': 'Маршрут перестроен',
     'iteration.secondPass.lead': 'Маршрут перестроен для ',
-    'iteration.secondPass.carried': (kept: number, total: number) =>
-        `Прогресс перенесён: ${num(kept)} из ${num(total)} ${form(total, 'остановки', 'остановок', 'остановок')} ${form(kept, 'не изменилась и осталась просмотренной', 'не изменились и остались просмотренными', 'не изменились и остались просмотренными')}. `,
-    'iteration.secondPass.hasChanges': 'Комментарии на изменившихся диапазонах закреплены за старым коммитом',
+    'iteration.secondPass.carried.kept': (kept: number, total: number) =>
+        `${form(kept, 'Просмотренной', 'Просмотренными', 'Просмотренными')} ${form(kept, 'осталась', 'остались', 'остались')} ${num(kept)} ${form(kept, 'остановка', 'остановки', 'остановок')} из ${num(total)}. `,
+    'iteration.secondPass.carried.noMarks': 'Отметок просмотра с прошлого захода не было — переносить нечего. ',
+    'iteration.secondPass.carried.noOverlap':
+        'Отметки просмотра с прошлого захода были, но целиком просмотренной не осталась ни одна остановка. ',
+    'iteration.secondPass.carried.noInterdiff':
+        'Перенести отметки просмотра не вышло: хост не отдал разницу между итерациями. ',
+    'iteration.secondPass.carried.none': (total: number) =>
+        `Просмотренной не осталось ни одной остановки из ${num(total)}. `,
+    'iteration.secondPass.changed': (changed: number) =>
+        `${form(changed, 'Изменилась', 'Изменились', 'Изменились')} ${num(changed)} ${form(changed, 'остановка', 'остановки', 'остановок')}; комментарии на изменившихся диапазонах закреплены за старым коммитом`,
     'iteration.secondPass.noChanges': 'Изменений в остановках нет',
     'iteration.secondPass.showNew': 'Что нового с прошлого захода',
     'iteration.secondPass.dismiss': 'Скрыть баннер второго захода',

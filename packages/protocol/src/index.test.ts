@@ -269,7 +269,7 @@ describe('route (M2)', () => {
             createdAt: '2026-08-25T12:00:00.000Z',
             provenance: { harness: 'claude-code', model: 'claude-opus-5', locale: 'ru' },
             previousSnapshotId: 'snap-0',
-            carried: { kept: 3, total: 4 },
+            carried: { kept: 3, total: 4, zeroReason: null },
             summary: 'Summary.',
             stops: [
                 {

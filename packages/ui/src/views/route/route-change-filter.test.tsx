@@ -80,7 +80,7 @@ function snapshotChangedExcept(stopId: string): RouteSnapshot {
     return {
         ...SNAPSHOT,
         previousSnapshotId: 'route-medium-9f3c1ab',
-        carried: { kept: 4, total: 7 },
+        carried: { kept: 4, total: 7, zeroReason: null },
         stops: SNAPSHOT.stops.map((stop) =>
             stop.id === stopId ? stop : { ...stop, change: { kind: 'changed', reason: null, threadIds: [] } },
         ),

@@ -315,9 +315,17 @@ export const en: Dictionary = {
     'iteration.toCurrent': 'To the current one',
     'iteration.secondPass.aria': 'Route rebuilt',
     'iteration.secondPass.lead': 'The route was rebuilt for ',
-    'iteration.secondPass.carried': (kept: number, total: number) =>
-        `Progress carried over: ${num(kept)} of ${num(total)} ${form(total, 'stop', 'stops')} did not change and stayed viewed. `,
-    'iteration.secondPass.hasChanges': 'Comments on changed ranges are pinned to the old commit',
+    'iteration.secondPass.carried.kept': (kept: number, total: number) =>
+        `${num(kept)} of ${num(total)} ${form(total, 'stop', 'stops')} stayed viewed. `,
+    'iteration.secondPass.carried.noMarks': 'There were no viewed marks from the previous pass — nothing to carry over. ',
+    'iteration.secondPass.carried.noOverlap':
+        'There were viewed marks from the previous pass, but no stop stayed fully viewed. ',
+    'iteration.secondPass.carried.noInterdiff':
+        'The viewed marks could not be carried over: the host did not return the difference between the iterations. ',
+    'iteration.secondPass.carried.none': (total: number) =>
+        `None of the ${num(total)} ${form(total, 'stop', 'stops')} stayed viewed. `,
+    'iteration.secondPass.changed': (changed: number) =>
+        `${num(changed)} ${form(changed, 'stop has', 'stops have')} changed; comments on changed ranges are pinned to the old commit`,
     'iteration.secondPass.noChanges': 'No changes in the stops',
     'iteration.secondPass.showNew': 'What is new since the last pass',
     'iteration.secondPass.dismiss': 'Hide the second-pass banner',

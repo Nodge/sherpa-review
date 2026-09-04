@@ -340,17 +340,19 @@ export class ProgressStore {
     }
 
     /**
-     * How many ranges the iteration received through carryover. Answers "0 stops carried over:
-     * did no ranges arrive, or did they arrive without covering a single stop?" (M5-T20).
+     * Whether an iteration has at least one viewed mark, a range or a file pin. Answers
+     * "0 stops carried over: did the reviewer leave no marks, or leave marks without covering a whole stop?"
+     * (M5-T21). Ask about the source iteration: the destination may never have received any marks,
+     * even though there was progress to carry over.
      */
-    carriedRangeCount(diffId: HostId): number {
+    hasViewedMarks(diffId: HostId): boolean {
         const row = this.db
             .prepare(
-                `SELECT COUNT(*) AS count FROM file_seen_ranges
-                  WHERE diff_id = ? AND carried_from IS NOT NULL`,
+                `SELECT EXISTS(SELECT 1 FROM file_seen_ranges WHERE diff_id = ?)
+                     OR EXISTS(SELECT 1 FROM file_progress WHERE diff_id = ? AND viewed = 1) AS count`,
             )
-            .get(diffId) as CountRow | undefined;
-        return row?.count ?? 0;
+            .get(diffId, diffId) as CountRow | undefined;
+        return (row?.count ?? 0) > 0;
     }
 
     /**

@@ -1481,8 +1481,10 @@ export function App({ store, session, token }: AppProps) {
         dismissedSecondPass,
         readOnly,
     );
+    /** Classified stops in the ready snapshot, counted by the second-pass banner. */
+    const routeChangedStops = routeSnapshot?.stops.filter((stop) => stop.change !== null).length ?? 0;
     /** Whether the ready snapshot has classified stops determines the "what is new" filter. */
-    const routeHasChanges = routeSnapshot?.stops.some((stop) => stop.change !== null) ?? false;
+    const routeHasChanges = routeChangedStops > 0;
     /**
      * The "what is new" filter is invalid on a ready snapshot without classified stops
      * (decision 6) and resets. Otherwise it would stay in the URL and silently activate on the next
@@ -1624,7 +1626,7 @@ export function App({ store, session, token }: AppProps) {
                     <RouteSecondPassBanner
                         commit={routeSnapshot.commit}
                         carried={routeSnapshot.carried}
-                        hasChanges={routeHasChanges}
+                        changedStops={routeChangedStops}
                         onShowNew={() => {
                             session.setRouteFilter('new');
                         }}
