@@ -529,3 +529,26 @@
 .update-toast-frame .update-toast {
     position: static;
 }
+
+/*
+ * Tour state frame (M5-T8): tabs above, view beside the agent panel, as in the app.
+ * The tour shell is positioned relative to this frame, so the frame body has its own coordinate system.
+ */
+.tour-gallery {
+    position: relative;
+}
+
+.tour-gallery__tabs {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    padding: var(--space-inner) 0;
+    border-bottom: 1px solid var(--border-hairline);
+}
+
+.tour-gallery__body {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}

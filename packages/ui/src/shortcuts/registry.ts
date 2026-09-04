@@ -423,16 +423,28 @@ export function formatKeys(keys: readonly ShortcutKeys[], t: Translate): string 
     return keys.map((combination) => formatCombination(combination, t)).join(' / ');
 }
 
+/** Arrows render as glyphs: `ARROWRIGHT` is unreadable in the shortcuts sheet. */
+const KEY_GLYPHS: Readonly<Record<string, string>> = {
+    arrowright: '→',
+    arrowleft: '←',
+    arrowup: '↑',
+    arrowdown: '↓',
+};
+
 function formatCombination(keys: ShortcutKeys, t: Translate): string {
     return keys
         .split(' ')
         .filter((step) => step !== '')
-        .map((step) =>
-            step
-                .replace('mod+', '⌘')
-                .replace('shift+', '⇧')
-                .replace('alt+', '⌥')
-                .toUpperCase(),
-        )
+        .map((step) => {
+            const glyph = KEY_GLYPHS[step.toLowerCase()];
+            return (
+                glyph ??
+                step
+                    .replace('mod+', '⌘')
+                    .replace('shift+', '⇧')
+                    .replace('alt+', '⌥')
+                    .toUpperCase()
+            );
+        })
         .join(` ${t('shortcut.chord.then')} `);
 }

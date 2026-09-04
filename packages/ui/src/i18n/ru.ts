@@ -10,6 +10,8 @@ import { formatCount, plural } from './format.js';
  */
 
 const num = (value: number): string => formatCount(value, 'ru');
+/** Tour card counter: both parts have leading zeros (onboarding spec §1). */
+const pad = (value: number): string => String(value).padStart(2, '0');
 /** Russian word forms: `other` matches `many` ("5 files"). */
 const form = (value: number, one: string, few: string, many: string): string =>
     plural(value, { one, few, many, other: many }, 'ru');
@@ -912,6 +914,48 @@ export const ru = {
     'shortcut.agent.ask': 'Спросить агента о выделении',
     'shortcut.agent.ask.consequence': 'откроет панель чата',
     'shortcut.help.cheatsheet': 'Горячие клавиши',
+    'shortcut.tour.next': 'Дальше в туре',
+    'shortcut.tour.back': 'Назад в туре',
+    'shortcut.tour.replay': 'Показать онбординг заново',
+    'shortcut.tour.replay.consequence': (steps: number) => `${num(steps)} ${form(steps, 'шаг', 'шага', 'шагов')}`,
+
+    // Onboarding tour (M5-T8). Step bodies are verbatim from the storyboard
+    // `design/design_handoff_sherpa/Sherpa Onboarding.dc.html`. Titles are translated from spec §2.
+    'tour.kicker': 'КАК УСТРОЕНА ШЕРПА',
+    'tour.counter': (index: number, total: number) => `${pad(index)} / ${pad(total)}`,
+    'tour.live': (index: number, total: number, title: string) => `шаг ${num(index)} из ${num(total)}, ${title}`,
+    'tour.skip': 'Пропустить',
+    'tour.back': 'Назад',
+    'tour.next': 'Дальше',
+    'tour.start': 'Начать ревью',
+    'tour.step.narrative.title': 'Маршрут решает, что читать первым',
+    'tour.step.narrative.body':
+        'Остановки отсортированы по тому, насколько они могут навредить: сердце изменения, следствия, обвязка. Можно остановиться после любой — важное уже позади.',
+    'tour.step.fold.title': 'Неопасные остановки приходят свёрнутыми',
+    'tour.step.fold.body':
+        'У каждой остановки есть тир. Low приходят свёрнутыми, со счётчиком строк на свёртке — ничего не спрятано молча, клик раскрывает код.',
+    'tour.step.stopdiff.title': 'Внутри каждой остановки — настоящий дифф',
+    'tour.step.stopdiff.body':
+        'Не пересказ кода, а сам дифф: комментарии, отметки просмотра, поиск, развёртка контекста. Убери маршрут — это всё равно останется твоей читалкой.',
+    'tour.step.progress.title': 'Прогресс считает две разные вещи',
+    'tour.step.progress.body':
+        'Счётчик говорит, где ты; отметки — что ты действительно прочитал. Просмотренное гаснет и схлопывается, страница становится короче. Прогресс личный.',
+    'tour.step.presets.title': 'Два порядка одного ревью',
+    'tour.step.presets.body':
+        'Триаж сортирует по важности. Полный тур идёт по потоку чтения: точка входа, определения, следствия, верификация. Те же остановки и отметки — меняется только порядок.',
+    'tour.step.chat.title': 'Спроси про строки, которые перед тобой',
+    'tour.step.chat.body':
+        'Выдели код где угодно и спроси. Ответ придёт сюда и останется приколотым к этим строкам сворачиваемой заметкой — один клик превращает её в черновик комментария.',
+    'tour.step.fulldiff.title': 'Классическая читалка — в одном клике',
+    'tour.step.fulldiff.body':
+        'Полный дифф — все файлы в обычном порядке, ничего не переставлено и не свёрнуто моделью. ИИ-слой уходит на поля, а не исчезает.',
+    'tour.step.ship.title': 'Ничего не уйдёт автору, пока ты не скажешь',
+    'tour.step.ship.body':
+        'Комментарии сохраняются черновиками сразу, как ты их пишешь. Панель считает, что ждёт публикации; Ship или Request changes отправляет пакет. Шерпа ничего не постит и не шипает за тебя.',
+    'tour.stub.title': 'Здесь появится первая остановка маршрута',
+    'tour.stub.body':
+        'Пока маршрута нет, тур показывает его устройство: слева рассказ остановки, справа её дифф. Как только агент сдаст первую остановку, на этом месте встанет она.',
+    'tour.stub.fold': 'здесь встанет свёрнутая остановка низкой важности',
 
     'help.cheatsheet.title': 'Горячие клавиши',
     'help.cheatsheet.close': 'Закрыть читшит',

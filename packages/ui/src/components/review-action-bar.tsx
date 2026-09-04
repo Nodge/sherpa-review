@@ -137,7 +137,7 @@ export function ReviewActionBarLoading({ diffError }: { readonly diffError: stri
     const disabledReason =
         diffError === null ? t('ship.loading.reason') : t('ship.diffFailed.reason', diffError);
     return (
-        <div className="review-action-bar" aria-busy={errored ? undefined : true}>
+        <div className="review-action-bar" aria-busy={errored ? undefined : true} data-tour="ship">
             <span
                 className={`review-action-bar__progress ${errored ? 'is-error' : 'is-loading'}`}
                 aria-label={errored ? undefined : t('ship.loading.filesAria')}
@@ -438,7 +438,7 @@ export function ReviewActionBar({
     }
 
     return (
-        <div className="review-action-bar" ref={rootRef}>
+        <div className="review-action-bar" ref={rootRef} data-tour="ship">
             <span className="review-action-bar__progress">
                 {t('ship.progress', progress.filesSeen, progress.filesTotal)}
             </span>

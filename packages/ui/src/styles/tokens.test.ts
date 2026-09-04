@@ -187,6 +187,11 @@ const EXPECTED: Record<string, string> = {
     '--syntax-comment': '#5f646d',
     '--syntax-decorator': '#d99a5c',
 
+    // README §16 (Onboarding tour): tour card bg `#171a1f`, "Skip tour" uses
+    // `border-bottom:1px dashed #3a3f47` (same shade as an empty checkbox, but a separate role).
+    '--surface-tour-card': '#171a1f',
+    '--tour-skip-underline': '#3a3f47',
+
     // Neutral tier fills — medium `#4a5160`, low `#2b2f36`, unfilled `#2a2e4a`.
     '--tier-medium': '#4a5160',
     '--tier-low': '#2b2f36',
@@ -275,6 +280,10 @@ const EXPECTED: Record<string, string> = {
     '--shadow-floating': '0 16px 44px rgba(0,0,0,.6)',
     '--shadow-dialog': '0 24px 64px rgba(0,0,0,.65)',
     '--shadow-pr-comments': '0 18px 50px rgba(0,0,0,.55)',
+    // README §16: tour card `0 20px 52px rgba(0,0,0,.62)`, ring
+    // `box-shadow: 0 0 0 3px rgba(127,140,255,.13), 0 0 26px rgba(127,140,255,.16)`.
+    '--shadow-tour-card': '0 20px 52px rgba(0,0,0,.62)',
+    '--shadow-tour-ring': '0 0 0 3px rgba(127,140,255,.13), 0 0 26px rgba(127,140,255,.16)',
 
     // Motion — spinner `spin .8s linear infinite` · skeleton/streaming `shimmer 1.6s ease-in-out
     // infinite` · caret `caret 1s step-end infinite` · jump scroll ~320ms ease-in-out cubic ·

@@ -21,14 +21,21 @@ const SETTINGS_FIELDS = [
     'shipMode',
     'composerLayout',
     'locale',
-    // Nested object: "same value" compares by reference here, so the patch is always sent.
-    // One place writes it: "don't remind me about this version" in the update toast.
+    // Nested objects use reference equality for "same value", so the patch is always sent.
+    // Each has one writer: the onboarding tour and "do not remind me about this version".
+    'onboarding',
     'updates',
 ] as const satisfies readonly (keyof UiSettings)[];
 
 export interface UiSettingsStore {
     readonly subscribe: (listener: () => void) => () => void;
     readonly getSnapshot: () => UiSettings;
+    /**
+     * The server response has been applied. The first render uses a timeout and may still see defaults.
+     * Decisions that must not use a value the reviewer did not choose (whether to show the onboarding tour)
+     * wait for this flag.
+     */
+    readonly isLoaded: () => boolean;
     /** Applies the named fields immediately and sends PATCH. Fields with unchanged values are not sent. */
     readonly update: (patch: UiSettingsPatch) => void;
     /**
@@ -40,6 +47,8 @@ export interface UiSettingsStore {
 
 export interface UiSettingsStoreOptions {
     readonly initial?: Partial<UiSettings>;
+    /** Treat settings as already loaded. The gallery and component tests have nothing to wait for. */
+    readonly loaded?: boolean;
     /** Write transport. Without it, settings live only in memory (tests, gallery). */
     readonly send?: (patch: UiSettingsPatch) => Promise<UiSettings>;
 }
@@ -48,6 +57,7 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
     const listeners = new Set<() => void>();
     const changedHere = new Set<keyof UiSettings>();
     let snapshot: UiSettings = { ...DEFAULT_UI_SETTINGS, ...options.initial };
+    let loaded = options.loaded ?? false;
     // Writes form a chain: two consecutive PATCH requests must not apply in reverse order.
     let queue: Promise<unknown> = Promise.resolve();
 
@@ -83,6 +93,7 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
             };
         },
         getSnapshot: () => snapshot,
+        isLoaded: () => loaded,
 
         update: (patch) => {
             const changes = applyLocally(patch);
@@ -111,7 +122,12 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
                     Object.assign(fresh, { [field]: settings[field] });
                 }
             }
-            applyLocally(fresh);
+            const wasLoaded = loaded;
+            loaded = true;
+            // The flag itself also warrants a render because the response may match every default field.
+            if (Object.keys(applyLocally(fresh)).length === 0 && !wasLoaded) {
+                notify();
+            }
         },
     };
 }

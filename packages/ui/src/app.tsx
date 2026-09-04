@@ -92,6 +92,13 @@ import {
     VIEWING_CURRENT,
 } from './iterations/viewing.js';
 import { noteAnchorForIteration, notesForIteration, noteVisibleInIteration } from './notes/model.js';
+import {
+    TourHost,
+    tourAnchorEpoch,
+    TourScaffold,
+    useTourActive,
+    useTourReplayCommand,
+} from './onboarding/index.js';
 import { CommandPalette } from './palette/command-palette.tsx';
 import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } from './palette/diff-source.tsx';
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
@@ -261,8 +268,7 @@ export function App({ store, session, token }: AppProps) {
     }, [shortcutRegistry, view]);
     const state = snapshot.state;
     const reviewReady = state !== null;
-    // Update toast (M5-T9): state and the "Check for updates" palette command.
-    const updateToast = useUpdateToast(state?.update ?? null);
+    // "Check for updates" palette command (M5-T9). The toast below waits for the tour to finish.
     const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
     useUpdateCheckCommand({
         token,
@@ -1435,20 +1441,26 @@ export function App({ store, session, token }: AppProps) {
     }, [hasRouteTasks]);
     const longRunning = generationIsLong(routeTasks, now);
 
+    // The tour starts as soon as there is a snapshot and diff, without waiting for a route (decision 2026-09-04).
+    const tourActive = useTourActive(state !== null && currentDiff !== null);
+
     /**
      * A small PR opens in the full diff (SPEC §4.1). Respect the reviewer's choice,
      * whether from the URL or by hand, so decide once and only for the default.
+     *
+     * Wait for a running tour. It starts on the Route, and switching the tab underneath it would send
+     * its first steps into fallback placement. The decision is deferred until the tour ends.
      */
     const smallPrRedirected = useRef(false);
     useEffect(() => {
-        if (smallPrRedirected.current || routePhase !== 'none' || route?.smallPr !== true) {
+        if (smallPrRedirected.current || tourActive || routePhase !== 'none' || route?.smallPr !== true) {
             return;
         }
         smallPrRedirected.current = true;
         if (!session.viewPinned()) {
             session.setView('diff');
         }
-    }, [route?.smallPr, routePhase, session]);
+    }, [route?.smallPr, routePhase, session, tourActive]);
 
     const actionErrorInPlace = routeActionErrorInPlace(view, route);
     const generateAvailable = routeGenerationAvailable({
@@ -2025,6 +2037,36 @@ export function App({ store, session, token }: AppProps) {
         [activeDiffId, currentDiff, openThreadAtIteration],
     );
 
+    /** Tour step 06 opens the chat panel and closes it on leaving the step (SPEC-onboarding §2). */
+    const openChatPanel = useCallback(() => {
+        session.setChatOpen(true);
+    }, [session]);
+    /** Pass key. "Show onboarding again" recreates the host so the tour starts at 01. */
+    const [tourReplays, setTourReplays] = useState(0);
+    useTourReplayCommand(() => {
+        setTourReplays((count) => count + 1);
+    });
+    const tourEpoch = tourAnchorEpoch({
+        view,
+        routeKind,
+        anyStopFilled: routeViewSnapshot?.stops.some((stop) => stop.status === 'ready') === true,
+        chatOpen,
+        completed: completion !== null,
+    });
+    /**
+     * Tour scaffold replaces an empty Route tab: until a route exists, anchors for steps 01–03
+     * have no targets. A small PR or previous iteration will never have a route, so the scaffold
+     * would misrepresent that state, and the steps use fallback placement.
+     */
+    const tourScaffoldVisible =
+        tourActive &&
+        view === 'route' &&
+        completion === null &&
+        !resolved.routeless &&
+        (routeKind === 'invitation' || routeKind === 'reading' || routeKind === 'failed');
+    // Update toast (M5-T9) waits for the tour to finish. It does not appear on top of it.
+    const updateToast = useUpdateToast(state?.update ?? null, tourActive);
+
     if (snapshot.connection === 'fatal') {
         return (
             <MessageScreen title={t('app.stopped')}>
@@ -2239,6 +2281,9 @@ export function App({ store, session, token }: AppProps) {
                     }}
                 />
             )}
+
+            {/* Tour scaffold: placeholder anchors in the Route tab until a route exists (M5-T8). */}
+            {tourScaffoldVisible ? <TourScaffold /> : null}
                 </div>
                 {chatOpen ? (
                     <>
@@ -2318,6 +2363,16 @@ export function App({ store, session, token }: AppProps) {
                     session.setPaletteOpen(false);
                 }}
             />
+
+            {tourActive ? (
+                <TourHost
+                    key={tourReplays}
+                    epoch={tourEpoch}
+                    agentConnected={agentConnected}
+                    onOpenChat={openChatPanel}
+                    onCloseChat={closeChat}
+                />
+            ) : null}
 
             {updateToast.visible && state.update !== null ? (
                 <UpdateToast

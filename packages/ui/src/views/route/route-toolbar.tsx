@@ -103,7 +103,8 @@ export function RouteToolbar({
     return (
         <div className="route-toolbar" ref={ref}>
             <div className="route-toolbar__row">
-                <div className="route-preset" role="group" aria-label={t('route.preset.aria')}>
+                {/* `data-tour="presets"` is the anchor for onboarding tour step 05 (M5-T8). */}
+                <div className="route-preset" role="group" aria-label={t('route.preset.aria')} data-tour="presets">
                     {PRESETS.map((option) => (
                         <button
                             key={option.id}

@@ -119,6 +119,10 @@
     /* README §10: the tree row `pci` tag has a distinct border shade. */
     --tag-pci-border: #3d3a2c;
 
+    /* --- Onboarding (README §16): tour card and dashed underline beneath "Skip tour" --- */
+    --surface-tour-card: #171a1f;
+    --tour-skip-underline: #3a3f47;
+
     /* --- Diff and statuses --- */
     --diff-add-bg: rgba(66, 160, 110, 0.11);
     --diff-add-text: #6cc38f;
@@ -241,6 +245,9 @@
     --shadow-floating: 0 16px 44px rgba(0, 0, 0, 0.6);
     --shadow-dialog: 0 24px 64px rgba(0, 0, 0, 0.65);
     --shadow-pr-comments: 0 18px 50px rgba(0, 0, 0, 0.55);
+    /* README §16: tour card and ring glow around the highlighted element. */
+    --shadow-tour-card: 0 20px 52px rgba(0, 0, 0, 0.62);
+    --shadow-tour-ring: 0 0 0 3px rgba(127, 140, 255, 0.13), 0 0 26px rgba(127, 140, 255, 0.16);
     --pr-comments-list-fade: linear-gradient(180deg, rgba(15, 16, 18, 0) 0%, #0f1012 92%);
 
     /* --- Motion --- */
