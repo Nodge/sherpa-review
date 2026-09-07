@@ -361,6 +361,31 @@ function flashed(host: HTMLElement): HTMLElement | null {
     return host.querySelector<HTMLElement>('.diff-row--palette-target');
 }
 
+/** Advance a jump by `count` frames. Targeting uses requestAnimationFrame. */
+async function jumpFrames(count: number): Promise<void> {
+    await act(async () => {
+        for (let step = 0; step < count; step += 1) {
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        }
+    });
+}
+
+/**
+ * Wait for the `count`th targeting attempt, counting frames, not milliseconds. On a busy machine a frame
+ * takes longer, so a fixed wait would measure machine speed instead of jump behaviour. If it does not arrive
+ * within `limit` frames, return what is available and let the test assertion fail.
+ */
+async function aimsAtLeast(count: number, limit = 60): Promise<number> {
+    for (let step = 0; step < limit && scrollAims.length < count; step += 1) {
+        await jumpFrames(1);
+    }
+    return scrollAims.length;
+}
+
 describe('collapsing route file cards', () => {
     it('clicking the header collapses the card and the summary row expands it again', () => {
         const view = mount();
@@ -532,17 +557,13 @@ describe('marking a stop viewed jumps to the next visible stop', () => {
 
         click(viewedToggle(view.host, 's04'));
         // The first frame targets the found section, the next targets the layout after it shrinks.
-        await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 60));
-        });
+        await aimsAtLeast(1);
+        await jumpFrames(2);
         const afterJump = scrollAims.length;
         expect(afterJump).toBeGreaterThanOrEqual(2);
 
         // The third attempt comes after ANCHOR_SETTLE, once collapsing has settled.
-        await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 250));
-        });
-        expect(scrollAims.length).toBeGreaterThan(afterJump);
+        expect(await aimsAtLeast(afterJump + 1)).toBeGreaterThan(afterJump);
     });
 
     it('an automatic mark through the last file jumps to the next stop', async () => {
