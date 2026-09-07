@@ -650,4 +650,146 @@ describe('storage', () => {
             db.close();
         }
     });
+
+    // The list is append-only. The name is the permanent key of an applied migration, the number is its position.
+    it('has unique migration names, consecutive numbers and non-empty sql', () => {
+        const names = MIGRATIONS.map((migration) => migration.name);
+
+        expect(new Set(names).size).toBe(names.length);
+        expect(names.map((name) => Number(name.slice(0, 3)))).toEqual(
+            MIGRATIONS.map((_migration, index) => index + 1),
+        );
+        for (const migration of MIGRATIONS) {
+            expect(migration.name).toMatch(/^\d{3}-[a-z0-9-]+$/);
+            expect(migration.sql.trim()).not.toBe('');
+        }
+    });
+
+    // A skill upgrade can find the database at any previous version. Each must upgrade to the current one.
+    it('upgrades a database at any prefix of the migration list to the full schema', () => {
+        for (let applied = 1; applied <= MIGRATIONS.length; applied += 1) {
+            const file = `${sherpaDir}/prefix-${String(applied)}.db`;
+
+            const partial = openDatabase(file, MIGRATIONS.slice(0, applied));
+            expect(readSchemaVersion(partial)).toBe(String(applied));
+            partial.close();
+
+            const full = openDatabase(file);
+            try {
+                expect(readSchemaVersion(full)).toBe(String(MIGRATIONS.length));
+                expect(full.prepare('SELECT COUNT(*) AS count FROM migrations').get()).toMatchObject({
+                    count: MIGRATIONS.length,
+                });
+            } finally {
+                full.close();
+            }
+        }
+    });
+
+    // The server started without an iteration host but built a route. Its snapshot names the iteration.
+    it('moves progress records to the current snapshot iteration when no active iteration exists', () => {
+        const file = `${sherpaDir}/progress-snapshot.db`;
+
+        const before = openDatabase(file, migrationsBefore('013-progress-iterations'));
+        before
+            .prepare(
+                `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
+                 VALUES ('iter-snap', 'base', 'head-snap', '2026-08-30T10:00:00.000Z', 'previous', '{}', '2026-08-30T10:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO route_snapshots (snapshot_id, diff_id, created_at, snapshot_json)
+                 VALUES ('snap-1', 'iter-snap', '2026-08-31T11:00:00.000Z', '{}')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO route_state (id, phase, small_pr, current_snapshot_id, intents, updated_at)
+                 VALUES (1, 'ready', 0, 'snap-1', '[]', '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO file_progress (file_id, viewed, updated_at)
+                 VALUES ('file-1', 1, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO file_seen_ranges (file_id, side, start_line, end_line, source_stop_id)
+                 VALUES ('file-1', 'new', 3, 7, 's01')`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT diff_id, file_id FROM file_progress').all()).toEqual([
+                { diff_id: 'iter-snap', file_id: 'file-1' },
+            ]);
+            expect(after.prepare('SELECT diff_id, file_id FROM file_seen_ranges').all()).toEqual([
+                { diff_id: 'iter-snap', file_id: 'file-1' },
+            ]);
+        } finally {
+            after.close();
+        }
+    });
+
+    // Carryover tracking starts at zero. Stops that predate it have never been carried over.
+    it('sets carried = 0 for existing stops during the carryover tracking migration', () => {
+        const file = `${sherpaDir}/stop-carried.db`;
+
+        const before = openDatabase(file, migrationsBefore('015-stop-carried'));
+        before
+            .prepare(
+                `INSERT INTO stop_progress (snapshot_id, stop_id, viewed, updated_at)
+                 VALUES ('snap-1', 's01', 1, '2026-08-31T11:00:00.000Z'),
+                        ('snap-1', 's02', 0, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT stop_id, viewed, carried FROM stop_progress ORDER BY stop_id').all()).toEqual([
+                { stop_id: 's01', viewed: 1, carried: 0 },
+                { stop_id: 's02', viewed: 0, carried: 0 },
+            ]);
+        } finally {
+            after.close();
+        }
+    });
+
+    // No path backfill: old `fileId` values cannot be resolved, and the migration must not invent paths.
+    it('creates empty columns during the progress path migration', () => {
+        const file = `${sherpaDir}/progress-paths.db`;
+
+        const before = openDatabase(file, migrationsBefore('016-progress-paths'));
+        before
+            .prepare(
+                `INSERT INTO file_progress (diff_id, file_id, viewed, updated_at)
+                 VALUES ('iter-1', 'file-1', 1, '2026-08-31T11:00:00.000Z')`,
+            )
+            .run();
+        before
+            .prepare(
+                `INSERT INTO file_seen_ranges (diff_id, file_id, side, start_line, end_line, source_stop_id, carried_from)
+                 VALUES ('iter-1', 'file-1', 'new', 3, 7, 's01', NULL)`,
+            )
+            .run();
+        before.close();
+
+        const after = openDatabase(file);
+        try {
+            expect(after.prepare('SELECT file_id, path FROM file_progress').all()).toEqual([
+                { file_id: 'file-1', path: null },
+            ]);
+            expect(after.prepare('SELECT file_id, path FROM file_seen_ranges').all()).toEqual([
+                { file_id: 'file-1', path: null },
+            ]);
+        } finally {
+            after.close();
+        }
+    });
 });
