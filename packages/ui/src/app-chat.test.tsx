@@ -6,7 +6,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, mergeChatResponse, openExchangeInChatRequest, withoutChatNote } from './app.tsx';
+import { App } from './app.tsx';
+import { mergeChatResponse, openExchangeInChatRequest, withoutChatNote } from './app/chat-state.js';
 import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
