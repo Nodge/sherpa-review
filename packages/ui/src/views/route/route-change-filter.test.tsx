@@ -10,7 +10,7 @@ import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
-import { RouteWorkspace } from './route-view.tsx';
+import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
  * The "what is new" filter is enabled outside the view (the second pass banner button), so the test mounts

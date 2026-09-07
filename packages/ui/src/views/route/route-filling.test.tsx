@@ -9,7 +9,7 @@ import { createDiffViewStore } from '../../diff-view/store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteReadingView } from './route-generating.tsx';
-import { RouteWorkspace } from './route-view.tsx';
+import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
  * Route during generation (README §8): every plan slot stays in place, unfilled ones show

@@ -12,7 +12,7 @@ import type { StopsState } from '../../session/session-store.js';
 import { createSessionStore, EMPTY_STOPS } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RegenerateBanner } from '../../views/route/other-card.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 
 /**
  * Route view states (M2-T6), the second layer of visual acceptance. Everything is computed from fixtures

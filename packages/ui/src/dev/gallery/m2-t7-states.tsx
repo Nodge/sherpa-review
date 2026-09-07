@@ -13,7 +13,7 @@ import { buildRouteModel, stopSeenRanges } from '../../route/route-model.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { CoverageStrip } from '../../views/route/coverage-strip.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 
 /**

@@ -11,7 +11,7 @@ import { createDiffViewStore } from '../../diff-view/store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { GenerationFailedBanner, RouteRegeneratingBanner } from '../../views/route/generation-card.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 
 const DATA = fixtureIteration('medium');

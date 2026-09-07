@@ -16,7 +16,8 @@ import type { SessionStore } from '../../session/session-store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import type * as RouteScroll from './scroll.js';
-import { nextCardInStop, RouteWorkspace } from './route-view.tsx';
+import { RouteWorkspace } from './route-workspace.tsx';
+import { nextCardInStop } from './stop-dom.js';
 import { stopFileShownModel } from './stop-file-card.tsx';
 
 /**

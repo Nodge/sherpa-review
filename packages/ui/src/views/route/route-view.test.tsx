@@ -11,7 +11,7 @@ import type { RoutePreset, SessionStore, StopsState } from '../../session/sessio
 import { createSessionStore, EMPTY_STOPS } from '../../session/session-store.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { createThreadStore } from '../../threads/store.js';
-import { RouteWorkspace } from './route-view.tsx';
+import { RouteWorkspace } from './route-workspace.tsx';
 import { createT } from '../../i18n/index.js';
 import { TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
 import { DIGEST_NOTE, UNCOVERED_NOTE } from './test-digest.tsx';

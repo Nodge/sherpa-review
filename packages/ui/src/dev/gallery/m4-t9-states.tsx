@@ -14,7 +14,7 @@ import { pickerRows, VIEWING_CURRENT } from '../../iterations/viewing.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { ReadOnlyIterationBanner } from '../../views/route/iteration-banners.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import { ViewFrame } from '../../views/view-frames.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 

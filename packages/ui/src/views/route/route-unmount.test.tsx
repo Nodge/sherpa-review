@@ -14,7 +14,7 @@ import type { SessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { openReply } from '../../threads/thread-list.tsx';
-import { RouteWorkspace } from './route-view.tsx';
+import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
  * Removing a distant stop's diff column from the DOM (M5-T13). jsdom has neither layout nor

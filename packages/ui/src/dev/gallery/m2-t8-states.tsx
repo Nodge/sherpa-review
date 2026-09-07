@@ -13,7 +13,7 @@ import { createThreadStore } from '../../threads/store.js';
 import { countThreadSources } from '../../threads/model.js';
 import { CoverageStrip } from '../../views/route/coverage-strip.tsx';
 import { RouteToolbar } from '../../views/route/route-toolbar.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 
 /**

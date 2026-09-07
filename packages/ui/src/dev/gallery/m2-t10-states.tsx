@@ -16,7 +16,7 @@ import {
     RouteFillingBanner,
 } from '../../views/route/generation-card.tsx';
 import { RouteFailedView, RouteReadingView } from '../../views/route/route-generating.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import { ViewFrame } from '../../views/view-frames.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 

@@ -14,7 +14,7 @@ import { TourLayer, TourScaffold, tourSteps } from '../../onboarding/index.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { RouteReadingView } from '../../views/route/route-generating.tsx';
-import { RouteWorkspace } from '../../views/route/route-view.tsx';
+import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import { RouteInvitation } from '../../views/view-frames.tsx';
 import type { RouteGalleryState } from './m2-t6-states.tsx';
 
