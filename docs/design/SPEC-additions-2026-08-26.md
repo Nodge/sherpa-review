@@ -1,6 +1,6 @@
 # Sherpa additions, 2026-08-26
 
-Handoff spec for the five blocks in the `design-requests.md` brief. Live mockup: **`Sherpa Additions.dc.html`**
+Handoff specification for five groups of design requests. Live mockup: **`Sherpa Additions.dc.html`**
 (in this directory, opens in a browser, every interactive element works, so click away).
 Tokens, fonts and general rules are in `README.md` §Design tokens. The main interface state
 matrix is in `SPEC-elements.md`. Only additions go here.
