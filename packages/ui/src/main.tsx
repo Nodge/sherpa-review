@@ -69,7 +69,7 @@ if (token === null) {
     // recreate the diff view store: its map is loaded separately (see App).
     const prState = createUiPrStateStore({ send: (patch, options) => patchUiPrState(token, patch, options) });
     const prStateReady = prState.load(() => fetchUiPrState(token));
-    // A departing tab flushes pending writes: debounce must not lose the last click.
+    // Flush the pending write when the tab leaves: the debounce delay must not lose the last click.
     const flushPrState = (): void => {
         prState.flush();
     };

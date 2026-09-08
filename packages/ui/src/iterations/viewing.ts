@@ -349,7 +349,7 @@ export interface PickerRow {
     readonly createdAt: string | null;
     readonly model: string | null;
     readonly harness: string | null;
-    /** Snapshot generation language. null means an iteration without a route or a pre-M5 snapshot. */
+    /** Snapshot generation language. null means an iteration without a route or a snapshot saved before language was recorded. */
     readonly locale: Locale | null;
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
     /** Slice head (active iteration commit). Null for other rows. */

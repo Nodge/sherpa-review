@@ -72,8 +72,8 @@ function described(id: string): boolean {
     return document.getElementById(id)?.getAttribute('aria-describedby') === TOUR_CARD_BODY_ID;
 }
 
-describe('step anchor', () => {
-    it('uses the tour scaffold anchor when it sits above a view with the same anchor', async () => {
+describe('step target', () => {
+    it('uses the tour placeholder when it overlays a view with the same target', async () => {
         // The generation skeleton and tour placeholder each have a coverage bar. The latter is visible.
         page(`
             <div class="route-skeleton__bar"><div id="under" data-tour="progress"></div></div>
@@ -86,7 +86,7 @@ describe('step anchor', () => {
         expect(described('under')).toBe(false);
     });
 
-    it('uses the view anchor when there is no scaffold', async () => {
+    it('uses the view target when there is no tour placeholder', async () => {
         page('<div class="route-toolbar"><div id="under" data-tour="progress"></div></div>');
 
         await mountLayer(PROGRESS);

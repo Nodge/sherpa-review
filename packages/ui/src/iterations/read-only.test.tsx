@@ -16,7 +16,7 @@ const t = createT('en');
 
 /**
  * Read-only mode for a previous iteration: controls that write to the PR are disabled with the same
- * tooltip (M4 boundaries).
+ * tooltip.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

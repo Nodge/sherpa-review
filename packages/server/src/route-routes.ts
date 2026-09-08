@@ -84,7 +84,7 @@ export function createRouteRoutes(options: RouteRoutesOptions): Route[] {
             method: 'POST',
             path: UI_ENDPOINTS.reviewRouteGenerate,
             handle: handlingRpcFailures(async (ctx) => {
-                // The body may be absent: auto-start and pre-M5 clients do not specify a language.
+                // The body may be entirely absent. Autostart and older clients do not specify a language.
                 const request = await readOptionalRouteRequest(ctx, uiRouteGenerateRequestSchema);
                 const body: UiRouteGenerateResponse = {
                     outcome: await options.orchestrator.generate(request.locale),

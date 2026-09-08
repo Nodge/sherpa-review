@@ -45,7 +45,7 @@ async function openFullDiff(page: Page, url: string, options: { reloaded?: boole
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
 }
 
-/** State writes are debounced. Wait for PATCH itself, otherwise reload can overtake it. */
+/** State writes wait for activity to stop. Wait for the PATCH itself so a reload does not get ahead of it. */
 async function savingPrState(page: Page, action: () => Promise<void>): Promise<void> {
     const saved = page.waitForResponse(
         (response) => response.url().includes('/api/ui/pr-state') && response.request().method() === 'PATCH',

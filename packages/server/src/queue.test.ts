@@ -379,7 +379,7 @@ describe('queue with leases', () => {
             }
             expect(queue.getTask(task.id)).toMatchObject({ status: 'leased', attempt: 1 });
 
-            // The transient failure is over, so the rejection count starts from zero.
+            // The temporary failure is over. The rejection count starts at zero.
             queue.setResultAcceptor(() => ({ kind: 'rejected', errors: ['nope'] }));
             for (let attempt = 1; attempt < MAX_RESULT_REJECTIONS; attempt += 1) {
                 queue.complete('w-1', task.id, 'invalid output');

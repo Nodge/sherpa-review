@@ -101,7 +101,7 @@ export function useRouteJump(preset: RoutePreset): RouteJump {
     }, []);
 
     /**
-     * Jump to a stop, file card or line (README "Interactions"): scroll the dedicated
+     * Jump to a stop, file card or line (docs/design/README.md §Interactions & behaviour): scroll the
      * container directly to −150px from the target top, and flash the target.
      *
      * The target is almost never ready in the same frame: a filter may have hidden the stop,
@@ -150,7 +150,7 @@ export function useRouteJump(preset: RoutePreset): RouteJump {
              * Recalculate the target while approaching it. Marking a stop does not collapse it in a single frame
              * (lazy rendering, ResizeObserver, late parsing). The document above the target keeps
              * shrinking during the animation, so calculating once causes an overshoot. Correction fits
-             * into what remains of ~320ms (README "Motion") since the last aim, but lasts at least
+             * into what remains of ~320ms (docs/design/README.md §Design tokens, "Motion") since the last targeting, but lasts at least
              * `REAIM_MIN_DURATION`: the target often appears hundreds of milliseconds after the search
              * starts, so time remaining "since the jump began" would turn the correction into a teleport.
              */

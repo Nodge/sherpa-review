@@ -10,7 +10,7 @@ import {
     PR_STATE_SEND_DEBOUNCE_MS,
 } from './pr-state-store.js';
 
-/** Client-side PR state: optimistic updates, debounced writes, late boot-GET. */
+/** Client-side PR state: optimistic updates, debounced writes, and a late boot-GET. */
 
 function recording(): {
     readonly patches: UiPrStatePatch[];

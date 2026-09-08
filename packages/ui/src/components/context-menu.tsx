@@ -9,7 +9,7 @@ import { copyText } from './clipboard.js';
 import './context-menu.css';
 
 /**
- * File context menu (docs/design/SPEC-elements.md §2.11 with 2026-09-03 amendments): opens on a right-click on the
+ * File context menu (docs/design/SPEC-elements.md §2.11). Opens on a right click on the
  * card header or tree row, or through their "⋯" button. Item order is fixed.
  * Unavailable items stay disabled so the menu does not change shape between files.
  * The only optional item is "Comment on file" for image cards:
@@ -58,7 +58,7 @@ const GAP = 4;
 const VIEWPORT_MARGIN = 8;
 
 /**
- * The component sets menu width (docs/design/README.md §Raised surfaces), rather than CSS. The same width positions
+ * The component sets the menu width instead of CSS. The same value positions
  * its right edge against the button, and that calculation must not depend on whether CSS has loaded.
  */
 const MENU_WIDTH = 240;

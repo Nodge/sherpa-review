@@ -93,7 +93,7 @@ function mount(readOnly = false) {
 }
 
 describe('tree row tags', () => {
-    it('a conflicted file gets a conflict tag (SPEC §4.1)', () => {
+    it('gives a conflicting file the conflict tag (SPEC-elements §4.1)', () => {
         const { host } = mount();
         const tags = [...host.querySelectorAll('.file-tree__tag--conflict')];
 

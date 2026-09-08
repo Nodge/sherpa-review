@@ -657,7 +657,7 @@
     flex-direction: column;
 }
 
-/* Flash after jumping to a file: 2px accent line for ~900ms (README Interactions).
+/* Flash after a file jump: 2px accent line for ~900ms (docs/design/README.md §Interactions & behaviour).
    Out of flow so the line does not shift the column under the cursor. */
 .route-stop__flash {
     position: absolute;

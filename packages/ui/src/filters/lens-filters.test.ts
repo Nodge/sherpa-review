@@ -47,7 +47,7 @@ const FILES = [
 ];
 
 describe('buildFileFilters', () => {
-    it('follows README §Filters order: all → mine → host lenses → generated', () => {
+    it('handoff §Filters order: all → mine → host lenses → generated', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', ['src/a.ts']),
@@ -107,7 +107,7 @@ describe('buildFileFilters', () => {
         expect(findFilter(filters, 'mine')).toBeNull();
     });
 
-    it('disables ownership without a zone and explains why (SPEC §4.2)', () => {
+    it('ownership without a zone is disabled and explains why (SPEC-elements §4.2)', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', [], {

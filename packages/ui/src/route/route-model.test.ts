@@ -92,7 +92,7 @@ function stopOf(id: string): RouteStop {
 }
 
 describe('route model', () => {
-    it('coverage matches the handoff bar: 866 changed, 828 explained, 38 unexplained', () => {
+    it('matches the design handoff coverage bar: 866 changed lines, 828 explained, 38 unexplained', () => {
         const { totals } = build();
 
         expect(totals.changed).toBe(866);
@@ -160,7 +160,7 @@ describe('route model', () => {
         expect(tour.stopCount).toBe(7);
     });
 
-    it('tour order strictly follows tourOrder: promoting Other is a triage feature', () => {
+    it('follows tourOrder strictly in the tour because promoting Other only applies to Triage', () => {
         const stripped = strippedAnchors();
         const triage = build(stripped);
         const tour = buildRouteModel({ snapshot: stripped, files: DATA.diff.files, models: MODELS, preset: 'tour' });

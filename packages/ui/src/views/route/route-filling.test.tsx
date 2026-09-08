@@ -66,7 +66,7 @@ function count(html: string, needle: string): number {
 }
 
 describe('route during filling', () => {
-    it('keeps all plan slots in plan order: no "Other" promotion before ready', () => {
+    it('keeps all plan slots in plan order: Other is not promoted until ready', () => {
         const html = render();
 
         expect(order(html)).toEqual(['s01', 's02', 's03', 's04', 's05', 's06', 'other']);

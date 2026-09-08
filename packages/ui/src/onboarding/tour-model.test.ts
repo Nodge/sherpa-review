@@ -46,7 +46,7 @@ describe('tour model', () => {
         expect([byId.get('fulldiff'), byId.get('ship')]).toEqual([true, true]);
     });
 
-    it('addresses the fold by prefix because its anchor includes the stop id', () => {
+    it('addresses a fold by prefix because its target includes the stop id', () => {
         expect(tourSteps(true)[1]?.selector).toBe('[data-tour^="fold-"]');
     });
 
@@ -73,7 +73,7 @@ describe('tour model', () => {
         expect(stepAt(offline, 3).id).toBe('progress');
     });
 
-    it('the anchor marker ignores each subsequent stop', () => {
+    it('does not change the target marker for each subsequent stop', () => {
         const base = {
             view: 'route',
             routeKind: 'workspace',

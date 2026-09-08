@@ -513,7 +513,7 @@ ease-in-out cubic · jump flash ~900ms. Nothing else animates; the reader must f
   and resume model, degradation, keyboard/a11y, telemetry, open questions, acceptance checklist.
 - `Sherpa Onboarding.dc.html` — onboarding storyboard: the eight steps with final copy and per-step
   anchor/state/placement rationale, card and ring anatomy, show-once and degradation rules.
-- `sherpa-brief.md` — the product brief the design was built from (problem, principles, v1 scope,
+- `../product.md` — the product brief the design was built from (problem, principles, v1 scope,
   non-scope, cross-cutting scenarios F1–F5, required system states).
 
 ## Open questions for the team

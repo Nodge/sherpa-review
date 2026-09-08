@@ -138,7 +138,7 @@
 
 /*
  * Inline code: only font family, size and colour, following `EditPolicy` in the prototype
- * (docs/design/README.md §Type "mono for machine data"). No background, border or padding: in a line of text
+ * (docs/design/README.md §Design tokens, "mono for code, paths, numbers"). No background, border or padding: in a line of text
  * break the line's rhythm.
  */
 .md-code {

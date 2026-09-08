@@ -157,7 +157,7 @@ export function useRouteGeneration({
      * whether from the URL or by hand, so decide once and only for the default.
      *
      * Wait for a running tour. It starts on the Route, and switching the tab underneath it would send
-     * its first steps into fallback placement. The decision is deferred until the tour ends.
+     * its first steps to fallback positions. Defer the decision until the tour ends, without cancelling it.
      */
     const smallPrRedirected = useRef(false);
     useEffect(() => {

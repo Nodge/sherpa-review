@@ -447,12 +447,12 @@ describe('chat and notes', () => {
         });
     });
 
-    it('retrying an M3 question treats an anchor without an iteration as belonging to the active one', async () => {
+    it('retrying an old question treats an anchor without an iteration as an active-iteration anchor', async () => {
         const first = await start(PR);
         const exchange = await ask(first, 'Question asked before iterations existed', ANCHOR);
         first.queue.fail(WORKER, leaseChat(first), 'not enough context');
         await first.close();
-        // M3 exchanges stored anchors without `diffId`, so the store fills in `unknown`.
+        // Old exchanges stored the anchor without `diffId`. The store substitutes `unknown`.
         stripAnchorIteration(sherpaDir, PR, exchange.id);
 
         const second = await start(PR);
@@ -853,7 +853,7 @@ function parseSseEvent(raw: string): SseEvent {
     return { event, data: data.join('\n') };
 }
 
-/** Remove `diffId` from an exchange anchor, as stored before M4. The store fills in `unknown`. */
+/** Removes `diffId` from the exchange anchor to match older versions. The store substitutes `unknown`. */
 function stripAnchorIteration(sherpaDir: string, prKey: string, exchangeId: number): void {
     const db = new DatabaseSync(databasePathFor(sherpaDir, prKey));
     try {

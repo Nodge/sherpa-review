@@ -139,7 +139,7 @@ describe('note anchor carryover', () => {
     });
 });
 
-describe('M3 anchor adoption', () => {
+describe('legacy anchor adoption', () => {
     let sherpaDir: string;
     let db: SherpaDatabase;
     let store: ChatStore;
@@ -156,7 +156,7 @@ describe('M3 anchor adoption', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    /** An M3 anchor does not name an iteration at all. */
+    /** A legacy anchor does not name an iteration at all. */
     function seedLegacy(): void {
         const note = NOTES[0];
         if (note === undefined) {

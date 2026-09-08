@@ -12,7 +12,7 @@ const MOD_KEY = process.platform === 'darwin' ? 'Meta' : 'Control';
 const DRAFT = 'E2E keyboard: draft from the c key.';
 const REPLY = 'E2E keyboard: reply from the r key.';
 
-test('keyboard: SPEC §5 map on fixture-medium', async ({ page, launchSherpa }) => {
+test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, launchSherpa }) => {
     const server = await launchSherpa('fixture-medium');
     const worker = server.worker;
 

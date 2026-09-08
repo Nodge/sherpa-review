@@ -247,7 +247,7 @@ export class TaskQueue {
     }
 
     /**
-     * Attaches fail-closed result acceptance (M2), installed by the route orchestrator.
+     * Enables fail-closed result acceptance, installed by the route orchestrator.
      * One per queue. The acceptor decides how to handle each task type.
      */
     setResultAcceptor(acceptor: TaskResultAcceptor | null): void {
@@ -762,7 +762,7 @@ function acceptedMessage(taskId: TaskId): string {
 /**
  * The acceptor declined validation because the server cannot validate right now. Storage
  * stays unchanged, including the attempt, rejection count and lease. The model simply retries
- * the call later. Otherwise a transient server failure would consume the rejection budget and fail the task.
+ * later. Otherwise a temporary server failure would consume the rejection budget and fail the task.
  */
 function deferResult(taskId: TaskId, errors: readonly string[]): TaskCompleteResponse {
     return {

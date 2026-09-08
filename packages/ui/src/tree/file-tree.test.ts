@@ -195,7 +195,7 @@ describe('buildFileTree', () => {
         expect([...tree.directories].sort()).toEqual(['a', 'a/b', 'a/c']);
     });
 
-    it('the row conflict flag comes from the file changeType (SPEC §4.1)', () => {
+    it('takes the row conflict flag from the file changeType (SPEC-elements §4.1)', () => {
         const tree = buildFileTree(
             input([...FILES, file('services/orders/domain/slot.ts', { changeType: 'conflict' })]),
         );

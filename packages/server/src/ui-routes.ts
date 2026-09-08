@@ -159,7 +159,7 @@ export function createUiRoutes(options: UiRoutesOptions): Route[] {
 
 /**
  * SSE channel: sends a snapshot immediately, then on every queue or worker status change.
- * Bursts of synchronous changes produce one event because a snapshot costs more than the delay.
+ * A batch of synchronous changes becomes one event, because a snapshot costs more than a delay.
  */
 function streamState(options: UiRoutesOptions, ctx: StreamContext): void {
     const { res } = ctx;

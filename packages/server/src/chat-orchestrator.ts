@@ -368,7 +368,7 @@ export class ChatOrchestrator {
             return { pr: null, diff: null, fileContent: null, headCommit: null };
         }
 
-        // An M3 exchange anchor names no iteration (`LEGACY_DIFF_ID`), so its question is about the active one.
+        // Legacy exchange anchors do not name an iteration (`LEGACY_DIFF_ID`), so these questions concern the active one.
         const pinned =
             anchor?.diffId === undefined || anchor.diffId === LEGACY_DIFF_ID ? null : anchor.diffId;
         const active = this.iterationFeed?.active() ?? null;

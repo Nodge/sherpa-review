@@ -87,7 +87,7 @@ describe('medium chat fixtures', () => {
         expect(exchanges.some((item) => item.status === 'failed' && item.error !== null)).toBe(true);
     });
 
-    it('all anchors refer only to actually changed lines in medium', () => {
+    it('all anchors cover only lines actually changed in medium', () => {
         const files = changedLines();
         for (const item of fixtures?.exchanges ?? []) {
             if (item.anchor !== null) {

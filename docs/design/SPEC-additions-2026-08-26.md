@@ -1,4 +1,4 @@
-# Sherpa additions from dogfooding on 2026-08-26
+# Sherpa additions, 2026-08-26
 
 Handoff spec for the five blocks in the `design-requests.md` brief. Live mockup: **`Sherpa Additions.dc.html`**
 (in this directory, opens in a browser, every interactive element works, so click away).

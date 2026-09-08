@@ -470,8 +470,8 @@ describe('route orchestration', () => {
         expect(routeTasks(server, 'route.skeleton')).toHaveLength(0);
     });
 
-    // Decision 2026-09-02: the threshold measures only the size of the change. The old file-count shortcut
-    // left a single 500-line file (a docs RFC) without a route.
+    // The threshold measures only the size of the change: counting files would leave a lone 500-line file
+    // (an RFC in the docs) without a route.
     it('the route threshold counts lines, not files', () => {
         const diffOf = (changes: readonly [additions: number, deletions: number][]): PrDiff => ({
             diffId: 'd1',

@@ -43,7 +43,7 @@ export function isNoteStackExpanded(
  * `expanded` means the stop is expanded despite tier-based collapse (low is collapsed by default).
  * `expandedViewed` means a viewed stop is temporarily expanded from its summary row.
  * `collapsed` means the stop was collapsed by hand (`x` shortcut, §5), regardless of tier.
- * `testCode` means test code is expanded in a digest stop (README §2). A set instead of a shared
+ * `testCode` means a digest stop's test code is expanded (docs/design/README.md §2). A set instead of a shared
  * flag allows multiple digests in a route, so expanding one digest's test code must not
  * expand another's. This toggle only changes the display and leaves the "viewed" mark alone.
  */

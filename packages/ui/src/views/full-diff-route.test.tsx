@@ -19,7 +19,7 @@ import { DiffWorkspace } from './full-diff.tsx';
 /**
  * Route in the full diff margins, rendered live: tree and card-header badges, a footer note
  * with computed counts, hatched strips under uncovered ranges and clicks that navigate
- * to a stop. Without a route, the reader must stay the same as it was in M1.
+ * to a stop. Without a route, the reader must remain exactly as it was before routes existed.
  */
 
 const DATA = fixtureIteration('medium');

@@ -118,7 +118,7 @@ describe('Overview: files by ownership', () => {
         ]);
     });
 
-    it('zones:null keeps the prefix fallback with a mixed group', () => {
+    it('keeps fallback prefix grouping with a mixed group for zones:null', () => {
         const summary = ownershipSummary(FILES, { ...OWNERSHIP, zones: null }, 'all', t);
 
         expect(summary.groups.map((group) => [group.path, group.ownership])).toEqual([

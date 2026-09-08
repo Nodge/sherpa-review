@@ -56,7 +56,7 @@ function render(
         collapsed?: ReadonlyMap<string, boolean>;
         onSetStopViewed?: (stopId: string, viewed: boolean) => Promise<number>;
         onFillStop?: (planIndex: number) => void;
-        /** The tab shows a previous iteration. Route writes are unavailable (M4 scope). */
+        /** The tab shows a previous iteration, so route writes are unavailable. */
         readOnly?: boolean;
         /** Files marked as conflicted by the host (docs/design/SPEC-elements.md §4.1). They are outside route coverage. */
         conflicts?: readonly string[];
@@ -157,7 +157,7 @@ describe('route view', () => {
         expect(html).toContain('Open 38 lines');
     });
 
-    it('tour step 02 anchors to the first rendered fold rather than the first low stop', () => {
+    it('tour step 02 targets the first rendered fold, not the first low stop', () => {
         expect(render()).toContain('data-tour="fold-s05"');
 
         // The first low stop is not filled yet. It has a skeleton, so there is nothing to outline.
@@ -436,7 +436,7 @@ describe('route view', () => {
         expect(html).toContain('No hunks: filling marked up no ranges at all.');
     });
 
-    it('promotes Other above low-tier stops when more than 40% is uncovered', () => {
+    it('Other moves above low stops when more than 40% is uncovered', () => {
         const html = render({
             snapshot: withStops((snapshot) =>
                 snapshot.stops.map((stop) =>

@@ -1106,7 +1106,7 @@ describe('server on a database accumulated by a previous version', () => {
     }
 
     /**
-     * The database as an M3 server would leave it: snapshot blob in `route_state`, progress without
+     * Database as an old server would leave it: snapshot blob in `route_state`, progress without
      * an iteration dimension, note anchor without `diffId`. The test sets the snapshot `diffId`, which
      * determines whether the host recognizes the iteration where the reviewer left off.
      */

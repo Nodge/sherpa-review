@@ -214,7 +214,7 @@ export interface RouteFailedCardProps {
  * Generation failed (docs/design/README.md §12): a one-sentence reason, retry and the model's raw output.
  *
  * The design's "fix anchors and revalidate without the model" hint is omitted: revalidating
- * edited output is not implemented in M2, and `rawOutput` is skeleton output, whose schema has no anchors.
+ * edited output is not implemented, and `rawOutput` is skeleton output, whose schema has no anchors.
  */
 export function RouteFailedCard({
     failure,

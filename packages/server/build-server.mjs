@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = dirname(fileURLToPath(import.meta.url));
-// One release version for the whole distribution: the `version` field in the root package.json
-// (decision log, 2026-09-01).
+// The distribution has one version, taken from the root package.json `version` field.
 const version = JSON.parse(readFileSync(resolve(root, '../../package.json'), 'utf8')).version;
 const uiDist = resolve(root, '../ui/dist');
 const assetsModule = resolve(root, 'src/ui-assets.ts');
@@ -24,7 +23,7 @@ try {
 
 /**
  * Server bundle: one self-contained ESM file with embedded UI assets. No native dependencies:
- * storage uses built-in `node:sqlite`, so the whole server builds into one file (rpc-design §2).
+ * storage uses the built-in `node:sqlite`, so the entire server bundles into one file (docs/protocol.md §2).
  */
 await build({
     entryPoints: [resolve(root, 'src/bundle.ts')],

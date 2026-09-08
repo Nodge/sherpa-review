@@ -26,7 +26,7 @@ export type RouteListener = (revision: number) => void;
 const SLOT_ID = 1;
 
 /**
- * Fallback for `baseCommit` in a snapshot written before M4 when its iteration is not yet stored:
+ * Fallback for `baseCommit` in an older snapshot when its iteration is not yet stored.
  * It cannot support comparisons, but an unrelated commit would be worse than "unknown".
  */
 export const UNKNOWN_BASE_COMMIT = 'unknown';
@@ -698,7 +698,7 @@ function stepOf(snapshot: RouteSnapshot, onSnapshot?: SnapshotHook): (() => Tran
 }
 
 /**
- * Fields absent from pre-M4 snapshots. `baseCommit` comes from the locally stored iteration
+ * Fields absent from older snapshots. `baseCommit` comes from the locally saved iteration
  * (it may not have been written yet, in which case it is "unknown"). The rest default to null because there is no basis for carrying over progress
  * or computing `change` from a snapshot built without these data.
  */

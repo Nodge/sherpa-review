@@ -167,7 +167,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         onRouteSummary,
         onOpenThread,
     } = props;
-    // A previous iteration is read-only. Viewed marks and stop filling are unavailable (M4 scope).
+    // A previous iteration is read-only. Viewed marks and stop filling are unavailable.
     const readOnly = useReadOnlyIteration();
     const [threadNow] = useState(() => props.threadNow ?? Date.now());
     // The third argument is the same snapshot. Stores are isomorphic, and tests render the view statically.

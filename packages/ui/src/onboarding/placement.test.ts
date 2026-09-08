@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { easeInOutCubic, needsScroll, offscreen, placeTour, ringOf } from './placement.js';
 
 /**
- * Tour card geometry, docs/design/SPEC-onboarding-2026-09-02.md §3. The numbers match the reference implementation
- * (`Sherpa.dc.html`, `tourPlace`): a mismatch here is a mismatch with the design.
+ * Tour card geometry, docs/design/SPEC-onboarding-2026-09-02.md §3. The numbers match the implementation
+ * in the prototype (`docs/design/Sherpa.dc.html`, `tourPlace`): a difference here is a difference from the design.
  */
 
 /** Acceptance viewport: all expectations below are calculated for it. */
@@ -105,7 +105,7 @@ describe('scrolling to the target', () => {
         expect(needsScroll({ left: 0, top: 300, width: 10, height: 10 }, VIEWPORT)).toBe(false);
     });
 
-    it('a target outside the window uses fallback placement without a ring', () => {
+    it('uses fallback placement without a ring when the target is off screen', () => {
         expect(offscreen({ left: 100, top: 910, width: 10, height: 10 }, VIEWPORT)).toBe(true);
         expect(offscreen({ left: 100, top: -20, width: 10, height: 10 }, VIEWPORT)).toBe(true);
         expect(offscreen({ left: 1450, top: 100, width: 10, height: 10 }, VIEWPORT)).toBe(true);

@@ -22,7 +22,7 @@ export interface RouteShortcutsOptions {
     readonly model: RouteModel;
     /** Entries left after applying the lens and filter: keys navigate only these. */
     readonly shown: readonly RouteEntry[];
-    /** Previous iterations are read-only and have no marks at all (M4 scope). */
+    /** The previous iteration is read-only: it has no viewed marks at all. */
     readonly readOnly: boolean;
     readonly stopProgress: StopProgressStore;
     readonly unfilledEntry: StopViewed['unfilledEntry'];
@@ -82,7 +82,7 @@ export function useRouteShortcuts({
 
     /**
      * A mark can be set only after the stop's ranges have been counted. It can always be cleared.
-     * Previous iterations have no viewed marks at all (M4 scope).
+     * The previous iteration has no marks at all.
      */
     const canToggleViewed = useCallback(
         (entry: RouteEntry): boolean =>

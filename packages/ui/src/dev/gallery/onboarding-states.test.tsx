@@ -35,7 +35,7 @@ describe('onboarding gallery', () => {
         ]);
     });
 
-    it('the coverage strip anchor is duplicated above the generation skeleton and outlines the upper one in the scaffold', () => {
+    it('above the generation skeleton the coverage bar target appears twice, and the upper scaffold target gets the outline', () => {
         const html = markup('tour-scaffold-progress');
 
         expect(html.match(/data-tour="progress"/gu)).toHaveLength(2);
@@ -82,7 +82,7 @@ describe('onboarding gallery', () => {
         expect(html).toContain('The classic reader stays one click away');
     });
 
-    it('step anchors sit on real frame elements', () => {
+    it('step targets are on real frame elements', () => {
         const html = markup('tour-step-01-narrative');
 
         expect(html).toContain('data-tour="narrative"');
@@ -110,7 +110,7 @@ describe('onboarding gallery', () => {
         expect(html).not.toContain('data-stop="tour-stub"');
     });
 
-    it('missing target fallback places the card at bottom center without a ring', () => {
+    it('missing target fallback: card at the bottom center, no ring', () => {
         const html = markup('tour-fallback-missing');
 
         expect(html).toContain('tour-card--fallback');

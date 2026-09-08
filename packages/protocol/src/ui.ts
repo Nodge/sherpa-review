@@ -586,7 +586,7 @@ export const uiFileProgressSchema = z.object({
 });
 export type UiFileProgress = z.infer<typeof uiFileProgressSchema>;
 
-/** A route stop's "viewed" mark persists per PR (README State model). */
+/** Viewed mark for a route stop, persisted per PR (docs/design/README.md §State model). */
 export const uiStopProgressSchema = z.object({
     stopId: z.string().min(1),
     viewed: z.boolean(),

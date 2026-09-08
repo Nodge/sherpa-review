@@ -6,7 +6,7 @@ import { uiPrStateSchema } from '@sherpa/protocol';
  * commands. Stored in the PR database on the server, rather than `localStorage`: each PR server listens on a random
  * port, and browser storage is empty for the new port.
  *
- * Changes apply optimistically, with debounced writes following. Collapsing a directory is
+ * Changes apply optimistically, then writes are debounced. Collapsing directories involves
  * a series of clicks, and each does not need its own request. A failed write keeps the choice:
  * the reviewer already sees the collapsed tree, and jumping back is worse than losing persistence.
  *

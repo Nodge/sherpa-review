@@ -429,7 +429,7 @@ export class RouteOrchestrator {
     }
 
     /**
-     * No diff in memory means no way to validate the result: a transient server failure (restart during
+     * Without a diff in memory, the result cannot be validated. This is a temporary server failure (a restart during
      * generation or a failed warmup), not a model error, so rejection does not consume the budget.
      * Also trigger diff loading, otherwise a retry would hit the same failure.
      */
@@ -968,7 +968,7 @@ export class RouteOrchestrator {
     /**
      * Make the iteration diff available synchronously. A cache miss has exactly one recovery path:
      * ask the host for the active iteration, in case that is the requested one and its patch is not yet stored
-     * (a database carried over from M3). The host cannot provide a complete previous iteration (`getDiff` only accepts a
+     * (an existing DB without iteration patches). The host cannot return a whole previous iteration (`getDiff` only accepts a
      * slice), so failure is the only remaining option.
      */
     private async ensureDiff(diffId: HostId): Promise<PrDiff> {
@@ -1088,7 +1088,7 @@ export class RouteOrchestrator {
 
 /**
  * Snapshot language. Skeleton acceptance sets `provenance.locale`, while snapshots in the old format carry `null`
- * from before M5, which are in Russian.
+ * and are read as English.
  */
 function snapshotLocale(snapshot: RouteSnapshot): Locale {
     return snapshot.provenance.locale ?? 'en';

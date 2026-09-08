@@ -34,7 +34,7 @@ describe('breadcrumbFromPrKey', () => {
 });
 
 describe('breadcrumbFor', () => {
-    it('uses a text fallback from the key without metadata', () => {
+    it('falls back to a text breadcrumb from the key without metadata', () => {
         expect(breadcrumbFor('github-quillmart--quillmart--4821', null)).toEqual([
             { text: 'github', href: null },
             { text: 'PR 4821', href: null },

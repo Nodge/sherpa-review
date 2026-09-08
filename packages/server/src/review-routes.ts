@@ -291,7 +291,7 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(ctx, uiSetFileViewedRequestSchema, 'setting a viewed mark');
                 // The local record is the source of truth. The host learns about it next, and only if it supports it.
-                // Only the active iteration can be marked (M4 scope).
+                // Marks can only be set in the active iteration.
                 const progressRevision = options.progress.setFileViewed(
                     await activeDiffId(options),
                     request.fileId,

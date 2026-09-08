@@ -331,7 +331,7 @@ export class IterationFeed {
         try {
             notes.adoptLegacyAnchors(active.diffId);
         } catch (error) {
-            this.log(`M3 note anchors not adopted: ${messageOf(error)}`);
+            this.log(`could not adopt legacy note anchors: ${messageOf(error)}`);
             return;
         }
 
@@ -600,7 +600,7 @@ export class IterationFeed {
         if (known !== undefined) {
             return known;
         }
-        // A snapshot recorded before M4 has no base, and `RouteStore` fills it with a
+        // Old-format snapshots contain no base, so `RouteStore` substitutes a
         // placeholder. Treating it as a commit is the same as choosing a base at random.
         const stored = this.route.listSnapshots().findLast((snapshot) => snapshot.diffId === diffId);
         const base = stored?.baseCommit;

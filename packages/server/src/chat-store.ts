@@ -33,7 +33,7 @@ interface ExchangeRow extends SqlRow {
     error: string | null;
     task_id: number | null;
     head_commit: string | null;
-    /** Response language (migration 020). NULL means a pre-M5 exchange in Russian. */
+    /** Answer language (migration 020). NULL means the exchange predates the column and is read as English. */
     locale: string | null;
     created_at: string;
     updated_at: string;
@@ -241,7 +241,7 @@ export class ChatStore {
     }
 
     /**
-     * M3 note anchors have no iteration (`LEGACY_DIFF_ID`). The server treats them as created in the
+     * Legacy note anchors do not name an iteration (`LEGACY_DIFF_ID`), so the server treats them as created in the
      * active one. Lines stay put. Only `diffId` changes for both the current and original anchor.
      * Idempotent: no such notes remain after adoption.
      */

@@ -1,7 +1,7 @@
 import { findLineRow } from '../../diff-view/line-target.js';
 
 /**
- * Scrolling within the route (README, "Interactions & behaviour"): clicking a file chip goes
+ * Scrolling within the route (docs/design/README.md §Interactions & behaviour). Clicking a file chip leads
  * to its card in ~320ms with a −150px offset from the target's top. Use container `scrollTop`
  * because `scrollIntoView` offers no duration, offset or cancellation.
  */
@@ -9,7 +9,7 @@ import { findLineRow } from '../../diff-view/line-target.js';
 /** Offset from the top edge keeps the target clear of the sticky toolbar. */
 export const JUMP_OFFSET = 150;
 
-/** README «Motion»: jump scroll ~320ms ease-in-out cubic. */
+/** docs/design/README.md §Design tokens, «Motion»: jump scroll ~320ms ease-in-out cubic. */
 export const JUMP_DURATION = 320;
 
 /** ease-in-out cubic, the same profile as `--motion-jump-ease`. */

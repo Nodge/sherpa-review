@@ -114,7 +114,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         await expect(composer).toHaveCount(0);
     });
 
-    await test.step('plan numbers do not depend on the preset (SPEC §8 item 4)', async () => {
+    await test.step('plan numbers stay the same across presets (SPEC-elements §8 item 4)', async () => {
         await page.keyboard.press('t');
         await expect(page.getByRole('button', { name: 'Full tour', exact: true })).toHaveAttribute(
             'aria-pressed',

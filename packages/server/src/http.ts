@@ -127,7 +127,7 @@ export async function readJsonBody(req: IncomingMessage, maxBytes = REQUEST_BODY
 
 /**
  * The same, but an empty body is valid input and returns `null`. Used by endpoints where all fields
- * are optional (`route/generate`: a pre-M5 client sends POST with no body at all).
+ * are optional (`route/generate`: an old client sends POST with no body at all).
  */
 export async function readOptionalJsonBody(
     req: IncomingMessage,

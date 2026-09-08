@@ -1150,7 +1150,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             if (only === undefined) {
                 return;
             }
-            // Approximation until symbol navigation (M5): a single-file PR card is always
+            // There is no symbol navigation, so this approximates it: a single-file PR card is always
             // in the DOM, and native scrolling is enough to reach the hunk start.
             document
                 .querySelector(`[data-file="${CSS.escape(only.fileId)}"] [data-hunk="${String(index)}"]`)

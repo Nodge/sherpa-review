@@ -45,7 +45,7 @@ export interface StopCardProps {
     readonly diff: ReactNode;
     /** Expose the diff column so the view can measure its height and reserve space when it leaves the DOM. */
     readonly diffRef?: RefObject<HTMLDivElement | null>;
-    /** Accent line flash above the diff column after jumping to a file (README Interactions). */
+    /** Accent line flash above the diff column after a file jump (docs/design/README.md §Interactions & behaviour). */
     readonly flash?: boolean;
     /** Threads from `change.threadIds` that caused the change, reduced to links with unknown ids removed. */
     readonly changeThreads?: readonly StopChangeThread[];
@@ -118,7 +118,7 @@ export function StopCard({
 }: StopCardProps) {
     const t = useT();
     const { count } = useFormat();
-    // Filling writes to the snapshot and is available only in the active iteration (M4 scope).
+    // Filling writes to the snapshot, so it is only available in the active iteration.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     const { stop } = view;

@@ -130,7 +130,7 @@ describe('where to show generation endpoint errors', () => {
 });
 
 describe('route filling progress', () => {
-    it('gets counts from fixture slot statuses, not the handoff illustration', () => {
+    it('takes counts from fixture slot statuses instead of the design handoff image', () => {
         const progress = generationProgress(snapshotOf('filling'));
 
         expect(progress.total).toBe(7);
@@ -210,7 +210,7 @@ describe('summary and provenance', () => {
         const ready = snapshotOf('ready');
         const english = { ...ready, provenance: { ...ready.provenance, locale: 'en' as const } };
 
-        // A pre-M5 snapshot (`locale: null`) is read as Russian.
+        // A snapshot with no recorded language (`locale: null`) is read as English.
         expect(provenanceLine(ready, createT('ru'), 'ru')).toBe(provenanceLine(english, createT('ru'), 'ru'));
         expect(provenanceLine(ready, createT('en'), 'en')).not.toContain('English');
         expect(provenanceLine(english, createT('ru'), 'ru')).toContain(ru['route.locale.name.en']);
