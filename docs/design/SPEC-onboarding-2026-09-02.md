@@ -1,21 +1,15 @@
 # Sherpa onboarding on the first visit 2026-09-02
 
-Handoff spec for the 8-tip tour. The storyboard with 1:1 cards and the rationale for each
-step is **`Sherpa Onboarding.dc.html`**. Live implementation: **`Sherpa.dc.html`**, the
-"07 · First run" scenario in the SCENARIOS dock and the "Replay the onboarding tour · 8 steps" palette command.
-Tokens and general rules are in `README.md` §Design tokens and §16. The main interface state
-matrix is in `SPEC-elements.md`. This document covers only onboarding.
+Handoff spec for the eight-tip tour. Storyboard with 1:1 cards and the reason for each step: **`Sherpa Onboarding.dc.html`**. Live implementation: **`Sherpa.dc.html`**, the "07 · First run" scenario in the SCENARIOS dock and the "Replay the onboarding tour · 8 steps" palette command. Tokens and shared rules: `README.md` §Design tokens and §16. Main interface state matrix: `SPEC-elements.md`. This spec covers onboarding only.
 
 | What | Stage | Status |
 |---|---|---|
-| Eight coach marks over the live interface | M5 | **fully implemented in the prototype** |
-| "Show once" flag + resume from a step | M5 | implemented with localStorage (backend choice needed, see §9) |
+| Eight tips over the live interface | M5 | **fully implemented in the prototype** |
+| "Show once" flag + resume from step | M5 | implemented with localStorage (storage choice needed, see §9) |
 | "Replay the onboarding tour" palette command | M5 | implemented |
 | Tour telemetry | M5 | not implemented, spec only (§8) |
 
-The format is deliberate: **neither a wizard nor a takeover**. There is no dimming, the screen stays interactive.
-You can scroll, click the interface, open a file and come back. The same rule governs
-the whole product: a scrollable document instead of a step-by-step wizard.
+The format is deliberate: **no wizard or screen takeover**. There is no dimming, and the screen stays interactive. You can scroll, click the interface, open a file and come back. This follows the same rule as the rest of the product: a scrollable document instead of a step-by-step wizard.
 
 ---
 
@@ -38,7 +32,7 @@ the whole product: a scrollable document instead of a step-by-step wizard.
 | Element | Spec |
 |---|---|
 | Container | width **350**, padding `14px 16px 15px`, radius **12**, bg `#171a1f`, border `1px solid #313640`, shadow `0 20px 52px rgba(0,0,0,.62)`, z-index **89** |
-| Arrow | 9×9, `transform:rotate(45deg)`, bg `#171a1f`, two `1px solid #313640` borders on the side facing the target. Offset calculated from the target centre and clamped 14px from the card corners |
+| Pointer | 9×9, `transform:rotate(45deg)`, bg `#171a1f`, two `1px solid #313640` borders on the side facing the target. Offset is calculated from the target's centre and stays at least 14px from the card's corners |
 | Counter | 10px mono `#8f9bff`, format `04 / 08` (both parts with a leading zero) |
 | Kicker | 9.5px mono `#5e636b`, letter-spacing .07em, text `HOW SHERPA WORKS`, the same on every step |
 | Title | 14px/600 `#f0f1f4`, letter-spacing −.012em, line-height 1.34, `text-wrap:pretty` |
@@ -49,8 +43,7 @@ the whole product: a scrollable document instead of a step-by-step wizard.
 | Ring | target + 5px, `1.5px solid #7f8cff`, radius 11, `box-shadow:0 0 0 3px rgba(127,140,255,.13), 0 0 26px rgba(127,140,255,.16)`, `pointer-events:none`, z-index **88** |
 | Movement | `transition: left .18s ease, top .18s ease` on the card and ring |
 
-Forbidden inside the card: lists, links, images, progress dots, a second paragraph, icons.
-One step, one idea.
+Not allowed inside the card: lists, links, images, progress dots, a second paragraph, icons. One step carries one idea.
 
 ---
 
@@ -69,9 +62,7 @@ The copy is final, the interface is in English. `sel` is the anchor selector in 
 | 07 | `[data-tour="fulldiff"]`, the Full diff tab | The classic reader stays one click away | Full diff shows every file in plain order — nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing. |
 | 08 | `[data-tour="ship"]`, the floating panel of final actions | Nothing reaches the author until you say so | Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you. |
 
-The order follows the reviewer's path instead of the menu structure: **what to read** (01–03) → **how to measure progress**
-(04) → **how to control the order and ask questions** (05–06) → **a way out** (07) → **finishing** (08).
-On the last step the primary button reads **Start reviewing**, and Back stays.
+The order follows the reviewer's path, not the menu structure: **what to read** (01–03) → **how to measure progress** (04) → **how to change the order and ask a question** (05–06) → **the way out** (07) → **finishing** (08). On the last step the primary button is **Start reviewing**, and Back stays.
 
 ### Interface state during the steps
 
@@ -82,8 +73,7 @@ The tour **changes nothing on the user's behalf**, with one exception:
 | 01–05, 07, 08 | none: does not change the view, preset or filters, or expand folds |
 | 06 | opens the agent panel. Closes it again on the transition to 07 |
 
-Step 05 points to the preset toggle without pressing it. Step 07 points to the "Full diff" tab,
-without switching views, since that would lose the reviewer's place in the route.
+Step 05 highlights the preset toggle without pressing it. Step 07 highlights the "Full diff" tab without switching views, so the reviewer keeps their place in the route.
 
 ---
 
@@ -113,27 +103,20 @@ pointer: below/above → clamp(target centreX − left − 4.5, 14, W − 23)
       right/left  → clamp(target centreY − top  − 4.5, 14, H − 23)
 ```
 
-`right` works for tall targets (diff column, agent panel), `left` is the last option.
-The arrow is required on all 4 sides and always points at the target, even when the card
-sits against the window edge.
+`right` works for tall targets (diff column, agent panel), `left` is the last choice. The pointer is required on all four sides and always points at the target, even when the card is pushed against the window edge.
 
 ### Scrolling to the target
 
-- **Only** the first measurement of a step scrolls, and only if the target is outside the comfortable area:
-  `r.top < 150` or `r.top > vh − 180`.
-- The scroller is the closest ancestor with `overflow-y: auto|scroll` and actual scrollable content, otherwise
-  `document.scrollingElement`. **Do not use `scrollIntoView`**, as elsewhere in the product.
-- Animation: 320 ms, ease-in-out cubic. Target position: target top 150px from the viewport top.
-  With `prefers-reduced-motion: reduce`, jump instantly.
-- Remeasurement after scrolling must not initiate another scroll (to avoid recursion).
+- **Only** the first measurement of a step triggers scrolling, and only if the target is outside the comfortable zone: `r.top < 150` or `r.top > vh − 180`.
+- The scroller is the nearest ancestor with `overflow-y: auto|scroll` and actual scrolling, otherwise `document.scrollingElement`. **No `scrollIntoView`**, as everywhere else in the product.
+- Animation: 320 ms, ease-in-out cubic. Target position places the target's top 150px from the viewport top. With `prefers-reduced-motion: reduce`, jump instantly.
+- Remeasuring after scrolling must not trigger another scroll (it would recurse).
 - Sticky and fixed targets (steps 04–08) never scroll the page.
 
 ### Remeasurement and resilience
 
 - Recalculate on `scroll` (with capture), `resize`, `window.load`, `document.fonts.ready`.
-- After a step starts, retry until its position is found: **340 / 640 / 1000 / 1600 /
-  2400 / 3400 ms**, cancelled immediately on success. This handles cold loads: fonts, streamed
-  markup, and sticky panels settle after the first frame.
+- After a step starts, retry until a position is found: **340 / 640 / 1000 / 1600 / 2400 / 3400 ms**, stopping as soon as it succeeds. This handles cold loads: fonts, streamed markup and sticky panels settle after the first frame.
 
 ---
 
@@ -149,21 +132,17 @@ sits against the window edge.
 | Scrolling to the target | card does not redraw until the animation ends (no jitter) |
 | Palette open (⌘K) | palette rises to z-index **95** and covers the tour. The tour waits underneath |
 
-The tour **does not block** the interface: the ring has `pointer-events` set to `none`, and clicks on the highlighted element
-work without closing the tour.
+The tour **does not block** the interface: the ring's `pointer-events` is `none`, clicks on the highlighted element work and do not close the tour.
 
 ---
 
 ## 5. When to show it
 
-- **Trigger:** first UI visit, when the **first filled stop** is ready. Do not show the tour over the generation
-  skeleton, since there is nothing to point to.
+- **Trigger:** first visit to the UI, when the **first filled stop** is ready. Do not show the tour over the generation skeleton, there is nothing to highlight.
 - **Once per user**, not per PR.
 - `gen: 'failed'` (validation failed): do not start the tour at all.
-- `gen: 'offline'` (agent disconnected): show the tour, **omit step 06**, and change the counter to
-  `/ 07`, shifting the remaining step numbers.
-- If the agent dies **during** the tour, keep step 06 if it has already appeared. If it has not been reached,
-  omit it (see §9, question 3).
+- `gen: 'offline'` (agent disconnected): show the tour, **omit step 06**, counter becomes `/ 07`, remaining steps are renumbered.
+- If the agent dies **during** the tour, do not retract step 06 if already shown. If it has not been reached, omit it (see §9, question 3).
 
 ## 6. Leaving and returning
 
@@ -179,12 +158,10 @@ work without closing the tour.
 ## 7. Keyboard and accessibility
 
 - `→` / `Enter` go to the next step, `←` goes back. While the palette is open, arrows do not control the tour.
-- The card has `role="dialog"` with `aria-modal="false"`: the screen reader reads the step, but focus
-  is not trapped in the card (the tour is non-blocking).
+- The card has `role="dialog"` with `aria-modal="false"`: the screen reader reads the step, but focus is not trapped in the card (the tour is non-blocking).
 - Focus moves to the card when a step starts. `aria-describedby` points to the step body.
 - A live region announces step changes: "step 4 of 8, <title>".
-- The highlighted element gets `aria-describedby` pointing to the card, so the "ring ↔ text" connection
-  can be heard as well as seen.
+- The highlighted element gets `aria-describedby` pointing to the card, so the "ring ↔ text" connection is audible as well as visible.
 - `prefers-reduced-motion: reduce` disables smooth scrolling and card movement.
 
 ## 8. Telemetry
@@ -192,44 +169,32 @@ work without closing the tour.
 | Event | Payload |
 |---|---|
 | `tour_shown` | trigger (first_run / replay), step count (8 or 7 when offline) |
-| `tour_step` | index, title, time on step, whether the target was found (to evaluate the fallback) |
+| `tour_step` | index, title, time on step, whether the target was found (to assess the fallback layout) |
 | `tour_skipped` | step index when leaving |
 | `tour_completed` | total time |
 | `tour_replayed` | source (palette) |
 
-Interpretation: the most frequently skipped step signals a need to **rewrite the copy**, not remove the step.
-Frequent "target not found" fallbacks signal a poor anchor choice.
+Interpretation: the most frequently skipped step signals that the **copy needs rewriting**, not that the step should be removed. Frequent "target not found" results signal a poorly chosen anchor.
 
 ## 9. Questions to settle before implementation
 
-1. **Where the completion flag and step number live.** The prototype uses `localStorage`
-   (`sherpa.onboarding.v1`, `sherpa.onboarding.step`). Product choice: local
-   per-user Sherpa state on disk (survives switching browsers, lost on reinstall)
-   or browser session. A choice is needed.
-2. **Second pass.** Does the "what changed since last time" banner need its own small tip
-   (F3), or is that an explanation of the banner rather than onboarding?
-3. **Agent dies during the tour.** Finish without step 06, or show the step with reconnection
-   copy?
-4. **Narrow windows.** The page is designed for ≥1440px. At 1280, some anchors (viewed counter,
-   agent panel) go offscreen and the step uses its fallback. If 1280 is a real use case,
-   these 2 steps need alternative anchors.
+1. **Where to store the completion flag and step number.** The prototype uses `localStorage` (`sherpa.onboarding.v1`, `sherpa.onboarding.step`). Product choice: per-user local Sherpa state on disk (survives a browser change, lost on reinstall) or a browser session. A choice is needed.
+2. **Second pass.** Does the "what changed since last time" banner (F3) need its own small tip, or is that explaining the banner rather than onboarding?
+3. **Agent dies during the tour.** Continue without step 06 or show it with reconnection text?
+4. **Narrow windows.** The page is designed for ≥1440px. At 1280 some anchors (viewed counter, agent panel) go offscreen and the step uses the fallback layout. If 1280 is a real use case, these two steps need alternative anchors.
 
 ## 10. Acceptance checklist
 
 - [ ] The tour starts once, after the first stop is ready, and does not start on `failed`.
 - [ ] Eight steps follow the order in §2 with the exact copy. The last primary button is `Start reviewing`.
-- [ ] The ring outlines the element the step describes, and the arrow points at its centre on all
-      4 sides, including when the card sits against the window edge.
-- [ ] A scrolling step (01–03) reaches the target and outlines it. Remeasurement does not trigger
-      a second scroll.
+- [ ] The ring outlines the element the step describes, and the pointer points to its centre on all four sides, including when the card is against the window edge.
+- [ ] A scrolling step (01–03) reaches the target and outlines it. Remeasuring does not trigger a second scroll.
 - [ ] Cold load: the card gets a position without user action (remeasurement retries).
-- [ ] Step 06 opens the agent panel and closes it on step 07. No other step changes
-      state.
+- [ ] Step 06 opens the agent panel and closes it on step 07. No other step changes state.
 - [ ] Offline: step 06 is omitted, counter `/ 07`.
 - [ ] Target offscreen or missing: ring hidden, card at bottom centre, step readable.
 - [ ] Clicking the interface and Esc do not close the tour. `Skip tour` closes it forever.
 - [ ] An unfinished tour resumes from the same step after reload.
 - [ ] The palette covers the tour. The "Replay the onboarding tour" command resets the flag and starts from 01.
-- [ ] `→ / Enter / ←` work. Step changes are announced in the live region. `prefers-reduced-motion`
-      removes animations.
+- [ ] `→ / Enter / ←` work. A live region announces step changes. `prefers-reduced-motion` removes animations.
 - [ ] The five telemetry events in §8 are sent with the specified payloads.

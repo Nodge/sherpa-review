@@ -1,6 +1,6 @@
 # Sherpa documentation
 
-Code is the source of truth. These documents describe what the code doesn't explain: why the system works this way, which invariants it maintains, what was decided and why. Contracts (schemas, interfaces, constants) aren't duplicated. Each document links to their file in `packages/protocol` or `packages/server`.
+Code is the source of truth. These documents describe what the code cannot tell you: why the system is designed this way, which invariants hold, and what was decided and why. They link to contracts (schemas, interfaces and constants) in `packages/protocol` or `packages/server` without duplicating them.
 
 ## Contents
 
@@ -18,11 +18,11 @@ Code is the source of truth. These documents describe what the code doesn't expl
 
 `product.md` → `design/SPEC-elements.md` → `design/README.md` → the `design/Sherpa.dc.html` prototype. The prototype is a reference, not source code.
 
-When a document disagrees with the code, the code is right and the document needs fixing.
+If a document disagrees with the code, the code is right. Fix the document.
 
 ## References from code
 
-References in comments use a path from the repository root and a section: `docs/protocol.md §7`, `docs/design/SPEC-elements.md §2.6`, `docs/product.md §3`. Section numbering in `product.md` and `protocol.md` is stable. New sections go at the end, not in the middle.
+Use a path from the repository root and a section in comments: `docs/protocol.md §7`, `docs/design/SPEC-elements.md §2.6`, `docs/product.md §3`. Section numbers in `product.md` and `protocol.md` are stable. Append new sections at the end, never insert them in the middle.
 
 ## Style
 

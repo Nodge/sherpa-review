@@ -28,7 +28,7 @@ The **skill distribution** is the `packages/skill/dist` directory: `SKILL.md`, `
 
 There are 2 bundles because the agent loop invokes the CLI on every call, and a server with embedded UI would add unnecessary weight. Both use the same distribution version, the `version` field in the root `package.json`.
 
-IBM Plex fonts are vendored. They arrive as npm packages and become part of the build (`packages/ui/src/styles/fonts.css`), so no runtime network access is needed. Restricted networks won't allow Google Fonts. Telemetry collection in these packages' `postinstall` is disabled in `pnpm-workspace.yaml`.
+IBM Plex fonts ship with the distribution. They come from npm packages and go into the build (`packages/ui/src/styles/fonts.css`), so no network is needed at runtime. A restricted network would block Google Fonts. Telemetry collection in these packages' `postinstall` is disabled in `pnpm-workspace.yaml`.
 
 The UI keeps state outside the React tree, in stores with subscriptions and `useSyncExternalStore`. Patch parsing moves off the main thread into a web worker (`packages/ui/src/diff/worker.ts`). Lists use virtualization (`@tanstack/react-virtual`). The comment composer uses ProseMirror.
 
@@ -36,7 +36,7 @@ The UI keeps state outside the React tree, in stores with subscriptions and `use
 
 The agent in the reviewer's harness receives a PR key like `<host>-<pr>` and runs `sherpa up`. The command is idempotent. It finds and reuses a live server for this PR through the manifest, or starts a daemon from the adjacent bundle that survives the CLI exiting (`packages/cli/src/up.ts`). Neither pnpm nor a repository checkout is needed. `up` prints a UI link and opens the browser on a cold start.
 
-The PR key is optional. Without it, the CLI resolves the PR from the launch directory: Git checkout, current branch, branch PR (`packages/cli/src/pr-discovery.ts`). No step in this chain may crash the command. Any failure becomes a one-line explanation for the user.
+The PR key is optional: without it the CLI discovers the PR from the launch directory, through the Git checkout, current branch and branch PR (`packages/cli/src/pr-discovery.ts`). No step in this chain may crash the command. A failure at any step becomes a one-line explanation for the user.
 
 CLI commands and their roles:
 
@@ -53,7 +53,7 @@ The server is one process per PR. It owns all state for that PR and all writes t
 
 **Session ↔ server: pull only.** The agent accepts no connections and has no address. It long-polls with `worker next`. The server leases it a task, the agent does the work and submits the result in a separate call.
 
-A lease doesn't remove a task from the queue. A lease that expires without a response returns the task to the queue and increments its attempt count. A new session always takes precedence. Registration with a fresh `workerId` takes over the slot, and the displaced worker's leases return to the queue. Details: `docs/protocol.md §2, §5, §7`.
+A lease does not remove a task from the queue. A lease that expires silently returns the task to the queue and consumes an attempt. A new session always takes precedence. Registration with a fresh `workerId` takes over the slot, and the displaced worker's leases return to the queue. Details are in `docs/protocol.md §2, §5, §7`.
 
 **Task types** are defined by `taskTypeSchema` in `packages/protocol/src/task.ts`:
 
@@ -78,7 +78,7 @@ The **host adapter** is the only way to access PR data. The server chooses it by
 
 ## 3. Storage in `~/.sherpa`
 
-The state root is `~/.sherpa`, overridden by `SHERPA_DIR` in tests and development. Each side constructs paths in one place: `packages/server/src/paths.ts` and `packages/cli/src/paths.ts`.
+State lives under `~/.sherpa`. Tests and development runs override it with `SHERPA_DIR`. Each side assembles paths in one place: `packages/server/src/paths.ts` and `packages/cli/src/paths.ts`.
 
 ```
 ~/.sherpa/
@@ -97,11 +97,11 @@ The state root is `~/.sherpa`, overridden by `SHERPA_DIR` in tests and developme
 
 Both sides validate the PR key with `prKeySchema` because it is used in paths. Without a restricted alphabet, it could redirect writes outside `~/.sherpa`.
 
-The **manifest** (`serverManifestSchema`) contains `prKey`, port, PID, token, protocol and server versions, creation time. The CLI uses it to find a live server. The UI doesn't use it, since the CLI prints the link with the token. Publication is atomic. The file is prepared alongside its target and placed using `link`, the only POSIX operation that provides "create if absent" (`packages/server/src/manifest.ts`). An occupied path means a server for this PR already exists. The server removes a dead process's manifest at startup (the CLI doesn't touch manifests). Liveness checks use both the PID and a `/healthz` request with the manifest token, since any process could have taken the port.
+The **manifest** (`serverManifestSchema`) contains `prKey`, port, PID, token, protocol and server versions, and creation time. The CLI uses it to find a live server. The UI does not use it. The CLI prints the link with the token. Publication is atomic. The server prepares a file alongside the target and puts it in place with `link`, the only POSIX operation for "create if absent" (`packages/server/src/manifest.ts`). An occupied path means a server already exists for this PR. At startup, the server removes manifests for dead processes (the CLI does not touch manifests). It checks liveness by both PID and a `/healthz` request using the manifest's token, because another process could have taken the port.
 
-**Permissions.** Directories under `~/.sherpa` use 0700, the manifest and `settings.json` use 0600. An explicit `chmod` sets the modes after creation, since `mkdir` and `writeFile` apply umask and directories may already exist.
+**Permissions.** Directories inside `~/.sherpa` use 0700, the manifest and `settings.json` use 0600. The server sets the modes with an explicit `chmod` after creation. `mkdir` and `writeFile` apply the umask, and directories may already exist.
 
-The **PR database** is `sherpa.db`, using WAL. A migration list updates its schema (`packages/server/src/migrations.ts`). Migration names are permanent, and SQL for an applied migration never changes. `node:sqlite` has no nested transactions, so all server operations use the `transaction` helper with `BEGIN IMMEDIATE`. Domain errors return as values, since an exception rolls everything back.
+The **PR database** is `sherpa.db`, with WAL enabled. A migration list maintains its schema (`packages/server/src/migrations.ts`). A migration's name is fixed forever. Never rewrite SQL in an applied migration. `node:sqlite` has no nested transactions, so all server operations use the `transaction` helper with `BEGIN IMMEDIATE`. Domain errors return as values, not exceptions, because an exception rolls back everything.
 
 These survive server restarts: task queue and leases, worker identity, reading progress (file and stop marks, ranges), route snapshots and generation state, iterations and computed interdiffs, chat history and agent notes, draft buffer, per-PR UI state, idle counter. Only cheap-to-recreate state lives in memory: host subscriptions, open SSE channels, the tab's parsed-patch cache.
 
@@ -113,9 +113,9 @@ Route generation has 2 phases. `route.skeleton` produces a PR summary, a stop pl
 
 A **snapshot** (`routeSnapshotSchema` in `packages/protocol/src/route.ts`) is tied to the commit and iteration it was built for: `commit`, `baseCommit`, `diffId`. Its `provenance` records the harness, model and generation language. A snapshot appears when the skeleton is accepted, grows as sections arrive, and becomes immutable in the `ready` phase. Its content hash is computed at that point. A PR has many snapshots and one current snapshot. Past snapshots remain readable.
 
-The **validator** consists of pure modules in `packages/server/src/route/`, with no database, network or queue. It parses the result against a schema, then checks semantics.
+The **validator** consists of pure modules in `packages/server/src/route/`, with no database, network or queue. A schema parses the result first, then semantic checks run.
 
-Acceptance fails closed and runs synchronously inside the `complete` transaction. A rejected result keeps its lease and doesn't spend an attempt, so the model can fix it. The loop has a limit. After `MAX_RESULT_REJECTIONS` (3) consecutive rejections, the task fails with the last raw output.
+Acceptance is synchronous and fails closed, inside the `complete` transaction. A rejected result neither releases the lease nor consumes an attempt. The model corrects it itself. This loop has a limit. `MAX_RESULT_REJECTIONS` (3) consecutive rejections fail the task with the last raw output.
 
 Sections have 2 levels of reduced functionality. Soft rules remove individual elements and leave a note for the reviewer: an anchor to a missing file, an anchor outside changed lines, a range already covered by another stop, or a link to a missing thread. Hard rules reject the entire result: a plan number from another plan or a nonexistent one, `end < start`, or a stop with no surviving anchors.
 
@@ -135,7 +135,7 @@ The reviewer starts regeneration with a button. It never starts automatically. T
 
 A regeneration task receives the previous route and discussion added since then as context (`packages/server/src/route-regeneration.ts`). If the budget is too small, stop paragraphs are cut first, starting at the end of the plan. The plan table is cut last. Truncation is marked explicitly in the text.
 
-**Progress carryover** happens when a new snapshot is accepted, within the same transaction. Stop marks move through the interdiff line map, and the result is stored in `carried`. Stops with unchanged ranges stay marked.
+The server handles **progress carryover** when accepting a new snapshot, in the same transaction. Stop marks carry over through the interdiff's line map, and the result goes into `carried`. Stops with unchanged ranges stay marked.
 
 The server classifies each stop against the previous snapshot deterministically: `new` if all anchor lines are affected or the file is new, `changed` if some are affected. The model does not choose this classification. It only explains it in words.
 
@@ -152,7 +152,7 @@ The interface is in `packages/protocol/src/review-host.ts`. Required methods fal
 
 Optional methods are `setFileViewed`, `getFileContent`, `getBlob`. Each has its own capability flag.
 
-Subscriptions promise a full snapshot immediately and then on each change. The adapter chooses the transport. Polling is the common denominator across hosts, so convergence is guaranteed, immediate reactivity is not.
+Subscriptions promise a full snapshot once immediately, then on every change. The adapter chooses the transport. Polling is the common denominator across hosts, so the promise is convergence, not reactivity.
 
 `getDiff` without arguments returns the active iteration. With a pair of iterations, it returns a slice between them (what changed from one to the other).
 
@@ -167,7 +167,7 @@ The `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`) declares host c
 | `iterations` | a list of past iterations and a slice between them. Without it, only "route is stale" is available, with no progress carryover or stop classification |
 | `blobs` | an image card in the diff. Without it, a binary file stays a "binary file not shown" line |
 
-**Invariant: a method is implemented if and only if its corresponding flag is set.** The shared `describeReviewHostContract` suite (`packages/server/src/hosts/review-host-contract.ts`) enforces this by running the same tests against every implementation. It also checks response shapes against protocol schemas, subscription promises, the two-stage draft model and consistency between `file.viewed` and `fileViewedSync`.
+**Invariant: a method is implemented if and only if its corresponding flag is set.** The shared `describeReviewHostContract` suite (`packages/server/src/hosts/review-host-contract.ts`) enforces it with the same tests for every implementation. It also checks response shapes against protocol schemas, subscription promises, the two-stage draft model and consistency between `file.viewed` and `fileViewedSync`.
 
 The **fixture host** (`packages/fixtures`) provides deterministic PRs for development, the state gallery and e2e.
 
@@ -181,15 +181,15 @@ Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`. `fixt
 
 **Performance.** The diff appears on screen before the route. Server startup does not wait for `getDiff`, and warmup runs on a deferred timer that does not keep the process alive.
 
-The file tree and card list are virtualized, and a web worker parses patches. A file with more than 2000 changed lines renders collapsed (`COLLAPSE_THRESHOLD` in `packages/ui/src/diff-view/file-card.tsx`). Cards far from the viewport leave the DOM and return using hysteresis with 2 boundaries. With one boundary, they would flicker every frame when a stop's edge sat exactly on it.
+The file tree and card list are virtualized, and a web worker parses patches. A file with more than 2000 changed lines renders collapsed (`COLLAPSE_THRESHOLD` in `packages/ui/src/diff-view/file-card.tsx`). The UI removes cards far from the viewport from the DOM and restores them using hysteresis with 2 boundaries. With a single boundary, they would flicker on every frame when a stop's edge sits exactly on it.
 
 The frame-time budget is a mean ≤ 16.7 ms and p95 ≤ 33 ms, measured on `fixture-huge` (100 files, about 25 thousand changed lines) in a separate run of `packages/e2e/src/performance.spec.ts`.
 
 **Security.** Everything runs on localhost, and the server accepts no external connections. Every API endpoint, including the UI, requires a bearer token. SSE is the one exception: the token travels as a query parameter because `EventSource` doesn't support headers.
 
-Tokens are compared by hash in constant time (`packages/server/src/auth.ts`). Comparing the strings themselves requires equal lengths and would reveal the real token's length. The UI link keeps its token in the fragment, so it never reaches the server but survives page reloads.
+The server compares token hashes in constant time (`packages/server/src/auth.ts`). Comparing the strings themselves would require equal lengths and reveal the real token's length. The UI link carries its token in the fragment, so it never reaches the server but survives page reloads.
 
-The manifest and settings use 0600, state directories use 0700. Outbound requests go only to the review host API and to the issue service when the reviewer explicitly sends feedback.
+The manifest and settings use 0600 permissions, state directories use 0700. Only host API requests and feedback requests leave the machine, the latter when the reviewer sends feedback.
 
 **Reliability.** The server survives agent termination. Leases held by a displaced or silent session return to the queue, and reconciliation repairs the generation phase. The UI survives server termination. The tab shows a banner and reconnects.
 
@@ -199,7 +199,7 @@ A result over the limit fails the task with a clear error instead of failing sil
 
 **Idle shutdown.** The PR server is a background daemon, and the contract has no shutdown command. It shuts itself down after 15 minutes without open connections or requests (`DEFAULT_IDLE_SECONDS`, `packages/server/src/idle.ts`).
 
-Each request entering the router counts as activity once. Internal timers, including SSE keepalive pings and the worker death timer, don't count. Otherwise, the server would never stop. State survives shutdown in the database, and the next `up` starts the server again.
+The server tracks activity at a single router entry point. Internal timers, such as SSE keepalive pings and the worker-death timer, do not count as activity, or the server would never shut down. State survives shutdown in the database, and the next `up` starts the server again.
 
 Reviewer departure is separate from idleness. The agent receives the loop-completion signal when the last UI connection has been closed for longer than `UI_GONE_GRACE_SECONDS` (60 s). Page reloads, switching tabs, laptop sleep and brief network interruptions break SSE for seconds and do not count as departure.
 
@@ -207,7 +207,7 @@ Reviewer departure is separate from idleness. The agent receives the loop-comple
 
 ## 7. Invariants
 
-**7.1. A "viewed line" derives only from manual marks.** There is no viewport tracking. A file's viewed ranges are the union of ranges in stops marked manually by the reviewer and files marked manually. They determine the 3 file states (`read` means all changed lines are covered, `partial` means some, `unread` means none). The UI uses `IntersectionObserver` only for rendering decisions: which cards to request parsing for and which to keep in the DOM. It writes no progress. Stops can be marked automatically, but this uses the same manual file marks. A stop is marked when they already cover its ranges.
+**7.1. A "viewed line" derives only from manual marks.** There is no viewport tracking. A file's viewed ranges are the union of ranges from stops the reviewer marked by hand, plus files marked by hand. These determine 3 file states (`read` covers all changed lines, `partial` covers some, `unread` covers none). The UI uses `IntersectionObserver` only to decide what to render: which cards to request parsing for and which to keep in the DOM. It writes no progress. Stops can be marked automatically, but the input is those same manual file marks: a stop gets marked when they already cover its ranges.
 
 **7.2. Filters hide stops with no matching files, and numbers stay as planned.** A stop with no files under the current filter disappears from view. A card held on screen remains visible. The skeleton fixes the stop number (`planIndex`), and filling does not change it. Filters and moving "Other" to the top reorder rendering, but not numbering.
 
@@ -215,7 +215,7 @@ Reviewer departure is separate from idleness. The agent receives the loop-comple
 
 **7.4. Reply nesting is limited by indentation.** Indentation grows up to level 4, then stops increasing. Deeper replies name the author they reply to (`packages/ui/src/threads/model.ts`).
 
-**7.5. One server per PR, SQLite storage, task payloads in files.** One process owns each PR, and all database writes go through it, using WAL. Large task context is materialized as Markdown files, and a schema is attached only for the result. The result limit is `RESULT_MAX_BYTES` (256 KB). Larger results fail the task with a clear error. Context files are truncated to budget with an explicit truncation notice (`packages/server/src/payload-budget.ts`), so the model doesn't mistake partial context for complete context.
+**7.5. One server per PR, SQLite storage, task payloads as files.** One process owns each PR, and all database writes go through it, using WAL. The server materializes large task context as Markdown files and provides a schema only for the result. The result limit is `RESULT_MAX_BYTES` (256 KB). Larger results fail the task with a clear error. Context files are trimmed to fit the budget with an explicit truncation marker (`packages/server/src/payload-budget.ts`) so the model does not treat partial context as complete.
 
 **7.6. The small-PR threshold is 40 changed lines.** It counts additions plus deletions across all files. File count has no effect. The threshold is a route configuration field, not a constant at the call site.
 

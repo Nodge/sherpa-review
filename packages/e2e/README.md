@@ -1,20 +1,7 @@
-Run: `pnpm --filter @sherpa/e2e e2e`.
-Requires Playwright Chromium: `pnpm --filter @sherpa/e2e exec playwright install chromium`.
-The production build of `@sherpa/ui` and the `@sherpa/cli` bundle are built automatically once in `globalSetup`.
-Each test starts FixtureHost with a separate temporary `--sherpa-dir` and removes it after the run.
-`server.worker` provides the agent session (CLI bundle, `FakeWorker`). The test writes the loop itself: `worker next`
-waits a long time for a task, so only claim one when the server is known to have queued it.
-A "push" is simulated by the dev endpoint `POST /api/dev/fixture/advance-iteration` (`advanceIteration` helper):
-the fixture's next declared iteration becomes active, and the tab learns about it through SSE.
-The F3 specs (`f3.spec.ts`, `f3-forcepush.spec.ts`) set `test.setTimeout(240_000)`. Each runs 2
-full route generations through the CLI bundle, which exceed the shared 120 s on a slow machine.
-The `fixture-huge` performance fixture has 100 files and 25 274 changed lines. It measures
-time to first diff frame, worker parsing, cold and warm scroll frame times in both views,
-and the DOM node count. The measurement covers only part of the PR: 24 cards are collapsed for a reason (14 `viewed`,
-10 `generated`) and do not request parsing, so the worker and line rendering receive
-76 files and 21 260 lines (`HUGE_PARSED_FILE_COUNT`, `HUGE_PARSED_LINE_COUNT` in `@sherpa/fixtures`).
-Read the run's numbers as a load of that size.
-Run: `pnpm --filter @sherpa/e2e e2e src/performance.spec.ts`. Numbers print
-as `PERF …` lines and duplicated in `performance` annotations. The budget in `docs/testing.md` §5
-(avg ≤ 16.7 ms, p95 ≤ 33 ms) is enabled for `huge` (`HUGE_BUDGET_ENFORCED`). Exceeding it fails the spec.
-The run is long (about 1.5 minutes). The general `e2e` command does not treat it separately. Run it manually before release.
+Run `pnpm --filter @sherpa/e2e e2e`. Requires Playwright Chromium: `pnpm --filter @sherpa/e2e exec playwright install chromium`. `globalSetup` builds the production `@sherpa/ui` and the `@sherpa/cli` bundle once.
+
+Each test starts FixtureHost with a separate temporary `--sherpa-dir` and removes it afterward. `server.worker` provides the agent session (the CLI bundle, `FakeWorker`). The test writes the loop: `worker next` waits a long time for a task, so call it only when the server is known to have enqueued one. The development endpoint `POST /api/dev/fixture/advance-iteration` simulates a push (`advanceIteration`): the next declared fixture iteration becomes active, and the tab learns about it through SSE. The F3 specs (`f3.spec.ts`, `f3-forcepush.spec.ts`) set `test.setTimeout(240_000)`: each builds two complete routes through the CLI bundle, which exceeds the shared 120 s timeout on a slow machine.
+
+The `fixture-huge` performance fixture has 100 files and 25 274 changed lines. It measures time to the first diff frame, worker parsing, cold and warm scrolling frame times in both views, and DOM node count. The measurement does not cover the whole PR: 24 cards are collapsed for a reason (14 `viewed`, 10 `generated`) and request no parsing. So 76 files and 21 260 lines reach the worker and line rendering (`HUGE_PARSED_FILE_COUNT`, `HUGE_PARSED_LINE_COUNT` in `@sherpa/fixtures`). Read the run figures as a load of that size.
+
+Run: `pnpm --filter @sherpa/e2e e2e src/performance.spec.ts`. Measurements print as `PERF …` lines and also appear as `performance` annotations. The `docs/testing.md` §5 budget (avg ≤ 16.7 ms, p95 ≤ 33 ms) is enabled for `huge` (`HUGE_BUDGET_ENFORCED`): exceeding it fails the spec. The run takes about 1.5 minutes and is outside the regular `e2e` suite. Run it by hand before a release.
