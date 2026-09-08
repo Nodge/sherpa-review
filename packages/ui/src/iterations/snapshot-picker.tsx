@@ -12,8 +12,8 @@ import { sameViewing } from './viewing.js';
 import './snapshot-picker.css';
 
 /**
- * Snapshot picker (docs/design/README.md §1: pill on the right of the PR header. §6: "Snapshots" card on Overview).
- * The prototype has no menu drawing. It uses the pill tokens and follows the filter
+ * Snapshot picker (docs/design/README.md §1: indicator on the right of the PR header, §6: "Snapshots" card on Overview).
+ * The prototype has no menu. It uses the indicator tokens and follows the file filter
  * select: Esc closes it and restores focus, arrows navigate, ⏎ selects.
  *
  * The third menu section is "Show changes since iteration…". Selecting a row opens a slice
@@ -46,7 +46,7 @@ export function pillText(label: ViewingLabel, t: Translate): string {
         : t('iteration.pill.diff', shortCommit(label.commit), status);
 }
 
-/** Full selection commits appear in the pill tooltip so the reviewer can check them against the host. */
+/** Full selected commits in the indicator tooltip let the reviewer compare them with the host. */
 export function pillTitle(label: ViewingLabel, t: Translate): string {
     if (label.kind === 'slice') {
         return t('iteration.title.slice', label.baseCommit, label.commit);
@@ -86,7 +86,7 @@ export function rowText(row: PickerRow, now: number, t: Translate, locale: Local
 
 /**
  * Snapshot provenance in words: "claude-code · sonnet-5 · 9f3c1ab" (docs/design/README.md §13). The route language
- * is appended under the same rule as in the Overview pill: only when it differs from the language
+ * follows the same rule as the Overview indicator: append it only when it differs from the
  * tab language.
  */
 export function provenanceText(row: PickerRow, t: Translate, uiLocale: Locale): string {
@@ -154,7 +154,7 @@ export function menuSections(rows: PickerRows): readonly MenuSection[] {
 
 export interface SnapshotPillProps {
     readonly label: ViewingLabel;
-    /** Without a menu the pill is static, since there is nothing to select. */
+    /** Without a menu, the indicator is static because there is nothing to select. */
     readonly menu?: SnapshotMenu;
 }
 
@@ -332,7 +332,7 @@ function SnapshotPillMenu({
 }
 
 /**
- * "Snapshots" card on Overview (docs/design/README.md §6): the same rows as the pill menu,
+ * "Snapshots" card on Overview (docs/design/README.md §6): the same rows as the indicator menu,
  * plus a separate provenance line for each snapshot (docs/design/SPEC-elements.md §4.4).
  */
 export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMenu, 'initialOpen'>) {

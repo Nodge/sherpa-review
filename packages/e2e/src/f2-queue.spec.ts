@@ -14,7 +14,7 @@ import { expect, test } from './sherpa-fixture.js';
 /**
  * The queue works as shown. A question asked during route generation waits
  * exactly one step in the queue. The worker sees it after submitting the current section, and the UI shows this
- * with a banner in the panel and the queue length in the pill (docs/protocol.md §5,
+ * with a panel banner and the queue length in the indicator (docs/protocol.md §5,
  * docs/design/README.md «Agent queue is honest»).
  *
  * The second test cancels an exchange in flight. The exchange stops, but the UI says the worker still holds
@@ -59,7 +59,7 @@ test('F2 queue: a question during generation waits one step, the UI shows the qu
         return held;
     });
 
-    await test.step('question joins the queue: route banner and +1 in the pill', async () => {
+    await test.step('question enters the queue: route banner and +1 in the indicator', async () => {
         await page.locator('.agent-pill').click();
         await expect(page.locator('.chat-panel')).toBeVisible();
 

@@ -260,7 +260,7 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
     });
 
     await test.step('Route tab explains that no route is built for a slice', async () => {
-        // The no-route slice screen replaces the entire workspace: neither a header with a pill,
+        // The no-route slice screen replaces the whole workspace. It has neither an indicator header
         // nor a banner slot, only an explanation and a way to open the reader.
         const empty = page.locator('main.route-empty#view-route');
         await expect(empty.locator('.invitation-card__title')).toHaveText('No route for a slice');
@@ -268,7 +268,7 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
         await empty.locator('button.invitation-card__primary').click();
     });
 
-    await test.step('the reader identifies the slice through its pill, banner, and interdiff files', async () => {
+    await test.step('reader shows the slice through the indicator, banner and interdiff files', async () => {
         await expect(page.getByRole('tab', { name: 'Full diff', exact: true })).toHaveAttribute(
             'aria-selected',
             'true',
@@ -410,7 +410,7 @@ test('F3 force-push: route rebuilt on c4f9b17, missing iteration snapshot stays 
 
 /**
  * Waits for the named iteration to become active on the server. With no route, the tab has no way
- * to identify it: there is no snapshot pill yet, and the only observable sign is the `fileId` of the active
+ * to show a push because there is no snapshot indicator yet. The only observable sign is the active
  * diff `fileId`, and each iteration has its own IDs.
  */
 async function waitForActiveIteration(page: Page, server: SherpaServerHandle, diffId: string): Promise<void> {

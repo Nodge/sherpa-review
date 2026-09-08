@@ -72,7 +72,7 @@ describe('inter-iteration slice gallery', () => {
         }
     });
 
-    it('slice shows a pill with both sides and a read-only banner', () => {
+    it('the slice shows an indicator with both sides and a read-only banner', () => {
         const host = mount('iterations-slice');
 
         expect(host.querySelector('.snapshot-pill')?.textContent).toContain('slice');
@@ -104,7 +104,7 @@ describe('inter-iteration slice gallery', () => {
     it('slice loading shows 3 skeleton cards and a host notice', () => {
         const host = mount('iterations-slice-loading');
 
-        // The PR header with its pill and the file panel space are present while loading. Incoming data
+        // The PR header with its indicator and the file panel space are present while waiting. Data arrival
         // does not shift the layout, and the reviewer can see which slice is being calculated throughout.
         expect(host.querySelector('.pr-header')).not.toBeNull();
         expect(host.querySelector('.snapshot-pill')?.textContent).toContain('slice');

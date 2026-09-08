@@ -59,7 +59,7 @@ function pill(initialOpen = false) {
     );
 }
 
-/** Full diff of a slice: a "slice …" pill, read-only with a slice reason, no threads or notes. */
+/** Full diff of a slice: "slice …" indicator, read-only mode with the slice reason, no threads or notes. */
 function SliceState() {
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter: 'all', viewing: VIEWING } }), []);
     const threadStore = useMemo(() => createThreadStore([], new Set(SLICE.files.map((file) => file.fileId))), []);

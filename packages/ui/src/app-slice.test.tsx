@@ -186,7 +186,7 @@ describe('inter-iteration slice', () => {
         expect(mounted.calls).not.toContain(UI_ENDPOINTS.reviewDiff);
     });
 
-    it('the pill names both sides and the banner explains the reading mode', async () => {
+    it('names both sides in the indicator and explains read-only mode in the banner', async () => {
         const mounted = mountApp({ viewing: SLICE });
         await mounted.settle();
 

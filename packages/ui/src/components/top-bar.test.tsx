@@ -81,7 +81,7 @@ describe('top bar brandcrumb', () => {
     });
 });
 
-describe('agent pill popover', () => {
+describe('agent indicator popover', () => {
     it('opens the reconnect command for never with the disconnected tone', () => {
         const html = renderToStaticMarkup(
             <AgentPill

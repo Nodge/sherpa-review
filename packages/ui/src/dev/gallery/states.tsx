@@ -131,7 +131,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...OVERVIEW_STATES.filter((state) => state.id === START_STATE_ID),
     ...AGENT_STATES.map((state) => ({
         id: `agent-${state.id}`,
-        group: 'Agent pill',
+        group: 'Agent indicator',
         title: state.title,
         render: () => <AgentPillState worker={state.worker} tasks={state.tasks} />,
     })),

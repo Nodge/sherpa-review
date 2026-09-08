@@ -1,6 +1,6 @@
 # Testing
 
-## 1. Required checks
+## 1. Checks
 
 These must pass before any commit:
 

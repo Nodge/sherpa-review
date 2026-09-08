@@ -29,7 +29,7 @@ export interface IterationPickerResult {
     readonly snapshotPill: ReactNode;
 }
 
-/** Iteration selection: picker rows, header pill and transitions between iteration, slice and current. */
+/** Iteration selection: picker rows, header indicator and navigation between an iteration, a slice and the active one. */
 export function useIterationPicker({
     session,
     snapshots,
@@ -40,7 +40,7 @@ export function useIterationPicker({
     resolved,
     now,
 }: IterationPickerOptions): IterationPickerResult {
-    /** Iteration selection: the pill menu and Overview card use the same rows. */
+    /** Iteration selection: the indicator menu and the Overview card use the same rows. */
     const pickerMenuRows = useMemo(
         () =>
             pickerRows({

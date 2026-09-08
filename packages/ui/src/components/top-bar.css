@@ -160,7 +160,7 @@ a.top-bar__breadcrumb-item:hover {
     font-weight: 500;
 }
 
-/* --- Ghost buttons: agent pill and search --- */
+/* --- Ghost buttons: agent indicator and search --- */
 
 .ghost-button {
     display: flex;
@@ -198,7 +198,7 @@ a.top-bar__breadcrumb-item:hover {
     color: var(--text-muted);
 }
 
-/* --- Agent pill (docs/design/SPEC-elements.md §2.2) --- */
+/* --- Agent indicator (docs/design/SPEC-elements.md §2.2) --- */
 
 .agent-pill-wrap {
     position: relative;

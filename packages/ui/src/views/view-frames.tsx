@@ -62,7 +62,7 @@ export interface ViewFrameProps {
     readonly generation?: RouteGenerationProps;
     /** Snapshots and iterations for the Overview card (docs/design/README.md §6). Without them, there is no card. */
     readonly picker?: Omit<SnapshotMenu, 'initialOpen'>;
-    /** Right edge of the PR header: snapshot pill (docs/design/README.md §1). */
+    /** The PR header's right edge: snapshot indicator (docs/design/README.md §1). */
     readonly headerAside?: ReactNode;
     /**
      * Open the PR comments modal from the discussion card (docs/design/SPEC-additions-2026-08-26.md §1e item 5).

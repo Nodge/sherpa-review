@@ -110,7 +110,7 @@ export function TopBar({
     );
 }
 
-/** The pill opens chat, or the reconnection popover when the agent is disconnected. */
+/** Indicator opens chat, or the reconnect popover when the agent is disconnected. */
 export function AgentPill({
     view,
     reconnectCommand: command,

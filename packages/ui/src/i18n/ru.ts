@@ -793,7 +793,7 @@ export const ru = {
     'banner.generationCap': (files: number) =>
         `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте ${form(files, 'его', 'их', 'их')} в Полном диффе`,
 
-    // Route language. The language name needs two forms: nominative for the pill
+    // Route language. The language name needs two forms: nominative for the indicator
     // of provenance, prepositional for the phrase "built in English".
     'route.locale.name.ru': 'русский',
     'route.locale.name.en': 'английский',

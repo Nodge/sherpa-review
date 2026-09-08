@@ -31,7 +31,7 @@ function task(overrides: Partial<UiTask> & Pick<UiTask, 'id' | 'status'>): UiTas
     };
 }
 
-describe('agent pill', () => {
+describe('agent indicator', () => {
     it('shows the harness in the label when connected and idle', () => {
         const view = agentPillView(CONNECTED, [], t);
 

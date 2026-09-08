@@ -262,7 +262,7 @@ describe('route view', () => {
         expect(order(tour)).toEqual([...SNAPSHOT.tourOrder]);
     });
 
-    it('the header has a snapshot pill with a short commit and status', () => {
+    it('the header shows a snapshot indicator with a short commit hash and status', () => {
         const html = render();
 
         // Without the picker from App, the workspace shows its own snapshot as current.

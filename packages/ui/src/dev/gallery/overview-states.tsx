@@ -113,7 +113,7 @@ export const OVERVIEW_STATES: readonly OverviewGalleryState[] = [
     },
     {
         id: 'agent-reconnect-popover',
-        group: 'Agent pill',
+        group: 'Agent indicator',
         title: 'reconnect popover',
         render: () => <AgentReconnectState />,
     },

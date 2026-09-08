@@ -355,7 +355,7 @@
     position: static;
 }
 
-/* Route language: provenance pill and banner in a single column. */
+/* Route language: provenance indicator and banner in one column. */
 .route-locale-stack {
     display: flex;
     flex-direction: column;

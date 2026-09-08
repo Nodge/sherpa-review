@@ -20,7 +20,7 @@ describe('route language gallery', () => {
         ]);
     });
 
-    it('an English route in a Russian tab shows the language in the pill and a question in the banner', () => {
+    it('shows the language indicator and banner question for an English route on a Russian tab', () => {
         const html = markup('route-locale-en-route-ru-ui');
 
         expect(html).toContain('claude-code · claude-opus-5');

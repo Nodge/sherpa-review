@@ -233,7 +233,7 @@ function readHunk(
 
 /**
  * Pairs for word-level highlighting: a block of deleted lines is paired with the following block
- * added lines by index within the block (the usual GitHub approach).
+ * of added lines by index within the block, as diff viewers commonly do.
  */
 function markWords(lines: DiffLine[]): void {
     let index = 0;

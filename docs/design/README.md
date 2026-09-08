@@ -38,7 +38,7 @@ Product principles that shape the UI (do not design them away during implementat
    and ranges left without explanation are explicitly marked.
 4. **Importance ≠ size.** A 6-line CODEOWNERS change can outrank a 200-line refactor.
 5. **One viewer, two orders.** Route and full diff share one state (viewed marks, comments, notes).
-6. **Canonical state lives in the review backend**: a comment draft is
+6. **Canonical state lives in the review backend** (review host): a comment draft is
    saved immediately, the accumulated batch is published on ship / request-changes.
 7. **The human decides.** Nothing is posted or shipped without an explicit action, and every AI
    artefact shows its provenance (harness, model, commit).

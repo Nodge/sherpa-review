@@ -7,7 +7,7 @@ import { LocaleProvider, useLocale, useT } from '../../i18n/index.js';
 import { provenanceLine, snapshotLocale } from '../../route/generation.js';
 
 /**
- * Generation language: provenance pill with the route language and a "rebuild" banner.
+ * Generation language: a provenance indicator with the route language and a rebuild banner.
  * Data comes from the `medium` fixture with a replaced `provenance.locale`. There is no server in the gallery.
  */
 
@@ -19,7 +19,7 @@ function snapshotWith(locale: Locale | null): RouteSnapshot {
     return { ...ready, provenance: { ...ready.provenance, locale } };
 }
 
-/** Provenance pill beside the banner, exactly as the reviewer sees them in Overview. */
+/** The provenance indicator next to the banner, exactly as the reviewer sees them on Overview. */
 function LocaleState({
     snapshot,
     rebuildDisabledReason,

@@ -26,7 +26,7 @@ import { type SherpaServer, startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 const PR = 'fixture-medium';
-const LOCAL_PR = 'github-777';
+const LOCAL_PR = 'unknown-777';
 const WORKER = 'w-chat';
 const ANSWER = 'The cache is cleared before the write so the next reader does not get the previous value.';
 const ANCHOR: ChatAnchor = {

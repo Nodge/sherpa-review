@@ -1,4 +1,4 @@
-/* Snapshot picker, docs/design/README.md §1 (pill on the right of the header) and §6 (card on Overview). */
+/* Snapshot picker: docs/design/README.md §1 (indicator on the right of the header) and §6 (Overview card). */
 
 .snapshot-picker {
     position: relative;

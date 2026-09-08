@@ -7,7 +7,7 @@ import type { Iteration, Locale, RouteSnapshot, UiRouteState, UiSnapshotSummary 
  *
  * Resolving the selection is a pure function: it takes the snapshot list, iterations, current route
  * and what App already knows about the active iteration. It returns endpoint parameters, read-only mode
- * and the pill label.
+ * and the indicator label.
  */
 
 export type Viewing =
@@ -94,7 +94,7 @@ export function sameViewing(left: Viewing, right: Viewing): boolean {
     return true;
 }
 
-/** Pill label: `current` / `stale` / `commit no longer in the PR` / `no route` / `slice`. */
+/** Indicator label: `current` / `stale` / `commit is no longer in the PR` / `no route` / `slice`. */
 export type ViewingStatus = 'current' | 'stale' | 'gone' | 'noRoute' | 'slice';
 
 export type ViewingLabel =
@@ -303,7 +303,7 @@ function commitOfDiff(diffId: string, input: ViewingInput): string | null {
     return input.route?.snapshot?.diffId === diffId ? input.route.snapshot.commit : null;
 }
 
-/** Current-state pill: `stale` while the PR has moved ahead of the snapshot (docs/design/README.md §1). */
+/** Current state indicator: `stale` while the PR is ahead of the snapshot (docs/design/README.md §1). */
 function labelOfCurrentRoute(route: UiRouteState | null): ViewingLabel | null {
     const snapshot = route?.snapshot ?? null;
     if (snapshot === null) {

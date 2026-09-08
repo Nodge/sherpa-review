@@ -14,7 +14,7 @@ import './viewed-toggle.css';
  */
 export interface ViewedToggleProps {
     readonly viewed: boolean;
-    /** Call-site class: the pill in the stop header differs from the plain row in the file header. */
+    /** Call site class: indicator in the stop header and plain row in the file header differ. */
     readonly className: string;
     readonly disabled?: boolean;
     /**

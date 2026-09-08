@@ -164,7 +164,7 @@ describe('slice section in the picker menu', () => {
         expect(chosen).toEqual([{ kind: 'slice', base: '182800', head: '182801' }]);
     });
 
-    it('checks the selected slice and names both sides in the pill', () => {
+    it('marks the selected slice with a check and names both sides in the indicator', () => {
         const { host } = render({
             interdiff: true,
             viewing: { kind: 'slice', base: '182800', head: '182801' },

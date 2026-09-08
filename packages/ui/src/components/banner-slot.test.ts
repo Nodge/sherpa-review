@@ -108,7 +108,7 @@ describe('banner slot', () => {
         expect(selection.hidden.map((item) => item.id)).toEqual(['route-filling', 'audit-scope']);
     });
 
-    it('agent disconnection is not a slot source: the pill shows the status', () => {
+    it('does not use agent disconnection as a slot source because the indicator owns that status', () => {
         expect(Object.keys(BANNER_PRIORITY)).not.toContain('agentDisconnected');
     });
 });

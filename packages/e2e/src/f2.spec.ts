@@ -76,7 +76,7 @@ test('F2: selection → agent question → answer and note → draft → request
         await expect(page.locator('.chat-panel__context-label')).toHaveText(ANCHOR);
     });
 
-    await test.step('⏎ sends the question: message with anchor, popover and pill show it in flight', async () => {
+    await test.step('⏎ sends the question: anchored message, popover and indicator show it in flight', async () => {
         const question = page.getByRole('textbox', { name: 'Question to the agent' });
         await expect(question).toBeFocused();
         await question.pressSequentially(QUESTION);
@@ -106,7 +106,7 @@ test('F2: selection → agent question → answer and note → draft → request
         await expectNoteAtLines(page);
     });
 
-    await test.step('note and history survive reload, the pill opens the panel', async () => {
+    await test.step('note and history survive reload, the indicator opens the panel', async () => {
         await page.reload();
 
         await expectNoteAtLines(page);

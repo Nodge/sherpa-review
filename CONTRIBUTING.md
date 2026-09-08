@@ -16,7 +16,7 @@ Node ≥ 22.13 (`engines` in the root `package.json`), and the exact pnpm versio
 pnpm -r typecheck && pnpm -r lint && pnpm -r test
 ```
 
-These must pass before every commit. E2E is outside the required checks: `packages/e2e` deliberately has no `test` script because browser runs take a long time and are started explicitly.
+These must pass before every commit. E2E is outside the required checks. `packages/e2e` deliberately has no `test` script because browser tests take time and run explicitly.
 
 ## Packages
 
@@ -28,9 +28,9 @@ These must pass before every commit. E2E is outside the required checks: `packag
 
 `packages/cli` is the thin `sherpa` CLI (`up`, `worker next`, and others). The worker loop calls it each time, so it starts fast and has no runtime dependencies. One `sherpa.mjs` bundle.
 
-`packages/skill` is the harness distribution: `SKILL.md` and both bundles in `dist/bin/`. All of `dist/` is a build artifact and is not stored in the repository.
+`packages/skill` is the harness distribution: `SKILL.md` plus both bundles in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release copies it there, and committing that directory delivers the update to users.
 
-`packages/fixtures` provides deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and domain object builders. Dev mode, the state gallery and e2e use them.
+`packages/fixtures` contains deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and domain object builders. Development mode, the state gallery and e2e use them.
 
 `packages/e2e` contains Playwright specs that run against built artifacts.
 
@@ -95,7 +95,7 @@ Measurements are printed as `PERF …` lines. See `docs/testing.md` and `package
 
 ## Appearance
 
-The test in `packages/ui/src/styles/tokens.test.ts` checks design tokens in `packages/ui/src/styles/tokens.css` against the table in `docs/design/README.md`. Changing a token without changing the handoff (or vice versa) fails the checks. Then add a gallery card and compare it with the prototype. The prototype is a reference, not a source of code.
+The test in `packages/ui/src/styles/tokens.test.ts` compares the design tokens in `packages/ui/src/styles/tokens.css` with the table in `docs/design/README.md`. Changing a token without updating the design handoff, or vice versa, fails the checks. Then add a gallery card and compare it with the prototype. The prototype is a reference, not a source of code.
 
 ## Releasing the distribution
 
@@ -113,4 +113,4 @@ When you change behaviour, a contract or an invariant, record it in `docs/decisi
 
 ## PR
 
-Branch from main, pass the checks, then run `gh pr create`. The description says what changes and why. If the change touches the server, UI flows or `packages/e2e`, run e2e before submitting.
+Branch from main, pass the checks, then run `gh pr create`. Describe what changes and why. If the change touches the server, UI flows or `packages/e2e`, run e2e before submitting.

@@ -37,7 +37,7 @@ import {
 } from './route-workspace.tsx';
 
 /**
- * Route view, Triage preset (docs/design/README.md §1–2): PR header with snapshot pill, sticky toolbar
+ * Route view, triage preset (docs/design/README.md §1–2): PR header with a snapshot indicator, sticky toolbar
  * and stop grid with a sticky narrative column on the left and the actual diff on the right, clipped to
  * the stop's anchors.
  *
@@ -87,7 +87,7 @@ export interface RouteViewProps {
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Open a thread by id from links in the "why this stop changed" block (docs/design/README.md §1 item 4). */
     readonly onOpenThread?: (threadId: string) => void;
-    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    /** Right side of the header: snapshot picker from App, or a static snapshot indicator without it. */
     readonly headerAside?: ReactNode;
     /** Generation cap from server state (docs/design/SPEC-elements.md §4.1), shown below the coverage bar. */
     readonly generationCap?: UiGenerationCap | null;

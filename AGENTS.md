@@ -10,7 +10,7 @@ Record any decision that changes behaviour, a contract or an invariant in `docs/
 
 ## Checks
 
-Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pass. E2E (`pnpm --filter @sherpa/e2e e2e`) is not a required check. Run it before a release and after changes to `packages/e2e`, the server or UI flows covered by e2e.
+Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pass. E2E (`pnpm --filter @sherpa/e2e e2e`) is outside the required checks. Run it before a release and after changes to `packages/e2e`, the server or UI flows covered by e2e.
 
 ## Contracts
 

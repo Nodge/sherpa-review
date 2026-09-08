@@ -3,7 +3,7 @@ import type { UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { Translate } from '../i18n/index.js';
 
 /**
- * Agent pill (docs/design/SPEC-elements.md §2.2): four states based on actual
+ * Agent indicator (docs/design/SPEC-elements.md §2.2): four states based on the actual
  * worker status.
  * Compute it outside the component so unit tests and the state gallery can use it.
  */
@@ -28,7 +28,7 @@ function isPending(task: UiTask): boolean {
 
 /**
  * "Last task failed" means the failure is newer than the last success. A success resets the state.
- * otherwise one old failure would color the pill for the rest of the session.
+ * Otherwise one old error would keep the indicator red for the rest of the session.
  */
 function lastTaskFailed(tasks: readonly UiTask[]): boolean {
     const latestOf = (status: UiTask['status']): number =>
@@ -54,7 +54,7 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[], t:
         };
     }
 
-    // Session uptime uses server data instead of the browser clock, so the pill remains
+    // Calculate session age from server data, not the browser clock. This keeps the indicator
     // a pure function of state, with the same rendering in the gallery and tests.
     const uptime = formatUptime(Date.parse(worker.lastSeenAt) - Date.parse(worker.registeredAt), t);
     const title = t('agent.uptime', identity(worker), uptime, pending.length);

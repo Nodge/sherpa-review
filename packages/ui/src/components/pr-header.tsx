@@ -11,7 +11,7 @@ import './pr-header.css';
  * This shared component also appears in the route view, so it knows nothing about
  * data loading or the chip destination. Both come through props.
  *
- * The header's right side is the `aside` slot (docs/design/README.md §1), which holds the pill-shaped
+ * The right side of the header is the `aside` slot (docs/design/README.md §1). It holds the
  * snapshot indicator with an iteration picker menu. Without iterations, the slot is empty.
  *
  * The `overview` variant has its own layout from the prototype Overview screen (`Sherpa.dc.html:523-529`):
@@ -36,7 +36,7 @@ export interface PrHeaderDefaultProps {
     readonly pci: FileFilter | null;
     readonly pciActive: boolean;
     readonly onTogglePci: () => void;
-    /** Right edge of the header's bottom row, used for the snapshot pill in the route. */
+    /** Right edge of the bottom header row, the snapshot indicator in the route view. */
     readonly aside?: ReactNode;
 }
 
@@ -55,7 +55,7 @@ export interface PrHeaderOverviewProps {
     readonly pci: FileFilter | null;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
-    /** Right edge of the author row. Also holds the snapshot pill (docs/design/README.md §1). */
+    /** Right edge of the author row, also the snapshot indicator here (docs/design/README.md §1). */
     readonly aside?: ReactNode;
 }
 

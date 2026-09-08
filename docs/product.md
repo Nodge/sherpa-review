@@ -12,11 +12,11 @@ Sherpa is a code review tool: a local server and web UI where the reviewer's AI 
 
 ## 2. Problem and context
 
-The flow of pull requests has grown roughly **5 times** because of AI agents writing code. Review has become the bottleneck: a reviewer physically cannot read every diff line by line from top to bottom, and the current review host UI doesn't help prioritize. All lines look equally important, and the reviewer has to reconstruct the heart of the change from alphabetically sorted files.
+The flow of pull requests has grown **more than 2-fold** because AI agents write code. Review has become the bottleneck: the reviewer physically cannot read every diff line by line from top to bottom, and the current UI (review host) does not help prioritize. All lines look equally important, and the reviewer has to reconstruct the heart of the change from files sorted alphabetically.
 
 The v1 target user is the **reviewer**: an engineer on a large team working in a monorepo (quillmart/quillmart), with ownership zones defined by CODEOWNERS and their own agent harness (Claude Code, Codex and others, teams use a whole zoo of them). The PR author as a separate role is v2.
 
-**What counts as success.** The reviewer handles ×5 the flow without losing quality. Proxy metrics: time from opening the PR to a verdict, share of the diff that had to be read raw, number of passes through the PR before ship.
+**What counts as success.** The reviewer handles the increased flow without losing quality. Proxy metrics are time from opening a PR to a verdict, the share of the diff that had to be read raw, and the number of passes through a PR before ship.
 
 ## 3. Product principles
 
@@ -38,24 +38,13 @@ The protocol promises that AI tasks run one at a time, the minimum shared capabi
 
 More details: `architecture.md` (packages, data flow, storage, orchestrator), `protocol.md` (queue, liveness, versions, endpoints).
 
-## 4a. Host adapter: review hosts and GitHub
+## 4a. Host adapter
 
 Everything specific to a host lives in the `ReviewHost` adapter (diff source, comments and drafts, verdicts, viewed marks, ownership lens, statuses). The core, including the route, task loop, tiers, progress, chat and snapshots, is independent of the host. The data schema rule is that host concepts (for example, "sticky ship") stay within host verdicts and never enter the route model or state.
 
 The **fixture adapter** provides deterministic data for tests, dev mode and the state gallery (`packages/server/src/hosts/select.ts`, PR key `fixture-<name>`).
 
-**The GitHub adapter is planned, not implemented.** The table below records the differences it must handle. There is no GitHub code in the repository.
-
-| Capability | Review host | GitHub (planned) |
-|---|---|---|
-| "My files" ownership lens | Ownership rules | CODEOWNERS (less expressive, but enough for the lens) |
-| PCI DSS lens | available | unavailable, specific to the host adapter |
-| Verdict | ship / sticky ship | approve / request changes. Repository settings determine whether approval persists, the UI shows the actual status |
-| Comment drafts | Two-stage model | Pending review (the same model, one pending review per user, visible only to its author) |
-| Inline comment outside the diff | Broader support | Only lines inside the diff → falls back to a file comment with a quote |
-| Thread updates | polling ~7 s through a lightweight PR endpoint | polling (well within rate limits) |
-| Snapshots after force-push | local patch copy | old commits cannot be retrieved reliably → a local copy is required |
-| Viewed marks | local | synchronized with GitHub |
+There is one real review host. Some capabilities depend on the adapter: the ownership lens reads CODEOWNERS, and the PCI DSS lens is available only from an adapter that provides it. The core learns what a host supports from `HostCapabilities` flags, without checking its name.
 
 ## 5. Glossary
 
@@ -73,7 +62,7 @@ The **fixture adapter** provides deterministic data for tests, dev mode and the 
 
 Three views of one PR, available as tabs and through keys `1` / `2` / `3`: **Overview**, **Route**, **Full diff** (`packages/ui/src/session/views.ts`).
 
-**Overview is the starting screen.** On opening, the route hasn't been built yet and has nothing to show, so Overview is the default: PR header, "Summary" (when the route is built), files by ownership zone with "My zone / All" segments, and a "Discussion" card with participants and counters, PR-level threads, and an author filter that leaves only that author's threads in the diff. The reviewer starts the route explicitly ("Build route" on Overview, in the banner or through a palette command). It never starts on its own. A small PR (up to 40 changed lines) has no route at all and defaults to the full diff tab.
+**The initial screen is Overview.** On opening, route generation is only just being queued, so there is nothing to read in the route yet. Overview is the default: the PR header, "Summary" (when the route is ready), files grouped by CODEOWNERS ownership zones with "My zone / All" segments, and the "Discussion" card with participants, counters and PR-level threads. Clicking an author leaves only their threads in the diff. Generation starts automatically once a worker agent is connected and the diff has loaded. An explicit action ("Build the route" on Overview, in the banner or through the command palette) is needed to restart, rebuild or recover when automatic startup did not work. Small PRs (up to 40 changed lines) have no route at all, and the default tab is Full diff.
 
 **Route** combines narrative and diff in one feed with 2 columns. A third panel (chat, threads) opens through an explicit action and can be collapsed, instead of staying open permanently. The default supports reading code. Everything secondary can collapse and stays out of the way of the diff.
 
@@ -149,7 +138,7 @@ Every state renders in the state gallery using fixtures. See `testing.md`.
 
 **PR list and reviewer inbox.** Entry always starts from a specific PR. The skill runs in a session for that PR, the UI lives per PR, there is no "my reviews" screen, and the reviewer chooses the next PR in the review host. Parallel reviews mean several browser tabs, one per PR (the title shows its number and name). Two sessions cannot share a PR, a new session replaces the old one.
 
-**Sherpa-generated AI review** (generating findings) is planned for v2. For now, Sherpa only displays existing comments from the review host, including review bot comments. The model feedback loop also moves to v2. PR authors as users (reviewing their own PR before submission, author highlights) are planned for v2. Snapshots built ahead of time in CI as a cache are planned for v2/v3. Structural diff is a v2 candidate with a more specific plan (`research/difftastic.md`): difftastic as a full-diff display mode, with a tree-sitter layer of "hunks × symbols" as agent input. Semantic coverage within the diff and deterministic call-graph analysis are v2 candidates. Diagrams as a guaranteed artifact. Team dashboards and metrics. A mobile version. Multiple parallel worker agents. A second host (GitHub).
+**Sherpa-generated AI review** (generating findings) is planned for v2. For now, Sherpa only displays existing comments from the review host, including review bot comments. The model feedback loop also moves to v2. PR authors as users (reviewing their own PR before submission, author highlights) are planned for v2. Snapshots built ahead of time in CI as a cache are planned for v2/v3. Structural diff is a v2 candidate with a more specific plan (`research/difftastic.md`): difftastic as a full-diff display mode, with a tree-sitter layer of "hunks × symbols" as agent input. Semantic coverage within the diff and deterministic call-graph analysis are v2 candidates. Diagrams as a guaranteed artifact. Team dashboards and metrics. A mobile version. Multiple parallel worker agents.
 
 **Design choices.** A scrolling document instead of a step-by-step wizard, shared route and diff state, 2-level progress, the "what → consequence" formula and floating final actions. Layers as line ranges, a synthetic catch-all, complexity managed through attention, snapshots that show when they are stale, progressive generation and entity headers. Dense screens are a counterexample. Fail-closed validation, the coverage rule, an exploration budget in the prompt and narrative mechanics. Keyboard navigation and virtualization underpin work with large diffs.
 

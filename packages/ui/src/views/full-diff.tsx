@@ -225,7 +225,7 @@ export function FullDiffView({
         [fragmentTarget.selection, selectionNavigationRequest],
     );
     const failure = diffError ?? lensesError ?? (progress === null ? progressError : null);
-    // The view chrome stays the same in every frame. The PR header with its pill and panel remain while content
+    // The view chrome stays the same in every frame: the PR header with its indicator and the panel stay in place while content
     // loads or fails (docs/design/SPEC-elements.md §3: incoming data does not shift the layout).
     const frame = { pr, counts: diff === null ? null : prHeaderCounts(diff), headerAside };
     if (failure !== null) {
@@ -329,7 +329,7 @@ const SKELETON_DELAY_MS = PENDING_DELAY_MS;
 const SLICE_LOADING_NOTE: MessageKey = 'fullDiff.slice.loading';
 
 /**
- * Status frame layout: the PR header with its `aside` (the slice pill and picker stay in place
+ * Status frame: the PR header with its `aside` (the slice indicator and picker stay in place
  * throughout the wait), the same toolbar and the same file panel and card column as
  * the loaded view. No counters until the diff arrives, so the metadata row omits them.
  */

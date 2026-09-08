@@ -275,7 +275,7 @@ describe('selecting a previous snapshot', () => {
         expect(mounted.calls.some((url) => url.startsWith(UI_ENDPOINTS.reviewStopViewed))).toBe(false);
     });
 
-    it('the header pill names the selected snapshot and its status', async () => {
+    it('names the selected snapshot and its status in the header indicator', async () => {
         const mounted = mountApp({
             viewing: { kind: 'snapshot', snapshotId: OLD_SNAPSHOT.snapshotId },
             view: 'diff',
@@ -408,7 +408,7 @@ describe('read-only mode disables all writes', () => {
         expect(disabled.some((button) => button.title === 'only in the active iteration')).toBe(true);
     });
 
-    it('places the snapshot pill in the PR header on Overview', async () => {
+    it('places the snapshot indicator in the PR header on Overview', async () => {
         const mounted = mountApp({ view: 'overview' });
         await mounted.settle();
 

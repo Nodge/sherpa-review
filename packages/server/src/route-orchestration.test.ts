@@ -742,7 +742,7 @@ describe('route orchestration', () => {
         });
 
         it('returns no_review_host without a review host while route state stays readable', async () => {
-            const server = await start('github-777');
+            const server = await start('unknown-777');
 
             const response = await postJson(server.port, UI_ENDPOINTS.reviewRouteGenerate, {}, server.token);
             expect(response.status).toBe(404);

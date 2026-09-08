@@ -98,7 +98,7 @@ describe('resolve iteration selection', () => {
         expect(resolved.label).toEqual({ kind: 'snapshot', commit: NEW_COMMIT, status: 'current' });
     });
 
-    it('shows a stale route in the pill label', () => {
+    it('the indicator label shows a stale route', () => {
         const resolved = resolveViewing(input({ route: route({ stale: STALE }) }));
 
         expect(resolved.label?.status).toBe('stale');

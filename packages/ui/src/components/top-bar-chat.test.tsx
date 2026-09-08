@@ -50,7 +50,7 @@ function view(tone: AgentPillView['tone']): AgentPillView {
     };
 }
 
-describe('clicking the agent pill', () => {
+describe('clicking the agent indicator', () => {
     it('connected agent toggles chat without a scroll target', () => {
         const { onToggleChat } = clickPill(view('connected'));
 

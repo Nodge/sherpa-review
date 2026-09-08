@@ -10,7 +10,7 @@ import { z } from 'zod';
 /**
  * Opaque host identifier (PR, comment, diff file, iteration).
  * Do not parse or construct these: hosts can use signed numbers or base64 protobufs,
- * while GitHub uses node ids. The contract promises only equality in either case.
+ * another host will use its own formats. The contract likewise promises nothing beyond equality.
  */
 export const hostIdSchema = z.string().min(1);
 export type HostId = z.infer<typeof hostIdSchema>;
@@ -213,7 +213,7 @@ export type PrDiff = z.infer<typeof prDiffSchema>;
 
 /**
  * Iteration status. `active` is the one under review now (exactly one). `previous` means
- * the host still lists it. `gone` means the host no longer lists it (a force-push on GitHub),
+ * the host still lists it. `gone` means the host no longer lists it (after a force-push, for example),
  * but the server remembers its locally saved diff (`docs/product.md §4a`). Only the server sets
  * `gone`, by comparing the host's list with its own storage. The adapter returns only what it sees.
  */
@@ -332,7 +332,7 @@ export const commentDraftSchema = z.object({
 });
 export type CommentDraft = z.infer<typeof commentDraftSchema>;
 
-/** Verdict for finishing a review. GitHub variants (approve) will arrive in a minor version. */
+/** Verdict for finishing a review. New variants require a minor version bump. */
 export const verdictSchema = z.enum(['ship', 'sticky_ship', 'request_changes']);
 export type Verdict = z.infer<typeof verdictSchema>;
 

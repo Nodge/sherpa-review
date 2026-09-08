@@ -24,7 +24,7 @@ describe('breadcrumbFromPrKey', () => {
     });
 
     it('splits on the first hyphen because the number can contain one', () => {
-        expect(breadcrumbFromPrKey('github-owner-repo-42')).toEqual(['github', 'PR owner-repo-42']);
+        expect(breadcrumbFromPrKey('unknown-owner-repo-42')).toEqual(['unknown', 'PR owner-repo-42']);
     });
 
     it('shows a key without a separator as is', () => {

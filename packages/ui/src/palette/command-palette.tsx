@@ -22,7 +22,7 @@ import { fuzzyMatch } from './fuzzy.js';
 import { parsePaletteQuery } from './query.js';
 import './command-palette.css';
 
-/** "Iterations…" mode: the same rows as in the snapshot pill menu. */
+/** "Iterations…" mode: the same rows as the snapshot indicator menu. */
 export interface PaletteIterations {
     readonly rows: PickerRows;
     readonly viewing: Viewing;

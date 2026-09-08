@@ -837,7 +837,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
 }
 
-/** Pill without a picker: the snapshot on screen is current (gallery, standalone workspace). */
+/** Indicator without a picker. The displayed snapshot is current (gallery, standalone workspace). */
 function pillLabelOf(snapshot: RouteSnapshot): ViewingLabel {
     return { kind: 'snapshot', commit: snapshot.commit, status: 'current' };
 }

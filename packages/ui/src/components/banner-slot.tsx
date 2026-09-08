@@ -17,7 +17,7 @@ import './banner-slot.css';
  * "Route is stale" sits below rebuild. While a new route is being built, the old route's age is
  * no longer news. The second-pass banner sits lower because it describes a filter, not a condition.
  *
- * Agent disconnection is absent here. The pill shows the status, and its popover explains it.
+ * Agent disconnection does not appear here. The indicator owns that status, and its popover explains it.
  *
  * A ship from someone else is last. It does not end the review or require any action.
  */

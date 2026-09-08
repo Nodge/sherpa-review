@@ -48,7 +48,7 @@ interface IterationRow {
 }
 
 const FIXTURE_PR = 'fixture-medium';
-const UNKNOWN_PR = 'github-777';
+const UNKNOWN_PR = 'unknown-777';
 
 describe('server review endpoints', () => {
     let sherpaDir: string;
@@ -1148,7 +1148,7 @@ describe('host selection by PR key', () => {
         
         
         expect(selectReviewHost('fixture-unknown')).toBeNull();
-        expect(selectReviewHost('github-777')).toBeNull();
+        expect(selectReviewHost('unknown-777')).toBeNull();
     });
 });
 

@@ -38,7 +38,7 @@ describe('iteration snapshots gallery', () => {
         expect(html).not.toContain('read-only');
     });
 
-    it('previous snapshot: read-only banner, stale pill and disabled viewed marks', () => {
+    it('previous snapshot: read-only banner, stale indicator and disabled marks', () => {
         const html = markup('iterations-old-snapshot-readonly');
 
         expect(html).toContain('You are looking at snapshot');

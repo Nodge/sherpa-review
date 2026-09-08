@@ -10,14 +10,16 @@ For reviewers in a monorepo whose PR queue exceeds what they can read line by li
 
 - Credentials for the review host. No separate sign-in or browser OAuth.
 - Node ≥ 22.13 (on the 23 release line, 23.4 or later, because earlier versions lack `node:sqlite`).
-- Agent harness: Claude Code (tested) or Codex (listed as supported, tested less).
+- An agent harness: Claude Code (tested) or Codex (supported, tested less). Any other harness works too if it supports skills and can call bash.
+- Model: this configuration has been tested with `opus:high` and `gpt-5.60-sol:high`. These are the recommended models.
 
 ## Installation
 
 Symlink the `skill` directory into the harness's skills:
 
 ```
-ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa
+ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa   # Claude Code
+ln -s ~/src/sherpa-review/skill ~/.codex/skills/sherpa    # Codex
 ```
 
 The directory is self-contained: 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. Neither pnpm nor a repository checkout is needed. You can copy it anywhere instead of symlinking it.
@@ -36,13 +38,13 @@ The argument can be a GitHub link, a bare PR number (`12345`) or a key such as `
 
 The UI opens in your browser automatically, and the agent prints the link either way. The link is local and contains the access token. Do not publish it. Over SSH or in a headless environment, ask the agent to add `--no-open`, then open the printed link manually.
 
-The agent then runs the loop and waits for tasks from the UI. That keeps the session busy, so use another session for your own questions.
+The agent then runs the loop and waits for tasks from the UI.
 
 ## Features
 
 ### Route
 
-The reviewer starts the route with "Build route" on Overview, in the banner or through a palette command. Stops appear as they are generated, and the UI works before generation finishes. Each stop has a title, a paragraph on "what changed → what follows", anchors to line ranges and a real diff reader inside. You can comment, mark viewed and expand context right there.
+Route generation starts automatically. Once an agent worker connects and the diff loads, the server queues a task. Use "Build the route" on Overview, in the banner or in the command palette to retry after an error, rebuild after a push, or start if automatic generation did not run. Stops appear as they are generated, and the UI works before generation finishes. Each stop has a title, a paragraph explaining "what changed → its consequences", anchors to line ranges and a real diff reader inside. You can comment, mark viewed and expand context right there.
 
 Stops have an importance tier: high / medium / low. Low stops are collapsed by default. A preset switches the order between "Triage" (by importance) ↔ "Full tour" (entry point → definitions → consequences → verification). Ranges the model has not placed go into an "Other" stop marked "not placed", with a button to ask the agent to place them. Unexplained ranges are hatched in the full diff. The route passes validation. References to nonexistent files and claims without anchors are discarded, and the stop shows how many were dropped.
 
@@ -56,11 +58,11 @@ Small PRs (up to 40 changed lines) have no route. The diff opens directly.
 
 ### Diff reader
 
-Unified and split, syntax highlighting and word-level highlighting within a line, entity headers ("function X changed · 120–164"), collapsed unchanged blocks, virtualization for large diffs. Long lines wrap, so the code column has no horizontal scrolling. Images display as images: Before / After side by side, Swipe, Onion Skin, Diff, 1:1 scale or Fit.
+Unified and split modes, syntax highlighting and word-level highlighting within lines, entity headers ("function X changed · 120–164"), collapsed unchanged ranges and virtualization for large diffs. Images appear as images: "Before / After" side by side, Swipe, Onion Skin, Diff, and 1:1 or Fit scaling.
 
 The "My files" lens only counts ownership rules that requested your review. The PCI DSS lens appears only when the PR actually touches files in the audit scope. Generated files are muted and count as viewed by default. Right-click a file (or "⋯" in the card header and tree) to copy its path, copy a link to the file on the review host, open it on the review host or mark it viewed.
 
-Viewed marks are local and per-user. Viewed content collapses, so progress is visible in the density of code on screen. After "Viewed", the screen moves to the next file, or the next stop in the route.
+File viewed marks sync with the review host in both directions. Your marks go to the host if it supports them, and host marks come back. Local marks win conflicts. Route stop marks, line-level coverage and the "generated files are viewed" default stay local. Viewed content collapses, so the density of code on screen shows your progress. After "Viewed", the screen moves to the next file, or the next stop in the route.
 
 ### Comments and ship
 
@@ -68,11 +70,11 @@ Sherpa polls threads from the review host and attaches them to ranges and stops.
 
 Publishing has 2 stages. A draft goes to the review host immediately, and accumulated drafts are published as one batch when you finish. Before ship, Sherpa shows a summary of exactly what will be sent. Unfinished comments survive a tab reload. Comments support lists, quotes, headings, tables, checklists, code blocks and strikethrough. The editor has Notion-style shortcuts (`- ` and `1. ` start a list, ``` starts a code block, and Enter and Tab follow list behaviour).
 
-Verdicts: Ship (approves only this snapshot), Sticky ship (carries over to later pushes) and "Request changes". Sherpa tells you if someone ships before you.
+Verdict: Ship (approves only this snapshot), Sticky ship (carries over to later pushes) and Request changes.
 
 ### Agent chat and notes
 
-Select lines in the diff and the popover offers "Ask the agent". The question goes to the same session. The answer arrives in the chat panel (opened by the agent pill in the top bar) and stays beside those lines as a collapsible note. The note is local and isn't sent to the review host, but one click turns it into a comment draft marked "quoted from the agent's answer". A question without a selection is about the whole PR. While the agent builds the route, the question waits in the queue, as shown in the panel and pill.
+Select lines in the diff and choose "Ask the agent" in the popover. The question goes to the same session. The answer appears in the chat panel (opened by the agent indicator in the top bar) and stays beside those lines as a collapsible note. Notes stay local and do not go to the review host. One click turns a note into a comment draft marked "quoted from an agent answer". A question without a selection is about the whole PR. While the agent builds a route, the question waits in the queue. The panel and indicator show this.
 
 The agent reads unchanged task context (the PR diff, file text and guides) once per session, so 5 consecutive questions do not require 5 reads of the diff. Chat history is stored per PR. `@` in the palette searches it, including previous iterations, and jumps to the lines if the anchor still exists.
 
@@ -82,7 +84,7 @@ When the author pushes another commit, Sherpa detects it without a restart and s
 
 "What is new since the last pass" (key `w`) leaves only changed content on screen. Each stop has a "why this stop changed" explanation with thread links. Chat notes move with their lines. Sherpa marks notes that no longer have a target "anchor lost after push" and keeps them in chat.
 
-The snapshot pill in the top bar opens a menu. Previous snapshots and iterations open read-only (you can comment and mark viewed only in the active one). "Show changes since iteration…" opens the difference between two pushes without a route. Force-push doesn't break history: Sherpa reads a snapshot whose commit has disappeared from its local copy.
+The snapshot indicator in the top bar opens a menu. Previous snapshots and iterations open read-only (comments and viewed marks are available only in the active iteration). "Show changes since iteration…" opens the difference between 2 pushes without a route. A force-push does not break history: Sherpa reads the snapshot of a disappeared commit from its local copy.
 
 ### Keyboard
 
@@ -114,7 +116,7 @@ On the first visit, Sherpa takes you through a short 8-step screen tour. `→` o
 
 Russian or English. By default, the agent supplies the language through the skill (`sherpa up --lang`). Without an agent session, it comes from the browser. To change it manually, use the ⌘K palette → "Interface language: English" / ": Russian". "Language: auto (from the agent or the browser)" restores automatic selection. The choice is global, survives restarts and applies to all PRs.
 
-The agent writes the route and answers chat questions in the same language. Sherpa records the generation language when building the route. If you then change the interface language, the provenance pill names the route's language and a banner offers to rebuild it in the new language. The old route isn't translated automatically.
+The agent writes the route and chat answers in the same language. Sherpa records the generation language when it builds the route. If you later change the interface language, the provenance indicator names the route language and a banner offers to rebuild it in the new one. The existing route is not translated automatically.
 
 ### Updates
 

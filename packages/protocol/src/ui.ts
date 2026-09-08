@@ -304,7 +304,7 @@ export const uiReviewRouteResponseSchema = z.object({
 export type UiReviewRouteResponse = z.infer<typeof uiReviewRouteResponseSchema>;
 
 /**
- * PR snapshots (snapshot picker pill, "Snapshots" card on Overview, `docs/design/README.md §6`).
+ * PR snapshot list (snapshot picker in the indicator, "Snapshots" card in Overview, `docs/design/README.md §6`).
  * `current` is the current snapshot (exactly one if any exist). `stale` is a previous snapshot whose iteration
  * is still in the PR. `gone` means the snapshot's iteration left the PR (force-push), and the snapshot is readable from
  * the locally saved diff. Previous snapshots are read-only.
@@ -332,7 +332,7 @@ export type UiReviewSnapshotsResponse = z.infer<typeof uiReviewSnapshotsResponse
  * Start/restart route generation (Retry from Generation failed, "regenerate"
  * from the palette, and regeneration from `ready`, with the old snapshot
  * remaining until the new skeleton is accepted). Enqueues `route.skeleton` even without a live
- * worker. The task waits in the queue, and the agent pill shows the reduced functionality.
+ * worker. The task waits in the queue, and the agent indicator shows reduced functionality.
  * `already_running` only applies to `reading`/`filling` (generation already in progress).
  * `small_pr` rejects the request. The endpoint does not bypass the threshold (`docs/architecture.md §7.6`).
  */

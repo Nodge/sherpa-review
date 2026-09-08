@@ -160,7 +160,7 @@ export function snapshotLocale(provenance: RouteProvenance): Locale {
     return provenance.locale ?? 'en';
 }
 
-/** Route language name in the UI dictionary: nominative for the pill, prepositional for the phrase. */
+/** Route language name in the UI dictionary: nominative for the indicator, prepositional for a phrase. */
 export function localeNameKey(locale: Locale): MessageKey {
     return locale === 'ru' ? 'route.locale.name.ru' : 'route.locale.name.en';
 }

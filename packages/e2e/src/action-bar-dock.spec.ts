@@ -18,7 +18,7 @@ test('action bar makes room for docked chat at 1440', async ({ page, launchSherp
     const server = await launchSherpa('fixture-medium');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(server.url);
-    // The pill opens chat only when an agent is connected. No route needs to be built for this.
+    // The indicator opens chat only for a connected agent. No route needs to be built.
     expect((await server.worker.register('claude-code')).code).toBe(0);
 
     const bar = page.locator('.review-action-bar');
