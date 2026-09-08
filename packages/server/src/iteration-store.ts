@@ -30,7 +30,7 @@ interface InterdiffRow extends SqlRow {
 }
 
 /**
- * PR iterations and their patches in this PR's SQLite database (M4-T3, brief §4a).
+ * PR iterations and their patches in the PR SQLite database (docs/product.md §4a).
  *
  * Why store the patch locally: after a force-push the host no longer returns the previous iteration, but the old
  * route snapshot must remain readable. The diff it was built from must therefore

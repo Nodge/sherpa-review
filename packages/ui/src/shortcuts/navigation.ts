@@ -1,5 +1,5 @@
 /**
- * Target selection for navigation keys (SPEC §5: `j`/`k`, `n`/`p`). Both views calculate the target
+ * Target selection for navigation keys (docs/design/SPEC-elements.md §5: `j`/`k`, `n`/`p`). Both views compute the target
  * the same way, using their own entry list and "viewed" flag, so selection itself
  * lives here, separate from scrolling and React.
  */
@@ -28,7 +28,7 @@ export function neighbourId<T>(
 
 /**
  * Nearest unviewed entry in the given direction, wrapping the search from the end of the list
- * back to the start (SPEC §5, `n`/`p`). `null` means there are no unviewed items.
+ * to the start (docs/design/SPEC-elements.md §5, `n`/`p`). `null` means there are no unviewed entries at all.
  */
 export function unreadNeighbourId<T>(
     items: readonly T[],

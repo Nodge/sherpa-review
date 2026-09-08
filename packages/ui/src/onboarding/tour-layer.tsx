@@ -19,10 +19,10 @@ import { TOUR_SCAFFOLD_SELECTOR } from './tour-scaffold.tsx';
 import './tour.css';
 
 /**
- * Tour layer: ring, card, position measurement and keyboard (SPEC-onboarding §3, §7).
+ * Tour layer: ring, card, position measurement and keyboard (docs/design/SPEC-onboarding-2026-09-02.md §3, §7).
  * Mounted only while the tour runs. `tour-store.ts` holds the state.
  *
- * Measurement lives here because it uses the DOM: each measurement looks up the `data-tour` anchor
+ * Measurement lives here because it deals with the DOM: each measurement finds the step target by `data-tour`
  * again, while pure functions in `placement.ts` calculate the geometry.
  */
 
@@ -31,7 +31,7 @@ export interface TourLayerProps {
     readonly index: number;
     readonly total: number;
     /**
-     * "Anchor epoch" marker: changes (scaffold → route, first filled
+     * Step target "epoch": changing it (placeholder → route, first filled
      * stop appearing, view change) makes the step remeasure. An explicit signal instead of watching
      * the DOM makes remeasurement deterministic and visible in tests. It must change rarely because
      * each change triggers remeasurement, which no longer touches the reviewer's scroll position.
@@ -49,8 +49,8 @@ export function TourLayer({ step, index, total, epoch, onNext, onBack, onSkip }:
     const selector = step.selector;
     const fixed = step.fixed;
     /*
-     * Keep the previous position until the next measurement succeeds: between a step (or anchor epoch) change
-     * and the first measurement, the card moves to the new target over .18s, instead of flashing at
+     * Keep the previous position until a new measurement succeeds: between a step change (or target epoch change)
+     * and the first measurement, the card moves to its new target over .18s instead of flashing at the fallback position at the
      * bottom center, where `top` would switch px↔auto and jump without animation (§4).
      */
     const [placement, setPlacement] = useState<TourPlacement | null>(null);
@@ -191,7 +191,7 @@ export function TourLayer({ step, index, total, epoch, onNext, onBack, onSkip }:
         // First measurement runs on the next tick so the step markup (placeholder, open chat panel)
         // is in place before it is measured.
         const startTimer = window.setTimeout(() => {
-            // Remeasuring on an anchor epoch change does not start a step or scroll, otherwise
+            // A target epoch change triggers remeasurement, not a new step: it does not scroll, otherwise
             // a stop arriving over SSE would drag the route back to the step target.
             const initial = scrolledFor.current !== stepId;
             scrolledFor.current = stepId;
@@ -281,8 +281,8 @@ export function TourLayer({ step, index, total, epoch, onNext, onBack, onSkip }:
 }
 
 /**
- * Step anchor. The tour scaffold is an opaque layer above the invitation or generation skeleton,
- * which may have its own anchor with the same name (coverage strip). In that case, search the scaffold:
+ * Step target. The tour placeholder is an opaque layer above the invitation or generation skeleton,
+ * which may have its own target with the same name (coverage bar). In that case, search the placeholder:
  * it comes second in document order, but the ring must outline the visible target.
  */
 function anchorOf(selector: string): HTMLElement | null {

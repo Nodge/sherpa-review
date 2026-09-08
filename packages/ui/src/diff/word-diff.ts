@@ -1,7 +1,7 @@
 import type { CharRange } from './model.js';
 
 /**
- * Word-level highlighting of changed pairs (SPEC §2.14). The hunk parser pairs lines externally,
+ * Word-level highlighting of changed pairs (docs/design/SPEC-elements.md §2.14). Pairing happens outside (in the hunk parser),
  * this only diffs two lines by token: words, whitespace runs and individual punctuation characters.
  *
  * A local LCS instead of a library: the algorithm for two lines takes thirty lines of code,

@@ -15,9 +15,9 @@ import type { ThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
 
 /**
- * Full "Full diff" view states: left panel with filters and tree, plus file cards
- * (visual acceptance layer 2, CLAUDE.md). Everything is computed synchronously from fixtures, without a server,
- * worker, timers or `localStorage`. Opening a state gives the same frame every time.
+ * Full diff view states: the left panel with filters and the tree, plus cards.
+ * Everything is computed from fixtures synchronously, without a server, worker, timers or `localStorage`:
+ * opening a state produces the same frame.
  */
 
 interface WorkspaceStateProps {
@@ -128,8 +128,7 @@ const MEDIUM_VIEWED = [
 
 /**
  * Partial file coverage: ranges come from the file's own changed lines, so "N of M"
- * the tooltip uses the actual model count. In M1 only the gallery writes ranges:
- * the endpoint will arrive with M2 stops.
+ * in the tooltip is the actual model count, not a made-up number.
  */
 function partialRecord(fixture: FixtureName, path: string, share: number): UiFileProgress {
     const file = fileOf(fixture, path);
@@ -142,7 +141,7 @@ function partialRecord(fixture: FixtureName, path: string, share: number): UiFil
     };
 }
 
-/** Explicitly cleared generated-file mark (unpin, requirements §3.7): a record exists with the value "unread". */
+/** Explicitly cleared generated file mark (un-pin, docs/architecture.md §7.7): the record exists with an "unread" value. */
 function unpinnedRecord(fixture: FixtureName, path: string): UiFileProgress {
     return { fileId: fileOf(fixture, path).fileId, viewed: false, seenRanges: [] };
 }
@@ -254,7 +253,7 @@ function botThreadWithFortyReplies(): Thread[] {
 }
 
 /**
- * Markdown gallery (M2F-T5): one thread whose body uses the entire `comment` profile,
+ * Markdown display: one thread whose body contains the entire `comment` profile,
  * including content that must not render: raw HTML, a `javascript:` link and an unmatched backtick
  * must remain text.
  */

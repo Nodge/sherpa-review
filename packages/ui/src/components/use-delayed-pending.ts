@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 /**
- * "No spinner before 200 ms" (SPEC §3) in one utility: the pending indicator appears only
+ * "No spinner before 200 ms" (docs/design/SPEC-elements.md §3) in one utility: the pending indicator appears only
  * if the wait outlasts the delay, and hides immediately. A fast response does not flash, and a slow one does not
  * leave you wondering whether the screen is alive.
  *
@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
  * the countdown on each mount.
  */
 
-/** Default threshold from SPEC §3. */
+/** Default threshold from docs/design/SPEC-elements.md §3. */
 export const PENDING_DELAY_MS = 200;
 
 export function useDelayedPending(pending: boolean, delayMs: number = PENDING_DELAY_MS): boolean {

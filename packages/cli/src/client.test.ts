@@ -21,7 +21,7 @@ describe('client timeout for next', () => {
         expect(nextTimeoutMs(undefined)).toBe((LONG_POLL_DEFAULT_SECONDS + SLACK_SECONDS) * 1000);
     });
 
-    // An hour-long wait is valid for background polling (decision #35), and the client must survive it.
+    // An hour-long wait is valid for background polling, and the client must survive it.
     it('an hour-long wait does not hit undici\'s five-minute headersTimeout', () => {
         expect(nextTimeoutMs(3600)).toBeGreaterThan(300 * 1000);
     });

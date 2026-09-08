@@ -1,6 +1,6 @@
 /*
- * Route generation states: Overview generation card (README §6–7), red failure
- * card and its banner (README §12, SPEC §2.21). Backgrounds come from the handoff: accent for the generation
+ * Route generation states: the Overview generation card (docs/design/README.md §6–7), the red failure
+ * card and its banner (docs/design/README.md §12, docs/design/SPEC-elements.md §2.21). Backgrounds follow the design: accent for the generation
  * card, red for failure. Both sets already have tokens.
  */
 
@@ -144,8 +144,8 @@
     letter-spacing: 0.04em;
 }
 
-/* An item's base state is "queued": README §7 gives it its own text colour. The same colour goes to
-   failed slots (the handoff gives their titles no colour of their own). The unlit strip segment
+/* An item's base state is "queued": docs/design/README.md §7 gives it its own text colour. The same colour goes
+   to failed slots (the design has no separate title colour for them). The unlit bar segment
    (--tier-unfilled) cannot be used here: its colour and role differ, since it is a background. */
 .gen-plan__title,
 .gen-plan__state {
@@ -261,7 +261,7 @@
     cursor: default;
 }
 
-/* --- Generation failed (README §12) --- */
+/* --- Generation failed (docs/design/README.md §12) --- */
 
 .gen-failed {
     padding: 16px;
@@ -274,7 +274,7 @@
     padding: var(--space-control);
 }
 
-/* Failure card on the route tab: the same width as the invitation (README §12). */
+/* Failure card on the route tab: the same width as the invitation (docs/design/README.md §12). */
 .gen-failed-wrap {
     width: min(760px, 100%);
     margin-top: 58px;
@@ -396,7 +396,7 @@
     font-size: var(--font-size-meta);
 }
 
-/* --- Partially filled route banner (README §8) --- */
+/* --- Partially filled route banner (docs/design/README.md §8) --- */
 
 .gen-filling {
     display: flex;

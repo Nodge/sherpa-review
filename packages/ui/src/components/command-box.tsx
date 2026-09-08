@@ -18,7 +18,7 @@ const FEEDBACK_MS = 2000;
 
 type Feedback = 'copied' | 'manual';
 
-/** Copyable command with text selection as a fallback when Clipboard API is unavailable. */
+/** Copyable command. Without Clipboard API, the fallback selects the text. */
 export function CommandBox({ command, hint, actionLabel, inputLabel }: CommandBoxProps) {
     const t = useT();
     const label = actionLabel ?? t('command.copy');

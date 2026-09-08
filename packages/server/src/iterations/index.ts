@@ -1,5 +1,5 @@
 /**
- * PR iterations (M4): pure line carryover arithmetic between iterations, without a database or host.
+ * PR iterations: pure arithmetic for carrying lines over between iterations. No database or host.
  * Used by progress carryover, stop classification and banner text.
  */
 export { LEGACY_DIFF_ID } from './legacy.js';

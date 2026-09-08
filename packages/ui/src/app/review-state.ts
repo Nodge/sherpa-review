@@ -112,7 +112,7 @@ export function emptyReviewState(key: string, viewKey: string, loading: boolean)
 /**
  * Changing the PR or host resets everything. Changing the selected iteration resets only the diff, progress and route:
  * threads and lenses belong to the host and are shared across the PR. Old data never appears as new data.
- * The view receives a loading skeleton (SPEC §3).
+ * The view shows a loading skeleton instead (docs/design/SPEC-elements.md §3).
  */
 /**
  * PR-wide layers (lenses, threads) do not depend on the selected iteration and must not overwrite

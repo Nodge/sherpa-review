@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0e10; }
+  * { box-sizing: border-box; }
+  a { color: #8f9bff; text-decoration: none; }
+  a:hover { color: #b3bcff; }
+  ::selection { background: rgba(127,140,255,.28); }
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6.9" cy="6.9" r="4.2"></circle><path d="M10.1 10.1 13.6 13.6"></path></symbol>
+  <symbol id="ic-chev-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.4 8 10.4 12 6.4"></path></symbol>
+  <symbol id="ic-chev-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 4 10.4 8 6.4 12"></path></symbol>
+  <symbol id="ic-thumb" viewBox="0 0 16 16"><path fill="currentColor" d="M6.3 7.3 8.7 2.7a1.55 1.55 0 0 1 2.3 1.65l-.6 2.5h2.7a1.4 1.4 0 0 1 1.35 1.8l-1.15 3.7a1.7 1.7 0 0 1-1.6 1.15H6.3Z"></path><rect x="1.7" y="7.3" width="3.1" height="6.2" rx="0.8" fill="currentColor"></rect></symbol>
+  <symbol id="ic-pencil" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 12.8l.55-2.45 6.9-6.9 1.9 1.9-6.9 6.9z"></path><path d="M9.4 4.8l1.9 1.9"></path></symbol>
+  <symbol id="ic-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.5 6.4 11.5 12.8 5.1"></path></symbol>
+  <symbol id="ic-cross" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5"></path></symbol>
+  <symbol id="ic-swap" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 6.1h10.4M10.9 3.8 13.2 6.1 10.9 8.4M13.2 10.1H2.8M5.1 7.8 2.8 10.1 5.1 12.4"></path></symbol>
+  <symbol id="ic-arrow-up" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.2V3.4M4.5 6.9 8 3.4 11.5 6.9"></path></symbol>
+  <symbol id="ic-arrow-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.8v9.8M11.5 9.1 8 12.6 4.5 9.1"></path></symbol>
+  <symbol id="ic-updown" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6v10.8M5.3 5.3 8 2.6l2.7 2.7M5.3 10.7 8 13.4l2.7-2.7"></path></symbol>
+  <symbol id="ic-reply" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v7h8.8M10.5 7.6 13 10.1 10.5 12.6"></path></symbol>
+  <symbol id="ic-bold" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h3.6a2.5 2.5 0 0 1 0 5H5zM5 8h4.2a2.5 2.5 0 0 1 0 5H5z"></path></symbol>
+  <symbol id="ic-italic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.4 3h4.8M4.8 13h4.8M9.6 3 7 13"></path></symbol>
+  <symbol id="ic-link" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 9.4 9.4 6.6M6.9 4.6l1.4-1.4a2.7 2.7 0 0 1 3.8 3.8l-1.4 1.4M9.1 11.4l-1.4 1.4a2.7 2.7 0 0 1-3.8-3.8l1.4-1.4"></path></symbol>
+  <symbol id="ic-code" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.2 2.6 8 6 11.8M10 4.2 13.4 8 10 11.8"></path></symbol>
+  <symbol id="ic-codeblock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.6"></rect><path d="M6.4 6.6 4.8 8l1.6 1.4M9.6 6.6 11.2 8 9.6 9.4"></path></symbol>
+  <symbol id="ic-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 4.4h7.6M6 8h7.6M6 11.6h7.6"></path><circle cx="3" cy="4.4" r="1"></circle><circle cx="3" cy="8" r="1"></circle><circle cx="3" cy="11.6" r="1"></circle></symbol>
+  <symbol id="ic-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.6h9.6M6.4 4.6V3.2h3.2v1.4M4.6 4.6l.6 8.2h5.6l.6-8.2"></path></symbol>
+</svg>
+
+<div style="min-height:100vh;background:#0d0e10;color:#e9eaee;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:34px 40px 90px">
+
+<section style="max-width:1180px">
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#6b7078">SHERPA · Dogfooding fixes 2026-08-26</span>
+  </div>
+  <h1 style="margin:0 0 10px;font-size:23px;font-weight:600;letter-spacing:-.015em;color:#f0f1f4">Context gaps, icons, comments, discussion</h1>
+  <p style="margin:0 0 30px;max-width:720px;font-size:13px;line-height:1.62;color:#a9aeb7;text-wrap:pretty">Five sections of the brief using the prototype's tokens. <a href="#1a">1a</a> and <a href="#1b">1b</a> are for M2F, ready to implement as shown. <a href="#1c">1c</a>–<a href="#1e">1e</a> are for M5. Everything is interactive: context gap arrows, the editor toolbar and discussion filters work.</p>
+
+  <!-- ===================== A ===================== -->
+  <div id="1a" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:2px 6px">1a · M2F · №23</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Context gap</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:700px;font-size:12.5px;line-height:1.6;color:#a9aeb7">The row stays a diff row, with the same 24px height and <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">#111214</span> background. Interaction sits in the two gutter columns (46px + 46px), exactly where code line numbers go, so targets don't overlap the text or shift the grid. The counter stays in the code area.</p>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1 1 620px;min-width:520px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#e9eaee">handlers.py</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">services/orders/api/v3</span>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">live prototype, arrows work</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:0;height:24px;background:#111214;border-bottom:1px solid #191c20">
+          <button onClick="{{ revealTop }}" title="Load 20 lines up" style="{{ upTopStyle }}" style-hover="background:#181a1e;color:#9ba1ab" style-active="background:#1e2126;color:#c7cad1">
+            <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg>
+          </button>
+          <div style="width:46px;height:24px;flex:none"></div>
+          <div style="width:16px"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">{{ topLabel }}</span>
+        </div>
+
+        <sc-for list="{{ headLines }}" as="l" hint-placeholder-count="0">
+          <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px">
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.o }}</span>
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.n }}</span>
+            <span></span>
+            <span style="color:#cfd3da;white-space:pre">{{ l.c }}</span>
+          </div>
+        </sc-for>
+
+        <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:rgba(66,160,110,.11)">
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e"></span>
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#4f7f66">124</span>
+          <span style="color:#6cc38f;text-align:center">+</span>
+          <span style="color:#cfd3da;white-space:pre">    policy = EditPolicy.for_order(order)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px">
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">124</span>
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">125</span>
+          <span></span>
+          <span style="color:#cfd3da;white-space:pre">    await policy.assert_editable()</span>
+        </div>
+
+        <sc-for list="{{ midUpLines }}" as="l" hint-placeholder-count="0">
+          <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px">
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.o }}</span>
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.n }}</span>
+            <span></span>
+            <span style="color:#cfd3da;white-space:pre">{{ l.c }}</span>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{ bridgeOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:0;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+            <button onClick="{{ revealMidUp }}" title="Load 20 lines up" style="{{ midUpStyle }}" style-hover="background:#181a1e;color:#9ba1ab" style-active="background:#1e2126;color:#c7cad1">
+              <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg>
+            </button>
+            <button onClick="{{ revealMidDown }}" title="Load 20 lines down" style="{{ midDownStyle }}" style-hover="background:#181a1e;color:#9ba1ab" style-active="background:#1e2126;color:#c7cad1">
+              <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg>
+            </button>
+            <div style="width:16px"></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">{{ midLabel }}</span>
+          </div>
+        </sc-if>
+
+        <sc-for list="{{ midDownLines }}" as="l" hint-placeholder-count="0">
+          <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px">
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.o }}</span>
+            <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">{{ l.n }}</span>
+            <span></span>
+            <span style="color:#cfd3da;white-space:pre">{{ l.c }}</span>
+          </div>
+        </sc-for>
+
+        <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:rgba(224,108,102,.10)">
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#7f5a56">470</span>
+          <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e"></span>
+          <span style="color:#dd8a84;text-align:center">−</span>
+          <span style="color:#d5c0be;white-space:pre">    return JSONResponse(order.as_dict())</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:0;height:24px;background:#111214;border-top:1px solid #191c20">
+          <div style="width:46px;height:24px;flex:none"></div>
+          <button onClick="{{ revealBottom }}" title="Load 20 lines down, to end of file" style="{{ downBottomStyle }}" style-hover="background:#181a1e;color:#9ba1ab" style-active="background:#1e2126;color:#c7cad1">
+            <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg>
+          </button>
+          <div style="width:16px"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">{{ bottomLabel }}</span>
+        </div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:300px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">States</div>
+        <div style="padding:14px 13px;display:flex;flex-direction:column;gap:14px">
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">idle · middle gap</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg></div>
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">347 unchanged lines</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">hover over up arrow</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;background:#181a1e;color:#9ba1ab"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg></div>
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">+20 lines up · 347 unchanged</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">hover over down arrow</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg></div>
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;background:#181a1e;color:#9ba1ab"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">+20 lines down · 347 unchanged</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">pressed</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;background:#1e2126;color:#c7cad1"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg></div>
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">loading…</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">one direction · file header</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-up"></use></svg></div>
+              <div style="width:46px;height:24px;flex:none"></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">123 unchanged lines</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">one direction · to end of file</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20">
+              <div style="width:46px;height:24px;flex:none"></div>
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-arrow-down"></use></svg></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">88 unchanged lines · to end of file</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">fewer than 20 left</div>
+            <div style="display:flex;align-items:center;height:24px;background:#111214;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+              <div style="width:46px;height:24px;display:flex;align-items:center;justify-content:center;color:#4a4f57"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-updown"></use></svg></div>
+              <div style="width:46px;height:24px;flex:none"></div>
+              <div style="width:16px"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">7 unchanged lines, expand</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;padding:12px 14px;background:#191712;border-left:2px solid #6b5b39;border-radius:0 6px 6px 0;max-width:860px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a7550;margin-bottom:5px">DECISIONS</div>
+      <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#d8c9ad">
+        <li>The arrow shows the direction in which visible context grows: <span style="font-family:'IBM Plex Mono',monospace">↑</span> adds 20 lines at the top edge of the hidden block, <span style="font-family:'IBM Plex Mono',monospace">↓</span> at the bottom. Repeated clicks reveal more, and the counter decreases.</li>
+        <li>An unavailable direction leaves an empty gutter cell instead of a grey placeholder. Empty space doesn't look like a broken button, and the grid stays in place.</li>
+        <li>The <span style="font-family:'IBM Plex Mono',monospace">↕</span> glyph from the old row remains in exactly one case: fewer lines remain than the step size, so a click expands the whole block (one target instead of two).</li>
+        <li>The target is 46×24 (the standard diff gutter size). The counter text isn't clickable because the direction would be unclear.</li>
+        <li>Hover highlights only its half and replaces the counter with the action label, so the step size and direction are visible before clicking.</li>
+        <li>Keyboard: the context gap has one tab stop, <span style="font-family:'IBM Plex Mono',monospace">←/→</span> moves between arrows, <span style="font-family:'IBM Plex Mono',monospace">Enter</span> loads more. aria-label "Load 20 lines up, 347 hidden".</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== B ===================== -->
+  <div id="1b" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:2px 6px">1b · M2F · №6 №10 №15 №27</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Icon set</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:700px;font-size:12.5px;line-height:1.6;color:#a9aeb7">A custom set instead of a ready-made one: exactly 12 glyphs are needed at one optical size. All use viewBox 16×16, <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">currentColor</span>, stroke 1.35–1.7 (the thumb is the only filled icon). Drawn in a 12.8×12.8 square inside 16×16: 1.6px of space all around gives an optical centre that matches the centre of an 11–12.5px text row without manual offsets.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:1px;background:#1e2126;border:1px solid #24272d;border-radius:9px;overflow:hidden">
+      <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="12">
+        <div style="background:#0f1012;padding:13px 14px;display:flex;flex-direction:column;gap:9px" style-hover="background:#131417">
+          <div style="display:flex;align-items:center;gap:11px">
+            <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#141518;border:1px solid #1e2126;border-radius:6px;color:#e9eaee">
+              <svg width="16" height="16" viewBox="0 0 16 16" style="display:block;flex:none"><use href="{{ ic.href }}"></use></svg>
+            </div>
+            <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#141518;border:1px solid #1e2126;border-radius:6px;color:#6b7078">
+              <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="{{ ic.href }}"></use></svg>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">{{ ic.id }}</span>
+          </div>
+          <div style="font-size:11.5px;line-height:1.5;color:#6b7078">{{ ic.use }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:22px">
+      <div style="flex:1 1 420px;min-width:380px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">In use · Before / After</div>
+        <div style="padding:15px 14px;display:flex;flex-direction:column;gap:15px">
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5e636b">font glyphs</span>
+              <button style="display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;background:#2b7a55;border:1px solid #3f7a5a;border-radius:7px;color:#eaf6ee;font-family:inherit;font-size:12.5px;font-weight:500;cursor:default">👍 Ship it</button>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#9ba1ab"><span style="font-family:'IBM Plex Mono',monospace">⌄</span> services/orders</div>
+              <div style="display:flex;align-items:center;gap:7px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b"><span>⇄</span> unified</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#86d9a8">icon set</span>
+              <button style="display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;background:#2b7a55;border:1px solid #3f7a5a;border-radius:7px;color:#eaf6ee;font-family:inherit;font-size:12.5px;font-weight:500;cursor:default"><svg width="15" height="15" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-thumb"></use></svg> Ship it</button>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#9ba1ab"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none;color:#6b7078"><use href="#ic-chev-down"></use></svg> services/orders</div>
+              <div style="display:flex;align-items:center;gap:7px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-swap"></use></svg> unified</div>
+            </div>
+          </div>
+
+          <div style="height:1px;background:#1e2126"></div>
+
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:7px;height:23px;padding:0 8px;background:#16211a;border:1px solid #25422f;border-radius:6px;color:#86d9a8;font-size:11.5px">
+              <span style="width:11px;height:11px;border-radius:3px;background:#2b7a55;border:1px solid #3f7a5a;display:flex;align-items:center;justify-content:center;color:#0d0e10"><svg width="9" height="9" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-check"></use></svg></span>
+              Viewed
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b"><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-reply"></use></svg> replying to ada</div>
+            <button style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#6b7078;cursor:pointer" style-hover="color:#c7cad1;border-color:#3a3f47" title="Close"><svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-cross"></use></svg></button>
+            <button style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:#22252b;border:1px solid #2f333a;border-radius:5px;color:#9ba1ab;cursor:pointer" style-hover="color:#e0e2e7" title="Comment on line"><svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-pencil"></use></svg></button>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:9px;height:32px;padding:0 11px;background:#131417;border:1px solid #262a30;border-radius:7px;color:#6b7078">
+            <svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none;flex:none"><use href="#ic-search"></use></svg>
+            <span style="font-size:12.5px;line-height:1;transform:translateY(-1px)">File, stop, symbol…</span>
+            <div style="flex:1"></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b;border:1px solid #2b2f36;border-radius:4px;padding:1px 4px">⌘K</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:290px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">Delivery rules</div>
+        <ul style="margin:0;padding:14px 14px 15px 31px;font-size:12.5px;line-height:1.7;color:#a9aeb7">
+          <li>One sprite file: <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">&lt;symbol id="ic-*"&gt;</span>, included once, inserted with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">&lt;use&gt;</span>. No icon fonts.</li>
+          <li>Rendered sizes: 13px in 11–12.5px text rows, 15px on the Ship button, 9px in an 11×11 box. No intermediate sizes.</li>
+          <li>Colour comes only from the parent's <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">color</span>. In the tokens, the icon is always one shade quieter than the text (<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">#6b7078</span> against <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">#9ba1ab</span>).</li>
+          <li>Use strokes because filled shapes blur at 13px. The thumb is the exception (its silhouette is only recognisable when filled).</li>
+          <li><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">aria-hidden</span> on the icon, label on the button (as in SPEC §accessibility).</li>
+          <li>The collapsed chevron uses a separate <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9ba1ab">ic-chev-right</span> instead of the same file rotated by 90°, so its thickness doesn't change during rotation animation.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== C ===================== -->
+  <div id="1c" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:2px 6px">1c · M5 · №9b</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">"PR comments" modal</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:700px;font-size:12.5px;line-height:1.6;color:#a9aeb7">The modal is 620px wide, with existing comments first and the composer below. Drafts and published comments share one list. Drafts have a lighter background, a yellow chip and edit actions. Published comments are immutable. Everything publishes as one batch on Ship, so the modal has no "Publish" button.</p>
+
+    <div style="margin:0 0 16px;padding:12px 14px;background:#191712;border-left:2px solid #6b5b39;border-radius:0 6px 6px 0;max-width:860px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a7550;margin-bottom:5px">Scrolling</div>
+      <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#d8c9ad">
+        <li>Only the list scrolls: the header and composer stay fixed at the modal edges. The list uses <span style="font-family:'IBM Plex Mono',monospace">max-height:330px</span>, then its own scroll with <span style="font-family:'IBM Plex Mono',monospace">overscroll-behavior:contain</span> (the page beneath the modal stays still).</li>
+        <li>Newest first. Saving a draft scrolls the list to it, clears the composer and keeps the composer in place.</li>
+        <li>Editing happens in place: the pencil turns the list item itself into an editor (same toolbar and layouts), the border turns blue and the chip says "editing". The bottom composer is only for a new comment. Their text stays separate.</li>
+        <li>Deletion takes two steps within the item: the trash icon opens a row saying "Delete draft? It won't be published" with "Delete" / "Keep". There is no modal over a modal. Deletion has no undo, so confirmation is required.</li>
+        <li>The modal grows rather than the list while the viewport height allows: <span style="font-family:'IBM Plex Mono',monospace">max-height:min(330px, 100vh − 260px)</span>. Below a viewport height of 520px, the composer shrinks to 64px.</li>
+        <li>The 26px gradient at the bottom is the only sign that the list continues. The scrollbar is thin, <span style="font-family:'IBM Plex Mono',monospace">#2b2f36</span>, with a transparent track.</li>
+      </ul>
+    </div>
+
+    <div style="position:relative;border:1px solid #24272d;border-radius:11px;background:#0b0c0e;padding:28px;display:flex;justify-content:center">
+      <div style="position:absolute;inset:0;background:rgba(8,9,10,.55);border-radius:11px"></div>
+      <div style="position:relative;width:620px;background:#0f1012;border:1px solid #2b2f36;border-radius:11px;box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #1e2126;background:#141518">
+          <span style="font-size:13px;font-weight:600;color:#f0f1f4">PR comments</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">outside the diff · 4821</span>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:2px 6px">{{ draftChip }}</span>
+          <button style="width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#8a8f98;cursor:pointer" style-hover="color:#e0e2e7;border-color:#3a3f47" title="Close · Esc"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-cross"></use></svg></button>
+        </div>
+
+        <div style="position:relative;background:#0f1012">
+        <div style="max-height:330px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#2b2f36 transparent;padding:13px 15px;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ prComments }}" as="c" hint-placeholder-count="3">
+            <div style="{{ c.boxStyle }}">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <div style="width:19px;height:19px;border-radius:50%;background:#2b2f36;color:#c7cad1;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ c.ini }}</div>
+                <span style="font-size:12px;color:#c7cad1">{{ c.author }}</span>
+                <span style="{{ c.chipStyle }}">{{ c.chip }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ c.time }}</span>
+                <div style="flex:1"></div>
+                <sc-if value="{{ c.editable }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:5px">
+                    <button onClick="{{ startEdit }}" data-i="{{ c.id }}" style="width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#8a8f98;cursor:pointer" style-hover="color:#c7cad1;border-color:#3a3f47" title="Edit draft"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-pencil"></use></svg></button>
+                    <button onClick="{{ askDrop }}" data-i="{{ c.id }}" style="width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#8a8f98;cursor:pointer" style-hover="color:#e0736c;border-color:#4a2f2d" title="Delete draft"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-trash"></use></svg></button>
+                  </div>
+                </sc-if>
+              </div>
+              <sc-if value="{{ c.editing }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid #343941;border-radius:8px;background:#0f1012;overflow:hidden;box-shadow:0 0 0 3px rgba(127,140,255,.10)">
+                  <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid #1e2126;background:#141518">
+                    <sc-for list="{{ tools }}" as="t" hint-placeholder-count="6">
+                      <button onClick="{{ toolEdit }}" data-t="{{ t.id }}" title="{{ t.title }}" style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:5px;color:#8a8f98;cursor:pointer" style-hover="background:#22252b;color:#e0e2e7" style-active="background:#2b2f36">
+                        <svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="{{ t.href }}"></use></svg>
+                      </button>
+                    </sc-for>
+                    <div style="flex:1"></div>
+                    <div style="display:flex;align-items:center;gap:2px;padding:2px;background:#0f1012;border:1px solid #24272d;border-radius:6px">
+                      <button onClick="{{ setModeWy }}" style="{{ modeWyStyle }}">Visual</button>
+                      <button onClick="{{ setModeMd }}" style="{{ modeMdStyle }}">Markdown</button>
+                    </div>
+                  </div>
+                  <sc-if value="{{ isMd }}" hint-placeholder-val="{{ false }}">
+                    <textarea ref="{{ taEditRef }}" value="{{ editDraft }}" onChange="{{ onEditDraft }}" style="display:block;width:100%;min-height:88px;padding:9px 10px;background:transparent;border:none;outline:none;resize:vertical;color:#e9eaee;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.65"></textarea>
+                  </sc-if>
+                  <sc-if value="{{ isWy }}" hint-placeholder-val="{{ true }}">
+                    <div ref="{{ wyEditRef }}" contentEditable="true" suppressContentEditableWarning="{{ true }}" onInput="{{ onWyEdit }}" style="min-height:88px;padding:9px 10px;font-size:12.5px;line-height:1.6;color:#e9eaee;outline:none">{{ wyNodesEdit }}</div>
+                  </sc-if>
+                </div>
+                <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+                  <button onClick="{{ saveEdit }}" style="height:27px;padding:0 11px;background:#22252b;border:1px solid #343941;border-radius:6px;color:#e9eaee;font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:#2b2f36">Save changes</button>
+                  <button onClick="{{ cancelEdit }}" style="height:27px;padding:0 10px;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#9ba1ab;font-family:inherit;font-size:12px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">Cancel</button>
+                  <div style="flex:1"></div>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b;white-space:nowrap">⌘⏎ · Esc</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ c.notEditing }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:12.5px;line-height:1.6;color:#c3c8d1;text-wrap:pretty">{{ c.body }}</div>
+              </sc-if>
+              <sc-if value="{{ c.code }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:7px;padding:7px 9px;background:#0b0c0e;border:1px solid #1e2126;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#cfd3da;white-space:pre;overflow-x:auto">{{ c.code }}</div>
+              </sc-if>
+              <sc-if value="{{ c.confirming }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:9px;margin-top:9px;padding:7px 9px;background:#170f0f;border:1px solid #4a2f2d;border-radius:6px">
+                  <span style="font-size:12px;color:#e8a29c">Delete draft? It won't be published.</span>
+                  <div style="flex:1"></div>
+                  <button onClick="{{ dropDraft }}" data-i="{{ c.id }}" style="height:23px;padding:0 9px;background:#3a1f1e;border:1px solid #5c3230;border-radius:5px;color:#f2c4c0;font-family:inherit;font-size:11.5px;white-space:nowrap;cursor:pointer" style-hover="background:#4a2725">Delete</button>
+                  <button onClick="{{ cancelDrop }}" style="height:23px;padding:0 9px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:11.5px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">Keep</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ prEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:22px 0;text-align:center;font-size:12.5px;color:#5e636b">No PR comments yet. Anything written here publishes with the review on Ship.</div>
+          </sc-if>
+        </div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;background:linear-gradient(180deg,rgba(15,16,18,0) 0%,#0f1012 92%)"></div>
+        </div>
+
+        <div style="border-top:1px solid #1e2126;background:#0d0e10;padding:12px 15px 13px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">{{ composerTitle }}</span>
+            <div style="flex:1"></div>
+            <span style="font-size:11.5px;color:#5e636b">{{ saveStatus }}</span>
+          </div>
+
+          <div style="border:1px solid #2b2f36;border-radius:8px;background:#111214;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid #1e2126;background:#141518">
+              <sc-for list="{{ tools }}" as="t" hint-placeholder-count="7">
+                <button onClick="{{ toolNew }}" data-t="{{ t.id }}" title="{{ t.title }}" style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:5px;color:#8a8f98;cursor:pointer" style-hover="background:#22252b;color:#e0e2e7" style-active="background:#2b2f36">
+                  <svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="{{ t.href }}"></use></svg>
+                </button>
+              </sc-for>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;gap:2px;padding:2px;background:#0f1012;border:1px solid #24272d;border-radius:6px">
+                <button onClick="{{ setModeWy }}" style="{{ modeWyStyle }}">Visual</button>
+                <button onClick="{{ setModeMd }}" style="{{ modeMdStyle }}">Markdown</button>
+              </div>
+            </div>
+            <sc-if value="{{ isMd }}" hint-placeholder-val="{{ true }}">
+              <textarea ref="{{ taRef }}" value="{{ draft }}" onChange="{{ onDraft }}" placeholder="General PR comment, not tied to a line" style="display:block;width:100%;min-height:104px;padding:10px 11px;background:transparent;border:none;outline:none;resize:vertical;color:#e9eaee;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.65"></textarea>
+            </sc-if>
+            <sc-if value="{{ isWy }}" hint-placeholder-val="{{ false }}">
+              <div style="position:relative">
+                <sc-if value="{{ wyPlaceholder }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;left:11px;top:10px;font-size:12.5px;line-height:1.62;color:#5e636b;pointer-events:none">General PR comment, not tied to a line</div>
+                </sc-if>
+                <div ref="{{ wyRef }}" contentEditable="true" suppressContentEditableWarning="{{ true }}" onInput="{{ onWy }}" style="min-height:104px;padding:10px 11px;font-size:12.5px;line-height:1.62;color:#e9eaee;outline:none">{{ wyNodes }}</div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+            <button onClick="{{ saveDraft }}" style="height:29px;padding:0 12px;background:#22252b;border:1px solid #343941;border-radius:7px;color:#e9eaee;font-family:inherit;font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:#2b2f36">{{ saveLabel }}</button>
+            <button onClick="{{ cancelEdit }}" style="height:29px;padding:0 11px;background:transparent;border:1px solid #2b2f36;border-radius:7px;color:#9ba1ab;font-family:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">{{ cancelLabel }}</button>
+            <div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8a8f98;white-space:nowrap">
+              <span style="border:1px solid #343941;border-radius:4px;padding:1px 5px;color:#c7cad1">⌘⏎</span> save
+              <span style="border:1px solid #343941;border-radius:4px;padding:1px 5px;color:#c7cad1;margin-left:4px">Esc</span> close
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid #191c20;font-size:11.5px;color:#6b7078">
+            <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none;color:#8a7550"><use href="#ic-updown"></use></svg>
+            {{ shipNote }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== D ===================== -->
+  <div id="1d" style="margin-bottom:46px;padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:2px 6px">1d · M5 · №26</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Comment composer</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:700px;font-size:12.5px;line-height:1.6;color:#a9aeb7">One component in 3 places: a thread reply, a line comment, and the modal <a href="#1c">1c</a>. The toolbar inserts markdown into the text, exactly what the renderer will display. There is no hidden HTML. The toolbar buttons above work: select some text and click.</p>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1 1 430px;min-width:400px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">In a thread · Reply</div>
+        <div style="padding:14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">
+            <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-reply"></use></svg> replying to ai-review-bot [bot] · handlers.py:118
+          </div>
+          <div style="border:1px solid #343941;border-radius:8px;background:#111214;overflow:hidden;box-shadow:0 0 0 3px rgba(127,140,255,.10)">
+            <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid #1e2126;background:#141518">
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-bold"></use></svg></div>
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:#22252b;color:#e0e2e7"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-italic"></use></svg></div>
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-link"></use></svg></div>
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-code"></use></svg></div>
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-codeblock"></use></svg></div>
+              <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-list"></use></svg></div>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;gap:2px;padding:2px;background:#0f1012;border:1px solid #24272d;border-radius:6px">
+                <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;background:#2b2f36;color:#f0f1f4;font-size:11px;font-weight:500">Visual</div>
+                <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;color:#8a8f98;font-family:'IBM Plex Mono',monospace;font-size:11px">Markdown</div>
+              </div>
+            </div>
+            <div style="padding:10px 11px;font-size:12.5px;line-height:1.62;color:#e9eaee">
+              <div>There is <i>really</i> a race here, but a different one: <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#191c20;border:1px solid #24272d;border-radius:4px;padding:1px 4px;color:#cfd3da">DISPATCH_LOCK</span> is acquired before the transaction, see below.</div>
+              <div style="margin:8px 0;padding:8px 10px;background:#0b0c0e;border:1px solid #1e2126;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.55;color:#cfd3da;white-space:pre">async with lock(order_id):
+    await policy.assert_editable()</div>
+              <ul style="margin:0;padding-left:18px">
+                <li>only reproduces on retry</li>
+                <li>fixed by moving the lock inside<span style="display:inline-block;width:1.5px;height:14px;background:#7f8cff;vertical-align:-2px;margin-left:1px"></span></li>
+              </ul>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+            <button style="height:29px;padding:0 12px;background:#22252b;border:1px solid #343941;border-radius:7px;color:#e9eaee;font-family:inherit;font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:#2b2f36">Save draft</button>
+            <button style="height:29px;padding:0 11px;background:transparent;border:1px solid #2b2f36;border-radius:7px;color:#9ba1ab;font-family:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">Cancel</button>
+            <div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:5px;min-width:0;font-size:11.5px;line-height:1.35;color:#6b7078"><svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none;color:#5e8a6d"><use href="#ic-check"></use></svg> saved as draft · 14:02</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 330px;min-width:320px;display:flex;flex-direction:column;gap:16px">
+        <div style="border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+          <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">Field states</div>
+          <div style="padding:14px;display:flex;flex-direction:column;gap:13px">
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">idle · collapsed to one row</div>
+              <div style="display:flex;align-items:center;gap:9px;height:32px;padding:0 11px;background:#111214;border:1px solid #262a30;border-radius:7px;color:#5e636b;font-size:12.5px">Reply…<div style="flex:1"></div><svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-pencil"></use></svg></div>
+            </div>
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">draft exists, the field reopens with its text</div>
+              <div style="border:1px solid #4a4230;border-radius:7px;background:#141210;padding:8px 10px">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px">draft · publishes on ship</span></div>
+                <div style="font-size:12.5px;line-height:1.55;color:#d8c9ad">There really is a race here, but a different one: DISPATCH_LOCK is acquired…</div>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b7078;margin-bottom:5px">autosave: saving / saved / failed</div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px">
+                <span style="color:#6b7078">saving…</span>
+                <span style="display:flex;align-items:center;gap:5px;color:#6b7078"><svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none;color:#5e8a6d"><use href="#ic-check"></use></svg> saved as draft · 14:02</span>
+                <span style="color:#e0736c">not saved, draft stays in the field, will retry</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:12px 14px;background:#191712;border-left:2px solid #6b5b39;border-radius:0 6px 6px 0">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a7550;margin-bottom:5px">Decisions</div>
+          <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#d8c9ad">
+            <li>The toolbar has exactly 6 buttons: <span style="font-family:'IBM Plex Mono',monospace">B</span>, <span style="font-family:'IBM Plex Mono',monospace">I</span>, link, inline code, code block, list. No headings, a 3-line comment does not need them.</li>
+            <li>Two layouts for the same field: <b style="font-weight:500;color:#e9eaee">Visual</b> applies formatting in place, as in the finished comment (default), <b style="font-weight:500;color:#e9eaee">Markdown</b> shows the same text as source, 12px monospace. The toggle is on the right of the toolbar. The choice is saved per user.</li>
+            <li>The text has one format, markdown. "Visual" edits that same markdown: typing, caret movement, selection, and formatting happen directly in the rendered body (using the renderer for published comments). It is neither a preview nor a second format. The toolbar works in both layouts. In "Visual" it acts at the caret and inserts a placeholder ("text", "code") when nothing is selected. In "Markdown" it wraps the selection in markers.</li>
+            <li><span style="font-family:'IBM Plex Mono',monospace">⌘B/⌘I/⌘K</span> do the same as the buttons. <span style="font-family:'IBM Plex Mono',monospace">⌘⏎</span> = "Save draft", <span style="font-family:'IBM Plex Mono',monospace">Esc</span> = "Cancel" (with confirmation if the text is not empty).</li>
+            <li>There is no "Send" or "Publish", only "Save draft". Ship alone publishes comments, as the note below the field explains.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:26px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:9px;padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">At a code line · Create and edit in place</span>
+        <div style="flex:1"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">handlers.py · patch_order · 116–120</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px">
+        <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">116</span>
+        <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">116</span>
+        <span></span>
+        <span style="color:#cfd3da;white-space:pre">    guard = Guard.for_actor(request.actor)</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:#141518">
+        <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">117</span>
+        <span style="position:relative;padding-right:9px;text-align:right;font-size:10.5px;color:#43474e">117
+          <button style="position:absolute;right:-11px;top:-1px;width:23px;height:23px;display:flex;align-items:center;justify-content:center;background:#7f8cff;border:none;border-radius:6px;color:#0d0e10;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.45)" title="Comment on line 117"><svg width="15" height="15" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-pencil"></use></svg></button>
+        </span>
+        <span></span>
+        <span style="color:#cfd3da;white-space:pre">    if not guard.allows(order):</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:46px 46px 16px minmax(0,1fr);line-height:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:rgba(66,160,110,.11)">
+        <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#43474e"></span>
+        <span style="padding-right:9px;text-align:right;font-size:10.5px;color:#4f7f66">118</span>
+        <span style="color:#6cc38f;text-align:center">+</span>
+        <span style="color:#cfd3da;white-space:pre">        raise HTTPException(403)</span>
+      </div>
+
+      <div style="padding:12px 13px 13px 62px;background:#0d0e10;border-top:1px solid #191c20;border-bottom:1px solid #191c20">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b">
+          new comment · line 118
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px">draft · publishes on ship</span>
+        </div>
+        <div style="max-width:620px;border:1px solid #343941;border-radius:8px;background:#111214;overflow:hidden;box-shadow:0 0 0 3px rgba(127,140,255,.10)">
+          <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid #1e2126;background:#141518">
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-bold"></use></svg></div>
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-italic"></use></svg></div>
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-link"></use></svg></div>
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:#22252b;color:#e0e2e7"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-code"></use></svg></div>
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-codeblock"></use></svg></div>
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-list"></use></svg></div>
+            <div style="flex:1"></div>
+            <div style="display:flex;align-items:center;gap:2px;padding:2px;background:#0f1012;border:1px solid #24272d;border-radius:6px">
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;background:#2b2f36;color:#f0f1f4;font-size:11px;font-weight:500">Visual</div>
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;color:#8a8f98;font-family:'IBM Plex Mono',monospace;font-size:11px">Markdown</div>
+            </div>
+          </div>
+          <div style="padding:9px 10px;font-size:12.5px;line-height:1.6;color:#e9eaee">403 masks 404 here: when <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#191c20;border:1px solid #24272d;border-radius:4px;padding:1px 4px;color:#cfd3da">guard.allows</span> rejects access to someone else's order, it reveals that the order exists.<span style="display:inline-block;width:1.5px;height:14px;background:#7f8cff;vertical-align:-2px;margin-left:1px"></span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:9px;max-width:620px">
+          <button style="height:27px;padding:0 11px;background:#22252b;border:1px solid #343941;border-radius:6px;color:#e9eaee;font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:#2b2f36">Save draft</button>
+          <button style="height:27px;padding:0 10px;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#9ba1ab;font-family:inherit;font-size:12px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">Cancel</button>
+          <div style="flex:1"></div>
+          <span style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:#6b7078;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none;color:#5e8a6d"><use href="#ic-check"></use></svg> saved as draft · 14:07</span>
+        </div>
+      </div>
+
+      <div style="padding:12px 13px 14px 62px;background:#0d0e10">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b;margin-bottom:8px">existing thread at line 116 · edit your draft in place</div>
+        <div style="max-width:620px;display:flex;flex-direction:column;gap:9px">
+          <div style="border:1px solid #1e2126;border-radius:8px;background:#111214;padding:9px 11px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+              <div style="width:19px;height:19px;border-radius:50%;background:#2b2f36;color:#c7cad1;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center">MP</div>
+              <span style="font-size:12px;color:#c7cad1">morgan</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">2 h ago</span>
+            </div>
+            <div style="font-size:12.5px;line-height:1.6;color:#c3c8d1">Guard comes from request instead of the unit of work. It will be None in the background.</div>
+          </div>
+
+          <div style="border:1px solid #3c4560;border-left:2px solid #7f8cff;border-radius:0 8px 8px 0;background:#12141c;padding:9px 11px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+              <div style="width:19px;height:19px;border-radius:50%;background:#2b2f36;color:#c7cad1;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center">RS</div>
+              <span style="font-size:12px;color:#c7cad1">rowan</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#aeb6ff;background:#191c2b;border:1px solid #3c4560;border-radius:4px;padding:1px 5px">editing</span>
+              <div style="flex:1"></div>
+              <div style="display:flex;gap:5px">
+                <div style="width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:#22252b;border:1px solid #3a3f47;border-radius:6px;color:#e0e2e7"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-pencil"></use></svg></div>
+                <div style="width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-trash"></use></svg></div>
+              </div>
+            </div>
+            <div style="border:1px solid #343941;border-radius:8px;background:#0f1012;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid #1e2126;background:#141518">
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-bold"></use></svg></div>
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-italic"></use></svg></div>
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-link"></use></svg></div>
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-code"></use></svg></div>
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-codeblock"></use></svg></div>
+                <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:#8a8f98"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block;flex:none"><use href="#ic-list"></use></svg></div>
+                <div style="flex:1"></div>
+                <div style="display:flex;align-items:center;gap:2px;padding:2px;background:#0f1012;border:1px solid #24272d;border-radius:6px">
+                  <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;color:#8a8f98;font-size:11px">Visual</div>
+                  <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;background:#2b2f36;color:#f0f1f4;font-family:'IBM Plex Mono',monospace;font-size:11px">Markdown</div>
+                </div>
+              </div>
+              <div style="padding:9px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.65;color:#e9eaee;white-space:pre-wrap">Agreed. Then `Guard` needs to be built **inside** the unit of work, otherwise the worker gets the same None.<span style="display:inline-block;width:1.5px;height:14px;background:#7f8cff;vertical-align:-2px;margin-left:1px"></span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+              <button style="height:27px;padding:0 11px;background:#22252b;border:1px solid #343941;border-radius:6px;color:#e9eaee;font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:#2b2f36">Save changes</button>
+              <button style="height:27px;padding:0 10px;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#9ba1ab;font-family:inherit;font-size:12px;white-space:nowrap;cursor:pointer" style-hover="color:#e0e2e7">Cancel</button>
+              <div style="flex:1"></div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5e636b;white-space:nowrap">⌘⏎ · Esc</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;padding:12px 14px;background:#191712;border-left:2px solid #6b5b39;border-radius:0 6px 6px 0;max-width:860px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a7550;margin-bottom:5px">Line comment · Decisions</div>
+      <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#d8c9ad">
+        <li>The pencil sits in the right gutter of the line and appears on row hover and keyboard focus. For a selected range, it appears on the first line of the range.</li>
+        <li>The composer expands below the line in the diff flow, indented by 62px (the width of two gutters + the marker). The indentation shows the nesting without lines or borders around the whole hunk.</li>
+        <li>The same component as in 1c and in a thread: one toolbar, two layouts, "Save draft" / "Cancel". Only the context heading, "line 118", differs.</li>
+        <li>You edit your own comment in its card (blue edge, "editing" chip). Its body stays there instead of moving to a modal or the bottom field.</li>
+        <li>You cannot edit someone else's published comment. It has no pencil, only "Reply" and "Resolve".</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== E ===================== -->
+  <div id="1e" style="padding-top:6px;border-top:1px solid #1e2126">
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:2px 6px">1e · M5 · №5</span>
+      <h2 style="margin:0;font-size:17px;font-weight:600;color:#f0f1f4">Discussion card in Overview</h2>
+    </div>
+    <p style="margin:0 0 20px;max-width:700px;font-size:12.5px;line-height:1.6;color:#a9aeb7">Decision: the card provides a summary and an entry point, not a feed. Thread bodies live beside the code. The card only expands threads <b style="font-weight:500;color:#e0e2e7">outside the diff</b>. There are only a few, and there is nowhere else to read them. Bot threads collapse to one row per bot by default. Of the 86 threads, 85 are noise the card must handle. The filters work.</p>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:0 0 360px;width:360px;border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid #1e2126">
+          <span style="font-size:13px;font-weight:600;color:#f0f1f4">Discussion</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">86 threads · 48 open</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid #1e2126;background:#0d0e10">
+          <button onClick="{{ toggleF }}" data-k="people" style="{{ fPeople }}">People 12</button>
+          <button onClick="{{ toggleF }}" data-k="bots" style="{{ fBots }}">Bots 74</button>
+          <button onClick="{{ toggleF }}" data-k="resolved" style="{{ fResolved }}">Resolved 38</button>
+        </div>
+
+        <div style="padding:6px 0">
+          <sc-for list="{{ parts }}" as="p" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:9px;padding:7px 13px;cursor:pointer" style-hover="background:#131417">
+              <div style="{{ p.avStyle }}">{{ p.ini }}</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#c7cad1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
+                  <sc-if value="{{ p.bot }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8a90a0;border:1px solid #2b2f36;border-radius:3px;padding:0 3px">bot</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:11px;color:#6b7078">{{ p.sub }}</div>
+              </div>
+              <span style="{{ p.countStyle }}">{{ p.count }}</span>
+              <svg width="13" height="13" viewBox="0 0 16 16" style="display:block;flex:none;color:#4a4f57"><use href="#ic-chev-right"></use></svg>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border-top:1px solid #1e2126">
+          <button onClick="{{ toggleOff }}" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 13px;background:transparent;border:none;color:#9ba1ab;font-family:inherit;font-size:12px;cursor:pointer;text-align:left" style-hover="background:#131417">
+            <svg width="13" height="13" style="{{ offChevStyle }}"><use href="#ic-chev-down"></use></svg>
+            Outside the diff
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7078">2</span>
+            <div style="flex:1"></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ offHint }}</span>
+          </button>
+
+          <sc-if value="{{ offOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:2px 13px 13px;display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ offThreads }}" as="t" hint-placeholder-count="2">
+                <div style="border:1px solid #1e2126;border-radius:7px;background:#111214;padding:9px 10px">
+                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+                    <div style="{{ t.avStyle }}">{{ t.ini }}</div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c7cad1">{{ t.author }}</span>
+                    <sc-if value="{{ t.bot }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8a90a0;border:1px solid #2b2f36;border-radius:3px;padding:0 3px">bot</span>
+                    </sc-if>
+                    <div style="flex:1"></div>
+                    <span style="{{ t.stateStyle }}">{{ t.state }}</span>
+                  </div>
+                  <div style="font-size:12px;line-height:1.58;color:#c3c8d1;text-wrap:pretty">{{ t.body }}</div>
+                  <sc-if value="{{ t.code }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:6px;padding:6px 8px;background:#0b0c0e;border:1px solid #1e2126;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#cfd3da;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.code }}</div>
+                  </sc-if>
+                  <sc-if value="{{ t.link }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:6px;font-size:11.5px"><a href="#1e" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">{{ t.link }}</a></div>
+                  </sc-if>
+                  <div style="display:flex;align-items:center;gap:9px;margin-top:8px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5e636b">{{ t.meta }}</span>
+                    <div style="flex:1"></div>
+                    <button style="height:22px;padding:0 8px;background:transparent;border:1px solid #2b2f36;border-radius:5px;color:#9ba1ab;font-family:inherit;font-size:11px;cursor:pointer" style-hover="background:#1b1e24">Reply</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="border-top:1px solid #1e2126;padding:10px 13px;display:flex;align-items:center;gap:8px">
+          <a href="#1e" style="font-size:12px">All threads beside the code</a>
+          <svg width="12" height="12" viewBox="0 0 16 16" style="display:block;flex:none;color:#8f9bff"><use href="#ic-chev-right"></use></svg>
+          <div style="flex:1"></div>
+          <button onClick="{{ openPr }}" style="height:24px;padding:0 9px;background:transparent;border:1px solid #2b2f36;border-radius:6px;color:#9ba1ab;font-family:inherit;font-size:11.5px;cursor:pointer" style-hover="background:#1b1e24">Comment on PR</button>
+        </div>
+      </div>
+
+      <div style="flex:1 1 380px;min-width:340px;display:flex;flex-direction:column;gap:16px">
+        <div style="border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+          <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">Scale 86/85 · What changes</div>
+          <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:7px 12px;font-size:12.5px;line-height:1.55">
+              <span style="color:#6b7078;font-family:'IBM Plex Mono',monospace;font-size:11px">Before</span>
+              <span style="color:#a9aeb7">3 counter tiles + 50 bot threads in one long list in a 360px column</span>
+              <span style="color:#6b7078;font-family:'IBM Plex Mono',monospace;font-size:11px">After</span>
+              <span style="color:#a9aeb7">one summary row, a participant list with counters, 2 expanded threads outside the diff, one entry point to the code</span>
+              <span style="color:#6b7078;font-family:'IBM Plex Mono',monospace;font-size:11px">height</span>
+              <span style="color:#a9aeb7">fixed: the participant list has at most 6 rows, followed by "N more participants"</span>
+            </div>
+            <div style="height:1px;background:#1e2126"></div>
+            <ul style="margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#a9aeb7">
+              <li>Bots are not participants. They collapse to one row per bot with a counter. The card never shows bot thread bodies.</li>
+              <li>The filters are additive and use the same chips as the route toolbar (people on, bots and resolved off by default). The card and the diff read the same state.</li>
+              <li>For threads outside the diff in the narrow column: markdown is allowed, but headings render as ordinary bold text, long links truncate to one line, and code blocks occupy one line without wrapping.</li>
+              <li>Bodies longer than 4 lines truncate with "expand". The card never has nested replies, they live beside the code.</li>
+              <li>Empty state: "No threads yet. Discussion starts beside the code".</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="border:1px solid #24272d;border-radius:9px;background:#0f1012;overflow:hidden">
+          <div style="padding:9px 13px;background:#141518;border-bottom:1px solid #1e2126;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7078">Open questions for the team</div>
+          <ul style="margin:0;padding:13px 14px 14px 31px;font-size:12.5px;line-height:1.7;color:#a9aeb7">
+            <li>Whether resolved bot threads count in the bot row counter or disappear entirely when Resolved is off.</li>
+            <li>Participant order: by open thread count (current) or by latest activity.</li>
+            <li>Whether Overview needs an anchor directly to a specific thread beside the code, or a link to the stop is enough.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+const CTX = [
+  'async def patch_order(order_id: UUID, body: PatchOrder) -> JSONResponse:',
+  '    order = await repo.get(order_id)',
+  '    if order is None:',
+  '        raise HTTPException(404)',
+  '    log.debug("patch %s", order_id)',
+  '    tracer.tag("checkout.patch")',
+  '    await audit.record(order_id, body.dict())',
+  '    guard = Guard.for_actor(request.actor)',
+  '    if not guard.allows(order):',
+  '        raise HTTPException(403)',
+];
+
+class Component extends DCLogic {
+  state = {
+    top: 0, midUp: 0, midDown: 0, bottom: 0,
+    draft: '', editDraft: '', saveStatus: '', editing: null, confirm: null,
+    items: [
+      { id: 1, author: 'rowan', ini: 'RS', time: '14:02', draft: true, body: 'General: the migration and code are in one PR, but the release order is not documented anywhere. Add to the description that **migrate runs before deployment**, otherwise `patch_order` will fail in production.' },
+      { id: 2, author: 'rowan', ini: 'RS', time: '13:58', draft: true, body: 'There is no test for concurrent patch requests. At minimum, send two simultaneous requests for the same order:', code: 'pytest -k test_patch_order_concurrent -x' },
+      { id: 3, author: 'morgan', ini: 'MP', time: 'yesterday, 18:20', draft: false, body: 'Agreed on the call: EditPolicy stays in domain. Moving it to shared is a separate task.' }
+    ],
+    f: { people: true, bots: false, resolved: false },
+    offOpen: true, mode: 'wy',
+  };
+
+  inline(text, keyBase) {
+    const out = [];
+    const re = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]*\))/g;
+    let last = 0, m, i = 0;
+    while ((m = re.exec(text))) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      const t = m[0];
+      const k = keyBase + '-' + (i++);
+      if (t.startsWith('**')) out.push(React.createElement('b', { key: k, style: { fontWeight: 600 } }, t.slice(2, -2)));
+      else if (t.startsWith('`')) out.push(React.createElement('span', { key: k, style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '11.5px', background: '#191c20', border: '1px solid #24272d', borderRadius: '4px', padding: '1px 4px', color: '#cfd3da' } }, t.slice(1, -1)));
+      else if (t.startsWith('[')) out.push(React.createElement('a', { key: k, href: '#1c' }, t.slice(1, t.indexOf(']'))));
+      else out.push(React.createElement('i', { key: k }, t.slice(1, -1)));
+      last = m.index + t.length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+
+  render_md(src) {
+    const lines = src.split('\n');
+    const nodes = [];
+    let i = 0, key = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      if (l.trim().startsWith('```')) {
+        const buf = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) { buf.push(lines[i]); i++; }
+        i++;
+        nodes.push(React.createElement('div', { key: 'k' + key++, style: { margin: '8px 0', padding: '8px 10px', background: '#0b0c0e', border: '1px solid #1e2126', borderRadius: '6px', fontFamily: "'IBM Plex Mono',monospace", fontSize: '11.5px', lineHeight: 1.55, color: '#cfd3da', whiteSpace: 'pre', overflowX: 'auto' } }, buf.join('\n')));
+        continue;
+      }
+      if (/^\s*-\s+/.test(l)) {
+        const items = [];
+        while (i < lines.length && /^\s*-\s+/.test(lines[i])) {
+          items.push(React.createElement('li', { key: 'i' + items.length }, this.inline(lines[i].replace(/^\s*-\s+/, ''), 'l' + key)));
+          i++;
+        }
+        nodes.push(React.createElement('ul', { key: 'k' + key++, style: { margin: '6px 0', paddingLeft: '18px' } }, items));
+        continue;
+      }
+      if (l.trim() === '') { i++; continue; }
+      nodes.push(React.createElement('div', { key: 'k' + key++, style: { marginBottom: '4px' } }, this.inline(l, 'p' + key)));
+      i++;
+    }
+    return nodes;
+  }
+
+  constructor(props) {
+    super(props);
+    this.ta = React.createRef();
+    this.taEdit = React.createRef();
+    this.wy = React.createRef();
+    this.wyEdit = React.createRef();
+  }
+
+  serialize(node) {
+    if (node.nodeType === 3) return node.data;
+    const kids = () => Array.prototype.map.call(node.childNodes, (n) => this.serialize(n)).join('');
+    const tag = node.tagName;
+    if (tag === 'BR') return '\n';
+    if (tag === 'B' || tag === 'STRONG') return '**' + kids() + '**';
+    if (tag === 'I' || tag === 'EM') return '*' + kids() + '*';
+    if (tag === 'A') return '[' + kids() + '](' + (node.getAttribute('href') || '') + ')';
+    if (tag === 'CODE') return '`' + kids() + '`';
+    if (tag === 'UL' || tag === 'OL') return '\n' + Array.prototype.map.call(node.children, (li) => '- ' + this.serialize(li).trim()).join('\n') + '\n';
+    if (tag === 'LI') return '- ' + kids();
+    if (tag === 'SPAN') {
+      const ff = (node.style && node.style.fontFamily) || '';
+      return ff.indexOf('Mono') >= 0 ? '`' + kids() + '`' : kids();
+    }
+    if (tag === 'DIV' || tag === 'P' || tag === 'PRE') {
+      const ws = (node.style && node.style.whiteSpace) || '';
+      const inner = kids();
+      if (ws === 'pre' || tag === 'PRE') return '\n```python\n' + inner.replace(/^\n+|\n+$/g, '') + '\n```\n';
+      return inner + '\n';
+    }
+    return kids();
+  }
+
+  syncWy(field) {
+    const host = (field === 'draft' ? this.wy : this.wyEdit).current;
+    if (!host) return;
+    const text = this.serialize(host).replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
+    this.setState({ [field]: text, saveStatus: 'saving…' });
+    this.autosave();
+  }
+
+  snap(field, text) {
+    return { [field === 'draft' ? 'wyNodes' : 'wyNodesEdit']: this.render_md(text || '') };
+  }
+
+  wyTool(e, field) {
+    const t = e.currentTarget.getAttribute('data-t');
+    const host = (field === 'draft' ? this.wy : this.wyEdit).current;
+    if (!host) { this.toolClick(e, field); return; }
+    host.focus();
+    const sel = window.getSelection();
+    const has = sel && sel.rangeCount && !sel.isCollapsed && host.contains(sel.anchorNode);
+    const txt = has ? String(sel) : '';
+    const ex = (cmd, arg) => { try { document.execCommand(cmd, false, arg); } catch (err) { /* prototype */ } };
+    if (t === 'b') ex('bold');
+    else if (t === 'i') ex('italic');
+    else if (t === 'a') ex('insertHTML', '<a href="https://">' + (txt || 'link') + '</a>&nbsp;');
+    else if (t === 'c') ex('insertHTML', '<code style="font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;background:#191c20;border:1px solid #24272d;border-radius:4px;padding:1px 4px;color:#cfd3da">' + (txt || 'code') + '</code>&nbsp;');
+    else if (t === 'p') ex('insertHTML', '<div style="white-space:pre;margin:8px 0;padding:8px 10px;background:#0b0c0e;border:1px solid #1e2126;border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;color:#cfd3da">' + (txt || 'code') + '</div>');
+    else ex('insertUnorderedList');
+    this.syncWy(field);
+  }
+
+  toolClick(e, field) {
+    const t = e.currentTarget.getAttribute('data-t');
+    if (t === 'b') this.wrap('**', '**', false, field);
+    else if (t === 'i') this.wrap('*', '*', false, field);
+    else if (t === 'a') this.wrap('[', '](https://)', false, field);
+    else if (t === 'c') this.wrap('`', '`', false, field);
+    else if (t === 'p') this.wrap('\n```python\n', '\n```\n', true, field);
+    else this.wrap('\n- ', '', false, field);
+  }
+
+  step(key) {
+    this.setState(s => ({ [key]: s[key] + 20, saveStatus: s.saveStatus }));
+  }
+
+  lines(startOld, startNew, n) {
+    const out = [];
+    for (let i = 0; i < n; i++) out.push({ o: startOld + i, n: startNew + i, c: '    ' + CTX[i % CTX.length].trim() });
+    return out;
+  }
+
+  wrap(pre, post, block, field) {
+    field = field || 'draft';
+    const el = (field === 'draft' ? this.ta : this.taEdit).current;
+    const t = this.state[field];
+    if (!el) {
+      const ph = block ? 'code' : 'text';
+      this.setState({ [field]: t + pre + ph + post, saveStatus: 'saving…' });
+      this.autosave();
+      return;
+    }
+    const a = el.selectionStart, b = el.selectionEnd;
+    const sel = t.slice(a, b) || (block ? 'code' : 'text');
+    const next = t.slice(0, a) + pre + sel + post + t.slice(b);
+    this.setState({ [field]: next, saveStatus: 'saving…' }, () => {
+      el.focus();
+      const p = a + pre.length;
+      el.setSelectionRange(p, p + sel.length);
+    });
+    this.autosave();
+  }
+
+  autosave() {
+    clearTimeout(this._t);
+    this._t = setTimeout(() => {
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
+      this.setState({ saveStatus: 'saved as draft · ' + hh + ':' + mm });
+    }, 900);
+  }
+
+  componentWillUnmount() { clearTimeout(this._t); }
+
+  chip(on, count) {
+    const base = 'height:24px;padding:0 9px;border-radius:6px;font-family:inherit;font-size:11.5px;cursor:pointer;';
+    return on
+      ? base + 'border:1px solid #2f333a;background:#22252b;color:#e0e2e7'
+      : base + 'border:1px solid #22252b;background:transparent;color:#6b7078';
+  }
+
+  renderVals() {
+    const s = this.state;
+    const HID_TOP = 123, HID_MID = 347, HID_BOT = 88;
+    const topLeft = Math.max(0, HID_TOP - s.top);
+    const midLeft = Math.max(0, HID_MID - s.midUp - s.midDown);
+    const botLeft = Math.max(0, HID_BOT - s.bottom);
+
+    const arrow = (on) => 'width:46px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;background:transparent;border:none;padding:0;color:' + (on ? '#4a4f57' : '#2b2f36') + ';cursor:' + (on ? 'pointer' : 'default');
+
+    const icons = [
+      { id: 'ic-search', href: '#ic-search', use: 'command palette ⌘K, file filter, tree search' },
+      { id: 'ic-chev-down', href: '#ic-chev-down', use: 'expanded folder, expanded fold, thread group' },
+      { id: 'ic-chev-right', href: '#ic-chev-right', use: 'the same items collapsed + navigation in the participant list' },
+      { id: 'ic-thumb', href: '#ic-thumb', use: 'Ship button, 15px, the only filled icon' },
+      { id: 'ic-pencil', href: '#ic-pencil', use: 'comment on a line (gutter), edit a draft' },
+      { id: 'ic-check', href: '#ic-check', use: 'Viewed: 11×11 box (9px), buttons, Review complete' },
+      { id: 'ic-cross', href: '#ic-cross', use: 'close modal, clear filter, clear selection' },
+      { id: 'ic-swap', href: '#ic-swap', use: 'unified / side-by-side toggle' },
+      { id: 'ic-arrow-up', href: '#ic-arrow-up', use: 'bridge: load 20 more lines above' },
+      { id: 'ic-arrow-down', href: '#ic-arrow-down', use: 'bridge: load 20 more lines below' },
+      { id: 'ic-updown', href: '#ic-updown', use: 'bridge when fewer lines remain than the step size, expand all' },
+      { id: 'ic-reply', href: '#ic-reply', use: '"replying to" in deeply nested thread replies' },
+    ];
+
+    const tools = [
+      { id: 'b', href: '#ic-bold', title: 'Bold · ⌘B' },
+      { id: 'i', href: '#ic-italic', title: 'Italic · ⌘I' },
+      { id: 'a', href: '#ic-link', title: 'Link · ⌘K' },
+      { id: 'c', href: '#ic-code', title: 'Inline code' },
+      { id: 'p', href: '#ic-codeblock', title: 'Code block' },
+      { id: 'l', href: '#ic-list', title: 'List' },
+    ];
+
+    const prComments = s.items.map(c => {
+      const editing = s.editing === c.id;
+      return {
+        id: c.id, author: c.author, ini: c.ini, time: c.time, code: c.code || '',
+        body: this.render_md(c.body),
+        editable: c.draft, confirming: s.confirm === c.id, editing, notEditing: !editing,
+        chip: editing ? 'editing' : (c.draft ? 'draft · publishes on ship' : 'published'),
+        chipStyle: c.draft
+          ? "font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px"
+          : "font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8a90a0;background:#191b21;border:1px solid #2b2f36;border-radius:4px;padding:1px 5px",
+        boxStyle: editing
+          ? 'border:1px solid #3c4560;border-left:2px solid #7f8cff;border-radius:0 8px 8px 0;background:#12141c;padding:10px 12px'
+          : (c.draft
+            ? 'border:1px solid #33301f;border-left:2px solid #6b5b39;border-radius:0 8px 8px 0;background:#131210;padding:10px 12px'
+            : 'border:1px solid #1e2126;border-radius:8px;background:#111214;padding:10px 12px'),
+      };
+    });
+
+    const av = (bot) => 'width:19px;height:19px;flex:none;border-radius:' + (bot ? '5px' : '50%') + ";background:#2b2f36;color:#c7cad1;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace";
+    const cnt = (open) => "font-family:'IBM Plex Mono',monospace;font-size:11px;color:" + (open ? '#e2b878' : '#6b7078');
+
+    const people = [
+      { name: 'morgan', ini: 'MP', sub: '3 open · latest 40 min ago', count: '3', open: true, bot: false },
+      { name: 'ada', ini: 'AO', sub: '1 open · 4 resolved', count: '5', open: true, bot: false },
+      { name: 'drew', ini: 'DK', sub: 'all resolved', count: '4', open: false, bot: false },
+    ];
+    const bots = [
+      { name: 'ai-review-bot', ini: 'AR', sub: '68 threads · 61 automatically resolved', count: '68', open: false, bot: true },
+      { name: 'pci-lint', ini: 'PL', sub: '6 threads · 2 open', count: '6', open: true, bot: true },
+    ];
+    let parts = [];
+    if (s.f.people) parts = parts.concat(people);
+    if (s.f.bots) parts = parts.concat(bots);
+    if (!s.f.resolved) parts = parts.filter(p => p.open);
+    parts = parts.map(p => ({ ...p, avStyle: av(p.bot), countStyle: cnt(p.open) }));
+
+    const offThreads = [
+      { author: 'morgan', ini: 'MP', bot: false, state: 'open', body: 'This is the third PR with DISPATCH_LOCK in a different module. We need to settle who owns the locks before merging, otherwise no one will find them a month from now.', meta: 'outside the diff · 2 replies', link: '' },
+      { author: 'pci-lint', ini: 'PL', bot: true, state: 'open', body: 'PCI DSS 6.5.8: this PR touches 3 files in the payments zone. The review requires a second approval from someone with the payments-reviewer role.', code: 'policy: pci/checkout-scope.yaml#L118', link: 'https://wiki.example.internal/security/payments/checkout-scope-and-review-rules', meta: 'outside the diff · bot, auto-resolves after 7 days' },
+    ].map(t => ({
+      ...t, avStyle: av(t.bot),
+      stateStyle: "font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px",
+    }));
+
+    return {
+      topLabel: s.top ? topLeft + ' unchanged lines · shown ' + s.top : '123 unchanged lines',
+      midLabel: midLeft + ' unchanged lines',
+      bottomLabel: (s.bottom ? botLeft + ' unchanged lines' : '88 unchanged lines') + ' · to end of file',
+      bridgeOpen: midLeft > 0,
+      headLines: this.lines(124 - s.top, 125 - s.top, Math.min(s.top, 6)),
+      midUpLines: this.lines(125, 126, Math.min(s.midUp, 6)),
+      midDownLines: this.lines(470 - Math.min(s.midDown, 6), 472 - Math.min(s.midDown, 6), Math.min(s.midDown, 6)),
+      upTopStyle: arrow(topLeft > 0),
+      midUpStyle: arrow(true),
+      midDownStyle: arrow(true),
+      downBottomStyle: arrow(botLeft > 0),
+      revealTop: () => this.step('top'),
+      revealMidUp: () => this.step('midUp'),
+      revealMidDown: () => this.step('midDown'),
+      revealBottom: () => this.step('bottom'),
+
+      icons, tools,
+      isMd: s.mode === 'md', isWy: s.mode === 'wy',
+      wyRef: this.wy, wyEditRef: this.wyEdit,
+      wyPlaceholder: s.mode === 'wy' && !String(s.draft || '').trim(),
+      wyNodes: s.wyNodes || (this._n0 = this._n0 || this.render_md(s.draft)),
+      wyNodesEdit: s.wyNodesEdit || (this._n1 = this._n1 || this.render_md(s.editDraft)),
+      onWy: () => this.syncWy('draft'),
+      onWyEdit: () => this.syncWy('editDraft'),
+      wyTool: (e) => this.wyTool(e, 'draft'),
+      wyToolEdit: (e) => this.wyTool(e, 'editDraft'),
+      modeMdStyle: 'height:20px;padding:0 7px;border:none;border-radius:4px;cursor:pointer;' + (s.mode === 'md'
+        ? "background:#2b2f36;color:#f0f1f4;font-family:'IBM Plex Mono',monospace;font-size:11px"
+        : "background:transparent;color:#8a8f98;font-family:'IBM Plex Mono',monospace;font-size:11px"),
+      modeWyStyle: 'height:20px;padding:0 7px;border:none;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px;' + (s.mode === 'wy'
+        ? 'background:#2b2f36;color:#f0f1f4;font-weight:500'
+        : 'background:transparent;color:#8a8f98'),
+      setModeMd: () => this.setState({ mode: 'md' }),
+      setModeWy: () => this.setState({ mode: 'wy', wyNodes: this.render_md(this.state.draft), wyNodesEdit: this.render_md(this.state.editDraft) }),
+      taRef: this.ta,
+      draft: s.draft,
+      onDraft: (e) => { this.setState({ draft: e.target.value, saveStatus: 'saving…' }); this.autosave(); },
+      toolNew: (e) => (s.mode === 'wy' ? this.wyTool(e, 'draft') : this.toolClick(e, 'draft')),
+      toolEdit: (e) => (s.mode === 'wy' ? this.wyTool(e, 'editDraft') : this.toolClick(e, 'editDraft')),
+      taEditRef: this.taEdit,
+      editDraft: s.editDraft,
+      editPreview: this.render_md(s.editDraft || ''),
+      onEditDraft: (e) => { this.setState({ editDraft: e.target.value, saveStatus: 'saving…' }); this.autosave(); },
+      saveEdit: () => {
+        this.setState(st => ({
+          items: st.items.map(it => it.id === st.editing ? { ...it, body: st.editDraft, time: 'just now' } : it),
+          editing: null, editDraft: '', saveStatus: 'draft updated',
+        }));
+      },
+      saveDraft: () => {
+        if (!s.draft.trim()) return;
+        this.setState(st => {
+          const it = { id: Date.now(), author: 'rowan', ini: 'RS', time: 'just now', draft: true, body: st.draft };
+          return { items: [it].concat(st.items), draft: '', wyNodes: this.render_md(''), saveStatus: 'saved as draft' };
+        });
+      },
+      cancelEdit: () => this.setState({ editing: null, editDraft: '', confirm: null, saveStatus: '' }),
+      composerTitle: 'New PR comment',
+      saveLabel: 'Save draft',
+      cancelLabel: 'Cancel',
+      saveStatus: s.saveStatus || (s.draft ? '' : 'draft is empty'),
+      draftChip: s.items.filter(c => c.draft).length + ' drafts · published with Ship',
+      shipNote: 'Ship publishes drafts as one batch, together with line comments.',
+      prComments, prEmpty: prComments.length === 0,
+      startEdit: (e) => {
+        const id = Number(e.currentTarget.getAttribute('data-i'));
+        const it = this.state.items.filter(x => x.id === id)[0];
+        if (it) this.setState({ editing: id, editDraft: it.body, wyNodesEdit: this.render_md(it.body), confirm: null, saveStatus: '' });
+      },
+      askDrop: (e) => {
+        const id = Number(e.currentTarget.getAttribute('data-i'));
+        this.setState(st => ({ confirm: st.confirm === id ? null : id }));
+      },
+      cancelDrop: () => this.setState({ confirm: null }),
+      dropDraft: (e) => {
+        const id = Number(e.currentTarget.getAttribute('data-i'));
+        this.setState(st => ({
+          items: st.items.filter(x => x.id !== id),
+          confirm: null,
+          editing: st.editing === id ? null : st.editing,
+          draft: st.editing === id ? '' : st.draft,
+          saveStatus: 'draft deleted',
+        }));
+      },
+
+      parts, offThreads, offOpen: s.offOpen,
+      offHint: s.offOpen ? 'read them here' : 'expand',
+      offChevStyle: 'display:block;color:#6b7078;transform:rotate(' + (s.offOpen ? '0' : '-90') + 'deg)',
+      toggleOff: () => this.setState(st => ({ offOpen: !st.offOpen })),
+      toggleF: (e) => {
+        const k = e.currentTarget.getAttribute('data-k');
+        this.setState(st => ({ f: { ...st.f, [k]: !st.f[k] } }));
+      },
+      fPeople: this.chip(s.f.people), fBots: this.chip(s.f.bots), fResolved: this.chip(s.f.resolved),
+      openPr: () => {},
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -76,7 +76,7 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
 }
 
 /**
- * Bootstraps the session in one command (rpc-design §3): start the PR server, register
+ * Bootstraps the entire session in one command (`docs/protocol.md §3`): start the PR server, register
  * as a worker and return the UI link. The model knows nothing about the server or registration. It sees only the link
  * and the next step of the loop.
  */
@@ -91,8 +91,8 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
     });
-    // A fresh session always gets the worker slot: the server takes it even from a live previous session
-    // (decision 2026-08-20), so `up` registers through the normal path with no fallback.
+    // A fresh session always gets the worker slot. The server takes it even from a live previous session,
+    // so `up` registers through the normal path, with no fallback paths.
     await registerWorker(prKey, labelsOf(command), io);
 
     io.out(formatUpReady(server.uiUrl, prKey));
@@ -115,7 +115,7 @@ async function workerRegister(command: Extract<Command, { kind: 'worker-register
 }
 
 /**
- * Registers a session as the PR worker: each session has a fresh identity (decision log).
+ * Registers a session as the PR worker. Each session gets a fresh identity.
  * The server writes it to the state file while handling `register` (`worker-id-file.ts`):
  * two parallel sessions must have exactly as many writers to the shared file as there are
  * owners of the slot: one.

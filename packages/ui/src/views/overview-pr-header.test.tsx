@@ -8,7 +8,7 @@ import { createThreadStore } from '../threads/store.js';
 import { ViewFrame } from './view-frames.tsx';
 
 /**
- * PR header in Overview (M2F-T4, "Sherpa.dc.html" prototype, Overview screen): number and counters
+ * PR header in Overview (prototype `docs/design/Sherpa.dc.html`, Overview screen): number and diff counters
  * in the metadata row, author with time, branches and check status.
  */
 

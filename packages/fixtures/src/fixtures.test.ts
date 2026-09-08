@@ -29,7 +29,7 @@ interface HunkCounts {
  * Minimal unified diff parsing: hunk headers, matching counts and consistent line
  * numbers between hunks of one file (`newStart − oldStart` must equal the accumulated
  * delta of previous hunks, with hunks ordered and non-overlapping, otherwise `git apply` will reject
- * the patch, and context expansion and the minimap in the UI will break). The full parser is M1-T5.
+ * the patch, and "expand context" and the UI minimap will break). The full parser lives in the UI.
  * Here, fixtures must be parseable and report accurate `+N/−M` counts.
  */
 function parsePatch(patch: string): HunkCounts {
@@ -191,7 +191,7 @@ describe('fixtures: shared invariants', () => {
 describe('medium fixture', () => {
     const data = fixtureIteration('medium');
 
-    it('matches the handoff header plus images: 21 files, +812 −56', () => {
+    it('matches the design handoff header plus images: 21 files, +812 −56', () => {
         expect(data.diff.files.length).toBe(MEDIUM_TOTALS.files);
         expect(totalChanges(data.diff.files)).toEqual({
             additions: MEDIUM_TOTALS.additions,
@@ -260,7 +260,7 @@ describe('medium fixture', () => {
 describe('small fixture', () => {
     const data = fixtureIteration('small');
 
-    it('is below the route threshold (requirements §3.6)', () => {
+    it('is below the route threshold', () => {
         const totals = totalChanges(data.diff.files);
         expect(totals.additions + totals.deletions).toBeLessThanOrEqual(40);
     });
@@ -276,7 +276,7 @@ describe('small fixture', () => {
 describe('empty fixture', () => {
     const data = fixtureIteration('empty');
 
-    it('empty PR (SPEC §4.1): an iteration exists with no changes', () => {
+    it('has an iteration with no changes for an empty PR', () => {
         expect(data.diff.files).toEqual([]);
         // Base and head match: there is nothing to change relative to the base.
         expect(data.diff.headCommit).toBe(data.diff.baseCommit);

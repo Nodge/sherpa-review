@@ -19,7 +19,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Queue with leases (rpc-design §5). `id` is the contract TaskId, shown as `sherpa/<id>` in the UI and prompts.
+        // Queue with leases (docs/protocol.md §5). `id` is also the contract's TaskId, shown as `sherpa/<id>` in the UI and prompts.
         name: '002-queue',
         sql: `
             CREATE TABLE tasks (
@@ -44,8 +44,8 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // PR worker (rpc-design §7). Exactly one row because there is one server and one worker per PR.
-        // Session history is unnecessary in M0. Reconnection overwrites the slot.
+        // PR worker (docs/protocol.md §7). Exactly one row: each server handles one PR, and each PR has one worker.
+        // No session history is needed. Reconnection overwrites the slot.
         name: '003-worker',
         sql: `
             CREATE TABLE worker (
@@ -65,9 +65,9 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // PR reading progress (T8, requirements §5). One DB per PR, so there are no prKey keys inside.
+        // PR reading progress (docs/architecture.md §3). One database per PR, so no internal prKey keys.
         // A row in `file_progress` appears only after an explicit reviewer action. Its absence means
-        // the default state, which the UI interprets. `file_seen_ranges` prepares for M2 stops:
+        // the default state, interpreted by the UI. `file_seen_ranges` prepares for route stops:
         // range writes arrive with them, while reads already work.
         // Boundary columns are `start_line`/`end_line` because `end` is an SQLite keyword.
         name: '005-progress',
@@ -89,14 +89,14 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // PR route (M2-T4). Exactly one row: one database per PR, one snapshot in M2
-        // (snapshot versioning belongs to M4). The snapshot and stop intents are JSON blobs.
+        // PR route. Exactly one row: one database per PR and, at the time, one snapshot
+        // (snapshot versioning arrived in migration `010`). The snapshot and stop intents are JSON blobs.
         // Protocol schemas describe their shape, so there is no need to duplicate it in columns. On input and
         // output, they pass through `routeSnapshotSchema` (a fail-closed boundary).
         // `route_tasks` links a queued task to the stops it fills. The orchestrator uses this
         // link to restore stop statuses after a restart and avoid scheduling duplicates.
         // `rejections` counts result rejections within one lease. A rejection does not release the lease,
-        // but the model cannot keep fixing the result forever (rpc-design §3).
+        // but the model cannot keep fixing forever (docs/protocol.md §3).
         name: '006-route',
         sql: `
             CREATE TABLE route_state (
@@ -121,7 +121,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Route stop progress (M2-T7, requirements §3.1). The stop mark persists per PR, and
+        // Route stop progress (docs/architecture.md §7.1). A stop's mark persists per PR, and
         // the seen ranges it adds carry its `stop_id`. Clearing the mark removes
         // exactly that stop's ranges, leaving other stops' ranges and manual file marks alone.
         // `source_stop_id IS NULL` means a range did not come from a stop (nothing writes these now, but
@@ -140,7 +140,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Chat exchanges and local agent notes (M3-T3). Anchors are JSON blobs: their
+        // Chat exchanges and local agent notes. Anchors are JSON blobs. Their
         // canonical shape lives in `chatAnchorSchema`, which the store validates on reads and writes.
         // `task_id` is the exchange's current attempt. A retry replaces it with a new task.
         name: '008-chat',
@@ -183,7 +183,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // PR iterations and multiple snapshots (M4-T3, brief §4a, F3).
+        // PR iterations and multiple snapshots (docs/product.md §4a, F3).
         //
         // `iterations` stores a local patch for each iteration. The host no longer serves it
         // after a force-push, but old snapshots must remain readable. `interdiffs` caches slices
@@ -191,7 +191,7 @@ export const MIGRATIONS: readonly Migration[] = [
         //
         // Route snapshots move from the `route_state.snapshot` blob to their own table. A PR has
         // many snapshots (one per generation), while `route_state` keeps only the current ID.
-        // The migration copies the existing dogfooding database row, preserving the route.
+        // Migration data moves the existing row from the accumulated database, preserving the route.
         // The condition uses `json_valid`: a corrupted blob (a manual database edit) must leave
         // "no route" instead of crashing server startup during migration. If the blob did not move, reset the phase
         // too. "ready"/"filling" without a snapshot would falsely tell the UI a route is ready.
@@ -260,7 +260,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // This PR's UI state (M3-T18): collapsed directories and cards, recent palette commands.
+        // UI state for this PR: collapsed directories and cards, recent palette commands.
         // Key-value storage: the contract schema defines the keys, so a new field needs no migration.
         // No prKey column, since the database already belongs to one PR.
         name: '011-ui-pr-state',
@@ -273,7 +273,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Route task iteration (M4-T4): acceptance must resolve anchors against the same
+        // Route task iteration: the result handler must resolve anchors against the exact
         // diff used to build the task payload. After a server restart, there is nowhere else
         // to recover it. Old bindings do not name an iteration, so they are deleted. Their tasks
         // become orphans, and the orchestrator cancels them and schedules generation again.
@@ -285,14 +285,14 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Reading progress gains an iteration dimension (M4-T6, planning decision 4). File marks and
+        // Adds iteration to reading progress. File marks and
         // seen ranges are keyed by iteration, stop marks by snapshot. After a push, progress
         // in the previous iteration must stay readable, and stops in the new snapshot receive their
         // marks through carryover. `progress_carries` records completed carryovers. Recalculating would restore
         // a mark the reviewer had already cleared.
         //
         // SQLite cannot change a PK, so tables are recreated with a copy (as in `010`).
-        // Rows from the dogfooding database move to the active iteration or, if absent, the current
+        // Rows from the accumulated database move to the active iteration, or, if absent, the current
         // snapshot's iteration, or, if that is absent too, `unknown` (`LEGACY_DIFF_ID`). Such a server has no host,
         // and this is its only "iteration". Stop marks without a snapshot have no meaning
         // and are deleted.
@@ -372,12 +372,12 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Note anchors after a push (M4-T11). `anchor` and `commit_hash` describe the current
+        // Note anchors after a push. `anchor` and `commit_hash` describe the note's current
         // location and move to the new iteration, so the original location gets its own
         // columns. The contract's `origin` never changes. `lost_anchor` means a push rewrote the actual
         // lines, leaving nowhere to carry the note. It leaves the code and stays in chat with a label.
         //
-        // Number 013 is taken by the progress carryover migration (M4-T6).
+        // Number 013 is taken by the progress carryover migration.
         name: '014-notes-anchors',
         sql: `
             ALTER TABLE agent_notes ADD COLUMN lost_anchor INTEGER NOT NULL DEFAULT 0;
@@ -388,7 +388,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Track mark carryover into a snapshot (M4-T13). Freezing a snapshot repeats when
+        // Tracks mark carryover to a snapshot. Snapshot freezing repeats when
         // a stop is filled, while "N of M carried over" adds up across passes. Without recording
         // that a stop has already been counted, the second pass would count it again.
         name: '015-stop-carried',
@@ -397,7 +397,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // File path alongside `fileId` in progress records (M5-T20). The review host's `fileId` is an
+        // File path beside its `fileId` in progress records. The review host's `fileId` is
         // opaque id, so records from two iterations can only be matched through a path.
         // The path came from the saved source iteration patch, but iterations recorded by server
         // 0.3.x have no patch and never will. Carryover silently returned zero.
@@ -412,7 +412,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // The language the agent speaks with the reviewer (M5-T2): a third session label beside the harness
+        // The language the agent uses with the reviewer: a third session label beside the harness
         // and model. The UI uses it as a hint in locale selection, not an instruction.
         name: '017-worker-lang',
         sql: `
@@ -420,7 +420,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Draft buffer (M5-T15, requirements §6 "drafts are never lost"): text the server
+        // Draft buffer (docs/architecture.md §6, "drafts are never lost"): text the server
         // accepted but has not delivered to the host. `id` is the composer's `clientKey`, so repeating the same
         // write upserts the row instead of adding another. `idempotency_key` is created with the
         // row and survives every attempt. If the host has already accepted the write, retrying with the same
@@ -442,7 +442,7 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Drafts created from buffer records (M5-T15): `id` is the composer's `clientKey`,
+        // Drafts created from buffer entries: `id` is the same composer `clientKey`,
         // and the pair survives deletion of the buffer row. Without it, another write with the same key would reach
         // the host as a create operation. The idempotency key would return the existing comment with
         // its old text, silently losing the new text (the server would consider the write saved).
@@ -456,8 +456,8 @@ export const MIGRATIONS: readonly Migration[] = [
         `,
     },
     {
-        // Requested response language (M5-T4): the retry prompt must use the language of
-        // the original question, or the answer would change language mid-feed. NULL means a pre-M5 exchange,
+        // Requested response language: the retry prompt must use the language of
+        // the original question, or the answer would switch languages mid-feed. NULL means the exchange predates the column,
         // so its language was not recorded. There is no backfill. The reader interprets NULL as `en`.
         name: '020-chat-locale',
         sql: `

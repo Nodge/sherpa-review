@@ -20,7 +20,7 @@ import type { ViewId } from './session/views.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Iteration integration in App (M4-T8): which banners appear in which tab and phase, and
+ * Iteration integration in App: which banners appear on which tab and in which phase, and
  * whether an invalid "what is new" filter is reset. The tab here is always outside the route,
  * so these tests check what appears outside the route. Banner markup itself is checked by
  * `iteration-banners.test.tsx`.
@@ -274,8 +274,7 @@ describe('validity of the "what is new" filter', () => {
 /**
  * The diff and lenses have no revision of their own. They are immutable within an iteration. Reload them
  * when "without parameters" starts meaning a different iteration, which happens when a new
- * skeleton is accepted, not at the push itself. The whole route remains readable on the previous iteration without anchor drift
- * (task breakdown decision 10).
+ * skeleton is accepted, not on push. Read the previous iteration's whole route without anchor drift.
  */
 describe('reloading the diff and lenses when the iteration changes', () => {
     const V1_ACTIVE = iteration(MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, 'active');

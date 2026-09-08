@@ -5,8 +5,8 @@ import { useT } from '../i18n/index.js';
 import './banner-slot.css';
 
 /**
- * Slot priority order (SPEC §2.21): generation failure → failed route action →
- * rebuild → stale route → read-only mode for a previous iteration → second pass →
+ * Slot priority order (docs/design/SPEC-elements.md §2.21): generation failure →
+ * failed route action → rebuild → stale route → previous iteration read-only mode → second pass →
  * underexplained route → route filling → notes with lost anchors → audit scope →
  * generation cap → route language → a ship from someone else. Keep the numbers here instead of scattering them across
  * source declarations. This order is a product decision.
@@ -17,7 +17,7 @@ import './banner-slot.css';
  * "Route is stale" sits below rebuild. While a new route is being built, the old route's age is
  * no longer news. The second-pass banner sits lower because it describes a filter, not a condition.
  *
- * Agent disconnection is absent here. Its status lives in the pill, with an explanation in its popover (decision #32).
+ * Agent disconnection is absent here. The pill shows the status, and its popover explains it.
  *
  * A ship from someone else is last. It does not end the review or require any action.
  */

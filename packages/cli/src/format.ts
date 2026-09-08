@@ -9,7 +9,7 @@ import {
 import { CLI_VERSION } from './version.js';
 
 /**
- * Task in prompt format (rpc-design §4): the model reads the output as text, so it contains
+ * Task in prompt format (`docs/protocol.md §4`). The model reads the output as text, so it contains
  * instructions, context paths and ready-to-run submission commands. Large context stays in files.
  */
 export function formatTask(task: Task): string {
@@ -38,7 +38,7 @@ export function formatTask(task: Task): string {
 
 /**
  * The only link the skill shows the reviewer. Keep its format stable.
- * The token is in the fragment: it is not sent to the server, but survives page reloads (rpc-design §8).
+ * The token is in the fragment: it never reaches the server but survives page reloads (`docs/protocol.md §8`).
  */
 export function formatUiUrl(port: number, token: string): string {
     return `http://127.0.0.1:${String(port)}/#t=${token}`;
@@ -57,7 +57,7 @@ export function formatUpReady(uiUrl: string, prKey: string): string {
     ].join('\n');
 }
 
-/** Worker work is finished: DONE signals the session to exit (rpc-design §3). */
+/** Worker work is finished. The word DONE tells the session to end (`docs/protocol.md §3`). */
 export function formatDone(message: string): string {
     return `${message}\n\nDONE`;
 }
@@ -124,7 +124,7 @@ export function formatRpcError(error: RpcError['error'], role: CallRole): string
 
 /**
  * Local rejection before sending. An oversized result would make the server fail the task,
- * while here the task stays leased and the model can try shortening the file (decision log).
+ * but this leaves it leased so the model can try to shorten the file.
  */
 export function formatOversizedResult(taskId: number, file: string, bytes: number): string {
     return (

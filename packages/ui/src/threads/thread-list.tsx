@@ -359,7 +359,7 @@ function ThreadBlock({
     );
 }
 
-/** Pin chip and navigation: the label shows a short commit, the tooltip has the full hash (README §13). */
+/** Pin chip and navigation: short commit in the label, full commit in the tooltip (docs/design/README.md §13). */
 export function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
     const t = useT();
     return (
@@ -377,7 +377,7 @@ export function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
 }
 
 /**
- * Threads absent from every line of the rendered diff: the file left the PR (SPEC §2.17)
+ * Threads absent from every rendered diff line: the file left the PR (docs/design/SPEC-elements.md §2.17)
  * or the thread belongs to a PR-level bot. The heading names the reason only when all threads share it.
  */
 function outsideTitle(threads: readonly Thread[], t: Translate): string {
@@ -458,8 +458,8 @@ export function NewCommentComposer({
     if (composer === null) {
         return null;
     }
-    // Three cases: no anchor means a PR comment, an anchor without a line means the whole file (image,
-    // M5-T24), and an anchor with a line means a code range.
+    // Three cases: no anchor means a PR comment, an anchor without a line means the whole file
+    // (an image), and an anchor with a line means a code range.
     const anchor = composer.anchor;
     const position = anchor?.position ?? null;
     return (
@@ -515,11 +515,11 @@ function ComposerForThread({
     draft: Comment | null;
     draftEditorAvailable: boolean;
     composer: ComposerSnapshot | null;
-    /** The thread pin commit: its draft was written before the push (SPEC §4.5). */
+    /** Thread's pinned commit: its draft was written before the push (docs/design/SPEC-elements.md §4.5). */
     pinnedCommit: string | null;
 }) {
     const t = useT();
-    // Replies are available only in the active iteration (M4 scope).
+    // Replies are only allowed in the active iteration.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     if (composer === null) {
@@ -672,7 +672,7 @@ function fileNameOf(path: string): string {
 }
 
 /**
- * File comment composer without a line (M5-T24): an anchor with `position: null` places it below
+ * Composer for a file comment without a line. An anchor with `position: null` places it under
  * the card header, alongside threads that lost their line.
  */
 export function openFileComposer(store: ThreadStore, fileId: string, path: string, commentIssues: boolean): void {

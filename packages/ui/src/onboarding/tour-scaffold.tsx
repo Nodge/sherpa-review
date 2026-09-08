@@ -12,8 +12,8 @@ import { CollapsedStop, StopCard, StopSkeleton } from '../views/route/stop-card.
 import './tour.css';
 
 /**
- * Tour scaffold in the Route tab until a route exists (Alice Ingram's decision, 2026-09-04):
- * the tour starts as soon as the UI first opens, and a placeholder supplies the missing anchors,
+ * Tour placeholder on the "Route" tab while no route exists:
+ * the tour starts as soon as the UI first opens, and the placeholder supplies the missing step targets,
  * otherwise the first visit would tour an empty screen.
  *
  * The placeholder is inert by construction: it never enters `buildRouteModel` or `entries`, has
@@ -22,7 +22,7 @@ import './tour.css';
  *
  * Disappears when the tour ends or the real route arrives.
  */
-/** Scaffold layer: search it first for the step anchor, see `anchorOf` in `tour-layer.tsx`. */
+/** Placeholder layer: step targets are searched here first. See `anchorOf` in `tour-layer.tsx`. */
 export const TOUR_SCAFFOLD_SELECTOR = '.tour-scaffold';
 
 export function TourScaffold() {

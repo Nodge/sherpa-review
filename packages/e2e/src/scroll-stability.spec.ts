@@ -22,7 +22,7 @@ const JUMP_TOLERANCE_PX = 1;
 const SETTLE_FRAMES = 8;
 /** Scroll step is roughly one fixture card, so each step brings in a fresh, cold card. */
 const STEP_PX = 900;
-/** README "Interactions": a route jump target sits at −150px from the container edge. */
+/** docs/design/README.md "Interactions": a route jump target lands at −150px from the container edge. */
 const ROUTE_JUMP_OFFSET_PX = 150;
 
 interface WalkReport {
@@ -72,7 +72,7 @@ test('fixture-large does not jump during cold scrolling through the full diff', 
 
 /**
  * Remeasuring cards already shown. Switching modes changes the heights of all cards on screen and
- * overscan. Cards above the fold must be compensated regardless of where the reviewer
+ * in the overscan area. Cards above the fold must be compensated for regardless of the reviewer's last
  * scroll direction, otherwise the visible text moves the moment the toggle is pressed.
  */
 for (const gesture of ['up', 'down'] as const) {
@@ -386,7 +386,7 @@ function walk(page: Page, direction: 'down' | 'up'): Promise<WalkReport> {
 }
 
 /**
- * "Scrolling follows collapse" (decision log 2026-09-02): marking the file
+ * "Scrolling follows collapse": marking the file
  * the reviewer is reading moves the view to the next file. Marking the last file and clearing a mark
  * do not move the view.
  */

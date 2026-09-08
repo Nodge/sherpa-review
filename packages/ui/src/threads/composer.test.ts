@@ -6,7 +6,7 @@ import { closePublishedComposers, composerControllerFor, createComposerControlle
 import { openNewComposer, openReply } from './thread-list.tsx';
 import { createThreadStore } from './store.js';
 
-/** Draft endpoint responses (M5-T15): the host accepted the write. */
+/** Draft endpoint responses: the host accepted the write. */
 const SAVED = { outcome: 'saved' } as const;
 function saved(comment: Comment): UiSaveDraftResponse {
     return { outcome: 'saved', comment };
@@ -281,7 +281,7 @@ describe('composer state machine', () => {
     });
 
     // The server did not respond. The text stays in the field, and a retry uses the same `clientKey`, so
-    // there is no duplicate even if the first request did get through (M5-T15).
+    // it cannot create a duplicate even if the first request did reach the server.
     it('keeps the text in the field on request failure and retries with the same clientKey', async () => {
         const { store, controller, save } = setup();
         save.mockRejectedValueOnce(new Error('server did not respond'));
@@ -560,7 +560,7 @@ describe('composer state machine', () => {
     });
 });
 
-// Draft buffer (M5-T15): the host rejected the write, the server accepted the text and will deliver it.
+// Draft buffer: the host rejected the write, but the server accepted the text and will deliver it.
 describe('composer and draft buffer', () => {
     it('keeps the composer open without adding a draft to threads on a buffered response', async () => {
         const { store, controller, save } = setup();

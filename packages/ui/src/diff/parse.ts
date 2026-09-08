@@ -16,7 +16,7 @@ import { languageOf, tokenizeLine } from './syntax.js';
 import { diffWords } from './word-diff.js';
 
 /**
- * Parses the host's raw unified diff into the rendering model. Runs in a worker (requirements §1/C3).
+ * Parses the raw unified diff from the host into a render model. Runs in a worker (docs/architecture.md §1).
  *
  * Fail-open: the parser does not throw on a malformed patch. An unknown line enters the model
  * as context with the `malformed` flag. The UI should show an odd diff instead of a blank screen.

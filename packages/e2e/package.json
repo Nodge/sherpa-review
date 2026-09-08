@@ -1,7 +1,9 @@
 {
   "name": "@sherpa/e2e",
   "version": "0.0.0",
+  "description": "Sherpa Playwright specs against built artifacts",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "e2e": "playwright test",

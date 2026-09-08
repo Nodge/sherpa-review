@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandBox } from './command-box.tsx';
 
 /**
- * Copy feedback is visible, not only announced by a screen reader (dogfooding #4). Success changes
- * the button label for a couple of seconds. The fallback without Clipboard API prints a line below the command.
+ * Copy feedback is visible, not just announced by a screen reader. Success changes the button label
+ * for a couple of seconds, and the fallback without Clipboard API adds a line below the command.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -110,7 +110,7 @@ describe('command box', () => {
         expect(liveRegion(host).textContent).toBe('');
     });
 
-    it('selects the command and shows the fallback line without the Clipboard API', async () => {
+    it('selects the command and shows the fallback message without Clipboard API', async () => {
         setClipboard(undefined);
         const { host, button } = mount();
 
@@ -127,7 +127,7 @@ describe('command box', () => {
         expect(region.className).toBe('command-box__fallback');
     });
 
-    it('uses the same fallback when Clipboard API rejects', async () => {
+    it('uses the same fallback when Clipboard API fails', async () => {
         setClipboard({ writeText: () => Promise.reject(new Error('access denied')) });
         const { host, button } = mount();
 

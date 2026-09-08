@@ -2,8 +2,8 @@ import type { MessageKey } from '../i18n/ru.js';
 import type { Translate } from '../i18n/translate.js';
 
 /**
- * Shared keyboard command registry (requirements §3.3). Declare each command once here,
- * and the same declaration builds the command palette (M1-T9) and shortcuts sheet (M5-T5) without
+ * Shared keyboard command registry (docs/architecture.md §7.3). Each command is declared here once,
+ * and that declaration also builds the command palette and shortcuts sheet. The UI must not have
  * a second place that defines keyboard shortcuts.
  *
  * The application also has a single keydown listener: it decides which command owns the key. It also keeps

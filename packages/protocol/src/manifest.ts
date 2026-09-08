@@ -11,7 +11,7 @@ export const prKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
 export type PrKey = z.infer<typeof prKeySchema>;
 
 /**
- * Discovery manifest: `~/.sherpa/servers/<prKey>.json`, file permissions 0600 (rpc-design §8).
+ * Discovery manifest: `~/.sherpa/servers/<prKey>.json`, file permissions 0600 (`docs/protocol.md §8`).
  * The CLI resolves the PR from cwd or `SHERPA_PR` → manifest → port + token. The agent knows neither.
  * A stale manifest (dead PID) is cleaned up on the next skill run.
  */

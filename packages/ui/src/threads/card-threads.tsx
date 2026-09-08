@@ -13,7 +13,7 @@ import { NewCommentComposer, ThreadList } from './thread-list.tsx';
 /**
  * Thread and composer placement in a file card: what goes below the header and what sits
  * below a specific line. Both views share the same logic. Full diff cards and route stop
- * cards must behave identically (brief principle 5: one reader, two reading orders).
+ * cards must behave alike (principle 5 in `docs/product.md` §3: one reader, two orders).
  *
  * On the route, stop anchors trim the card model. A thread on a line absent from the
  * slice goes below the header, through the same path as a thread without a position.

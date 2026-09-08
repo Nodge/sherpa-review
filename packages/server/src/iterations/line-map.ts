@@ -1,5 +1,5 @@
 /**
- * Line mapping between PR iterations (M4, planning decision 3). Input is an interdiff A→B:
+ * Maps lines between PR iterations. Takes an interdiff A→B:
  * a regular `PrDiff` whose old patch side is iteration A's head and whose new side is B's head.
  * A line outside the interdiff hunks carries over to B with an offset. A line inside is "touched".
  *
@@ -7,7 +7,7 @@
  * stale banner text and note anchor migration. Only pure functions here, with no database or host.
  *
  * `walkPatch` reads the hunk layout. It is the same parser that supplies line numbers to the model
- * in the payload (decision of 2026-08-26). There is no separate parser here.
+ * in the payload. There is no separate parser here.
  */
 import type { PrDiff, RouteSnapshot, RouteStop } from '@sherpa/protocol';
 
@@ -55,7 +55,7 @@ export interface IterationMap {
     touchedInB(path: string, side: 'old' | 'new', range: LineRange): readonly LineRange[];
 }
 
-/** Classify a stop in a new snapshot (planning decision 5). */
+/** Classification of a stop in the new snapshot. */
 export type StopChangeKind = 'new' | 'changed';
 
 /** Offset segment: lines in A starting at `from` shift by `delta` in B. */

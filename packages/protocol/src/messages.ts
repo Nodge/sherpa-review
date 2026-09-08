@@ -12,8 +12,8 @@ export type WorkerId = z.infer<typeof workerIdSchema>;
 
 /**
  * Shared part of all worker requests. Versions go in every call: the CLI keeps no state
- * between runs, the handshake (rpc-design §9) happens on every request and costs little.
- * Every such request is a heartbeat (rpc-design §7).
+ * between runs, so the handshake (`docs/protocol.md §9`) happens on every request and costs little.
+ * Each such request is a liveness signal (`docs/protocol.md §7`).
  */
 const workerRequestBase = z.object({
     protocolVersion: semverSchema,
@@ -22,9 +22,9 @@ const workerRequestBase = z.object({
 });
 
 /**
- * `sherpa worker register` registers the session as the PR worker at skill startup (rpc-design §7).
+ * `sherpa worker register` registers the PR worker session when the skill starts (`docs/protocol.md §7`).
  * A new session always wins: registration with a fresh workerId takes the slot even from a live
- * worker (decision 2026-08-20, amendment to spec §3.7), the displaced worker's leases return to the queue immediately.
+ * worker (`docs/architecture.md §7.7`). The displaced worker's leases return to the queue immediately.
  * The same workerId renews registration idempotently. Registration does not throw `worker_conflict`. The
  * displaced session receives it on subsequent calls.
  */
@@ -34,7 +34,7 @@ export const workerRegisterRequestSchema = workerRequestBase.extend({
     /** Worker model name for UI status ("claude-opus-5", "gpt-5"), a free-form string reported by the model itself. */
     model: z.string().min(1).max(64).optional(),
     /**
-     * Language hint (M5, planning decision 1): the language the user speaks with the agent,
+     * Language hint: the language the user uses with the agent.
      * The UI uses it if the reviewer has not chosen a language explicitly. If absent, the agent did not determine it,
      * so the UI uses the browser language.
      */
@@ -49,7 +49,7 @@ export const workerRegisterResponseSchema = z.object({
 export type WorkerRegisterResponse = z.infer<typeof workerRegisterResponseSchema>;
 
 /**
- * PR worker state as seen by the server (rpc-design §7), displayed in the UI.
+ * PR worker state as seen by the server (`docs/protocol.md §7`), displayed in the UI.
  * `disconnected` means more than `WORKER_DEAD_AFTER_SECONDS` have passed since the last CLI call.
  */
 export const workerStatusSchema = z.discriminatedUnion('kind', [
@@ -78,7 +78,7 @@ export type WorkerStatus = z.infer<typeof workerStatusSchema>;
 
 /**
  * `sherpa worker next` long-polls for the next task.
- * The harness decides how long to wait (decision 2026-08-27, #35). `waitSeconds` is the desired wait,
+ * The harness decides how long to wait. `waitSeconds` is the requested wait,
  * and the server holds the call no longer than that. Without the field, the server default applies
  * (`LONG_POLL_DEFAULT_SECONDS`). Schema validation rejects values above the limit.
  */
@@ -95,7 +95,7 @@ export const workerNextResponseSchema = z.discriminatedUnion('kind', [
     /**
      * The worker is done (DONE), so the session can end. The human-readable reason
      * is in `message` (for example, "the reviewer closed the tab"). The worker passes it to the user.
-     * There is no machine-readable reason field: the harness behaves the same for any reason (decision M2F-T33).
+     * There is no machine-readable reason field because the harness behaves the same for every reason.
      */
     z.object({ kind: z.literal('done'), message: z.string() }),
 ]);
@@ -115,7 +115,7 @@ export const taskCompleteResponseSchema = z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('accepted'), message: z.string() }),
     /** Fail-closed result validation failed. Errors are listed in prompt format. Fix them and call again. */
     z.object({ kind: z.literal('rejected'), errors: z.array(z.string()).min(1) }),
-    /** Task already closed, repeated call is a no-op (rpc-design §5, idempotency). */
+    /** The task is already closed. A repeated call is a no-op (`docs/protocol.md §5`, idempotency). */
     z.object({ kind: z.literal('noop'), message: z.string() }),
 ]);
 export type TaskCompleteResponse = z.infer<typeof taskCompleteResponseSchema>;
@@ -143,7 +143,7 @@ export type TaskAckResponse = z.infer<typeof taskAckResponseSchema>;
 
 /**
  * RPC error codes. Error text is human-readable: both the model in CLI output
- * and the reviewer in the UI can read it (rpc-design §9).
+ * and the reviewer in the UI see it (`docs/protocol.md §9`).
  */
 export const rpcErrorCodeSchema = z.enum([
     /** Missing or invalid bearer token. */
@@ -160,9 +160,9 @@ export const rpcErrorCodeSchema = z.enum([
     'lease_not_held',
     /** Another (newer) live session holds the worker slot. The caller must stop the loop. */
     'worker_conflict',
-    /** The `complete` result exceeded the limit, the task failed (spec §3.5). */
+    /** The `complete` result exceeded the limit. The task failed (`docs/architecture.md §7.5`). */
     'result_too_large',
-    /** This server's prKey maps to no host, so review endpoints are unavailable (M1-T10). */
+    /** This server's prKey maps to no host, so review endpoints are unavailable. */
     'no_review_host',
     /** The host adapter failed: network, token or response schema validation. The text gives a human-readable reason. */
     'host_unavailable',

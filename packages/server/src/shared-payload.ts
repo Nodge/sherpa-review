@@ -7,12 +7,12 @@ import type { PrDiff } from '@sherpa/protocol';
 import type { TaskRecord } from './queue.js';
 
 /**
- * Shared task context (decision log 2026-09-02). Anything unchanged between tasks, such as the PR diff, file
+ * Shared task context. Anything unchanged between tasks, such as the PR diff, file
  * text or a guide, is written once at a stable path under `payload/shared/`. The task directory
  * holds only task-specific data. The path itself signals sharing: the model can tell from it whether it has read this
  * file in this session. The protocol stays the same: tasks carry the same `contextFiles`.
  *
- * Tasks stay self-contained (rpc-design §4): the file is on disk, its path is in the task, and
+ * Tasks remain self-contained (docs/protocol.md §4). The file is on disk, its path is in the task, and
  * a new session reads it as usual.
  *
  * Writes are synchronous. Files are written only a few times per session, and the synchronous path costs less than a state machine
@@ -20,7 +20,7 @@ import type { TaskRecord } from './queue.js';
  * `rename`), so a task never receives a partially written file.
  */
 
-/** Directory and file permissions match the rest of the payload (spec §6). */
+/** Directory and file permissions match the rest of the payload (docs/architecture.md §6). */
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 
@@ -38,7 +38,7 @@ export function diffKeyOf(diff: PrDiff): string {
 
 /**
  * Whether a task holds its payload: an open task is reading it, and the holder of a cancelled task doesn't yet know
- * about the cancellation (rpc-design §5) and may still finish reading. Everything else can be cleaned up.
+ * about cancellation (docs/protocol.md §5) and may finish reading too. Everything else is eligible for cleanup.
  */
 export function holdsPayload(task: TaskRecord): boolean {
     return task.status === 'queued' || task.status === 'leased' || task.workerId !== null;
@@ -74,7 +74,7 @@ export class SharedPayloadStore {
     }
 
     /**
-     * Slice between iterations for route regeneration (M4-T7). Its key is a pair of iteration heads,
+     * Inter-iteration slice for route regeneration. Its key is a pair of iteration heads,
      * so it differs from the PR diff key. The directory joins the current build instead of starting
      * a new one, or cleanup would remove the diff before a task from this same build could reference it.
      */

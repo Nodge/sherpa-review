@@ -3,7 +3,7 @@ import type { AgentNote, AnchorPosition, ChatAnchor, FileAnchor } from '@sherpa/
 import type { Translate } from '../i18n/index.js';
 
 /**
- * Comment draft from an agent note (SPEC §2.16): quote text and composer address.
+ * A comment draft from an agent note (docs/design/SPEC-elements.md §2.16): quote text and composer address.
  * This pure module is shared by both views and the route model.
  */
 

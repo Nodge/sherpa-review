@@ -4,13 +4,13 @@ import type { DiffFileModel } from '../diff/model.js';
 import type { Translate } from '../i18n/index.js';
 
 /**
- * File reading progress (SPEC §2.12, requirements §3.1): three read-state values and tooltip counts.
+ * File reading progress (docs/design/SPEC-elements.md §2.12, docs/architecture.md §7.1): three read-state values and tooltip counts.
  * Pure module: takes a progress record, a diff file, and (when available) changed model lines,
  * returns state and counts, with no React or network. The component builds the tooltip text
  * (`readStateTooltip`) because the result is cached in the diff store and must not carry a language.
  *
- * Marks are manual only, with no viewport tracking (requirements §3.1 decision). Seen ranges arrive
- * with M2 stops. They are always empty in M1, so `partial` is reachable only in unit tests and the gallery.
+ * Marks are manual only, with no viewport tracking. `partial` means seen ranges cover some
+ * of the changed lines.
  */
 
 export type ReadState = 'unread' | 'partial' | 'read';
@@ -37,16 +37,16 @@ export interface ReadStateInput {
 
 export interface FileReadState {
     readonly state: ReadState;
-    /** Changed lines seen, used in the tooltip. Must match the visual state (SPEC §2.12). */
+    /** Changed lines seen, used for the tooltip count. Must match the visual state (docs/design/SPEC-elements.md §2.12). */
     readonly seen: number;
     readonly total: number;
     /** `read` is pinned (manual mark, host mark, generated default) rather than based on coverage. */
     readonly pinned: boolean;
-    /** Marked by default because the file is generated. The mark can be cleared (requirements §3.7). */
+    /** Marked by default because the file is generated. The mark can be cleared (docs/architecture.md §7.7). */
     readonly generatedDefault: boolean;
 }
 
-/** Progress tooltip (SPEC §2.12): numbers must match the progress box. */
+/** Progress tooltip (docs/design/SPEC-elements.md §2.12): counts must match the box visual state. */
 export function readStateTooltip(t: Translate, read: Pick<FileReadState, 'seen' | 'total' | 'generatedDefault'>): string {
     const numbers = read.total === 0 ? t('progress.noChangedLines') : t('progress.seen', read.seen, read.total);
     return read.generatedDefault ? t('progress.generatedSeen', t('progress.generatedNote'), numbers) : numbers;

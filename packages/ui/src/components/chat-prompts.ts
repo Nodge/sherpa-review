@@ -1,8 +1,8 @@
 import type { MessageKey, Translate } from '../i18n/index.js';
 
 /**
- * Chat entry point text (README §2, §10, SPEC §2.15, §2.18). The question is always just
- * placed in the composer for the reviewer to send, so it must read as their
+ * Chat entry-point text (docs/design/README.md §2, §10, docs/design/SPEC-elements.md §2.15,
+ * §2.18). A question only fills the composer. The reviewer sends it, so the text must read as their
  * own words, not a command they didn't write.
  *
  * Pure module with no React or DOM. `t` builds the question string that goes into the
@@ -36,7 +36,7 @@ export function placeRangesQuestion(ranges: readonly QuestionRange[], t: Transla
     return t('chat.ask.placeRanges.listed', rest > 0 ? t('chat.ask.rangesRest', listed, rest) : listed);
 }
 
-/** Hatched Full diff strip → question anchored to exactly this range (README §10). */
+/** Hatched Full diff strip → a question anchored to exactly this range (docs/design/README.md §10). */
 export function placeRangeQuestion(range: QuestionRange, t: Translate): string {
     const single = range.start === range.end;
     const removed = range.side === 'old';
@@ -50,7 +50,7 @@ export function placeRangeQuestion(range: QuestionRange, t: Translate): string {
     return t(key, rangeNumbers(range), range.path);
 }
 
-/** Example questions in the empty panel (SPEC §2.18): a click places them in the composer. */
+/** Example questions in the empty panel (docs/design/SPEC-elements.md §2.18). Clicking fills the composer. */
 export const CHAT_EXAMPLE_QUESTIONS: readonly MessageKey[] = [
     'chat.example.risky',
     'chat.example.manual',
@@ -58,13 +58,13 @@ export const CHAT_EXAMPLE_QUESTIONS: readonly MessageKey[] = [
 ];
 
 /**
- * "Agent disconnected" labels at all AI entry points (SPEC §2.15). One module for all:
+ * "Agent disconnected" labels for all AI entry points (docs/design/SPEC-elements.md §2.15). One shared module:
  * the reader keeps working everywhere, and the wording must stay consistent.
  */
 export const ASK_SELECTION_DISABLED_TITLE: MessageKey = 'chat.ask.selectionDisabled';
 export const ASK_RANGES_DISABLED_TITLE: MessageKey = 'chat.ask.rangesDisabled';
 
-/** The "place" button leaves the route unchanged. Regeneration is separate (SPEC §4.3). */
+/** The "place" button does not change the route. Regeneration is separate (docs/design/SPEC-elements.md §4.3). */
 export const ASK_ANSWER_IN_CHAT_NOTE: MessageKey = 'chat.ask.answerInChat';
 
 function rangeLabel(range: QuestionRange, t: Translate): string {

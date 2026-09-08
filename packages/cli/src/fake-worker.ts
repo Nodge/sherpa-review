@@ -42,7 +42,7 @@ export interface FakeWorkerOptions {
 
 /**
  * Worker session emulator for protocol tests. Each command is a separate plain
- * node process running the CLI bundle, with only state files retaining data between calls (rpc-design §1).
+ * node process with the CLI bundle. Only state files preserve memory between calls (`docs/protocol.md §1`).
  * Stopping calls simulates session "death", and a new `register` simulates reconnection.
  */
 export class FakeWorker {

@@ -4,9 +4,9 @@ import { groupThreads } from './model.js';
 import type { IterationLayout } from './model.js';
 
 /**
- * `buffered` (M5-T15) means the server accepted the text but the host has not yet. The record is in the
+ * `buffered` means the server accepted the text, but the host has not yet: the entry is in the server
  * buffer and will be sent automatically. The reviewer sees this as "saved, but not fully", rather than an error: the text
- * survives tab reloads, but ship stays blocked until it is sent (SPEC §4.5).
+ * survives a tab reload, but ship stays blocked until it is sent (docs/design/SPEC-elements.md §4.5).
  */
 export type ComposerStatus = 'idle' | 'saving' | 'saved' | 'discarding' | 'error' | 'buffered';
 
@@ -25,7 +25,7 @@ export interface ComposerSnapshot {
     /** Time of the last confirmed save, for the status under the field. */
     readonly savedAt?: number | null;
     /**
-     * Logical record key for the server (M5-T15): lives from the first save until it succeeds, so
+     * Logical write key for the server: kept from the first save until success, so
      * a retry cannot create a duplicate. `undefined` means no write has happened yet.
      */
     readonly clientKey?: string | undefined;
@@ -51,7 +51,7 @@ export interface ThreadStoreSnapshot {
     readonly byFile: ReadonlyMap<string, readonly Thread[]>;
     readonly outside: readonly Thread[];
     /**
-     * The iteration whose diff is rendered, when it is not the active PR iteration (M4-T10). The store
+     * The iteration of the rendered diff, when it is not the active PR iteration: the layout
      * uses it to find the thread file by `path` and decide whether the thread sits at its lines.
      */
     readonly iterationLayout: IterationLayout | null;
@@ -64,8 +64,8 @@ export interface ThreadStoreSnapshot {
 
 export interface ComposerLayoutSnapshot {
     /**
-     * Composers anchored to a file, with or without a line (image comment, M5-T24,
-     * placed below the header by the card). Text is deliberately not published here.
+     * Composers anchored to a file, with or without a line (an image comment is placed
+     * under the header by the card). Text is deliberately not published here.
      */
     readonly byFile: ReadonlyMap<string, readonly ComposerSnapshot[]>;
     /**
@@ -99,7 +99,7 @@ export interface ThreadStore {
     /** Local subscription to one composer: typing does not notify the card list. */
     readonly subscribeComposer: (key: string, listener: () => void) => () => void;
     readonly getComposer: (key: string) => ComposerSnapshot | null;
-    /** All open composers, used to reconcile the draft buffer (M5-T15). */
+    /** All open composers, used to reconcile the draft buffer. */
     readonly listComposers: () => readonly ComposerSnapshot[];
     readonly setServerThreads: (threads: readonly Thread[]) => void;
     readonly addDraft: (draft: CommentDraft, comment: Comment) => void;
@@ -187,7 +187,7 @@ export function createThreadStore(
                     composer.status === 'saving' ||
                     composer.status === 'discarding' ||
                     // Buffered text is already on the server, so leaving is safe. A separate reason blocks ship
-                    // (`publishDisabledReason`, M5-T15). Text added after
+                    // until it is delivered (`publishDisabledReason`). Text added after
                     // a failure is different: it is not on the server yet, and leaving would lose it.
                     (composer.status === 'buffered'
                         ? composer.text !== composer.bufferEntry?.draft.body
@@ -464,7 +464,7 @@ function mergeThreads(
                     resolved: false,
                     resolvedBy: null,
                     outdated: false,
-                    // The thread pin arrives from the host on the next read in M4-T3.
+                    // The next host read supplies the thread pin.
                     pinnedTo: null,
                     root: comment,
                 },

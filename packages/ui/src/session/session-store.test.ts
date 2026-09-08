@@ -16,7 +16,7 @@ import {
 import { DEFAULT_VIEW, parseViewId } from './views.js';
 
 describe('session store', () => {
-    it('starts in Overview: the route is not ready when opened (decision #2)', () => {
+    it('starts in Overview because the route is not ready when opened', () => {
         expect(DEFAULT_VIEW).toBe('overview');
 
         // This is how main.tsx chooses the view at startup. The URL overrides the default, but invalid URL values do not.

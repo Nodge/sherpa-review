@@ -10,7 +10,7 @@ export const NOTE_LOST_DRAFT_REASON: MessageKey = 'thread.note.lostDraft';
 export const NOTE_LOST_ANCHOR_REASON: MessageKey = 'thread.note.lostAnchor';
 
 /**
- * A note anchor as seen in the viewed iteration (M4-T11). In the iteration where the note
+ * Note anchor as seen from the viewed iteration: in the iteration where the note
  * was pinned, it stays at its original lines. In any other iteration, it uses the carried-over lines.
  */
 export function noteAnchorForIteration(note: AgentNote, viewDiffId: string | null): ChatAnchor {
@@ -19,7 +19,7 @@ export function noteAnchorForIteration(note: AgentNote, viewDiffId: string | nul
 
 /**
  * The note appears beside code in this iteration. A note with a lost anchor leaves code everywhere except its
- * original iteration, where the lines it was asked about still exist (SPEC §2.16).
+ * original iteration, where the lines it was asked about still exist (docs/design/SPEC-elements.md §2.16).
  */
 export function noteVisibleInIteration(note: AgentNote, viewDiffId: string | null): boolean {
     return !note.lostAnchor || (viewDiffId !== null && viewDiffId === note.origin.anchor.diffId);

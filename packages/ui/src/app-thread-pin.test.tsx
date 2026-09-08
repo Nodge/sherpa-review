@@ -15,10 +15,10 @@ import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * "View at the old commit" navigation (M4-T10): a thread pinned to a previous iteration
+ * "Show on old commit" navigation opens the full diff of the iteration a thread is
  * pinned to, with focus on that thread. The entry point is the "outside the diff" fold in the
- * Discussion card in Overview (SPEC additions §1e), since there is nowhere else to read such a thread. The iteration choice and `thread` go into the fragment
- * in one patch, or changing iterations would clear `thread` as an anchor from another diff.
+ * Overview discussion card (docs/design/SPEC-additions-2026-08-26.md §1e). There is nowhere else
+ * to read such a thread. Patch the iteration selection and `thread` into the fragment together, or changing iterations would clear `thread` as an anchor from another diff.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

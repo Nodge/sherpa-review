@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-/** 48 bits give 8 base64url characters without padding (rpc-design §8). */
+/** 48 bits give 8 base64url characters without padding (docs/protocol.md §8). */
 const TOKEN_BYTES = 6;
 
 export function createToken(): string {

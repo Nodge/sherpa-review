@@ -3,7 +3,8 @@ import type { FileDiff, Lens } from '@sherpa/protocol';
 import type { MessageKey, Translate } from '../i18n/index.js';
 
 /**
- * Shared file filter model (README §Filters, SPEC §2.7): the same model feeds
+ * Shared file filter model (docs/design/README.md §Filters,
+ * docs/design/SPEC-elements.md §2.7): the same model feeds
  * the toolbar select, left-panel chips, file tree and card list.
  *
  * The list is extensible: the UI counts `all` and `generated` itself, everything else arrives as host lenses.
@@ -18,7 +19,7 @@ export const MINE_FILTER_ID = 'mine';
 export const PCI_FILTER_ID = 'pci';
 
 /**
- * Labels for known lenses (decision log, 2026-08-21): we own the label, while `Lens.label` comes
+ * Known lens labels: we supply the label, while `Lens.label` arrives
  * in English from the adapter. Unknown ids display the host label unchanged.
  */
 const KNOWN_LABELS: Readonly<Record<string, MessageKey>> = {
@@ -43,7 +44,7 @@ export interface FileFilter {
     readonly shortLabel: string;
     /** Live count from the current diff: membership, not lens size. */
     readonly count: number;
-    /** A disabled item always explains why it is disabled (SPEC §1.1). */
+    /** A disabled item always explains why it is disabled (docs/design/SPEC-elements.md §1.1). */
     readonly available: boolean;
     readonly note: string | null;
     /** Filter files. null for `all` passes everything through. */
@@ -60,13 +61,13 @@ export interface FileFiltersInput {
 }
 
 /**
- * Filter order from README §Filters: all → mine → host lenses in host order → generated.
+ * Filter order, docs/design/README.md §Filters: all → mine → host lenses in host order → generated.
  * Duplicate ids are dropped: the UI owns `all`/`generated`, the host cannot override them.
  *
- * Exclude host lenses other than ownership and the synthetic `generated` lens when they have zero files (decision #11).
+ * Empty non-ownership host lenses and synthetic `generated` are excluded from the list.
  * Ownership remains: without a zone it uses the host reason, without owned files it uses the UI reason.
  * Nothing is preselected regardless of the list: even when all files are mine and the mine count matches
- * the "all" count (SPEC §4.2), `all` remains selected.
+ * the all count (docs/design/SPEC-elements.md §4.2), `all` stays selected.
  */
 export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInput): readonly FileFilter[] {
     const byPath = new Map<string, string>();
@@ -181,7 +182,7 @@ export function filterFiles(files: readonly FileDiff[], filter: FileFilter): rea
     return fileIds === null ? files : files.filter((file) => fileIds.has(file.fileId));
 }
 
-/** Counts for the audit-scope banner (README §Filters): "N files, M of K changed lines". */
+/** Audit-scope banner counts (docs/design/README.md §Filters): "N files, M of K changed lines". */
 export interface FilterStats {
     readonly files: number;
     readonly changedLines: number;
@@ -212,7 +213,7 @@ export function filterFragmentValue(id: string): string | null {
 }
 
 /**
- * An empty result explains itself (SPEC §2.7). The host provides `note` for this,
+ * An empty result explains itself (docs/design/SPEC-elements.md §2.7): the host supplies a `note` for this,
  * and if it is absent, the UI explains in its own words.
  */
 export function zeroResultText(filter: FileFilter, t: Translate): string {

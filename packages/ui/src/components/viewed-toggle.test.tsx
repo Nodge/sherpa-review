@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ViewedToggle } from './viewed-toggle.tsx';
 
 /**
- * Viewed mark: one control for files and stops (SPEC §2.10), with 2 states,
+ * "Viewed" mark is one control for a file and a stop (docs/design/SPEC-elements.md §2.10): two states,
  * identical text and box in both places, and each call site adds only its own class.
  */
 
@@ -47,7 +47,7 @@ describe('viewed mark', () => {
         expect(file).toBe(stop.replace('route-stop__viewed', 'file-card__viewed'));
     });
 
-    it('the disabled toggle always explains why (SPEC §1.1)', () => {
+    it('disabled toggle always explains why (docs/design/SPEC-elements.md §1.1)', () => {
         const html = render({ disabled: true, title: 'Stop ranges are still being calculated' });
 
         expect(html).toContain('disabled=""');

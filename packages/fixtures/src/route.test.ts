@@ -5,13 +5,13 @@ import { buildRouteFixtures, fixtureData, fixtureIteration, routeFixtures } from
 
 /**
  * Checks route fixtures against the diff, not themselves: coverage is recalculated
- * from patches (`+`/`−` hunk lines) and compared with handoff numbers. Shifting any anchor
+ * from patches (`+`/`−` hunk lines) and compared with the design handoff numbers. Moving any anchor
  * by one line fails either the "anchor covers changed lines only" check or the uncovered line count.
  */
 
 const HUNK_HEADER = /^@@ -(\d+),\d+ \+(\d+),\d+ @@/;
 
-/** Target coverage bar shares from README §1 (862 lines: 188 / 348 / 292 + 34 unplaced). */
+/** Target coverage bar shares from `docs/design/README.md §1` (862 lines: 188 / 348 / 292 + 34 unplaced). */
 const TIER_TARGETS: Record<'high' | 'medium' | 'low', number> = { high: 188, medium: 348, low: 292 };
 const TIER_TOLERANCE = 25;
 const UNEXPLAINED_LINES = 40;
@@ -24,7 +24,7 @@ interface ChangedFile {
     new: Set<number>;
 }
 
-/** Changed diff lines: the same definition as SPEC §2.4 coverage math (added + removed). */
+/** Changed diff lines: same definition as the coverage math in `docs/design/SPEC-elements.md §2.4` (added + removed). */
 function changedLines(diff: PrDiff): Map<string, ChangedFile> {
     const files = new Map<string, ChangedFile>();
     for (const file of diff.files) {
@@ -150,7 +150,7 @@ describe('medium fixture route', () => {
         expect(totalChangedLines(files)).toBe(868);
     });
 
-    // The route ignores images entirely (M5-T23 decision): the added SVG lines are correctly
+    // The route does not see images: lines of the added svg
     // remain unexplained, shown as "Other" in the UI.
     it('leaves exactly 40 lines in exactly 4 files unexplained', () => {
         expect(coverage.unexplained).toBe(UNEXPLAINED_LINES);
@@ -269,7 +269,7 @@ describe('medium fixture route', () => {
 });
 
 describe('intermediate route states', () => {
-    it('filling matches README §7: 01, 02 and 05 are ready, indicators are out of order', () => {
+    it('matches filling in `docs/design/README.md §7`: 01, 02 and 05 are ready, with lights out of order', () => {
         const filling = routeFixtures('medium')?.states.filling;
         const snapshot = filling?.snapshot;
         expect(filling?.phase).toBe('filling');
@@ -349,7 +349,7 @@ describe('raw model outputs', () => {
             expect(rawStop?.bridge ?? null).toBe(stop?.bridge ?? null);
 
             // Compare the whole anchor: a shifted `end` or missing collapse directive would make
-            // the section differ from the snapshot, which the M2-T3 validator builds from that section.
+            // the section disagree with the snapshot, which the validator builds from that section.
             expect(
                 rawStop?.anchors.map(
                     (anchor) =>
@@ -500,7 +500,7 @@ describe('second-pass route', () => {
 });
 
 /**
- * Performance fixture: there are no handoff coverage numbers to compare against, and its stops
+ * Performance fixture: there are no design handoff coverage numbers to compare against, and the stops
  * follow a template. Checks only what the performance run relies on: a 25-stop plan and anchors
  * placed exclusively on changed lines (otherwise the validator will remove them).
  */
@@ -572,7 +572,7 @@ describe('route fixtures: delivery', () => {
     }
 });
 
-describe('route fixtures: English output set (M5-T4)', () => {
+describe('route fixtures: English output set', () => {
     const en = routeFixtures('medium')?.rawResultsEn;
     const ru = routeFixtures('medium')?.rawResults;
 

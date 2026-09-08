@@ -52,7 +52,7 @@ const SAFETY_POLL_INTERVAL_MS = 1000;
 
 /**
  * `complete` body without the contract's size refine: exceeding the limit is a task failure
- * (spec §3.5), so it must reach the queue instead of being rejected as an invalid request.
+ * (docs/architecture.md §7.5), so it must reach the queue instead of being rejected as an invalid request.
  */
 const completeBodySchema = z.object({
     protocolVersion: semverSchema,
@@ -63,10 +63,10 @@ const completeBodySchema = z.object({
 });
 
 /**
- * Worker endpoints (rpc-design §3): the session's pull channel, all POST with a contract JSON body.
- * Each valid call is a worker heartbeat (rpc-design §7): a non-owner call is rejected with
+ * Worker endpoints (docs/protocol.md §3): the session's pull channel, all POST with a contract JSON body.
+ * Every valid call is a worker heartbeat (docs/protocol.md §7). A non-owner's call is rejected with
  * `worker_conflict` before reaching the queue. `register` is the exception: a new session
- * takes the slot even from a live session (decision 2026-08-20).
+ * takes over the slot even from a live one.
  */
 export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
     const subscribeSlotChange = watchSlotOwner(options.registry);
@@ -162,7 +162,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
     ];
 }
 
-/** Request body + version handshake (rpc-design §9): checked on every worker call. */
+/** Request body and version handshake (docs/protocol.md §9): checked on every worker call. */
 async function readWorkerRequest<T extends { protocolVersion: string }>(
     ctx: RequestContext,
     schema: z.ZodType<T>,
@@ -194,7 +194,7 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
 /**
  * Long-poll `next`: returns a task as soon as one appears. UI departure stops the worker
  * when there are no open tasks. When the window expires, it returns `idle` ("call again"). The window length comes from the
- * harness (`waitSeconds`, decision #35), which alone knows its tool timeout and whether it can wait
+ * harness (`waitSeconds`). Only it knows its tool timeout and whether it can wait
  * in the background. Liveness is independent of it. While the call waits, the open connection keeps the worker alive.
  */
 async function pollForTask(

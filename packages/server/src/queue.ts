@@ -61,7 +61,7 @@ export interface TaskQueueOptions {
 export type CancelOutcome = 'cancelled' | 'noop';
 
 /**
- * Result of fail-closed acceptance (rpc-design §3). The queue calls `onCommitted` after
+ * Outcome of fail-closed result acceptance (docs/protocol.md §3). The queue calls `onCommitted` after
  * committing its transaction. Applying an accepted result writes to its own tables,
  * and `node:sqlite` has no nested transactions.
  *
@@ -118,7 +118,7 @@ interface TaskRow extends SqlRow {
 }
 
 /**
- * Task queue with leases (rpc-design §5): `next` leases a task with a TTL instead of removing it.
+ * Task queue with leases (docs/protocol.md §5). `next` leases a task with a TTL instead of removing it.
  * A worker that dies silently does not lose its task. The lease expires and the task returns to the queue.
  * Leases expire lazily on entry to operations. The module has no timers.
  */
@@ -283,10 +283,10 @@ export class TaskQueue {
 
     /**
      * Immediately releases leases of a displaced worker when a new session takes its slot
-     * (rpc-design §7): the slot is no longer its own, so there is no reason to wait for natural TTL expiry. Otherwise after
-     * reconnect the task would sit for up to ten minutes. Semantics match expiry:
-     * increment the attempt count, and fail the task when attempts run out. For cancelled tasks,
-     * simply release the hold: there is nothing to return to the queue.
+     * (docs/protocol.md §7). The slot is no longer its own, so there is no reason to wait for TTL expiry. Otherwise,
+     * after reconnecting the task would sit until the TTL ends, half an hour for a background task. The semantics match
+     * expiry. The attempt increments, and exhausted attempts fail the task. Holds on
+     * cancelled tasks are simply cleared. There is nothing to requeue.
      */
     releaseLeasesOf(workerId: string): void {
         this.txReleaseLeasesOf(workerId);
@@ -391,7 +391,7 @@ export class TaskQueue {
 
         const bytes = Buffer.byteLength(result, 'utf8');
         if (bytes > RESULT_MAX_BYTES) {
-            // Spec §3.5: exceeding the limit fails the task, rather than asking to try again.
+            // docs/architecture.md §7.5: exceeding the limit fails the task instead of asking for a retry.
             // The card reason is for the reviewer (Russian), the error text is for the model (English).
             this.closeTask(taskId, 'failed', {
                 failReason:
@@ -430,9 +430,9 @@ export class TaskQueue {
 
     /**
      * The result was not accepted. The model keeps the lease and attempt, fixes the output
-     * and calls `complete` again (rpc-design §3). The loop stops after `MAX_RESULT_REJECTIONS` rejections
+     * and calls `complete` again (docs/protocol.md §3). The loop stops after `MAX_RESULT_REJECTIONS` rejections
      * per lease. The task then fails, and the last raw output remains in `result`
-     * (shown by "Open raw output", README §12).
+     * (shown by "Open raw output", docs/design/README.md §12).
      */
     private rejectResult(row: TaskRow, result: string, errors: readonly string[]): TaskCompleteResponse {
         const rejections = row.rejections + 1;
@@ -511,7 +511,7 @@ export class TaskQueue {
 
         if (row.status === 'leased') {
             // The session cannot be interrupted. The task is closed, but its holder does not know yet
-            // (rpc-design §5). `worker_id`/`lease_expires_at` remain so the UI can show
+            // (docs/protocol.md §5). `worker_id`/`lease_expires_at` remain so the UI shows
             // that the agent is still busy with the cancelled task.
             this.db
                 .prepare("UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE id = ?")

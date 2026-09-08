@@ -20,7 +20,7 @@ import { createDiffViewStore, fileCollapseReason } from '../../diff-view/store.j
 import '../../diff-view/diff-view.css';
 
 /**
- * Diff rendering states for the gallery (visual acceptance layer 2, CLAUDE.md). Everything is derived
+ * Diff rendering states for the gallery. Everything is computed
  * from fixtures synchronously, without a server, worker or timers, so opening a state produces
  * the same frame on every run.
  */
@@ -41,7 +41,7 @@ interface CardStateProps {
     readonly selection?: { hunk: number; from: number; to: number };
     /** File opened despite the size-based collapse. */
     readonly opened?: boolean;
-    /** Card kept on screen despite the filter (SPEC §2.7). */
+    /** Card kept on screen despite the filter (docs/design/SPEC-elements.md §2.7). */
     readonly keptInView?: boolean;
     /** Initial card hint: shows a write failure that cannot occur without a click. */
     readonly hint?: Feedback;

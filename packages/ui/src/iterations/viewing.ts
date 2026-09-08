@@ -1,8 +1,8 @@
 import type { Iteration, Locale, RouteSnapshot, UiRouteState, UiSnapshotSummary } from '@sherpa/protocol';
 
 /**
- * What the tab displays (M4-T9): current PR state, a previous route snapshot, an iteration
- * without a route, or a slice between 2 iterations (M4-T12). The selection lives on the client in the
+ * What the tab is viewing: current PR state, a previous route snapshot, an iteration without
+ * a route or a slice between 2 iterations. The selection is client-side and lives in the
  * URL fragment. The server is not asked for the "current view" (`uiReviewDiffRequestSchema` contract).
  *
  * Resolving the selection is a pure function: it takes the snapshot list, iterations, current route
@@ -26,8 +26,8 @@ export interface ViewingSlice {
 }
 
 /**
- * With several URL parameters, `snapshot` takes precedence over a slice, and a slice over `diff` (task breakdown
- * M4-T9: selections are mutually exclusive). A slice missing either half is ignored entirely.
+ * With several URL parameters, `snapshot` takes precedence over slice, and slice over `diff`: selections
+ * are mutually exclusive. A slice missing either half is ignored entirely.
  */
 export function parseViewing(
     snapshotId: string | null,
@@ -263,7 +263,7 @@ function resolveSlice(
         createdAt: baseIteration.createdAt,
         unknown: false,
         pending: false,
-        // No route is built for a slice. It is "what is new" without AI (brief, principle 1).
+        // No route is built for a slice. It shows "what is new" without AI (docs/product.md §3, principle 1).
         routeless: true,
         slice: { base, head },
     };
@@ -303,7 +303,7 @@ function commitOfDiff(diffId: string, input: ViewingInput): string | null {
     return input.route?.snapshot?.diffId === diffId ? input.route.snapshot.commit : null;
 }
 
-/** Current-state pill: `stale` while the PR is ahead of the snapshot (README §1). */
+/** Current-state pill: `stale` while the PR has moved ahead of the snapshot (docs/design/README.md §1). */
 function labelOfCurrentRoute(route: UiRouteState | null): ViewingLabel | null {
     const snapshot = route?.snapshot ?? null;
     if (snapshot === null) {
@@ -379,8 +379,8 @@ export interface PickerRows {
 /**
  * Picker rows: snapshots newest first, followed by iterations without snapshots.
  * Even an empty iteration list yields the active iteration row if it has no snapshot:
- * its `diffId` and commit are known from the route fetched without parameters (the server sends `iterations: []`
- * before M4-T4).
+ * its `diffId` and commit are known from the route without parameters (the server may send
+ * `iterations: []`).
  */
 export function pickerRows(input: PickerRowsInput): PickerRows {
     const snapshots = [...input.snapshots].reverse().map(

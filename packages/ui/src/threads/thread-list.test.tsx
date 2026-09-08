@@ -15,7 +15,7 @@ import type { ThreadStore } from './store.js';
 import { openReply, OutsideThreads, ThreadList } from './thread-list.tsx';
 
 /**
- * Comment bodies render as markdown (M2F-T5). Bots write headings, lists,
+ * Comment bodies render as Markdown. Bots write headings, lists,
  * links and code blocks, and the thread card must render that markup instead of a raw string.
  */
 
@@ -520,7 +520,7 @@ describe('reply draft', () => {
     });
 });
 
-/** M4 boundaries: a previous iteration's thread can be read, but cannot send any writes. */
+/** Threads in a previous iteration are readable, but cannot send any writes. */
 describe('read-only thread', () => {
     it('disables Resolve, draft editing and draft deletion with the same reason', () => {
         const source = threadOf('kai');

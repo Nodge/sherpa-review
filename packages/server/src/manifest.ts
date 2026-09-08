@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { ServerManifest } from '@sherpa/protocol';
 import { serverManifestSchema } from '@sherpa/protocol';
 
-/** Manifest file permissions: it contains the bearer token (rpc-design §8, spec §6). */
+/** Manifest file permissions: it contains a bearer token (docs/protocol.md §8, docs/architecture.md §6). */
 const MANIFEST_MODE = 0o600;
 
 /** Liveness probe for the adjacent server. It is a local request, so a longer wait buys nothing. */
@@ -163,7 +163,7 @@ async function probeHealth(manifest: ServerManifest): Promise<boolean> {
 
 /**
  * Removes stale manifests: those that fail the schema and those left by dead processes.
- * Called at server startup and skill launch (rpc-design §8). Returns the deleted files.
+ * Called at server startup and when the skill starts (docs/protocol.md §8). Returns removed files.
  */
 export async function cleanStaleManifests(serversDir: string): Promise<string[]> {
     let entries: string[];

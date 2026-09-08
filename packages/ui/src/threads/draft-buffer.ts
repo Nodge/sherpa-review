@@ -6,7 +6,7 @@ import type { ComposerSnapshot, ThreadStore } from './store.js';
 import { PR_COMPOSER_KEY } from './thread-list.tsx';
 
 /**
- * Restoring the draft buffer into composers (M5-T15). The server remembers text the host has not
+ * Restores the draft buffer into composers. The server remembers text that the host has not
  * accepted yet. After a tab reload, it must appear in a composer on the same line.
  *
  * Builds the key exactly as a live composer does, or the restored composer and a new composer

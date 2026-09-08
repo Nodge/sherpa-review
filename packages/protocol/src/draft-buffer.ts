@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { commentDraftSchema, hostIdSchema } from './review.js';
 
 /**
- * Draft buffer (M5, breakdown decision 11, requirements §6 "drafts are never lost"): a record
+ * Draft buffer (`docs/architecture.md §6`, "drafts are never lost"): a composer record
  * accepted by the server but not yet delivered to the host. Lives in per-PR SQLite
  * (`draft_buffer`) and does not enter the UI thread store: it is field text, not a comment,
  * that survives tab reloads and host failures.

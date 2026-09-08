@@ -406,7 +406,7 @@
     }
 }
 
-/* Drafts stuck between server and host (M5-T15): the only place to see them
+/* Drafts stuck between server and host. The only place to see them
    without a composer, and the only place to discard them to make ship available again. */
 .pr-comments-modal__buffered {
     display: flex;

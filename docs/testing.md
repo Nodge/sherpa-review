@@ -1,0 +1,157 @@
+# Testing
+
+## 1. Required checks
+
+These must pass before any commit:
+
+```
+pnpm -r typecheck && pnpm -r lint && pnpm -r test
+```
+
+- `typecheck` runs `tsc --noEmit` for each package (`skill` has nothing to typecheck, so its script prints that and exits).
+- `lint` runs eslint for each package.
+- `test` runs `vitest run` in 6 packages: `protocol`, `fixtures`, `cli`, `server`, `ui`, `skill`.
+
+E2E is outside the required checks. `packages/e2e` has no `test` script, only `e2e`. Playwright runs separately, before releases and after changes to `packages/e2e`, the server or UI flows covered by e2e. The performance run is separate even from regular e2e and must be invoked explicitly (§5).
+
+Tests must not call a live review host or model. The host uses recorded responses, generation uses raw fixture outputs.
+
+## 2. Unit tests by package
+
+There is no shared vitest configuration. Each package runs with its own. `protocol` and `fixtures` have no configuration at all and use defaults (the `node` environment, forks, isolation). No package has setup files.
+
+**`protocol`** uses one file for all schemas: handshake version and compatibility, task and lease, `complete`, discovery manifest, review domain types (PR, diff, threads, lenses), route, chat and notes, iterations and snapshots, settings/onboarding/update, JSON Schema generation. Tests check both acceptance of valid data and rejection of malformed data: limits (`RESULT_MAX_BYTES` counts bytes, not characters), zero attempts, unknown task types, a broken node deep in a thread tree rejecting the entire thread.
+
+**`server`** has the largest suite. `vitest.config.ts` sets only `globalSetup: ['./src/bundle.global-setup.ts']`. Test files run in parallel forks, and esbuild overwrites the bundle nonatomically, so the build runs once for the whole suite. Global setup builds the UI (skipping it if `packages/ui/dist/index.html` already exists) and the server bundle.
+
+Routes are tested only over real HTTP, with no direct handler calls. There are three setups: the full app through `startServer` (a real `http.createServer` on `listen(0, '127.0.0.1')`, its own DB, manifest and fixture host), a bare listener with manually assembled routes and stubbed orchestrators, and a separate OS process. `bundle.test.ts` starts the built `dist/sherpa-server.mjs`, reads the port and token from the manifest and uses regular `fetch`. Request and temporary-directory helpers live in `packages/server/src/test-support.ts`.
+
+Storage uses the built-in `node:sqlite`. An append-only migration list (`packages/server/src/migrations.ts`) builds the schema, with the version equal to the number applied. `db.test.ts` checks creation from scratch and WAL mode (confirmed through a separate connection), idempotent reopening, upgrades **from every list prefix** (a loop over all intermediate states), specific data migrations, atomic failure (a broken migration leaves no half-created table) and list hygiene (unique names, `NNN-name` format, consecutive numbering).
+
+The route validator is covered from two sides: the golden suite (§3) and the negative corpus in `packages/server/src/route/corpus.test.ts`, a table of hand-written bad payloads with exact error-message checks. Every case of "the model returned something strange" adds a corpus entry.
+
+**`cli`** also requires bundle building in the config's global setup. Unit tests cover argument parsing, the Node version check, browser opening, task text formatting, the `next` timeout, PR discovery from recorded VCS output, server-bundle lookup and the absence of external imports in the built bundle.
+
+`cli.integration.test.ts` calls commands as functions, but uses a real server: `up` (finds a live server, does not reopen the tab, reports "incomplete distribution" when the server bundle is missing beside it), `worker register` (state file and permissions, `--lang`, reconnection, session displacement), `task complete/progress/fail` (text limit, another task's number, another token, dead manifest).
+
+`protocol.scenarios.test.ts` tests the C1↔C2 protocol against a live server, with the built bundle acting as the worker. `src/fake-worker.ts` runs each command in a separate node process, so no memory survives between calls, exactly like an agent session. The server clock is mocked, so leases expire instantly. Scenarios: **died silently** (the lease expires, a new session receives the same task on its second attempt), **returned garbage** (the validator rejects `complete`, the task stays leased, the second attempt is accepted), **repeated complete** (the second call is a no-op, the first result isn't overwritten), **exceeded the lease** (submission is rejected, the task returns to the queue without an owner, no work is lost), cancellation during a lease, reconnection with slot takeover, and exhausted attempts.
+
+**`ui`** has no separate config. The `test` block lives in `vite.config.ts` and raises timeouts to 20 s. Each file selects its environment through a `// @vitest-environment jsdom` docblock. Other files use `node`. The project has no Testing Library. DOM tests mount components manually with `createRoot` + `act`, pure rendering tests use `renderToStaticMarkup`. There are no snapshot tests. Every expectation is explicit.
+
+Topics: diff parsing and highlighting, rendering lines and file cards, threads and notes, the route model (coverage is recalculated from anchors and the diff instead of being taken from the snapshot), reading progress, the palette and keyboard shortcuts, i18n, stores and URL parsing, and `App`-level integration in jsdom against a stubbed transport.
+
+Three separate guards check:
+
+- `src/styles/tokens.test.ts` stores the token table from `docs/design/README.md` as a literal. The test reads `tokens.css`, extracts `--*` declarations from `:root`, and requires exact agreement on the set of names and agreement on values after normalizing colour notation. Extra and missing tokens both fail.
+- `src/icons/icon.test.tsx` extracts the hidden sprite block from `docs/design/Sherpa Additions.dc.html` and requires a byte-for-byte match with the vendored `sprite.svg`. It also checks the symbol id list and `Icon` component markup.
+- `src/i18n/no-cyrillic.test.ts` and `src/styles/component-styles.test.ts` allow Cyrillic only in the dictionary and comments, forbid colour literals outside `tokens.css`, and require every `var(--x)` to have a declaration somewhere.
+
+**`fixtures`** tests data invariants rather than examples: deterministic builds, consistent hunk counters and line numbers, reconstruction of the full file text from a patch, and agreement between inter-iteration slices and the iterations' own patches. Route fixtures are checked against the diff. Coverage is recalculated from added and deleted lines and compared with the handoff counts.
+
+**`skill`** sets `fileParallelism: false` in `vitest.config.mjs` because both suites rebuild `dist/`. `build.test.mjs` checks the distribution contents (`SKILL.md`, `bin/` with two bundles, `version.json`), byte-for-byte equality of `SKILL.md` with its source, `version.json` contents, running the built CLI with plain node and keeping the server and UI out of the CLI bundle (the CLI is smaller than the server and contains no `node:sqlite`). It also tests loop markers. All quoted strings are extracted from `SKILL.md`, and must include `No tasks` and `stop the loop`. Every such phrase plus `DONE` must appear verbatim in the built bundles. If the wording drifts, the harness loop silently stops recognizing these situations. `release.test.mjs` runs `scripts/release.mjs` into a temporary directory: file layout, executable bit on `bin`, printed publication commands (a human publishes), reruns removing stale files, `builtFrom` matching the working tree, and `releasedAt` and `whatsNew` appearing in `version.json` but not in `dist/`.
+
+## 3. The `ReviewHost` contract suite
+
+`packages/server/src/hosts/review-host-contract.ts` exports the function `describeReviewHostContract(name, makeHost, { writes?, advance? })`, rather than a test. Both implementations call it: `FixtureHost` (a loop over all fixtures) and the review host adapter with mocked transport. One suite, two implementations. Adapter differences are caught where they arise (`docs/architecture.md §5`).
+
+What the tests check:
+
+- `getPr` and `getDiff` pass schema validation, and file identifiers are unique.
+- **Method ⇔ capability flag.** Every `HostCapabilities` field (`fileViewedSync`, `fileContent`, `blobs`, `iterations`, `commentIssues`, `stickyShip`) is checked in both directions. With the flag off, the host must not have the method, and data must reflect that (viewed mark `null`, image `null`, exactly one iteration, slices rejected). With the flag on, the method must exist. Declaring a capability without its method is as invalid as adding a method without declaring it.
+- Behavioural consequences: `getFileContent` returns `null` for binary files. For text files, patch context lines appear at their exact line numbers in the text (otherwise context expansion would draw the wrong lines). A missing blob returns `null`, byte length matches the declared size, and an oversized image side returns `null`.
+- Iterations: exactly one is active, none are marked missing (the server sets that, not the host), and timestamps never decrease. A slice with an unknown iteration is rejected instead of returning an empty diff. After a "push", slice paths belong to the union of the two iterations.
+- Subscriptions: the initial snapshot arrives immediately, `getThreads` matches it, and each write delivers a **new** snapshot (the delivery count is checked separately, so returning a live reference to the host's array doesn't satisfy the contract). Unsubscribing stops the stream.
+- Writes (if the host supports them): draft lifecycle, idempotent saving by key, thread replies, thread resolution, batch publishing (no drafts left, verdict applied), viewed marks visible in the next `getDiff`.
+
+The review host adapter is constructed with a substituted `fetch`, a mock backed by recorded host responses. The mock is stateful. Writes change comments and marks, and the update time advances. Otherwise thread polling would see nothing and the write suite would test static files. The mock can fail a chosen endpoint (testing reduced lens functionality), replace the body between polling ticks and count requests (testing the cache). An unknown request fails the test. A separate check ensures tokens do not leak into error messages.
+
+**Golden tests** cover the route validator, not review rules. `packages/server/src/route/golden.test.ts` takes raw model outputs from fixtures (the skeleton and section results, exactly what an agent would return) and the expected finished route snapshot, runs the raw text through the production validator and compares the result verbatim. Coverage includes the skeleton plan with the synthetic "Other" stop, identical results when sections are split into batches, stop digests discarding unconfirmed assertions, resolving anchors to active-iteration files, a second pass after a push and English generation. There is no regeneration mode. Golden files are edited by hand, and `packages/fixtures/src/route.test.ts` checks the fixtures themselves.
+
+Review host rules have ordinary unit tests: reviewer-invocation criteria (who counts as an invoked reviewer and how, behaviour on incomplete responses) and the glob dialect in `subpaths` (`**` versus `*`, character classes, groups, escaping, "last match wins", parse errors reported as errors instead of silently not matching).
+
+## 4. E2E
+
+`packages/e2e` uses Playwright. Run `pnpm --filter @sherpa/e2e e2e`. Chromium is required:
+
+```
+pnpm --filter @sherpa/e2e exec playwright install chromium
+```
+
+An environment variable sets the mirror:
+
+```
+
+  pnpm --filter @sherpa/e2e exec playwright install chromium
+```
+
+`global-setup.ts` builds the artifacts that e2e tests run as production once per run: UI static assets and the CLI bundle.
+
+Each test starts its own server with `FixtureHost`, a separate temporary `--sherpa-dir` and a separate working directory. Both directories are removed after the test. The address and bearer token are read from server output. Direct endpoint requests use the same token as the UI. `FakeWorker` plays the agent session using the built CLI bundle and the same shell commands the model runs in the harness. The test writes the loop itself because `worker next` waits a long time for a task, so the test claims one only when the server has definitely queued it.
+
+Dev endpoints are declared in the protocol and registered only for the fixture host. These routes don't exist for a real PR:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/dev/fixture/advance-iteration` | "the author pushed": the next declared iteration becomes active, and the tab learns about it through SSE |
+| `POST /api/dev/fixture/fail-draft-writes` | the host rejects a draft write to test buffering |
+| `POST /api/dev/update-available` | announce an available update without touching the disk cache |
+
+Specs for end-to-end scenarios (`docs/product.md §7`):
+
+| Spec | Coverage | Scenario |
+|---|---|---|
+| `f1.spec.ts` | Full queue → validator → snapshot → SSE → UI path: skeleton and sections through the CLI bundle, progressive rendering, coverage, tour, drafts, guardrail, finishing a review. Failure cases: three invalid plans, raw output display, retry | F1 |
+| `f2.spec.ts` | Line selection → question to the agent → answer → agent note at the lines survives reload → blocking draft → requesting changes publishes one comment | F2 |
+| `f2-queue.spec.ts` | Question during generation: queue banner, chat task issued next, cancellation in flight, late submission as a no-op, retry | F2 |
+| `f3.spec.ts` | Push while reading: stale-route banner through SSE, rebuild with mark carryover, "what is new" filter with a change explanation and thread link, what happens to notes, outdated thread on the old commit | F3 |
+| `f3-forcepush.spec.ts` | Force-push removes an iteration: reading the route from a local patch, progress carryover through the missing iteration's head, arbitrary slice, read-only snapshot of the missing iteration | F3 |
+| `f5.spec.ts` | Full review without an agent, run in two languages: tabs, lenses, filter, palette search, marks after reload, draft, ship | F5 |
+
+There is no separate F4 spec. Colleague and AI review threads are checked inside `f1`, `f2`, `f3`, `f5`, `keyboard`, `draft-buffer`, `image-diff`, but there is no end-to-end run through "other people's discussions + filters".
+
+The remaining specs cover element behaviour from `docs/design/SPEC-elements.md`: `action-bar-dock`, `context-expansion`, `draft-buffer`, `empty-pr`, `file-menu`, `icons`, `image-diff`, `keyboard` (the full key map), `line-wrapping`, `locale`, `onboarding`, `route-file-collapse`, `route-fill-stop`, `route-regeneration`, `route-unmount`, `scroll-stability`, `sticky-file-header`, `ui-pr-state`, `ui-settings`, `update-toast`.
+
+Timeouts: 120 s per test, 10 s for `expect`, one worker process without parallelism (servers use real ports), viewport 1440×900, browser locale pinned to `ru-RU` (the UI language defaults to automatic, while Chromium arrives with `en-US`). Both F3 specs raise their timeout to 240 s because each runs two full route generations through the CLI bundle. Traces and screenshots are saved only on failure.
+
+## 5. Performance budgets
+
+`packages/e2e/src/performance.spec.ts`, run explicitly:
+
+```
+pnpm --filter @sherpa/e2e e2e src/performance.spec.ts
+```
+
+The run is long (about a minute and a half). The internal timeout for huge tests is raised to 600 s.
+
+The `huge` fixture has 100 files and 25 274 changed lines. The measurement doesn't cover the entire PR. Twenty-four cards are collapsed for a reason (viewed or generated file) and don't request parsing, so 76 files and 21 260 lines reach the worker and renderer. Constants in `@sherpa/fixtures` fix these counts, and the test checks them, so the run's numbers describe a load of exactly this size.
+
+What is measured:
+
+- time to the first diff frame.
+- patch parsing in the worker: total, mean, p95, maximum, number of parsed files (cache hits don't count).
+- cold and warm scrolling frame times, in two series: frame work (measured around position assignment with forced layout) and the interval between adjacent frames.
+- DOM node count.
+- heap size, if the Chromium build exposes it.
+
+All measurements print as `PERF …` lines and also appear as report annotations.
+
+The budget is mean ≤ 16.7 ms, p95 ≤ 33 ms (`docs/architecture.md §6`). It is enabled and fails the run:
+
+- on `large` (64 files), only for frame work. Intervals between frames aren't checked.
+- on `huge`, for both metrics, on cold and warm passes, in both huge tests. The route also has a DOM node limit.
+
+`HUGE_BUDGET_ENFORCED` at the top of the spec is currently `true`. It provides one place to temporarily disable the budget, rather than indicating that the budget is only recorded.
+
+## 6. State gallery
+
+`packages/ui/gallery.html` and `packages/ui/src/dev/gallery/` render screen states deterministically from `@sherpa/fixtures`, using only static props, with no server or token. Run:
+
+```
+pnpm --filter @sherpa/ui dev
+```
+
+and open `/gallery.html`. States are grouped by subsystem on the left, with the selected state on the right. State and language live in the address bar (`#state=…&locale=en`), so you can share a link to a specific state. Changing either remounts the render so initial props apply again. The gallery is excluded from the production build, which builds only `index.html`.
+
+The gallery is used for visual acceptance. Open it beside the `docs/design/Sherpa.dc.html` prototype at the same viewport size and fix differences until they match. A new state or component needs a new gallery card.
+
+Each set of states has a `*-states.test.tsx` test. These check markup, without image comparisons. Each starts by checking that exactly the states defined by the set are registered, in a fixed order. Adding a state outside the registry fails the test. Then it checks the visible contract from the spec: labels, chips, counters, presence and absence of elements. Most files render to a string, a few mount in jsdom where focus and input matter. A shared registry test checks unique ids and that every state mounts and unmounts without exceptions in both languages, catching missing dictionary keys.

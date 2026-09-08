@@ -1,5 +1,6 @@
 /**
- * Line range arithmetic for anchor deduplication (SPEC §4.3: 2 stops claiming
+ * Line range arithmetic for anchor deduplication (`docs/design/SPEC-elements.md §4.3`:
+ * two stops claiming
  * one range). Uses intervals instead of individual lines because the model supplies anchor lengths.
  */
 

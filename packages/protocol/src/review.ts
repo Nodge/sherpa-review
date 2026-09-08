@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 /**
- * Review domain types (requirements §1/C4, brief §4a): data that crosses the host adapter boundary
+ * Review domain types (`docs/architecture.md §5`, `docs/product.md §4a`): what crosses the host adapter boundary
  * and reaches the UI. Host details (sticky ship mechanics, signed host ids,
  * status fields, etc.) stay as verdicts and opaque strings, without leaking into the model.
- * Shapes checked against the M1-T1 spike.
+ * Shapes follow the review host API research.
  */
 
 /**
@@ -15,7 +15,7 @@ import { z } from 'zod';
 export const hostIdSchema = z.string().min(1);
 export type HostId = z.infer<typeof hostIdSchema>;
 
-/** Comment or PR author. The bot flag controls muting and the source chip in the UI (brief F4). */
+/** Comment or PR author. The bot label controls dimming and the source chip in the UI (`docs/product.md §7`, scenario F4). */
 export const reviewUserSchema = z.object({
     login: z.string().min(1),
     /** Human-readable source name. Bots use a label such as "AI Review (…)". */
@@ -58,7 +58,7 @@ export const prChecksSchema = z.enum(['passed', 'failed', 'pending']);
 export type PrChecks = z.infer<typeof prChecksSchema>;
 
 /**
- * Current reviewer verdict on a PR (M5-T15, SPEC §4.5 "someone else ships first"): the host exposes
+ * The reviewer's current PR verdict (`docs/design/SPEC-elements.md §4.5`, "someone else ships first"): on the review host,
  * the reviewer's action (`ship` / `sticky_ship` / `request_changes`).
  * Hosts do not supply verdict timestamps. The UI records when the verdict appeared in a snapshot.
  */
@@ -146,7 +146,7 @@ export type FileImage = z.infer<typeof fileImageSchema>;
 
 /**
  * One diff file. Content is a raw unified diff (`patch`), parsed into a line model
- * by the UI in a worker (requirements §1/C3). The server and adapter do not interpret the text.
+ * by the UI in a worker (`docs/architecture.md §1`). The server and adapter do not interpret the text.
  */
 export const fileDiffSchema = z.object({
     /** Opaque file id in this iteration, the anchor for comments and viewed marks. */
@@ -171,21 +171,21 @@ export const fileDiffSchema = z.object({
     blameUrl: z.string().nullable(),
     /**
      * Link to this file in this PR on the host. "Copy file link" points to the host,
-     * outside Sherpa (decision 2026-09-03). null means the host has no web UI (fixtures) or file link.
+     * not Sherpa. null if the host has no web interface (fixtures) or file link.
      */
     hostFileUrl: z.string().nullable(),
     /**
      * The file is an image (by extension, set by the host only with `capabilities.blobs`).
      * null means it is not an image. The UI renders an image card instead of the binary notice. The text
      * `patch` (svg) remains available in a separate mode.
-     * Optional on input with a null default: diffs saved before T23 load without migration.
+     * Optional on input, defaults to null, so older saved diffs remain readable without migration.
      */
     image: fileImageSchema.nullable().default(null),
 });
 export type FileDiff = z.infer<typeof fileDiffSchema>;
 
 /**
- * File content on both sides of the diff supplies "Expand context" (SPEC §2.13):
+ * File contents on both sides of the diff for "Expand context" (`docs/design/SPEC-elements.md §2.13`):
  * the UI fills in lines outside the hunks from this text. The host needs no protocol for context
  * width. A null side means the file does not exist on that side (add/delete).
  */
@@ -214,7 +214,7 @@ export type PrDiff = z.infer<typeof prDiffSchema>;
 /**
  * Iteration status. `active` is the one under review now (exactly one). `previous` means
  * the host still lists it. `gone` means the host no longer lists it (a force-push on GitHub),
- * but the server retains its locally saved diff (brief §4a). Only the server sets
+ * but the server remembers its locally saved diff (`docs/product.md §4a`). Only the server sets
  * `gone`, by comparing the host's list with its own storage. The adapter returns only what it sees.
  */
 export const iterationStatusSchema = z.enum(['active', 'previous', 'gone']);
@@ -251,8 +251,8 @@ export const fileAnchorSchema = z.object({
 export type FileAnchor = z.infer<typeof fileAnchorSchema>;
 
 /**
- * Comment with a subtree of replies. Threads are trees, not lists: spike data
- * reaches depth 14, with branching at ~7% of nodes. The UI flattens them for rendering (indent cap 4).
+ * A comment with a reply subtree. Threads are trees, not lists. Review host API research
+ * found depths up to 14, with ~7% of nodes branching. The UI flattens them for rendering (indentation capped at 4).
  * `draft` is my unpublished draft (visible only to me, with a "publishes on ship" chip).
  */
 export interface Comment {
@@ -286,7 +286,7 @@ export const commentSchema: z.ZodType<Comment> = z.object({
 });
 
 /**
- * A thread's pin to the commit where it was written (SPEC §4.5 "pinned to 9f3c1ab"): the iteration
+ * Pins a thread to the commit where it was written (`docs/design/SPEC-elements.md §4.5`, "pinned to 9f3c1ab"). The host
  * of the original anchor reported by the host. The UI neither stores
  * nor computes its own pin. A `pinnedTo.diffId` different from the active iteration gives "view at the
  * old commit". The rest is handled by `outdated` and the rebound `anchor`.
@@ -315,7 +315,7 @@ export const threadSchema = z.object({
 export type Thread = z.infer<typeof threadSchema>;
 
 /**
- * Draft to create (two-stage model, brief §3.6): saved to the host immediately,
+ * Draft to create (two-stage model, `docs/product.md §3`, principle 6). Saved to the host immediately,
  * published as one batch with a verdict. Either a reply (`parentId`) or a new thread (`anchor`;
  * null in both means a PR comment.
  */
@@ -332,13 +332,13 @@ export const commentDraftSchema = z.object({
 });
 export type CommentDraft = z.infer<typeof commentDraftSchema>;
 
-/** Verdict that finishes a review. GitHub variants (approve) will be added in M6 with a minor version bump. */
+/** Verdict for finishing a review. GitHub variants (approve) will arrive in a minor version. */
 export const verdictSchema = z.enum(['ship', 'sticky_ship', 'request_changes']);
 export type Verdict = z.infer<typeof verdictSchema>;
 
 /**
  * Batch publication result. On partial failure, the verdict is NOT applied,
- * the review is not complete (SPEC §4.5), and the UI shows the failed comments.
+ * the review is not considered finished (`docs/design/SPEC-elements.md §4.5`), and the UI shows the failed items.
  */
 export const publishResultSchema = z.object({
     publishedCommentIds: z.array(hostIdSchema),
@@ -348,7 +348,7 @@ export const publishResultSchema = z.object({
 export type PublishResult = z.infer<typeof publishResultSchema>;
 
 /**
- * Ownership lens zone (M2F-T7, decision #3): the boundary from ownership configuration is
+ * An ownership lens zone: a boundary from CODEOWNERS,
  * the owning configuration directory, or a subpath within it for subpath rules.
  * A diff file belongs to at most one zone, the deepest boundary.
  * Zones describe the entire PR (not just the reviewer's zones) and remain meaningful even when
@@ -370,7 +370,7 @@ export const lensZoneSchema = z.object({
 export type LensZone = z.infer<typeof lensZoneSchema>;
 
 /**
- * A lens is a named set of paths for filtering files (README filter model).
+ * A lens is a named set of paths for filtering files (filter model in `docs/design/README.md`).
  * `available: false` means the lens mechanism is unavailable (the reviewer has no zone, an
  * undocumented endpoint broke). The UI disables the filter and explains why using `note`.
  */
@@ -384,7 +384,7 @@ export const lensSchema = z.object({
     /**
      * PR ownership zones, only for the ownership lens. null means the implementation does not
      * distinguish zones (directory fallback in the review host, extra lenses), so the UI groups
-     * files by path prefix, as before M2F-T7. The UI groups files outside all zones
+     * files by path prefix. The UI also groups files outside all zones
      * (generated files and files not covered by CODEOWNERS).
      */
     zones: z.array(lensZoneSchema).nullable(),

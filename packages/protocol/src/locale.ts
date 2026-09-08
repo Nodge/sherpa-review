@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Sherpa languages (M5, planning decision 1): one UI dictionary and one required answer language
+ * Sherpa languages: one UI dictionary and one required response language
  * for generation. Anything other than `ru` resolves to `en`. There is no third language.
  */
 export const localeSchema = z.enum(['ru', 'en']);

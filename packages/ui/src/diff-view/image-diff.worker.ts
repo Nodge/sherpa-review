@@ -2,7 +2,7 @@ import type { ImageDiffMessage, ImageDiffReply } from './image-diff-client.js';
 import { diffPixels } from './image-diff.js';
 
 /**
- * Pixel-difference worker entry point (M5-T25): scanning several million pixels
+ * Pixel diff worker entry point: processing several million pixels
  * must not block the main thread. Only transport lives here. All logic is in `image-diff.ts`.
  */
 

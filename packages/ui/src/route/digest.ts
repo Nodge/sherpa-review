@@ -6,7 +6,7 @@ import { anchorSpans } from './anchor-clip.js';
 import type { ContextLines, RouteEntry } from './route-model.js';
 
 /**
- * Behavioural test digest (README §2, brief §6): a stop replaces line-by-line reading of
+ * Behavioural test digest (docs/design/README.md §2, docs/product.md §6). A stop shows an assertion list instead of line-by-line
  * test code, with the test code itself hidden behind Show test code.
  *
  * This pure module takes a snapshot stop and returns what to render and which stop files
@@ -39,7 +39,7 @@ export interface DigestModel {
     readonly rows: readonly DigestClaimView[];
     /** Footer rows for changed behaviour left without an assertion. */
     readonly footer: readonly DigestClaimView[];
-    /** Number of assertions discarded by the validator (SPEC §4.3). */
+    /** Number of assertions rejected by the validator (docs/design/SPEC-elements.md §4.3). */
     readonly dropped: number;
     /**
      * Assertion anchor files are candidates for hiding. The digest only hides their
@@ -239,7 +239,7 @@ function sideOf(drawn: DrawnFile, line: number): 'old' | 'new' | null {
     return null;
 }
 
-/** Category chip label key. Semantics follow README §2. */
+/** Category chip label key, with semantics from docs/design/README.md §2. */
 export function claimLabel(kind: RouteTestClaimKind): MessageKey {
     switch (kind) {
         case 'new':
@@ -253,7 +253,7 @@ export function claimLabel(kind: RouteTestClaimKind): MessageKey {
     }
 }
 
-/** Link to a test line: `edit-window.test.ts:41` (README §2, 11px mono). */
+/** Link to a test line: `edit-window.test.ts:41` (docs/design/README.md §2, 11px mono). */
 export function anchorLabel(anchor: DigestAnchorView): string {
     return `${anchor.name}:${String(anchor.line)}`;
 }

@@ -2,7 +2,7 @@ import type { FileChangeType, FileDiff, FileImage, HostId, ImageMime, ImageSide 
 
 /**
  * Builds unified diffs for fixtures. Uses the `git diff` format (file header, `@@ -a,b +c,d @@`,
- * lines prefixed with ' ' / '+' / '-'): the real UI diff parser (M1-T5) will parse it,
+ * lines prefixed with ' ' / '+' / '-'): the real UI diff parser parses it,
  * so fixtures must contain valid diffs, not just text resembling a diff.
  *
  * Always derives `additions`/`deletions` counts from the patch itself, so they cannot disagree.
@@ -15,7 +15,7 @@ export interface HunkSpec {
     /** First hunk line number in the old file version (1-based, 0 if there is no old version). */
     oldStart: number;
     newStart: number;
-    /** Text after the closing `@@`. The UI extracts the entity header from it (SPEC §2.13). */
+    /** Text after the closing `@@`. The UI extracts the entity header from it (`docs/design/SPEC-elements.md §2.13`). */
     section?: string;
     lines: readonly PatchLine[];
 }
@@ -119,7 +119,7 @@ export function hashHex(input: string, length: number): string {
 }
 
 /**
- * Opaque diff item id. Its shape follows the host format (`eid:1:<base64>`, M1-T1 spike):
+ * Opaque diff item id. Its format resembles a review host id (`eid:1:<base64>`):
  * consumers must not parse it, and its appearance makes this clear.
  */
 export function makeFileId(diffId: HostId, path: string): HostId {
@@ -221,7 +221,7 @@ function renderFileHeader(spec: FileSpec): string[] {
 
 /**
  * Builds a `FileDiff`. The patch is null for binary files and files without a text diff (empty files):
- * this matches the host response. The UI shows these files as single-line notices (SPEC §2.14).
+ * this matches the host response, and the UI displays these files as single-line notices (`docs/design/SPEC-elements.md §2.14`).
  * A mode change without content changes has a patch consisting only of headers, without hunks.
  */
 export function makeFileDiff(diffId: HostId, spec: FileSpec): FileDiff {

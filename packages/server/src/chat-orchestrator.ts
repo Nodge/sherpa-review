@@ -42,7 +42,7 @@ export interface ChatOrchestratorOptions {
     readonly iterationFeed?: IterationFeed | null;
     /** Shared question context: guide, PR diff and file contents at stable paths. */
     readonly shared: SharedPayloadStore;
-    /** UI settings supply the response language when the request omits it (M5-T4). */
+    /** UI settings: supply the answer language when the request does not specify one. */
     readonly settings?: Pick<SettingsStore, 'read'> | null;
     /** Worker registry: the `--lang` hint is the penultimate language fallback. */
     readonly registry?: Pick<WorkerRegistry, 'status'> | null;
@@ -99,7 +99,7 @@ export class ChatOrchestrator {
         this.unsubscribeQueue?.();
     }
 
-    /** `requestedLocale` is the tab's effective language. Without it, use the fallback order (M5-T4). */
+    /** `requestedLocale` is the tab's effective language. Without it, the fallback order selects the language. */
     async ask(
         question: string,
         requested: UiChatAskAnchor | null,
@@ -407,7 +407,7 @@ export class ChatOrchestrator {
     }
 
     /**
-     * Context for a question about a previous iteration: its patch is local (brief §4a), but it has no file
+     * Context for a question about a previous iteration: its patch is stored locally (docs/product.md §4a), but the host has no file
      * contents for it. `getFileContent` only knows the active iteration.
      */
     private async loadPinnedContext(host: ReviewHost, diffId: string, meta?: PrMeta | null): Promise<PrContext> {

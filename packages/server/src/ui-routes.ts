@@ -98,7 +98,7 @@ export interface UiRoutesOptions {
 const KEEPALIVE_INTERVAL_MS = 30_000;
 
 /**
- * UI endpoints (rpc-design §2): REST for actions, SSE for reactivity. Only the
+ * UI endpoints (docs/protocol.md §2): REST for actions, SSE for reactivity. Only the `UiState`
  * snapshot is exposed. It excludes server internals (file paths, lease workerId).
  */
 export function createUiRoutes(options: UiRoutesOptions): Route[] {

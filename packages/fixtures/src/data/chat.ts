@@ -5,12 +5,12 @@ import { makeFileId } from '../patch.js';
 import type { FixtureName } from './index.js';
 import { MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2, MEDIUM_HEAD_COMMIT } from './medium.js';
 
-/** Chat history and local agent notes for the M3 gallery and end-to-end tests. */
+/** Chat history and local agent notes for the gallery and end-to-end tests. */
 export interface ChatFixtures {
     exchanges: ChatExchange[];
     notes: AgentNote[];
     /**
-     * The same notes after moving to the second iteration (SPEC §2.16): ranges in unchanged
+     * The same notes after moving to the second iteration (`docs/design/SPEC-elements.md §2.16`): ranges in unchanged
      * files moved through the interdiff, while the note on a changed range lost its anchor.
      */
     notesAfterPush: AgentNote[];

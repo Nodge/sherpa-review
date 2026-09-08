@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { askReviewChat, generateReviewRoute } from './api.js';
 
-/** Generation language (M5-T4) goes to the server in the request body. The tab knows it, the server does not. */
+/** The request body sends the generation language to the server. The tab knows it, the server does not. */
 
 const originalFetch = globalThis.fetch;
 

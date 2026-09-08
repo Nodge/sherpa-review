@@ -51,7 +51,7 @@ describe('route generation card', () => {
         expect(html).toContain('Filling the stops one by one');
         expect(html).toContain('The plan comes first — until it lands there is nothing to count stops from');
         expect(html).toContain('Open the route skeleton');
-        // Neither a counter nor a segment bar can appear in this phase: there is no plan yet (README §6).
+        // Neither a counter nor a segment bar can appear in this phase: there is no plan yet (docs/design/README.md §6).
         expect(html).not.toContain('gen-bar');
         expect(html).not.toMatch(/\d+ of \d+ ready/);
     });
@@ -79,7 +79,7 @@ describe('route generation card', () => {
         expect(html).toContain('4 stops are ready to read, 3 are placeholders');
     });
 
-    it('over a minute: "still working" with a phase counter and cancellation (SPEC §3)', () => {
+    it('shows "still working" with the phase count and cancellation after a minute (docs/design/SPEC-elements.md §3)', () => {
         expect(render(state('filling'), { longRunning: true })).toContain('still working · 4 of 7');
         // The reading phase has no count to show, so the line stays without one.
         expect(render(state('reading'), { longRunning: true })).toContain('still working<');
@@ -87,7 +87,7 @@ describe('route generation card', () => {
         expect(render(state('filling'))).not.toContain('still working');
     });
 
-    it('the 60 s threshold uses the oldest open route task (SPEC §3)', () => {
+    it('measures the 60 s threshold from the oldest open route task (docs/design/SPEC-elements.md §3)', () => {
         const created = Date.parse('2026-09-01T10:00:00.000Z');
         const task = (createdAt: string): UiTask => ({
             id: 1,
@@ -145,7 +145,7 @@ describe('phase B plan list', () => {
     const css = readFileSync(new URL('./generation.css', import.meta.url), 'utf8');
 
     it('keeps queued items readable with their own text token instead of the segment fill', () => {
-        // README §7 separates two colours: `#5c6288` is queued item text, `#2a2e4a` is the background
+        // docs/design/README.md §7 distinguishes two colours: `#5c6288` for queued item text, `#2a2e4a` for the background
         // of an unlit bar segment. Combining them makes the lines invisible against the card background.
         const title = /\.gen-plan__title,\s*\.gen-plan__state\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
 

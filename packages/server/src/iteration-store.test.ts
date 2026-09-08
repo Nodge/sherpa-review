@@ -9,7 +9,7 @@ import { IterationStore, rememberIterationDiff } from './iteration-store.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Local iteration patch storage and slice cache (M4-T3, brief §4a): after a force-push the host
+ * Local iteration patch storage and slice cache (docs/product.md §4a): after a force-push the host
  * no longer returns the previous iteration, but the old snapshot must remain readable.
  */
 

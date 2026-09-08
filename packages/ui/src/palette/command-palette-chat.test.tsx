@@ -11,7 +11,7 @@ import { createShortcutRegistry } from '../shortcuts/registry.js';
 import type { PaletteChat } from './command-palette.tsx';
 import { CommandPalette } from './command-palette.tsx';
 
-/** `@` mode: this PR's chat history in the palette (M5-T6, SPEC §2.18). */
+/** `@` mode: this PR's chat history in the palette (docs/design/SPEC-elements.md §2.18). */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

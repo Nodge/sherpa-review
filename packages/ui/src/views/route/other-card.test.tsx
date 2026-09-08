@@ -162,7 +162,7 @@ describe('conflict line in Other', () => {
         expect(renderCard().querySelector('.route-other__conflicts')).toBeNull();
     });
 
-    it('states the file count and sends the reviewer to the host to resolve them (SPEC §4.1)', () => {
+    it('shows the file count and directs the reviewer to resolve conflicts in the host (docs/design/SPEC-elements.md §4.1)', () => {
         const host = renderCard({ view: { ...OTHER_VIEW, conflictFiles: 2 } });
         const line = host.querySelector('.route-other__conflicts');
 

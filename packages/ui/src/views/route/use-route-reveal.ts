@@ -89,7 +89,7 @@ export function useRouteReveal({
                 setOtherOpen(true);
                 return;
             }
-            // Expand a collapsed stop before scrolling to it (SPEC §2.11).
+            // Expand a collapsed stop first, then scroll to it (docs/design/SPEC-elements.md §2.11).
             expandStop(entry.view.stop.id);
             // A file hidden by the digest behind "Show test code" would otherwise be absent from the markup.
             if (fileId !== null && buildDigest(entry.view.stop)?.testFileIds.has(fileId) === true) {
@@ -117,7 +117,7 @@ export function useRouteReveal({
     );
 
     /**
-     * Follow a digest assertion anchor (README §2). An `uncovered` anchor points to code
+     * Jump to a digest assertion anchor (docs/design/README.md §2). An `uncovered` anchor points to code
      * that has no coverage, and another stop or "Other" explains that code:
      * jump to where the line actually renders, not where the click came from.
      */

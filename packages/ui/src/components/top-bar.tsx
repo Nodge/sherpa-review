@@ -14,12 +14,12 @@ import './top-bar.css';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
- * Top bar (README §0): mark, breadcrumb, view tabs, agent status, search and Feedback.
+ * Top bar (docs/design/README.md §0): mark, brandcrumb, view tabs, agent status, search and Feedback.
  */
 export interface TopBarProps {
     /** Distribution version from the root package.json, inserted at build time. */
     readonly version: string;
-    /** Available new version (M5-T9). With null, the version stays plain text. */
+    /** New version available. null leaves the version as plain text. */
     readonly update?: UiUpdate | null;
     /** Clicking the version with a dot clears "Later" and reopens the toast. */
     readonly onOpenUpdate?: () => void;
@@ -190,7 +190,7 @@ export function AgentPill({
             {open && view.tone === 'disconnected' ? (
                 <div className="agent-popover" role="dialog" aria-label={t('topbar.agent.connect')}>
                     <div className="agent-popover__title">{t('topbar.agent.connect')}</div>
-                    {/* Text from the removed "Agent disconnected" banner (decision #32). */}
+                    {/* "Agent disconnected" explanation lives here, with no separate banner. */}
                     <p className="agent-popover__offline">{t('topbar.agent.offline')}</p>
                     <CommandBox command={command} hint={t('command.hint')} actionLabel={t('command.copy')} />
                 </div>

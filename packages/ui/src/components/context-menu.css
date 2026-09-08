@@ -1,4 +1,5 @@
-/* File context menu (SPEC §2.11): raised surface and menu shadow from the handoff README. */
+/* File context menu (docs/design/SPEC-elements.md §2.11). Raised surface and menu shadow
+   from `docs/design/README.md`. */
 
 .context-menu {
     position: fixed;

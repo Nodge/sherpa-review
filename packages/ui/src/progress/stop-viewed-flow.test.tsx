@@ -24,7 +24,7 @@ import { createShortcutRegistry } from '../shortcuts/registry.js';
 import type { Store, StoreSnapshot } from '../store.js';
 
 /**
- * End-to-end stop marking (dogfooding finding #31): header toggle click → write
+ * End-to-end path of marking a stop: click the header toggle → write
  * seen ranges through the endpoint → refetch the progress snapshot → update file read-state boxes in the shared
  * store. Mount the whole application: App handles refetching, so an isolated view cannot
  * test it. The mark was lost at the boundary between the view and App.

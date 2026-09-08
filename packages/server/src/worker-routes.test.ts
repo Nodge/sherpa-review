@@ -52,7 +52,7 @@ describe('worker endpoints', () => {
             sherpaDir,
             longPollSeconds,
             now: () => new Date(Date.now() + clockOffsetMs),
-            // Tests must not access the live review host (requirements §7). Without a host, route warmup makes no network calls.
+            // Tests must not call a live review host (docs/testing.md). Without a host, route warm-up makes no network requests.
             reviewHostFactory: () => null,
         });
         servers.push(server);

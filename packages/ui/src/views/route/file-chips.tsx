@@ -7,10 +7,10 @@ import type { FileReadState } from '../../progress/read-state.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
 
 /**
- * Stop file chips (README §1): name, path, counts for this stop and a read-state
- * box. Clicking goes to the file card in the right column (SPEC §2.11).
+ * A stop's file chips (docs/design/README.md §1): name, path, counts for this stop and the read-state
+ * checkbox. Clicking opens the file card in the right column (docs/design/SPEC-elements.md §2.11).
  *
- * With more than 12 files, show 8 and a "N more files" expander (SPEC §2.9). The narrow column
+ * Above 12 files, show 8 and a "N more files" expander (docs/design/SPEC-elements.md §2.9): the narrow column
  * must not become a file list two screens long.
  */
 
@@ -75,7 +75,7 @@ function FileChip({
             <span className="route-chip__spacer" />
             <span className="route-chip__add">+{count(group.additions)}</span>
             <span className="route-chip__del">−{count(group.deletions)}</span>
-            {/* The three-state box uses the shared `readStateOf`. The tooltip always includes counts (SPEC §2.12). */}
+            {/* The checkbox uses the shared tri-state `readStateOf`: the tooltip always includes counts (docs/design/SPEC-elements.md §2.12). */}
             <span className={`route-chip__read route-chip__read--${read.state}`} title={readStateTooltip(t, read)}>
                 {read.state === 'read' ? <Icon name="check" size={9} /> : null}
             </span>

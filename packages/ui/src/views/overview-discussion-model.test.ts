@@ -6,7 +6,7 @@ import { threadIsVisible } from '../threads/model.js';
 import { bodyNeedsExpand, discussionSummary } from './overview-model.js';
 
 /**
- * Discussion card model (SPEC additions §1e): who gets a row, in what order,
+ * Discussion card model (docs/design/SPEC-additions-2026-08-26.md §1e): who gets a row, in what order,
  * what the header counts and what goes into the "outside the diff" fold.
  */
 

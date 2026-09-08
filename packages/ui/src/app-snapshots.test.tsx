@@ -14,7 +14,7 @@ import type { ViewId } from './session/views.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Snapshot picker in App (M4-T9): endpoint parameters when selecting a previous snapshot,
+ * Snapshot picker in App: endpoint parameters sent for a previous snapshot,
  * read-only banner text and app behaviour when the server has no snapshots endpoint.
  */
 
@@ -61,7 +61,7 @@ function routeState(patch: Partial<UiRouteState> = {}): UiRouteState {
     return { phase: 'ready', smallPr: false, snapshot: CURRENT_SNAPSHOT, failure: null, stale: null, ...patch };
 }
 
-/** The PR has moved ahead of the snapshot: only `stale` identifies the active iteration (server before M4-T4). */
+/** The PR moved past the snapshot. Only `stale` identifies the active iteration because the old server provides no slices. */
 const PR_COMMIT = 'c0ffee1b2a3d4e5f60718293a4b5c6d7e8f90123';
 const PR_DIFF_ID = '182802';
 const STALE: UiRouteStale = {

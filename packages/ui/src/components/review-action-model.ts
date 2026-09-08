@@ -15,14 +15,14 @@ export interface PublishGuardInput {
     readonly connection: ConnectionState;
     readonly pendingComposer: boolean;
     /**
-     * Drafts in the server buffer (M5-T15): the host has not accepted them yet, so there is nothing to publish.
-     * ship waits for them to arrive (SPEC §4.5).
+     * Drafts in the server buffer: the host has not accepted them yet, so there is nothing to publish.
+     * Ship waits until they arrive (docs/design/SPEC-elements.md §4.5).
      */
     readonly bufferedDrafts?: number;
     readonly publishing: boolean;
     /** After failure, only an explicit retry of the same verdict is allowed. */
     readonly failure?: boolean;
-    /** The tab is viewing a previous iteration. Only the active one can be shipped (M4 boundaries). */
+    /** The tab is viewing a previous iteration. Only the active one can be approved. */
     readonly readOnlyIteration?: boolean;
     /** Read-only reason from context. Defaults to the active-iteration message. */
     readonly readOnlyReason?: string;

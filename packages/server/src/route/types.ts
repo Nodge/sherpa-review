@@ -1,11 +1,11 @@
 import type { RouteAnchor, RouteStop, RouteStopChange, RouteTestClaim } from '@sherpa/protocol';
 
 /**
- * Shared types for route result acceptance (M2-T3).
+ * Shared types for accepting route results.
  *
- * Two languages per the logged decision: `errors` are for the model ("fix it and call complete again",
- * rpc-design §3), in actionable English. A stop's `validationNotes` are for the reviewer in the UI,
- * in Russian.
+ * There are two languages: the model reads `errors` ("fix and call complete again",
+ * `docs/protocol.md §3`), which are actionable and in English. The reviewer reads a stop's `validationNotes`
+ * in the UI, in Russian.
  */
 
 /** Acceptance result: a normalized result or a list of errors for the model. */
@@ -15,7 +15,7 @@ export type RouteValidation<T> =
 
 /**
  * Accepted skeleton. `stops` is the full plan, including the synthetic "Other" stop (unknown
- * to the model). `intents` stay out of the snapshot. The section scheduler consumes them (T5).
+ * to the model). `intents` aren't stored in the snapshot. The section scheduler consumes them.
  */
 export interface AcceptedSkeleton {
     readonly summary: string;

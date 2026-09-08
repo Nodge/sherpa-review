@@ -137,7 +137,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
     const count = selectedKeys.size;
     const mode = gallery?.mode ?? (inFlight ? 'sent' : 'rest');
     const [error, setError] = useState<string | null>(null);
-    // Asking the agent works in a previous iteration, commenting does not (M4 boundaries).
+    // Questions can be asked from a previous iteration, but comments cannot be posted there.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     const [position, setPosition] = useState<SelectionPopoverPosition | null>(

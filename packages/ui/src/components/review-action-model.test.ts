@@ -36,7 +36,7 @@ describe('floating bar model', () => {
         ).toBeNull();
     });
 
-    // Draft buffer (M5-T15): there is nothing to publish until the host accepts the text.
+    // Draft buffer: there is nothing to publish until the host accepts the text.
     it('blocks publishing while buffered drafts have not arrived', () => {
         expect(
             publishDisabledReason({

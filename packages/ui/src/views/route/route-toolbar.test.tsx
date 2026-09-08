@@ -12,7 +12,7 @@ import { createT } from '../../i18n/index.js';
 
 const t = createT('en');
 
-/** Toolbar preset toggle: active option, hint and disabled state (SPEC §2.5). */
+/** Toolbar preset switch: active option, tooltip and disabled state (docs/design/SPEC-elements.md §2.5). */
 
 const DATA = fixtureIteration('medium');
 
@@ -51,7 +51,7 @@ describe('route toolbar', () => {
         expect(tour).toContain('aria-pressed="false">Triage</button>');
     });
 
-    it('the cap row appears only when the plan does not cover the entire diff (SPEC §4.1)', () => {
+    it('shows the limit row only when the plan does not cover the full diff (docs/design/SPEC-elements.md §4.1)', () => {
         const capped = render({ cap: { filesCovered: 120, filesTotal: 500, machineFiles: 380, truncated: false } });
 
         expect(capped).toContain('route-toolbar__cap');

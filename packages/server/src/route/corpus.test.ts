@@ -7,7 +7,7 @@ import type { RouteValidation } from './types.js';
 import { bannedPhrases } from './voice.js';
 
 /**
- * Validator negative corpus. Add a case for every "model returned something odd" incident (requirements §7):
+ * Negative validator corpus. Each "the model returned something odd" incident adds a case:
  * one entry in `CASES` with raw text and the expected errors. The validators below default to Russian,
  * the language of cases without an `en:` prefix, so its voice stop list and note wording stay covered.
  * The model reads the errors, so tests compare them verbatim. Text owned by
@@ -35,7 +35,7 @@ function planEn(): RouteStop[] {
     return skeleton.value.stops;
 }
 
-/** Plan with a filled stop: input for deduplication rules (SPEC §4.3). */
+const validateSection: typeof validateSectionIn = (raw, stops, allowed, diff, context) => validateSectionIn(raw, stops, allowed, diff, { locale: 'ru', ...context });
 function planWith(planIndex: number, anchors: readonly Omit<RouteAnchor, 'fileId' | 'collapsed'>[]): RouteStop[] {
     const files = mediumDiff().files;
     return plan().map((stop) =>
@@ -191,7 +191,7 @@ const CASES: readonly Case[] = [
     },
     {
         // The error path addresses the model JSON, not our processing order. The model submits stops
-        // in any order it likes and uses this path to fix the result (rpc-design §3).
+        // in its preferred order and uses this path to fix the result (`docs/protocol.md §3`).
         name: 'section: invalid stop is not first in the model output',
         run: () =>
             validateSection(
@@ -235,9 +235,10 @@ const CASES: readonly Case[] = [
         ],
     },
     {
-        // When results compete for a range, the first accepted result wins (SPEC §4.3: keeps the first).
-        // The competing stop number does not matter: the validator does not alter other fillings.
-        // Orchestration (M2-T4) controls section acceptance order if it matters to route quality.
+        // Conflicts between results favor the first accepted result (`docs/design/SPEC-elements.md
+        // §4.3`: keeps the first). The competing plan number has no effect because the validator leaves
+        // accepted fillings intact. Orchestration controls the order in which sections are accepted
+        // when that order matters for route quality.
         name: 'section: a lower plan number cannot take a range from an accepted stop',
         run: () =>
             validateSection(
@@ -705,7 +706,7 @@ describe('route validator: reduced functionality', () => {
 });
 
 /**
- * The stop list belongs to the generation locale (M5-T4). A phrase in another language is not a violation,
+ * The stop list belongs to the generation locale. A phrase in another language is allowed
  * so the validator does not reject a quotation from a discussion.
  */
 describe('route validator: voice stop list in another language', () => {

@@ -11,7 +11,7 @@ import type { SettingsStore } from './settings-store.js';
 import { SERVER_VERSION } from './version.js';
 
 /**
- * Check for a new version in main (M5, task breakdown decision 7). Sherpa only notifies:
+ * Check for a newer version in main. Notification only. Sherpa does not
  * it downloads or installs nothing, and reports new versions with an update command.
  */
 

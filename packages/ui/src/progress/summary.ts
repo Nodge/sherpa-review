@@ -12,7 +12,7 @@ export interface ReviewProgressSummary {
 
 /**
  * Shared panel and Review complete counts use the same read-state model as the tree.
- * Conflicted files (SPEC §4.1) are excluded from both numerator and denominator: they are resolved
+ * Conflict files (docs/design/SPEC-elements.md §4.1) are excluded from both numerator and denominator. They are resolved
  * in the review host, so requiring them to be read before ship would be unfair.
  */
 export function reviewProgressSummary(
@@ -56,7 +56,7 @@ export function countDraftComments(threads: readonly Thread[]): number {
 }
 
 /**
- * Drafts in threads pinned outside the active iteration (SPEC §4.5) were written before the push.
+ * Drafts in threads pinned outside the active iteration (docs/design/SPEC-elements.md §4.5) were written before a push.
  * They will be sent to a commit that is no longer at the PR head.
  */
 export function countPinnedDraftComments(threads: readonly Thread[], activeDiffId: string | null): number {

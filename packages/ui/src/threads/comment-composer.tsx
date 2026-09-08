@@ -43,7 +43,7 @@ export interface CommentComposerProps {
     readonly onSaveComplete?: (() => void) | undefined;
     readonly closeOnSave?: boolean;
     readonly showDraftChip?: boolean;
-    /** The thread pin commit: the draft was written before the push and will go to this commit (SPEC §4.5). */
+    /** Thread's pinned commit: the draft was written before the push and will target this commit (docs/design/SPEC-elements.md §4.5). */
     readonly pinnedCommit?: string | null;
     readonly restoreOnCancel?: string;
     readonly onCancel?: (() => void) | undefined;
@@ -79,8 +79,8 @@ export function CommentComposer({
         [t],
     );
     const settings = useUiSettingsStore();
-    // Composer layout is global (SPEC §2.8). Until the reviewer switches it in this composer,
-    // it follows the settings, including those that arrive from the server after mounting.
+    // Composer layout is global (docs/design/SPEC-elements.md §2.8). Until the reviewer
+    // changes it in this composer, it follows settings, including settings received from the server after mounting.
     const [chosenLayout, setChosenLayout] = useState<ComposerLayout | null>(initialLayout ?? null);
     const settingsLayout = useUiSettings().composerLayout;
     const layout = chosenLayout ?? settingsLayout;
@@ -89,7 +89,7 @@ export function CommentComposer({
     const resolvedRestoreOnCancel =
         restoreOnCancel ?? (composer.commentId === null ? undefined : (composer.originalText ?? composer.text));
     const resolvedWhileTyping = notice !== undefined;
-    // Drafts from a previous iteration are visible but cannot be edited (M4 boundaries). The composer can
+    // Previous iteration drafts are visible but cannot be edited. The composer can still
     // be closed because closing is not a write.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
@@ -389,7 +389,7 @@ function ComposerStatus({
     if (composer.status === 'discarding') {
         return <span className="thread-composer__status">{t('thread.composer.status.discarding')}</span>;
     }
-    // The text is already on the server. The host has not accepted it, but it can no longer be lost (M5-T15).
+    // The text is already on the server. The host has not accepted it yet, but it can no longer be lost.
     if (composer.status === 'buffered') {
         const error = composer.bufferEntry?.error ?? null;
         return (

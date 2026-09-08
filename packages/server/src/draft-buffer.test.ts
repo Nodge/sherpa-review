@@ -8,7 +8,7 @@ import { DraftBufferStore, DraftBufferWriter, retryDelayMs } from './draft-buffe
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Draft buffer (M5-T15): a failed host write leaves the text on the server, and the delivery worker
+ * Draft buffer: a failed host write leaves the text on the server. The writer
  * retries it automatically on a timer, on a button press and at the next server start.
  */
 

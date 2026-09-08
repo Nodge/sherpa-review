@@ -1,7 +1,7 @@
 /**
  * Finds and reveals a navigation target in the markup: diff line, agent note, composer.
  * One implementation handles line navigation from the command palette in the full diff and from an
- * assertion in the route digest (README §2). `lineKey` produces the line key. Here it is
+ * assertion anchor in the route digest (docs/design/README.md §2). `lineKey` writes the line key. Here it is
  * only read.
  */
 

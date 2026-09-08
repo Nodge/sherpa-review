@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { RouteFailedCard } from './generation-card.tsx';
 
 /**
- * Real clicks on the failure card (README §12): "Retry" actually calls generation,
+ * Real clicks on the failure card (docs/design/README.md §12): "Retry" starts generation on click,
  * and "Show the raw output" expands the model output itself.
  */
 

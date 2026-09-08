@@ -13,7 +13,7 @@ export interface UseShipVerdictResult {
 }
 
 /**
- * Another reviewer's ship (M5-T15): verdicts arrive in the metadata snapshot without timestamps, so
+ * A ship from someone else: verdicts arrive in the metadata snapshot without timestamps, so
  * record when they appear. The first snapshot of a tab session is the baseline and shows no banner.
  */
 export function useShipVerdict(

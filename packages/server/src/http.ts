@@ -55,9 +55,9 @@ export interface StreamContext extends RequestContext {
 }
 
 /**
- * Endpoint authentication policy. All API endpoints require a token (rpc-design §8).
+ * Endpoint authentication policy. All API endpoints require a token (docs/protocol.md §8).
  * `bearer-or-query` is an exception for SSE because EventSource cannot set headers, so the token
- * arrives as a `?token=` parameter (the server listens only on localhost, decision log).
+ * arrives in the `?token=` parameter (the server listens only on localhost).
  */
 export type RouteAuth = 'bearer' | 'bearer-or-query';
 
@@ -196,7 +196,7 @@ export interface RequestListenerOptions {
 
 /**
  * A small router on top of node:http. Matches the method and path exactly, then applies
- * authentication of the matched route (all API endpoints require a token, rpc-design §8).
+ * the matched route authentication policy (all API endpoints require a token, docs/protocol.md §8).
  * Requests that match no route go to UI static assets (no token required because they contain no secrets,
  * and the token reaches the browser in the URL fragment, which never reaches the server).
  */

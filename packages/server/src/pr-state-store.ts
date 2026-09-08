@@ -18,7 +18,7 @@ interface StateRow extends SqlRow {
 type PrStateField = keyof UiPrState;
 
 /**
- * UI state for one PR (M3-T18): collapsed tree directories and diff cards, recent palette
+ * UI state for one PR: collapsed tree directories and diff cards, recent palette
  * commands. Stored in per-PR SQLite instead of the browser: the tab origin changes with the
  * server port, so `localStorage` does not survive until the next run.
  *

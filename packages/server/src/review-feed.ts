@@ -10,7 +10,7 @@ import type { ReviewHost, Thread } from '@sherpa/protocol';
  */
 export interface ReviewFeedOptions {
     /**
-     * Host-specific subscription to review status changes (M5-T15): the host exposes a status field
+     * Host-specific subscription to review status changes: the review host uses a status field
      * in the same lightweight poll. It lives in the feed because it must follow the same lazy lifecycle as threads.
      */
     readonly watchStatus?: (onChange: () => void) => () => void;

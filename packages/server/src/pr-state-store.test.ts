@@ -7,7 +7,7 @@ import { openDatabase } from './db.js';
 import { PrStateStore } from './pr-state-store.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
-/** UI state for one PR (M3-T18): KV by schema field, a patch replaces the entire field. */
+/** UI state for one PR: KV by schema field, a patch replaces the whole field. */
 describe('UI state store for this PR', () => {
     let sherpaDir: string;
     let file: string;

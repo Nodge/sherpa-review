@@ -1,4 +1,4 @@
-/* Command palette. README §14 and SPEC §2.3. */
+/* Command palette, docs/design/README.md §14 and docs/design/SPEC-elements.md §2.3. */
 
 .command-palette__overlay {
     position: fixed;

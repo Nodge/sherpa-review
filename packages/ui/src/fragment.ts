@@ -2,10 +2,10 @@
  * Address bar state lives in the URL fragment in `URLSearchParams` format:
  * `#t=<token>&view=route`. The old `token` is read for compatibility with running servers.
  * The fragment is not sent to the server, stays out of logs and survives
- * reloads, so it holds both the access token (rpc-design §8) and what should return
- * after F5: the active view, later the filter (SPEC §2.7) and other view parameters.
+ * reloads, so it holds both the access token (docs/protocol.md §8) and what should return
+ * after F5: the active view, then the filter (docs/design/SPEC-elements.md §2.7) and other view parameters.
  *
- * Parsing is shared. Later tasks add parameters without changing the mechanism.
+ * Parsing is shared: new parameters use the same format without changing the mechanism.
  */
 
 export function parseFragment(hash: string): URLSearchParams {

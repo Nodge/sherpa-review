@@ -1,4 +1,4 @@
-/* Overview and Route states without generated content (README §6, SPEC §4.4). */
+/* Non-generative Overview and Route states (docs/design/README.md §6, docs/design/SPEC-elements.md §4.4). */
 
 .view-frame,
 .route-empty,
@@ -123,7 +123,7 @@
     margin-bottom: 0;
 }
 
-/* --- "Summary" card: provenance and reading-phase skeleton (README §6, SPEC §3) --- */
+/* --- Summary card: provenance and reading-phase skeleton (docs/design/README.md §6, docs/design/SPEC-elements.md §3) --- */
 
 .summary-card__provenance {
     margin: var(--space-inner) 0 0;

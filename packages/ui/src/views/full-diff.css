@@ -1,5 +1,5 @@
 /*
- * The "Full diff" view, README §10: PR header in normal flow, sticky toolbar, then a row
+ * Full diff view, docs/design/README.md §10: PR header in normal flow, sticky toolbar, then a row
  * with a 290px file panel and cards. The view itself is the only scroll container.
  */
 
@@ -84,7 +84,7 @@
     color: var(--text-dim);
 }
 
-/* Quiet small-PR note (SPEC §4.1): explains the empty route tab without asking for anything. */
+/* Small PR note (docs/design/SPEC-elements.md §4.1): explains the empty route tab without asking for action. */
 .full-diff__small-pr {
     flex: none;
     padding: 2px 7px;
@@ -113,7 +113,7 @@
 }
 
 /*
- * File list skeleton (SPEC §3): 3 cards with the height of a collapsed file card,
+ * File list skeleton (docs/design/SPEC-elements.md §3): three cards as tall as a collapsed file card,
  * a 41px header and a 30px summary row, so loading the diff does not shift the layout.
  */
 .full-diff__skeleton {
@@ -164,7 +164,7 @@
 }
 
 /*
- * An empty filter result explains itself and offers a way out (SPEC §2.7). The panel sits ABOVE
+ * Empty filter results explain themselves and offer a way out (docs/design/SPEC-elements.md §2.7). The panel sits ABOVE
  * the list instead of replacing it. A card kept on screen may remain under the filter.
  */
 .full-diff__zero {
@@ -184,7 +184,7 @@
     color: var(--text-body);
 }
 
-/* Empty PR (SPEC §4.1): two lines in a column, no action, since there is no way out here. */
+/* Empty PR (docs/design/SPEC-elements.md §4.1): two lines in a column, no action because there is no way out. */
 .full-diff__zero--empty-pr {
     flex-direction: column;
     align-items: flex-start;

@@ -14,7 +14,7 @@ export interface IterationPickerOptions {
     /** Active PR iteration from route facts returned without parameters. */
     readonly factsDiffId: string | null;
     readonly factsCommit: string | null;
-    /** The host provides slices between iterations. Otherwise hide this picker section (M4-T4). */
+    /** The host supplies slices between iterations. Otherwise this picker section stays hidden. */
     readonly interdiffAvailable: boolean;
     readonly resolved: ResolvedViewing;
     readonly now: number;

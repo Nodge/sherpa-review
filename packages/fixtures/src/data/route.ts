@@ -19,7 +19,7 @@ import {
 
 /**
  * Fixture route data: generation states for the gallery and raw model outputs
- * for the e2e fake worker and validator golden corpus (M2-T3).
+ * for the e2e fake worker and the validator golden corpus.
  *
  * Served like `fixtureData`: protocol schema validation during construction, a per-process cache,
  * and a `structuredClone` copy for callers (consumers mutate them).
@@ -43,7 +43,7 @@ export interface RouteRawResults {
 }
 
 /**
- * English model outputs (M5-T4): the same anchors, a different language. There is no broken set here,
+ * Model outputs in English: the same anchors, a different language. No invalid set here,
  * since the negative corpus breaks semantics, which do not depend on language.
  */
 export interface RouteRawResultsEn {
@@ -61,20 +61,19 @@ export interface RouteFixtures {
     rawResultsV2: RouteRawResults | null;
     /** English output set. null means the fixture has none. */
     rawResultsEn: RouteRawResultsEn | null;
-    /** Ready route for the second pass (README §9). null means the fixture has no second iteration. */
+    /** Completed second-pass route (`docs/design/README.md §9`). null means the fixture has no second iteration. */
     secondPass: UiRouteState | null;
 }
 
 /**
  * Validation failure in `edge`: anchors shifted when a file was renamed. The
- * Generation failed state (README §12) uses real anchor drift, not a made-up error.
+ * Generation failed state (`docs/design/README.md §12`) uses real anchor drift instead of a made-up error.
  */
 function edgeFailedState(): UiRouteState {
     return {
         phase: 'failed',
         smallPr: false,
         snapshot: null,
-        // Route staleness is handled in M4-T4.
         stale: null,
         failure: {
             message:
@@ -114,7 +113,7 @@ const BUILDERS: Partial<Record<FixtureName, () => RouteFixtures>> = {
         },
         secondPass: makeMediumSecondPassState(),
     }),
-    // PR below the route threshold: no generation task is enqueued (requirements §3.6).
+    // The PR is below the route threshold, so generation is never queued.
     small: () => ({
         states: { none: { phase: 'none', smallPr: true, snapshot: null, failure: null, stale: null } },
         rawResults: null,

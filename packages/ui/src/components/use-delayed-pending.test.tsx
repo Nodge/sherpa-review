@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PENDING_DELAY_MS, useDelayedPending } from './use-delayed-pending.js';
 
-/** SPEC §3 policy: the pending indicator does not flash on fast responses and hides without delay. */
+/** docs/design/SPEC-elements.md §3 policy: pending indicator does not flash on a fast response and hides without delay. */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

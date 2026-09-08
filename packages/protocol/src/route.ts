@@ -4,9 +4,9 @@ import { localeSchema } from './locale.js';
 import { hostIdSchema } from './review.js';
 
 /**
- * Route (M2, requirements §1/C5): snapshot schema and generation task result schemas.
- * This is the canonical definition (requirements §5). Task payload JSON schemas come from these same zod schemas.
- * Brief rule (principle 3): the UI consumes nothing that has not passed the fail-closed
+ * Route snapshot schema and result schemas for generative tasks.
+ * This is the canonical definition (`docs/architecture.md §5`). Task payload JSON schemas come from these same zod schemas.
+ * Product principle 3 (`docs/product.md §3`): the UI consumes nothing that has not passed the fail-closed
  * validator. Raw model output never reaches a snapshot.
  *
  * A snapshot stores only model-generated content (titles, paragraphs, anchors, digest).
@@ -22,7 +22,7 @@ import { hostIdSchema } from './review.js';
 export const routeTierSchema = z.enum(['high', 'medium', 'low', 'other']);
 export type RouteTier = z.infer<typeof routeTierSchema>;
 
-/** Stop filling status during progressive generation (rpc-design §6). */
+/** Stop fill status during progressive generation (`docs/protocol.md §6`). */
 export const routeStopStatusSchema = z.enum(['queued', 'filling', 'ready', 'failed']);
 export type RouteStopStatus = z.infer<typeof routeStopStatusSchema>;
 
@@ -44,7 +44,7 @@ export const routeAnchorSchema = z.object({
 export type RouteAnchor = z.infer<typeof routeAnchorSchema>;
 
 /**
- * A Behavioural test digest assertion (brief §6). `weakened` is a first-class
+ * Behavioural test digest assertion (`docs/product.md §6`). `weakened` is a first-class
  * signal. `uncovered` explicitly represents "changed behaviour without coverage".
  * A test anchor is required for new/changed/weakened (otherwise the validator drops
  * the assertion and increments `droppedClaims`). `uncovered` has no test anchor
@@ -68,9 +68,9 @@ export const routeTestClaimSchema = z.object({
 export type RouteTestClaim = z.infer<typeof routeTestClaimSchema>;
 
 /**
- * Generation provenance (brief, principle 7): which tool and language generated it.
- * The commit belongs to the snapshot. `locale` is the UI language when generation starts (M5, planning
- * decision 2). null on pre-M5 snapshots means Russian. The UI reads null as `ru`.
+ * Generation provenance (`docs/product.md §3`, principle 7), what generated it and in which language.
+ * The commit is stored at snapshot level. `locale` is the UI language when generation started.
+ * Old-format snapshots have null, and the server and the UI read null as `en`.
  */
 export const routeProvenanceSchema = z.object({
     harness: z.string().nullable(),
@@ -80,7 +80,7 @@ export const routeProvenanceSchema = z.object({
 export type RouteProvenance = z.infer<typeof routeProvenanceSchema>;
 
 /**
- * A stop's classification relative to the previous snapshot (README §1 `changed`/`new` badges,
+ * Stop classification relative to the previous snapshot (`docs/design/README.md §1`, `changed`/`new` badges,
  * "why this stop changed" block). The server computes it deterministically from the interdiff between
  * the snapshots' iterations. `new` means all anchored lines were touched or the file was added,
  * `changed` means some were touched. The model only explains (`reason`), it does not choose the classification.
@@ -97,13 +97,13 @@ export type RouteStopChange = z.infer<typeof routeStopChangeSchema>;
 
 /**
  * A route stop. The skeleton fixes the plan (id, planIndex, tier, title),
- * and filling does not change it: numbers stay fixed by the plan (SPEC §8 item 4). Filters
- * and promoting "Other" reorder rendering but leave the numbers unchanged.
+ * and filling it does not change it. Numbers are fixed by the plan (`docs/design/SPEC-elements.md §8`, item 4).
+ * Filters and moving "Other" up reorder rendering but leave the numbers unchanged.
  *
  * The synthetic "Other" stop has `id: 'other'`, `tier: 'other'`, and the last
  * `planIndex`. The server sets its title in the generation language (reviewer-facing).
  * It has `status: 'ready'` immediately, since there is nothing to fill. The UI computes its contents
- * itself. The UI hides it when there are no uncovered lines (SPEC §4.3).
+ * itself. With no uncovered lines, the UI hides it (`docs/design/SPEC-elements.md §4.3`).
  */
 export const routeStopSchema = z.object({
     id: z.string().min(1),
@@ -122,7 +122,7 @@ export const routeStopSchema = z.object({
     droppedClaims: z.number().int().min(0),
     /** Reviewer-facing validator notes in the snapshot language: "range moved to stop 02", etc. */
     validationNotes: z.array(z.string()),
-    /** Section provenance if it differs from the snapshot (agent changed mid-generation, SPEC §4.4). */
+    /** Section provenance if different from the snapshot's (the agent changed during generation, `docs/design/SPEC-elements.md §4.4`). */
     provenance: routeProvenanceSchema.nullable(),
     /** null if the push did not affect the stop or this is the first snapshot (nothing to compare). */
     change: routeStopChangeSchema.nullable(),
@@ -130,7 +130,7 @@ export const routeStopSchema = z.object({
 export type RouteStop = z.infer<typeof routeStopSchema>;
 
 /**
- * Why mark carryover yielded zero (M5-T21). The reason uses the source iteration: `no_marks` means
+ * Why progress carryover produced zero marks. The reason describes the source iteration. `no_marks` means
  * it had no viewed marks to carry over. `no_overlap` means it had marks, but no
  * stop survived in full. `no_interdiff` means it had marks, but the host returned no interdiff.
  */
@@ -138,14 +138,14 @@ export const routeCarriedZeroReasonSchema = z.enum(['no_interdiff', 'no_marks', 
 export type RouteCarriedZeroReason = z.infer<typeof routeCarriedZeroReasonSchema>;
 
 /**
- * Result of carrying viewed marks from the previous snapshot (second-pass banner, README §9).
+ * Viewed marks carryover result from the previous snapshot (second-pass banner, `docs/design/README.md §9`).
  * `total` counts stops eligible for carryover, those with anchors. Synthetic "Other" and stops
  * without anchors are excluded from the denominator because they cannot appear in the numerator.
  */
 export const routeCarriedSchema = z.object({
     kept: z.number().int().min(0),
     total: z.number().int().min(0),
-    /** null when `kept > 0`. Snapshots before M5-T21 lack this field, which reads as null. */
+    /** null when `kept > 0`. Old-format snapshots lack this field, which reads as null. */
     zeroReason: routeCarriedZeroReasonSchema.nullable().default(null),
 });
 export type RouteCarried = z.infer<typeof routeCarriedSchema>;
@@ -168,7 +168,7 @@ export const routeSnapshotSchema = z.object({
     previousSnapshotId: z.string().nullable(),
     /** Progress carryover result. null if there was no source to carry over from. */
     carried: routeCarriedSchema.nullable(),
-    /** PR summary. Arrives in full with the skeleton: the loop has no token streaming (rpc-design §6). */
+    /** PR summary. Arrives in full with the skeleton. The loop has no token streaming (`docs/protocol.md §6`). */
     summary: z.string(),
     /** Triage order, with synthetic "Other" last. */
     stops: z.array(routeStopSchema),

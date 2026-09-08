@@ -1,5 +1,5 @@
 /**
- * Images for the `medium` fixture (M5-T23). The PNG is 48×32 RGBA with a transparent background and a colored
+ * Images for the `medium` fixture. The PNG is 48×32 RGBA with a transparent background and a coloured
  * rectangle. A zlib/struct script generated the bytes (compression 9), stored in the repository
  * as base64, the only form that lets binary data survive in TS source.
  * The SVG is built from its own text: the same line array also goes into the file-addition patch.

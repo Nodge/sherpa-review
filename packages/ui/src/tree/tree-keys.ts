@@ -1,7 +1,7 @@
 import type { TreeRow } from './file-tree.js';
 
 /**
- * Tree keyboard controls (SPEC §2.20): ↑/↓ move, →/← expand and collapse, ⏎ opens the file.
+ * Tree keyboard controls (docs/design/SPEC-elements.md §2.20): ↑/↓ navigate, →/← expand and collapse, ⏎ opens a file.
  * Pure reducer: takes a key and a flat list of visible rows, returns an intent.
  * This lets tests check behaviour without the DOM. The component only executes the command.
  */

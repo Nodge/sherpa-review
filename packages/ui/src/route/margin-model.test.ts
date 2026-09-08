@@ -24,7 +24,7 @@ const t = createT('en');
 /**
  * Route margins use the same counts as the route view: 38 uncovered lines in four files
  * in the `medium` fixture (CODEOWNERS 5, ci.yml 12, countdown-icon.svg 6, end of psp-schema.ts 15, with two blank lines at the end
- * excluded by the whitespace rule, decision log 2026-08-26). If the counts drift,
+ * excluded by the whitespace rule). If the counts diverge,
  * this test catches it before anyone has to spot it in a screenshot.
  */
 

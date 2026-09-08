@@ -6,16 +6,16 @@ import { readStateOf } from '../progress/read-state.js';
 import type { RouteMarginFile } from '../route/margin-model.js';
 
 /**
- * File tree in the left panel of the full diff (SPEC §2.20, README §10). Pure module:
- * building, aggregates, collapsing and search run without React or the DOM. Rendering only draws
- * the prepared rows.
+ * Full diff left-panel file tree (docs/design/SPEC-elements.md §2.20,
+ * docs/design/README.md §10). Pure module. Building, aggregation, collapse and search run
+ * without React or the DOM. Rendering only draws the prepared rows.
  *
  * Directory chains with a single child collapse into one row (`services/orders`,
  * `api/v3`), so a tree of two dozen files fits the panel instead of taking one row
  * per path segment.
  */
 
-/** Directories with more children than this start collapsed (SPEC §2.20). */
+/** Directories with more than this many children collapse by default (docs/design/SPEC-elements.md §2.20). */
 export const BULK_DIRECTORY_CHILDREN = 20;
 
 export interface TreeFileRow {
@@ -29,16 +29,16 @@ export interface TreeFileRow {
     readonly additions: number;
     readonly deletions: number;
     readonly generated: boolean;
-    /** Host links for the file menu (SPEC §2.11). null when the host has nothing to offer. */
+    /** Host links for the file menu (docs/design/SPEC-elements.md §2.11). null means the host has none. */
     readonly hostFileUrl: string | null;
     readonly blameUrl: string | null;
-    /** The file is unmerged: a `conflict` row tag and exclusion from coverage (SPEC §4.1). */
+    /** Unmerged file: `conflict` tag on the row and exclusion from coverage (docs/design/SPEC-elements.md §4.1). */
     readonly conflict: boolean;
-    /** The file belongs to the extra `pci` lens, shown as a row tag (README §10). */
+    /** The file is in the extra `pci` lens, shown as a tag in its row (docs/design/README.md §10). */
     readonly pci: boolean;
-    /** File reading progress (SPEC §2.12): three states and tooltip counts. */
+    /** File reading progress (docs/design/SPEC-elements.md §2.12): three states and counts for the tooltip. */
     readonly read: FileReadState;
-    /** Route in the margins (README §10): a stop badge or hatch. null means no route. */
+    /** Route in the margins (docs/design/README.md §10): stop badge or hatch. null means no route. */
     readonly route: RouteMarginFile | null;
 }
 
@@ -52,10 +52,10 @@ export interface TreeDirRow {
     readonly files: number;
     /** Fully read files in the subtree. `partial` does not count. */
     readonly readFiles: number;
-    /** The entire subtree is generated, so it dims like generated files (README §10). */
+    /** The whole subtree is generated, so dim it like files (docs/design/README.md §10). */
     readonly generated: boolean;
     /**
-     * Root directory with none of my files (README §10, "foreign roots").
+     * Root directory without any of my files (docs/design/README.md §10, "foreign roots").
      * Always `false` without an ownership lens. There is no basis for dimming.
      */
     readonly foreign: boolean;
@@ -81,7 +81,7 @@ export interface FileTreeInput {
     readonly mineFileIds: ReadonlySet<string> | null;
     /** File read-state. Files missing from the map use their own defaults. */
     readonly readState: ReadonlyMap<string, FileReadState>;
-    /** Route in the margins (README §10). null means no route and no row badges. */
+    /** Route in the margins (docs/design/README.md §10). null means no route and no row badges. */
     readonly routeFiles: ReadonlyMap<string, RouteMarginFile> | null;
     /** Reviewer's explicit choice: path → collapsed. Missing keys use the default. */
     readonly collapsed: ReadonlyMap<string, boolean>;
@@ -230,7 +230,7 @@ function emit(node: Node, depth: number, prefix: string, visible: boolean, conte
                 files: dir.fileCount,
                 readFiles: dir.readCount,
                 generated: dir.generatedCount === dir.fileCount,
-                // A "foreign root" only applies at the top level (README §10). Further down,
+                // Roots outside the ownership zone only apply at the top level (docs/design/README.md §10). Deeper down,
                 // the files themselves already make ownership visible, so no extra dimming is needed.
                 foreign: depth === 0 && context.mineKnown && dir.mineCount === 0,
                 collapsed,
@@ -255,7 +255,7 @@ export function rowKey(row: TreeRow): string {
 }
 
 /**
- * Row label split into a directory chain and the final segment (SPEC §1.2). The path
+ * Row label split into a directory chain and the final segment (docs/design/SPEC-elements.md §1.2). The path
  * truncates from the left while the filename with its extension stays intact. The separator moves into the name, so
  * no neutral character remains at the left truncation edge to disrupt the order.
  */
@@ -271,7 +271,7 @@ export function isCollapsed(tree: FileTree, collapsed: ReadonlyMap<string, boole
 
 /**
  * Toggle a directory. ⌥-click (`subtree`) applies the new state to the whole subtree,
- * including directories hidden under a collapsed parent (SPEC §2.20).
+ * including directories hidden by collapsed ancestors (docs/design/SPEC-elements.md §2.20).
  */
 export function toggleDirectory(
     tree: FileTree,
@@ -292,7 +292,7 @@ export function toggleDirectory(
 }
 
 /**
- * Filter by query (SPEC §2.20): a path substring or a fuzzy match against the
+ * Query filtering (docs/design/SPEC-elements.md §2.20): substring in the path or fuzzy match on the
  * filename. An empty query matches everything.
  */
 export function matchesQuery(path: string, query: string): boolean {
@@ -312,17 +312,10 @@ export function filterByQuery(files: readonly FileDiff[], query: string): readon
     return query.trim() === '' ? files : files.filter((file) => matchesQuery(file.path, query));
 }
 
-/** Directory reading summary (SPEC §2.20): all read gives a full box, some read gives a half box. */
+/** Three read-state checkbox styles (docs/design/SPEC-elements.md §2.12, §2.20): full, half, empty. */
 export type ReadSummary = 'none' | 'partial' | 'full';
 
-export function readSummary(row: TreeDirRow): ReadSummary {
-    if (row.readFiles === 0) {
-        return 'none';
-    }
-    return row.readFiles === row.files ? 'full' : 'partial';
-}
-
-/** Read-state box in the row: the same three forms as the directory summary (SPEC §2.12). */
+/** Read-state checkbox in row markup. */
 export function readBox(state: ReadState): ReadSummary {
     if (state === 'read') {
         return 'full';

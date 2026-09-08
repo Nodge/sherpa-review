@@ -1,5 +1,5 @@
 /*
- * Onboarding tour, SPEC-onboarding-2026-09-02 §1 (anatomy) and README §16.
+ * Onboarding tour, docs/design/SPEC-onboarding-2026-09-02.md §1 (anatomy) and docs/design/README.md §16.
  * Ring z-index 88, card 89: above sticky panels, the floating action bar (70)
  * and update toast (65), but below the palette (100) and shortcuts sheet (120).
  */

@@ -13,10 +13,10 @@ import type {
 } from './review.js';
 
 /**
- * Host adapter interface (requirements §1/C4, brief §4a). One abstraction, implemented by:
- * Fixture (M1, for UI/tests), GitHub (M6). All host-specific behaviour stays
- * behind this boundary. The core (walkthrough, queue, progress, snapshots) knows no host details.
- * The same contract test suite (requirements §7) runs against every implementation.
+ * Host adapter interface (`docs/architecture.md §5`, `docs/product.md §4a`). One
+ * abstraction, two implementations: a review host adapter and a fixture host for UI and tests. All
+ * host-specific details stay behind this boundary. The core (route, queue, progress, snapshots)
+ * knows nothing about the host. The same contract suite (`docs/testing.md §3`) runs against every implementation.
  */
 export interface ReviewHost {
     getPr(): Promise<PrMeta>;
@@ -50,14 +50,14 @@ export interface ReviewHost {
     /**
      * Thread subscription: the callback receives a full snapshot on every change
      * (and once immediately after subscribing). Transport is an adapter detail. The common
-     * denominator across hosts is polling (M1-T1 decision), so reactive delivery
+     * denominator across hosts is polling, so reactivity
      * is not guaranteed, only convergence.
      */
     watchThreads(onChange: (threads: Thread[]) => void): () => void;
 
     /**
      * Save a draft to the host immediately (two-stage model). Returns the created comment.
-     * `idempotencyKey` is the retry key from the draft buffer (M5-T15). Retrying with the same key
+     * `idempotencyKey` is the retry key from the draft buffer. A retry with the same key
      * must not create a second comment. A host without such an endpoint ignores the key.
      */
     saveDraft(draft: CommentDraft, options?: { idempotencyKey?: string }): Promise<Comment>;
@@ -74,7 +74,7 @@ export interface ReviewHost {
 
     /**
      * Publish accumulated drafts as one batch and apply the verdict.
-     * The verdict applies only if every draft is published (SPEC §4.5).
+     * The verdict applies only if all drafts were published (`docs/design/SPEC-elements.md §4.5`).
      * The result carries no final PR state. Read it again through `getPr`.
      */
     publishBatch(verdict: Verdict): Promise<PublishResult>;

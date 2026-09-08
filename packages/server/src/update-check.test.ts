@@ -13,7 +13,7 @@ import type { UpdateCheckOptions, UpdateCheckerOptions } from './update-check.js
 import { classifyInstall, UpdateChecker } from './update-check.js';
 
 /**
- * Check for a new version in main (M5-T9, task breakdown decision 7). Tests forbid network access (brief §7):
+ * Check for a newer version in main. Network access is forbidden in tests (docs/testing.md):
  * transport, clock, token and cache file are injected.
  */
 

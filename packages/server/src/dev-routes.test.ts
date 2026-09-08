@@ -8,7 +8,7 @@ import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-su
 
 /**
  * The "fixture receives a push" dev endpoint exists only for a fixture prKey and uses the same
- * token as UI endpoints. T3/T4 handle what changes in UI state after a push.
+ * token as UI endpoints.
  */
 
 describe('server dev endpoints', () => {

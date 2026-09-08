@@ -20,8 +20,8 @@ import { fileContentOf } from './file-content.js';
 import { fixtureBlob } from './patch.js';
 
 /**
- * Third `ReviewHost` implementation (requirements §1/C4), with deterministic fixtures. Used for
- * UI development without a remote review host, the state gallery, contract tests and e2e F5.
+ * `ReviewHost` implementation backed by deterministic fixtures. It supports
+ * UI development without a live review host, the state gallery, contract tests and e2e.
  *
  * Rules:
  * - no `Date.now()`/`Math.random()`: mutation timestamps are computed from the fixture's `mutationEpoch`
@@ -40,11 +40,11 @@ const PR_LEVEL_DRAFT_ID_BASE = 70_000;
 export interface FixtureHostOptions {
     /**
      * Comments that `publishBatch` will fail: a fixture hook for partial publication failure
-     * in which case the verdict is not applied (SPEC §4.5).
+     * tests, where the verdict must not be applied (`docs/design/SPEC-elements.md §4.5`).
      */
     readonly failPublishFor?: readonly HostId[];
     /**
-     * Draft writes fail: fixture hook for the draft buffer (M5-T15), where the host rejects
+     * Draft writes fail: a fixture hook for the draft buffer, where the host refuses
      * the write and the server keeps the text. Toggle on a running host through `setFailDraftWrites`.
      */
     readonly failDraftWrites?: boolean;
@@ -125,7 +125,7 @@ export class FixtureHost implements ReviewHost {
     /** Last applied verdict, observable in tests and the state gallery. */
     private verdict: Verdict | null = null;
 
-    /** Draft writes fail: development toggle for the draft buffer (M5-T15). */
+    /** Draft writes fail: development toggle for the draft buffer. */
     private failDraftWrites: boolean;
 
     /** Present only when the fixture host supports viewed marks (`capabilities.fileViewedSync`). */
@@ -240,7 +240,7 @@ export class FixtureHost implements ReviewHost {
 
     /**
      * The fixture ignores the idempotency key because duplicates are harmless here. The contract must accept
-     * the parameter, because retries from the draft buffer depend on it (M5-T15).
+     * the parameter because draft-buffer write retries depend on it.
      */
     saveDraft(draft: CommentDraft, _options?: { idempotencyKey?: string }): Promise<Comment> {
         if (this.failDraftWrites) {
@@ -340,7 +340,7 @@ export class FixtureHost implements ReviewHost {
 
     /**
      * Publishes all accumulated drafts. The verdict applies only if every draft is published
-     * (SPEC §4.5). Failed comments remain drafts, and the review is not complete.
+     * (`docs/design/SPEC-elements.md §4.5`). Failed comments remain drafts, and the review stays unfinished.
      */
     publishBatch(verdict: Verdict): Promise<PublishResult> {
         const parsed = verdictSchema.parse(verdict);

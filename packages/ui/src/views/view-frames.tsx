@@ -25,12 +25,12 @@ import { GenerationCard } from './route/generation-card.tsx';
 import './view-frames.css';
 
 /**
- * What Overview knows about route generation (README §6–7, SPEC §3). Endpoints come from App:
+ * What Overview knows about route generation (docs/design/README.md §6–7, docs/design/SPEC-elements.md §3). App supplies the handlers:
  * the view does not call endpoints itself, so it can render in the gallery without a server.
  */
 export interface RouteGenerationProps {
     readonly route: UiRouteState | null;
-    /** Task running for over a minute: "still working" line with cancellation (SPEC §3). */
+    /** The task has been running for over a minute: a "still working" line with cancellation (docs/design/SPEC-elements.md §3). */
     readonly longRunning?: boolean;
     readonly cancelling?: boolean;
     readonly retrying?: boolean;
@@ -60,12 +60,12 @@ export interface ViewFrameProps {
     readonly threadNow?: number;
     readonly threadStore?: ThreadStore;
     readonly generation?: RouteGenerationProps;
-    /** Snapshots and iterations for the Overview card (README §6). No data means no card. */
+    /** Snapshots and iterations for the Overview card (docs/design/README.md §6). Without them, there is no card. */
     readonly picker?: Omit<SnapshotMenu, 'initialOpen'>;
-    /** Right edge of the PR header: the snapshot pill (README §1). */
+    /** Right edge of the PR header: snapshot pill (docs/design/README.md §1). */
     readonly headerAside?: ReactNode;
     /**
-     * Open the PR comments modal from the discussion card (SPEC additions §1e item 5).
+     * Open the PR comments modal from the discussion card (docs/design/SPEC-additions-2026-08-26.md §1e item 5).
      * The argument restores focus to the button that opened it.
      */
     readonly onWritePrComment?: (returnFocus: () => void) => void;
@@ -123,7 +123,7 @@ export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDi
 }
 
 /**
- * The selected iteration has no route (M4-T9). The tab explains this and sends the reviewer
+ * An iteration with no generated route is selected: the tab explains this and points
  * to the reader. The route cannot be rebuilt here, as generation targets the active iteration.
  */
 export function IterationWithoutRoute({
@@ -132,7 +132,7 @@ export function IterationWithoutRoute({
     onReadDiff,
 }: {
     commit: string | null;
-    /** The tab is viewing a slice between iterations (M4-T12): it never has a route. */
+    /** The tab shows a slice between iterations: it cannot have a route at all. */
     slice?: { readonly baseCommit: string; readonly headCommit: string } | null;
     onReadDiff: () => void;
 }) {
@@ -160,7 +160,7 @@ export function IterationWithoutRoute({
 }
 
 /**
- * Overview in a slice between iterations (M4-T12): ownership zones, threads, and progress are calculated using
+ * Overview for a slice between iterations: ownership zones, threads and progress use
  * the iteration's `fileId`. The slice uses a different namespace, so this data
  * is never requested for it. Show an explanation and a way out instead of misleading empty cards.
  */
@@ -189,7 +189,7 @@ export function SliceWithoutOverview({
 }
 
 /**
- * PR below the route threshold (SPEC §4.1): the tab stays clickable and explains why there is
+ * A PR below the route threshold (docs/design/SPEC-elements.md §4.1): the tab remains clickable and explains why there is
  * no route. Describe the threshold in words, since its value lives in server config and the UI does not know it.
  */
 export function SmallPrRoute({ onReadDiff }: { onReadDiff: () => void }) {
@@ -276,7 +276,7 @@ export function OverviewView({
     };
     const route = generation?.route ?? null;
 
-    // Empty PR (SPEC §4.1): empty Overview cards would mislead. There is nothing to derive ownership zones, discussions or progress
+    // Empty PR (docs/design/SPEC-elements.md §4.1): Overview cards would be misleadingly empty, since there is nothing to compute zones, discussions and progress
     // from. The action panel lives one level above, so ship remains available.
     if (diff !== null && diff.files.length === 0) {
         return (
@@ -356,9 +356,9 @@ export function OverviewView({
 }
 
 /**
- * "Summary" card (README §6–7). Summary arrives whole with the skeleton. The loop has no token
- * streaming (M2-T1 decision), so the reading phase shows no caret, only skeleton bars
- * of fixed height: arriving text does not shift the layout (SPEC §3).
+ * Summary card (docs/design/README.md §6–7). Summary arrives whole with the skeleton. There is no token streaming
+ * in the loop, so the reading phase has no caret. Instead, skeleton bars have a fixed
+ * height, so text arriving does not shift the layout (docs/design/SPEC-elements.md §3).
  */
 function SummaryCard({
     prKey,

@@ -1,7 +1,9 @@
 {
   "name": "@sherpa/server",
   "version": "0.0.0",
+  "description": "Single-PR server: HTTP and SSE, database, task queue, orchestrators and host adapters",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {

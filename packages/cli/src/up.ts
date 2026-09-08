@@ -24,7 +24,7 @@ const HEALTH_PROBE_TIMEOUT_MS = 1_000;
 /** Number of log lines to show when the daemon fails to start. */
 const LOG_TAIL_LINES = 20;
 
-/** State directory permissions: only the owner can see its contents (requirements §6). */
+/** State directory permissions: only the owner can read the contents (`docs/architecture.md §6`). */
 const STATE_DIR_MODE = 0o700;
 
 /** How long to wait for exit after each signal in `terminateChild`. */
@@ -59,7 +59,7 @@ interface Daemon {
 
 /**
  * Ensures the PR server is running and returns a UI link for the reviewer. Idempotent: a live server for this PR
- * is found through the manifest (rpc-design §8) and reused, otherwise the server bundle starts as a daemon
+ * through the manifest (`docs/protocol.md §8`) and reused. Otherwise a daemon starts from the server bundle,
  * that outlives the CLI. Neither pnpm nor a repository checkout is required.
  */
 export async function ensureServer(options: EnsureServerOptions): Promise<EnsureServerResult> {
@@ -163,7 +163,7 @@ function isProcessAlive(pid: number): boolean {
  * No token in the log: the CLI reads the manifest and builds the link with the token.
  *
  * `--install-dir` is the distribution directory (parent of `bin/`). Only the
- * CLI knows it, and the server needs it to check for a new version in main (M5, planning decision 7).
+ * CLI, and the server needs it to check for a newer version in main.
  */
 async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logPath: string): Promise<Daemon> {
     const installDir = path.dirname(path.dirname(await fs.realpath(serverBin)));

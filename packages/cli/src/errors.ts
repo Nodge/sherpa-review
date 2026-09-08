@@ -2,7 +2,7 @@ import type { RpcErrorCode } from '@sherpa/protocol';
 
 /**
  * An error with a message ready for the model: what happened and what to do next.
- * Stack traces and dumps stay out of the output because a language model reads the CLI output (rpc-design §3).
+ * No stacks or dumps in the output, as a language model reads the CLI output (`docs/protocol.md §3`).
  */
 export class CliError extends Error {
     constructor(message: string) {

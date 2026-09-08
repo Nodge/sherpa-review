@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { LocaleProvider, ru } from '../i18n/index.js';
 import { RouteLocaleBanner, routeLocaleBannerVisible } from './route-locale-banner.tsx';
 
-/** Route language (M5-T4): banner visibility conditions and buttons. */
+/** Route language: conditions for showing the banner and its button. */
 
 function snapshot(): RouteSnapshot {
     const ready = routeFixtures('medium')?.states.ready?.snapshot;
@@ -45,7 +45,7 @@ describe('route language banner visibility', () => {
         ).toBe(true);
     });
 
-    it('a pre-M5 snapshot (`locale: null`) is treated as Russian', () => {
+    it('treats a snapshot without a language (`locale: null`) as English', () => {
         const route = routeWith({}, null);
         const args = { generating: false, keptSnapshotId: null, readOnly: false };
         expect(routeLocaleBannerVisible({ route, uiLocale: 'en', ...args })).toBe(false);

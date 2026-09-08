@@ -8,7 +8,6 @@ import {
     isCollapsed,
     matchesQuery,
     readBox,
-    readSummary,
     rowKey,
     splitLabel,
     toggleDirectory,
@@ -93,27 +92,6 @@ describe('buildFileTree', () => {
         const root = tree.rows.find((row): row is TreeDirRow => row.kind === 'dir');
 
         expect(root).toMatchObject({ label: 'a', additions: 7, deletions: 3, files: 2 });
-    });
-
-    it('summarizes read state: all read → full, some → partial, none → none', () => {
-        const files = [file('a/one.ts'), file('a/two.ts')];
-        const dirOf = (readState: ReadonlyMap<string, FileReadState>): TreeDirRow => {
-            const row = buildFileTree(input(files, { readState })).rows.find(
-                (candidate): candidate is TreeDirRow => candidate.kind === 'dir',
-            );
-            if (row === undefined) {
-                throw new Error('the tree has no directory');
-            }
-            return row;
-        };
-
-        expect(readSummary(dirOf(new Map()))).toBe('none');
-        expect(readSummary(dirOf(new Map([['f-a/one.ts', read('read')]])))).toBe('partial');
-        expect(
-            readSummary(dirOf(new Map([['f-a/one.ts', read('read')], ['f-a/two.ts', read('read')]]))),
-        ).toBe('full');
-        // A partially read file does not count in the directory summary. Read means fully read.
-        expect(readSummary(dirOf(new Map([['f-a/one.ts', read('partial')]])))).toBe('none');
     });
 
     it('gives file rows three read-state values', () => {

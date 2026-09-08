@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { jumpTarget } from './scroll.js';
 
 /**
- * Jump target levels (SPEC §2.9): section → card → row. The level matters more than the element itself:
+ * Jump target levels (docs/design/SPEC-elements.md §2.9): section → card → line. The level matters more than the element:
  * it tells the caller whether the jump arrived or needs to keep looking. An intermediate level must be
  * a real scroll target: a stop whose cards are deferred by lazy rendering adds them
  * only after it has appeared on screen, and this jump brings it there.

@@ -218,7 +218,7 @@ function sum(files: readonly FileDiff[], key: 'additions' | 'deletions'): number
 }
 
 
-/** Participant row in the discussion card (SPEC additions §1e item 3). */
+/** Participant row in the discussion card (docs/design/SPEC-additions-2026-08-26.md §1e item 3). */
 export interface DiscussionParticipant {
     readonly login: string;
     readonly name: string;
@@ -242,7 +242,7 @@ export interface DiscussionSummary {
 }
 
 /**
- * Discussion card model (SPEC additions §1e). A participant row follows the same
+ * Discussion card model (docs/design/SPEC-additions-2026-08-26.md §1e). Participant rows follow the same
  * rule as the author lens in Full diff (`threadHasAuthor`): include everyone who
  * wrote the root or any reply, so the row count matches its lens results. A bot
  * gets its own row with a counter, but its thread bodies never enter the card.

@@ -76,7 +76,7 @@ describe('task and lease', () => {
         expect(taskSchema.safeParse({ ...validTask, instructions: '' }).success).toBe(false);
     });
 
-    it('M2 generative types and chat (M3) are valid', () => {
+    it('accepts generative route and chat types', () => {
         expect(taskSchema.safeParse({ ...validTask, type: 'route.skeleton' }).success).toBe(true);
         expect(taskSchema.safeParse({ ...validTask, type: 'route.section' }).success).toBe(true);
         expect(taskSchema.safeParse({ ...validTask, type: 'chat' }).success).toBe(true);
@@ -229,7 +229,7 @@ describe('review domain', () => {
     });
 });
 
-describe('route (M2)', () => {
+describe('route', () => {
     const skeleton = {
         summary: 'The PR switches the session cache to write-through.',
         stops: [
@@ -335,7 +335,7 @@ describe('route (M2)', () => {
     });
 });
 
-describe('chat and notes (M3)', () => {
+describe('chat and notes', () => {
     const anchor = { diffId: 'iter-3', fileId: 'f1', path: 'src/order_service.py', side: 'new', start: 148, end: 151 };
     const exchange = {
         id: 1,
@@ -351,7 +351,7 @@ describe('chat and notes (M3)', () => {
     };
 
     it('exchange: with and without an anchor (Ask AI about the PR), all lifecycle statuses', () => {
-        // Response language (M5-T4) is absent in pre-M5 exchanges, so the schema supplies `null`.
+        // Old-format exchanges have no response language. The schema supplies `null`.
         expect(chatExchangeSchema.parse(exchange)).toEqual({ ...exchange, locale: null });
         expect(chatExchangeSchema.parse({ ...exchange, locale: 'en' }).locale).toBe('en');
         expect(chatExchangeSchema.safeParse({ ...exchange, locale: 'de' }).success).toBe(false);
@@ -391,7 +391,7 @@ describe('chat and notes (M3)', () => {
     });
 });
 
-describe('iterations and snapshots in the UI contract (M4)', () => {
+describe('iterations and snapshots in the UI contract', () => {
     it('diff selection: no parameters, by iteration or slice, rejects half a slice and mixed modes', () => {
         expect(uiReviewDiffRequestSchema.safeParse({}).success).toBe(true);
         expect(uiReviewDiffRequestSchema.safeParse({ diffId: 'iter-2' }).success).toBe(true);
@@ -432,7 +432,7 @@ describe('iterations and snapshots in the UI contract (M4)', () => {
     });
 });
 
-describe('M5 contracts (locale, onboarding, update)', () => {
+describe('locale, onboarding, update', () => {
     it('settings: new fields get defaults, patches have no defaults and replace fields as a whole', () => {
         expect(uiSettingsSchema.parse({})).toMatchObject({
             locale: 'auto',
@@ -457,7 +457,7 @@ describe('M5 contracts (locale, onboarding, update)', () => {
         expect(routeProvenanceSchema.safeParse({ harness: null, model: null, locale: 'fr' }).success).toBe(false);
     });
 
-    it('diff file: image is optional on input (diffs before T23) and null on output', () => {
+    it('diff file: image is optional on input (old saved diffs) and null on output', () => {
         const file = {
             fileId: 'f1',
             path: 'src/index.ts',

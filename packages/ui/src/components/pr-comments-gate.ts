@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 
 /**
  * The "PR comments" modal opens from two places, the action bar and the Discussion card
- * in Overview (SPEC additions §1e item 5). State lives above both, and focus return depends
+ * on Overview (docs/design/SPEC-additions-2026-08-26.md §1e item 5). State lives above both, and focus restoration depends
  * on the opener. The callback arrives when opening and runs on closing.
  */
 export interface PrCommentsGate {

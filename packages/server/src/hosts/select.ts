@@ -5,12 +5,12 @@ import type { Iteration, ReviewHost } from '@sherpa/protocol';
 
 
 /**
- * Select a host adapter by PR key (`<host>-<pr>`, rpc-design §8):
+ * Select the host adapter by PR key (`<host>-<pr>`, `docs/protocol.md §8`):
  * `github-quillmart--quillmart--<number>` uses the live review host, `fixture-<name from FIXTURE_NAMES>` uses deterministic
- * fixtures (UI development and e2e F5). Anything else has no host, so review endpoints return `no_review_host`.
+ * fixtures (UI development and e2e). Anything else has no host, and review endpoints return `no_review_host`.
  *
  * The fixture host is intentionally connected to the server. Otherwise development mode and e2e would need a live
- * review host, while the M1 UI branch is developed using fixtures.
+ * review host.
  */
 
 export interface SelectedHost {
@@ -27,7 +27,7 @@ export interface SelectedHost {
     readonly advanceIteration?: () => Iteration;
     /**
      * Host-specific subscription to review status changes (a status field in the lightweight
-     * poll, M5-T15). When present, the server uses it to reread PR metadata and detect another reviewer's ship.
+     * polling). When available, the server uses it to reread PR metadata and detect someone else's ship.
      */
     readonly watchStatus?: (onChange: () => void) => () => void;
     /** Fixture host only: development toggle for draft write failures (buffer e2e). */

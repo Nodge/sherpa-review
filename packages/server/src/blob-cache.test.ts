@@ -7,7 +7,7 @@ import { BlobCache } from './blob-cache.js';
 import { blobsDirOf } from './paths.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
-/** Image byte cache on disk (M5-T23): filename, atomic writes and cache misses. */
+/** On-disk image byte cache: file naming, atomic writes and cache misses. */
 describe('image blob cache', () => {
     const PR_KEY = 'fixture-medium';
     let sherpaDir: string;

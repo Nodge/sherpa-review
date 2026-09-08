@@ -11,7 +11,7 @@ import { createThreadStore } from './store.js';
 import { openFileComposer } from './thread-list.tsx';
 
 /**
- * Where a file card puts a thread pinned to a previous iteration (M4-T10). In the active
+ * Where a file card places a thread pinned to a previous iteration: in the active
  * iteration, its outdated anchor moves it below the header. In its pinned iteration it sits by the lines.
  */
 
@@ -87,7 +87,7 @@ describe('thread placement in a file card', () => {
         expect(underHeader(V1, alien)).toContain(`thread-${OUTDATED.id}`);
     });
 
-    /** M5-T24: an image comment uses an anchor without a line and goes in the same place. */
+    /** An image comment has an anchor without a line and goes in the same place. */
     it('places a composer with an anchor without a line below the header, away from the lines', () => {
         const file = fileOf(V2, PATH);
         const store = createThreadStore([], new Set([file.fileId]));

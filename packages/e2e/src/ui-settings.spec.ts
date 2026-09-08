@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * Global UI settings (M3-T16) live in `<sherpaDir>/settings.json`, not `localStorage`:
+ * Global UI settings live in `<sherpaDir>/settings.json`, not `localStorage`.
  * Each PR server listens on a random port, and browser storage is empty for a new port.
  */
 

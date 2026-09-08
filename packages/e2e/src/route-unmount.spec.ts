@@ -4,7 +4,7 @@ import { mediumRawResults, sectionFor, submit, takeTask } from './route-worker.j
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * A distant stop's diff column is removed from the DOM (M5-T13). Checks what this
+ * A distant stop's diff column is removed from the DOM. This checks what that
  * might break: the section stays in place, the document does not shrink (the placeholder keeps
  * the measured height), and a jump from the coverage bar reaches the unmounted stop. The
  * "section → card" sequence waits for the column to return.

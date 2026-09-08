@@ -5,7 +5,7 @@ import { localeOnKey, snapshotLocale } from '../route/generation.js';
 import './route-locale-banner.css';
 
 /**
- * "The route was built in English — rebuild it in Russian?" (M5-T4, task breakdown decision 2).
+ * "The route was built in English. Rebuild in Russian?"
  *
  * There is no automatic rebuild: the route takes minutes of agent work, so a language switch
  * must not change it silently. The banner has low priority because this is background news and the old route remains readable.

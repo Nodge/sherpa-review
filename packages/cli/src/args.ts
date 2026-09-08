@@ -66,7 +66,7 @@ const LABEL_MAX_CHARS = 64;
 
 /**
  * Parse arguments. Any malformed input raises `CliError` with a hint for the correct invocation.
- * The model gets command syntax wrong, and the output should help it correct the call (rpc-design §1).
+ * The model gets command formats wrong, so output must correct it (`docs/protocol.md §1`).
  */
 export function parseArgs(argv: readonly string[]): Command {
     if (argv.includes('--version') || argv.includes('-v')) {
@@ -188,7 +188,7 @@ function parseLang(raw: string | undefined): Locale | undefined {
 }
 
 /**
- * Requested wait for `worker next`: how long the harness can keep the call open (decision #35).
+ * Requested `worker next` wait: how long the harness is willing to keep the call open.
  * The bounds come from the contract (`LONG_POLL_CEILING_SECONDS`). Without the flag, the server decides.
  */
 function parseWaitSeconds(raw: string | undefined): number | undefined {

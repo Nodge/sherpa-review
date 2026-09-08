@@ -20,7 +20,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
     const sherpaDir = readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR;
     const uiDir = await resolveUiDir(readOption(argv, '--ui'));
-    // As in the bundle: the gallery and e2e also need install classification for the update toast (M5-T9).
+    // As in the bundle: both the gallery and e2e need installation classification for the update toast.
     const installDir = readOption(argv, '--install-dir');
 
     // Idle shutdown is disabled. The dev server holds the developer terminal open,

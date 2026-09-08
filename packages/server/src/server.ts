@@ -111,11 +111,11 @@ export interface StartServerOptions {
     feedback?: FeedbackIntegrationOptions;
     /**
      * Route thresholds and section batching (`DEFAULT_ROUTE_CONFIG`). Internal server policy:
-     * neither the UI nor the CLI knows about it. The M2-T12 latency measurement adjusts section batches here.
+     * the UI and CLI don't know about it. Latency measurements adjust section batch sizes here.
      */
     route?: Partial<RouteConfig>;
     /**
-     * Update check injection point (M5-T9): tests substitute the transport, clock, cache and distribution
+     * Update check injection point: transport, clock, cache and distribution path
      * path.
      */
     updateCheck?: UpdateCheckOptions;
@@ -151,7 +151,7 @@ const CLAIM_ATTEMPTS = 5;
 
 /**
  * Starts the local PR server: 127.0.0.1 only, random port, bearer token on every endpoint,
- * discovery manifest in `<sherpaDir>/servers/<prKey>.json` (rpc-design §2, §8).
+ * and a discovery manifest at `<sherpaDir>/servers/<prKey>.json` (docs/protocol.md §2, §8).
  * If a server for the same PR is already alive, throws `ServerAlreadyRunningError` without starting a second process.
  */
 export async function startServer(options: StartServerOptions): Promise<SherpaServer> {
@@ -230,7 +230,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         const unsubscribeQueue = queue.subscribeChanges(() => {
             workerRegistry.checkNow();
         });
-        // Local iteration patches and slice cache (M4-T3): populated wherever a diff is loaded.
+        // Local iteration patches and slice cache, populated wherever a diff is loaded.
         const iterationStore = new IterationStore(options.now === undefined ? { db } : { db, now: options.now });
         // Reading progress is local and exists on every server, including those without a review host.
         // It needs iteration patches to carry over marks between iterations by file path.
@@ -241,8 +241,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         });
         const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
         const advanceIteration = reviewHost?.advanceIteration;
-        // Without a host, there are no review events. The SSE channel keeps serving M0 state only.
-        // Review status changes (another reviewer's ship, M5-T15) reload metadata so verdicts reach the UI snapshot.
+        // Without a host, there are no review events. The SSE channel carries state only.
+        // A review status change (someone else's ship) reloads metadata so verdicts reach the UI snapshot.
         const reviewFeed =
             reviewHost === null
                 ? null
@@ -254,7 +254,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                   });
         // The snapshot includes PR metadata, and `buildState` is synchronous. The network `getPr()` call uses a cache.
         const prMeta = new PrMetaCache({ host: reviewHost?.host ?? null });
-        // Draft buffer (M5-T15): text the host has not accepted survives crashes,
+        // Draft buffer: text the host hasn't accepted yet survives host failure,
         // tab reloads and server restarts.
         const draftBuffer = new DraftBufferWriter({
             host: reviewHost?.host ?? null,
@@ -263,7 +263,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         });
         // Settings are global: both the settings endpoint and update checker read them (`dismissedVersion`).
         const settingsStore = new SettingsStore(sherpaDir);
-        // Check for a new version in main (M5-T9). Disabled on the fixture host, where the version
+        // Check for a newer version in main. Disabled on the fixture host, where the version
         // comes from a dev endpoint instead of the review host.
         const updateChecker = new UpdateChecker({
             ...options.updateCheck,
@@ -273,9 +273,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         });
         // The route, like reading progress, is local. Without a host, it stays in the `none` phase.
         const routeStore = new RouteStore(options.now === undefined ? { db } : { db, now: options.now });
-        // Notes are created before the feed, which carries their anchors to the new iteration (M4-T11).
+        // Notes are created before the feed, which moves their anchors to the new iteration.
         const chatStore = new ChatStore(options.now === undefined ? { db } : { db, now: options.now });
-        // PR iterations (M4-T4): one watcher per server supplies `uiState.iterations` and `stale`.
+        // PR iterations: one watcher per server supplies `uiState.iterations` and `stale`.
         const iterationFeed =
             reviewHost === null
                 ? null
@@ -301,7 +301,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             shared: sharedPayload,
             progress,
             iterations: iterationStore,
-            // Generation language: settings follow the tab request in the fallback order (M5-T4).
+            // Generation language: settings are the second fallback after the tab's request.
             settings: settingsStore,
             ...(options.route === undefined ? {} : { config: options.route }),
         });
@@ -416,7 +416,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             chatOrchestrator,
         });
         // Warm up the route after building the handle, on its own timer. Server startup doesn't wait for `getDiff()`,
-        // otherwise the "diff on screen in under two seconds" requirement (§7) would wait on the host's network call.
+        // or the "diff on screen in under two seconds" target would have to wait on a host network call.
         routeOrchestrator.start();
         chatOrchestrator.start();
         // PR metadata also loads in the background. The snapshot is served immediately, and metadata arrives over SSE.

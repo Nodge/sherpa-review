@@ -12,12 +12,13 @@ import {
 import { describe, expect, it } from 'vitest';
 
 /**
- * Shared `ReviewHost` contract suite (requirements §7): the same tests run against every
- * implementations, using `FixtureHost` and recorded host responses (M1-T10/T12).
+ * Shared `ReviewHost` contract suite (`docs/testing.md §3`): the same list of tests
+ * runs against every implementation, on `FixtureHost` and recorded review host responses.
  *
  * Checks interface promises rather than internals: response shapes
  * (fail-closed through protocol schemas), the `watchThreads` promise of an initial snapshot and a snapshot
- * after every change, the two-stage draft model and verdict semantics (SPEC §4.5).
+ * after every change, the two-stage draft model and verdict semantics
+ * (`docs/design/SPEC-elements.md §4.5`).
  */
 
 export interface ReviewHostContractOptions<H extends ReviewHost> {
@@ -485,7 +486,7 @@ export function describeReviewHostContract<H extends ReviewHost>(
             feed.stop();
         });
 
-        // A retry from the draft buffer (M5-T15) uses the key from the first attempt. The host
+        // A retry from the draft buffer uses the key from the first attempt. The host
         // must accept the parameter even if it does not handle duplicates itself (fixture).
         it.runIf(writes)('saveDraft accepts an idempotency key', async () => {
             const host = makeHost();

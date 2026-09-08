@@ -15,7 +15,7 @@ import './notes.css';
 
 export interface CardNoteActions {
     readonly onOpenInChat: (note: AgentNote) => void;
-    /** New comment composer at the note anchor, prefilled with its quote (SPEC §2.16). */
+    /** New comment composer at the note anchor, prefilled with a quote of the note (docs/design/SPEC-elements.md §2.16). */
     readonly onTurnIntoDraft: (note: AgentNote) => void;
     readonly onDelete: (noteId: number) => Promise<void>;
 }

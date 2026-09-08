@@ -21,7 +21,7 @@ import {
 } from './sherpa-fixture.js';
 
 /**
- * F3, continued (M4-T15): the second push rewrote the first, a force-push. The iteration the route
+ * F3, continued: the second push rewrites the first with a force-push. The iteration the route
  * was built on disappears from the host, and all Sherpa knows about it is the locally saved
  * patch. The route stays readable, progress carries over past the missing iteration,
  * and the UI never offers a slice to it. After rebuilding, its snapshot becomes read-only,
@@ -169,7 +169,8 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         await expect(page.locator('.file-card[data-file]').first()).toBeVisible();
         await expect(page.locator('.coverage__stops')).toHaveText('4 of 7 stops viewed');
 
-        // The host no longer returns the iteration. Its diff comes from local patch storage (brief §4a).
+        // The host no longer serves the iteration. The diff comes from local patch storage
+        // (docs/product.md §4a).
         const stored = await diffOf(page, server, MEDIUM_DIFF_ID_V2);
         expect(stored.length).toBeGreaterThan(0);
     });
@@ -180,7 +181,7 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
             .toBeGreaterThan(0);
 
         // Carryover starts from the latest iteration with progress, a71d4e2. The host permanently
-        // the host refuses permanently, and carryover falls back to 9f3c1ab (M4-T6 + T16 decision).
+        // rejects a slice from it, so carryover falls back to 9f3c1ab.
         // Marks made on a71d4e2 itself are lost. That is the cost of a force-push.
         const carriedToV3 = await seenRangeKeys(page, server, MEDIUM_DIFF_ID_V3);
         expect(outsideReadme(carriedToV3)).toEqual(outsideReadme(carriedToV2));

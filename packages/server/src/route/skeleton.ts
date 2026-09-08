@@ -11,7 +11,7 @@ import { voiceErrors } from './voice.js';
  *
  * The skeleton has no anchors, so it needs no diff. Semantic checks are limited to the plan:
  * `tourOrder` must be a permutation of plan numbers 1..N to build a full tour.
- * The server assigns stop IDs and synthetic "Other" (decision logged on 2026-08-25).
+ * The server assigns stop ids and the synthetic "Other" stop.
  */
 
 /** Synthetic stop id: the model does not know about it, the server adds it. */
@@ -29,8 +29,8 @@ export function stopId(planIndex: number): string {
 
 /**
  * `locale` is the generation language of the model result (which selects the voice stop list)
- * voice) and the synthetic stop title. Defaults to Russian, as generation did
- * before M5, which is also how `provenance.locale: null` is read for snapshots from that time.
+ * and the synthetic stop title. Defaults to English, which is also how
+ * `provenance.locale: null` is read in old-format snapshots.
  */
 export function validateSkeleton(rawText: string, locale: Locale = 'en'): RouteValidation<AcceptedSkeleton> {
     const parsed = parseResult(rawText, routeSkeletonResultSchema, 'skeleton');
@@ -82,7 +82,8 @@ export function validateSkeleton(rawText: string, locale: Locale = 'en'): RouteV
 
 /**
  * "Other" has nothing to fill. Its status is `ready` immediately, with no anchors. The UI computes its content (uncovered
- * ranges). The UI hides the stop when there are no uncovered lines (SPEC §4.3).
+ * ranges). With no uncovered lines, the UI hides the stop itself
+ * (`docs/design/SPEC-elements.md §4.3`).
  */
 function otherStop(planIndex: number, locale: Locale): RouteStop {
     return {

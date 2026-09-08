@@ -5,8 +5,9 @@ import type { ViewId } from '../session/views.js';
 import { VIEWS } from '../session/views.js';
 
 /**
- * View segmented control (README §0, SPEC §2.1). Tabs are never disabled. Even without a route,
- * the "Route" tab opens and shows its state (SPEC §4.4).
+ * View segmented control (docs/design/README.md §0, docs/design/SPEC-elements.md §2.1, §4.4).
+ * Tabs are never disabled. Even without a route, the "Route" tab opens and shows
+ * its state.
  *
  * Keyboard: ←/→ move between tabs when focus is inside the control. 1/2/3 are global commands
  * from the shortcuts registry and are not handled here.
@@ -46,7 +47,7 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
                     role="tab"
                     className="view-tabs__tab"
                     aria-selected={item.id === view}
-                    // Anchor for onboarding tour step 07 (M5-T8).
+                    // Target of step 07 of the onboarding tour.
                     {...(item.id === 'diff' ? { 'data-tour': 'fulldiff' } : {})}
                     // Roving tabindex: Tab enters the control once, then arrow keys move within it.
                     tabIndex={item.id === view ? 0 : -1}

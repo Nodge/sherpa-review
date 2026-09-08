@@ -1,4 +1,4 @@
-/* Session-scoped Review complete screen. README §13, M1 counters. */
+/* Session-scoped Review complete screen. See docs/design/README.md §13. */
 
 .review-complete {
     display: grid;

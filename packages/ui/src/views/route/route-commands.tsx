@@ -10,7 +10,7 @@ import { useShortcut } from '../../shortcuts/context.tsx';
 import type { Shortcut } from '../../shortcuts/registry.js';
 
 /**
- * "Go to stop NN" palette commands (README §14, `route` group). They live at the App
+ * "Go to stop NN" palette commands (docs/design/README.md §14, `route` group). They live at application
  * level instead of view level: a command must also work from the full diff, switching
  * to the route view and completing the scroll itself.
  *
@@ -37,7 +37,7 @@ export function RouteCommands({
     );
 }
 
-/** The command and `t` shortcut share a label through the common registry (SPEC §5). */
+/** The command and the `t` shortcut share a label because the registry is shared (docs/design/SPEC-elements.md §5). */
 export const PRESET_COMMAND_LABEL: MessageKey = 'shortcut.route.togglePreset';
 
 export interface PresetCommandInput {
@@ -47,7 +47,7 @@ export interface PresetCommandInput {
 }
 
 /**
- * The `t` shortcut and "toggle preset" palette command (SPEC §5) share one declaration.
+ * The `t` shortcut and the "toggle preset" palette command (docs/design/SPEC-elements.md §5) share one declaration.
  * The preset is route state, but the command also works from the full diff: like "go
  * to stop", it switches to the route itself.
  */
@@ -71,7 +71,7 @@ export function presetCommand({ preset, setPreset, setView }: PresetCommandInput
 
 /**
  * The command lives alongside stop commands at application level, and only when the route
- * exists: there is nothing to toggle until then (SPEC §2.5).
+ * is ready: there is nothing to switch until a route exists (docs/design/SPEC-elements.md §2.5).
  */
 export function RoutePresetCommand(input: PresetCommandInput) {
     useShortcut(presetCommand(input));
@@ -87,12 +87,12 @@ export interface GenerateCommandInput {
 }
 
 /**
- * "Build / regenerate the route" (README §14). In `ready` and `failed`, the old route
+ * "Build / regenerate a route" (docs/design/README.md §14). In `ready` and `failed`, the old route
  * stays readable until a new skeleton is accepted.
  *
  * The command is hidden while generation runs because the server would return `already_running`. It is also hidden between
  * the request and the phase change, based on `generating`. A small PR does not bypass the threshold
- * (requirements §3.6), so the command is absent there too.
+ * (docs/architecture.md §7.6), so the command is absent there too.
  */
 export function generateCommand({ phase, smallPr, generating, onGenerate }: GenerateCommandInput): Shortcut {
     return {

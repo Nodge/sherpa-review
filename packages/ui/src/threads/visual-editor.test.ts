@@ -8,9 +8,14 @@ import {
     createEditorState,
     markdownInputRules,
     parseClipboardMarkdown,
-    serializeMarkdown,
+    parseMarkdown,
     serializeMarkdownDocument,
 } from './visual-editor.js';
+
+/** Round trip: Markdown → ProseMirror document → Markdown. */
+function roundTrip(markdown: string): string {
+    return serializeMarkdownDocument(parseMarkdown(markdown));
+}
 
 const CASES = [
     ['bold', '**important**', '**important**'],
@@ -33,7 +38,7 @@ const CASES = [
 
 describe('visual editor Markdown round trip', () => {
     it.each(CASES)('%s', (_title, markdown, expected) => {
-        expect(serializeMarkdown(markdown)).toBe(expected);
+        expect(roundTrip(markdown)).toBe(expected);
     });
 
     it('parses pasted plain text as Markdown without adding backslashes', () => {

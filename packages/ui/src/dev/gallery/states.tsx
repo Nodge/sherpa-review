@@ -12,50 +12,48 @@ import type { ViewId } from '../../session/views.js';
 import { UI_VERSION } from '../../version.js';
 import { DIFF_STATES } from './diff-states.tsx';
 import { FULL_DIFF_STATES } from './full-diff-states.tsx';
-import { M1_T14_STATES } from './m1-t14-states.tsx';
-import { M1_T15_STATES } from './m1-t15-states.tsx';
-import { M2_T6_STATES } from './m2-t6-states.tsx';
-import { M2_T7_STATES } from './m2-t7-states.tsx';
-import { M2_T8_STATES } from './m2-t8-states.tsx';
-import { M2_T9_STATES } from './m2-t9-states.tsx';
-import { M2_T10_STATES } from './m2-t10-states.tsx';
-import { M2_T11_STATES } from './m2-t11-states.tsx';
-import { M2F_T17_STATES } from './m2f-t17-states.tsx';
-import { M2F_T23_STATES } from './m2f-t23-states.tsx';
-import { M2F_T28_STATES } from './m2f-t28-states.tsx';
-import { M2F_T24_STATES } from './m2f-t24-states.tsx';
-import { M2F_T25_STATES } from './m2f-t25-states.tsx';
-import { M2F_T43_STATES } from './m2f-t43-states.tsx';
-import { M3_T5_STATES } from './m3-t5-states.tsx';
-import { M3_T6_STATES } from './m3-t6-states.tsx';
-import { M3_T7_STATES } from './m3-t7-states.tsx';
-import { M3_T8_STATES } from './m3-t8-states.tsx';
-import { M3_T9_DIFF_STATES, M3_T9_ROUTE_STATES } from './m3-t9-states.tsx';
-import { M4_T2_STATES } from './m4-t2-states.tsx';
-import { M4_T8_STATES } from './m4-t8-states.tsx';
-import { M4_T9_STATES } from './m4-t9-states.tsx';
-import { M4_T10_STATES } from './m4-t10-states.tsx';
-import { M4_T11_STATES } from './m4-t11-states.tsx';
-import { M4_T12_STATES } from './m4-t12-states.tsx';
-import { M5_T5_STATES } from './m5-t5-states.tsx';
-import { M5_T4_STATES } from './m5-t4-states.tsx';
-import { M5_T8_STATES } from './m5-t8-states.tsx';
-import { M5_T9_STATES } from './m5-t9-states.tsx';
-import { M5_T14_STATES } from './m5-t14-states.tsx';
-import { M5_T15_STATES } from './m5-t15-states.tsx';
-import { M5_T16_STATES } from './m5-t16-states.tsx';
-import { M5_T17_STATES } from './m5-t17-states.tsx';
-import { M5_T22_STATES } from './m5-t22-states.tsx';
-import { M5_T24_STATES } from './m5-t24-states.tsx';
+import { REVIEW_COMPLETION_STATES } from './review-completion-states.tsx';
+import { OVERVIEW_STATES } from './overview-states.tsx';
+import { ROUTE_STATES } from './route-states.tsx';
+import { ROUTE_COVERAGE_STATES } from './route-coverage-states.tsx';
+import { ROUTE_PRESET_STATES } from './route-presets-states.tsx';
+import { ROUTE_DIGEST_STATES } from './route-digest-states.tsx';
+import { ROUTE_GENERATION_STATES } from './route-generation-states.tsx';
+import { ROUTE_BADGE_STATES } from './route-badges-states.tsx';
+import { FILTER_STATES } from './filters-states.tsx';
+import { COMMENT_COMPOSER_STATES } from './comment-composer-states.tsx';
+import { ROUTE_REBUILD_STATES } from './route-rebuild-states.tsx';
+import { PR_COMMENTS_STATES } from './pr-comments-states.tsx';
+import { LINE_COMMENT_STATES } from './line-comments-states.tsx';
+import { ROUTE_STOP_FAILURE_STATES } from './route-stop-failure-states.tsx';
+import { SELECTION_POPOVER_STATES } from './selection-popover-states.tsx';
+import { CHAT_PANEL_STATES } from './chat-panel-states.tsx';
+import { AGENT_NOTE_STATES } from './agent-notes-states.tsx';
+import { AGENT_NOTE_DRAFT_STATES } from './agent-note-draft-states.tsx';
+import { AGENT_ASK_DIFF_STATES, AGENT_ASK_ROUTE_STATES } from './agent-ask-states.tsx';
+import { ITERATION_SECOND_PASS_STATES } from './iterations-second-pass-states.tsx';
+import { ITERATION_SNAPSHOT_STATES } from './iterations-snapshots-states.tsx';
+import { ITERATION_PINNED_THREAD_STATES } from './iterations-pinned-threads-states.tsx';
+import { ITERATION_LOST_NOTE_STATES } from './iterations-lost-notes-states.tsx';
+import { ITERATION_SLICE_STATES } from './iterations-slice-states.tsx';
+import { SHORTCUT_STATES } from './shortcuts-states.tsx';
+import { ROUTE_LOCALE_STATES } from './route-locale-states.tsx';
+import { ONBOARDING_STATES } from './onboarding-states.tsx';
+import { UPDATE_TOAST_STATES } from './update-toast-states.tsx';
+import { LIMIT_STATES } from './limits-states.tsx';
+import { DRAFT_BUFFER_STATES } from './draft-buffer-states.tsx';
+import { DISCUSSION_STATES } from './discussion-states.tsx';
+import { FILE_MENU_STATES } from './file-menu-states.tsx';
+import { REVIEW_BAR_CHAT_DOCK_STATES } from './review-bar-chat-dock-states.tsx';
+import { IMAGE_VIEWER_STATES } from './image-viewer-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
 import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
 /**
- * Gallery state registry, the second layer of visual acceptance (CLAUDE.md). Each state
- * renders deterministically, without a server or token, using `@sherpa/fixtures`.
+ * Gallery state registry: each state renders deterministically, without a server
+ * or token, using `@sherpa/fixtures` fixtures.
  *
- * Add a state by adding an entry to this array. Each subsequent UI task
- * adds its own states.
+ * To add a state, add one entry to this array.
  */
 export interface GalleryState {
     readonly id: string;
@@ -121,17 +119,16 @@ const MEDIUM_BREADCRUMB = breadcrumbFor('fixture-medium', MEDIUM.pr);
  */
 const START_STATE_ID = 'overview-ownership';
 
-const M4_ITERATION_STATES = [
-    ...M4_T8_STATES,
-    ...M4_T9_STATES,
-    ...M4_T10_STATES,
-    ...M4_T11_STATES,
-    ...M4_T12_STATES,
+const ITERATION_STATES = [
+    ...ITERATION_SECOND_PASS_STATES,
+    ...ITERATION_SNAPSHOT_STATES,
+    ...ITERATION_PINNED_THREAD_STATES,
+    ...ITERATION_LOST_NOTE_STATES,
+    ...ITERATION_SLICE_STATES,
 ];
-const M4_ITERATION_IDS = new Set(M4_ITERATION_STATES.map((state) => state.id));
 
 export const GALLERY_STATES: readonly GalleryState[] = [
-    ...M1_T15_STATES.filter((state) => state.id === START_STATE_ID),
+    ...OVERVIEW_STATES.filter((state) => state.id === START_STATE_ID),
     ...AGENT_STATES.map((state) => ({
         id: `agent-${state.id}`,
         group: 'Agent pill',
@@ -144,30 +141,30 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: 'complete, fixture PR',
         render: () => <TopBarState />,
     },
-    ...M1_T15_STATES.filter((state) => state.id !== START_STATE_ID),
-    ...M1_T14_STATES,
-    ...M5_T5_STATES,
-    ...M5_T15_STATES,
-    ...M5_T22_STATES,
-    ...M2F_T17_STATES.map((state) => ({
+    ...OVERVIEW_STATES.filter((state) => state.id !== START_STATE_ID),
+    ...REVIEW_COMPLETION_STATES,
+    ...SHORTCUT_STATES,
+    ...DRAFT_BUFFER_STATES,
+    ...REVIEW_BAR_CHAT_DOCK_STATES,
+    ...FILTER_STATES.map((state) => ({
         id: state.id,
         group: 'Filters',
         title: state.title,
         render: state.render,
     })),
-    ...M2F_T23_STATES.map((state) => ({
+    ...COMMENT_COMPOSER_STATES.map((state) => ({
         id: state.id,
         group: 'Comment composer',
         title: state.title,
         render: state.render,
     })),
-    ...M2F_T24_STATES.map((state) => ({
+    ...PR_COMMENTS_STATES.map((state) => ({
         id: state.id,
         group: 'PR comments',
         title: state.title,
         render: state.render,
     })),
-    ...M2F_T25_STATES.map((state) => ({
+    ...LINE_COMMENT_STATES.map((state) => ({
         id: state.id,
         group: 'Line comments',
         title: state.title,
@@ -179,54 +176,53 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    ...M3_T5_STATES.map((state) => ({
+    ...SELECTION_POPOVER_STATES.map((state) => ({
         id: state.id,
         group: 'Selection popover',
         title: state.title,
         render: state.render,
     })),
-    ...M3_T6_STATES.map((state) => ({
+    ...CHAT_PANEL_STATES.map((state) => ({
         id: state.id,
         group: 'Agent chat',
         title: state.title,
         render: state.render,
     })),
-    ...M3_T7_STATES.map((state) => ({
+    ...AGENT_NOTE_STATES.map((state) => ({
         id: state.id,
         group: 'Agent notes',
         title: state.title,
         render: state.render,
     })),
-    ...M3_T8_STATES.map((state) => ({
+    ...AGENT_NOTE_DRAFT_STATES.map((state) => ({
         id: state.id,
         group: 'Agent notes',
         title: state.title,
         render: state.render,
     })),
-    ...[...FULL_DIFF_STATES, ...M3_T9_DIFF_STATES].map((state) => ({
+    ...[...FULL_DIFF_STATES, ...AGENT_ASK_DIFF_STATES].map((state) => ({
         id: state.id,
         group: 'Full diff',
         title: state.title,
         render: state.render,
     })),
     ...[
-        ...M2_T6_STATES,
-        ...M2_T7_STATES,
-        ...M2_T8_STATES,
-        ...M2_T9_STATES,
-        ...M2_T10_STATES,
-        ...M2_T11_STATES,
-        ...M2F_T28_STATES,
-        ...M2F_T43_STATES,
-        ...M3_T9_ROUTE_STATES,
+        ...ROUTE_STATES,
+        ...ROUTE_COVERAGE_STATES,
+        ...ROUTE_PRESET_STATES,
+        ...ROUTE_DIGEST_STATES,
+        ...ROUTE_GENERATION_STATES,
+        ...ROUTE_BADGE_STATES,
+        ...ROUTE_REBUILD_STATES,
+        ...ROUTE_STOP_FAILURE_STATES,
+        ...AGENT_ASK_ROUTE_STATES,
     ].map((state) => ({
         id: state.id,
         group: 'Route',
         title: state.title,
         render: state.render,
     })),
-    // T2 placeholders stay until real states take their ids (T8–T11 have already taken theirs).
-    ...[...M4_ITERATION_STATES, ...M4_T2_STATES.filter((state) => !M4_ITERATION_IDS.has(state.id))].map((state) => ({
+    ...ITERATION_STATES.map((state) => ({
         id: state.id,
         group: 'Iterations',
         title: state.title,
@@ -238,43 +234,43 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    ...M5_T8_STATES.map((state) => ({
+    ...ONBOARDING_STATES.map((state) => ({
         id: state.id,
         group: 'Onboarding',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T9_STATES.map((state) => ({
+    ...UPDATE_TOAST_STATES.map((state) => ({
         id: state.id,
         group: 'Update',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T4_STATES.map((state) => ({
+    ...ROUTE_LOCALE_STATES.map((state) => ({
         id: state.id,
         group: 'Route language',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T14_STATES.map((state) => ({
+    ...LIMIT_STATES.map((state) => ({
         id: state.id,
         group: 'Limits and reduced functionality',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T16_STATES.map((state) => ({
+    ...DISCUSSION_STATES.map((state) => ({
         id: state.id,
         group: 'Discussion on Overview',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T17_STATES.map((state) => ({
+    ...FILE_MENU_STATES.map((state) => ({
         id: state.id,
         group: 'Files',
         title: state.title,
         render: state.render,
     })),
-    ...M5_T24_STATES.map((state) => ({
+    ...IMAGE_VIEWER_STATES.map((state) => ({
         id: state.id,
         group: 'Images',
         title: state.title,

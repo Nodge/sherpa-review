@@ -4,8 +4,8 @@ import { buildRoute, buildRouteV2 } from './route-worker.js';
 import { advanceIteration, expect, test } from './sherpa-fixture.js';
 
 /**
- * Full keyboard map from SPEC §5 (M5-T5): one check per map row, plus chord cancellation
- * and the Esc hierarchy. A fake worker builds the route. Half the map is unavailable without it.
+ * The full key map from docs/design/SPEC-elements.md §5: one check per map row, plus
+ * chord cancellation and Esc handling order. A fake worker builds the route. Without it, half the map is unavailable.
  */
 
 const MOD_KEY = process.platform === 'darwin' ? 'Meta' : 'Control';

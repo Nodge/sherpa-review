@@ -1,17 +1,17 @@
 import { z } from 'zod';
 
 /**
- * Task types. `echo` is an M0 dummy task for exercising the loop. `route.skeleton`
- * (summary + stop plan + tour order) and `route.section` (filling planned stops), M2.
- * `chat` (reviewer question with selection context, markdown answer without a result schema), M3.
- * Regeneration after a push (M4) uses the same `route.*` types with extra context
- * (previous route, interdiff), with no separate types (decision M4-T1).
+ * Task types. `echo` is a dummy task to exercise the loop. `route.skeleton` produces the summary,
+ * stop plan and tour order. `route.section` fills planned stops. `chat` is a reviewer
+ * question with selection context, answered in Markdown without a result schema.
+ * Regeneration after a push uses the same `route.*` types with extra context
+ * (previous route, interdiff), with no separate task types.
  * Validation rejects unknown types, fail-closed.
  */
 export const taskTypeSchema = z.enum(['echo', 'route.skeleton', 'route.section', 'chat']);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 
-/** Two priority classes (rpc-design §5): interactive tasks always precede background tasks, FIFO within each class. */
+/** Two priority classes (`docs/protocol.md §5`). Interactive tasks always precede background tasks, FIFO within each class. */
 export const priorityClassSchema = z.enum(['interactive', 'background']);
 export type PriorityClass = z.infer<typeof priorityClassSchema>;
 
@@ -20,7 +20,7 @@ export const taskIdSchema = z.number().int().positive();
 export type TaskId = z.infer<typeof taskIdSchema>;
 
 /**
- * Task issued to a worker. Self-contained (rpc-design §4): the session may have died
+ * Task handed to a worker. Self-contained (`docs/protocol.md §4`), since a session may have died
  * and reconnected. The payload contains all required context. Session memory is a bonus, not a contract.
  */
 export const taskSchema = z.object({
@@ -39,7 +39,7 @@ export const taskSchema = z.object({
 export type Task = z.infer<typeof taskSchema>;
 
 /**
- * Task lease (rpc-design §5). Not a dequeue: if the lease expires silently, the task returns
+ * Task lease (`docs/protocol.md §5`). Not a dequeue. If the lease expires silently, the task returns
  * to the queue with an incremented attempt number.
  */
 export const leaseSchema = z.object({

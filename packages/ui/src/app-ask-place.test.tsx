@@ -13,7 +13,7 @@ import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Ask AI entry points through the full app (M3-T9): "Other" opens chat with a list of
+ * Ask AI entry points through the full app: "Other" opens chat with a list of
  * uncovered ranges and no anchor. The hatched Full diff strip anchors chat to its own
  * range. Neither sends the question, it waits for ⏎ in the composer.
  */

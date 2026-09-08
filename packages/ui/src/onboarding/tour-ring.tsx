@@ -1,7 +1,7 @@
 import type { TourRing as TourRingGeometry } from './placement.js';
 
 /**
- * Ring around the highlighted element (SPEC-onboarding §1). Intercepts nothing:
+ * Ring around the highlighted element (docs/design/SPEC-onboarding-2026-09-02.md §1). Intercepts nothing:
  * `pointer-events: none`, clicking the outlined element works and does not close the tour (§4).
  */
 export function TourRing({ ring }: { ring: TourRingGeometry }) {

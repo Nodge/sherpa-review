@@ -13,7 +13,7 @@ import { clampParagraph } from '../../route/paragraph.js';
 import type { RouteStopView } from '../../route/route-model.js';
 
 /**
- * Route stop (README §1): a grid with a sticky left column and a diff column.
+ * Route stop (docs/design/README.md §1): a grid with a sticky left column and a diff column.
  * The left column has a tier rule, plan number, badge, comment count, viewed mark, title,
  * paragraph, connector and file chips. The view builds the right column and passes it as the `diff` prop.
  *
@@ -31,15 +31,15 @@ export interface StopCardProps {
     readonly pending?: boolean;
     /** Parsing failed for some files. Their ranges will be unavailable until retry. */
     readonly parseFailed?: boolean;
-    /** Agent died during generation: filled content remains readable with a quiet note (SPEC §4.4). */
+    /** Agent stopped during generation. Filled content has a muted note (docs/design/SPEC-elements.md §4.4). */
     readonly filledBeforeStop?: boolean;
     /** Value of the failed mark write. Shows "not saved · retry" beside the control. */
     readonly failedViewed?: boolean | null;
-    /** The stop is highlighted by hovering over a coverage strip segment (SPEC §2.4). */
+    /** Stop highlighted by hovering a coverage bar segment (docs/design/SPEC-elements.md §2.4). */
     readonly marked?: boolean;
-    /** "Kept in view — outside the current filter" label (SPEC §2.7). */
+    /** "Kept on screen, outside the current filter" note (docs/design/SPEC-elements.md §2.7). */
     readonly keptInView?: boolean;
-    /** Fills the slot where the agent stopped early (SPEC §4.3). */
+    /** Fill the individual slot where the agent previously stopped (docs/design/SPEC-elements.md §4.3). */
     readonly onFillStop?: (planIndex: number) => void;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
@@ -51,13 +51,13 @@ export interface StopCardProps {
     readonly changeThreads?: readonly StopChangeThread[];
     readonly onOpenThread?: (threadId: string) => void;
     /**
-     * Onboarding tour anchors (M5-T8): `narrative` for the narrative column,
+     * Onboarding tour step targets: `narrative` for the narrative column,
      * `stopdiff` for the diff column. Set on the first route stop and the tour skeleton placeholder.
      */
     readonly tourAnchors?: boolean;
 }
 
-/** Link to a thread that caused the change, in "why this stop changed" (README §1 item 4). */
+/** Link to a thread that caused the change in the "why this stop changed" block (docs/design/README.md §1 item 4). */
 export interface StopChangeThread {
     readonly id: string;
     readonly label: string;
@@ -89,7 +89,7 @@ export function stopChangeThreads(
 
 const EMPTY_CHANGE_THREADS: readonly StopChangeThread[] = [];
 
-/** Stop classification badge relative to the previous pass (README §1 item 1). */
+/** Stop classification badge relative to the previous pass (docs/design/README.md §1 item 1). */
 const CHANGE_BADGE: Readonly<Record<RouteStopChange['kind'], MessageKey>> = {
     changed: 'route.stop.change.changed',
     new: 'route.stop.change.new',
@@ -214,8 +214,7 @@ export function StopCard({
                 {/*
                  * Validator notes only appear on unfilled stops, where they explain
                  * the empty slot. On filled stops, they cost more space than they help. The reviewer
-                 * cannot move the anchor anyway, and missing coverage is visible in the bar and "Other"
-                 * (Alice Ingram's decision, 2026-09-04).
+                 * cannot move a discarded anchor anyway, and missing coverage appears in the bar and Other.
                  */}
                 {!unfilled || stop.validationNotes.length === 0 ? null : (
                     <ul className="route-stop__validation">
@@ -241,7 +240,7 @@ export function StopCard({
 }
 
 /**
- * Stop viewed mark: the same control as the file card uses (SPEC §2.10),
+ * Stop viewed mark uses the same control as a file card (docs/design/SPEC-elements.md §2.10),
  * with an error on failed writes beside it and a retry of the exact same action.
  *
  * A stop cannot be marked until its ranges are computed. An empty set would go
@@ -298,7 +297,7 @@ export function StopViewedToggle({
 }
 
 /**
- * "Why this stop changed" (README §1 item 4): the model's explanation below the paragraph, followed by
+ * "Why this stop changed" (docs/design/README.md §1 item 4): model explanation below the paragraph, followed by
  * links to the threads it named as the cause. Without a handler, the links remain text:
  * only the view, which knows about the URL fragment, can open a thread.
  */
@@ -339,7 +338,7 @@ function StopChangeReason({
 }
 
 /**
- * A paragraph clamped to four sentences (SPEC §2.9). The clamp truncates plain text before rendering,
+ * Paragraph clamped to four sentences (docs/design/SPEC-elements.md §2.9). Clamping cuts plain text before rendering,
  * so the truncated start can split a pair of backticks. That backtick
  * stays visible as a literal until the paragraph is expanded.
  */
@@ -372,7 +371,7 @@ function Paragraph({ text }: { text: string }) {
 }
 
 /**
- * Collapsed low-stop card (README §2). The view builds the label with its line count, since the
+ * Collapsed low-tier stop card (docs/design/README.md §2). The view builds the line-count label. The tour skeleton
  * placeholder has nothing to count and must not invent numbers.
  */
 export function CollapsedStop({
@@ -381,7 +380,7 @@ export function CollapsedStop({
     onExpand,
 }: {
     label: string;
-    /** Onboarding tour anchor: `fold-<stopId>` (M5-T8). */
+    /** Onboarding tour step target: `fold-<stopId>`. */
     dataTour?: string;
     onExpand: () => void;
 }) {
@@ -404,9 +403,9 @@ export function CollapsedStop({
 }
 
 /**
- * Collapsed viewed stop: a summary row that expands on click (SPEC §2.9).
+ * Viewed stop fold: a summary row that expands on click (docs/design/SPEC-elements.md §2.9).
  * A digest stop's summary also names assertions. The reviewer did not read test code line by line,
- * and "N files · M lines" alone would misrepresent what they actually accepted (README §2).
+ * so "N files · M lines" alone would misrepresent what they accepted (docs/design/README.md §2).
  */
 export function ViewedSummary({
     lines,
@@ -432,13 +431,13 @@ export function ViewedSummary({
     );
 }
 
-/** Dashed card instead of empty space: the stop has no hunks (SPEC §2.9). */
+/** Card with a dashed border fills the empty space when a stop has no hunks (docs/design/SPEC-elements.md §2.9). */
 export function EmptyStop({ text }: { text: string }) {
     return <div className="route-collapsed route-collapsed--empty">{text}</div>;
 }
 
 /**
- * Shimmer skeleton in the diff column: the stop is waiting to be filled (README §8, SPEC §3).
+ * Shimmer skeleton in the diff column while the stop awaits filling (docs/design/README.md §8, docs/design/SPEC-elements.md §3).
  * Its fixed height is close to a real card, so arriving content does not shift
  * neighbouring elements.
  */
@@ -458,7 +457,7 @@ export function StopSkeleton() {
 const SKELETON_ROWS = ['wide', 'mid', 'wide', 'short', 'mid', 'wide'] as const;
 
 /**
- * Anchor drift: a stop points at lines no longer present in the diff (SPEC §2.9).
+ * Anchor drift: the stop points to lines no longer in the diff (docs/design/SPEC-elements.md §2.9).
  * `partial` means some anchors survived. The notice sits above their cards.
  */
 export function AnchorDrift({ paths, partial = false }: { paths: readonly string[]; partial?: boolean }) {
@@ -478,7 +477,7 @@ export function AnchorDrift({ paths, partial = false }: { paths: readonly string
 }
 
 /**
- * The stop's anchors point to conflicted files (SPEC §4.1): the diff has lines, but the file is outside
+ * Stop anchors fall in conflicted files (docs/design/SPEC-elements.md §4.1). The lines exist in the diff, but the file is outside
  * route coverage. There is nothing to read or mark here. Resolve the conflict in the host.
  * This is not drift, so prompting regeneration would be misleading.
  */

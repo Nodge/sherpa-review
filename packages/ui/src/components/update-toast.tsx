@@ -6,7 +6,7 @@ import { CommandBox } from './command-box.tsx';
 import './update-toast.css';
 
 /**
- * "New version available" toast (M5-T9, task breakdown decision 8): bottom left, on the same line
+ * "New version available" toast: bottom left corner, on the same line
  * as the floating bar. Notification only. Sherpa downloads or installs nothing, and tells you
  * which command to use to update.
  */

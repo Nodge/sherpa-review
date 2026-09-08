@@ -6,7 +6,7 @@ import type { CoverageStripModel } from '../../route/coverage-model.js';
 import { MIN_SEGMENT_PX } from '../../route/coverage-model.js';
 
 /**
- * Coverage strip (SPEC §2.4, README §1, second row of the route toolbar): segments
+ * Coverage strip (docs/design/SPEC-elements.md §2.4, docs/design/README.md §1, second row of the route toolbar): segments
  * are proportional to changed lines, the legend is computed, and the connection to stops
  * works both ways: hovering highlights their rulers, and clicking scrolls to them.
  *
@@ -20,7 +20,7 @@ export interface CoverageStripLoading {
      * and coverage cannot be calculated yet. Only the legend text differs.
      */
     readonly kind: 'plan' | 'diff';
-    /** Completed portion: the shimmer segment has this size (SPEC §2.4 loading). */
+    /** Completed share, which sets the shimmer segment size (docs/design/SPEC-elements.md §2.4 loading). */
     readonly ready: number;
     readonly total: number;
 }
@@ -51,8 +51,8 @@ export function CoverageStrip({
 }: CoverageStripProps) {
     const t = useT();
     /*
-     * Tour step 04's anchor (M5-T8) sits on the viewed-stop counter, which the step explains.
-     * Until the counter exists (no plan yet, unknown denominator), the whole strip holds the anchor:
+     * Tour step 04 targets the viewed-stop counter, which is what the step explains.
+     * Until the counter exists (no plan yet, no denominator), the entire strip is the target:
      * the step needs an outlined target even above the tour skeleton.
      */
     const counterAnchored = totalStops > 0;
@@ -147,7 +147,7 @@ export function CoverageStrip({
     );
 }
 
-/** "viewed 3 of 7 stops" renders README §1 "N / 7 stops viewed" in the voice of the rest of the UI. */
+/** "3 of 7 stops viewed" follows docs/design/README.md §1 "N / 7 stops viewed" in the voice of the rest of the UI. */
 function StopCounter({ viewed, total, anchored }: { viewed: number; total: number; anchored: boolean }) {
     const t = useT();
     if (total === 0) {

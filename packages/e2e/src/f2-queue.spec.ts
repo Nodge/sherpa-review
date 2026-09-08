@@ -12,9 +12,10 @@ import {
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * M3 DoD: the queue behaves honestly. A question asked during route generation waits
+ * The queue works as shown. A question asked during route generation waits
  * exactly one step in the queue. The worker sees it after submitting the current section, and the UI shows this
- * with a panel banner and queue length in the pill (rpc-design §5, README "Agent queue is honest").
+ * with a banner in the panel and the queue length in the pill (docs/protocol.md §5,
+ * docs/design/README.md «Agent queue is honest»).
  *
  * The second test cancels an exchange in flight. The exchange stops, but the UI says the worker still holds
  * the cancelled task until it checks in. A late `complete` does not revive the exchange, and "Retry"
@@ -135,7 +136,7 @@ test('F2 queue: cancellation stops the exchange in flight, a late answer is a no
         await expect(page.locator('.chat-message--failed .chat-message__body')).toHaveText('Question cancelled.');
         await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
 
-        // The task is cancelled, but the worker does not know yet. It still holds the lease (rpc-design §5).
+        // The task is cancelled, but the worker does not know yet. The hold remains active (docs/protocol.md §5).
         await expect(page.locator('.chat-panel__cancelled-lease')).toHaveText(
             'The agent is still busy with the cancelled task — it learns about the cancel on its next call',
         );

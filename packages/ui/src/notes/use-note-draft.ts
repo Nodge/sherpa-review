@@ -8,9 +8,9 @@ import { openNewComposer } from '../threads/thread-list.tsx';
 import { noteComposerAnchor, noteComposerKey, noteDraftText } from './note-draft.js';
 
 /**
- * The note action "Turn into a comment draft" (SPEC §2.16) opens a regular
+ * The note action "Turn into a comment draft" (docs/design/SPEC-elements.md §2.16) opens a regular
  * new-comment composer at the note anchor with a quote of the agent answer. The draft belongs to the reviewer and follows the usual
- * rules: no autosave (log entry 2026-08-31, M2F-T37), it reaches the host only when explicitly
+ * rules: no autosave, it goes to the host only when explicitly
  * saved. The hook is shared by the full diff and route, so both views behave the same way.
  */
 

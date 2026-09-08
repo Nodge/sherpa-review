@@ -1,6 +1,6 @@
 /*
- * Full diff left panel, README §10: 290px wide, its own scrolling, panel surface
- * and standard right border. Tree rows are 26px (SPEC §2.20).
+ * Full diff left panel, docs/design/README.md §10: 290px wide, its own scrolling, panel background
+ * and standard right border. Tree rows are 26px (docs/design/SPEC-elements.md §2.20).
  */
 
 .file-panel {
@@ -109,7 +109,7 @@
     color: var(--text-muted-dim);
 }
 
-/* Failed mark write (SPEC §2.10): the hint sits beside the tree, with no modals. */
+/* Failed mark write (docs/design/SPEC-elements.md §2.10): a hint beside the tree, never a modal. */
 .file-panel__notice {
     margin: 0 var(--space-control) var(--space-inner);
     font-size: var(--font-size-secondary);
@@ -117,7 +117,7 @@
     color: var(--attention-text);
 }
 
-/* Route footer note (README §10): below the tree, outside its scroll area. */
+/* Route footer note (docs/design/README.md §10): below the tree, outside its scroll area. */
 .file-panel__footer {
     flex: none;
     margin: var(--space-control);
@@ -177,7 +177,7 @@
     background: var(--surface-raised);
 }
 
-/* The active file has the topmost card in the right panel (README §10). */
+/* The active file is the one whose card is currently at the top of the right panel (docs/design/README.md §10). */
 .file-tree__row.is-active {
     background: var(--surface-popover);
 }
@@ -195,7 +195,7 @@
     color: var(--text-dim-strong);
 }
 
-/* The read checkbox has the same three states as the card (SPEC §2.12). */
+/* The read-state checkbox has the same three states as the card (docs/design/SPEC-elements.md §2.12). */
 .file-tree__read {
     display: flex;
     align-items: center;
@@ -229,7 +229,7 @@
 }
 
 /*
- * Truncation per SPEC §1.2: trim the path from the left (`…/api/v3/handlers.py`), preserving the last segment
+ * Truncation per docs/design/SPEC-elements.md §1.2: the path truncates from the left (`…/api/v3/handlers.py`), while the final segment
  * with its extension while space allows. Left truncation uses `direction: rtl` with left
  * alignment. `bdi` isolates the content so character order does not reverse.
  */
@@ -269,7 +269,7 @@
     color: var(--text-muted);
 }
 
-/* Roots outside your ownership zone and generated files are dimmed (README §10). */
+/* Roots outside the ownership zone and generated files are dimmed (docs/design/README.md §10). */
 .file-tree__row.is-foreign .file-tree__label {
     color: var(--text-muted-dim);
 }
@@ -279,7 +279,7 @@
 }
 
 /*
- * Row menu button (SPEC §2.11): always reserves its width, becomes visible on hover
+ * Row menu button (docs/design/SPEC-elements.md §2.11): always reserves its width, becomes visible on hover
  * and focus, so the row layout does not jump under the pointer.
  */
 .file-tree__more {
@@ -329,7 +329,7 @@
     color: var(--text-dim-strong);
 }
 
-/* A conflict is a warning, not an origin label, so its color is brighter than `gen` (SPEC §4.1). */
+/* Conflict is a warning, not a provenance label. Its colour is brighter than `gen` (docs/design/SPEC-elements.md §4.1). */
 .file-tree__tag--conflict {
     border-color: var(--attention-border-strong);
     color: var(--attention-text-dim);

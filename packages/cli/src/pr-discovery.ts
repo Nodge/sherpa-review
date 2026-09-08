@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 
 /**
- * PR resolution from the launch directory (rpc-design §8): Git checkout → current branch → its PR.
+ * Resolve the PR from the launch directory (`docs/protocol.md §8`): git checkout → current branch → branch PR.
  * Explicit `--pr` and `SHERPA_PR` take precedence. This is called only when neither is set.
  *
  * No step may crash the CLI. Any failure returns `unavailable` with a one-line

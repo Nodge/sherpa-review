@@ -52,7 +52,7 @@ export interface RouteTask extends NextRun {
     readonly taskId: number;
 }
 
-/** Task types the server enqueues for the e2e session: route (M2) and chat question (M3). */
+/** Task types the server queues for an e2e session: route and chat question. */
 export type TaskType = 'route.skeleton' | 'route.section' | 'chat';
 
 /** Number of route sections the server queues for the `medium` fixture, one per plan stop. */
@@ -110,7 +110,7 @@ export async function submit(worker: FakeWorker, taskId: number, result: unknown
 
 /**
  * A chat answer is submitted as is. A `chat` task result is the answer's Markdown text, not route
- * JSON (rpc-design §6, the answer arrives in full through one `complete`).
+ * JSON (docs/protocol.md §6, the whole answer arrives in one `complete`).
  */
 export async function answerChat(worker: FakeWorker, taskId: number, answer: string): Promise<WorkerRun> {
     const run = await worker.complete(taskId, answer);
@@ -164,7 +164,7 @@ export async function buildHugeRoute(worker: FakeWorker): Promise<void> {
     }
 }
 
-/** Rebuild after a push: the same plan with second-pass sections (F3, force-push in T15). */
+/** Rebuild after a push: the same plan, with second-pass sections (F3, force-push). */
 export async function buildRouteV2(worker: FakeWorker): Promise<void> {
     const skeleton = await takeTask(worker, 'route.skeleton');
     await submit(worker, skeleton.taskId, mediumRawResultsV2().skeleton);

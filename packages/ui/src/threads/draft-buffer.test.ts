@@ -9,7 +9,7 @@ import {
 } from './draft-buffer.js';
 import { createThreadStore } from './store.js';
 
-/** Restoring the draft buffer into composers (M5-T15): key, anchor, text, status. */
+/** Restores the draft buffer into composers: key, anchor, text, status. */
 
 function entry(patch: Partial<DraftBufferEntry> & Pick<DraftBufferEntry, 'id'>): DraftBufferEntry {
     return {

@@ -35,7 +35,7 @@ import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, postRaw, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Route orchestration (M2-T4) on the fixture host: automatic enqueueing, result acceptance
+ * Route orchestration on the fixture host: automatic enqueuing, result acceptance
  * by the validator, generation phases and recovery after a restart. There is no network host here. `fixture-medium`
  * returns the same diff used to build the validator's golden corpus.
  */
@@ -421,7 +421,8 @@ describe('route orchestration', () => {
         const route = (await readRoute(server)).route;
         expect(route.phase).toBe('filling');
         expect(route.snapshot?.stops[1]?.status).toBe('queued');
-        // Filled stops remain readable: the stop submitted before agent death is still here (SPEC §4.4).
+        // Filled content stays readable: the stop submitted before the agent died is still there
+        // (docs/design/SPEC-elements.md §4.4).
         expect(route.snapshot?.stops[0]).toEqual(mediumReadySnapshot().stops[0]);
     });
 
@@ -751,7 +752,7 @@ describe('route orchestration', () => {
     });
 
     /**
-     * Generation language (M5-T4): fallback order "tab request → settings → agent hint → Russian"
+     * Generation language: fallback order "tab request → settings → agent hint → Russian"
      * and a snapshot written entirely in one language.
      */
     describe('generation language', () => {

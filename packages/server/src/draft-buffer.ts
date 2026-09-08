@@ -5,7 +5,7 @@ import type { SherpaDatabase, SqlRow } from './db.js';
 import type { ReviewFeed } from './review-feed.js';
 
 /**
- * Draft buffer (M5-T15, breakdown decision 11, requirements §6 "drafts are never lost").
+ * Draft buffer (docs/architecture.md §6 "drafts are never lost").
  *
  * Storage is the `draft_buffer` table for this PR. A record appears on every save/update and
  * disappears once the host accepts it. A failed "server → host" step no longer loses text:

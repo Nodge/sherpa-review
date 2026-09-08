@@ -196,7 +196,7 @@ describe('PR comments modal', () => {
 });
 
 /**
- * Bar with shared modal state (M5-T16): the discussion card can open it too,
+ * Bar with shared modal state: the Discussion card in Overview can open it too,
  * and focus must return to wherever it was opened from.
  */
 function mountSharedGate(): { readonly outside: HTMLButtonElement } {
@@ -413,7 +413,7 @@ describe('floating review bar', () => {
         expect(renderBar({ threads })).toContain('21 drafts go out on ship');
     });
 
-    // Draft buffer (M5-T15): records count in the batch and block ship until they reach the host.
+    // Buffered drafts count in the batch and block ship until they arrive.
     it('counts buffered drafts and blocks ship with a reason', () => {
         const drafts = countDraftComments(DRAFT_THREADS);
 
@@ -437,7 +437,7 @@ describe('floating review bar', () => {
         expect(html).toContain('ship is blocked until it is');
     });
 
-    // Ship summary (SPEC §4.5): informational, does not block publishing.
+    // Ship summary (docs/design/SPEC-elements.md §4.5): informs without blocking publishing.
     it('shows the unresolved thread count and nothing when it is zero', () => {
         const open = DRAFT_THREADS.filter((thread) => !thread.resolved).length;
         expect(open).toBeGreaterThan(0);
@@ -490,7 +490,7 @@ describe('floating review bar', () => {
         expect(html).not.toContain('ship anyway?');
     });
 
-    it('keeps the M1 file guardrail when there is no route', () => {
+    it('keeps the file-based warning without a route', () => {
         const html = renderBar({ menu: true });
 
         expect(html).toContain('files not viewed — ship anyway?');
@@ -547,7 +547,7 @@ describe('floating review bar', () => {
 });
 
 describe('Review complete screen', () => {
-    it('renders the M1 counters and amber footer for open threads', () => {
+    it('renders counters and an amber footer for open threads', () => {
         const html = renderToStaticMarkup(
             <ReviewComplete
                 completion={{

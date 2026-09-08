@@ -7,10 +7,10 @@ import { useEscapeLayer } from '../shortcuts/context.tsx';
 import './filter-select.css';
 
 /**
- * File filter select (SPEC §2.7, README §Filters): a "label + count" button and a
- * a 250px list with an icon next to the active item.
+ * File filter select (docs/design/SPEC-elements.md §2.7, docs/design/README.md §Filters):
+ * a "label + counter" button and a 250px dropdown with an icon on the active item.
  *
- * Keyboard follows SPEC: ↓ opens, ↑/↓ navigate, ⏎ selects, Esc and an outside click close
+ * Keyboard handling follows the spec. ↓ opens, ↑/↓ navigate, ⏎ selects, Esc and outside clicks close
  * and restore focus to the button. Arrow keys can still reach disabled items so the reviewer can read
  * why they are unavailable, but cannot select them.
  */
@@ -42,7 +42,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
         setOpen(true);
     };
 
-    // An outside click closes the list and restores focus to the button (SPEC §2.7). Button focus
+    // An outside click closes the list and restores focus to the button (docs/design/SPEC-elements.md §2.7). Focus on the button
     // is temporary. If the reviewer clicked a focusable element, the browser immediately moves focus
     // there. This prevents the keyboard from losing focus altogether.
     useEffect(() => {

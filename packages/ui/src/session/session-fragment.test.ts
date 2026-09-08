@@ -7,7 +7,7 @@ import { sessionFragmentPatch } from './session-fragment.js';
 import { createSessionStore } from './session-store.js';
 
 /**
- * What iteration selection writes to the URL (M4-T9, M4-T12): a slice becomes a `base`/`head` pair,
+ * What iteration selection writes to the URL. A slice uses the `base`/`head` pair,
  * changing the selection removes previous anchors, and returning to the active iteration clears the URL.
  */
 

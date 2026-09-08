@@ -166,7 +166,7 @@ describe('second pass banner', () => {
         expect(secondPass({ kept: 0, total: 6, zeroReason: 'no_interdiff' })).toContain(
             'Перенести отметки просмотра не вышло: хост не отдал разницу между итерациями.',
         );
-        // Snapshot before M5-T21: no reason is stored, so show only the count.
+        // A snapshot without a reason reports only the count.
         expect(secondPass({ kept: 0, total: 6, zeroReason: null })).toContain(
             'None of the 6 stops stayed viewed.',
         );

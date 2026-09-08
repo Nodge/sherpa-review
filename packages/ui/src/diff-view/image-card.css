@@ -1,5 +1,5 @@
 /*
- * Image card (M5-T24): controls in a row with the sides below. Mode buttons use the same style
+ * Image card: controls above the sides. Mode buttons use the same segmented control
  * as the route preset toggle (`route-preset`), with padding matching the file card body.
  * No custom colors. The transparency checkerboard uses two muted diff backgrounds.
  */
@@ -268,7 +268,7 @@
 }
 
 /*
- * Diff mode (M5-T25): the original sides are only inputs for rasterization. `drawImage`
+ * Diff mode needs the source sides only for rasterization. `drawImage`
  * works on hidden elements too, leaving a single diff canvas on screen.
  */
 .image-card__source {

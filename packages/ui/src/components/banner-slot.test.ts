@@ -29,7 +29,7 @@ describe('banner slot', () => {
         expect(selection.hidden).toEqual([]);
     });
 
-    it('covers the full SPEC §2.21 priority order: failure → action failure → rebuild → stale → second pass → underexplained → filling → audit', () => {
+    it('uses the full priority order: failure → action failure → rebuild → stale → second pass → underexplained → filling → audit', () => {
         const selection = selectBanners([
             source('audit-scope', BANNER_PRIORITY.auditScope),
             source('route-filling', BANNER_PRIORITY.routeFilling),
@@ -108,7 +108,7 @@ describe('banner slot', () => {
         expect(selection.hidden.map((item) => item.id)).toEqual(['route-filling', 'audit-scope']);
     });
 
-    it('agent disconnection is not a slot source: status lives in the pill (decision #32)', () => {
+    it('agent disconnection is not a slot source: the pill shows the status', () => {
         expect(Object.keys(BANNER_PRIORITY)).not.toContain('agentDisconnected');
     });
 });

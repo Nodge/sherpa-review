@@ -1,9 +1,9 @@
 /*
- * Route view, triage preset, README §1–2. All values come from there: the
+ * Route view, triage preset, docs/design/README.md §1–2. All values come from there: grid
  * `minmax(300px,368px) minmax(0,1fr)` grid with a 40px gap, sticky left column, tier ruler
  * at 3×15px, and tier-specific heading typography.
  *
- * One deliberate difference from the handoff: the prototype scrolls the whole page, and sticky
+ * One deliberate departure from the design: the prototype scrolls the whole page, and sticky
  * elements use its top as their origin (toolbar 46px, left column 132px). In the app,
  * the view itself scrolls below the top panel, so the same 46 and 132
  * become 0 and 132−46=86.
@@ -12,7 +12,7 @@
 .route {
     /*
      * Sticky toolbar height sets the origin for the sticky stop column. The toolbar
-     * measures itself (`ResizeObserver`) and sets it here as an inline style. This is a 2-line fallback
+     * measures itself (`ResizeObserver`) and sets this as an inline style. The fallback allows 2 rows
      * with the coverage bar so the column stays in place until the first measurement.
      */
     --route-toolbar-height: 99px;
@@ -71,7 +71,7 @@
     max-width: 1560px;
 }
 
-/* "What is new since the last pass" filter chip (README §9), height and radius match "Comments from" chips. */
+/* "What is new since the previous pass" filter chip, docs/design/README.md §9. Same height and radius as "Comments from" chips. */
 .route-change-chip {
     display: inline-flex;
     align-items: center;
@@ -88,14 +88,14 @@
     cursor: pointer;
 }
 
-/* --- Coverage strip (SPEC §2.4, README §1) --- */
+/* --- Coverage bar (docs/design/SPEC-elements.md §2.4, docs/design/README.md §1) --- */
 
 .route-toolbar__strip {
     margin-top: 11px;
     max-width: 1560px;
 }
 
-/* Generation limit (SPEC §4.1): muted like the bar legend, with monospaced numbers. */
+/* Generation cap row (docs/design/SPEC-elements.md §4.1) uses the bar legend's muted tone and monospace numbers. */
 .route-toolbar__cap {
     margin-top: 5px;
     max-width: 1560px;
@@ -123,7 +123,7 @@
 
 .coverage__segment:hover,
 .coverage__segment:focus-visible {
-    /* "One step lighter": each segment keeps its own hue (SPEC §2.4). */
+    /* "One step lighter" keeps the segment's own tone (docs/design/SPEC-elements.md §2.4). */
     filter: brightness(1.28);
 }
 
@@ -244,7 +244,7 @@
     color: var(--text-primary);
 }
 
-/* No route yet, so nothing to toggle (SPEC §2.5). */
+/* No route yet, so nothing to switch (docs/design/SPEC-elements.md §2.5). */
 .route-preset__option:disabled {
     opacity: var(--disabled-opacity);
     cursor: default;
@@ -267,7 +267,7 @@
 
 .route-stop__side {
     position: sticky;
-    /* Gap below the toolbar, a deliberate change from the mockup (decisions.md, #38): without it the stop header
+    /* The gap from the toolbar departs from the design. Without it, the stop header
        merges with the coverage bar. */
     top: calc(var(--route-toolbar-height) + var(--space-inner));
     align-self: start;
@@ -277,7 +277,7 @@
     border-left: 2px solid transparent;
 }
 
-/* Hovering over a coverage strip segment highlights stops of its tier (SPEC §2.4). */
+/* Hovering a coverage bar segment highlights stops in its tier (docs/design/SPEC-elements.md §2.4). */
 .route-stop.is-marked .route-stop__side {
     border-left-color: var(--accent);
 }
@@ -401,7 +401,7 @@
     color: var(--diff-add-text-strong);
 }
 
-/* Failed mark write: an error with a retry beside the control (SPEC §2.10). */
+/* Failed mark write: error and retry next to the control (docs/design/SPEC-elements.md §2.10). */
 .route-stop__viewed-error {
     display: flex;
     align-items: center;
@@ -464,7 +464,7 @@
     color: var(--text-dim-strong);
 }
 
-/* "Why this stop changed" block (README §1 item 4). */
+/* "Why this stop changed" block, docs/design/README.md §1 item 4. */
 
 .route-stop__change {
     margin: 11px 0 0;
@@ -604,7 +604,7 @@
     color: var(--diff-del-text);
 }
 
-/* Read-state box uses the same three states as the tree and card (SPEC §2.12). */
+/* Read-state box has the same 3 states as the tree and card (docs/design/SPEC-elements.md §2.12). */
 .route-chip__read {
     display: flex;
     align-items: center;
@@ -647,7 +647,7 @@
     min-width: 0;
 }
 
-/* Placeholder for the diff column removed from the DOM (M5-T13), using its last measured height. */
+/* Space for the diff column removed from the DOM, at its last measured height. */
 .route-stop__placeholder {
     flex: none;
 }
@@ -727,7 +727,7 @@
     color: var(--text-dim-strong);
 }
 
-/* Collapsed stop (README §2): dashed card, nothing hidden. */
+/* Collapsed stop (docs/design/README.md §2): a card with a dashed border, nothing hidden. */
 .route-collapsed {
     display: flex;
     align-items: center;
@@ -760,7 +760,7 @@
     color: var(--text-muted-dim);
 }
 
-/* --- Unfilled stops and generation-phase skeletons (README §8, SPEC §3) --- */
+/* --- Unfilled stops and generation phase skeletons (docs/design/README.md §8, docs/design/SPEC-elements.md §3) --- */
 
 .route-stop--unfilled .route-stop__title {
     color: var(--text-dim);
@@ -775,7 +775,7 @@
 
 /*
  * Diff card skeleton has a fixed height close to a real card, so arriving
- * content does not move its neighbours (SPEC §3).
+ * content does not shift its neighbours (docs/design/SPEC-elements.md §3).
  */
 .route-skeleton-card {
     height: 214px;
@@ -882,7 +882,7 @@
     color: var(--text-dim-strong);
 }
 
-/* Anchor drift (SPEC §2.9): amber notice instead of empty space. */
+/* Anchor drift (docs/design/SPEC-elements.md §2.9): amber notice instead of empty space. */
 /* Conflict notice has the same shape as drift. Different reason, same role on screen. */
 .route-drift,
 .route-conflicts {
@@ -959,7 +959,7 @@
     opacity: var(--disabled-opacity);
 }
 
-/* The second card action is secondary (README §2): same geometry, without the fill. */
+/* The card's second action is secondary (docs/design/README.md §2): the same geometry without a fill. */
 .route-other__action--secondary {
     border-color: var(--border-control);
     background: transparent;
@@ -988,7 +988,7 @@
     color: var(--text-muted);
 }
 
-/* Conflicts are warnings, not just labels. They are resolved outside Sherpa (SPEC §4.1). */
+/* Conflicts are warnings, beyond a simple note. Resolve them outside Sherpa (docs/design/SPEC-elements.md §4.1). */
 .route-other__conflicts {
     color: var(--attention-text-dim);
 }
@@ -1003,7 +1003,7 @@
     cursor: pointer;
 }
 
-/* SPEC §4.3 banner: the plan explains less than half the diff. */
+/* Banner from docs/design/SPEC-elements.md §4.3: the plan explains less than half of the diff. */
 .route-regenerate {
     display: flex;
     align-items: center;
@@ -1045,7 +1045,7 @@
     margin-left: 6px;
 }
 
-/* Empty filter result, as in the full diff: explanation and a way out (SPEC §2.7). */
+/* Empty filter result matches the full diff: explanation and a way out (docs/design/SPEC-elements.md §2.7). */
 .route__zero {
     display: flex;
     align-items: center;
@@ -1074,7 +1074,7 @@
     cursor: pointer;
 }
 
-/* --- Behavioural test digest (README §2) --- */
+/* --- Behavioural test digest (docs/design/README.md §2) --- */
 
 .digest {
     border: 1px solid var(--border-control);
@@ -1138,7 +1138,7 @@
 }
 
 /*
- * `weakened` is a first-class signal (brief §6): the same amber as `changed`, but its row has
+ * `weakened` is a first-class signal (docs/product.md §6). It uses the same amber as `changed`, with
  * an extra amber line on the left so weakened assertions stand out among changed ones.
  */
 .digest__row--weakened {
@@ -1172,7 +1172,7 @@
     border-color: var(--attention-border-strong);
 }
 
-/* README §2 gives the chip pair the same tone as the error border. Here it is a fill. */
+/* docs/design/README.md §2 gives the chip pair the same tone as the error border, used here as a fill. */
 .digest__chip--uncovered {
     background: var(--error-border);
     color: var(--error-text);

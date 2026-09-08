@@ -13,21 +13,21 @@ import { hashHex, makeFileId } from '../patch.js';
 import { MEDIUM_BASE_COMMIT, MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT } from './medium.js';
 
 /**
- * Route for the `medium` fixture, the same "Enforce the 30-minute edit window…" PR (README §1–2).
- * The data is deterministic: the state gallery, e2e F1 and validator golden corpus (M2-T3) must
+ * Route for the `medium` fixture, the same PR, "Enforce the 30-minute edit window…" (`docs/design/README.md §1–2`).
+ * The data is deterministic: the state gallery, e2e, and validator golden corpus must
  * see the same numbers.
  *
  * The plan has 7 stops: 01–02 high, 03 medium, 04 medium (Behavioural test digest), 05–06 low,
- * 07 is synthetic "Other" (decision logged on 2026-08-25: id `other`, tier `other`, empty anchors,
+ * and 07 is synthetic "Other" (id `other`, tier `other`, empty anchors,
  * with its contents, the uncovered ranges, computed by the UI).
  *
- * The handoff bar ("862 changed lines · 96% explained · 34 lines not explained") predates the images
- * from T23: anchors still cover the same 828 changed lines, but the added `countdown-icon.svg`
+ * The design handoff bar ("862 changed lines · 96% explained · 34 lines not explained") was captured
+ * before images: anchors still cover the same 828 changed lines, but the added `countdown-icon.svg`
  * is invisible to the route (images always go to "Other"), leaving its 6 patch lines uncovered. Total: 868
  * changed lines, with 40 uncovered in four files: `CODEOWNERS` (5), `ci.yml` (12), the end of
  * generated `psp-schema.ts` (17), and the SVG (6).
  * UI coverage statistics count 38 of these (`psp-schema.ts` 15): two blank lines at its end outside
- * the anchors from the count (decision log, 2026-08-26).
+ * the anchors are excluded by the whitespace-line rule.
  * By tier: high 196, medium 327, low 305 lines (the design counts 188/348/292 have the same bar proportions).
  * The `route.test.ts` test recalculates every count from diff patches rather than taking them on trust.
  *
@@ -60,7 +60,7 @@ export const P = {
 
 /**
  * The file is outside the diff. Test files import helpers from it, but it has not changed.
- * The validator drops digest assertions anchored here (SPEC §4.3).
+ * The validator drops digest assertions anchored here (`docs/design/SPEC-elements.md §4.3`).
  */
 const FACTORIES_PATH = 'services/orders/src/domain/__tests__/factories.ts';
 
@@ -86,7 +86,7 @@ function claim(
 /**
  * A digest assertion as returned by the model. The anchor is a path and line in a test file.
  * With `dropped: true`, the validator drops it because the anchor points outside the diff. The snapshot
- * excludes that assertion and counts it only in `droppedClaims` (SPEC §4.3).
+ * excludes this assertion and counts it only in `droppedClaims`.
  */
 export interface DigestEntry {
     kind: RouteTestClaimKind;
@@ -393,7 +393,6 @@ export function otherStop(): RouteStop {
         droppedClaims: 0,
         validationNotes: [],
         provenance: null,
-        // Classify stops after a push in M4-T7.
         change: null,
     };
 }
@@ -457,7 +456,6 @@ function snapshot(stops: RouteStop[], hashed: boolean): RouteSnapshot {
         diffId: MEDIUM_DIFF_ID,
         createdAt: CREATED_AT,
         provenance: { harness: 'claude-code', model: 'claude-opus-5', locale: null },
-        // Second pass through snapshots in M4-T6.
         previousSnapshotId: null,
         carried: null,
         summary: SUMMARY,
@@ -474,7 +472,7 @@ function readySnapshot(): RouteSnapshot {
 }
 
 /**
- * Partially filled route exactly as in README §7: 01, 02 and 05 are ready, "3 of 7 ready",
+ * Partially filled route exactly as in `docs/design/README.md §7`: 01, 02 and 05 are ready, "3 of 7 ready",
  * the indicators are not filled left to right. 06 is in progress, 03 and 04 are queued, "Other" is ready at once.
  */
 function fillingSnapshot(): RouteSnapshot {
@@ -490,7 +488,7 @@ function fillingSnapshot(): RouteSnapshot {
 
 /**
  * Raw model output that failed validation: two stops reference a file
- * that is not in the diff. Shown in "Open raw output" (README §12), this is model output,
+ * outside the diff. Shown in "Open raw output" (`docs/design/README.md §12`), this is model output,
  * not a validator report.
  */
 const FAILED_RAW_OUTPUT = `{
@@ -516,7 +514,6 @@ const FAILED_RAW_OUTPUT = `{
 
 /** Route states for the `medium` fixture gallery: one per `uiRoutePhaseSchema` phase. */
 export function makeMediumRouteStates(): Record<'none' | 'reading' | 'filling' | 'ready' | 'failed', UiRouteState> {
-    // Route staleness is handled in M4-T4.
     return {
         none: { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null },
         reading: { phase: 'reading', smallPr: false, snapshot: null, failure: null, stale: null },
@@ -592,7 +589,7 @@ export function makeMediumSectionResults(): RouteSectionResult[] {
 }
 
 /**
- * Broken model outputs for validator negative tests (M2-T3). They satisfy the protocol
+ * Invalid model outputs for negative validator tests. They satisfy the protocol
  * schemas but break semantics, so they do not go through `parse` during construction.
  */
 export function makeMediumBrokenResults(): {

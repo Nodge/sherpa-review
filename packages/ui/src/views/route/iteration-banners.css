@@ -1,4 +1,4 @@
-/* Iteration banners: README §9, amber token group (layout shared with the audit banner). */
+/* Iteration banners, docs/design/README.md §9, amber tokens (shared layout with the audit banner). */
 
 .iteration-banner {
     display: flex;

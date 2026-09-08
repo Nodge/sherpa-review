@@ -6,7 +6,7 @@ import { modulePathOf, synthesizeFiles } from './synthetic.js';
 import type { FixtureData } from './types.js';
 
 /**
- * Large PR for virtualization (SPEC §8 item 8: 60+ files at 60fps) and performance runs (requirements §7).
+ * Large PR for virtualization (`docs/design/SPEC-elements.md §8`, item 8: 60+ files at 60fps) and the performance run.
  * Built with the shared `synthesizeFiles` generator: content comes from the file index.
  * No megabytes in the repository, but the result is identical byte for byte across runs.
  */

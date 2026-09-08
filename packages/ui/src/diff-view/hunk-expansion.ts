@@ -3,31 +3,13 @@ import type { ExpandDirection, GapKey } from './expand.js';
 import { gapKeyOf } from './expand.js';
 
 /**
- * The `e` key (SPEC §5) expands context around the focused hunk by one step up and one step down.
+ * The `e` key (docs/design/SPEC-elements.md §5) expands the focused hunk's context one step up and down.
  * Gaps around the hunk use the same keys and directions as the targets in the markup
  * (`expandFileContext`). For an internal gap, "down" expands the hunk below it and "up" the one above.
  */
 export interface HunkExpandRequest {
     readonly gapKey: GapKey;
     readonly direction: ExpandDirection;
-}
-
-/** The hunk containing the focused line. `null` means the line is absent from the model. */
-export function hunkIndexOfLine(model: DiffFileModel, side: 'old' | 'new', line: number): number | null {
-    if (model.content.kind !== 'text') {
-        return null;
-    }
-    let index = 0;
-    for (const block of model.content.blocks) {
-        if (block.kind !== 'hunk') {
-            continue;
-        }
-        if (hunkHasLine(block, side, line)) {
-            return index;
-        }
-        index += 1;
-    }
-    return null;
 }
 
 /**

@@ -4,14 +4,14 @@
  * State lives in SQLite and survives shutdown. The next `up` starts the server again.
  */
 
-/** Default idle threshold (decision 2026-08-20): a quarter hour without UI or CLI calls. */
+/** Default idle threshold: a quarter hour without the UI or CLI calls. */
 export const DEFAULT_IDLE_SECONDS = 15 * 60;
 
 /** Idle check interval. A minute is enough for a quarter-hour threshold, shorter thresholds are checked more often. */
 const MAX_CHECK_INTERVAL_MS = 60_000;
 const MIN_CHECK_INTERVAL_MS = 50;
 
-/** Undocumented threshold override: the end-to-end bundle test uses it to shorten a quarter hour to seconds. */
+/** Undocumented threshold override that lets the bundle end-to-end test reduce a quarter hour to seconds. */
 const IDLE_SECONDS_ENV = 'SHERPA_IDLE_SECONDS';
 
 export interface IdleWatchOptions {

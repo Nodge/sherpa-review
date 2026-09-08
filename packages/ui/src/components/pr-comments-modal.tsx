@@ -34,7 +34,7 @@ export interface PrCommentsModalProps {
     readonly pr: PrMeta;
     readonly store: ThreadStore;
     readonly transport: ComposerTransport;
-    /** Draft buffer records (M5-T15). Only PR-level records count in the modal counter. */
+    /** Draft buffer entries. Only PR-level entries count toward the modal counter. */
     readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onClose: () => void;
     readonly now?: number;
@@ -354,7 +354,7 @@ export function PrCommentsModal({
 }
 
 /**
- * Drafts the server has accepted but the host has not (M5-T15). This includes all drafts, not just
+ * Drafts accepted by the server but not yet by the host. All of them appear here, not just
  * PR-level drafts. While a record exists, ship is unavailable, and its composer may be off screen,
  * for example at a file line in a previous iteration. This is the only place to see such a record
  * and discard it.

@@ -54,7 +54,7 @@ function render(file: FileDiff, hint = false): string {
 }
 
 describe('file card', () => {
-    it('a conflicted file gets a badge in the header (SPEC §2.14, §4.1)', () => {
+    it('conflicting file gets a header badge (docs/design/SPEC-elements.md §2.14, §4.1)', () => {
         const conflict = DATA.diff.files.find((file) => file.changeType === 'conflict');
         const plain = DATA.diff.files.find((file) => file.changeType === 'modify' && !file.binary);
         if (conflict === undefined || plain === undefined) {

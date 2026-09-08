@@ -206,7 +206,7 @@ describe('summary and provenance', () => {
         expect(provenanceLine(snapshot, createT('en'), 'en')).toBe(snapshot.commit.slice(0, 7));
     });
 
-    it('appends route language only when it differs from the tab language (M5-T4)', () => {
+    it('adds the route language only when it differs from the tab language', () => {
         const ready = snapshotOf('ready');
         const english = { ...ready, provenance: { ...ready.provenance, locale: 'en' as const } };
 

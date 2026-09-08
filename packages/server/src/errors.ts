@@ -16,7 +16,7 @@ export class RpcFailure extends Error {
     }
 }
 
-/** A live server for the same PR already holds the manifest, so a second process must not start (spec §1/C2). */
+/** A live server for the same PR already holds the manifest. A second process must not start (docs/architecture.md §1). */
 export class ServerAlreadyRunningError extends Error {
     readonly prKey: string;
     readonly port: number;

@@ -8,7 +8,7 @@ import {
     GenerationCapBanner,
 } from './generation-cap-banner.tsx';
 
-/** Generation cap banner: SPEC §4.1, the plan was built from a partial diff. */
+/** Generation limit banner, docs/design/SPEC-elements.md §4.1. The plan was built from a partial diff. */
 
 const CAP: UiGenerationCap = { filesCovered: 120, filesTotal: 505, machineFiles: 380, truncated: true };
 

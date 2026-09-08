@@ -136,7 +136,7 @@ describe('FixtureHost', () => {
         await expect(host.deleteDraft(published.id)).rejects.toThrow(/already published/);
     });
 
-    it('does not apply the verdict after partial publication failure (SPEC §4.5)', async () => {
+    it('partial publication failure does not apply the verdict', async () => {
         // Draft ids are deterministic, so a future draft can be set to fail in advance.
         const probe = await makeFixtureHost('medium').saveDraft({ body: 'probe', parentId: null, anchor: null });
 

@@ -146,15 +146,15 @@ interface SeenRange {
 }
 
 /**
- * PR reading progress (T8, requirements §5, decision log 2026-08-22). This PR SQLite DB is the source of truth,
+ * PR reading progress (docs/architecture.md §3): this PR's SQLite is the source of truth,
  * independent of the host and tab memory.
  *
  * A file record exists only after an explicit reviewer action (`viewed: true` pins
  * `read` permanently, `viewed: false` unpins it). The UI interprets missing records. Seen ranges
- * come from stop marks (M2-T7): the UI calculates them from its diff model, the server stores them
+ * carry stop marks, computed by the UI from its diff model. The server stores them
  * bound to the stop without interpreting them.
  *
- * Everything is scoped to an iteration (M4-T6): files and ranges are keyed by `diffId`, stop marks
+ * Everything is scoped to an iteration: files and ranges are keyed by `diffId`, stop marks
  * by snapshot. Endpoints know which iteration is active. The store receives it as an argument.
  * After a push, progress moves to a new iteration through `carryRanges`, while stop marks for the new
  * snapshot are set by `carryStopsInTransaction` during route acceptance.
@@ -225,7 +225,7 @@ export class ProgressStore {
     }
 
     /**
-     * Progress for one iteration. A file with only ranges (M2) arrives
+     * Progress for one iteration. A file with only ranges arrives
      * with `viewed: null`: the reviewer has made no decision, so the UI applies defaults and counts
      * ranges when needed.
      */
@@ -279,7 +279,7 @@ export class ProgressStore {
     }
 
     /**
-     * A stop mark and its seen ranges in one transaction (decision log, 2026-08-26).
+     * A stop mark and its seen ranges in one transaction.
      * The UI computes ranges. The server stores only their link to the stop without interpreting them,
      * so clearing the mark deletes exactly those ranges. With `viewed: false`, incoming ranges are ignored.
      */
@@ -294,7 +294,7 @@ export class ProgressStore {
     }
 
     /**
-     * Progress recorded without an iteration (pre-M4 database or server running without a host) moves
+     * Progress recorded without an iteration (an existing database from an earlier version or a server running without a host) moves
      * to the active one. Idempotent: the active iteration's record wins on conflict.
      */
     adoptLegacy(activeDiffId: HostId): number {
@@ -310,7 +310,7 @@ export class ProgressStore {
      *
      * Candidates come from progress records themselves rather than `iterations`: a row there exists
      * only for an iteration active while 0.4.x was running (`IterationStore.upsert`), so
-     * progress recorded by server 0.3.x would never become a source (M5-T20). For freshness,
+     * progress recorded by server 0.3.x would never qualify as a source. Without a row,
      * recency comes from the iteration's route snapshots, or as a last resort,
      * from the time of the latest file mark.
      *
@@ -341,8 +341,8 @@ export class ProgressStore {
 
     /**
      * Whether an iteration has at least one viewed mark, a range or a file pin. Answers
-     * "0 stops carried over: did the reviewer leave no marks, or leave marks without covering a whole stop?"
-     * (M5-T21). Ask about the source iteration: the destination may never have received any marks,
+     * whether "0 stops carried over" means the reviewer marked nothing or marked only parts of stops.
+     * Query the source iteration: marks may not have appeared on the target
      * even though there was progress to carry over.
      */
     hasViewedMarks(diffId: HostId): boolean {
@@ -356,7 +356,7 @@ export class ProgressStore {
     }
 
     /**
-     * Carry seen ranges and file marks from one iteration to another (planning decision 4).
+     * Carries seen ranges and file marks from one iteration to another.
      * Files are matched by `path` and lines through `map`: lines touched by the interdiff
      * are not carried over at all.
      *
@@ -752,7 +752,7 @@ export class ProgressStore {
      * Fallback chain from the source iteration's `fileId` to a path. The review host's `fileId` is opaque,
      * so records from two iterations can only be matched through a path. Layers: the stored iteration
      * patch, followed by anchors left in its route snapshots and chat notes.
-     * An iteration recorded by server 0.3.x has no patch and no way to retrieve it (M4-T4), so
+     * An iteration recorded by server 0.3.x has no patch and no way to retrieve one, so
      * anchors are the only option here, rather than a fallback.
      *
      * The record's own `path` column (0.5.x and later) is more precise than any layer and is checked
@@ -964,8 +964,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Changed diff lines within stop anchors, exactly those the UI marks as viewed
- * (`coveredChangedRanges`: added lines belong to `new`, removed to `old`). The server copy of the rule
- * is needed for mark carryover and tests that simulate a reviewer marking lines.
+ * (`coveredChangedRanges`: added lines live in `new`, removed lines in `old`). Mark carryover
+ * (`requiredRanges`) uses the same rule, exposed for tests that simulate a reviewer mark.
  */
 export function requiredSeenRanges(anchors: readonly RouteAnchor[], diff: PrDiff): UiStopSeenRange[] {
     return requiredRanges(anchors, indexDiff(diff));

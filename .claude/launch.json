@@ -4,7 +4,7 @@
     {
       "name": "design-demo",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "design/design_handoff_sherpa"],
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "docs/design"],
       "port": 8765
     },
     {

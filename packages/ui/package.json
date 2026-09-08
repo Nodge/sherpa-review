@@ -1,7 +1,9 @@
 {
   "name": "@sherpa/ui",
   "version": "0.0.0",
+  "description": "Reviewer React app: diff, route, discussions, chat and settings",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",

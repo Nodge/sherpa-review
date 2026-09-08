@@ -15,7 +15,7 @@ import { createThreadStore } from '../threads/store.js';
 import { DiffWorkspace } from './full-diff.tsx';
 
 /**
- * Slice between iterations in the reader (M4-T12): slice files have `fileId` values in another
+ * Inter-iteration slice in the reader: slice files have `fileId` values from another
  * namespace, so an agent question cannot attach to them through either the popover button or the anchor in the chat
  * composer.
  */

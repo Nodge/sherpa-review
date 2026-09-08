@@ -6,7 +6,7 @@ import { makeFileDiff } from '../patch.js';
 
 /**
  * Generates synthetic PRs from identically shaped modules. Used to build `large` (64 files) and
- * `huge` (100 files, 20k+ lines for the performance run in requirements §7).
+ * `huge` (100 files, 20k+ lines for performance runs).
  *
  * Content is computed from the file index instead of stored, keeping megabytes out of the repository while
  * producing byte-for-byte identical results across runs. The index itself is the seed, with no `Math.random()`.
@@ -37,7 +37,7 @@ export interface SyntheticParams {
     viewedAt: (index: number, changeType: FileChangeType) => boolean;
     /** Insert long lines into the file for line-wrapping tests. */
     longLinesAt?: (index: number) => boolean;
-    /** Text after the closing `@@`. The UI reads the entity header from it (SPEC §2.13). */
+    /** Text after the closing `@@`. The UI extracts the entity header from it (`docs/design/SPEC-elements.md §2.13`). */
     sectionAt?: (moduleIndex: number) => string;
 }
 

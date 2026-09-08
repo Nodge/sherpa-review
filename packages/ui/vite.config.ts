@@ -8,15 +8,15 @@ import react from '@vitejs/plugin-react';
 import type { ProxyOptions } from 'vite';
 import { defineConfig } from 'vite';
 
-// One release version for the whole distribution: the `version` field in the root package.json
-// (decision log, 2026-09-01). The UI package version is not a source.
+// The distribution has one version, taken from the root package.json `version` field.
+// The UI package version is not the source.
 const rootPackageJson = JSON.parse(
     readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
 /**
  * UI build. Only `index.html` goes into the production build: `gallery.html` (the state gallery)
- * and `dev.html` (M0 echo loop demo) are development pages, available in `vite dev` and not
+ * and `dev.html` (the echo loop demo) are development pages available in `vite dev`, and they do not
  * increase the server bundle's size.
  *
  * Fonts arrive in an npm package and go into `dist/assets`, so no network is needed at runtime.
@@ -36,7 +36,7 @@ export default defineConfig({
 /**
  * Development proxy to a running Sherpa server: `dev.html` uses the same `/api` endpoints as the main page.
  * The address comes from `SHERPA_SERVER`, otherwise from the running server's manifest
- * (`~/.sherpa/servers/<PR key>.json`, rpc-design §8). The port is ephemeral and cannot be hardcoded.
+ * (`~/.sherpa/servers/<PR key>.json`, docs/protocol.md §8): the port is ephemeral and cannot be hardcoded.
  * A server started after `vite dev` requires restarting the development server.
  */
 function devProxy(): Record<string, ProxyOptions> | null {

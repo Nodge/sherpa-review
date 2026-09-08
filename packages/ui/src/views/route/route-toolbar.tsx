@@ -12,7 +12,7 @@ import type { RoutePreset, ThreadsShow } from '../../session/session-store.js';
 import type { ThreadSourceCounts } from '../../threads/model.js';
 
 /**
- * Sticky route toolbar (README §1): preset switcher with a hint and the right cluster shared with the full
+ * Sticky route toolbar (docs/design/README.md §1): preset switch with a tooltip and a right-hand cluster shared with the full
  * diff. Mode, filter and comment sources must match between views.
  *
  * The second row is the coverage bar with its own legend and viewed stop counter.
@@ -22,10 +22,10 @@ import type { ThreadSourceCounts } from '../../threads/model.js';
 export const TRIAGE_HINT: MessageKey = 'route.preset.triage.hint';
 export const TOUR_HINT: MessageKey = 'route.preset.tour.hint';
 
-/** SPEC §2.5: the toggle is disabled until a route exists and explains why (`title`). */
+/** docs/design/SPEC-elements.md §2.5: the switch is disabled until a route exists and explains why (`title`). */
 export const PRESET_DISABLED_TITLE: MessageKey = 'route.preset.disabled';
 
-/** "What is new" filter chip (README §9), dismissible with a close button. */
+/** The what-is-new filter chip (docs/design/README.md §9) can be cleared with its close button. */
 export const CHANGE_CHIP_LABEL: MessageKey = 'route.changeChip';
 
 const PRESETS: readonly { readonly id: RoutePreset; readonly label: MessageKey; readonly hint: MessageKey }[] = [
@@ -37,7 +37,7 @@ export interface RouteToolbarProps {
     readonly store: DiffViewStore;
     readonly preset: RoutePreset;
     readonly onPreset: (preset: RoutePreset) => void;
-    /** No route means nothing to toggle (SPEC §2.5). */
+    /** There is no route, so there is nothing to switch (docs/design/SPEC-elements.md §2.5). */
     readonly presetDisabled?: boolean;
     readonly filters: readonly FileFilter[];
     readonly filter: FileFilter;
@@ -45,14 +45,14 @@ export interface RouteToolbarProps {
     readonly threadsShow: ThreadsShow;
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
-    /** The "what is new since the last pass" filter is on (README §9): a chip appears below the preset. */
+    /** The changes-since-last-pass filter is on (docs/design/README.md §9). Show a chip below the preset. */
     readonly changeFilterOn?: boolean;
     readonly onClearChangeFilter?: () => void;
-    /** Second toolbar row: coverage strip (SPEC §2.4). */
+    /** Second toolbar row: the coverage bar (docs/design/SPEC-elements.md §2.4). */
     readonly strip: ReactNode;
     /**
-     * Generation cap (SPEC §4.1): the payload budget kept part of the diff out of the agent's context.
-     * null means no truncation or a route built before M5-T14.
+     * Generation limit (docs/design/SPEC-elements.md §4.1): the payload budget kept part of the diff out of the agent context.
+     * null means nothing was cut or the route was built by an older version.
      */
     readonly generationCap?: UiGenerationCap | null;
     /**
@@ -82,7 +82,7 @@ export function RouteToolbar({
     const t = useT();
     const ref = useRef<HTMLDivElement | null>(null);
 
-    // Measure before painting: otherwise the first frame uses the fallback height from route.css.
+    // Measure before painting, or the first frame will use the fallback height from route.css.
     // Take the initial measurement manually because ResizeObserver stays silent in background tabs.
     useLayoutEffect(() => {
         const element = ref.current;
@@ -103,7 +103,7 @@ export function RouteToolbar({
     return (
         <div className="route-toolbar" ref={ref}>
             <div className="route-toolbar__row">
-                {/* `data-tour="presets"` is the anchor for onboarding tour step 05 (M5-T8). */}
+                {/* `data-tour="presets"` is the target of onboarding tour step 05. */}
                 <div className="route-preset" role="group" aria-label={t('route.preset.aria')} data-tour="presets">
                     {PRESETS.map((option) => (
                         <button
@@ -156,7 +156,7 @@ export function RouteToolbar({
 }
 
 /**
- * Cap row below the coverage bar (SPEC §4.1): what limits the plan. Stays silent while
+ * The limit row below the coverage bar (docs/design/SPEC-elements.md §4.1) states what limits the plan. It stays hidden while
  * the entire diff fits in context. The coverage bar already has a way to say that everything is covered.
  *
  * Mention the generated group only when it exists. Without one, saying "0 generated files in one stop"

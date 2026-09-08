@@ -1,6 +1,6 @@
 import type { ChatExchange } from '@sherpa/protocol';
 
-/** Number of recent exchanges shown for an empty `@` query (SPEC §2.18). */
+/** Number of recent exchanges shown by an empty `@` (docs/design/SPEC-elements.md §2.18). */
 export const CHAT_RECENT_LIMIT = 8;
 
 export interface ChatSearchResult {

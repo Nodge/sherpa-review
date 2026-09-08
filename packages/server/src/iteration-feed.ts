@@ -19,7 +19,7 @@ import type { RouteStore } from './route-store.js';
 import { UNKNOWN_BASE_COMMIT } from './route-store.js';
 
 /**
- * One server subscription to PR iterations (M4-T4): merged host and storage list,
+ * A single server subscription to PR iterations, with a merged list from the host and storage,
  * the active iteration and a stale route flag for the UI.
  *
  * Separate from `ReviewFeed` because threads and iterations have different consumers and mechanisms.
@@ -57,11 +57,11 @@ export interface IterationFeedOptions {
      * Snapshot history is the last place to find the base of a forgotten iteration.
      */
     readonly route: Pick<RouteStore, 'current' | 'subscribe' | 'listSnapshots'>;
-    /** Notes whose anchors move to a new iteration (M4-T11). null means there is nobody to move them. */
+    /** Notes whose anchors move to a new iteration. null means there is no carrier. */
     readonly notes?: NoteCarrier | null;
     /** Delay before retrying carryovers after a temporary host refusal. */
     readonly carryRetryMs?: number;
-    /** Reading progress: a push carries it to the new iteration (M4-T6). `null` means nothing to carry over. */
+    /** Reading progress, carried over to a new iteration on push. `null` means there is nothing to carry over. */
     readonly progress?: ProgressCarrier | null;
     /** Where to log host refusals. Defaults to stderr. */
     readonly log?: (message: string) => void;
@@ -274,7 +274,7 @@ export class IterationFeed {
 
     /**
      * The active iteration patch must be stored locally: after the next push, a snapshot
-     * built on it can only be read from that patch (brief §4a). Read it from storage. On
+     * built on it can only be read from that patch (docs/product.md §4a). Read it from storage, and on
      * a miss, fetch it from the host and store it immediately. Concurrent requests share one call.
      */
     private activeDiff(active: Iteration): Promise<PrDiff> {
@@ -318,7 +318,7 @@ export class IterationFeed {
     }
 
     /**
-     * Note anchors move to the active iteration (M4-T11). Usually they move from one
+     * Note anchors move to the active iteration. Usually they move from one
      * iteration, but 2 pushes in a row without an open UI leave notes on different ones, hence
      * a set instead of a single pair. A note that has already lost its anchor never migrates again.
      */
@@ -502,7 +502,7 @@ export class IterationFeed {
     }
 
     /**
-     * Progress moves to the active iteration (planning decision 4a): first adopt
+     * Progress moves to the active iteration: first adopt
      * records without an iteration, then carry over ranges and file marks from the latest
      * iteration that has any.
      *
@@ -631,7 +631,7 @@ export class IterationFeed {
     }
 
     /**
-     * Shared host refusal policy for all carryovers (M4-T16). A permanent refusal means the source
+     * Shared host refusal policy for all carryovers. A permanent refusal means the source
      * is no longer on the host: a force-push removed the iteration (`gone`) or the host called it unknown
      * (`bad_request`). Everything else is a temporary failure that a retry can resolve.
      *
@@ -797,7 +797,7 @@ export class IterationFeed {
 }
 
 /**
- * "Stale route" rule (planning decision 10): the snapshot was built on a different iteration than the one
+ * The "stale route" rule: the snapshot was built on a different iteration from the one
  * the PR is reviewing now. Generation phase does not affect this. The UI handles banner priorities.
  *
  * `affectedStopIds` is always empty here: it needs an interdiff, which requires a network call (`IterationFeed`).

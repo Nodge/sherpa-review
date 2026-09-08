@@ -28,10 +28,9 @@ import {
 
 /**
  * Route counts come from anchors and diff models, not the snapshot. The reference is
- * the `medium` fixture, whose coverage matches the handoff bar (866 / 828 / 38, tiers
+ * the `medium` fixture, whose coverage matches the design bar (866 / 828 / 38, tiers
  * 196 / 327 / 305). This test catches any mismatch. The patches contain
- * 868. Two blank lines in psp-schema.ts outside anchors do not count toward coverage
- * (decision log, 2026-08-26).
+ * 868 changed lines. Two empty lines in psp-schema.ts outside anchors are excluded from coverage statistics.
  */
 
 const DATA = fixtureIteration('medium');
@@ -74,7 +73,7 @@ function numbers(model: ReturnType<typeof build>): string[] {
     return model.entries.map((entry) => entry.view.planLabel);
 }
 
-/** Anchors for low-tier stops and composite 03 are trimmed: uncovered lines exceed the promotion threshold (SPEC §4.3). */
+/** Low-tier and combined 03 anchors are trimmed, pushing uncovered lines above the promotion threshold (docs/design/SPEC-elements.md §4.3). */
 function strippedAnchors(): RouteSnapshot {
     return {
         ...SNAPSHOT,
@@ -199,7 +198,7 @@ describe('route model', () => {
         expect(other?.view.planLabel).toBe('07');
     });
 
-    it('has no Other when there are zero uncovered lines (SPEC §4.3)', () => {
+    it('hides Other when there are zero uncovered lines (docs/design/SPEC-elements.md §4.3)', () => {
         // One synthetic stop covers the whole diff, leaving nothing uncovered.
         const everything: RouteSnapshot = {
             ...SNAPSHOT,
@@ -223,7 +222,7 @@ describe('route model', () => {
         expect(model.stopCount).toBe(everything.stops.length - 1);
     });
 
-    it('a conflicted file is outside coverage calculations and named in the "Other" row (SPEC §4.1)', () => {
+    it('excludes conflict files from coverage counts and reports them in Other (docs/design/SPEC-elements.md §4.1)', () => {
         const first = DATA.diff.files[0];
         if (first === undefined) {
             throw new Error('fixture needs at least one file');
@@ -723,7 +722,7 @@ describe('route model', () => {
 });
 
 /**
- * Whitespace line rule (decision log, 2026-08-26) on a synthetic diff: empty and
+ * Whitespace-line rule on a synthetic diff: empty and
  * whitespace-only changed lines outside anchors are excluded from coverage statistics entirely, while lines
  * covered by an anchor are counted as before.
  *

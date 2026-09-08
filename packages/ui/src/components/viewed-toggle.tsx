@@ -4,7 +4,7 @@ import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only
 import './viewed-toggle.css';
 
 /**
- * Viewed mark: the same control for file cards and stops (SPEC §2.10):
+ * "Viewed" mark is one control for a file card and a stop (docs/design/SPEC-elements.md §2.10):
  * a checkbox with an icon and the "Mark viewed / Viewed" label.
  *
  * The control has two states. The three-state reading progress indicator (§2.12) is a separate entity:
@@ -18,7 +18,7 @@ export interface ViewedToggleProps {
     readonly className: string;
     readonly disabled?: boolean;
     /**
-     * For a file, always carries progress counts (SPEC §2.12), for a stop, the reason it is disabled.
+     * For a file, always holds progress numbers (docs/design/SPEC-elements.md §2.12). For a stop, the reason it is disabled.
      * When reading a previous iteration, its reason replaces this.
      */
     readonly title?: string | undefined;

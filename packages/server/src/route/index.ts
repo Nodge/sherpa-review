@@ -1,6 +1,6 @@
 /**
- * Route generation result validator (M2-T3). Pure modules with no database, network or queue.
- * Orchestration (M2-T4) calls them when accepting `task complete` and stores accepted output in the snapshot.
+ * Route generation result validator. Pure modules with no DB, network or queue.
+ * Orchestration calls them on `task complete` and stores accepted results in the snapshot.
  */
 export { indexDiff, sideLines, touchesChangedLines } from './diff-index.js';
 export type { ChangedFile, DiffIndex } from './diff-index.js';

@@ -9,7 +9,7 @@ import type { Viewing, ViewingLabel } from './viewing.js';
 import { pickerRows, VIEWING_CURRENT } from './viewing.js';
 
 /**
- * The "Show changes since iteration…" section in the picker menu (M4-T12): what it offers,
+ * "Show changes since iteration…" section in the picker menu: what it offers,
  * what becomes the selection, and how keyboard navigation crosses the 3 sections.
  */
 

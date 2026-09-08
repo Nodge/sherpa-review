@@ -1,5 +1,5 @@
 /**
- * Sherpa local server (spec §1/C2): discovery manifest, bearer authentication, storage,
+ * Sherpa local server (docs/architecture.md §1): discovery manifest, bearer authentication, storage,
  * leased task queue, worker endpoints and a UI channel (REST + SSE, serving the built UI).
  */
 export { createToken, extractBearerToken, tokenMatches } from './auth.js';

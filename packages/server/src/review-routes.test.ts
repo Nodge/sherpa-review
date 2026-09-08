@@ -37,7 +37,7 @@ import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Server review endpoints and the SSE event for thread changes (M1-T10), using a fixture host:
+ * Server review endpoints and the thread change SSE event, using the fixture host.
  * prKey `fixture-medium` selects it through the same mechanism as a hosted review key.
  */
 
@@ -131,7 +131,7 @@ describe('server review endpoints', () => {
 
         await (await get(server.port, UI_ENDPOINTS.reviewDiff, server.token)).json();
 
-        // The write does not block the endpoint response, so wait for it (M4-T3).
+        // The write does not block the endpoint response, so wait for it.
         const db = new DatabaseSync(databasePathFor(sherpaDir, FIXTURE_PR), { readOnly: true });
         try {
             const query = db.prepare('SELECT diff_id, status, diff_json FROM iterations');
@@ -573,7 +573,7 @@ describe('server review endpoints', () => {
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('no_review_host');
         });
 
-        // A failed "server → host" step no longer fails the endpoint. The text goes into the buffer (M5-T15).
+        // A failed server-to-host step is no longer an endpoint error. The text goes into the buffer.
         it('a failed host draft write returns buffered instead of an error', async () => {
             const host = makeFixtureHost('medium');
             host.saveDraft = () => Promise.reject(new Error('drafts temporarily unavailable'));
@@ -807,7 +807,7 @@ describe('server review endpoints', () => {
         }
 
         /**
-         * Completed fixture route: stop marks are keyed by snapshot (M4-T6),
+         * Completed fixture route. Stop marks are keyed by snapshot,
          * so there is nowhere to write them without a route.
          */
         async function completeRoute(server: SherpaServer): Promise<void> {

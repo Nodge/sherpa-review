@@ -74,7 +74,7 @@ import type { z } from 'zod';
 import { activeT } from './i18n/index.js';
 
 /**
- * UI actions (rpc-design §2): regular REST with a bearer token. Protocol schemas validate
+ * UI actions (docs/protocol.md §2): standard REST with a bearer token. Protocol schemas validate
  * responses. The UI consumes nothing that has not passed validation.
  */
 
@@ -102,7 +102,7 @@ export async function cancelTask(token: string, taskId: number): Promise<UiCance
 
 /**
  * Diff selection for the endpoint: absent selects the active iteration, `diffId` selects a saved iteration
- * (snapshot picker, M4-T9), `base`/`head` selects a slice between iterations (M4-T12).
+ * (snapshot picker), and `base`/`head` select a slice between iterations.
  */
 export type ReviewDiffSelection = { readonly diffId: string | null } | { readonly base: string; readonly head: string };
 
@@ -116,7 +116,7 @@ export async function fetchReviewDiff(token: string, selection?: ReviewDiffSelec
     return (await get(withQuery(UI_ENDPOINTS.reviewDiff, query), token, uiReviewDiffResponseSchema)).diff;
 }
 
-/** File filter lenses: ownership is separate from extra lenses (README §Filters). */
+/** File filter lenses: ownership is separate from additional lenses (docs/design/README.md §Filters). */
 export async function fetchReviewLenses(token: string): Promise<UiReviewLensesResponse> {
     return get(UI_ENDPOINTS.reviewLenses, token, uiReviewLensesResponseSchema);
 }
@@ -127,7 +127,7 @@ export async function fetchReviewThreads(token: string): Promise<Thread[]> {
 }
 
 /**
- * Drafts reach the host through the server buffer (M5-T15): `buffered` means the host rejected the write, and the text stays
+ * A draft reaches the host through the server buffer. `buffered` means the host refused it, so the text stays
  * on the server for later delivery. `clientKey` identifies one logical record: retrying the same key
  * upserts that record without creating a duplicate.
  */
@@ -214,7 +214,7 @@ export async function fetchBlob(token: string, blobId: string): Promise<Blob | n
 }
 
 /**
- * PR reading progress (T8): explicit marks and seen ranges. The endpoint is local, so it also works when
+ * PR reading progress: explicit marks and seen ranges. The endpoint is local, so it works even when
  * the PR has no review host.
  */
 export async function fetchReviewProgress(
@@ -234,7 +234,7 @@ export async function setFileViewed(
 }
 
 /**
- * A stop's "viewed" mark (M2-T7) sends the visible snapshot ID
+ * Marks a stop as "viewed", sending the visible snapshot id
  * and seen ranges with it. With `viewed: false`, the server deletes this stop's saved ranges.
  */
 export async function setStopViewed(
@@ -258,7 +258,7 @@ export async function mirrorViewedFiles(token: string, entries: UiViewedMirrorRe
 }
 
 /**
- * Route state (M2): phase, snapshot and revision. The endpoint is local and works without a review host,
+ * Route state: phase, snapshot and revision. The endpoint is local and works without a review host.
  * Refetched when `routeRevision` from SSE increases.
  */
 export async function fetchReviewRoute(
@@ -269,7 +269,7 @@ export async function fetchReviewRoute(
 }
 
 /**
- * PR snapshots for the picker (M4-T9). A server without this endpoint returns 404.
+ * PR snapshots for the picker. A server that does not yet support the endpoint returns 404.
  * The caller falls back to the single current snapshot without showing an error in the UI.
  */
 export async function fetchReviewSnapshots(token: string): Promise<readonly UiSnapshotSummary[]> {
@@ -277,8 +277,8 @@ export async function fetchReviewSnapshots(token: string): Promise<readonly UiSn
 }
 
 /**
- * Start or restart route generation: "Retry" on the failure card (README §12)
- * and the palette command. The server knows what to generate. The body carries only the language (M5-T4),
+ * Starts or restarts route generation: "Retry" on the failure card (docs/design/README.md §12)
+ * and the palette command. The server knows what to generate. The body only carries the language,
  * the tab's effective locale, so the route is generated in the same language as the interface.
  */
 export async function generateReviewRoute(
@@ -356,7 +356,7 @@ export async function sendFeedback(token: string, request: UiFeedbackRequest): P
 }
 
 /**
- * Forced check for a new version (M5-T9), ignoring cache TTL. `null` means no update.
+ * Forces a new-version check, ignoring the cache TTL. `null` means there is no update.
  * A check that could not reach the review host returns an error instead of "no updates".
  */
 export async function updateCheck(token: string): Promise<UiUpdate | null> {

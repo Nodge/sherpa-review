@@ -1,8 +1,8 @@
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * File context menu (SPEC §2.11, amended 2026-09-03): right-clicking a tree row
- * and the "⋯" button in the card header open the same menu. The path goes to the clipboard, the viewed mark
+ * File context menu (docs/design/SPEC-elements.md §2.11 with the 2026-09-03 amendments):
+ * right-clicking a tree row and the "⋯" button in the card header open the same menu. Copy path writes to the clipboard, the viewed mark
  * follows the same chain as the read checkbox, and Esc only closes the menu.
  */
 

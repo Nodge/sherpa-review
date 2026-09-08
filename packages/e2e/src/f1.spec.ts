@@ -4,11 +4,12 @@ import { asRawText, fillSections, mediumRawResults, sectionFor, submit, takeTask
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * F1 (brief §7): the reviewer runs the skill, the UI opens with the diff immediately, and the route fills in
+ * F1 (docs/product.md §7): the reviewer starts the skill, the UI opens immediately with the diff, and the route builds
  * as generation progresses. The reviewer reads high/medium stops, leaves two drafts and ships.
  *
  * The agent uses the same CLI bundle as the model in its harness. It submits prepared results
- * the `medium` fixture, so the screen counts are known in advance and must agree (SPEC §8 items 3–4).
+ * from the `medium` fixture, so the numbers on screen are known in advance and must agree
+ * (docs/design/SPEC-elements.md §8 items 3–4).
  *
  * The worker loop lives in the test: `worker next` long-polls for four minutes, and a task is claimed
  * only when the server is known to have enqueued one.
@@ -61,7 +62,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
         await expect(page.locator('.route-skeleton-card')).toHaveCount(6);
         await expect(page.locator('.coverage__legend-text')).toHaveText('coverage known after the plan');
 
-        // F1 progressive rendering (brief §7): the summary is readable here, before the first section.
+        // Progressive F1 (docs/product.md §7): the summary is already readable here, before the first section.
         await page.getByRole('tab', { name: 'Overview', exact: true }).click();
         await expectSummary(page);
         await page.getByRole('tab', { name: 'Route', exact: true }).click();
@@ -161,7 +162,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
 
         await expect(page.getByRole('heading', { name: 'Shipped · PR 4821', exact: true })).toBeVisible();
         await expect(page.getByText('2 comments published as one batch', { exact: true })).toBeVisible();
-        // Review complete counters (README §13) agree with the actions taken by hand.
+        // Review complete counters (docs/design/README.md §13) match the manual actions.
         await expect(counter(page, 'Stops viewed')).toHaveText('4 of 7');
         await expect(counter(page, 'Comments published')).toHaveText('2 (0 of them replies)');
         // 89% compared with the start. The difference comes exactly from marking 4 stops.
@@ -237,7 +238,7 @@ async function expectHalfFilled(page: Page): Promise<void> {
     await expect(stop(page, 's04')).toContainText('The agent has not filled this stop yet');
     await expect(page.locator('.coverage__legend-text')).toHaveText('coverage known after the plan');
 
-    // The Overview plan card and the route use the same numbers (SPEC §8 item 4).
+    // The Overview plan card and route use the same numbers (docs/design/SPEC-elements.md §8 item 4).
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     await expect(page.locator('.gen-plan__number')).toHaveText(['01', '02', '03', '04', '05', '06', '07']);
     await expect(page.locator('.gen-card__counter')).toHaveText('4 of 7 ready');
@@ -258,7 +259,7 @@ async function expectSummary(page: Page): Promise<void> {
 
 /** A draft on a stop line uses the same composer as the full diff. */
 async function addDraft(page: Page, stopId: string, text: string): Promise<void> {
-    // A distant stop's diff column is removed from the DOM (M5-T13), so scroll to the section first,
+    // The diff column of a distant stop is removed from the DOM. First scroll to the section,
     // as the reviewer does. The section stays in place, cards return near the viewport.
     await stop(page, stopId).scrollIntoViewIfNeeded();
     const button = stop(page, stopId).getByRole('button', { name: /Comment on line \d+/ }).first();

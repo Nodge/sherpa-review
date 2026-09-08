@@ -5,16 +5,16 @@ import type { ViewId } from '../session/views.js';
 import { planLabel } from './route-model.js';
 
 /**
- * Route generation state model (README §6–8, SPEC §3): what the generation
+ * Route generation state model (docs/design/README.md §6–8, docs/design/SPEC-elements.md §3) determines what the Overview generation
  * card and route view skeleton show. This pure module uses neither React nor network.
  *
  * All counts come from `snapshot.stops[].status`. "N of M", the segment bar and the plan list must
- * describe the same set of slots. "3 of 7" in README illustrates its data,
+ * describe the same set of slots. "3 of 7" in docs/design/README.md illustrates its data,
  * not a constant.
  */
 
 /**
- * What the "Route" tab renders (README §6–8, §12, SPEC §4.1). The decision lives outside App:
+ * What the Route tab renders (docs/design/README.md §6–8 and §12, docs/design/SPEC-elements.md §4.1). The choice is separate from App.
  * There are 5 phases, snapshots can be partial, and phase selection must be testable without a server.
  *
  * An available snapshot always takes precedence over the phase. The old route stays usable
@@ -125,7 +125,7 @@ export function snapshotFilling(snapshot: RouteSnapshot): boolean {
     return snapshot.stops.some((stop) => stop.status === 'queued' || stop.status === 'filling');
 }
 
-/** Open route generation tasks: these are what "Cancel" cancels (SPEC §3). */
+/** Open route-generation tasks cancelled by Cancel (docs/design/SPEC-elements.md §3). */
 export function openRouteTasks(tasks: readonly UiTask[]): readonly UiTask[] {
     return tasks.filter(
         (task) =>
@@ -134,7 +134,7 @@ export function openRouteTasks(tasks: readonly UiTask[]): readonly UiTask[] {
     );
 }
 
-/** "Still working" threshold from SPEC §3: the task has run for over a minute. */
+/** The "still working" threshold from docs/design/SPEC-elements.md §3: a task running for over a minute. */
 export const LONG_GENERATION_MS = 60_000;
 
 /** The oldest open route task has passed the threshold. */
@@ -154,8 +154,7 @@ export function summaryParagraphs(summary: string): readonly string[] {
 }
 
 /**
- * Language used to build the route (M5-T4). Pre-M5 snapshots carry `null` in provenance,
- * and are in Russian.
+ * The language used to build the route. Older snapshots have `null` in their provenance, which is read as English.
  */
 export function snapshotLocale(provenance: RouteProvenance): Locale {
     return provenance.locale ?? 'en';
@@ -171,7 +170,7 @@ export function localeOnKey(locale: Locale): MessageKey {
 }
 
 /**
- * Snapshot provenance in one line: "claude-code · sonnet-5 · 9f3c1ab" (README §6).
+ * Snapshot provenance on one line: "claude-code · sonnet-5 · 9f3c1ab" (docs/design/README.md §6).
  * The language appears only when it differs from the tab's language. A match needs no label.
  */
 export function provenanceLine(snapshot: RouteSnapshot, t: Translate, uiLocale: Locale): string {

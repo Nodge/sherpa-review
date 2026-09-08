@@ -38,7 +38,7 @@ import { startServer } from './server.js';
 import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Iteration endpoints (M4-T4) and progress carryover (M4-T6) on the fixture host: iteration list
+ * Iteration endpoints and progress carryover on the fixture host: the list
  * in the UI snapshot, route `stale` state, snapshot history, per-iteration diff and slices between iterations,
  * mark carryover after a push. The `advance-iteration` dev endpoint simulates a "push".
  */
@@ -867,7 +867,7 @@ describe('progress carryover between iterations', () => {
 });
 
 /**
- * Regeneration after a push (M4-T7): second-pass tasks carry the slice, previous route and
+ * Regeneration after a push: second-pass tasks carry the slice, previous route and
  * discussion, while the server classifies stops and the model only explains them.
  */
 describe('regeneration after a push: what changed context', () => {
@@ -1068,10 +1068,10 @@ describe('regeneration after a push: what changed context', () => {
 });
 
 /**
- * A database accumulated before M4 (M4-T15): the server starts with it, migrates the schema, and
+ * Database accumulated by previous versions: the server starts on it, migrates the schema and
  * keeps working. The old snapshot is readable, progress and note anchors survive.
  */
-describe('server on an M3 dogfooding database', () => {
+describe('server on a database accumulated by a previous version', () => {
     let sherpaDir: string;
     let servers: SherpaServer[];
     let streams: SseStream[];

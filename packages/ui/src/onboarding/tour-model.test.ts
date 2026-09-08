@@ -12,7 +12,7 @@ import {
     tourSteps,
 } from './tour-model.js';
 
-/** Step order and contents follow onboarding spec §2. Omitting the chat step follows §5. */
+/** Step order and contents: docs/design/SPEC-onboarding-2026-09-02.md §2. Omitting the chat step: §5. */
 describe('tour model', () => {
     it('takes eight steps in the order of the reviewer journey', () => {
         expect(TOUR_STEP_COUNT).toBe(8);

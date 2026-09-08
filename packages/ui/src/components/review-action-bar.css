@@ -1,4 +1,4 @@
-/* Floating bar for final actions. README §5, SPEC §2.19. */
+/* Floating bar for final review actions. See docs/design/README.md §5, docs/design/SPEC-elements.md §2.19. */
 
 /*
  * Docked column widths: floating elements center on the content column, not the window.
@@ -142,7 +142,7 @@
     color: var(--text-dim);
 }
 
-/* Ship summary: unresolved threads are informational and do not block publishing (SPEC §4.5). */
+/* Ship summary: unresolved threads are reported but do not block publishing (docs/design/SPEC-elements.md §4.5). */
 .review-action-bar__open-threads {
     font-size: var(--font-size-secondary);
     color: var(--text-muted);

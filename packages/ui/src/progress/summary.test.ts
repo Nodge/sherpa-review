@@ -70,7 +70,7 @@ describe('review progress aggregates', () => {
         });
     });
 
-    it('a conflicted file is outside the denominator because it cannot be read in Sherpa (SPEC §4.1)', () => {
+    it('excludes conflict files from the denominator because they cannot be read in Sherpa (docs/design/SPEC-elements.md §4.1)', () => {
         const files = fixtureIteration('edge').diff.files;
         const conflict = files.find((file) => file.changeType === 'conflict');
         if (conflict === undefined) {

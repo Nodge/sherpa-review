@@ -1,4 +1,4 @@
-/* PR header, README §1 ("PR header", padding 26px 30px 0). */
+/* PR header, docs/design/README.md §1 ("PR header", padding 26px 30px 0). */
 
 .pr-header {
     padding: 26px var(--space-page) 0;
@@ -34,7 +34,7 @@
     white-space: nowrap;
 }
 
-/* Audit-scope chip: shortcut to the `pci` filter (README §Filters). */
+/* Audit scope chip: shortcut to the `pci` filter (docs/design/README.md §Filters). */
 .pr-header__pci {
     height: 17px;
     padding: 0 6px;

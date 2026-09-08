@@ -13,7 +13,7 @@ import type { MarginStripActions } from './route-margin.tsx';
 import { useMarginStrips } from './route-margin.tsx';
 
 /**
- * The "ask the agent to place" entry point in the hatched strip (README §10, M3-T9): the anchor is
+ * "Ask the agent to place the ranges" action on the hatched strip (docs/design/README.md §10): the anchor covers
  * exactly the strip's range, a pending question replaces the button with a chip, and a disconnected agent disables it.
  */
 

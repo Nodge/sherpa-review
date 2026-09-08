@@ -39,12 +39,13 @@ import './review-action-bar.css';
 
 const EMPTY_DRAFT_BUFFER: readonly DraftBufferEntry[] = [];
 
-// The sticky description does not promise cancellation by CODEOWNERS zone from README §5. It publishes the host's
-// regular sticky ship. Sherpa has no zone-specific mechanism (decision log, #36).
+// The sticky description does not promise revocation by CODEOWNERS zone from docs/design/README.md §5. It publishes a regular
+// host sticky ship. There is no zone-specific mechanism.
 
 /**
- * The route layer in the action bar (SPEC §2.19, README §13): the guardrail counts unviewed
- * stops instead of files, and the review summary has route rows. `null` means no route, as in M1.
+ * Route data in the action bar (docs/design/SPEC-elements.md §2.19, docs/design/README.md
+ * §13): the warning counts unviewed stops instead of files, and the review summary shows route rows. `null` means no route,
+ * so the warning and summary count files.
  */
 export interface RouteProgress {
     /** Route slots in render order, including Other. */
@@ -59,7 +60,7 @@ export interface RouteProgress {
 export interface ReviewCompletionRoute {
     readonly stopsTotal: number;
     readonly stopsViewed: number;
-    /** "Other" was read as a raw diff (README §13). */
+    /** Other was read as raw diff (docs/design/README.md §13). */
     readonly otherViewed: boolean;
     readonly uncoveredLines: number | null;
 }
@@ -86,14 +87,14 @@ export interface ReviewActionBarProps {
     readonly hostName: string;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
-    /** Drafts in the server buffer (M5-T15): count in the batch and block ship until delivered. */
+    /** Drafts in the server buffer: count in the batch and block ship until sent. */
     readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
     readonly onComplete: (completion: ReviewCompletion) => void;
     readonly defaultMenuOpen?: boolean;
     /**
      * Shared PR comments modal state: both the bar and the Discussion card in Overview open it
-     * in Overview (SPEC additions §1e). Without it, the bar keeps its own state, as in the gallery.
+     * (docs/design/SPEC-additions-2026-08-26.md §1e). Without it, the bar keeps its own state for use in the gallery.
      */
     readonly prComments?: PrCommentsGate;
     readonly initialFailure?: PublicationFailure | null;
@@ -220,7 +221,7 @@ export function ReviewActionBar({
     );
     const stickyAvailable = pr.capabilities.stickyShip;
     const settings = useUiSettingsStore();
-    // Ship mode is global (SPEC §2.8). Unavailable sticky always falls back to ship.
+    // Ship mode is global (docs/design/SPEC-elements.md §2.8). Unavailable sticky always falls back to ship.
     const shipMode = useUiSettings().shipMode;
     const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
     const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
@@ -248,15 +249,16 @@ export function ReviewActionBar({
     const bufferedNew = draftBuffer.filter((entry) => entry.commentId === null).length;
     const drafts = countDraftComments(threadSnapshot.threads) + bufferedNew;
     const openThreads = discussionStats(threadSnapshot.threads).open;
-    // Drafts written before a push will go to a commit no longer at the PR head (SPEC §4.5).
+    // Drafts written before a push target a commit no longer at the PR head
+    // (docs/design/SPEC-elements.md §4.5).
     const pinnedDrafts = countPinnedDraftComments(threadSnapshot.threads, threadPin.activeDiffId);
     const progress = reviewProgressSummary(diff.files, diffSnapshot.readState);
     const unviewed = progress.filesTotal - progress.filesSeen;
     const routeCompletion = routeCompletionOf(route);
-    // A route exists, so the guardrail counts stops instead of files (SPEC §2.19).
+    // With a route, the warning counts stops instead of files (docs/design/SPEC-elements.md §2.19).
     const unviewedStops = routeCompletion === null ? 0 : routeCompletion.stopsTotal - routeCompletion.stopsViewed;
     const draggingSelection = diffSnapshot.selectionDragging;
-    // Publishing changes the PR, so it is available only in the active iteration (M4 boundaries).
+    // Publishing changes the PR, so it is available only in the active iteration.
     const readOnlyIteration = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     const retryDisabledReason = publishDisabledReason({
@@ -614,7 +616,7 @@ export function ReviewActionBar({
 }
 
 /**
- * The ship menu's informational guardrail reports without blocking (SPEC §2.19). With a ready
+ * The ship menu warning informs without blocking (docs/design/SPEC-elements.md §2.19). With a ready
  * route it counts stops. A file counter next to it would only confuse the reader.
  */
 function ShipGuard({ files, stops }: { files: number; stops: number | null }) {

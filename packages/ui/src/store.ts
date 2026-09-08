@@ -16,7 +16,7 @@ import {
 } from '@sherpa/protocol';
 
 /**
- * The store lives outside the React tree (spec §1/C3). State arrives over SSE, and React reads it
+ * The store lives outside the React tree (docs/architecture.md §1): state arrives over SSE, and React reads it
  * through `useSyncExternalStore`. Anything that fails the protocol schema never enters the store.
  */
 
@@ -36,13 +36,13 @@ export interface StoreSnapshot {
     /** Fatal error text, set only in `fatal`. */
     readonly error: string | null;
     /**
-     * Last reading progress revision from the channel (T8). null means no event has arrived yet.
+     * Last reading progress revision from the channel. null means no event has arrived yet.
      * When it exceeds the revision seen by the view, the view rereads the progress endpoint.
      */
     readonly progressRevision: number | null;
     /** Last thread revision. When it increases, the view rereads the thread snapshot. */
     readonly threadsRevision: number | null;
-    /** Last route revision (M2). When it increases, the view rereads `review/route`. */
+    /** Last route revision. When it increases, the view rereads the `review/route` endpoint. */
     readonly routeRevision: number | null;
     /** Last chat and notes revision. When it increases, the application rereads `review/chat`. */
     readonly chatRevision: number | null;

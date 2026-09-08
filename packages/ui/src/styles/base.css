@@ -15,7 +15,7 @@ body {
 }
 
 body {
-    /* README, "Fidelity": the layout targets desktops ≥1440px, v1 has no mobile layout.
+    /* docs/design/README.md, "Fidelity": the design targets desktop ≥1440px. There is no mobile layout in v1.
        The threshold is lowered to 1280px for a typical laptop viewport: below 1440 the layout shrinks,
        and horizontal scrolling starts only below 1280. */
     min-width: 1280px;
@@ -45,7 +45,7 @@ button {
 }
 
 /*
- * Keyboard-only focus ring (SPEC §1.1). Mouse clicks must not show it.
+ * Show a focus ring only for keyboard input (docs/design/SPEC-elements.md §1.1), never for a mouse click.
  * The ring is 2px with a 1px gap from the element edge. `outline-offset` provides the gap, unlike
  * box-shadow, outline does not paint the gap in its own colour (the real background shows under the ring)
  * and does not conflict with the element's own shadows.
@@ -67,7 +67,7 @@ button {
     white-space: nowrap;
 }
 
-/* SPEC §1.1: disabled controls are dimmed, use the default cursor and give a reason in `title`. */
+/* docs/design/SPEC-elements.md §1.1: disabled means dimming, the default cursor and a `title` with the reason. */
 [disabled],
 [aria-disabled='true'] {
     opacity: var(--disabled-opacity);

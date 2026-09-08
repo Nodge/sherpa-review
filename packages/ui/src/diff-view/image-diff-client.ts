@@ -2,7 +2,7 @@ import { activeT } from '../i18n/index.js';
 import type { DiffPixelsOptions, ImageDiffResult, PixelSurface } from './image-diff.js';
 
 /**
- * Client wrapper for the pixel-difference worker (M5-T25). Follows `diff/client.ts`:
+ * Client wrapper for the pixel diff worker. Follows `diff/client.ts`:
  * the transport is injected (`postMessage` in the browser, a direct `diffPixels` call in tests),
  * raster buffers are transferred without copying.
  *

@@ -278,7 +278,7 @@ describe('comment composer', () => {
         expect(host.querySelector('.thread-composer__status')?.textContent).toBe('not saved — ⌘⏎ or the button');
     });
 
-    // Draft buffer (M5-T15): the text is on the server, the host has not accepted it yet.
+    // Draft buffer: the text is on the server, but the host has not accepted it yet.
     it('a buffered composer promises to deliver the text and offers a retry', () => {
         const { host, store } = mount('markdown');
         act(() => {

@@ -304,7 +304,7 @@ export function useReviewData({
         // must not overwrite the key of an already loaded diff.
     }, [activeIterationKey, reviewHost, reviewKey, reviewReady, setReviewState, sliceBase, token, viewKey, viewPending]);
 
-    // App owns one ProgressWriter. Server snapshots go through its merge,
+    // There is one `ProgressWriter` per tab (`use-progress-writer.ts`). Server snapshots pass through its merge,
     // and its own write event does not trigger an extra refresh unless there is a revision gap.
     const [progressRetry, setProgressRetry] = useState<{ key: string; attempt: number }>({
         key: reviewKey,
@@ -432,7 +432,7 @@ export function useReviewData({
         viewedMirrorAvailable,
     ]);
 
-    // App is the sole owner of thread reads. A revision is marked seen only after a successful read.
+    // Read threads only here. Mark the revision as seen only after success.
     const seenThreads = useRef<{ key: string; revision: number | null; loaded: boolean }>({
         key: reviewKey,
         revision: null,

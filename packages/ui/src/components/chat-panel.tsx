@@ -26,7 +26,7 @@ export interface ChatPanelProps {
     readonly anchor: UiChatAskAnchor | null;
     readonly focusRequest: number;
     /**
-     * Prefill the composer (README §2, §10). The question stays unsent while the reviewer reads, edits and
+     * Prefill the composer (docs/design/README.md §2, §10) without sending the question. The reviewer reads, edits and
      * sends it. A request with a new `id` takes effect even with the same text.
      */
     readonly prefillRequest?: { readonly id: number; readonly text: string } | null;
@@ -40,7 +40,7 @@ export interface ChatPanelProps {
     readonly onNavigate: (anchor: ChatAnchor) => void;
     readonly onNavigateToNote: (note: AgentNote) => void;
     /**
-     * The iteration shown in the tab (M4-T11) determines whether there is code to navigate to.
+     * The iteration shown in the tab determines whether a note with a lost anchor has a navigation target.
      * null means the iteration is unknown and navigation is unavailable.
      */
     readonly viewDiffId?: string | null;
@@ -308,7 +308,7 @@ export function ChatPanel(props: ChatPanelProps) {
     const prLabel = breadcrumbFromPrKey(props.prKey).at(-1) ?? props.prKey;
 
     return (
-        // `data-tour="chat"` is the anchor for onboarding tour step 06 (M5-T8).
+        // `data-tour="chat"` is the target for step 06 of the first-pass tour.
         <aside className="chat-panel" aria-label={t('chat.aria')} data-tour="chat">
             <header className="chat-panel__header">
                 <div>
@@ -583,7 +583,7 @@ function ChatExchangeView({
 }
 
 /**
- * Empty state (SPEC §2.18). Examples are clickable: a click prefills the composer with the question and
+ * Empty state (docs/design/SPEC-elements.md §2.18). Examples are clickable: a click prefills the question in the composer and
  * sends nothing. The `empty` state only occurs with a connected agent, so
  * it never offers a clickable action while the agent is disconnected.
  */

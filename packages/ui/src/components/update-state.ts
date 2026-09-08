@@ -7,7 +7,7 @@ import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 
 /**
- * Update toast state (M5-T9): when it appears, what hides it, and the
+ * Update toast state: when it appears, what hides it, and the "Check for updates"
  * palette command. All toast behaviour lives here. The component only renders it.
  */
 
@@ -25,7 +25,7 @@ export interface UpdateToastState {
 }
 
 /**
- * `tourActive` indicates whether the onboarding tour is running (M5-T8). The tour takes priority, so the toast
+ * `tourActive` indicates whether the onboarding tour is running. The tour takes priority over the toast: the toast
  * never appears on top of it, and the delay timer does not start beneath it.
  */
 export function useUpdateToast(update: UiUpdate | null, tourActive = false): UpdateToastState {

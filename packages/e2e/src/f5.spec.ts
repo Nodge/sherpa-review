@@ -116,7 +116,7 @@ test.describe('browser locale ru-RU', () => {
 
 /**
  * The same scenario in English. Each test has its own state directory, with the default
- * default (`auto`), F5 has no agent, so the language comes from the browser (M5 task breakdown decision 1).
+ * language setting (`auto`). F5 has no agent, so the language comes from the browser.
  */
 test.describe('browser locale en-US', () => {
     test.use({ locale: 'en-US' });

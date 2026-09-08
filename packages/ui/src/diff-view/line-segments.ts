@@ -2,7 +2,7 @@ import type { DiffLine, SyntaxKind } from '../diff/model.js';
 
 /**
  * Splits a diff line into segments for rendering: syntax highlighting, word-level highlighting of a pair
- * (SPEC §2.14), tabs shown as four spaces, and trailing whitespace blocks on added lines.
+ * (docs/design/SPEC-elements.md §2.14), tabs as four spaces, and a trailing-space block for added lines.
  *
  * Tabs expand within a segment, without changing the source text. Otherwise offsets calculated
  * by the parser from the raw line would no longer match what is on screen.
@@ -19,7 +19,7 @@ export interface LineSegment {
     readonly kind: SyntaxKind | null;
     /** The segment falls within word-level highlighting of a changed pair. */
     readonly word: boolean;
-    /** Trailing whitespace on an added line, displayed as a block (SPEC §2.14). */
+    /** Trailing spaces on an added line appear as a block (docs/design/SPEC-elements.md §2.14). */
     readonly trailing: boolean;
 }
 

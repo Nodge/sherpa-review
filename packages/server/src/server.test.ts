@@ -30,7 +30,7 @@ describe('startServer', () => {
     });
 
     async function start(prKey = PR_KEY): Promise<SherpaServer> {
-        // Tests must not access the live review host (requirements §7). Without a host, the route does not warm up,
+        // Tests must not call a live review host (docs/testing.md). Without a host, the route does not warm up,
         // and this suite's review key stays just a key.
         const server = await startServer({ prKey, sherpaDir, reviewHostFactory: () => null });
         servers.push(server);

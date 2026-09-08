@@ -1,4 +1,4 @@
-/* Shared banner slot. SPEC §2.21. */
+/* Shared banner slot, docs/design/SPEC-elements.md §2.21. */
 
 .banner-slot {
     flex: none;

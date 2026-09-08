@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * The entire UI uses the dictionary. No Cyrillic is allowed in `packages/ui/src` code, in labels,
- * in `title` or messages. This test checks translation completeness (M5-T3).
+ * `title` attributes or messages. This test checks translation completeness.
  *
  * Excluded: comments (documentation for developers, outside the reviewer interface), the Russian
  * the `i18n/ru.ts` dictionary, tests, and `dev/**`. The gallery uses fixtures and state labels,

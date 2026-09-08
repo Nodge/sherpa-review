@@ -11,7 +11,7 @@ import { useUpdateToast } from './update-state.js';
 import { UpdateToast } from './update-toast.tsx';
 
 /**
- * Update toast behavior (M5-T9): delay before appearing, "Later" until the tab reloads,
+ * Update toast behaviour: delay before appearing, "Later" until the tab reloads,
  * "Don't remind me" in global settings and Esc while focus is inside the toast.
  */
 
@@ -195,7 +195,7 @@ describe('update toast', () => {
 
         expect(copy.querySelector('.command-box')).toBeNull();
         expect(copy.querySelector('.update-toast__copy-dir')?.textContent).toContain('/opt/sherpa/skill');
-        expect(copy.querySelector<HTMLAnchorElement>('.update-toast__readme')?.href).toContain('README.md');
+        expect(copy.querySelector<HTMLAnchorElement>('.update-toast__readme')?.href).toContain('/tools/sherpa/README.md');
     });
 
     it('does not render a body without "what is new"', () => {

@@ -45,7 +45,7 @@ for (const mode of ['unified', 'split'] as const) {
 
 async function openFullDiff(page: Page, mode: 'unified' | 'split'): Promise<void> {
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
-    // Diff mode is global and survives reloads (M3-T16), so we check what
+    // The diff mode is global and survives reloads, so inspect
     // what is rendered instead of the stored selection.
     await expect(page.locator('.diff-rows').first()).toBeVisible();
     if ((await page.locator(`.diff-rows--${mode}`).count()) === 0) {

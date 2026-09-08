@@ -1,9 +1,9 @@
 import type { FileChangeType, FileDiff } from '@sherpa/protocol';
 
 /**
- * Single-file diff model for rendering (T6): file → blocks (hunks and gaps) → lines.
+ * Single-file diff model for rendering: file → blocks (hunks and gaps) → lines.
  *
- * The model leaves the worker through structured clone (requirements §1/C3), so it contains only plain data:
+ * The model leaves the worker through structured clone (docs/architecture.md §1), so it contains only plain data:
  * no functions, classes, or `Map`. Validation is deliberately omitted: the patch already passed `fileDiffSchema`
  * at the server boundary, and the worker is built in the same bundle.
  */
@@ -15,7 +15,7 @@ export interface CharRange {
 }
 
 /**
- * Highlighting categories from README §1 ("intentionally minimal"). The README gives numbers the same color
+ * Highlighting categories from docs/design/README.md §1 ("intentionally minimal"): the README colours numbers the same
  * as strings, so they have no separate category. Anything the lexer is unsure of gets no category
  * at all, to avoid misleading highlighting.
  */
@@ -33,7 +33,7 @@ export interface DiffLine {
     oldLine: number | null;
     newLine: number | null;
     text: string;
-    /** Changed spans within a del/add pair (SPEC §2.14). No key means nothing to highlight. */
+    /** Changed spans within a del/add pair (docs/design/SPEC-elements.md §2.14). No key means nothing to highlight. */
     words?: CharRange[];
     tokens?: SyntaxToken[];
     /** The parser could not understand the patch line and kept it as is (fail-open: malformed diffs do not crash the UI). */
@@ -51,7 +51,7 @@ export interface EntityRange {
     to: number;
 }
 
-/** Entity for the card header (SPEC §2.13). T6 formats it as "apply_edit · 142–164". */
+/** Entity for the card header (docs/design/SPEC-elements.md §2.13): used to build "apply_edit · 142–164". */
 export interface EntityHeader {
     label: string;
     /** null means the name is known (git put it in the hunk header), but its file bounds are not. */
@@ -69,7 +69,10 @@ export interface DiffHunk {
     section: string | null;
     /** null means the parser is unsure. The header slot stays empty and never says "unknown". */
     entity: EntityHeader | null;
-    /** Hunk changes consist only of spaces and line breaks (SPEC §2.14, a one-line notice). */
+    /**
+     * Hunk changes consist only of spaces and line breaks
+     * (docs/design/SPEC-elements.md §2.14, single-line notice).
+     */
     whitespaceOnly: boolean;
     lines: DiffLine[];
 }
@@ -85,13 +88,13 @@ export interface DiffGap {
     hiddenLines: number | null;
     /**
      * Number of changed lines hidden along with unchanged ones. The parser does not set this field.
-     * populated by clipping to stop anchors (M2), where a gap may include changes from other stops,
+     * Trimming by stop anchors fills it: a gap there may hide changes from other stops,
      * so calling them "unchanged" would be false.
      */
     hiddenChanged?: number;
     /** Stable key of the original gap, added after the first partial expansion. */
     sourceKey?: string;
-    /** First hidden line in each version, an anchor for loading more context (T6). */
+    /** First hidden line in each version, used as an anchor for loading more context. */
     oldStart: number;
     newStart: number;
 }
@@ -100,7 +103,7 @@ export type DiffBlock = DiffHunk | DiffGap;
 
 export type DiffFileContent =
     | { kind: 'text'; blocks: DiffBlock[] }
-    /** «binary file not shown» (SPEC §2.14). */
+    /** «binary file not shown» (docs/design/SPEC-elements.md §2.14). */
     | { kind: 'binary' }
     /** No text diff: empty patch, rename/copy without edits, or mode-only change. */
     | { kind: 'none' };
@@ -120,7 +123,10 @@ export interface DiffFileModel {
     changeType: FileChangeType;
     /** null means the extension has no highlighting profile. */
     language: LanguageId | null;
-    /** Permission change from the patch header (SPEC §2.14, a one-line notice), or null if unchanged. */
+    /**
+     * Permission change from the patch header (docs/design/SPEC-elements.md §2.14, single-line notice).
+     * null means permissions did not change.
+     */
     modeChange: ModeChange | null;
     /** Patch counts: must match `FileDiff.additions`/`deletions`. */
     additions: number;

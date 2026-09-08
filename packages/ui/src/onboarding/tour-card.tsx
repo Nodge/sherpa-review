@@ -21,7 +21,7 @@ export interface TourCardProps {
 }
 
 /**
- * Tour card (SPEC-onboarding §1, §4): counter, kicker, title, body and footer. No
+ * Tour card (docs/design/SPEC-onboarding-2026-09-02.md §1, §4): counter, kicker, title, body and footer. No
  * lists, links, images or progress dots inside. One step, one thought.
  *
  * `aria-modal="false"`: the screen reader reads the step, but focus is not trapped in the card because the tour

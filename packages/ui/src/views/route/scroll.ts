@@ -86,7 +86,7 @@ export interface StopAnchor {
 
 /**
  * Top visible stop. `line` is the sticky toolbar's bottom edge. A stop whose tail is
- * entirely behind it is invisible to the reviewer and cannot be an anchor (SPEC §2.5). The offset
+ * entirely beneath it is invisible to the reviewer and cannot be an anchor (docs/design/SPEC-elements.md §2.5). The offset
  * is measured from the container edge `containerTop`, so restoration returns the stop exactly
  * where the reviewer was reading, even if it starts beneath the toolbar.
  */

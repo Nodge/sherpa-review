@@ -6,7 +6,7 @@ import { uiSettingsSchema } from '@sherpa/protocol';
 import { settingsPathFor } from './paths.js';
 
 /**
- * Global UI settings in `<sherpaDir>/settings.json` (M3-T16). All PR servers share the file,
+ * Global UI settings in `<sherpaDir>/settings.json`. All PR servers share the file,
  * so the disk is always the source of truth. Reads and patch merges both use fresh contents.
  * A missing file, malformed JSON or a field that fails validation yields schema defaults. Settings must not block the UI.
  */

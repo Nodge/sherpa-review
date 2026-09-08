@@ -63,7 +63,7 @@ function addedLines(patch: string): number[] {
     return added;
 }
 
-/** New-side lines touched by the slice, by path: a line inside a hunk is "touched" (decision 3). */
+/** New-side lines touched by the slice, by path: a line inside a hunk is "touched". */
 function touchedNewLines(slice: PrDiff): Map<string, NewSideRange[]> {
     const touched = new Map<string, NewSideRange[]>();
     for (const file of slice.files) {
@@ -215,7 +215,7 @@ describe('fixture iterations', () => {
     });
 
     it('matches the v2 snapshot stop classifications to the v1→v2 interdiff', () => {
-        // The server will compute classifications (decision 5, tasks T5/T7), while the fixture snapshot carries
+        // The server computes the classification, while the fixture snapshot contains
         // predefined values. They must match, or the UI will show a badge the server would not produce.
         const snapshot = routeFixtures('medium')?.secondPass?.snapshot;
         if (snapshot === undefined || snapshot === null) {
@@ -229,7 +229,7 @@ describe('fixture iterations', () => {
             for (const anchor of stop.anchors) {
                 for (let line = anchor.start; line <= anchor.end; line += 1) {
                     lines += 1;
-                    // The `old` side carries over unchanged when the iterations share a base (T5).
+                    // With a shared iteration base, the `old` side maps identically.
                     const ranges = anchor.side === 'new' ? (touched.get(anchor.path) ?? []) : [];
                     if (ranges.some((range) => line >= range.start && line <= range.end)) {
                         hits += 1;

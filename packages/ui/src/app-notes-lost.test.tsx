@@ -13,7 +13,7 @@ import type { ViewId } from './session/views.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Notes with anchors lost after a push (M4-T11): the priority-120 banner opens chat and scrolls to the first note
+ * Notes that lose their anchors after a push: the priority-120 banner opens chat at the note
  * with the lost anchor. The exchange chip names its last valid location.
  */
 

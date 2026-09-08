@@ -175,7 +175,7 @@ describe('stop coverage by file progress', () => {
         ).toBe(true);
     });
 
-    it('the guardrail does not require reading an entry held only by conflicts (SPEC §4.1)', () => {
+    it('does not require reading a conflict-only entry for the guardrail (docs/design/SPEC-elements.md §4.1)', () => {
         const base = entry('s01', []);
         if (base.kind !== 'stop') {
             throw new Error('a stop is required');

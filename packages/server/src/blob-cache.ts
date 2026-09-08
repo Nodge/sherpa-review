@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ensurePrivateDir } from './paths.js';
 
 /**
- * Diff image byte cache on disk (M5-T23). `blobId` addresses content rather than a file: identical
+ * On-disk cache for diff image bytes. `blobId` addresses content, not a file: identical
  * bytes across iterations and slices share the same key, so entries never expire.
  *
  * The directory is `blobs/` inside the PR state directory. The filename is the base64url encoding of `blobId` (the id is opaque and may

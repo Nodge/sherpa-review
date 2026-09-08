@@ -1,5 +1,5 @@
 /**
- * Pixel difference between two image sides (M5-T25). Pure function without DOM or theme colors:
+ * Pixel diff of two image sides. A pure function without DOM or theme colors:
  * the card rasterizes, the accent is a parameter. The same calculation runs in a web worker.
  */
 

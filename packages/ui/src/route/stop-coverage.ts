@@ -12,7 +12,7 @@ export interface StopCoverageSnapshot {
 
 /** Whether viewed ranges cover every range of a route entry. An empty entry does not mark itself. */
 export function stopCoveredByProgress(entry: RouteEntry, snapshot: StopCoverageSnapshot): boolean {
-    // An entry held only by conflicts (SPEC §4.1) contains no readable ranges.
+    // A conflict-only entry (docs/design/SPEC-elements.md §4.1) has no readable ranges.
     // The guardrail cannot require reading what is outside coverage.
     if (conflictsOnlyEntry(entry)) {
         return true;

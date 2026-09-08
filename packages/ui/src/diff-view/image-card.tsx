@@ -11,7 +11,7 @@ import type { DiffPixelsOptions, ImageDiffResult, PixelSurface } from './image-d
 import './image-card.css';
 
 /**
- * Image card body (M5-T24, requested by Alice Ingram from the review host): replaces the "binary file
+ * Image card body replaces the "binary file
  * not shown" notice with sides next to each other and ways to compare them. The header, Viewed, menu and folds
  * stay shared, since this body sits inside a regular `FileCard`.
  *

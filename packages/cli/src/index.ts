@@ -1,7 +1,7 @@
 import { run } from './cli.js';
 import { checkNodeVersion } from './runtime.js';
 
-/** The `sherpa` CLI entry point (spec §1/C1): runtime check, command execution, exit code. */
+/** `sherpa` CLI entry point: runtime check, command invocation, exit code. */
 async function main(): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
     if (versionError !== null) {

@@ -84,7 +84,7 @@ const BUFFERED_PR: DraftBufferEntry = {
 };
 
 describe('PR comments modal', () => {
-    // Draft buffer (M5-T15) and ship summary (SPEC §4.5) in the modal header.
+    // Draft buffer and ship summary (docs/design/SPEC-elements.md §4.5) in the modal header.
     it('counts PR-level buffer records as drafts and shows unresolved threads', () => {
         mountModal([PUBLISHED, DRAFT], {}, () => undefined, [BUFFERED_PR]);
 
@@ -325,7 +325,7 @@ function mountModal(
         delete: () => Promise.resolve(),
         ...transportOverrides,
     };
-    // The modal's Esc handler uses the registry hierarchy (M5-T5). Without a provider, nothing can close it.
+    // The modal handles Esc through the registry stack. Without a provider, nothing can close it.
     const registry = createShortcutRegistry();
     const detach = attachShortcuts(window, registry);
     const root = createRoot(host);

@@ -8,10 +8,10 @@ import { expandAllGaps, expandGap } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
 
 /**
- * Diff view state outside the React tree (requirements §1/C3): what the worker has parsed, what is expanded,
+ * Diff view state outside the React tree (docs/architecture.md §1): what the worker has parsed, what is expanded,
  * what is read, and what is selected. The snapshot is immutable. React reads it through `useSyncExternalStore`.
  *
- * Reading progress (T8) has two layers here: `progress` holds explicit reviewer records (the source of
+ * Reading progress has two layers here: `progress` holds the reviewer's explicit records (server
  * truth), `readState` derives the state from those records and the file itself for the card
  * and tree to render. The view handles endpoint writes and rollback. The store makes no network calls.
  */
@@ -19,7 +19,7 @@ import type { LineKey, LineSelection } from './selection.js';
 export type DiffMode = 'unified' | 'split';
 export type FileCollapseReason = 'viewed' | 'manual' | 'generated';
 
-/** Side by side is unavailable below this width (SPEC §2.6). */
+/** Below this width, side by side is unavailable (docs/design/SPEC-elements.md §2.6). */
 export const SPLIT_MIN_WIDTH = 1100;
 
 export interface DiffViewSnapshot {
@@ -35,7 +35,7 @@ export interface DiffViewSnapshot {
     readonly expansion: ReadonlyMap<string, FileExpansion>;
     /** Explicit progress records by fileId. An absent record means the default state. */
     readonly progress: ReadonlyMap<string, UiFileProgress>;
-    /** Effective read-state for every diff file (SPEC §2.12). */
+    /** Effective read-state of each diff file (docs/design/SPEC-elements.md §2.12). */
     readonly readState: ReadonlyMap<string, FileReadState>;
     /** Manual expansion overriding the generated default. */
     readonly collapseExpanded: ReadonlySet<string>;
@@ -45,7 +45,7 @@ export interface DiffViewSnapshot {
     readonly collapseCollapsed: ReadonlySet<string>;
     /** Reviewer's explicit choice for persistence: true to collapse, false to expand. */
     readonly collapsePreferences: ReadonlyMap<string, boolean>;
-    /** Files the reviewer opened by hand despite the size-based fold (SPEC §2.13). */
+    /** Files the reviewer opened by hand despite collapse by size (docs/design/SPEC-elements.md §2.13). */
     readonly opened: ReadonlySet<string>;
     /** Whitespace-only lines the reviewer explicitly expanded. */
     readonly whitespaceShown: ReadonlySet<string>;
@@ -71,7 +71,7 @@ export interface DiffViewStore {
     readonly markViewed: (fileId: string, viewed: boolean) => void;
     /** Roll back an optimistic mark: `null` means no record existed before it. */
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
-    /** Toggles manual collapse using the same layer formula as route stops (SPEC §2.9). */
+    /** Toggles manual collapse with the same layer formula as route stops (docs/design/SPEC-elements.md §2.9). */
     readonly toggleFileCollapse: (fileId: string) => void;
     /**
      * Full explicit collapse choices: PR state arrived from the server after store creation.
@@ -107,7 +107,7 @@ type FileCollapseSnapshot = Pick<
     'readState' | 'collapseExpanded' | 'collapseExpandedViewed' | 'collapseCollapsed'
 >;
 
-/** Final collapse reason per the SPEC §2.9 formula. Collapse for >2000 lines is counted separately. */
+/** Final collapse reason from docs/design/SPEC-elements.md §2.9. Collapse for >2000 lines is calculated separately. */
 export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDiff): FileCollapseReason | null {
     const read = snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null });
     // The generated default works like the low tier, not a viewed mark. An explicit expansion must survive un-pin.
@@ -149,8 +149,8 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
     const filesById = new Map(options.files.map((file) => [file.fileId, file]));
 
     /**
-     * Read-state for one file. Changed model lines are needed only when ranges exist
-     * (M2). Without ranges there is no coverage to calculate, so no need to parse the model for it.
+     * Read-state of one file. The model's changed lines are needed only when ranges exist:
+     * without ranges there is no coverage to calculate, so there is no reason to parse the model for it.
      */
     const computeReadState = (
         fileId: string,

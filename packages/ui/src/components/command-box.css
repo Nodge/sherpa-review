@@ -72,7 +72,7 @@
     color: var(--text-dim);
 }
 
-/* Visible fallback feedback: Clipboard API is absent or failed, so the command stays selected. */
+/* Visible fallback feedback. Clipboard API is absent or failed, so the command remains selected. */
 .command-box__fallback {
     font-size: var(--font-size-secondary);
     color: var(--text-secondary);

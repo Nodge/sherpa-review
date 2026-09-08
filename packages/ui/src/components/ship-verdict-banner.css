@@ -1,4 +1,4 @@
-/* "Someone else ships first" (M5-T15) is news, not an alert. Use the neutral card background. */
+/* "Someone shipped earlier" is news rather than an alarm, so use a neutral card background. */
 
 .ship-verdict-banner {
     display: flex;

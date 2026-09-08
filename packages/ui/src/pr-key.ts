@@ -7,7 +7,7 @@ export interface BreadcrumbSegment {
 }
 
 /**
- * The PR key is `<host>-<pr>` (see the protocol's `prKeySchema`). The parsed key is the breadcrumb fallback:
+ * A PR key is `<host>-<pr>` (see the protocol's `prKeySchema`). The parsed key is a fallback breadcrumb:
  * the top bar uses it until PR metadata arrives in the snapshot.
  */
 export function breadcrumbFromPrKey(prKey: string): readonly string[] {

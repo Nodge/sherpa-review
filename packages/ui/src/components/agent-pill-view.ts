@@ -3,7 +3,8 @@ import type { UiTask, WorkerStatus } from '@sherpa/protocol';
 import type { Translate } from '../i18n/index.js';
 
 /**
- * Agent pill (SPEC §2.2): four states based on the actual M0 worker status.
+ * Agent pill (docs/design/SPEC-elements.md §2.2): four states based on actual
+ * worker status.
  * Compute it outside the component so unit tests and the state gallery can use it.
  */
 
@@ -13,7 +14,7 @@ export interface AgentPillView {
     readonly tone: AgentTone;
     readonly workerKind: WorkerStatus['kind'];
     readonly label: string;
-    /** Tooltip: harness, model, session uptime and queue length (SPEC §2.2). */
+    /** Tooltip: harness, model, session age and queue length (docs/design/SPEC-elements.md §2.2). */
     readonly title: string;
 }
 
@@ -59,7 +60,7 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[], t:
     const title = t('agent.uptime', identity(worker), uptime, pending.length);
 
     // "Working" means there is work left, regardless of priority class. Route generation runs
-    // in the background, but the reviewer waits for it at the screen just the same (M2-T10 decision).
+    // in the background, but the reviewer waits for it on screen just the same.
     if (pending.length > 0) {
         return {
             tone: 'working',
@@ -83,7 +84,7 @@ export function agentPillView(worker: WorkerStatus, tasks: readonly UiTask[], t:
 
 /**
  * Worker identity: harness and model are free-form strings, both optional,
- * so the session id is always in the tooltip (SPEC §2.2).
+ * so the tooltip always includes the session id (docs/design/SPEC-elements.md §2.2).
  */
 function identity(worker: Extract<WorkerStatus, { workerId: string }>): string {
     return [

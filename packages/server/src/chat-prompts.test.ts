@@ -5,7 +5,7 @@ import { chatGuide, chatInstructions } from './chat-prompts.js';
 import { bannedPhrases, quoted } from './route/voice.js';
 
 /**
- * Chat instructions (M5-T4): response language and stop list. The filler phrase rule is exhaustive,
+ * Chat guide: answer language and stop list. The wording gives an exhaustive list of banned phrases,
  * so the list must match what the server rejects. Otherwise the model wastes
  * an attempt on a phrase it was not warned about.
  */

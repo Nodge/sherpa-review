@@ -14,12 +14,12 @@ import {
 } from './sherpa-fixture.js';
 
 /**
- * F3 (brief §7): the author pushed another commit while the reviewer was reading. The route declares itself
+ * F3 (docs/product.md §7): the author pushes a commit while the reviewer is reading. The route marks itself
  * stale, rebuilding carries over progress, "what is new" shows 3 rebuilt
  * stops, notes move with the code (one loses its anchor), and the conversation
  * on rewritten lines stays readable on the old commit.
  *
- * First live integration of UI (M4-T8…T12) and server (M4-T4/T6/T7) on fixtures: 2 full
+ * Live UI/server integration with fixtures: 2 full
  * route generations and 3 chat exchanges through the CLI bundle exceed the default 120 s.
  */
 test.setTimeout(240_000);
@@ -141,7 +141,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         );
 
         // Until rebuilding, the tab stays on the snapshot iteration. The diff stays unchanged, stop
-        // stops do not drift, and marks stay in place (task breakdown decision 10).
+        // anchors do not drift, and marks stay in place.
         await expect(page.locator('.route-drift')).toHaveCount(0);
         await expect(page.locator('.coverage__stops')).toHaveText('4 of 7 stops viewed');
 
@@ -184,7 +184,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         await expect(page.locator('.coverage__legend-text')).toHaveText(
             '877 changed lines · 94% explained · 47 lines not explained',
         );
-        // A distant stop's diff column is removed from the DOM (M5-T13). Scroll to the unmarked
+        // The diff column of a distant stop is removed from the DOM. Scroll to the unmarked
         // stop to inspect it. Cards return near the viewport.
         const changed = page.locator(`[data-stop="${CHANGED_STOPS[0]}"]`);
         await changed.scrollIntoViewIfNeeded();
@@ -192,7 +192,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
     });
 
     await test.step('"What is new since the last pass" leaves 3 stops on screen', async () => {
-        // The top visible stop survives the filter with a marker (SPEC §2.7). To make that stop
+        // The top visible stop survives the filter with a label (docs/design/SPEC-elements.md §2.7). To make that
         // 01, scroll the route to the start, since automatic marks moved it to their next stop.
         await page.locator('[data-stop="s01"]').scrollIntoViewIfNeeded();
         await page
@@ -297,7 +297,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
     });
 
     await test.step('threads on files removed from the PR form a separate group', async () => {
-        // A review bot wrote the thread, and bots are hidden by default (SPEC §2.8).
+        // A review bot wrote the thread, and bots are disabled by default (docs/design/SPEC-elements.md §2.8).
         await page.locator('.thread-chips button.thread-chip', { hasText: 'Bots' }).click();
 
         const outside = page.locator('.thread-outside__toggle');

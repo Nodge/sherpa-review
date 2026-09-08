@@ -29,7 +29,7 @@ import { lineSide, parseLineKey } from './selection.js';
 import type { DiffMode, FileCollapseReason } from './store.js';
 
 /**
- * File card (README §1 "Right column: one card per hunk", §10): sticky header with the name,
+ * File card (docs/design/README.md §1 "Right column: one card per hunk", §10). A sticky header with filename,
  * path, counters, entity header and actions, followed by diff rows or a single-line notice.
  *
  * The card loads nothing itself. It receives model, content and state as props and emits
@@ -37,11 +37,11 @@ import type { DiffMode, FileCollapseReason } from './store.js';
  * and fixtures in the state gallery.
  */
 
-/** Above this threshold, the file starts collapsed (SPEC §2.13). */
+/** Files above this threshold open collapsed (docs/design/SPEC-elements.md §2.13). */
 export const COLLAPSE_THRESHOLD = 2000;
 
 /**
- * Inline hint below the header (SPEC §1.2: no modals). null means there is nothing to say.
+ * Inline hint below the header (docs/design/SPEC-elements.md §1.2: no modals). null means nothing to say.
  * `retry` renders "retry" alongside it and updates the hint with its own result.
  */
 export interface FeedbackHint {
@@ -64,7 +64,7 @@ export interface FileCardActions {
     readonly onSelectStart: (fileId: string, key: LineKey, side: 'old' | 'new', extend: boolean) => void;
     readonly onSelectExtend: (fileId: string, key: LineKey, side: 'old' | 'new') => void;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
-    /** File comment without a line: the menu item exists only on image cards (M5-T24). */
+    /** File comment without a line. The menu item appears only on image cards. */
     readonly onCommentFile?: ((fileId: string) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
@@ -84,16 +84,16 @@ export interface FileCardProps {
     /** Reason for unavailable content. Defaults to a host without `fileContent`. */
     readonly noContentReason?: string | undefined;
     readonly expansion: FileExpansion;
-    /** File reading progress (SPEC §2.12): box state and tooltip counts. */
+    /** File reading progress (docs/design/SPEC-elements.md §2.12): checkbox state and tooltip with counts. */
     readonly read: FileReadState;
-    /** Collapse reason per SPEC §2.9. null means the manual/read/generated layer is expanded. */
+    /** Collapse reason per docs/design/SPEC-elements.md §2.9. null means the manual/read/generated layer is expanded. */
     readonly collapseReason?: FileCollapseReason | null;
     /** Toggle manual/read/generated collapse. Without it the header ignores clicks. */
     readonly onToggleCollapse?: (() => void) | undefined;
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
     readonly showWhitespace: boolean;
-    /** Card kept on screen despite the filter (SPEC §2.7). */
+    /** The card stays on screen despite the filter (docs/design/SPEC-elements.md §2.7). */
     readonly keptInView?: boolean;
     /**
      * Space reserved for the "parsing diff…" skeleton, using the list estimate of card body height.
@@ -118,7 +118,7 @@ export interface FileCardProps {
     /** Header counters override file totals. On the route, the card shows counts for its stop. */
     readonly counts?: { readonly additions: number; readonly deletions: number };
     readonly selection: LineSelection | null;
-    /** Route badge in the header (README §10): "explained in 02 · …" or a hatch. */
+    /** Route badge in the header (docs/design/README.md §10): "explained in 02 · …" or hatch. */
     readonly routeBadge?: ReactNode;
     /** Strips for uncovered ranges with no row, grouped below the header. */
     readonly routeStrips?: ReactNode;
@@ -364,7 +364,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     }}
                 />
 
-                {/* The toggle tooltip always carries progress counts (SPEC §2.12): partial progress appears
+                {/* The toggle tooltip always includes progress counts (docs/design/SPEC-elements.md §2.12). Partial progress appears
                     in those counts and the tree and chip indicators, not in the button itself. */}
                 <ViewedToggle
                     className="file-card__viewed"
@@ -542,7 +542,7 @@ function FileName({ file }: { file: FileDiff }) {
 }
 
 /**
- * File parsing slot (SPEC §3): space for the card body is reserved immediately, so the arriving
+ * File parsing slot (docs/design/SPEC-elements.md §3). It reserves card body space immediately, so the arriving
  * diff does not shift the layout. The label appears only if parsing takes longer than 200 ms,
  * so fast files produce no flash.
  */
@@ -557,7 +557,7 @@ function ParsingSlot({ minHeight }: { minHeight?: number | undefined }) {
 }
 
 /**
- * Conflict badge (SPEC §2.14, §4.1): the file is unmerged. This is a precondition, not
+ * Conflict badge (docs/design/SPEC-elements.md §2.14, §4.1). An unmerged file is a working constraint rather than
  * a diff property. The route does not cover it, and the conflict is resolved in the host. The header has no other
  * status badges because add/delete/rename are visible in the name and counters.
  */
@@ -643,8 +643,8 @@ function ExpandButton({
 }
 
 /**
- * Single-line notices from SPEC §2.14: binary, mode change, whitespace only. With `hideBinary`, the card
- * shows the image itself (M5-T24), so "binary file not shown" would be false. The other
+ * Single-line notices from docs/design/SPEC-elements.md §2.14: binary, mode change, whitespace only.
+ * `hideBinary` means the card shows the image itself, so "binary file not shown" would be false. Other
  * notices (permission changes, malformed patch) still apply there.
  */
 function Notices({ model, file, hideBinary = false }: { model: DiffFileModel | null; file: FileDiff; hideBinary?: boolean }) {
@@ -763,7 +763,10 @@ function Body(props: BodyProps) {
     );
 }
 
-/** Entity header (SPEC §2.13): empty if the parser found nothing. Never displays "unknown". */
+/**
+ * Entity header (docs/design/SPEC-elements.md §2.13): empty if the parser returned nothing.
+ * It never displays "unknown".
+ */
 function entityText(model: DiffFileModel | null, t: Translate): string {
     if (model?.content.kind !== 'text') {
         return '';

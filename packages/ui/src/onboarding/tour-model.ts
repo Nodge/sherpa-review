@@ -1,7 +1,7 @@
 import type { MessageKey } from '../i18n/index.js';
 
 /**
- * Onboarding tour model (SPEC-onboarding-2026-09-02 §2, §5): 8 steps, their anchors
+ * Onboarding tour model (docs/design/SPEC-onboarding-2026-09-02.md §2, §5): eight steps, their targets
  * and transitions. A pure module with no React or DOM, so step order, omitting the agent
  * step and the counter can be tested without a screen.
  *
@@ -13,7 +13,7 @@ export type TourStepId = 'narrative' | 'fold' | 'stopdiff' | 'progress' | 'prese
 
 export interface TourStep {
     readonly id: TourStepId;
-    /** Anchor selector: `data-tour` on our elements (§2). */
+    /** Step target selector: `data-tour` on our elements (§2). */
     readonly selector: string;
     readonly title: MessageKey;
     readonly body: MessageKey;
@@ -90,19 +90,19 @@ const STEPS: readonly TourStep[] = [
 /** All 8 steps. The palette command counter uses this list. */
 export const TOUR_STEP_COUNT = STEPS.length;
 
-/** Inputs that determine anchor placement on screen. */
+/** What determines the placement of step targets on screen. */
 export interface TourAnchorEpoch {
     readonly view: string;
     /** Route tab state: the tour placeholder gives way to the real route. */
     readonly routeKind: string;
-    /** Whether any filled stop exists, providing the anchors for steps 01–03. */
+    /** Whether any filled stop has appeared. It supplies the targets for steps 01–03. */
     readonly anyStopFilled: boolean;
     readonly chatOpen: boolean;
     readonly completed: boolean;
 }
 
 /**
- * Anchor placement marker: a change makes the tour remeasure the current step. Only major
+ * Step target placement marker: a change makes the tour remeasure the current step. Only major
  * events count. Each subsequent stop arriving does not, otherwise the tour would remeasure on every
  * streamed section and move the card under the reviewer's hands.
  */

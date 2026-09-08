@@ -29,7 +29,7 @@ import {
 import { SharedPayloadStore } from './shared-payload.js';
 
 /**
- * Route generation task payloads (M2-T5) on the `medium` fixture diff: 21 files, 868
+ * Route generation task payload on the `medium` fixture diff: 21 files, 868
  * changed lines, including a generated lockfile and 3 test files. These are exactly the roles
  * that budget truncation distinguishes.
  */
@@ -302,7 +302,7 @@ describe('single truncation policy for the shared diff', () => {
     });
 });
 
-describe('generation cap (M5-T14)', () => {
+describe('generation cap', () => {
     it('covers everything without truncation when the entire diff fits', () => {
         const cap = prDiffPayload(context(), CONTEXT_BUDGET_BYTES).cap;
 
@@ -461,7 +461,7 @@ describe('writing payload to disk', () => {
 });
 
 /**
- * Regeneration context (M4-T7): the previous route, slice between iterations and discussion since then.
+ * Regeneration context: the previous route, interdiff and discussion since then.
  * Tested on 2 iterations of the `medium` fixture. The push touches `edit-policy.ts` and `handlers.ts`,
  * removes `card-token.ts` and rebuilds the lockfile.
  */
@@ -740,7 +740,7 @@ describe('regeneration context after a push', () => {
         return `${diff.baseCommit}-${diff.headCommit}`;
     }
 
-    /** The slice key is a pair of iteration heads (T1 decision). They share a base. */
+    /** The slice key is the pair of iteration heads, which share the same base. */
     function interdiffKey(): string {
         return `${mediumDiff().headCommit}-${mediumDiffV2().headCommit}`;
     }

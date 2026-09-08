@@ -1,4 +1,4 @@
-/* File filter select, README §Filters ("button + 250px dropdown"), prototype §toolbar. */
+/* File filter select, docs/design/README.md §Filters ("button + 250px dropdown"), prototype §toolbar. */
 
 .filter-select {
     position: relative;
@@ -28,7 +28,7 @@
     background: var(--surface-popover);
 }
 
-/* The filled button identifies the active filter without relying on colour (SPEC §1.1). */
+/* The active filter is visible without colour through its filled button (docs/design/SPEC-elements.md §1.1). */
 .filter-select__button.is-active {
     border-color: var(--border-strong-lifted);
     background: var(--border-standard);

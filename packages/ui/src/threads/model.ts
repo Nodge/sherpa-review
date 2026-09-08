@@ -19,7 +19,7 @@ export interface ThreadGroups {
 }
 
 /**
- * The iteration whose diff is rendered, when it is not the active PR iteration (M4-T10).
+ * The iteration whose diff is currently rendered, when it is not the active PR iteration.
  * `fileId` belongs to an iteration (fixtures use `makeFileId(diffId, path)`, the review host uses `entry_id`
  * from the diff set). Threads arrive once for the active iteration. In a previous iteration, the thread file is found
  * by `anchor.path`, and a thread sits at its lines only in the iteration it is pinned to.
@@ -31,7 +31,7 @@ export interface IterationLayout {
 
 /**
  * The thread sits at its lines instead of under the file header. In the active iteration (`layout === null`),
- * an outdated anchor moves it under the header (SPEC §2.17). In a previous iteration, the pin decides:
+ * an outdated anchor moves the thread under the header (docs/design/SPEC-elements.md §2.17). In a previous iteration, the pin decides:
  * "view at the old commit" shows the thread beside the code it was written about.
  */
 export function threadAtLines(thread: Thread, layout: IterationLayout | null): boolean {
@@ -152,7 +152,7 @@ export function countThreadSources(threads: readonly Thread[]): ThreadSourceCoun
 }
 
 /**
- * `author` is the participant lens from the discussion card (M5-T16): a thread stays if this
+ * `author` is the participant lens from the discussion card: a thread stays if this
  * login wrote the root or any reply. Source chips apply on top of the lens, rather than replacing it.
  */
 export function threadIsVisible(thread: Thread, show: ThreadVisibility, author: string | null = null): boolean {

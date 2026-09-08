@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * This PR's UI state (M3-T18) lives in its SQLite, not `localStorage`: the server listens
+ * This PR's UI state lives in its SQLite database, not `localStorage`. The server listens on
  * a random port, and browser storage is empty for a new port.
  */
 

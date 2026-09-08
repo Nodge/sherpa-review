@@ -26,7 +26,7 @@ import type { ThreadActions } from '../../threads/thread-list.tsx';
  * as usual, widening the window of unchanged lines around the stop's ranges.
  *
  * Collapsed anchors (`collapsed` directive) render as a summary row with a count. Nothing is
- * hidden silently. Everything appears as a fold (brief principle 3).
+ * hidden without a visible fold (docs/product.md §3, principle 3).
  */
 
 export interface StopFileCardProps {

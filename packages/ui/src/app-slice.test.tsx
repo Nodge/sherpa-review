@@ -14,7 +14,7 @@ import type { ViewId } from './session/views.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Slice between iterations in App (M4-T12): diff loading parameters, what is unavailable
+ * An inter-iteration slice in App: parameters used to load the diff, data never requested
  * in a slice, and what the header, banner, route tab and empty slice show.
  */
 

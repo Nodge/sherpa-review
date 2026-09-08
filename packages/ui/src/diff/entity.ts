@@ -1,7 +1,7 @@
 import type { DiffLine, EntityHeader, EntityRange, LanguageId } from './model.js';
 
 /**
- * Hunk entity heuristic for the card header (SPEC §2.13). Two sources, in order of trust:
+ * Hunk entity heuristic for the card header (docs/design/SPEC-elements.md §2.13). Two sources, in order of trust:
  * (a) text after the second `@@`, where git writes the enclosing declaration,
  * (b) a declaration found among the hunk lines.
  *

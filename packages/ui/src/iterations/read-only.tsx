@@ -5,9 +5,9 @@ import type { MessageKey } from '../i18n/index.js';
 import { useT } from '../i18n/index.js';
 
 /**
- * Read-only mode for a previous iteration (M4-T9, M4 boundaries): commenting, marking viewed
+ * Read-only mode for a previous iteration: commenting, marking viewed
  * and shipping are allowed only in the active iteration. Context distributes the flag instead of props:
- * leaf components in 3 views read it (composer, viewed marks, selection popover, ship bar),
+ * leaf components in all 3 views read it, including the composer, toggles, selection popover and ship panel,
  * and passing the flag through every render layer costs more than reading it where needed.
  *
  * Outside the provider (gallery, component tests), this mode is off. States must render
@@ -17,7 +17,7 @@ import { useT } from '../i18n/index.js';
 /** Reason a control is disabled: one text for all locations (`title` and labels). */
 export const READ_ONLY_REASON: MessageKey = 'iteration.readOnly.reason';
 
-/** Slice between iterations (M4-T12): a different `fileId` namespace with nothing to write to. */
+/** A slice between iterations has a separate `fileId` namespace with nothing to write to. */
 export const SLICE_READ_ONLY_REASON: MessageKey = 'iteration.readOnly.sliceReason';
 
 interface ReadOnlyIteration {

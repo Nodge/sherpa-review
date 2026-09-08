@@ -2,7 +2,7 @@ import type { UiPrState, UiPrStatePatch } from '@sherpa/protocol';
 import { uiPrStateSchema } from '@sherpa/protocol';
 
 /**
- * UI state for one PR (M3-T18): collapsed tree directories and diff cards, recent palette
+ * UI state for one PR: collapsed tree directories and diff cards, recent palette
  * commands. Stored in the PR database on the server, rather than `localStorage`: each PR server listens on a random
  * port, and browser storage is empty for the new port.
  *

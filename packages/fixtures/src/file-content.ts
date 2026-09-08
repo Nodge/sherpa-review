@@ -3,7 +3,7 @@ import type { FileContent, FileDiff } from '@sherpa/protocol';
 import { contextLineAt } from './content.js';
 
 /**
- * Full file text on both sides of the diff supplies "Expand context" (SPEC §2.13).
+ * Full file text on both sides of the diff supports "Expand context" (`docs/design/SPEC-elements.md §2.13`).
  *
  * There is no need to store full files in the repository. Hunk lines come from the patch, and anything
  * the patch leaves out is generated from the line number (`contextLineAt`). This gives two

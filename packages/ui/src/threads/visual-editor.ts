@@ -115,10 +115,6 @@ export function serializeMarkdownDocument(doc: ProseMirrorNode): string {
     return markdownSerializer.serialize(doc);
 }
 
-export function serializeMarkdown(markdown: string): string {
-    return serializeMarkdownDocument(parseMarkdown(markdown));
-}
-
 function parsesAsPlainText(markdown: string): boolean {
     const tokens = markdownParser.tokenizer.parseInline(markdown, {});
     const children = tokens.flatMap((token) => token.children ?? []);

@@ -12,7 +12,7 @@ import { formatCount, formatDecimal, plural } from './format.js';
 const num = (value: number): string => formatCount(value, 'ru');
 /** Fractional number: kilobytes and megabytes in an image size. */
 const dec = (value: number): string => formatDecimal(value, 'ru');
-/** Tour card counter: both parts have leading zeros (onboarding spec §1). */
+/** Tour card counter: both parts have a leading zero (docs/design/SPEC-onboarding-2026-09-02.md §1). */
 const pad = (value: number): string => String(value).padStart(2, '0');
 /** Russian word forms: `other` matches `many` ("5 files"). */
 const form = (value: number, one: string, few: string, many: string): string =>
@@ -793,7 +793,7 @@ export const ru = {
     'banner.generationCap': (files: number) =>
         `Маршрут построен не по всему диффу: ${num(files)} ${form(files, 'файл не влез', 'файла не влезли', 'файлов не влезли')} в контекст агента — проверьте ${form(files, 'его', 'их', 'их')} в Полном диффе`,
 
-    // Route language (M5-T4). The language name needs 2 forms: nominative for the pill
+    // Route language. The language name needs two forms: nominative for the pill
     // of provenance, prepositional for the phrase "built in English".
     'route.locale.name.ru': 'русский',
     'route.locale.name.en': 'английский',
@@ -1026,8 +1026,9 @@ export const ru = {
     'shortcut.tour.replay': 'Показать онбординг заново',
     'shortcut.tour.replay.consequence': (steps: number) => `${num(steps)} ${form(steps, 'шаг', 'шага', 'шагов')}`,
 
-    // Onboarding tour (M5-T8). Step bodies are verbatim from the storyboard
-    // `design/design_handoff_sherpa/Sherpa Onboarding.dc.html`. Titles are translated from spec §2.
+    // First-visit tour. Step bodies come verbatim from the storyboard
+    // `docs/design/Sherpa Onboarding.dc.html`. Titles are translated from
+    // `docs/design/SPEC-onboarding-2026-09-02.md` §2.
     'tour.kicker': 'КАК УСТРОЕНА ШЕРПА',
     'tour.counter': (index: number, total: number) => `${pad(index)} / ${pad(total)}`,
     'tour.live': (index: number, total: number, title: string) => `шаг ${num(index)} из ${num(total)}, ${title}`,

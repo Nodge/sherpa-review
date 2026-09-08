@@ -24,7 +24,7 @@
 }
 
 /*
- * Markdown headings use h1–h6 with three font sizes. SPEC-additions §1e ("a bold line
+ * Markdown headings use h1–h6 with three font sizes: docs/design/SPEC-additions-2026-08-26.md §1e ("a bold line
  * at the same font size") remains literally true for h4–h6, with higher levels one step apart.
  */
 .md-heading {
@@ -138,7 +138,7 @@
 
 /*
  * Inline code: only font family, size and colour, following `EditPolicy` in the prototype
- * (README §Type "mono for machine data"). No background, border or padding, since they
+ * (docs/design/README.md §Type "mono for machine data"). No background, border or padding: in a line of text
  * break the line's rhythm.
  */
 .md-code {

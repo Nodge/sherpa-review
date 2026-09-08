@@ -9,11 +9,11 @@ import type { ViewId } from '../../session/views.js';
 import './iteration-banners.css';
 
 /**
- * Iteration banners (README §9): "Route is stale" and "Route rebuilt". Both render through
+ * Iteration banners (docs/design/README.md §9): "route is stale" and "route rebuilt". Both render through
  * the shared banner slot. The source registry in App owns their activity conditions and priorities,
  * and the components only display what they receive.
  *
- * Stale describes a condition and stays while it holds (SPEC §2.21), so it has no close
+ * Stale describes a condition and stays while it holds (docs/design/SPEC-elements.md §2.21), so it has no close
  * button. The second pass banner describes a filter and can be dismissed.
  */
 
@@ -101,8 +101,8 @@ export interface NotesLostBannerProps {
 }
 
 /**
- * "2 notes lost their anchor after the new push · view" (SPEC §2.16). A filter banner
- * has a dismiss button because this is a one-time notice the reviewer may close (SPEC §2.21).
+ * "2 notes lost their anchors after a new push · show" (docs/design/SPEC-elements.md §2.16). A filter banner:
+ * it has a close button because the news is a one-off and the reviewer can dismiss it (docs/design/SPEC-elements.md §2.21).
  */
 export function NotesLostBanner({ count, onShow, onDismiss }: NotesLostBannerProps) {
     const t = useT();
@@ -132,7 +132,7 @@ export interface RouteStaleBannerProps {
     readonly stops: readonly RouteStop[];
     /** The same regeneration as the other route buttons. */
     readonly onRegenerate: () => void;
-    /** Switch to the active iteration without a route (M4-T9). Without this, there is no button. */
+    /** Switch to the active iteration without a route. Without this callback, the button is absent. */
     readonly onOpenDiffWithoutRoute?: (diffId: HostId) => void;
 }
 
@@ -190,7 +190,7 @@ export interface ReadOnlyIterationBannerProps {
 }
 
 /**
- * Reading a previous iteration (M4 scope) is a condition, not news, so there is no dismiss button (SPEC §2.21).
+ * Reading a previous iteration is a condition, so there is no close button (docs/design/SPEC-elements.md §2.21).
  * The date uses the same relative time format as other timestamps in the UI.
  */
 export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent }: ReadOnlyIterationBannerProps) {
@@ -242,7 +242,7 @@ export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent
 /**
  * Sentence about viewed-mark carryover. The `carried` counts describe carryover only: how many
  * stops stayed viewed out of those eligible for carryover. Zero carryover
- * is explained by the reason from the server. Snapshots before M5-T21 lack it, so show only the count.
+ * uses the reason from the server. Older snapshots have no reason, so they report only the count.
  */
 function carriedNote(carried: RouteCarried, t: Translate): string {
     if (carried.kept > 0) {

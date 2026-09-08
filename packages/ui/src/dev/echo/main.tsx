@@ -8,7 +8,7 @@ import { EchoApp } from './echo-app.tsx';
 import './echo.css';
 
 /**
- * Development page `dev.html`: M0 loop demo against a live server. The token is in the URL
+ * `dev.html` dev page: agent loop demo against a live server. The token is in a URL
  * fragment, like on the home page. Vite dev proxies `/api` requests to the running Sherpa server
  * (see `vite.config.ts`).
  */
@@ -24,7 +24,7 @@ if (token === null) {
     root.render(
         <StrictMode>
             <main className="screen screen--message">
-                <h1>M0 echo loop demo</h1>
+                <h1>Echo loop demo</h1>
                 <p>Access token required: open this page with the same fragment printed when Sherpa starts.</p>
                 <p className="muted">http://localhost:5173/dev.html#t=&lt;token&gt;</p>
             </main>

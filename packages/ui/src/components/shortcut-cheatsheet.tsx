@@ -11,7 +11,7 @@ import { useFocusTrap } from './use-focus-trap.js';
 import './shortcut-cheatsheet.css';
 
 /**
- * `?` shortcuts sheet (SPEC §5). The registry is the sole source: commands from the active scope
+ * `?` shortcuts sheet (docs/design/SPEC-elements.md §5). The registry is the only source: commands from the active scope
  * and global commands are grouped into sections. `when()` is ignored here, because this is a reference, not a
  * list of commands available right now. Commands without shortcuts are omitted.
  */
@@ -19,7 +19,7 @@ export interface ShortcutCheatsheetProps {
     readonly onClose: () => void;
 }
 
-/** `⌘K` is the first row of "Navigation": it opens access to everything else (SPEC §2.3). */
+/** `⌘K` is the first row of "Navigation": it leads to everything else (docs/design/SPEC-elements.md §2.3). */
 const FIRST_ID = 'palette.open';
 
 export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {

@@ -1,8 +1,8 @@
 /*
- * Handoff design tokens (design/design_handoff_sherpa/README.md, "Design tokens" section).
+ * Design handoff tokens (docs/design/README.md, "Design tokens" section).
  * The only place in the UI for hex values, shadows, hatches and scales: component styles cannot
- * use raw values, only these variables. A mechanical check compares them with the README
- * table in `src/styles/tokens.test.ts` (visual acceptance layer 1, CLAUDE.md).
+ * contain values, only these variables. The handoff table is checked against them
+ * mechanically by `src/styles/tokens.test.ts`.
  *
  * Names are semantic: a variable is named for its role ("application surface"), not its
  * shade ("grey-1"). Otherwise recolouring the system would require rewriting every component.
@@ -23,17 +23,17 @@
     --surface-raised: #181a1e;
     --surface-popover: #1b1e24;
     --surface-selected: #1f2228;
-    /* README §11 and §6: dedicated backgrounds for the banner, command and ownership chip. */
+    /* docs/design/README.md §11 and §6: dedicated banner, command and ownership chip surfaces. */
     --surface-offline-banner: #151619;
     --surface-command: #0e0f11;
     --ownership-mine-surface: #132019;
-    /* README §2: the `uncovered` footer row in the test digest. */
+    /* docs/design/README.md §2: `uncovered` footer row in the test digest. */
     --surface-digest-footer: #151316;
-    /* README §14: backdrop below the command palette. */
+    /* docs/design/README.md §14: backdrop under the command palette. */
     --overlay-dialog: rgba(7, 8, 9, 0.66);
-    /* README §1: sticky route toolbar, app background with transparency for blur(8px). */
+    /* docs/design/README.md §1: sticky route toolbar uses the application background with transparency for blur(8px). */
     --surface-toolbar: rgba(13, 14, 16, 0.92);
-    /* SPEC additions §1c/§1d: comment and draft editing states. */
+    /* docs/design/SPEC-additions-2026-08-26.md §1c/§1d: comment states and draft editing. */
     --pr-comments-overlay: rgba(8, 9, 10, 0.55);
     --pr-comments-draft-surface: #131210;
     --comment-edit-surface: #12141c;
@@ -42,7 +42,7 @@
     --pr-comments-delete-surface: #170f0f;
     --pr-comments-delete-button-surface: #3a1f1e;
     --pr-comments-delete-button-hover: #4a2725;
-    /* SPEC additions §1e: code block inside an "outside the diff" thread card. */
+    /* docs/design/SPEC-additions-2026-08-26.md §1e: code block inside an "outside the diff" thread card. */
     --surface-code-inset: #0b0c0e;
 
     /* --- Borders --- */
@@ -52,7 +52,7 @@
     --border-standard: #22252b;
     --border-control: #24272d;
     --border-chip: #262a30;
-    /* README §1: toolbar control divider, 1×18px. */
+    /* docs/design/README.md §1: toolbar control separator, 1×18px. */
     --border-divider: #26292f;
     --border-strong: #2b2f36;
     --border-strong-lifted: #2f333a;
@@ -84,7 +84,7 @@
     --pr-comments-delete-button-text: #f2c4c0;
     --pr-comments-note-icon: #8a7550;
 
-    /* --- Accent: "you can act here" and the AI layer (SPEC §1.2) --- */
+    /* --- Accent: "you can act here" and the AI layer (docs/design/SPEC-elements.md §1.2) --- */
     --accent: #7f8cff;
     --accent-hover: #8f9bff;
     --accent-hover-strong: #b3bcff;
@@ -92,7 +92,7 @@
     --accent-text: #aeb6ff;
     --accent-text-soft: #c9cdf0;
     --accent-text-bright: #dfe2ff;
-    /* README §7: queued plan item text on the generation card's accent background. */
+    /* docs/design/README.md §7: queued plan item, text on the generation card accent surface. */
     --accent-text-queued: #5c6288;
     --accent-surface: #131424;
     --accent-surface-alt: #141520;
@@ -110,18 +110,18 @@
     --attention-border: #4a4230;
     --attention-border-alt: #3d3524;
     --attention-border-strong: #6b5b39;
-    /* README §9: the iteration banner's primary button uses `--attention` fill and `#1b1508` ink. */
+    /* docs/design/README.md §9: the iteration banner's primary button uses `--attention` fill and `#1b1508` ink. */
     --attention-ink: #1b1508;
-    /* README §1 item 4: "why this stop changed" block, label and body. */
+    /* docs/design/README.md §1 item 4: "why the stop changed" block, label and body. */
     --attention-label: #8a7550;
     --attention-body: #d8c9ad;
-    /* SPEC additions §1d: closed field with a draft and confirmed autosave. */
+    /* docs/design/SPEC-additions-2026-08-26.md §1d: closed field with a draft and confirmed autosave. */
     --draft-field-surface: #141210;
     --draft-saved: #5e8a6d;
-    /* README §10: the tree row `pci` tag has a distinct border shade. */
+    /* docs/design/README.md §10: the `pci` tag in the tree row has a border in its own shade. */
     --tag-pci-border: #3d3a2c;
 
-    /* --- Onboarding (README §16): tour card and dashed underline beneath "Skip tour" --- */
+    /* --- Onboarding (docs/design/README.md §16): tour card and dashed underline under "Skip" --- */
     --surface-tour-card: #171a1f;
     --tour-skip-underline: #3a3f47;
 
@@ -135,12 +135,12 @@
     --diff-del-text-strong: #e8a29c;
     --diff-del-gutter: #7f5a56;
     --read-fill: #2b7a55;
-    /* README §1: viewed stop mark has its own background and border. */
+    /* docs/design/README.md §1: stop mark in the "viewed" state has its own surface and border. */
     --viewed-surface: #16211a;
     --viewed-border: #25422f;
-    /* README §13: circle for a successfully completed review. */
+    /* docs/design/README.md §13: successful review completion circle. */
     --success-surface: #1f3d2c;
-    /* SPEC §2.10, hovering over "viewed": the box fills a quarter with green. */
+    /* docs/design/SPEC-elements.md §2.10, hover on "viewed": the box fills with green at quarter opacity. */
     --read-fill-hover: rgba(43, 122, 85, 0.25);
     --read-border: #3f7a5a;
     --error: #e0736c;
@@ -148,7 +148,8 @@
     --error-surface: #171315;
     --error-border: #3d2a2c;
 
-    /* --- Diff rendering: rows, highlighting, checkboxes (README §1, SPEC §2.12, §2.14) --- */
+    /* --- Diff rendering: lines, highlighting, checkboxes
+       (docs/design/README.md §1, docs/design/SPEC-elements.md §2.12, §2.14) --- */
     --code-text: #cfd3da;
     --code-text-del: #d5c0be;
     --surface-diff-empty: #0c0d0f;
@@ -160,7 +161,7 @@
     --checkbox-border: #3a3f47;
     --read-box-border: #33383f;
 
-    /* --- Syntax highlighting: deliberately sparse (README §1) --- */
+    /* --- Syntax highlighting: deliberately sparse (docs/design/README.md §1) --- */
     --syntax-keyword: #9aa6ff;
     --syntax-string: #d3b183;
     --syntax-comment: #5f646d;
@@ -176,16 +177,16 @@
     --hatch-sidebar: repeating-linear-gradient(115deg, #2a2e34 0 3px, #1b1e22 3px 6px);
     --hatch-footer: repeating-linear-gradient(115deg, #191c20 0 3px, #141518 3px 6px);
 
-    /* --- Control states (SPEC §1.1) --- */
-    /* The README token table omits them, but each control must implement the state matrix:
+    /* --- Control states (docs/design/SPEC-elements.md §1.1) --- */
+    /* These are absent from the handoff token table, but every control must have a state matrix:
        the highlight step, focus ring and disabled opacity live here too. */
     --hover-selected: #282c33;
-    /* Active segment of the tab control (README §0). */
+    /* Active segment of the tab control (docs/design/README.md §0). */
     --surface-segment-active: #2b2f36;
     --focus-ring-color: rgba(127, 140, 255, 0.55);
     --text-on-selected: #e0e2e7;
     --disabled-opacity: 0.45;
-    /* Breadcrumb separator (README §0). */
+    /* Breadcrumb separator (docs/design/README.md §0). */
     --text-separator: #4a4f57;
 
     /* --- Typography --- */
@@ -208,7 +209,7 @@
     --font-size-gutter: 10.5px;
     --font-size-badge: 10px;
     --font-size-scope: 9.5px;
-    /* README §10: the `pci` tag in the tree is 9px, outside the main scale. */
+    /* docs/design/README.md §10: the `pci` tag in the tree is 9px, outside the main scale. */
     --font-size-tag: 9px;
     /* Prototype: initials in the 18×18 reply avatar. */
     --font-size-avatar-glyph: 9px;
@@ -240,14 +241,14 @@
     --space-bar-reserve: 180px;
 
     /* --- Shadows --- */
-    /* SPEC-additions §1d: comment button in the gutter. */
+    /* docs/design/SPEC-additions-2026-08-26.md §1d: comment button in the gutter. */
     --shadow-line-comment: 0 1px 4px rgba(0, 0, 0, 0.45);
     --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-menu: 0 16px 40px rgba(0, 0, 0, 0.6);
     --shadow-floating: 0 16px 44px rgba(0, 0, 0, 0.6);
     --shadow-dialog: 0 24px 64px rgba(0, 0, 0, 0.65);
     --shadow-pr-comments: 0 18px 50px rgba(0, 0, 0, 0.55);
-    /* README §16: tour card and ring glow around the highlighted element. */
+    /* docs/design/README.md §16: tour card and ring glow around the highlighted element. */
     --shadow-tour-card: 0 20px 52px rgba(0, 0, 0, 0.62);
     --shadow-tour-ring: 0 0 0 3px rgba(127, 140, 255, 0.13), 0 0 26px rgba(127, 140, 255, 0.16);
     --pr-comments-list-fade: linear-gradient(180deg, rgba(15, 16, 18, 0) 0%, #0f1012 92%);

@@ -7,7 +7,7 @@ import type { SherpaServerHandle } from './sherpa-fixture.js';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * F2 (brief §7): with a completed route, the reviewer selects lines, asks the agent about them, receives
+ * F2 (docs/product.md §7): with the route ready, the reviewer selects lines, asks the agent about them, gets
  * an answer in the panel and a note at the same lines, turns the note into a blocking draft and requests
  * changes to the PR.
  *
@@ -161,7 +161,7 @@ test('F2: selection → agent question → answer and note → draft → request
         await page.getByRole('button', { name: /^Request changes/ }).click();
 
         await expect(page.getByRole('heading', { name: 'Changes requested · PR 4821', exact: true })).toBeVisible();
-        // Exactly one comment is published, the agent note lives only in Sherpa (SPEC §2.16).
+        // Exactly one comment is published. The agent note lives only in Sherpa (docs/design/SPEC-elements.md §2.16).
         await expect(counter(page, 'Comments published')).toHaveText('1 (0 of them replies)');
 
         // The same comment at the host is no longer a draft, and issue survived publication.
@@ -195,7 +195,7 @@ async function dragSelectLines(page: Page, fromKey: string, toKey: string): Prom
 
 /** A note at its range: clicking the collapsed row expands it and names the same lines. */
 async function expectNoteAtLines(page: Page): Promise<void> {
-    // A distant stop's diff column is removed from the DOM (M5-T13). Scroll to the section as the reviewer does.
+    // The diff column of a distant stop is removed from the DOM. Scroll to the section as the reviewer does.
     await stop(page).scrollIntoViewIfNeeded();
     const collapsed = card(page).locator('.agent-note--collapsed');
     await expect(collapsed).toContainText('Agent note');

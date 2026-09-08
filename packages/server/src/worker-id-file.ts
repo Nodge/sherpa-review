@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { RpcFailure } from './errors.js';
 
-/** Identity file and state directory permissions match the rest of the PR state (spec §6). */
+/** Identity file and state directory permissions match the rest of PR state (docs/architecture.md §6). */
 const WORKER_ID_FILE_MODE = 0o600;
 const STATE_DIR_MODE = 0o700;
 
@@ -11,7 +11,7 @@ const STATE_DIR_MODE = 0o700;
  * Publishes the slot owner to a PR state file: subsequent session calls read their identity
  * from it, because env does not survive between harness calls.
  *
- * The server writes the file, not the CLI: with slot takeover (decision 2026-08-20), both parallel sessions
+ * The server writes the file, not the CLI: with slot takeover, both concurrent sessions
  * get a successful `register`, so the order of writes to the shared file would depend on the race between network
  * responses. The file could retain an evicted session id, while the winning slot would use
  * another id and hit `worker_conflict`. Here there is one writer, and the synchronous write runs in the same

@@ -4,8 +4,8 @@ import { useT } from '../i18n/index.js';
 import './generation-cap-banner.css';
 
 /**
- * Generation cap banner (SPEC §4.1): the payload budget left files out of the agent's context that
- * cannot be called generated, so the plan used a partial diff and must say so.
+ * Generation limit banner (docs/design/SPEC-elements.md §4.1). The payload budget dropped
+ * non-generated files from the agent context, so the plan uses a partial diff and must say so.
  *
  * No actions. Regeneration would change nothing (the budget is the same). The only useful action is
  * to finish reading those files in the full diff, linked from the text. Lowest priority in the slot

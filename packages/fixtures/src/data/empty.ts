@@ -4,7 +4,7 @@ import { human, lens, singleIteration } from '../builders.js';
 import type { FixtureData } from './types.js';
 
 /**
- * A PR without a single change against the base (SPEC §4.1): the diff is empty because the whole commit is already in the base
+ * PR with no changes against the base (`docs/design/SPEC-elements.md §4.1`): the diff is empty because the entire commit is already in the base
  * (the branch was merged outside the PR, reverted, or rebuilt). Both views show "Nothing to review",
  * and ship remains available: approving an empty diff is a valid reviewer action.
  *

@@ -29,7 +29,7 @@ import {
 } from './route-medium.js';
 
 /**
- * Route for the same `medium` fixture after the second push (README §9): the plan is unchanged, but 3 stops are
+ * Route for the same `medium` fixture after the second push (`docs/design/README.md §9`): the same plan, with three stops
  * rebuilt. Stops 02 and 03 changed, and 06 is entirely new. Progress was carried over from the first snapshot:
  * three of the six stops with anchors remain viewed.
  *
@@ -94,7 +94,7 @@ interface StopChangeSpec {
  * What the second push did to each affected stop. `changed` means some ranges were touched,
  * `new` means all: the lockfile was rebuilt entirely, with no lines left from the old block. In v2, the lockfile
  * has anchors only on the `new` side: the iterations share a base, so the old side carries over unchanged,
- * and an anchor on it would make the stop `changed` (task breakdown decision 5).
+ * and an anchor there would make the stop `changed`.
  */
 const CHANGED: Record<string, StopChangeSpec> = {
     s02: {
@@ -248,7 +248,7 @@ export function makeMediumSecondPassState(): UiRouteState {
         smallPr: false,
         snapshot: readySnapshotV2(),
         failure: null,
-        // The route uses the active iteration, so it is not stale (`stale` is handled in M4-T4).
+        // The route was built for the active iteration, so it is not stale.
         stale: null,
     };
 }

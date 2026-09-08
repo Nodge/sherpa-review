@@ -1,5 +1,5 @@
 /**
- * UI localization: a dictionary without a library (M5 planning decision 1). The Russian dictionary is
+ * UI localization: a custom dictionary without a library. The Russian dictionary is
  * the source of truth for keys, and the English one uses its type. Number,
  * plural and relative time formatting uses `Intl` instead of custom rules.
  *

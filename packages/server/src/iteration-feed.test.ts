@@ -17,7 +17,7 @@ import { mediumReadySnapshot } from './route/fixture-support.js';
 import { makeTempSherpaDir, removeTempSherpaDir, seedAgentNotes } from './test-support.js';
 
 /**
- * Push detection (M4-T4): merged iteration list, stale route flag and affected
+ * Push detection: a merged iteration list, a stale route flag and affected
  * stops. The `medium` fixture has 3 iterations, the third force-pushes over the second.
  */
 
@@ -526,7 +526,7 @@ describe('iteration feed', () => {
     }
 
     it('progress for an iteration without a row in iterations is carried over using its snapshot anchors', async () => {
-        // M5-T20 finding: server 0.3.x recorded progress, with no iteration row or patch.
+        // Server 0.3.x recorded the progress. There is no iteration row or patch.
         seedSeenRange(V1.diffId, fixtureFileId(0));
         seedRouteSnapshot(V1.diffId, [{ fileId: fixtureFileId(0), path: fixtureFilePath(0) }]);
         const host = makeFixtureHost('medium');

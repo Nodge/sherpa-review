@@ -4,7 +4,7 @@ import type { Translate } from '../i18n/index.js';
 import type { RouteEntry, RouteTotals } from './route-model.js';
 
 /**
- * Coverage strip model (SPEC §2.4, README §1): segments are proportional to changed lines,
+ * Coverage bar model (docs/design/SPEC-elements.md §2.4, docs/design/README.md §1). Segments are proportional to changed lines,
  * and the legend is calculated, not hardcoded. This pure module takes route totals and stops
  * and returns what the bar renders. It uses neither React nor DOM.
  *
@@ -12,7 +12,7 @@ import type { RouteEntry, RouteTotals } from './route-model.js';
  * chips and "Other", so this module only handles layout and text, with no separate arithmetic.
  */
 
-/** Minimum segment width: a 6-line piece must remain clickable (SPEC §2.4). */
+/** Minimum segment width keeps a 6-line chunk clickable (docs/design/SPEC-elements.md §2.4). */
 export const MIN_SEGMENT_PX = 3;
 
 /** Segment order from left to right, with important changes first and the hatch last. */
@@ -41,7 +41,7 @@ export interface CoverageSegment {
 export interface CoverageLegend {
     readonly changed: string;
     readonly explained: string;
-    /** `null` at 100% explained: omit the third clause instead of writing "0 lines" (SPEC §2.4). */
+    /** `null` when 100% is explained. The third clause is omitted instead of saying "0 lines" (docs/design/SPEC-elements.md §2.4). */
     readonly unexplained: string | null;
 }
 
@@ -84,7 +84,7 @@ export function buildCoverageStrip({ totals, entries, t }: CoverageStripInput): 
     const segments: CoverageSegment[] = [];
     for (const tier of TIER_ORDER) {
         const lines = totals.byTier[tier];
-        // A tier with zero lines is not rendered. A hairline segment would mislead (SPEC §2.4).
+        // A tier with zero lines is not rendered. A hairline segment would misrepresent it (docs/design/SPEC-elements.md §2.4).
         if (lines <= 0) {
             continue;
         }

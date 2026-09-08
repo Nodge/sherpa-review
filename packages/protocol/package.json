@@ -1,7 +1,9 @@
 {
   "name": "@sherpa/protocol",
   "version": "0.0.0",
+  "description": "Schemas and types for everything crossing Sherpa process boundaries",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {

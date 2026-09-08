@@ -22,7 +22,7 @@ import { fuzzyMatch } from './fuzzy.js';
 import { parsePaletteQuery } from './query.js';
 import './command-palette.css';
 
-/** "Iterations…" mode uses the same rows as the snapshot pill menu (M4-T9, M5-T5). */
+/** "Iterations…" mode: the same rows as in the snapshot pill menu. */
 export interface PaletteIterations {
     readonly rows: PickerRows;
     readonly viewing: Viewing;
@@ -31,7 +31,7 @@ export interface PaletteIterations {
     readonly onSelect: (viewing: Viewing) => void;
 }
 
-/** `@` mode: this PR's chat history (SPEC §2.18), all exchanges from all iterations, filtered on the client. */
+/** `@` mode: this PR's chat history (docs/design/SPEC-elements.md §2.18), all exchanges from all iterations, filtered on the client. */
 export interface PaletteChat {
     readonly exchanges: readonly ChatExchange[];
     readonly notes: readonly AgentNote[];
@@ -88,7 +88,7 @@ const PLACEHOLDER: Readonly<Record<BrowseMode, MessageKey>> = {
 /** Limit on file results and search matches, also used in the truncation notice. */
 const SEARCH_LIMIT = 50;
 
-/** Command and client-side search palette (README §14, SPEC §2.3). */
+/** Command and client-side search palette (docs/design/README.md §14, docs/design/SPEC-elements.md §2.3). */
 export function CommandPalette({
     open,
     source,
@@ -105,7 +105,7 @@ export function CommandPalette({
     const locale = useLocale();
     const format = useFormat();
     const [query, setQuery] = useState(initialQuery);
-    // SPEC has no file prefix. The command switches the internal results to files only.
+    // The spec defines no file prefix: the command switches the internal results to files only.
     const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
     const [cursor, setCursor] = useState(0);
     // Command history is part of server-side PR state. The server only stores it, the display limit lives here.
@@ -139,7 +139,7 @@ export function CommandPalette({
             cursorOrigin.current = 'programmatic';
         },
     });
-    // Route has no file tree, so `f` opens the same file results in the palette (SPEC §5).
+    // Route has no file tree, so `f` opens the same file results in the palette (docs/design/SPEC-elements.md §5).
     useShortcut({
         id: 'palette.findFile',
         keys: ['f'],

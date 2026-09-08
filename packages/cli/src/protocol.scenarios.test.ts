@@ -22,7 +22,7 @@ const LONG_POLL_SECONDS = 0.2;
 const PAST_LEASE_SECONDS = LEASE_TTL_SECONDS.interactive + 1;
 
 /**
- * C1↔C2 protocol tests (requirements §7): end-to-end session lifecycle scenarios against a real server,
+ * CLI↔server protocol tests: end-to-end session lifecycle scenarios against a real server,
  * with the worker running as the built bundle in separate processes. The server clock is injected,
  * so lease expiry and worker death happen instantly.
  */
@@ -42,7 +42,7 @@ describe('worker session scenarios', () => {
             sherpaDir,
             longPollSeconds: LONG_POLL_SECONDS,
             now: () => new Date(nowMs),
-            // Live review hosts are forbidden in tests (requirements §7), and scenarios do not need route tasks:
+            // Tests must not call a live review host, and these scenarios do not need route tasks:
             // without a host, automatic scheduling stays off and the queue contains only what the test enqueues.
             reviewHostFactory: () => null,
         });
@@ -139,7 +139,7 @@ describe('worker session scenarios', () => {
 
         const late = await worker.complete(taskId, 'Late result.');
         expect(late.code).toBe(1);
-        // Decision log: no grace period, but the text directs the worker back to the loop instead of a dead end.
+        // There is no grace period, but the text leads back into the loop instead of a dead end.
         expect(late.stderr).toContain('worker next');
         expect(late.stderr).not.toContain('lease_not_held');
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'queued', attempt: 2, workerId: null });
@@ -161,7 +161,7 @@ describe('worker session scenarios', () => {
 
         expect(server.queue.cancel(taskId)).toBe('cancelled');
 
-        // The session cannot be interrupted (rpc-design §5): both progress and complete return a no-op with cancellation text.
+        // The session cannot be interrupted (`docs/protocol.md §5`). Both progress and complete return a no-op with cancellation text.
         const progress = await worker.progress(taskId, 'still working');
         expect(progress.code).toBe(0);
         expect(progress.stdout).toContain('has been cancelled');
@@ -189,7 +189,7 @@ describe('worker session scenarios', () => {
         expect(reconnected.code).toBe(0);
         expect(await worker.workerId()).not.toBe(deadWorkerId);
 
-        // Taking over the slot returned the dead session's lease to the queue without waiting for TTL (rpc-design §7).
+        // Taking over the slot requeued the dead session's lease without waiting for TTL (`docs/protocol.md §7`).
         const reissued = await worker.next();
         expect(reissued.taskId).toBe(taskId);
         expect(reissued.stdout).toContain('attempt 2');

@@ -3,8 +3,8 @@ import type { Locale } from '@sherpa/protocol';
 import { bannedPhrases, quoted } from './route/voice.js';
 
 /*
- * Chat task instructions. The text is English because the model reads it. The exchange locale sets the response language
- * (M5-T4), which the reviewer reads. Payload and file layout live separately in `chat-payload.ts`.
+ * Chat task guide. The model reads the English text. The exchange locale sets the answer language,
+ * which the reviewer reads. Payload and file layout live separately in `chat-payload.ts`.
  */
 
 /** Locale-specific part of the chat guide. */

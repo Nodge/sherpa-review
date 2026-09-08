@@ -8,7 +8,7 @@ export function shouldClearSelectionOnPointerDown(target: EventTarget | null): b
 }
 
 /**
- * Line selection lifecycle (SPEC §2.14): the card starts the drag, while
+ * Line selection lifecycle (docs/design/SPEC-elements.md §2.14): the card starts dragging, window events end it:
  * mouse release, Esc, and clicks outside diff lines.
  *
  * Both views need this hook: when it lived inside the full diff list, selection started on the route

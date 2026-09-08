@@ -15,7 +15,7 @@ import { RouteWorkspace } from './route-workspace.tsx';
 /**
  * The "what is new" filter is enabled outside the view (the second pass banner button), so the test mounts
  * the live view in jsdom: the top stop that the filter would hide must stay on screen,
- * just as when changing the file filter (SPEC §2.7).
+ * just as it does when the file filter changes (docs/design/SPEC-elements.md §2.7).
  *
  * jsdom has no rectangles, so measurements are mocked to make the first section
  * in the markup the top stop. The filter must keep that section in view.

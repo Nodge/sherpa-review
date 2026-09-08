@@ -5,8 +5,9 @@ import { Icon } from '../icons/icon.tsx';
 import './ship-verdict-banner.css';
 
 /**
- * "Someone else ships first" (M5-T15, SPEC §4.5): another reviewer's ship does not cancel the review, drafts
- * will still be published, but the reviewer needs to know before pressing their own button.
+ * "Someone else ships first" (docs/design/SPEC-elements.md §4.5): someone else's ship does not cancel the review.
+ * Drafts will still be published, but the reviewer must know before pressing
+ * their own button.
  *
  * Hosts do not provide verdict timestamps, so "when" is measured from the moment the tab
  * saw the verdict in a metadata snapshot. The first snapshot is the baseline. Anything before the tab

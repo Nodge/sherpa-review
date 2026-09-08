@@ -18,11 +18,11 @@ export interface ServerConnection {
     readonly workerId: string;
 }
 
-/** Worker identity file permissions match the rest of the state (spec §6). */
+/** Worker identity file permissions match the rest of the state (`docs/architecture.md §6`). */
 const WORKER_ID_FILE_MODE = 0o600;
 const STATE_DIR_MODE = 0o700;
 
-/** Full discovery (rpc-design §8): PR → manifest → port and token, plus worker identity. */
+/** Full discovery (`docs/protocol.md §8`): PR → manifest → port and token, plus worker identity. */
 export async function connect(
     prKeyArg: string | undefined,
     env: Readonly<Record<string, string | undefined>>,

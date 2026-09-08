@@ -28,7 +28,7 @@ export interface UseRouteGenerationOptions {
     readonly refreshRoute: () => void;
 }
 
-/** Route generation: endpoints, long-running task, default view for a small PR (M2-T10). */
+/** Route generation: endpoints, the long-running task and the default view for a small PR. */
 export function useRouteGeneration({
     route,
     token,
@@ -153,7 +153,7 @@ export function useRouteGeneration({
     const longRunning = generationIsLong(routeTasks, now);
 
     /**
-     * A small PR opens in the full diff (SPEC §4.1). Respect the reviewer's choice,
+     * A small PR opens in Full diff (docs/design/SPEC-elements.md §4.1). Never override the reviewer's view choice,
      * whether from the URL or by hand, so decide once and only for the default.
      *
      * Wait for a running tour. It starts on the Route, and switching the tab underneath it would send

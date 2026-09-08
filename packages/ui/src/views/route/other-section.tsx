@@ -9,7 +9,7 @@ import { filterOtherView, uncoveredAsGroup } from '../../route/route-model.js';
 import { OtherCard } from './other-card.tsx';
 
 /**
- * "Other" entry: ranges outside the route, collapsed into one expandable card (README §2).
+ * Other entry: ranges not covered by the route, collapsed into an expandable card (docs/design/README.md §2).
  * Counts and the question to the agent use the same set that expands under the filter.
  */
 

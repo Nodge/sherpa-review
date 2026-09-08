@@ -1,7 +1,9 @@
 {
   "name": "@sherpa/cli",
   "version": "0.0.0",
+  "description": "Thin sherpa CLI: starts a PR server and runs the worker loop",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "bin": {
     "sherpa": "./dist/sherpa.mjs"

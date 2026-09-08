@@ -22,15 +22,15 @@ import { useNearViewport, useOnScreen } from './use-on-screen.js';
 
 /**
  * One route stop: narrative card on the left and diff column on the right, clipped to the stop's
- * ranges. The column leaves the DOM when the reviewer scrolls far away (M5-T13). A placeholder
+ * anchors. The column leaves the DOM when the reviewer scrolls far away. A placeholder
  * at the last measured height reserves its space.
  */
 
 export interface StopSectionProps {
     readonly view: RouteStopView;
-    /** First route stop: its diff column stays in the DOM (M5-T13). */
+    /** First route stop. Its diff column stays in the DOM. */
     readonly first: boolean;
-    /** First collapsed low stop: its fold holds the tour anchor `fold-<stopId>` (M5-T8). */
+    /** First collapsed low-tier stop. Its fold holds the tour step target `fold-<stopId>`. */
     readonly tourFold: boolean;
     /** Files with an active selection, open composer or focused row, across the whole route. */
     readonly busyFileIds: ReadonlySet<string>;
@@ -52,12 +52,12 @@ export interface StopSectionProps {
     readonly pending: boolean;
     /** Parsing failed for some files. Their ranges are unavailable until retry. */
     readonly parseFailed: boolean;
-    /** Agent disconnected during generation: filled stops get a quiet note (SPEC §4.4). */
+    /** Agent disconnected during generation. Filled content gets a muted note (docs/design/SPEC-elements.md §4.4). */
     readonly filledBeforeStop: boolean;
     /** Collapsed by a viewed mark, manual `x` collapse or the low-tier default. */
     readonly collapsed: boolean;
     readonly collapsedManually: boolean;
-    /** The stop is highlighted by hovering over a coverage strip segment (SPEC §2.4). */
+    /** See `StopCardProps.marked`. */
     readonly marked: boolean;
     /** Value of the failed mark write. `null` means no write has failed. */
     readonly failedViewed: boolean | null;
@@ -69,7 +69,7 @@ export interface StopSectionProps {
     readonly onOpenFile: (stopId: string, fileId: string) => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
     readonly renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
-    /** Digest stop: test code expands below the digest card (README §2). */
+    /** Digest stop with test code expanded below the digest card (docs/design/README.md §2). */
     readonly testCodeShown: boolean;
     readonly onToggleTestCode: () => void;
     /** Whether a route card renders the file containing the assertion's anchor. */
@@ -137,7 +137,7 @@ export function StopSection({
         [fileIds, view.files],
     );
     // Parsing is requested for all stop files, including hidden test code. The viewed mark's seen ranges
-    // marks are computed from stop anchors and do not depend on the toggle (M2-T7).
+    // are computed from the stop's anchors and do not depend on the toggle.
     const ids = useMemo(() => files.map((group) => group.fileId), [files]);
     useEffect(() => {
         if (onScreen) {
@@ -351,8 +351,8 @@ export function StopSection({
 }
 
 /**
- * Hysteresis boundaries for restoring a stop's diff column to the DOM and removing it
- * (M5-T13). Mount one screen ahead so cards render before they arrive in view. Unmount
+ * Hysteresis boundaries for returning the stop's diff column to the DOM and removing it.
+ * Mount a screen ahead so cards render before the reviewer arrives. Unmount
  * much further away so a stop edge sitting on the boundary does not flicker every frame.
  */
 const MOUNT_MARGIN = 1200;

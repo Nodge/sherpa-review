@@ -11,8 +11,8 @@ import type { AcceptedSkeleton } from './route/index.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Route snapshot history (M4-T3): `route_snapshots` stores every generation, `route_state`
- * keeps only the current one. Also covers dogfooding database compatibility, a snapshot written before M4.
+ * Route snapshot history. `route_snapshots` accumulates every generation, while `route_state`
+ * remembers only the current one. Also covers existing database compatibility with an older snapshot format.
  */
 
 function stop(planIndex: number): RouteStop {
@@ -132,7 +132,7 @@ describe('route store: snapshot history', () => {
         expect(restored.listSnapshots()).toHaveLength(2);
     });
 
-    /** Pre-M4 snapshot shape: no `baseCommit`, `previousSnapshotId`/`carried`, or stop `change`. */
+    /** Older snapshot format without `baseCommit`, `previousSnapshotId`/`carried` or stop `change` fields. */
     function legacySnapshotJson(diffId: string): string {
         return JSON.stringify({
             snapshotId: 'snap-legacy',
@@ -173,7 +173,7 @@ describe('route store: snapshot history', () => {
         ).run();
     }
 
-    it('reads a pre-M4 snapshot with baseCommit from the saved iteration and defaults for the rest', () => {
+    it('reads an older snapshot with baseCommit from the saved iteration and defaults for other fields', () => {
         const db = open();
         db.prepare(
             `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
@@ -197,7 +197,7 @@ describe('route store: snapshot history', () => {
             `INSERT INTO iterations (diff_id, base_commit, head_commit, created_at, status, diff_json, fetched_at)
              VALUES ('iter-legacy', 'base-of-iter', 'head-legacy', '2026-08-25T09:00:00.000Z', 'active', '{}', '2026-08-25T09:00:00.000Z')`,
         ).run();
-        // `carried` before M5-T21: carryover counts only.
+        // Older `carried` format with only carryover counts.
         insertLegacySnapshot(
             db,
             'iter-legacy',
@@ -210,7 +210,7 @@ describe('route store: snapshot history', () => {
         expect(new RouteStore({ db }).current()?.carried).toEqual({ kept: 2, total: 5, zeroReason: null });
     });
 
-    // Defaults apply only to new M4 fields: filling in `stops` would turn
+    // Defaults apply only to fields added later. Replacing `stops` would turn
     // a corrupt row into a valid empty route.
     it('the schema rejects a corrupt snapshot instead of filling it with an empty stops list', () => {
         const db = open();
@@ -280,7 +280,7 @@ describe('route store: snapshot history', () => {
         expect(store.currentGenerationCap()).toBeNull();
     });
 
-    it('a pre-M4 snapshot without a stored iteration has an unknown base', () => {
+    it('an older snapshot without a saved iteration has an unknown base', () => {
         const db = open();
         insertLegacySnapshot(db, 'iter-forgotten');
 

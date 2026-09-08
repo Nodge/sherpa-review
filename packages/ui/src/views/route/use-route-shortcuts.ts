@@ -44,7 +44,7 @@ export interface RouteShortcutsOptions {
 }
 
 /**
- * Route shortcuts (SPEC §5): mark and collapse the focused stop, comment and reply,
+ * Route keys (docs/design/SPEC-elements.md §5): mark and collapse the focused stop, comment and reply,
  * move between stops, filter by "what is new" and expand the bridge. The hook only registers
  * commands and returns nothing.
  */
@@ -70,7 +70,7 @@ export function useRouteShortcuts({
     openedCollapsed,
     expand,
 }: RouteShortcutsOptions): void {
-    /** The focused stop contains the focused element: its section has `data-stop` (SPEC §5). */
+    /** The focused stop contains the focus: its section carries `data-stop` (docs/design/SPEC-elements.md §5). */
     const focusedEntry = useCallback((): RouteEntry | null => {
         if (typeof document === 'undefined') {
             return null;
@@ -153,7 +153,7 @@ export function useRouteShortcuts({
         },
     });
 
-    // --- Route navigation keys (SPEC §5) ---
+    // --- Route navigation shortcuts (docs/design/SPEC-elements.md §5) ---
 
     /** Navigation keys count from the previous jump target, otherwise from the top visible stop. */
     const anchorStopId = useCallback(

@@ -13,7 +13,7 @@ const relativeFormats = new Map<Locale, Intl.RelativeTimeFormat>();
 const dateTimeFormats = new Map<Locale, Intl.DateTimeFormat>();
 
 /**
- * Locale-specific digit grouping: "2 412" uses a non-breaking space in Russian (SPEC §2.13),
+ * Locale-specific grouping: "2 412" with a non-breaking space in Russian (docs/design/SPEC-elements.md §2.13),
  * "2,412" in English. ICU returns either U+00A0 or narrow U+202F as the `ru` separator,
  * normalize to one non-breaking space so the counter string does not depend on the Node version.
  */
@@ -118,7 +118,7 @@ export function formatDateTime(iso: string, locale: Locale): string {
     ).format(parsed);
 }
 
-/** The label shows 7 hex characters of the commit (README §13). `title` holds the full hash. */
+/** A commit label uses 7 hex characters (docs/design/README.md §13). The full hash goes in `title`. */
 export function shortCommit(commit: string): string {
     return commit.slice(0, 7);
 }

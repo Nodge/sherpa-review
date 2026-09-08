@@ -181,7 +181,7 @@ describe('server startup in `up`', () => {
         expect(manifest.pid).not.toBe(process.pid);
     });
 
-    // Only the CLI knows where the distribution is installed. The server receives it as an argument (M5-T9).
+    // Only the CLI knows where the distribution is installed. It passes the path to the server as an argument.
     it('passes --install-dir to the daemon as the distribution root above bin/', async () => {
         await up(await fakeServer(WORKING_SERVER));
 

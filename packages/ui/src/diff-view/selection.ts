@@ -1,7 +1,8 @@
 import type { DiffFileModel, DiffLine } from '../diff/model.js';
 
 /**
- * Line range selection (SPEC §2.14): click-drag and shift-click, the same in unified and split modes.
+ * Line range selection (docs/design/SPEC-elements.md §2.14): click-drag and shift-click,
+ * the same in unified and split modes.
  *
  * A line is addressed by its file line numbers, not its position in the model: context expansion
  * reindexes blocks (gaps disappear, adjacent hunks merge), so selection tied

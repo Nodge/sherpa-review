@@ -1,5 +1,5 @@
 /**
- * Protocol limits and timings (rpc-design §5, §7, spec §3.5).
+ * Protocol limits and timings (`docs/protocol.md §5, §7`, `docs/architecture.md §7.5`).
  * Contract defaults: the server can override them through config, but semantics stay unchanged.
  */
 
@@ -21,13 +21,13 @@ export const LONG_POLL_CEILING_SECONDS = 3600;
 /**
  * Silence while holding a lease beyond this duration → the worker is considered dead.
  * Does not affect waiting in `next`: while the call is pending, its open connection proves liveness
- * (rpc-design §7). An hour-long poll does not make the worker dead.
+ * (`docs/protocol.md §7`). An hour-long long-poll does not make the worker dead.
  */
 export const WORKER_DEAD_AFTER_SECONDS = 360;
 
 /**
  * UI departure grace: sends `done` to the worker when the last UI connection has been closed longer than this
- * threshold (M2F-T33). Page reloads, switching tabs, laptop sleep and brief network
+ * duration. Page reloads, tab navigation, laptop sleep and brief network
  * interruptions break SSE for seconds without the reviewer leaving, so this must be at least a minute.
  */
 export const UI_GONE_GRACE_SECONDS = 60;
@@ -48,7 +48,7 @@ export const IMAGE_BLOB_MAX_BYTES = 10_000_000;
 export const PROGRESS_TEXT_MAX_CHARS = 500;
 
 /**
- * Worker endpoint paths are part of the CLI↔server contract (rpc-design §3).
+ * Worker endpoint paths are part of the CLI↔server contract (`docs/protocol.md §3`).
  * All use POST with a JSON body matching the corresponding schema from `messages.ts`.
  */
 export const WORKER_ENDPOINTS = {

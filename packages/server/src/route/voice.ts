@@ -1,7 +1,7 @@
 import type { Locale } from '@sherpa/protocol';
 
 /**
- * Voice stop list for route texts the reviewer reads (M2F-T31).
+ * Voice stop list for route text read by the reviewer.
  *
  * Only unambiguous cases are rejected: emoji and filler phrases from a fixed list.
  * These don't produce false positives, so a hard rejection is justified. Matters of taste
@@ -9,7 +9,7 @@ import type { Locale } from '@sherpa/protocol';
  * can't be distinguished from superlatives, and a false positive wastes
  * a model attempt on a matter of style.
  *
- * Each generation locale has its own phrase list (M5-T4). A phrase in another language is not a violation,
+ * Phrase lists belong to the generation locale. Foreign-language phrases aren't violations,
  * or an English quote in a Russian paragraph would trigger the stop list. The code has no rule against transliteration
  * (Russian spellings of English terms), even for `ru`: without morphology, it can't distinguish those from ordinary words,
  * so the guide handles this.

@@ -5,13 +5,13 @@ import type { FileExpansion } from '../diff-view/expand.js';
 import { FILE_EXPANSION_KEY, gapKeyOf } from '../diff-view/expand.js';
 
 /**
- * Clip the file model to stop anchors (README §1: the stop's right column shows
+ * Clips a file model by stop anchors (docs/design/README.md §1). The stop's right column shows
  * the real diff, limited to the ranges the stop covers.
  *
  * This pure function uses the original model. UI state is a set of anchors, and each calculation starts
  * from scratch. Within a hunk, `ANCHOR_CONTEXT` unchanged lines remain around each range. Every
  * omission becomes a gap with accurate counts of unchanged lines and
- * changed lines explained by other stops (brief principle 3: nothing is hidden silently).
+ * changed lines explained by other stops (docs/product.md §3, principle 3: nothing is hidden silently).
  * File edges are gaps too. Without them, the slice would silently drop the file start and end, and the card
  * would assume there was nothing to expand.
  */
@@ -31,7 +31,7 @@ export interface ClippedModel {
     readonly model: DiffFileModel;
     /** Changed file lines strictly within anchors (`changedLinesOf` rule: add→new, del→old). */
     readonly changedLines: number;
-    /** Hunks in the slice. Zero means anchors do not resolve in this diff (anchor drift, SPEC §2.9). */
+    /** Hunks in the slice. Zero means anchors do not resolve in this diff (anchor drift, docs/design/SPEC-elements.md §2.9). */
     readonly hunks: number;
 }
 
@@ -81,7 +81,7 @@ function covers(anchors: readonly AnchorSpan[], side: 'old' | 'new', line: numbe
  * Changed file lines untouched by any anchor supply the synthetic
  * "Other" stop. Ranges merge adjacent line numbers, with each side kept separate.
  *
- * Empty and whitespace-only lines are excluded (decision log, 2026-08-26): there is nothing
+ * Empty and whitespace-only lines are excluded because they contain nothing
  * to read. "Other" and the full diff hatch regularly filled with these separators
  * between blocks assigned to different stops. The rule applies only outside anchors.
  * A covered whitespace line still counts towards its tier.
@@ -106,7 +106,7 @@ export function droppedWhitespaceLines(model: DiffFileModel | null, anchors: rea
  * The same uncovered ranges, including all whitespace lines, supply the "viewed" mark.
  * Reading progress counts all changed patch lines, so marking "Other" must
  * cover them all. The whitespace rule removes lines from coverage statistics, not from
- * viewed (requirements §3.1).
+ * viewed lines (docs/architecture.md §7.1).
  */
 export function uncoveredReadRanges(
     model: DiffFileModel | null,
@@ -249,7 +249,7 @@ export function clipModelToAnchors(
             flush(run, block);
             run = [];
             // The gap counts everything the slice hid, including changed whitespace lines.
-            // the whitespace rule (decision log, 2026-08-26) excludes them from coverage counts,
+            // The whitespace rule subtracts them from coverage statistics,
             // not from what the card must report.
             const key = skipped.key ?? keep.gapKeys[index];
             skipped =

@@ -9,8 +9,8 @@ import { generationCardKind, generationProgress } from '../../route/generation.j
 import './generation.css';
 
 /**
- * Route generation states in the Overview right rail (README §6–7) and the red failure
- * card (README §12, SPEC §2.21).
+ * Route generation states in the Overview right rail (docs/design/README.md §6–7) and the red failure
+ * card (docs/design/README.md §12, docs/design/SPEC-elements.md §2.21).
  *
  * Components load nothing: the phase, snapshot and flags arrive as props, so the same cards
  * render in the state gallery. All counts come from `snapshot.stops[].status`.
@@ -20,7 +20,7 @@ export interface GenerationCardProps {
     readonly route: UiRouteState;
     /** Files in the diff for the phase A progress line. `null` until the diff arrives. */
     readonly diffFiles?: number | null;
-    /** Generation has run for over a minute: "still working" line with cancellation (SPEC §3). */
+    /** Generation has run for over a minute: the "still working" line with cancellation (docs/design/SPEC-elements.md §3). */
     readonly longRunning?: boolean;
     readonly cancelling?: boolean;
     readonly retrying?: boolean;
@@ -175,7 +175,7 @@ export function GenerationCard({
     );
 }
 
-/** Task running for over a minute (SPEC §3): an honest status line and cancellation. */
+/** The task has run for over a minute (docs/design/SPEC-elements.md §3): an accurate status line and cancellation. */
 function StillWorking({
     counter,
     cancelling,
@@ -211,9 +211,9 @@ export interface RouteFailedCardProps {
 }
 
 /**
- * Generation failed (README §12): a one-sentence reason, retry and raw model output.
+ * Generation failed (docs/design/README.md §12): a one-sentence reason, retry and the model's raw output.
  *
- * The handoff hint to "fix anchors and revalidate without the model" does not apply: revalidating
+ * The design's "fix anchors and revalidate without the model" hint is omitted: revalidating
  * edited output is not implemented in M2, and `rawOutput` is skeleton output, whose schema has no anchors.
  */
 export function RouteFailedCard({
@@ -278,7 +278,7 @@ export function RouteFailedCard({
 }
 
 /**
- * Partially filled route banner (README §8). A condition banner: stays while
+ * Partially filled route banner (docs/design/README.md §8). A condition banner that stays while
  * the route is being filled. Counts come from snapshot slot statuses.
  */
 export function RouteFillingBanner({
@@ -321,7 +321,7 @@ export function RouteRegeneratingBanner({
     );
 }
 
-/** Generation failure banner: highest priority in the slot (SPEC §2.21). */
+/** Generation failure banner: highest priority in the slot (docs/design/SPEC-elements.md §2.21). */
 export function GenerationFailedBanner({
     message,
     rebuilding = false,
@@ -369,7 +369,7 @@ export function RouteActionErrorBanner({ message }: { message: string }) {
     );
 }
 
-/** Loading retry button: the glyph spins in place without changing width (SPEC §1.1). */
+/** Loading retry button: the glyph spins in place and the width stays fixed (docs/design/SPEC-elements.md §1.1). */
 function RetryButton({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
     const t = useT();
     return (

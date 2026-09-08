@@ -30,7 +30,7 @@ import {
 } from './anchor-clip.js';
 
 /**
- * Route view model (README §1–2): what to render, in which order, how many lines are explained
+ * Route view model (docs/design/README.md §1–2): what to render, in what order, how many lines are explained
  * and what remains in Other. A pure module with no React or network. It takes a route snapshot,
  * diff files and parsed models, and returns the order ready for rendering.
  *
@@ -39,7 +39,7 @@ import {
  * diff model, using `changedLinesOf` (add→new, del→old).
  */
 
-/** Uncovered fraction above which Other is promoted above low-tier stops (SPEC §4.3). */
+/** Uncovered fraction above which Other moves ahead of low-tier stops (docs/design/SPEC-elements.md §4.3). */
 export const PROMOTE_THRESHOLD = 0.4;
 
 /** Unchanged line numbers by diff side. */
@@ -64,7 +64,7 @@ export interface RouteFileGroup {
      * nowhere. Each line belongs to exactly one entry, assigned in plan order.
      */
     readonly contextLines: ContextLines;
-    /** Hunks in the card slice, used for lazy rendering (SPEC §2.9). */
+    /** Hunks in the card slice, used for lazy rendering (docs/design/SPEC-elements.md §2.9). */
     readonly hunks: number;
     /** Changed file lines covered by the stop: additions and deletions. */
     readonly additions: number;
@@ -73,7 +73,7 @@ export interface RouteFileGroup {
     readonly collapsedLines: number;
     /**
      * Ranges of changed file lines covered by the stop's anchors. Marking the stop
-     * "viewed" writes them to progress (M2-T7). Collapsed anchors count alongside
+     * viewed writes them to progress. Collapsed anchors are included along with
      * visible ones because the stop explains them and prints their counts in a summary row.
      *
      * Also includes whitespace lines that Other will not take (`orphanWhitespace`). They are excluded from the stop's
@@ -86,7 +86,7 @@ export interface RouteFileGroup {
 
 export interface RouteStopView {
     readonly stop: RouteStop;
-    /** Plan-fixed number: `01`. Render order does not affect it (SPEC §8 item 4). */
+    /** Number fixed by the plan: `01`. Render order does not affect it (docs/design/SPEC-elements.md §8 item 4). */
     readonly planLabel: string;
     readonly files: readonly RouteFileGroup[];
     readonly changedLines: number;
@@ -94,10 +94,10 @@ export interface RouteStopView {
     readonly unresolvedPaths: readonly string[];
     /**
      * Anchor paths in conflict files. The lines are still there, but the file is outside route
-     * coverage (SPEC §4.1). This is not drift, so regeneration changes nothing here.
+     * coverage (docs/design/SPEC-elements.md §4.1). This is not drift. Regeneration will not change it.
      */
     readonly conflictPaths: readonly string[];
-    /** Anchors exist but none resolve in the diff: anchor drift (SPEC §2.9). */
+    /** Anchors exist but none resolve in the diff: anchor drift (docs/design/SPEC-elements.md §2.9). */
     readonly drift: boolean;
     /** No anchors at all: the stop was not filled, or filling placed no anchors. */
     readonly empty: boolean;
@@ -138,7 +138,7 @@ export interface RouteOtherView {
     readonly planLabel: string;
     readonly files: readonly RouteUncoveredFile[];
     readonly lines: number;
-    /** Conflicted file count: outside coverage, but "Other" must report them (SPEC §4.1). */
+    /** Conflict file count. They are outside coverage, but Other must report them (docs/design/SPEC-elements.md §4.1). */
     readonly conflictFiles: number;
 }
 
@@ -154,7 +154,7 @@ export interface RouteTotals {
      * finish counting without a retry, so the reviewer sees this count too.
      */
     readonly failedFiles: number;
-    /** Conflicted files: their lines are absent from both `changed` and `uncovered` (SPEC §4.1). */
+    /** Conflict files. Their lines are absent from `changed` and `uncovered` (docs/design/SPEC-elements.md §4.1). */
     readonly conflictFiles: number;
 }
 
@@ -164,14 +164,15 @@ export type RouteEntry =
 
 export interface RouteModel {
     /**
-     * Render order. Triage: high → medium → ["Other" if promoted] → low → "Other".
+     * Render order. Triage: high → medium → [promoted Other] → low → Other.
      * Full tour: the snapshot's `tourOrder` as is.
      */
     readonly entries: readonly RouteEntry[];
     readonly totals: RouteTotals;
     /**
-     * Uncovered lines exceed the threshold (SPEC §4.3): triage moves "Other" above low-tier stops, while tour
-     * order strictly follows `tourOrder`. Promotion is a triage feature. The "worth
+     * Uncovered lines exceed the threshold (docs/design/SPEC-elements.md §4.3). In Triage, Other moves ahead of
+     * low-tier stops. The tour follows `tourOrder` strictly, because promotion helps Triage and does not apply
+     * to the tour. The "consider
      * regenerating" banner uses this flag in both presets because it concerns route quality,
      * rather than card order.
      */
@@ -190,11 +191,11 @@ export interface RouteModelInput {
     readonly models: ReadonlyMap<string, DiffFileModel>;
     /** Files whose parsing failed have no model until the reviewer requests a retry. */
     readonly failed?: ReadonlySet<string>;
-    /** Session preset (SPEC §2.5). Affects only entry order. */
+    /** Session preset (docs/design/SPEC-elements.md §2.5). Only affects entry order. */
     readonly preset?: RoutePreset;
     /**
-     * The route is still filling (README §8): uncovered ranges are unoccupied plan slots, not a verdict
-     * from the model. "Other" promotion and its banner stay silent until ready, and the plan still fixes the order.
+     * The route is still filling (docs/design/README.md §8): uncovered ranges are unfilled plan slots, not the model's
+     * final judgement. "Other" is not promoted and its banner stays hidden until ready. The order stays fixed by the plan.
      */
     readonly filling?: boolean;
 }
@@ -207,7 +208,7 @@ export function buildRouteModel({
     preset = 'triage',
     filling = false,
 }: RouteModelInput): RouteModel {
-    // Conflicted files are excluded entirely from coverage calculations (SPEC §4.1). Their lines
+    // Conflicted files are excluded from coverage calculations entirely (docs/design/SPEC-elements.md §4.1). Their lines
     // count as neither changed nor uncovered, and the coverage bar omits them. A separate row
     // in "Other" reports the conflict itself.
     const files = allFiles.filter((file) => file.changeType !== 'conflict');
@@ -284,7 +285,7 @@ export function buildRouteModel({
     byTier.other = uncovered;
     const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles, conflictFiles };
 
-    // Hide "Other" only when there really are no uncovered lines (SPEC §4.3). While the diff
+    // Hide "Other" only when there really are no uncovered ranges (docs/design/SPEC-elements.md §4.3). While the diff
     // is being parsed, uncovered lines have not been counted yet. Keep the slot with "counting…",
     // otherwise card numbers and the counter would jump from 6 to 7 during parsing.
     // Conflicts also keep the slot: their row is the only place that reports them.
@@ -331,7 +332,7 @@ export function entryUnfilled(entry: RouteEntry): boolean {
 
 /**
  * Render order. Triage follows the snapshot's `stops` array. "Other" goes last, or
- * when promoted, before the first low-tier stop. Stop numbers stay fixed.
+ * before the first low-tier stop when raised. Stop numbers stay fixed.
  */
 function order(
     views: readonly RouteStopView[],
@@ -354,7 +355,7 @@ function order(
 }
 
 /**
- * Full tour order (SPEC §2.5): entries follow the snapshot's `tourOrder` exactly,
+ * Full tour order (docs/design/SPEC-elements.md §2.5). Entries follow the snapshot's `tourOrder` exactly,
  * including the position of "Other". The snapshot passed validation (`tourOrder` is a permutation
  * of all stops), but the view fails closed. Unknown ids are skipped, duplicates are used once,
  * and stops absent from `tourOrder` go at the end in plan order. A card
@@ -426,7 +427,7 @@ function stopView(
         const additions = shown.additions + collapsed.additions;
         const deletions = shown.deletions + collapsed.deletions;
         // The file exists in the diff, but no changed lines remain under the anchors. The diff has shifted beneath
-        // the snapshot. An empty card would not explain that, so the file goes into the notice (SPEC §2.9).
+        // the snapshot. An empty card would not explain this, so the file gets a notice (docs/design/SPEC-elements.md §2.9).
         if (model !== null && model.content.kind === 'text' && additions + deletions === 0) {
             markUnresolved(file.path);
             continue;
@@ -556,7 +557,7 @@ const EMPTY_SPANS: readonly AnchorSpan[] = [];
  * Changed lines in the file, using the canonical `changedLinesOf` rule (add→new, del→old). Without
  * a model yet, use patch counters.
  *
- * Empty and whitespace-only lines outside anchors are subtracted (decision log, 2026-08-26):
+ * Blank and whitespace lines outside anchors are subtracted from the count.
  * `uncoveredRanges` omits them. Without the same adjustment in the denominator, covered plus
  * uncovered would not equal changed.
  */
@@ -578,7 +579,7 @@ function names(file: FileDiff): { fileId: string; path: string; name: string; di
     };
 }
 
-/** Plan number as in the handoff: `01`, `07`. */
+/** Plan number as shown in the design: `01`, `07`. */
 export function planLabel(planIndex: number): string {
     return String(planIndex).padStart(2, '0');
 }
@@ -649,7 +650,7 @@ export function composersForGroup(
 }
 
 /**
- * Seen ranges for a route entry's "viewed" mark (requirements §3.1, log 2026-08-26).
+ * Seen ranges for the "viewed" mark on a route entry (docs/architecture.md §7.1).
  * For a regular stop, these are its files' changed lines covered by its anchors. For "Other",
  * these are uncovered ranges. The UI computes them because the server has no diff model.
  */
@@ -666,7 +667,7 @@ export function stopSeenRanges(entry: RouteEntry): readonly UiStopSeenRange[] {
     );
 }
 
-/** Stop comments (README §1: left column counter). */
+/** Stop comments (docs/design/README.md §1, counter in the left column). */
 export function countStopComments(
     view: RouteStopView,
     byFile: ReadonlyMap<string, readonly Thread[]>,
@@ -708,7 +709,7 @@ export function uncoveredAsGroup(file: RouteUncoveredFile): RouteFileGroup {
 }
 
 /**
- * Lazy stop rendering counts hunks, not files (SPEC §2.9): "stop with more
+ * Lazy rendering for a stop counts hunks, not files (docs/design/SPEC-elements.md §2.9): "stop with more
  * than 20 hunks lazy-renders beyond the first 5". Below the threshold, the whole stop renders
  * even offscreen, so scrolling does not have to wait for rendering unnecessarily.
  */
@@ -735,7 +736,7 @@ export function lazyCards(files: readonly RouteFileGroup[]): readonly RouteFileG
 }
 
 /**
- * Stop state that determines whether its diff column can be removed from the DOM (M5-T13).
+ * Stop state that determines whether its diff column can be removed from the DOM.
  * The route is not virtualized as a whole. The section stays in place with its narrative,
  * chips and viewed toggle. Only the right column is removed, with a placeholder
  * of its measured height holding its place.
@@ -745,7 +746,7 @@ export interface StopDiffMountState {
     readonly nearViewport: boolean;
     /** Last measured column height. `null` means it has never been measured, so there is no replacement height. */
     readonly measuredHeight: number | null;
-    /** First route stop: the reviewer's entry point and tour anchor (M5-T8). */
+    /** First stop in the route, the reviewer's entry point and the tour anchor. */
     readonly first: boolean;
     /**
      * The column renders file cards. An unfilled slot's skeleton, anchor drift, "no hunks"
@@ -776,7 +777,7 @@ export function canUnmountStopDiff(state: StopDiffMountState): boolean {
 
 /**
  * The stop is classified relative to the previous pass. Only these pass the
- * "what is new" filter (README §9). The synthetic "Other" has no classification and disappears along
+ * "what is new" filter (docs/design/README.md §9). The synthetic "Other" has no classification and is hidden along
  * with unchanged stops.
  */
 export function entryChanged(entry: RouteEntry): boolean {
@@ -785,7 +786,7 @@ export function entryChanged(entry: RouteEntry): boolean {
 
 /**
  * The "what is new" filter is invalid when there are no classified stops. The entire
- * route is shown, with no chip or URL entry (decision 6).
+ * route is shown, with no chip or URL entry.
  */
 export function changeFilterAvailable(entries: readonly RouteEntry[]): boolean {
     return entries.some(entryChanged);
@@ -799,7 +800,7 @@ export function entryMatchesChangeFilter(entry: RouteEntry, active: boolean): bo
     return !active || entryChanged(entry);
 }
 
-/** Stops with no files left under the current filter leave the view (SPEC §2.7). */
+/** Stops with no files left under the current filter are removed from the view (docs/design/SPEC-elements.md §2.7). */
 export function stopMatchesFilter(view: RouteStopView, fileIds: ReadonlySet<string> | null): boolean {
     return fileIds === null || view.files.some((group) => fileIds.has(group.fileId));
 }

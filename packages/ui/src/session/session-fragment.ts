@@ -8,7 +8,7 @@ import { DEFAULT_PRESET, DEFAULT_ROUTE_FILTER } from './session-store.js';
  * What session state writes to the URL fragment. Defaults stay out of the URL. The route preset and
  * filter appear in the URL only when changed.
  *
- * `fragment` contains keys set explicitly by the call (M4-T10 "View at the old commit" sets
+ * `fragment` contains keys set explicitly by the call ("show at the old commit" sets
  * `thread`). They take precedence over `viewingFragmentPatch` removing anchors from another diff.
  */
 export function sessionFragmentPatch(

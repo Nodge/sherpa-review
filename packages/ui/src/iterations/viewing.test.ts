@@ -12,7 +12,7 @@ import {
 import type { ViewingInput } from './viewing.js';
 
 /**
- * Resolving iteration selection (M4-T9): endpoint parameters, where read-only mode applies,
+ * Resolve the iteration selection: endpoint parameters, read-only mode,
  * and fallback behaviour when the server does not yet support the snapshots endpoint.
  */
 
@@ -170,7 +170,7 @@ describe('resolve iteration selection', () => {
         expect(resolved.label).toEqual({ kind: 'diff', commit: NEW_COMMIT, status: 'noRoute' });
     });
 
-    // Before M4-T4 the server sends `iterations: []`, and only the route knows the active iteration
+    // The server may send `iterations: []`, leaving only the route without parameters to identify the active iteration.
     // Its response lives apart from the tab data and survives selection changes.
     it('known facts identify the active iteration even without an iteration list or a route in the tab', () => {
         const resolved = resolveViewing(

@@ -3,7 +3,7 @@ import type { RouteSectionResult, RouteSkeletonResult } from '@sherpa/protocol';
 import { MODEL_STOPS, P, rawAnchors } from './route-medium.js';
 
 /**
- * English raw model output set for the `medium` fixture (M5-T4): the same PR and anchors,
+ * English set of raw model outputs for the `medium` fixture: the same PR and anchors,
  * with text in generation language `en`. Data for the validator golden corpus and gallery: without it,
  * tests of the English voice stop list and English validator annotations would use invented data.
  *
@@ -49,7 +49,7 @@ const PLAN_EN: readonly { title: string; intent: string }[] = [
     },
 ];
 
-/** The file is absent from the diff: the validator drops its 2 digest assertions (SPEC §4.3). */
+/** This file is absent from the diff, so the validator drops the two digest assertions anchored to it. */
 const FACTORIES_PATH = 'services/orders/src/domain/__tests__/factories.ts';
 
 /** English digest for stop 04: the same anchor layout, including the two dropped anchors. */

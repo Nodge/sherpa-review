@@ -254,7 +254,8 @@ export class ChatStore {
     }
 
     /**
-     * Carry note anchors from iteration `fromDiffId` to `toDiffId` using a line map (SPEC §2.16).
+     * Carries note anchors from iteration `fromDiffId` to `toDiffId` using the line map
+     * (docs/design/SPEC-elements.md §2.16).
      * A range untouched by the push moves as a whole. All other cases lose their anchor: a deleted file, rewritten
      * lines, a range split apart, or a file missing from the new diff. `anchor` and its
      * commit keep their last valid values. The note leaves the code and stays in chat with a marker.

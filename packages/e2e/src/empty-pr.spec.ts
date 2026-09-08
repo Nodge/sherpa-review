@@ -1,8 +1,8 @@
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * Empty PR (SPEC §4.1): no changes against the base. Both views say so explicitly
- * instead of showing empty lists, while ship stays available. The reviewer can still approve an empty PR.
+ * Empty PR (docs/design/SPEC-elements.md §4.1): no changes relative to the base at all.
+ * Both views say so instead of showing empty lists, and ship stays available. The reviewer can still approve an empty PR.
  */
 
 test('empty PR: both views show "Nothing to review" and ship is available', async ({ page, launchSherpa }) => {

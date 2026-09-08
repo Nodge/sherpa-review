@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import { diffOf, expect, test } from './sherpa-fixture.js';
 
 /**
- * Images in the diff (M5-T23 – T25): an image card replaces the "binary file not shown" notice,
+ * Images in the diff: an image card replaces the "binary file not shown" notice,
  * bytes come through the real blob endpoint, and 2-up / Swipe / Onion Skin / Diff modes switch
  * on a live page. A web worker computes the difference, so the test checks the screen,
  * while unit tests cover the pure function.

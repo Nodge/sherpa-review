@@ -48,7 +48,7 @@ describe('UI endpoints', () => {
     });
 
     async function start(uiDir?: string): Promise<SherpaServer> {
-        // This suite uses a hosted review key, but tests must not call a live service (requirements §7):
+        // This suite uses a hosted-review key, but tests must not call a live review host (docs/testing.md):
         // no host means review endpoints return `no_review_host` and SSE only sends state.
         const base = {
             prKey: PR_KEY,

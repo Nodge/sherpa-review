@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createProgressWriter } from './progress-writer.js';
 
-/** Viewed mark coordination: per-file queue, rollback and tab convergence (T8). */
+/** Coordinate viewed marks: per-file queue, rollback and convergence across tabs. */
 
 interface Deferred {
     readonly resolve: (revision: number) => void;

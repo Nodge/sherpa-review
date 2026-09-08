@@ -65,7 +65,7 @@ function button(host: HTMLElement, label: string): HTMLButtonElement {
 
 describe('Feedback form', () => {
     it('without credentials shows the reason and keeps the text available to copy', () => {
-        const reason = 'You can send feedback directly to issue #2300 or to Alice Ingram.';
+        const reason = 'You can send feedback directly to issue #2300.';
         const host = mountFeedback(
             { available: false, reason },
             () => Promise.reject(new Error('sending unavailable')),

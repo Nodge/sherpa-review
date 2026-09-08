@@ -185,7 +185,7 @@ describe('server idle shutdown', () => {
     });
 
     async function start(longPollSeconds?: number): Promise<SherpaServer> {
-        // The review host is irrelevant here, and live hosts are forbidden in tests (requirements §7).
+        // The review host is irrelevant here, and tests must not call a live host (docs/testing.md).
         const base = {
             prKey: PR_KEY,
             sherpaDir,

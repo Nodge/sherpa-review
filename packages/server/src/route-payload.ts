@@ -20,17 +20,17 @@ import type { SharedPayloadStore } from './shared-payload.js';
 import { diffKeyOf } from './shared-payload.js';
 
 /**
- * Route generation task payloads (rpc-design §4): large context goes in files, instructions in
+ * Route generation task payload (docs/protocol.md §4): large context in files, short instructions in
  * stdout, and the result schema as part of the task.
  *
  * Each task is self-contained. The agent session may have died and reconnected, so the payload
  * includes everything needed: the guide, PR diff and (for sections) route plan. The unchanged part (guide and
  * diff) lives at a stable path in the shared directory (`shared-payload.ts`). The generation directory holds
- * only its own data. Texts are English because the model reads them. The generation locale sets the result language
- * (M5-T4). The instructions filename includes a content hash, so 2 locales do not compete for one file.
+ * only its own files. Text is in English because the model reads it. The generation locale names the result language.
+ * The guide filename includes a content hash so that 2 locales do not compete for the same file.
  *
  * Priority is background. Route generation takes minutes and must not run ahead of work the reviewer
- * is waiting for on screen (rpc-design §5).
+ * is waiting for at the screen (docs/protocol.md §5).
  *
  * Writes are synchronous. The orchestrator enqueues tasks during synchronous reconciliation, which
  * runs from a queue subscriber and the result acceptance handler. Payload files total hundreds of kilobytes per
@@ -39,7 +39,7 @@ import { diffKeyOf } from './shared-payload.js';
  */
 
 /**
- * Budget for the diff context file, in bytes (requirements §3.5, decision 5). ~320 KB is roughly
+ * Diff context file budget in bytes (docs/architecture.md §7.5). ~320 KB is roughly
  * 80 thousand tokens. A large PR fits in full, while a pathological one (generated assets,
  * megabytes of snapshot tests) is truncated so it cannot consume the model context window and ruin latency.
  * The changed file list is outside the budget and is never truncated.
@@ -47,7 +47,7 @@ import { diffKeyOf } from './shared-payload.js';
 export const CONTEXT_BUDGET_BYTES = 320 * 1024;
 
 /**
- * Regeneration context budgets (M4-T7). Counted separately from the PR diff so the interdiff cannot
+ * Regeneration context budgets, counted separately from the PR diff. The interdiff must not
  * displace patches used by sections for anchors. The previous route is the cheapest to lose,
  * because it only helps preserve stop numbers. 128 KB fits any ordinary push in full, and 64 KB fits
  * a route with about 10 stops and 10 threads with replies.
@@ -64,7 +64,7 @@ export interface RegenerationBudgets {
     readonly threadsSince: number;
 }
 
-/** Payload directories have the same 0700 permissions as the rest of the PR state (requirements §6). */
+/** Payload directories use the same 0700 permissions as other PR state (docs/architecture.md §6). */
 const DIR_MODE = 0o700;
 /** The payload has no secrets, but outsiders have no reason to read it either. */
 const FILE_MODE = 0o600;
@@ -295,7 +295,7 @@ export class RoutePayloadWriter {
         return file;
     }
 
-    /** Result schema as a file (rpc-design §4). Zod is canonical, JSON Schema is derived. */
+    /** Result schema as a file (docs/protocol.md §4). Zod is canonical, JSON Schema is derived. */
     private writeSchema(kind: 'skeleton' | 'section'): string {
         const key = kind === 'skeleton' ? 'routeSkeletonResult' : 'routeSectionResult';
         const schema = generateJsonSchemas()[key];
@@ -313,7 +313,7 @@ export function prDiffContext(context: RoutePayloadContext, budgetBytes: number)
 }
 
 /**
- * The same file with truncation metrics (M5-T14), shown in the route header and
+ * The same file with truncation metrics, which the UI shows in the route header and the
  * banner. Calculated in the same pass as the text, since there is no reason to trim the diff twice.
  */
 export function prDiffPayload(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
@@ -420,7 +420,7 @@ const INTERDIFF_PATCHES_HEADING = [
 /**
  * PR context within budget: header, full file list and patches. The budget covers the entire
  * output file, including block separators. Otherwise "no more than N bytes" stops being
- * true exactly when it matters (requirements §3.5).
+ * true exactly when it matters (docs/architecture.md §7.5).
  */
 function prContext(context: RoutePayloadContext, budgetBytes: number): PatchedContext {
     const { diff, meta } = context;

@@ -2,7 +2,7 @@ import type { DiffParseMessage, DiffParseReply } from './client.js';
 import { parseFileDiff } from './parse.js';
 
 /**
- * Diff worker entry point: moves patch parsing off the main thread (requirements §1/C3).
+ * Diff worker entry point: moves patch parsing off the main thread (docs/architecture.md §1).
  * Only transport lives here. All logic is in `parse.ts` so it can be tested without a worker.
  */
 

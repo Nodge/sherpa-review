@@ -1,5 +1,5 @@
 /*
- * Syntax highlighting follows README §1, with exactly four categories. The classes are shared by everything
+ * Syntax highlighting, docs/design/README.md §1, four categories only. Classes are shared by everything
  * that passes text through `diff/syntax.ts`: diff lines and fenced code in comments.
  */
 

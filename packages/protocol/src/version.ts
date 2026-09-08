@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Session↔server protocol version (rpc-design §9).
+ * Session↔server protocol version (`docs/protocol.md §9`).
  * Compatibility rule: in the 0.x line, a minor change is breaking. From 1.0 onward, matching majors suffice.
  */
 export const PROTOCOL_VERSION = '0.11.0';

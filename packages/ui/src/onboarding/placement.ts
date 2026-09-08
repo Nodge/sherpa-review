@@ -1,5 +1,5 @@
 /**
- * Tour card placement (SPEC-onboarding-2026-09-02 §3). Pure geometry: takes a
+ * Tour card positioning (docs/design/SPEC-onboarding-2026-09-02.md §3). Pure geometry: takes a
  * target rectangle and window dimensions, returns the ring, side, card coordinates and arrow
  * offset. No DOM here, so unit tests cover all four sides and clamps.
  *

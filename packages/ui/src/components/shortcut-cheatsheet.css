@@ -1,4 +1,4 @@
-/* `?` shortcuts sheet (SPEC §5): overlay dialog using the PR comments modal anatomy. */
+/* `?` shortcuts sheet (docs/design/SPEC-elements.md §5): overlay dialog with the PR comments modal structure. */
 
 .shortcut-cheatsheet__overlay {
     position: fixed;

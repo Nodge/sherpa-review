@@ -1,5 +1,5 @@
 /**
- * Fitting task context files into the budget (rpc-design §4). Shared logic for payload
+ * Fits task context files into a budget (docs/protocol.md §4), shared by chat and route
  * payloads. The same rule applies to both: "at most N bytes" counts the entire finished
  * file, and a truncated part is marked so the model cannot mistake it for the full text.
  */

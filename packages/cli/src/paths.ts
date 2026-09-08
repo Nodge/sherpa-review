@@ -35,7 +35,7 @@ export function serverBinOverrideFrom(env: Readonly<Record<string, string | unde
     return override === undefined || override === '' ? undefined : override;
 }
 
-/** Discovery manifest written by the server (rpc-design §8). */
+/** Discovery manifest written by the server (`docs/protocol.md §8`). */
 export function manifestPathFor(sherpaDir: string, prKey: string): string {
     return path.join(sherpaDir, 'servers', `${assertValidPrKey(prKey)}.json`);
 }

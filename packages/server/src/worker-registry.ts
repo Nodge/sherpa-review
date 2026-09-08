@@ -18,7 +18,7 @@ export interface WorkerRegistryOptions {
     readonly gapGraceSeconds?: number;
 }
 
-/** Listener for worker status changes, to be used by the UI channel (M0-T7). */
+/** Worker status change listener, consumed by the UI channel. */
 export type WorkerStatusListener = (status: WorkerStatus) => void;
 
 /**
@@ -42,15 +42,15 @@ const SLOT_ID = 1;
 const DEAD_AFTER_MS = WORKER_DEAD_AFTER_SECONDS * 1000;
 
 /**
- * Pause without an open connection or lease after which the session is considered dead
- * (decision 2026-08-20). An idle worker hangs in long-poll `next`, so it has no connection
- * only between one call returning and the next call, a few seconds of model work.
+ * Gap without an open connection or lease after which the session is considered dead.
+ * An idle worker waits in long-poll `next`, so it has no connection only between
+ * one call returning and the next call, a few seconds of model work.
  * Internal server policy, outside the contract.
  */
 export const WORKER_GAP_GRACE_SECONDS = 60;
 
 /**
- * PR worker lifecycle (rpc-design §7): session registration, heartbeat on every CLI call,
+ * PR worker lifecycle (docs/protocol.md §7): session registration, heartbeat on every CLI call,
  * transition to "Agent disconnected" on either a broken connection or silence.
  *
  * A worker is alive if at least one condition holds:
@@ -108,7 +108,7 @@ export class WorkerRegistry {
 
     /**
      * PR worker session registration: `sherpa worker register` when the skill starts.
-     * Fresh registration always wins (decision 2026-08-20, superseding spec §3.7): takes a free slot,
+     * A new registration always wins (docs/architecture.md §7.7). It claims a free slot,
      * takes over from another session (even a live one), or renews the same workerId.
      * This never returns `worker_conflict`. The displaced session learns it has lost the slot on
      * its next call (`touch`/`assertOwner`).
@@ -119,7 +119,7 @@ export class WorkerRegistry {
     }
 
     /**
-     * Heartbeat: called on every valid worker request (rpc-design §7).
+     * Heartbeat: called on every valid worker request (docs/protocol.md §7).
      * A session without `register` (its workerId came from the state file) claims a free slot itself,
      * but does not displace a live owner. That requires `register`.
      * Returns the displaced dead session's workerId, like `register`.
@@ -142,7 +142,7 @@ export class WorkerRegistry {
 
     /**
      * Tracks an open worker connection. While it is open, the session is alive without a heartbeat,
-     * closing it signals session death (rpc-design §7, decision 2026-08-20). Returns a function
+     * and its closure signals the session's death (docs/protocol.md §7). Returns a function
      * for the HTTP layer to call when the connection closes. Repeated calls are a no-op.
      */
     holdConnection(workerId: string): () => void {
@@ -222,7 +222,8 @@ export class WorkerRegistry {
 
         if (row.worker_id === workerId) {
             // Repeated register for the same session renews it without registering a new one.
-            // `registered_at` holds the session start time, which the UI uses to calculate uptime (SPEC §2.2).
+            // `registered_at` keeps the session start time, which the UI uses to calculate uptime
+            // (docs/design/SPEC-elements.md §2.2).
             this.db
                 .prepare('UPDATE worker SET harness = ?, model = ?, lang = ?, last_seen_at = ? WHERE id = ?')
                 .run(harness ?? row.harness, model ?? row.model, lang ?? row.lang, nowIso, SLOT_ID);
@@ -230,7 +231,7 @@ export class WorkerRegistry {
         }
 
         // A live previous worker is displaced too. Starting a new session is a deliberate action
-        // by the reviewer, and it takes priority (decision 2026-08-20). Otherwise two parallel sessions on one PR
+        // by the reviewer, so it takes priority. Otherwise two parallel sessions on one PR
         // compete for the slot, and whoever goes silent first determines the winner.
         this.takeOver(workerId, harness ?? null, model ?? null, lang ?? null, nowIso);
         return ok(row.worker_id);
@@ -415,7 +416,7 @@ export class WorkerRegistry {
  * Another live session owns the slot: a non-owner called `touch`/`assertOwner`. Registration no longer
  * reaches this path because a new session takes over the slot. There is no reason to suggest waiting N minutes:
  * the recipient must stop its loop (the CLI adds the terminal instruction).
- * Two sessions per PR are not supported (SPEC §4.4).
+ * Two sessions for one PR are not supported (docs/design/SPEC-elements.md §4.4).
  */
 function conflict(row: WorkerRow): RpcFailure {
     const owner = row.harness === null ? row.worker_id : `${row.worker_id}, harness ${row.harness}`;

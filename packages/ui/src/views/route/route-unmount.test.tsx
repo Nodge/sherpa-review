@@ -17,7 +17,7 @@ import { openReply } from '../../threads/thread-list.tsx';
 import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
- * Removing a distant stop's diff column from the DOM (M5-T13). jsdom has neither layout nor
+ * Remove a distant stop diff column from the DOM. jsdom has neither layout nor
  * observers, so both are mocked: `IntersectionObserver` lets the test trigger hysteresis
  * boundaries manually, and the column `offsetHeight` supplies a nonzero height for the placeholder.
  */

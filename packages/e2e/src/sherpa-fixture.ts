@@ -33,10 +33,10 @@ export interface LaunchOptions {
      * apply across all PRs. The test creates and removes the directory. The fixture leaves it alone.
      */
     readonly sherpaDir?: string;
-    /** Distribution directory (`--install-dir`): determines the update command in the toast (M5-T9). */
+    /** Distribution directory (`--install-dir`): determines the update command in the toast. */
     readonly installDir?: string;
     /**
-     * The onboarding tour (M5-T8) starts for users who have not completed it, which means
+     * The onboarding tour starts for users who have not taken it yet, which means
      * any clean state root. It would interfere with specs for everything else, so by default
      * the fixture marks the tour complete. `'pending'` leaves the clean root as is.
      */

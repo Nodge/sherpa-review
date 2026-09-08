@@ -1,7 +1,7 @@
 /*
- * Route in the full diff margins, README §10: a stop badge (`01`) or hatched "outside
+ * Route in the full diff margins, docs/design/README.md §10: a stop badge (`01`) or hatched "outside the
  * the route" in a tree row, "explained in 02 · title" in a card header and a hatched strip
- * below an uncovered range. Sidebar and footer hatching use their own token variants (README, tokens).
+ * below an uncovered range. Sidebar and footer hatches have their own token variants (docs/design/README.md, tokens).
  */
 
 .route-badge {
@@ -61,7 +61,7 @@ button.route-badge:hover {
 }
 
 /*
- * The strip action (README §10) is an accent link at the right edge, with no button box, keeping
+ * Strip action (docs/design/README.md §10): an accent link at the right edge, rather than a boxed button, keeps
  * the strip as tall as its text line.
  */
 .route-strip__action,

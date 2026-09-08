@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * Whether the element has appeared on screen. Once `true`, always `true`. This flag lets a stop
- * request parsing of its files and render cards beyond the first five (SPEC §2.9),
+ * request parsing for its files and render cards beyond the first 5 (docs/design/SPEC-elements.md §2.9),
  * and there is no point in undoing that.
  *
  * Without `IntersectionObserver` (tests, older runtimes), consider everything visible. Fall back
@@ -42,7 +42,7 @@ export function useOnScreen(ref: RefObject<HTMLElement | null>, rootMargin = '80
 /**
  * Whether the element is near the viewport. Unlike `useOnScreen`, this flag changes both ways, letting
  * a stop remove its diff column from the DOM when the reviewer scrolls far away and restore it
- * when they scroll back (M5-T13).
+ * when they return.
  *
  * Hysteresis is required: mount at the near boundary, unmount at the far one. A single
  * boundary would make cards flicker every frame when a stop edge sits exactly on it.

@@ -8,7 +8,7 @@ import { createThreadStore } from '../threads/store.js';
 import { ViewFrame } from './view-frames.tsx';
 
 /**
- * Overview and the "Route" tab during generation (README §6–7, SPEC §4.1): what the
+ * Overview and the Route tab during generation (docs/design/README.md §6–7, docs/design/SPEC-elements.md §4.1): what the
  * Summary card shows and whether a generation card appears in the right rail.
  */
 
@@ -47,7 +47,7 @@ describe('Overview during generation', () => {
         expect(html).toContain('summary-skeleton');
         expect(html).toContain('Reading the diff, planning the route');
         expect(html).toContain('Reading the whole diff · 21 files');
-        // No caret: summary arrives whole with the skeleton (M2-T1 decision).
+        // No caret: the summary arrives in full with the skeleton.
         expect(html).not.toContain('caret');
     });
 

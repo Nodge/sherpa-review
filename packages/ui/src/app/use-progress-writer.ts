@@ -92,7 +92,7 @@ export function useProgressWriter({
     );
     /**
      * For a previous iteration, the progress writer only refreshes the snapshot. It rejects writes
-     * before the optimistic mark, so the control does not flash or revert (M4 boundaries).
+     * before applying an optimistic mark, so the control does not flicker and roll back.
      * The controls themselves are disabled. Only internal paths can reach this point.
      */
     const progressWriter = useMemo<ProgressWriter | null>(

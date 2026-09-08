@@ -20,11 +20,11 @@ import {
 import './route-margin.css';
 
 /**
- * Route in the full diff margins (README §10, brief principle 5): a stop badge in the tree row
+ * Route in full diff margins (docs/design/README.md §10, docs/product.md §3, principle 5): a stop badge in the tree row
  * and card header, a hatched strip below each uncovered range. The same AI layer that sets
  * the order in the route tab here only answers "which stop explains this", without changing the order.
  *
- * Components are shared by the tree and cards: the appearance is the same, sizes differ (README §10).
+ * Shared components for the tree and cards: the same appearance in different sizes (docs/design/README.md §10).
  */
 
 export interface RouteBadgeProps {
@@ -62,7 +62,7 @@ export function RouteBadge({ file, otherStopId, variant, onJump }: RouteBadgePro
             title={title}
             aria-label={title}
             // The tree badge adds no tab stop. Rows use the tree's roving cursor
-            // (SPEC §2.20), and an extra tab stop would break its keyboard navigation.
+            // (docs/design/SPEC-elements.md §2.20), which an extra tab stop would disrupt.
             tabIndex={variant === 'tree' ? -1 : undefined}
             onClick={(event) => {
                 // Clicking the badge navigates to the stop instead of opening the file through the tree row.
@@ -82,11 +82,11 @@ export interface MarginStrips {
 }
 
 /**
- * The "ask the agent to place the range" action in the hatched strip (README §10).
+ * "Ask the agent to place the range" action on a hatched strip (docs/design/README.md §10).
  * This sends a chat question without regenerating or changing the route.
  */
 export interface MarginStripActions {
-    /** A disconnected agent disables the entry point, as in the popover (SPEC §2.15). */
+    /** A disconnected agent disables the action, as in the popover (docs/design/SPEC-elements.md §2.15). */
     readonly agentConnected: boolean;
     /** A question about this range is queued or running. An "asked" chip replaces the button. */
     readonly isPending: (anchor: UiChatAskAnchor) => boolean;
@@ -107,7 +107,7 @@ export interface MarginStripsInput {
 /**
  * "No route stop" strips below uncovered ranges. A range whose last line
  * is not rendered (card collapsed by size, "whitespace only", patch failed to parse) does not disappear
- * silently: these ranges are grouped into one summary below the header (brief principle 3).
+ * silently. These ranges share a summary below the header (docs/product.md §3, principle 3).
  */
 export function useMarginStrips({
     model,

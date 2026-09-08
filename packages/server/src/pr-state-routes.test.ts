@@ -9,7 +9,7 @@ import { get, makeTempSherpaDir, patchJson, removeTempSherpaDir } from './test-s
 const PR_KEY = 'github-quillmart--quillmart--4242';
 const OTHER_PR_KEY = 'github-quillmart--quillmart--4343';
 
-/** Per-PR UI state endpoint (M3-T18): collapsed state and palette history live in this PR's database. */
+/** Per-PR UI state endpoint: folds and palette history live in this PR's database. */
 describe('UI state endpoint for this PR', () => {
     let sherpaDir: string;
     let servers: SherpaServer[];

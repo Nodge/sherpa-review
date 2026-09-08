@@ -12,7 +12,7 @@ import { RouteReadingView } from './route-generating.tsx';
 import { RouteWorkspace } from './route-workspace.tsx';
 
 /**
- * Route during generation (README §8): every plan slot stays in place, unfilled ones show
+ * Route during generation (docs/design/README.md §8): all plan slots remain, unfilled slots show
  * their number, title and a shimmer skeleton instead of a diff. The coverage bar waits for the plan.
  */
 
@@ -109,7 +109,7 @@ describe('route during filling', () => {
         expect(html).not.toContain('The model did not place these ranges');
     });
 
-    it('agent dies during generation: filled stops get a note, unfilled ones do not (SPEC §4.4)', () => {
+    it('marks filled slots when the agent dies during generation, leaving unfilled slots unmarked (docs/design/SPEC-elements.md §4.4)', () => {
         const stopped = render({ agentStopped: true });
 
         // Only ready slots get the mark: s01, s02, s05.

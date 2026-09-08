@@ -10,7 +10,7 @@ export interface PrStateRoutesOptions {
 }
 
 /**
- * This PR's UI state endpoints (M3-T18). They need no review host: collapsed state and palette history are
+ * UI state endpoints for this PR. They need no review host: folds and palette history
  * are local tab data. Like settings, they have no SSE: a second tab for the same PR catches up
  * when it rereads the endpoint. Until then, the last write wins.
  */

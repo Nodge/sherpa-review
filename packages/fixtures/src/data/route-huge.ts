@@ -5,7 +5,7 @@ import type { RouteBrokenResults, RouteRawResults } from './route.js';
 
 /**
  * Route for the `huge` performance fixture: 25 stops across 100 files. Used to measure the
- * Route view with a long list of stops (requirements §6). There is no substantive PR analysis here,
+ * "Route" tab with a long stop list. There is no substantive PR analysis here,
  * and text is built from a template using the files in each stop.
  *
  * Anchors use the same ranges that generated the hunks, so they fall exactly

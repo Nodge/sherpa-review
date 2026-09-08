@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DiffBlock, DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
-import { hunkContextRequests, hunkIndexOfLine } from './hunk-expansion.js';
+import { hunkContextRequests } from './hunk-expansion.js';
 
 function hunk(newStart: number, count: number): DiffHunk {
     const lines: DiffLine[] = Array.from({ length: count }, (_unused, index) => ({
@@ -36,16 +36,6 @@ function model(blocks: readonly DiffBlock[]): DiffFileModel {
         content: { kind: 'text', blocks: [...blocks] },
     } as unknown as DiffFileModel;
 }
-
-describe('hunkIndexOfLine', () => {
-    it('finds the hunk by a new-side line', () => {
-        const file = model([hunk(1, 3), gap('inner', 4, 30), hunk(40, 3)]);
-
-        expect(hunkIndexOfLine(file, 'new', 41)).toBe(1);
-        expect(hunkIndexOfLine(file, 'new', 2)).toBe(0);
-        expect(hunkIndexOfLine(file, 'new', 500)).toBeNull();
-    });
-});
 
 describe('hunkContextRequests', () => {
     it('expands the hunk from both sides through internal gaps', () => {

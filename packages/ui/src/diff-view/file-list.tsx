@@ -39,8 +39,8 @@ import { fileCollapseReason } from './store.js';
 import { useSelectionLifecycle } from './use-selection.js';
 
 /**
- * Virtualized list of diff cards (SPEC §8 item 8: 60+ files at 60fps). The DOM contains
- * only visible cards plus overscan, so worker parsing is lazy too: a file
+ * Virtualized diff card list (docs/design/SPEC-elements.md §8 item 8: 60+ files at 60fps). The DOM contains
+ * only visible cards plus overscan beyond the viewport, so worker parsing is lazy too. A file
  * is parsed exactly when it scrolls into view.
  *
  * `measureElement` measures actual card heights. The estimate lasts only until the first measurement.
@@ -55,7 +55,7 @@ import { useSelectionLifecycle } from './use-selection.js';
 
 /** Code line height, `--line-height-code`. Used to estimate the card body before measurement. */
 const CODE_LINE_HEIGHT = 20;
-/** Everything in a card except lines: header 36.8 + borders 2 + gap to the next card 22 (measured in M2F-T3). */
+/** Everything in the card except code lines: header 36.8 + borders 2 + gap to the next card 22 (measured). */
 const CARD_CHROME_HEIGHT = 61;
 /** Single-line notice or collapsed card: 7+7 padding, 11px/1.5 line and a border. */
 const NOTICE_ROW_HEIGHT = 32;
@@ -94,7 +94,7 @@ export interface DiffFileListProps {
     readonly store: DiffViewStore;
     /** The host can supply file contents (`capabilities.fileContent`). */
     readonly contentAvailable: boolean;
-    /** Why contents are missing: an inter-iteration slice has none, even without a host (M4-T12). */
+    /** Why content is missing. It is unavailable for an iteration slice even without a host. */
     readonly noContentReason?: string | undefined;
     /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
@@ -108,22 +108,22 @@ export interface DiffFileListProps {
     readonly threadActions?: ThreadActions | undefined;
     readonly threadVisible?: ((thread: Thread) => boolean) | undefined;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
-    /** File comment without a line: image card menu item (M5-T24). */
+    /** File comment without a line, from the image card menu. */
     readonly onCommentFile?: ((fileId: string) => void) | undefined;
     readonly onLineFocus?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
     readonly onFocusThread?: ((threadId: string | null) => void) | undefined;
     readonly threadNow?: number | undefined;
     readonly outsideThreads?: ReactNode;
-    /** Route in card margins (README §10). null means no route and no margins. */
+    /** Route in card margins (docs/design/README.md §10). null means no route and no margins. */
     readonly routeMargin?: RouteMarginModel | null;
-    /** Hatched strip action (README §10). Without it, the strip remains a label. */
+    /** Hatched bar action (docs/design/README.md §10). Without it, the bar is just a label. */
     readonly marginActions?: MarginStripActions | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** File from the URL fragment (`file=`), scrolled to on open. */
     readonly initialFileId?: string | null;
     /**
-     * File kept on screen despite the filter (SPEC §2.7): the card gets an
+     * File kept on screen despite the filter (docs/design/SPEC-elements.md §2.7). Its card gets an
      * "outside current filter" notice. The view decides which file to keep.
      */
     readonly keptFileId?: string | null;
@@ -312,10 +312,10 @@ export function DiffFileList({
         });
     }, []);
 
-    // Width available to the diff: side by side is unavailable below 1100px (SPEC §2.6). Measure the
+    // Width available to the diff. Side-by-side is unavailable below 1100px (docs/design/SPEC-elements.md §2.6). Measure
     // list itself, not the window. The tree panel on its left takes 290px that the diff cannot use.
     // Use the padding-box (`clientWidth`), since page padding is part of the space given to the diff.
-    // otherwise the reference 1440px viewport (README "Fidelity") would never meet the threshold.
+    // Otherwise the reference 1440px viewport (`docs/design/README.md`, "Fidelity") would never pass the threshold.
     // Read the initial value immediately. ResizeObserver does not fire in a background tab.
     useEffect(() => {
         const element = listRef.current;
@@ -337,7 +337,7 @@ export function DiffFileList({
 
     // While the list adjusts scrolling itself (a `#file=` link, tree navigation, repositioning after
     // a filter change), no scroll event is reported upward. These are not reviewer gestures and
-    // must not clear the "kept on screen" notice (SPEC §2.7).
+    // must not clear the "kept on screen" mark (docs/design/SPEC-elements.md §2.7).
     const settling = useRef(0);
     // Active adjustment sequence, cancelled by either new navigation or the reviewer's wheel.
     const converging = useRef<ConvergingScroll | null>(null);
@@ -370,7 +370,7 @@ export function DiffFileList({
     // ResizeObserver cannot see a card outside the DOM. When its collapsed state changes, replace its old
     // measurement with a new estimate. Keep the collapsed card's sticky header below the toolbar, since
     // the reviewer stayed on it. The only exception is a card from which the view already requested
-    // a move to the next file (`advancingFileId`, decision log 2026-09-02): keeping it would
+    // navigation to the next file (`advancingFileId`). Keeping that card in place would
     // pull the screen back against the view's own scrolling.
     const previousCollapseReasons = useRef<ReadonlyMap<string, FileCollapseReason>>(collapseReasons);
     useEffect(() => {
@@ -931,7 +931,7 @@ export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, c
     }
 
     // In split mode, a deletion and an addition share one row. One-sided files do not collapse
-    // collapses and renders unified at full width (README §1).
+    // into pairs and render unified at full width (docs/design/README.md §1).
     const lines =
         mode === 'split' && file.additions > 0 && file.deletions > 0
             ? Math.max(file.additions, file.deletions)

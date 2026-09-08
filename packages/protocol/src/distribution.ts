@@ -6,7 +6,7 @@ import { semverSchema } from './version.js';
 export const DISTRIBUTION_WHATS_NEW_MAX_CHARS = 140;
 
 /**
- * Distribution `version.json` (M5, planning decision 7): the source of truth for checking
+ * Distribution `version.json`: the source of truth for checking
  * whether a new version is available. The build (`build.mjs`) writes `version` and `builtFrom`. The release command
  * adds `releasedAt` and `whatsNew`. The server reads the file from main and compares it with the embedded version.
  * Release fields are nullable: `dist/` before release has the same file without them.

@@ -14,18 +14,19 @@ const P95_BUDGET_MS = 33;
 const SCROLL_STEP_PX = 300;
 
 /**
- * The spec §7 budget for `fixture-huge` fails the run starting with T13: a distant stop's diff column is removed
- * from the DOM, and the route keeps the same frame intervals as the virtualized full diff.
+ * `fixture-huge` meets the budget in `docs/testing.md` §5 because the diff column
+ * of a distant stop leaves the DOM: the route keeps the same frame intervals as
+ * the virtualized full diff.
  * The checks measure intervals between rAF calls, rather than "frame work": our synchronous share was already
- * 0.08 ms. Browser layout and painting were what exceeded the budget (T12 report).
+ * 0.08 ms before optimization. Browser layout and painting were what exceeded the budget.
  */
 // The type is deliberately widened to boolean: otherwise the literal would narrow to `true` and the linter would
 // consider the check redundant. Disabling the budget for investigation must still take just one edit.
 const HUGE_BUDGET_ENFORCED = true as boolean;
 
 /**
- * Route DOM node limit after scrolling through all 25 stops. T13 measured 30 433 nodes
- * (149 086 before unmounting). The rounded threshold = measurement × 1.3 catches a return
+ * Route DOM node limit after visiting all 25 stops. Measured: 30 433 nodes
+ * (149 086 before unmounting columns), threshold = measurement × 1.3, rounded: it catches a return
  * to "the whole route in the DOM", rather than fluctuations of a couple of cards.
  */
 const HUGE_ROUTE_DOM_BUDGET = 40_000;
@@ -86,7 +87,7 @@ test('fixture-huge: full diff first frame, worker parsing and scroll frame time'
     const domNodes = await page.evaluate(() => document.querySelectorAll('*').length);
     const heapAfter = await usedHeapMb(page);
 
-    // A file above the collapse threshold starts collapsed (SPEC §2.13). The fixture has exactly one.
+    // A file above the collapse threshold starts collapsed (docs/design/SPEC-elements.md §2.13). The fixture has exactly one.
     await scroller.evaluate((element) => {
         element.scrollTop = 0;
     });
@@ -155,7 +156,7 @@ test('fixture-huge: building a 25-stop route and scroll frame time', async ({ pa
     }
 });
 
-/** Spec §7 budget for one scroll pass: both frame intervals and our work within each frame. */
+/** The `docs/testing.md` §5 budget for one scroll pass: both frame intervals and our work within each frame. */
 function expectWithinBudget(metrics: FrameMetrics): void {
     expect(metrics.intervalAverage).toBeLessThanOrEqual(AVERAGE_BUDGET_MS);
     expect(metrics.intervalP95).toBeLessThanOrEqual(P95_BUDGET_MS);

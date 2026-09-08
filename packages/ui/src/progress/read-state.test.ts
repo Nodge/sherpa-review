@@ -10,7 +10,7 @@ const ru = createT('ru');
 const en = createT('en');
 const tooltip = (state: ReturnType<typeof readStateOf>): string => readStateTooltip(ru, state);
 
-/** Reading progress tri-state (SPEC §2.12) and tooltip counts. */
+/** Three reading-progress states (docs/design/SPEC-elements.md §2.12) and tooltip counts. */
 
 const PLAIN: ReadStateFile = { generated: false, viewed: null, additions: 40, deletions: 20 };
 

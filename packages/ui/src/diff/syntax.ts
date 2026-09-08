@@ -1,7 +1,7 @@
 import type { LanguageId, SyntaxToken } from './model.js';
 
 /**
- * Line-by-line highlighting lexer. README §1 calls for "intentionally minimal" highlighting: four categories
+ * Line-by-line highlighting lexer. docs/design/README.md §1: highlighting is "intentionally minimal", four categories
  * without claiming to parse the language. One rule for ambiguous cases: when unsure, use plain.
  *
  * The lexer deliberately keeps no state between lines. A hunk mixes lines from the old and new versions,
@@ -199,7 +199,7 @@ export function tokenizeLine(text: string, language: LanguageId): SyntaxToken[] 
         if (profile.numbers && isDigit(char)) {
             const to = scanNumber(text, i);
             if (to > i) {
-                // The README colors numbers as strings, so they have no separate category.
+                // `docs/design/README.md` §1 colours numbers like strings, without a separate category.
                 tokens.push({ from: i, to, kind: 'string' });
                 i = to;
                 continue;

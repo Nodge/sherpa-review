@@ -12,7 +12,7 @@ import { ProgressStore } from './progress-store.js';
 import { makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
- * Reading progress (T8) by iteration (M4-T6): persists explicit marks, carries ranges
+ * Reading progress per iteration: persists explicit marks, carries ranges
  * and file marks over to a new iteration, marks stops in a new snapshot.
  */
 
@@ -499,7 +499,7 @@ describe('reading progress store', () => {
 
         it('gets source file paths from snapshot anchors when the source patch is missing', () => {
             const db = open();
-            // Exact shape of the M5-T20 finding: server 0.3.x recorded progress, with no iteration row,
+            // Server 0.3.x wrote this progress: no iteration row exists,
             // its patch is missing for good, so only the route snapshot knows the path for `fileId`.
             const store = storeWith(db, iterations({ [V2]: diffOf(V2, [CLOCK]) }));
             insertRange(db, V1, fileIdOf(V1, CLOCK), 1, 5);
@@ -613,7 +613,7 @@ describe('reading progress store', () => {
         it('also accepts an iteration without a row in iterations', () => {
             const db = open();
             const store = new ProgressStore({ db });
-            // Server 0.3.x progress: it never saved iterations, but the marks remain (M5-T20).
+            // Progress from server 0.3.x: it did not store iterations, but the marks remain.
             insertRange(db, V1, 'file-1', 1, 2);
 
             expect(store.latestDiffIdWithProgress(V2)).toBe(V1);

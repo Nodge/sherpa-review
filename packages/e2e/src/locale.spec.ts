@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * UI language precedence (M5 task breakdown decision 1): explicit setting → session `--lang` label
+ * UI language priority: explicit setting → agent session `--lang`
  * tag → browser language. The spec runs through the full sequence with one state directory: the setting lives
  * in `<sherpaDir>/settings.json`, the session tag in the PR database, and both survive server restarts.
  */

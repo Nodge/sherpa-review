@@ -5,7 +5,7 @@ import path from 'node:path';
 import { announceUpdate, expect, test } from './sherpa-fixture.js';
 
 /**
- * "New version available" toast (M5-T9). No live review host here: version checks are
+ * "A new version is available" toast. No live review host here. On the fixture host, the check
  * disabled on the fixture host, and a dev endpoint supplies the "new version", just like in the gallery.
  */
 

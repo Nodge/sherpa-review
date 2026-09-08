@@ -2,14 +2,14 @@ import { formatCount, formatDecimal, plural } from './format.js';
 import type { Dictionary } from './ru.js';
 
 /**
- * English dictionary. Element labels follow the handoff (`SPEC-elements.md`) wherever it
+ * English dictionary. Element labels come from `docs/design/SPEC-elements.md` wherever it
  * names them: the spec is the English original of the product, not a translation from Russian.
  */
 
 const num = (value: number): string => formatCount(value, 'en');
 /** Fractional number: kilobytes and megabytes in an image size. */
 const dec = (value: number): string => formatDecimal(value, 'en');
-/** Tour card counter: both parts have leading zeros (onboarding spec §1). */
+/** Tour card counter: both parts have a leading zero (docs/design/SPEC-onboarding-2026-09-02.md §1). */
 const pad = (value: number): string => String(value).padStart(2, '0');
 /** English plural forms: `one` and everything else. */
 const form = (value: number, one: string, other: string): string => plural(value, { one, other }, 'en');
@@ -1007,7 +1007,7 @@ export const en: Dictionary = {
     'shortcut.tour.replay': 'Replay the onboarding tour',
     'shortcut.tour.replay.consequence': (steps: number) => `${num(steps)} ${form(steps, 'step', 'steps')}`,
 
-    // Onboarding tour (M5-T8): titles and bodies verbatim from onboarding spec §2.
+    // Onboarding tour: titles and bodies come verbatim from docs/design/SPEC-onboarding-2026-09-02.md §2.
     'tour.kicker': 'HOW SHERPA WORKS',
     'tour.counter': (index: number, total: number) => `${pad(index)} / ${pad(total)}`,
     'tour.live': (index: number, total: number, title: string) => `step ${num(index)} of ${num(total)}, ${title}`,

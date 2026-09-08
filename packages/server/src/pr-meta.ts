@@ -14,7 +14,7 @@ export interface PrMetaCacheOptions {
  * PR metadata cache for the UI snapshot. `buildState` is synchronous (called by the SSE timer
  * and change pushes), while `getPr()` makes a network request to the host, so metadata loads outside
  * snapshot assembly: at server startup and after verdict publication. Until the first success, `get()` returns null and the UI
- * renders fallbacks. Each update notifies subscribers, sending the snapshot with new metadata over SSE.
+ * shows placeholders. Each update notifies subscribers, sending a snapshot with the new metadata over SSE.
  */
 export class PrMetaCache {
     private readonly host: ReviewHost | null;
@@ -46,8 +46,8 @@ export class PrMetaCache {
     }
 
     /**
-     * Initial metadata load with retries until the first success. Without it, the UI would keep the breadcrumb
-     * fallback until a verdict was published. After success, the host is no longer polled,
+     * Loads initial metadata, retrying until success: without it, the UI would show a placeholder
+     * instead of breadcrumbs until a verdict was published. Polling stops after success.
      * Events that change metadata trigger its updates.
      */
     start(): void {

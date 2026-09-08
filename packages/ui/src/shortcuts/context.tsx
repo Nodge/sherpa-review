@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useSyncExternalStore } fr
 import type { EscapeLayerKind, Shortcut, ShortcutRegistry } from './registry.js';
 
 /**
- * View access to the single command registry (spec §3.3): the registry is created on page start,
+ * View access to the single command registry (docs/architecture.md §7.3). The registry is created on page startup,
  * and components with actions declare commands. Outside the provider (state gallery),
  * registration is a no-op because states must render without keyboard support.
  */
@@ -88,7 +88,7 @@ export function useShortcut(shortcut: Shortcut): void {
 }
 
 /**
- * A layer in the Esc hierarchy (M5 decision 10). While `active`, the layer is on the registry stack. On Esc
+ * An Esc hierarchy layer. While `active`, the layer is in the registry stack. On Esc,
  * only the highest-priority active layer fires, so the overlay does not need its own
  * keyboard listener.
  */

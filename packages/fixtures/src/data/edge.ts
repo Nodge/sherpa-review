@@ -7,7 +7,7 @@ import { makeFileDiff } from '../patch.js';
 import type { FixtureData } from './types.js';
 
 /**
- * PR shape edge cases (SPEC §4.1) and diff rendering edge cases (SPEC §2.11, §2.14): rename,
+ * Edge cases in PR structure and diff rendering (`docs/design/SPEC-elements.md §4.1, §2.11, §2.14`): rename,
  * deletion, binary, whitespace-only, one-sided file (additions only), empty file,
  * conflict, mode change. Everything the UI must display as a notice instead of an empty card.
  *
@@ -19,12 +19,12 @@ const PR_ID = '5122';
 const DIFF_ID = '196301';
 const UPDATED_AT = '2026-08-19T13:20:00.000Z';
 
-/** Count from the SPEC §2.13 example ("2,412 changed lines — open file"). */
+/** Number from the example in `docs/design/SPEC-elements.md §2.13` ("2,412 changed lines — open file"). */
 const HUGE_FILE_LINES = 2412;
 
 const FILES: readonly FileSpec[] = [
     {
-        // Rename with an edit: show the old path as "old → new" (SPEC §2.11).
+        // Rename with edits: the old path is shown as "old → new".
         path: 'services/orders/src/infra/time/clock.ts',
         oldPath: 'services/orders/src/infra/clock.ts',
         changeType: 'move',
@@ -69,7 +69,7 @@ const FILES: readonly FileSpec[] = [
         binary: true,
     },
     {
-        // Whitespace-only: single-line notice, collapsed by default (SPEC §2.14).
+        // Whitespace changes: a single-line notice, collapsed by default.
         path: 'services/orders/src/api/schemas.ts',
         changeType: 'modify',
         hunks: [
@@ -112,7 +112,7 @@ const FILES: readonly FileSpec[] = [
         changeType: 'add',
     },
     {
-        // Conflict: exclude the file from route coverage calculations (SPEC §4.1).
+        // Conflict: the file is excluded from route coverage calculations.
         path: 'services/orders/src/domain/order.ts',
         changeType: 'conflict',
         hunks: [
@@ -134,7 +134,7 @@ const FILES: readonly FileSpec[] = [
         ],
     },
     {
-        // File above the collapse threshold (SPEC §2.13): its card starts collapsed
+        // File above the collapse threshold: the card opens collapsed
         // with "2,412 changed lines — open file".
         path: 'services/orders/src/payments/generated/psp-client.ts',
         changeType: 'add',
@@ -143,7 +143,7 @@ const FILES: readonly FileSpec[] = [
     },
     {
         // Mode change without content changes: the patch has only an `old mode`/`new mode` header,
-        // No hunks, zero counts. The UI shows a single-line notice (SPEC §2.14).
+        // no hunks, and zero counters. The UI shows a single-line notice.
         path: 'services/orders/scripts/rollout.sh',
         changeType: 'modify',
         oldMode: '100644',
@@ -209,7 +209,7 @@ export function makeEdgeFixture(): FixtureData {
             UPDATED_AT,
         ),
         interdiffs: [],
-        // Reviewer without an ownership zone: disable "My files" with an explanation (SPEC §4.2).
+        // Reviewer without an ownership zone: the "My files" lens is disabled with an explanation (`docs/design/SPEC-elements.md §4.2`).
         ownership: lens({
             id: 'mine',
             label: 'My files',

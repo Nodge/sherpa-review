@@ -1,4 +1,4 @@
-/* Shared right cluster for the route and full diff toolbars (README §1, §10). */
+/* Shared right-hand controls of the route and full diff toolbars (docs/design/README.md §1, §10). */
 
 .toolbar-right-cluster {
     display: inline-flex;

@@ -11,7 +11,7 @@ import { createT } from '../i18n/index.js';
 const t = createT('en');
 
 /**
- * Test digest on the `medium` fixture (M2-T2): stop s04 has 12 accepted assertions and 2
+ * Test digest on the `medium` fixture. Stop s04 has 12 accepted assertions and 2
  * rejected by the validator. Counts come from data, not hardcoded test values. A digest that disagrees
  * with its fixture misrepresents the test contract.
  */
@@ -334,7 +334,7 @@ describe('digest and the viewed mark', () => {
         );
 
         // The Show/Hide toggle does not affect this count. The route model knows nothing about the session,
-        // and marking a digest stop correctly marks its test files (M2-T9 decision).
+        // so marking the digest stop covers its test files.
         expect(paths.size).toBe(3);
         expect([...paths].every((path) => path.includes('__tests__'))).toBe(true);
         expect(ranges.length).toBeGreaterThan(0);

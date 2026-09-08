@@ -1,12 +1,12 @@
 import type { Locale } from '@sherpa/protocol';
 
 /**
- * Server strings stored in the snapshot and read by the reviewer (M5-T4): the synthetic stop
+ * Server strings stored in the snapshot and read by the reviewer: the synthetic stop's
  * title, validator notes and reasons generation failed. They belong to the route,
  * so they use the generation language, not the tab's language. Each snapshot uses one language throughout.
  *
  * The entire small table lives here. Two dozen strings don't warrant a localization
- * framework (task breakdown decision 1: the UI dictionary is also local). Logs and stderr do not belong here:
+ * library. The UI also has its own dictionary. Logs and stderr aren't included here:
  * developers read them, not the reviewer.
  */
 export interface RouteStrings {

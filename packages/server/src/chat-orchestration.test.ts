@@ -30,7 +30,7 @@ const LOCAL_PR = 'github-777';
 const WORKER = 'w-chat';
 const ANSWER = 'The cache is cleared before the write so the next reader does not get the previous value.';
 const ANCHOR: ChatAnchor = {
-    // Active fixture iteration: the endpoint rejects an anchor from another iteration (M4-T4).
+    // Active fixture iteration: the endpoint rejects anchors from another iteration.
     diffId: mediumDiff().diffId,
     fileId: 'f-main',
     path: 'src/main.ts',
@@ -117,7 +117,7 @@ describe('chat and notes', () => {
         return path.dirname(own ?? '');
     }
 
-    /** Response language (M5-T4): fallback order, exchange snapshot and retry prompt. */
+    /** Answer language: selection fallback order, exchange snapshot and retry prompt. */
     describe('answer language', () => {
         function guideOf(server: SherpaServer, taskId: number): string {
             const guide = server.queue.getTask(taskId)?.contextFiles[0];

@@ -178,7 +178,7 @@ export function useStopCards({
     /**
      * Mark a file within a stop. After the file the reviewer is reading collapses,
      * the view moves to the next card in the same stop. The same "scrolling follows
-     * collapse" rule applies to stops (decision log 2026-09-02). The last file in a stop
+     * collapse" behaviour as stops. The last file in a stop
      * does not request scrolling: the covered stop marks itself and moves to the next one.
      */
     const markFileViewed = useCallback(

@@ -17,8 +17,8 @@ import { lineKey, selectedLines } from './selection.js';
 import type { DiffMode } from './store.js';
 
 /**
- * Diff rows: unified (README §1 "Diff rows (unified)") and side by side. Markup and colours come
- * directly from README §1, and behaviour comes from SPEC §2.14.
+ * Diff rows: unified (docs/design/README.md §1 "Diff rows (unified)") and side by side. Markup and colours
+ * come directly from docs/design/README.md §1, behaviour from docs/design/SPEC-elements.md §2.14.
  *
  * Mouse events attach to the container instead of individual rows. A large file has thousands of rows,
  * so a pair of listeners on each would be expensive. `data-key` identifies the row.
@@ -31,8 +31,8 @@ interface LineCell {
 }
 
 /**
- * `hunk` is set on the first line of each hunk so the single-file PR outline (T7)
- * can find the hunk start in the DOM. Other lines omit it. An attribute on every line
+ * `hunk` marks the first line of each hunk so the single-file PR outline can find
+ * the hunk start in the DOM. Other lines omit it because adding the attribute to every line
  * of a thousand-line file has a cost.
  */
 type Row = { readonly hunk?: number } & (
@@ -78,7 +78,7 @@ export function DiffRows({
     contextAvailable = true,
 }: DiffRowsProps) {
     const t = useT();
-    // A one-sided file in split mode would leave half the card empty (README §1).
+    // A one-sided file in split mode would leave half the card empty (docs/design/README.md §1).
     const oneSided = model.onlyAdditions || model.onlyDeletions;
     const effective: DiffMode = mode === 'split' && !oneSided ? 'split' : 'unified';
     const rows = useMemo(() => buildRows(model, effective), [model, effective]);
@@ -662,7 +662,7 @@ function CommentButton({
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
 }) {
     const t = useT();
-    // Only the active iteration allows comments (M4 boundaries).
+    // Comments are allowed only in the active iteration.
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
     return (

@@ -22,7 +22,7 @@ import { applyFilling, type RouteStopFilling } from './types.js';
 import { bannedPhrases } from './voice.js';
 
 /**
- * End-to-end golden test: raw model outputs (M2-T2 fixtures) → validator → ready snapshot stops.
+ * End-to-end golden test: raw fixture model outputs → validator → completed snapshot stops.
  * The fixture and the live pipeline must agree verbatim. Otherwise the gallery, e2e and UI see
  * one set of data while the server builds another.
  */
@@ -35,7 +35,7 @@ function planStops(): RouteStop[] {
     return skeleton.value.stops;
 }
 
-/** Merge fillings into the plan, as RouteStore does in M2-T4. */
+/** Merge fillings into the plan, as `RouteStore` does. */
 function merge(stops: readonly RouteStop[], fillings: readonly RouteStopFilling[]): RouteStop[] {
     const byIndex = new Map(fillings.map((filling) => [filling.planIndex, filling]));
     return stops.map((stop) => {
@@ -79,7 +79,7 @@ describe('route validator: end-to-end golden test on the medium fixture', () => 
             'ready',
         ]);
 
-        // Stop intent does not go into the snapshot. The section scheduler consumes it (T5).
+        // Stop intents do not go into the snapshot. The section scheduler consumes them.
         expect([...skeleton.value.intents.keys()]).toEqual([1, 2, 3, 4, 5, 6]);
         expect(skeleton.value.intents.get(4)).toBe(raw.skeleton.stops[3]?.intent);
         for (const stop of skeleton.value.stops) {
@@ -310,7 +310,7 @@ describe('route validator: second pass after a push', () => {
 });
 
 /**
- * The same pipeline with English generation (M5-T4): language changes model text and server strings,
+ * The same pipeline with English generation. The language changes model text and server strings,
  * but leaves anchors and numbers intact. This test checks that so locale cannot silently break validation.
  */
 describe('route validator: English generation', () => {

@@ -10,13 +10,13 @@ import { Markdown } from '../../markdown/markdown.tsx';
 import { anchorLabel, claimLabel } from '../../route/digest.js';
 
 /**
- * Behavioural digest card (README §2): a header with an assertion count, controls for
+ * Behavioural digest card (docs/design/README.md §2): header with assertion count, controls for
  * hidden test code or a link to its entry, rows of "category chip + assertion + anchor"
  * and an `uncovered` footer for changed behaviour left without an assertion.
  *
  * The component computes and loads nothing. Its model comes from `route/digest.ts`, and the view handles
  * anchor jumps. Test code expands into real file cards below this card,
- * so the global diff mode (SPEC §2.6) applies to it automatically.
+ * so the global diff mode (docs/design/SPEC-elements.md §2.6) applies to it automatically.
  */
 
 export const DIGEST_NOTE: MessageKey = 'digest.note';

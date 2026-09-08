@@ -53,6 +53,6 @@ export function openBrowser(options: OpenBrowserOptions): void {
         child.once('error', () => undefined);
         child.unref();
     } catch {
-        // Printing the link remains the fallback for headless/ssh and a missing system opener.
+        // Printing the link is the fallback for headless/ssh sessions and a missing system opener.
     }
 }

@@ -118,12 +118,12 @@ interface RouteTaskRow extends SqlRow {
 const EMPTY_STATE: UiRouteState = { phase: 'none', smallPr: false, snapshot: null, failure: null, stale: null };
 
 /**
- * PR route state (M2-T4): generation phase, snapshot and failure reason, the source of truth for the UI.
+ * PR route state: generation phase, snapshot and failure reason. The source of truth for the UI.
  *
  * Follows `ProgressStore`. The revision is monotonic from server startup and increases only on a real
  * change. Subscribers receive a `route` event, then the tab rereads the endpoint. The snapshot
  * passes through `routeSnapshotSchema` on database writes and reads, so invalid data is neither stored
- * nor returned to callers (brief principle 3).
+ * nor returned (docs/product.md §3, principle 3).
  *
  * Mutators apply whole states. The orchestrator computes the entire target state and applies it in one
  * call, so each state-machine step produces exactly one channel event.
@@ -181,7 +181,7 @@ export class RouteStore {
 
     /**
      * All PR snapshots in creation order. History is never cleared because an old snapshot is
-     * the only way to read a previous iteration's route (brief F3, M4 "Stage boundaries").
+     * the only way to read a previous iteration's route (docs/product.md §7, scenario F3).
      * A corrupt row is skipped with a warning, leaving the rest of history readable.
      */
     listSnapshots(): RouteSnapshot[] {
@@ -203,7 +203,7 @@ export class RouteStore {
 
     /**
      * Draft stop intents from the accepted skeleton. The snapshot contract excludes them,
-     * but the section scheduler needs them to build the prompt (T5).
+     * but the section scheduler needs them to build a prompt.
      */
     stopIntents(): Map<number, string> {
         return new Map(this.intents);
@@ -245,7 +245,7 @@ export class RouteStore {
 
     /**
      * Accepted section contents fill the planned slots. Provenance is written to the stop only when
-     * it differs from the snapshot's: the agent changed during generation (SPEC §4.4).
+     * it differs from the snapshot's because the agent changed mid-generation (docs/design/SPEC-elements.md §4.4).
      */
     applyFillings(fillings: readonly RouteStopFilling[], provenance: RouteProvenance): void {
         const snapshot = this.state.snapshot;
@@ -327,14 +327,14 @@ export class RouteStore {
     }
 
     /**
-     * Route generation failure (README §12): no skeleton, the reader is unaffected.
+     * Route generation failure (docs/design/README.md §12). There is no skeleton, and the reader is unaffected.
      * The reason is one Russian sentence. Raw model output is available through "Open raw output".
      */
     fail(message: string, rawOutput: string | null): void {
         this.commit({ ...this.state, phase: 'failed', failure: { message, rawOutput } });
     }
 
-    /** PR below the route threshold (requirements §3.6), computed from the diff separately from the phase. */
+    /** PR below the route threshold (docs/architecture.md §7.6). Computed from the diff, so it arrives separately from the phase. */
     setSmallPr(smallPr: boolean): void {
         this.commit({ ...this.state, smallPr });
     }
@@ -354,7 +354,7 @@ export class RouteStore {
     }
 
     /**
-     * Snapshot generation cap (M5-T14): how much of the diff the skeleton saw in full. Lives in `meta`
+     * Snapshot generation cap: how much of the diff the skeleton saw in full. Stored in `meta`
      * under the snapshot key, outside the snapshot itself. The snapshot is a UI contract without a payload
      * metric. Written on skeleton acceptance and read when assembling state.
      */
@@ -367,7 +367,7 @@ export class RouteStore {
             .run(generationCapKey(snapshotId), JSON.stringify(cap));
     }
 
-    /** Current snapshot cap. null means no snapshot or generation before M5-T14. */
+    /** Current snapshot's cap. null means no snapshot or generation before this metric existed. */
     currentGenerationCap(): UiGenerationCap | null {
         const snapshotId = this.state.snapshot?.snapshotId;
         return snapshotId === undefined ? null : this.generationCap(snapshotId);
@@ -390,7 +390,7 @@ export class RouteStore {
     }
 
     /**
-     * Language of the latest generation started (M5-T4). Stored in `meta`, outside process memory, since the
+     * Language of the latest started generation. Stored in `meta`, outside process memory, because the skeleton
      * task and its binding survive a server restart. Result acceptance must know
      * the language actually sent in the prompt. Otherwise the snapshot gets the wrong `provenance.locale`
      * and sections in different languages.
@@ -571,9 +571,9 @@ export class RouteStore {
     }
 
     /**
-     * Read a snapshot from a storage row. Snapshots written before M4 (without `baseCommit`, `previousSnapshotId`,
+     * Snapshot from a storage row. Snapshots written by an older version (without `baseCommit`, `previousSnapshotId`,
      * `carried`, `stops[].change`) get defaults. Otherwise the schema would reject
-     * the whole snapshot, silently turning a route used for dogfooding into "no route".
+     * the whole snapshot and silently turn the accumulated route into "no route".
      * A corrupt row produces a warning and `null`, leaving the rest of history readable.
      */
     private parseSnapshotRow(row: RouteSnapshotRow): RouteSnapshot | null {

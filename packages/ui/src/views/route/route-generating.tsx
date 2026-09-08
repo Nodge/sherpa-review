@@ -8,15 +8,15 @@ import './route.css';
 import './generation.css';
 
 /**
- * The "Route" tab in phases where no route exists yet (or anymore): reading-phase skeleton (README §8),
- * red failure card (README §12) and small-PR explanation (SPEC §4.1).
+ * Route tab in phases where no route exists yet (or anymore): the reading skeleton (docs/design/README.md §8),
+ * the red failure card (docs/design/README.md §12) and the small PR explanation (docs/design/SPEC-elements.md §4.1).
  *
  * None of the three loads anything. The state gallery renders them as they are.
  */
 
 /**
  * Reading phase: three unnumbered `— / ?` placeholders. Numbers are absent on purpose. The plan is not ready,
- * and the stop count is unknown (README §6, last sentence of §8).
+ * so the number of stops is unknown (docs/design/README.md §6, last sentence of §8).
  */
 export function RouteReadingView({ onOpenDiff }: { onOpenDiff: () => void }) {
     const t = useT();

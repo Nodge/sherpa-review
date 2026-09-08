@@ -1,6 +1,6 @@
 /*
- * Top bar, README §0. All dimensions and colors come from there. Hex is forbidden in this file,
- * only tokens. Control state matrix: SPEC §1.1 (hover, active, focus-visible, disabled).
+ * Top bar, docs/design/README.md §0. All dimensions and colours come from there. Hex is forbidden in this file,
+ * use tokens only. Control state matrix: docs/design/SPEC-elements.md §1.1 (hover, active, focus-visible, disabled).
  */
 
 .top-bar {
@@ -52,7 +52,7 @@
     padding-top: 2px;
 }
 
-/* While an update is available, the version is a button with an accent dot. Clicking opens the toast (M5-T9). */
+/* While an update is available, the version is a button with an accent dot. Clicking opens the toast. */
 .top-bar__version--update {
     display: inline-flex;
     align-items: center;
@@ -90,7 +90,7 @@
 
 .top-bar__breadcrumb-item {
     overflow: hidden;
-    /* SPEC §1.2: truncate paths from the left, since the end matters more than the start. */
+    /* docs/design/SPEC-elements.md §1.2: truncate paths from the left, because the end matters more. */
     direction: rtl;
     text-align: left;
     text-overflow: ellipsis;
@@ -153,7 +153,7 @@ a.top-bar__breadcrumb-item:hover {
     transition: none;
 }
 
-/* The selected tab also differs in font weight (SPEC §1.1). */
+/* The selected tab differs in both colour and weight (docs/design/SPEC-elements.md §1.1). */
 .view-tabs__tab[aria-selected='true'] {
     background: var(--surface-segment-active);
     color: var(--text-primary);
@@ -186,7 +186,7 @@ a.top-bar__breadcrumb-item:hover {
     color: var(--text-secondary);
 }
 
-/* Pressed is one shade darker than idle, without a transition (SPEC §1.1). */
+/* Pressed is one shade darker than idle, with no transition (docs/design/SPEC-elements.md §1.1). */
 .ghost-button:active {
     background: var(--surface-control);
     transition: none;
@@ -198,7 +198,7 @@ a.top-bar__breadcrumb-item:hover {
     color: var(--text-muted);
 }
 
-/* --- Agent pill (SPEC §2.2) --- */
+/* --- Agent pill (docs/design/SPEC-elements.md §2.2) --- */
 
 .agent-pill-wrap {
     position: relative;
@@ -269,7 +269,7 @@ a.top-bar__breadcrumb-item:hover {
     color: var(--text-dim);
 }
 
-/* Disconnected-agent explanation above the launch command, from the removed banner (decision #32). */
+/* Disconnected agent explanation above the launch command. It has no separate banner. */
 .agent-popover__offline {
     margin: 0 0 var(--space-inner);
     font-size: var(--font-size-secondary);

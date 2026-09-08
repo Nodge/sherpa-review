@@ -9,7 +9,7 @@ import { createThreadStore } from '../threads/store.js';
 import { EmptyPrNotice } from './full-diff.tsx';
 import { ViewFrame } from './view-frames.tsx';
 
-/** Empty PR (SPEC §4.1): "Nothing to review", no Overview cards, ship stays available. */
+/** Empty PR (docs/design/SPEC-elements.md §4.1): "Nothing to review", no Overview cards, ship remains available. */
 
 const DATA = fixtureIteration('medium');
 const EMPTY_DIFF = { ...DATA.diff, files: [] };
@@ -43,7 +43,7 @@ describe('empty PR', () => {
         expect(html).not.toContain('<button');
     });
 
-    it('English text matches SPEC §4.1 verbatim', () => {
+    it('uses the exact English text from docs/design/SPEC-elements.md §4.1', () => {
         const html = renderToStaticMarkup(
             <LocaleProvider locale="en">
                 <EmptyPrNotice />

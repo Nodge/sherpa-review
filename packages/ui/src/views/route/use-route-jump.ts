@@ -105,7 +105,7 @@ export function useRouteJump(preset: RoutePreset): RouteJump {
      * container directly to −150px from the target top, and flash the target.
      *
      * The target is almost never ready in the same frame: a filter may have hidden the stop,
-     * a card may be deferred by lazy rendering until its stop appears onscreen (SPEC §2.9), and a line may
+     * lazy rendering may defer the card until the stop enters the viewport (docs/design/SPEC-elements.md §2.9), and the line may
      * be waiting for file parsing. So the jump proceeds in stages, "section → card → line". Each
      * stage found immediately pulls scrolling towards it (reaching the section makes the view show it,
      * so deferred cards render). Later stages are sought frame by frame until the deadline. If it cannot reach the target,
@@ -262,7 +262,7 @@ export function useRouteJump(preset: RoutePreset): RouteJump {
     );
 
     /**
-     * Changing the preset anchors the viewport to the top stop (SPEC §2.5): the same stop id stays
+     * Changing the preset anchors the viewport to the top stop (docs/design/SPEC-elements.md §2.5): the same stop id stays
      * on screen without resetting scrolling to the start. A layout effect restores it before
      * the new order is painted, without animation: the reading position stays the same.
      */

@@ -1,7 +1,7 @@
 import type { UiStopProgress } from '@sherpa/protocol';
 
 /**
- * Route stop "viewed" marks (M2-T7, README State model: `viewed {stopId→bool}`).
+ * Viewed marks on route stops (docs/design/README.md, State model: `viewed {stopId→bool}`).
  * Persistence is on the server: the progress endpoint supplies the source of truth, and the store holds its snapshot with an optimistic
  * layer on top, just as `DiffViewStore` holds file records.
  *

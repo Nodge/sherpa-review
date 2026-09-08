@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { easeInOutCubic, needsScroll, offscreen, placeTour, ringOf } from './placement.js';
 
 /**
- * Tour card geometry, onboarding spec §3. Numbers checked against the prototype's reference implementation
+ * Tour card geometry, docs/design/SPEC-onboarding-2026-09-02.md §3. The numbers match the reference implementation
  * (`Sherpa.dc.html`, `tourPlace`): a mismatch here is a mismatch with the design.
  */
 
-/** Acceptance viewport (decision 6): all expectations below are calculated for it. */
+/** Acceptance viewport: all expectations below are calculated for it. */
 const VIEWPORT = { width: 1440, height: 900 };
 
 describe('ring', () => {

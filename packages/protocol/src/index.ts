@@ -1,5 +1,5 @@
 /**
- * C1↔C2 contract (rpc-design §3–§5, §9, spec §5).
+ * CLI↔server contract (`docs/protocol.md §3–§5, §9`, `docs/architecture.md §5`).
  * Zod schemas are canonical. Types are inferred from them, JSON schemas are generated from them.
  */
 export * from './chat.js';

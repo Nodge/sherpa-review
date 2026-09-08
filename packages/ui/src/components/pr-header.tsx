@@ -7,12 +7,12 @@ import { relativeTime, useFormat, useLocale, useT } from '../i18n/index.js';
 import './pr-header.css';
 
 /**
- * PR header (README §1): metadata row `+N −M · K files · branch · PCI DSS chip`, title and author.
- * The component is shared with the route view in M2, so it knows nothing about
+ * PR header (docs/design/README.md §1): metadata row `+N −M · K files · branch · PCI DSS chip`, title and author.
+ * This shared component also appears in the route view, so it knows nothing about
  * data loading or the chip destination. Both come through props.
  *
- * The right side of the header is the `aside` slot. Route puts the snapshot pill there (README §1),
- * Full diff leaves it empty. Snapshot selection arrives in M4.
+ * The header's right side is the `aside` slot (docs/design/README.md §1), which holds the pill-shaped
+ * snapshot indicator with an iteration picker menu. Without iterations, the slot is empty.
  *
  * The `overview` variant has its own layout from the prototype Overview screen (`Sherpa.dc.html:523-529`):
  * PR number in the metadata row, a larger title, author without an avatar, time, branches and check
@@ -55,7 +55,7 @@ export interface PrHeaderOverviewProps {
     readonly pci: FileFilter | null;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
-    /** Right end of the author row, also holds the snapshot pill (README §1). */
+    /** Right edge of the author row. Also holds the snapshot pill (docs/design/README.md §1). */
     readonly aside?: ReactNode;
 }
 

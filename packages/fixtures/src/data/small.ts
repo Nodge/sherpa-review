@@ -5,8 +5,8 @@ import { makeFileDiff } from '../patch.js';
 import type { FixtureData } from './types.js';
 
 /**
- * A PR below the route threshold (requirements §3.6: changed lines across all files ≤ 40). The UI opens
- * on the full diff with the label "small PR — no route needed" (SPEC §4.1).
+ * The PR is below the route threshold (`docs/architecture.md §7.6`: changed lines across all files ≤ 40),
+ * so the UI opens on the full diff with the "small PR — no route needed" note.
  *
  * This is also the only fixture without viewed synchronization (`fileViewedSync: false`):
  * file `viewed` is null and the host has no `setFileViewed` method, so reduced functionality can be tested here.

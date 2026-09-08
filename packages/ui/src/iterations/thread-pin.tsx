@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext } from 'react';
 
 /**
- * Thread pinned to the commit it was written on (SPEC §2.17, §4.5): a "pinned to 9f3c1ab" chip
+ * Thread pinned to the commit where it was written (docs/design/SPEC-elements.md §2.17 and §4.5): a "pinned to 9f3c1ab" chip
  * and "Show on old commit" action. Context distributes the flag instead of props: the chip
  * renders in a leaf (`ThreadBlock`) in 3 views and the "outside diff" group, while knowledge of the active
  * iteration and navigation live in App.

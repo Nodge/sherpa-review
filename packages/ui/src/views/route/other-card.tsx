@@ -8,7 +8,7 @@ import type { RouteOtherView } from '../../route/route-model.js';
 import { StopViewedToggle } from './stop-card.tsx';
 
 /**
- * "Other — lines the model did not place" (README §2): a hatched card with honest
+ * "Other: the model did not place these lines" (docs/design/README.md §2): a hatched card with accurate
  * copy and a single action to expand uncovered ranges as a raw diff.
  *
  * The UI calculates its contents: all changed lines minus the union of all stop
@@ -28,7 +28,7 @@ export interface OtherCardProps {
     /** Some files failed to parse, so their uncovered ranges are missing and Other cannot be marked. */
     readonly parseFailed?: boolean;
     /**
-     * The route is still filling (README §8): uncovered ranges are currently unoccupied plan slots,
+     * The route is still filling (docs/design/README.md §8): uncovered ranges currently represent vacant plan slots,
      * rather than the model's decision. Counts become accurate once the stops arrive.
      */
     readonly filling?: boolean;
@@ -36,25 +36,25 @@ export interface OtherCardProps {
     readonly failedFiles?: number;
     readonly onRetryFailed?: () => void;
     /**
-     * "Ask the agent to place them" (README §2): a question listing the ranges is placed
-     * in chat. The button leaves the route unchanged, regeneration is separate (SPEC §4.3).
+     * "Ask the agent to place them" (docs/design/README.md §2) inserts a question listing the ranges
+     * into the chat. The button leaves the route unchanged. Regeneration is separate (docs/design/SPEC-elements.md §4.3).
      * undefined means no entry point (chat is unavailable).
      */
     readonly onAskToPlace?: () => void;
-    /** Agent disconnected: the chat entry point is disabled, as in the popover (SPEC §2.15). */
+    /** Disconnected agent: disable the chat entry point as in the popover (docs/design/SPEC-elements.md §2.15). */
     readonly agentConnected?: boolean;
-    /** Card kept on screen despite the filter (SPEC §2.7). */
+    /** Card kept on screen despite the filter (docs/design/SPEC-elements.md §2.7). */
     readonly keptInView?: boolean;
     /**
      * Other is a route stop too: marking it writes uncovered ranges into progress
-     * (README §13 «Other read as raw diff»).
+     * (docs/design/README.md §13 «Other read as raw diff»).
      */
     readonly viewed?: boolean;
     readonly onViewed?: (viewed: boolean) => void;
     readonly failedViewed?: boolean | null;
     /** Accent line flash after navigating to Other. */
     readonly flash?: boolean;
-    /** Highlight from hovering over the hatched coverage strip segment (SPEC §2.4). */
+    /** Highlight on hover over the coverage strip's hatched segment (docs/design/SPEC-elements.md §2.4). */
     readonly marked?: boolean;
 }
 
@@ -175,7 +175,7 @@ export function OtherCard({
                     {conflictsOnly || onAskToPlace === undefined ? null : (
                         <p className="route-other__honest">{t('chat.ask.answerInChat')}</p>
                     )}
-                    {/* Conflicts are outside coverage (SPEC §4.1): they cannot be explained or read
+                    {/* Conflicts are outside coverage (docs/design/SPEC-elements.md §4.1): they cannot be explained or read
                         here, so the reviewer's only useful action is in the review host. */}
                     {view.conflictFiles === 0 ? null : (
                         <p className="route-other__conflicts" role="status">
@@ -224,7 +224,7 @@ function askToPlaceTitle(
     return agentConnected ? t('chat.ask.answerInChat') : t('chat.ask.rangesDisabled');
 }
 
-/** SPEC §4.3 banner: the plan explains less than half the diff. */
+/** Banner from docs/design/SPEC-elements.md §4.3: the plan explains less than half the diff. */
 export function RegenerateBanner({ onGenerate }: { readonly onGenerate?: () => void }) {
     const t = useT();
     return (

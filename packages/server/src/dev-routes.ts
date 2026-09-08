@@ -25,7 +25,7 @@ import type { UpdateChecker } from './update-check.js';
 export interface DevRoutesOptions {
     /** Fixture "push": makes the next declared iteration active. */
     readonly advanceIteration: () => Iteration;
-    /** Fixture draft write failure: e2e uses it to test the buffer (M5-T15). */
+    /** Fixture draft write failure, used by e2e to test the buffer. */
     readonly setFailDraftWrites?: (fail: boolean) => void;
     /** Version check for this server. The dev endpoint supplies its result for the fixture. */
     readonly update: UpdateChecker;

@@ -20,8 +20,8 @@ const t = createT('en');
 
 /**
  * Route view component tests use static markup on a fixture (the same approach as
- * the M1-T14 action panel). They check what the reviewer sees: stop order, folds,
- * Other copy and SPEC §2.9 edge cases.
+ * the action panel). They check what the reviewer sees: stop order, folds,
+ * Other copy and edge cases from docs/design/SPEC-elements.md §2.9.
  */
 
 const DATA = fixtureIteration('medium');
@@ -50,7 +50,7 @@ function render(
         threadStore?: ThreadStore;
         /** `false` means diff models are not parsed yet, so view counts are not final. */
         parsed?: boolean;
-        /** Global diff mode (SPEC §2.6): applies to route cards too. */
+        /** Global diff mode (docs/design/SPEC-elements.md §2.6) also applies to route cards. */
         mode?: 'unified' | 'split';
         progress?: readonly UiFileProgress[];
         collapsed?: ReadonlyMap<string, boolean>;
@@ -58,7 +58,7 @@ function render(
         onFillStop?: (planIndex: number) => void;
         /** The tab shows a previous iteration. Route writes are unavailable (M4 scope). */
         readOnly?: boolean;
-        /** Files marked conflicted by the host (SPEC §4.1): outside route coverage. */
+        /** Files marked as conflicted by the host (docs/design/SPEC-elements.md §4.1). They are outside route coverage. */
         conflicts?: readonly string[];
     } = {},
 ): string {
@@ -265,7 +265,7 @@ describe('route view', () => {
     it('the header has a snapshot pill with a short commit and status', () => {
         const html = render();
 
-        // Without the picker from App, the workspace renders its snapshot as current (M4-T9).
+        // Without the picker from App, the workspace shows its own snapshot as current.
         expect(html).toContain(`snapshot ${SNAPSHOT.commit.slice(0, 7)} · current`);
     });
 
@@ -322,7 +322,7 @@ describe('route view', () => {
         expect(html).toContain('This stop pointed at lines that are no longer in the diff.');
     });
 
-    it('shows a conflict notice when anchors move into conflicted files, rather than a drift notice (SPEC §4.1)', () => {
+    it('anchors in a conflicted file show a conflict notice instead of a drift notice (docs/design/SPEC-elements.md §4.1)', () => {
         const target = SNAPSHOT.stops.find((stop) => stop.id === 's01');
         if (target === undefined) {
             throw new Error('the fixture needs stop s01');
@@ -579,7 +579,7 @@ describe('route view', () => {
         expect(stop).toContain('file-card');
     });
 
-    it('global diff mode applies to expanded test code too (SPEC §2.6)', () => {
+    it('the global diff mode also applies to expanded test code (docs/design/SPEC-elements.md §2.6)', () => {
         const unified = section(render({ stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }), 's04');
         const split = section(
             render({ mode: 'split', stops: { ...EMPTY_STOPS, testCode: new Set(['s04']) } }),

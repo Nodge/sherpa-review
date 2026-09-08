@@ -77,8 +77,8 @@ import './route.css';
  * gallery too. It only holds the route model, lenses and markup, and delegates work to hooks:
  * `use-route-parse` (patch parsing), `use-route-jump` (scrolling and anchors), `use-route-reveal`
  * (making the jump target visible), `use-stop-viewed` (stop viewed marks), `use-stop-cards`
- * (file cards and focus) and `use-route-shortcuts` (keys). Calls follow the order of
- * the former single component, which determines the order of effects and command registration.
+ * (file cards and focus) and `use-route-shortcuts` (keys). Keep the hook call order
+ * because it determines the order of effects and command registration.
  */
 
 export interface RouteWorkspaceProps {
@@ -86,7 +86,7 @@ export interface RouteWorkspaceProps {
     readonly diff: PrDiff;
     readonly lenses: UiReviewLensesResponse;
     readonly snapshot: RouteSnapshot;
-    /** Agent disconnected during generation: filled stops get a note (SPEC §4.4). */
+    /** See `RouteViewProps.agentStopped`. */
     readonly agentStopped?: boolean;
     readonly session: SessionStore;
     readonly store: DiffViewStore;
@@ -108,7 +108,7 @@ export interface RouteWorkspaceProps {
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly threadTransport?: ComposerTransport;
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
-    /** Fixed clock for the gallery. The application captures the time when the view mounts. */
+    /** See the comment on `threadNow` in `views/full-diff.tsx`. */
     readonly threadNow?: number;
     readonly navigation?: { readonly id: number; readonly stopId: string } | null;
     readonly initialSelectionTarget?: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
@@ -127,9 +127,9 @@ export interface RouteWorkspaceProps {
     readonly onRouteSummary?: (summary: RouteSummary) => void;
     /** Initial "kept on screen" state lets the gallery show the filter state without a click. */
     readonly initialKeptStopId?: string | null;
-    /** Open a thread by id: links from "why this stop changed" (README §1 item 4). */
+    /** See `RouteViewProps.onOpenThread`. */
     readonly onOpenThread?: (threadId: string) => void;
-    /** Right edge of the header: the snapshot picker from App, or a static snapshot pill without it. */
+    /** See `RouteViewProps.headerAside`. */
     readonly headerAside?: ReactNode;
     /** See `RouteViewProps.generationCap`. */
     readonly generationCap?: UiGenerationCap | null;
@@ -343,7 +343,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     } = useRouteJump(preset);
     const [keptStopId, setKeptStopId] = useState<string | null>(props.initialKeptStopId ?? null);
     const [otherOpen, setOtherOpen] = useState(false);
-    /** Toolbar measurement: the sticky column offset uses the `route.css` fallback until the first measurement. */
+    /** Toolbar measurement. Until the first measurement, the sticky column uses the fallback offset from `route.css`. */
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
 
@@ -353,7 +353,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [],
     );
     /**
-     * "What is new since the last pass" filter (README §9). Invalid when there are no classified
+     * "What is new since the previous pass" filter (docs/design/README.md §9). Invalid without classified
      * stops: the route stays intact, no chip appears, and no value enters the URL.
      */
     const changeFilterOn = routeFilter === 'new' && changeFilterAvailable(model.entries);
@@ -406,7 +406,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         selectionNavigationRequest,
     });
 
-    // Filter changes need the top stop even before the first scroll (SPEC §2.7).
+    // Filter changes need the top stop even before the first scroll (docs/design/SPEC-elements.md §2.7).
     useEffect(() => {
         updateTopStop();
     }, [shown, updateTopStop]);
@@ -429,7 +429,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
      * The "what is new" filter changes outside the view, through the second-pass banner button and chip,
      * so the same store subscription detects it before rerendering, while the DOM
      * still has the old set of stops. As with the file filter, the view keeps the top stop
-     * on screen even when the new filter would hide it (SPEC §2.7).
+     * on screen if the new filter would hide it (docs/design/SPEC-elements.md §2.7).
      */
     useEffect(() => {
         let last = session.getSnapshot().routeFilter;
@@ -522,7 +522,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [collapsedOf, expandStop, session, stopViewed],
     );
 
-    // --- Coverage strip (SPEC §2.4) ---
+    // --- Coverage bar (docs/design/SPEC-elements.md §2.4) ---
 
     const coverage = useMemo(
         () => buildCoverageStrip({ totals: model.totals, entries: model.entries, t }),
@@ -612,10 +612,10 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     /** First planned stop. Its diff column stays in the DOM as the entry point and onboarding tour anchor. */
     const firstStopId = shown.find((entry) => entry.kind === 'stop')?.view.stop.id ?? null;
     /**
-     * The first low-stop fold anchors tour step 02 (M5-T8). Selection follows the
+     * The first low-tier fold is the target of tour step 02. Selection follows the fold
      * rendering conditions: viewed stops show a summary row, unfilled stops a skeleton, and stops
-     * with drift or no files have their own row. Otherwise the anchor would go to a stop that does not
-     * render a fold, and the step would needlessly use fallback placement despite real folds below.
+     * with drift or no files their own row. Otherwise the target would be a stop with no fold,
+     * and the step would use a fallback position away from the real folds below.
      */
     const tourFoldStopId = useMemo(
         () =>

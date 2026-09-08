@@ -26,8 +26,8 @@ import {
 } from './ui.js';
 
 /**
- * Contract JSON schemas generated from zod (spec §5): zod schemas are canonical,
- * JSON Schema is derived for non-TS consumers (C5 task payloads, documentation).
+ * Contract JSON schemas generated from zod (`docs/architecture.md §5`). Zod schemas are canonical,
+ * JSON Schema is derived for consumers outside TS (generation task payloads, documentation).
  */
 export function generateJsonSchemas(): Record<string, unknown> {
     const sources = {
@@ -52,7 +52,7 @@ export function generateJsonSchemas(): Record<string, unknown> {
         uiCancelRequest: uiCancelRequestSchema,
         uiCancelResponse: uiCancelResponseSchema,
         routeSnapshot: routeSnapshotSchema,
-        // Generation task result schemas are included as files in the payload (rpc-design §4).
+        // Generation task result schemas are passed as files in the payload (`docs/protocol.md §4`).
         routeSkeletonResult: routeSkeletonResultSchema,
         routeSectionResult: routeSectionResultSchema,
     };

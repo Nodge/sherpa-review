@@ -55,7 +55,7 @@ describe('warning before leaving', () => {
         detach();
     });
 
-    // Buffered text is already on the server (M5-T15), so leaving is safe and needs no dialog.
+    // Buffered text is already on the server. Leaving is safe, so no dialog is needed.
     it('does not prevent leaving because of a draft in the server buffer', () => {
         const store = createThreadStore([], new Set());
         const addEventListener = vi.fn();

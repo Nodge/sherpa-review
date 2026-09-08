@@ -41,7 +41,7 @@ import { CLI_VERSION } from './version.js';
 const LONG_POLL_SLACK_SECONDS = 30;
 
 /**
- * Client timeout for `next`: based on the requested wait, not a shared constant (decision #35).
+ * Client timeout for `next`: based on the requested wait, rather than a shared constant.
  * Without the flag, the harness relies on the server default, so we wait for that too.
  */
 export function nextTimeoutMs(waitSeconds: number | undefined): number {
@@ -59,7 +59,7 @@ export interface WorkerLabels {
     readonly lang: Locale | undefined;
 }
 
-/** Registers the session as the PR worker (rpc-design §7) on the first skill call and every reconnection. */
+/** Registers a session as the PR worker (`docs/protocol.md §7`): first skill invocation and every reconnection. */
 export async function requestRegister(
     connection: ServerConnection,
     labels: WorkerLabels,
@@ -142,7 +142,7 @@ export async function requestFail(
     });
 }
 
-/** Common body fields shared by all worker requests (rpc-design §9). */
+/** Shared body fields for all worker requests (`docs/protocol.md §9`). */
 type WorkerRequestBase = Pick<WorkerNextRequest, 'protocolVersion' | 'cliVersion' | 'workerId'>;
 
 /** Request fields left to the caller. `callWorker` adds the handshake and identity. */
@@ -175,7 +175,7 @@ type Transport = (
 ) => Promise<RawResponse>;
 
 /**
- * One worker call: version handshake in every request body (rpc-design §9),
+ * One worker call: a version handshake in every request body (`docs/protocol.md §9`),
  * bearer token from the manifest. Validates the body against the contract schema before sending, and the response after,
  * failing closed in both directions.
  */

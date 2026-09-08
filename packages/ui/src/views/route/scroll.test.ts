@@ -4,7 +4,7 @@ import type { StopBox } from './scroll.js';
 import { pickTopStop } from './scroll.js';
 
 /**
- * Choosing the scroll anchor (SPEC §2.5) controls both keeping a stop in view when the filter changes,
+ * Scroll anchor selection (docs/design/SPEC-elements.md §2.5) controls both keeping a stop on screen during a filter change
  * and restoring position during a preset change. Coordinates are used as given, so no DOM is needed here.
  */
 

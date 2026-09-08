@@ -1,5 +1,5 @@
 /**
- * Stop paragraph clamping (SPEC §2.9): above four sentences, show four and "more".
+ * Clamp a stop paragraph (docs/design/SPEC-elements.md §2.9): show four sentences and "more" if there are more than four.
  * Pure function: sentence boundaries are periods, exclamation marks, question marks
  * and ellipses followed by whitespace. Abbreviations like "i. e." are split rarely and harmlessly.
  */

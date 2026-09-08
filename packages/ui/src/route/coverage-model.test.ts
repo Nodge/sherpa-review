@@ -15,10 +15,10 @@ import { createT } from '../i18n/index.js';
 const t = createT('en');
 
 /**
- * Coverage strip and stop seen ranges (SPEC §2.4, §2.10) on the `medium` fixture:
+ * Coverage bar and stop seen ranges (docs/design/SPEC-elements.md §2.4 and §2.10) on the `medium` fixture:
  * 866 changed lines in coverage statistics (868 in patches, with two empty lines outside anchors
- * excluded, decision log 2026-08-26), tiers 196 / 327 / 305, with 38 uncovered
- * (6 of them from the added SVG image: the route ignores images, M5-T23).
+ * excluded), tiers 196 / 327 / 305, uncovered 38
+ * (6 of those are the added image svg because the route does not see images).
  * This test fails if the counts diverge.
  */
 
@@ -104,7 +104,7 @@ describe('coverage bar model', () => {
             totals: totals({ changed: 1000, uncovered: 44, byTier: { high: 956, medium: 0, low: 0, other: 44 } }),
             entries: [], t,});
 
-        // 95.6% means "95%", never "96%" (SPEC §2.4).
+        // 95.6% gives "95%", never "96%" (docs/design/SPEC-elements.md §2.4).
         expect(built.percent).toBe(95);
     });
 
@@ -130,7 +130,7 @@ describe('coverage bar model', () => {
         expect(built.segments[1]?.lines).toBe(6);
     });
 
-    it('lines in a conflicted file do not enter the bar (SPEC §4.1)', () => {
+    it('excludes conflict file lines from the bar (docs/design/SPEC-elements.md §4.1)', () => {
         const first = DATA.diff.files[0];
         if (first === undefined) {
             throw new Error('fixture needs at least one file');
@@ -214,7 +214,7 @@ describe('read-state from a stop mark', () => {
                 });
 
                 expect(state.state).toBe(group.whole ? 'read' : 'partial');
-                // The tooltip must give the exact count that filled the indicator (SPEC §2.12).
+                // The tooltip must show exactly the count that filled the box (docs/design/SPEC-elements.md §2.12).
                 expect(state.seen).toBe(group.additions + group.deletions);
                 expect(readStateTooltip(createT('en'), state)).toBe(
                     `${String(state.seen)} of ${String(state.total)} changed lines seen`,

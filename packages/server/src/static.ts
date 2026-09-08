@@ -4,7 +4,7 @@ import path from 'node:path';
 
 /**
  * Serves the built UI. Static assets are the only content served without a token because they contain no secrets,
- * and the browser gets the token in the URL fragment without sending it to the server (rpc-design §8).
+ * and the browser receives the token in a URL fragment without sending it to the server (docs/protocol.md §8).
  */
 
 /** UI build file ready to send. */

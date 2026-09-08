@@ -5,11 +5,11 @@ import { hostIdSchema } from './review.js';
 import { taskIdSchema } from './task.js';
 
 /**
- * Chat with the agent and agent notes (M3, brief F2). Domain schemas. Endpoints and SSE are in `ui.ts`.
+ * Chat with the agent and agent notes (`docs/product.md §7`, scenario F2). Domain schemas. Endpoints and SSE are in `ui.ts`.
  *
  * The data model is an exchange (question + answer in one record), not a message feed: status
  * lives in one place, an "answer without a question" is unrepresentable, and cancel/retry address one
- * entity. The UI expands an exchange into a feed of two messages (you/agent, handoff README §4)
+ * entity. The UI expands an exchange into a two-message feed
  * (you/agent, `docs/design/README.md §4`).
  */
 
@@ -33,11 +33,11 @@ export type ChatAnchor = z.infer<typeof chatAnchorSchema>;
 
 /**
  * Exchange lifecycle. `queued` means the task is waiting for a worker (including while
- * a route is being generated, the queue is accurate, SPEC §2.18). `running` means the worker took
+ * the route is being generated, since the queue is fair, `docs/design/SPEC-elements.md §2.18`). `running` means the worker claimed
  * the task. Terminal states: `done` means the answer was accepted. `failed` means an error or exhausted
- * attempts, the question is preserved (SPEC §3), `retry` enqueues a new task. `cancelled` means
+ * attempts, with the question preserved (`docs/design/SPEC-elements.md §3`), and `retry` queues a new task. `cancelled` means
  * the reviewer stopped it (a worker busy with a cancelled task learns about cancellation on
- * its next CLI call, rpc-design §5, and the UI accurately shows "agent still busy").
+ * its next CLI call, `docs/protocol.md §5`, while the UI shows "agent is still busy").
  */
 export const chatExchangeStatusSchema = z.enum(['queued', 'running', 'done', 'failed', 'cancelled']);
 export type ChatExchangeStatus = z.infer<typeof chatExchangeStatusSchema>;
@@ -58,13 +58,13 @@ export const chatExchangeSchema = z.object({
      * question, even if cancelled. null means an exchange without a task (the exchange outlived its loss).
      */
     taskId: taskIdSchema.nullable(),
-    /** Markdown, only when `done`, otherwise null. No token streaming, it arrives in full (rpc-design §6). */
+    /** Markdown, only for `done`, otherwise null. No token streaming: arrives in full (`docs/protocol.md §6`). */
     answer: z.string().nullable(),
     /** Latest `task progress` line, only for `running`, otherwise null. */
     progressText: z.string().nullable(),
     /** Reason readable by the reviewer, only for `failed`, otherwise null. */
     error: z.string().nullable(),
-    /** Requested response language (M5-T4). null means a pre-M5 exchange with a Russian answer. */
+    /** Requested answer language. null means an old-format exchange, read as English. */
     locale: localeSchema.nullable().default(null),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
@@ -72,7 +72,7 @@ export const chatExchangeSchema = z.object({
 export type ChatExchange = z.infer<typeof chatExchangeSchema>;
 
 /**
- * Agent note beside code (SPEC §2.16): the server pins an accepted answer to an anchored question
+ * Agent note beside code (`docs/design/SPEC-elements.md §2.16`): the server pins an accepted answer to an anchored question
  * as a note in the same transaction. It is local and never reaches the review backend.
  * `text` copies the answer: the note is self-contained, and lives and is deleted
  * independently of chat history. The UI derives the exchange's "pinned as a note" mark
@@ -100,7 +100,7 @@ export const agentNoteSchema = z.object({
     /** Markdown copy of the accepted answer. */
     text: z.string().min(1),
     /**
-     * A push touched the note's range and its anchor could not be carried over (SPEC §2.16). The note
+     * A push touched the note range and the anchor could not be carried over (`docs/design/SPEC-elements.md §2.16`): the note
      * leaves the code and stays marked in chat. `anchor` keeps the last successful value.
      */
     lostAnchor: z.boolean(),

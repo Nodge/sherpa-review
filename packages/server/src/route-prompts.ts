@@ -3,10 +3,11 @@ import type { Locale } from '@sherpa/protocol';
 import { bannedPhrases, quoted } from './route/voice.js';
 
 /**
- * Prompts for route generation tasks (requirements §1/C5).
+ * Prompts for generative route tasks (docs/architecture.md §1).
+ *
  *
  * Texts here are English because the model reads them. The model does not choose the result language.
- * The instructions set it to the generation locale (M5-T4, task breakdown decision 2): Russian or
+ * The guide names it, matching the generation locale: Russian or
  * English, with no third option. Only the required response language and its examples change. The prompt
  * always stays in English.
  *
@@ -16,7 +17,7 @@ import { bannedPhrases, quoted } from './route/voice.js';
  *
  * Methodology goes in a separate context file (`*-guide.md`), outside `instructions`.
  * Both guides exceed 4 KB, and `worker next` prints all of `instructions` to stdout
- * (rpc-design §4: large context in files).
+ * (docs/protocol.md §4 covers heavy context passed through files).
  */
 
 /**

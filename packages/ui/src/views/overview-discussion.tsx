@@ -16,7 +16,7 @@ import type { DiscussionParticipant } from './overview-model.js';
 import { bodyNeedsExpand, discussionSummary } from './overview-model.js';
 import './overview-discussion.css';
 
-/** The card caps participant rows here, then shows "N more" (SPEC additions §1e item 3). */
+/** The card shows no more participant rows beyond this limit, then "N more" (docs/design/SPEC-additions-2026-08-26.md §1e item 3). */
 const PARTICIPANT_ROWS = 6;
 
 export interface OverviewDiscussionProps {
@@ -37,7 +37,7 @@ export interface OverviewDiscussionProps {
 }
 
 /**
- * Discussion card in Overview (SPEC additions §1e): a summary and entry point, not a feed. Thread
+ * Discussion card in Overview (docs/design/SPEC-additions-2026-08-26.md §1e): a summary and entry point, not a feed. Thread
  * bodies live at code. Only threads outside the diff expand in the card because there is nowhere else
  * to read them. Bot threads collapse into one row per bot and never show their bodies.
  */
@@ -287,7 +287,7 @@ function OutsideThreadCard({
     const [repliesOpen, setRepliesOpen] = useState(false);
     const composer = useComposerSnapshot(store, `reply:${thread.id}`);
     // A thread on a removed file may have been written in a previous iteration. There is nowhere else to read it,
-    // so "show on old commit" navigation lives here too (SPEC §2.17).
+    // so the "show at old commit" action also lives here (docs/design/SPEC-elements.md §2.17).
     const pinned = useThreadPin(thread);
     const clampable = bodyNeedsExpand(thread.root.body);
     const clamped = clampable && !expanded;

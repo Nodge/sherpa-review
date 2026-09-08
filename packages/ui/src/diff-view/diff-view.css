@@ -1,6 +1,6 @@
 /*
- * Diff rendering: file cards and diff rows. All sizes and colours come from README §1
- * ("Right column: one card per hunk…") and SPEC §2.13–2.14. Values use tokens only.
+ * Diff rendering: file card and diff rows. All sizes and colours come from docs/design/README.md §1
+ * ("Right column: one card per hunk…") and docs/design/SPEC-elements.md §2.13–2.14. Values use tokens only.
  */
 
 @import '../diff/syntax.css';
@@ -50,7 +50,7 @@
     overflow: clip;
 }
 
-/* Generated files are dimmed (README §10: generated → dim). */
+/* Generated files are dimmed (docs/design/README.md §10: generated → dim). */
 .file-card--generated .file-card__name,
 .file-card--generated .file-card__path {
     color: var(--text-dim-strong);
@@ -94,7 +94,7 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--text-dim-strong);
-    /* The path truncates from the left (SPEC §1.2), never the filename: rtl cuts the start of the line,
+    /* The path is truncated on the left (docs/design/SPEC-elements.md §1.2), never the filename. rtl truncates the start,
        plaintext keeps the path itself in its usual order. */
     direction: rtl;
     unicode-bidi: plaintext;
@@ -123,7 +123,7 @@
     color: var(--diff-del-text);
 }
 
-/* Conflict badge in the card header (SPEC §2.14): a monospace chip using the warning token group. */
+/* Conflict badge in the card header (docs/design/SPEC-elements.md §2.14): a mono chip using warning tokens. */
 .file-card__badge--conflict {
     flex: none;
     padding: 0 5px;
@@ -146,7 +146,7 @@
     text-overflow: ellipsis;
 }
 
-/* Hover actions (README §1): hidden at rest, but available to the keyboard. */
+/* Hover actions (docs/design/README.md §1) are hidden at rest but keyboard-accessible. */
 .file-card__actions {
     display: flex;
     gap: var(--space-inner-tight);
@@ -226,7 +226,7 @@
     color: var(--text-dim-strong);
 }
 
-/* Viewed toggle in the file header (README §1): a row without its own border. The box and its
+/* Viewed toggle in the file header (docs/design/README.md §1): a row without its own border. The box and its
    states are shared by files and stops, in `components/viewed-toggle.css`. */
 .file-card__viewed {
     display: flex;
@@ -269,7 +269,7 @@
     background: var(--attention-surface-alt);
 }
 
-/* Card kept on screen despite the filter (SPEC §2.7). */
+/* The card stays on screen despite the filter (docs/design/SPEC-elements.md §2.7). */
 .file-card__kept {
     margin: 0;
     padding: 6px 13px;
@@ -279,10 +279,10 @@
     border-bottom: 1px solid var(--attention-border-alt);
 }
 
-/* The skeleton takes the space estimated by the list (M2F-T3). Text stays at the top edge,
+/* The skeleton takes the space estimated by the list. Text stays near the top edge,
    where it can be found even in a card several screens tall.
 
-   The slot is empty for the first 200 ms (SPEC §3): line height is reserved here, otherwise the indicator
+   The slot stays empty for the first 200 ms (docs/design/SPEC-elements.md §3). Reserve line height here, or the text
    would shift cards for which the list supplied no height estimate. */
 .file-card__loading {
     align-items: flex-start;
@@ -461,12 +461,12 @@
 .diff-row {
     position: relative;
     display: grid;
-    /* README §1: unified has the old gutter, new gutter, sign and code. */
+    /* docs/design/README.md §1: unified has old gutter, new gutter, sign, code. */
     grid-template-columns: 46px 46px 16px minmax(0, 1fr);
 }
 
 .diff-rows--split .diff-row {
-    /* README §1: side by side has a gutter, sign and code for each side. */
+    /* docs/design/README.md §1: side-by-side has gutter, sign and code on each side. */
     grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
 }
 
@@ -547,7 +547,7 @@
     color: var(--code-text-del);
 }
 
-/* Empty side of a pair in split mode (README §1). */
+/* Empty side of a split pair (docs/design/README.md §1). */
 .diff-row__gutter--empty,
 .diff-row__sign--empty,
 .diff-row__code--empty {
@@ -559,7 +559,7 @@
     background: var(--accent-selection);
 }
 
-/* The selected range is the same in both modes (README §1, SPEC §2.14). */
+/* The selected range looks the same in both modes (docs/design/README.md §1, docs/design/SPEC-elements.md §2.14). */
 .diff-row.is-selected,
 .diff-side.is-selected {
     background: var(--accent-selection);

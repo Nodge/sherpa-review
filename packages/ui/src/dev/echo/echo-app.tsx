@@ -5,9 +5,9 @@ import { ApiError, cancelTask, enqueueEchoTask } from '../../api.js';
 import type { Store, StoreSnapshot } from '../../store.js';
 
 /**
- * M0 loop demo: worker status, echo task enqueueing and a queue with results.
+ * Agent loop demo: worker status, echo task submission and queue with results.
  * Lives in dev mode (`dev.html`) as a tool for running the manual harness matrix,
- * instead of a product screen. Since M1-T4, the main page is the PR reader.
+ * not a product screen. The product home page is the PR reader.
  */
 export interface EchoAppProps {
     readonly store: Store;
@@ -97,7 +97,7 @@ function workerIdentity(harness: string | undefined, model: string | undefined, 
     return [harness ?? workerId, ...(model === undefined ? [] : [model])].join(' · ');
 }
 
-/** The "Agent disconnected" banner (SPEC §4.4): what happened, its consequence, one action. */
+/** "Agent disconnected" banner (docs/design/SPEC-elements.md §4.4): what happened, the consequence, one action. */
 function DisconnectedBanner({ prKey }: { prKey: string }) {
     return (
         <div className="banner banner--offline">
@@ -271,7 +271,7 @@ function TaskCard({ task, worker, token }: { task: UiTask; worker: WorkerStatus;
  * Leased task. The lease outlives the session: the worker is considered disconnected before
  * the lease expires (`WORKER_DEAD_AFTER_SECONDS` is shorter than any `LEASE_TTL_SECONDS`), so there is
  * a window where the agent is gone but the task status is still `leased`. Showing "agent is working" then
- * is not allowed because it would contradict the "Agent disconnected" banner on the same screen (rpc-design §5, §7).
+ * would contradict the "agent disconnected" banner on the same screen (docs/protocol.md §5, §7).
  */
 function LeasedDetails({ task, worker }: { task: UiTask; worker: WorkerStatus }) {
     const progress = task.progressText === null ? '' : `: ${task.progressText}`;
@@ -293,7 +293,7 @@ function LeasedDetails({ task, worker }: { task: UiTask; worker: WorkerStatus })
     return (
         <>
             <p className="task__progress">agent is working{progress}</p>
-            {/* rpc-design §5: the session cannot be interrupted. Cancellation reaches the agent on its next call. */}
+            {/* docs/protocol.md §5: the session cannot be interrupted. Cancellation reaches the agent on its next call. */}
             <p className="task__hint">Cancellation will reach the agent on its next CLI call.</p>
         </>
     );

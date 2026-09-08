@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createStopProgressStore } from './stop-progress-store.js';
 
-/** Stop marks: optimistic state, rollback and replacement with a server snapshot (M2-T7). */
+/** Stop marks: optimistic layer, rollback, and replacement with a server snapshot. */
 describe('stop mark store', () => {
     it('notifies subscribers of a mark and replaces the entire state with a server snapshot', () => {
         const store = createStopProgressStore([{ stopId: 's01', viewed: true }]);

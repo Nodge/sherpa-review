@@ -12,7 +12,7 @@ import { buildIterationMap, LEGACY_DIFF_ID, opaqueMap } from './iterations/index
 import { makeTempSherpaDir, removeTempSherpaDir, seedAgentNotes } from './test-support.js';
 
 /**
- * Note anchor migration between iterations (M4-T11). The fixture defines the expected result:
+ * Note anchor migration between iterations. The fixture defines the expected result:
  * `chatFixtures('medium').notesAfterPush` contains the same notes as seen in the second iteration.
  */
 

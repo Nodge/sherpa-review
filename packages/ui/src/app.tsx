@@ -91,7 +91,7 @@ import { RouteFailedView, RouteReadingView } from './views/route/route-generatin
 import { RouteView } from './views/route/route-view.tsx';
 import { IterationWithoutRoute, SliceWithoutOverview, ViewFrame } from './views/view-frames.tsx';
 
-/** Shortcut registry scope for the open view (SPEC §5). */
+/** Shortcut registry scope for the open view (docs/design/SPEC-elements.md §5). */
 const SCOPE_OF_VIEW: Readonly<Record<ViewId, ShortcutScope>> = {
     overview: 'overview',
     route: 'route',
@@ -107,7 +107,7 @@ export interface AppProps {
 
 export function App({ store, session, token }: AppProps) {
     const t = useT();
-    /** The tab's effective language also sets the route and chat response language (M5-T4). */
+    /** The effective tab language also controls route generation and chat answers. */
     const uiLocale = useLocale();
     // Language changes use palette commands in the "Sherpa" group. The design has no separate settings popover.
     useLocaleCommands();
@@ -130,7 +130,7 @@ export function App({ store, session, token }: AppProps) {
     }, [shortcutRegistry, view]);
     const state = snapshot.state;
     const reviewReady = state !== null;
-    // "Check for updates" palette command (M5-T9). The toast below waits for the tour to finish.
+    // The "Check for updates" palette command. The toast below waits until the tour ends.
     const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
     useUpdateCheckCommand({
         token,
@@ -143,7 +143,7 @@ export function App({ store, session, token }: AppProps) {
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
     const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
 
-    // --- Iteration selection: snapshot list, selection resolution, tab data key (M4-T9) ---
+    // --- Iteration selection: snapshot list, selection resolution, tab data key ---
 
     const {
         snapshotsState,
@@ -177,7 +177,7 @@ export function App({ store, session, token }: AppProps) {
             }),
         [facts.commit, facts.diffId, facts.routeSettled, iterations, snapshots, snapshotsLoaded, storedRoute, viewing],
     );
-    // The active PR iteration is also the reference point for thread pins (M4-T10).
+    // The active PR iteration is also the reference point for thread pins.
     const activeDiffId = useMemo(
         () => activeIterationDiffId({ iterations, activeDiffId: facts.diffId }),
         [facts.diffId, iterations],
@@ -188,13 +188,13 @@ export function App({ store, session, token }: AppProps) {
     const viewSnapshotId = resolved.snapshotId;
     const viewPending = resolved.pending;
     const readOnly = resolved.readOnly;
-    /** The tab shows a slice between iterations (M4-T12). The diff loads through the `base`/`head` endpoint. */
+    /** The tab displays an inter-iteration slice. Load its diff through the `base`/`head` endpoint. */
     const sliceBase = resolved.slice?.base ?? null;
     const sliceHead = resolved.slice?.head ?? null;
     /**
      * Reload key for the diff and lenses without parameters. They have no revision of their own and learn about
      * a push only here. While the route snapshot belongs to a previous iteration, the key keeps that diff
-     * (stop anchors address files by their own iteration's `fileId`, task breakdown decision 10) and moves
+     * (stop anchors address files by the `fileId` of their own iteration) and moves
      * when a new skeleton is accepted. Without a snapshot, it follows the active iteration in state.
      * `activeDiffId` does not work here. Its fallback `facts.diffId` comes from the diff response itself
      * and would trigger two requests on open. The key does not move a selected iteration, snapshot or slice.
@@ -210,7 +210,7 @@ export function App({ store, session, token }: AppProps) {
     const storedReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
     /**
      * Tab data. A slice has no progress, lenses or threads. Its `fileId` values belong to a separate
-     * namespace, and iteration endpoints do not apply to it (M4-T1 decision). Use empty placeholders
+     * namespace, so iteration endpoints do not apply. Use empty placeholders
      * instead, or Full diff would wait for data that will never arrive.
      */
     const currentReview = useMemo(
@@ -225,9 +225,9 @@ export function App({ store, session, token }: AppProps) {
     }, [resolved.unknown, session]);
     const currentDiff = currentReview.diff;
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
-    /** The host provides slices between iterations. Otherwise hide this picker section (M4-T4). */
+    /** The host supplies slices between iterations. Otherwise this picker section stays hidden. */
     const interdiffAvailable = state?.pr?.capabilities.iterations === true;
-    /** Image bytes (M5-T24): without `capabilities.blobs`, image cards do not render at all. */
+    /** Image bytes. Without `capabilities.blobs`, image cards are not rendered at all. */
     const blobsAvailable = state?.pr?.capabilities.blobs === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
@@ -245,7 +245,7 @@ export function App({ store, session, token }: AppProps) {
     /** Jump to a stop from the palette. The route view completes scrolling using the increasing `id`. */
     const [routeNavigation, setRouteNavigation] = useState<{ id: number; stopId: string } | null>(null);
     const routeNavigationId = useRef(0);
-    /** The route explains less than half the diff. The notification slot shows the banner (SPEC §4.3). */
+    /** When the route explains less than half the diff, the notification slot shows a banner (docs/design/SPEC-elements.md §4.3). */
     const [routeUnderExplained, setRouteUnderExplained] = useState(false);
     /**
      * Route counts from the view: only it knows them (uncovered lines are counted from parsed models).
@@ -360,7 +360,7 @@ export function App({ store, session, token }: AppProps) {
     );
 
     /**
-     * The draft buffer (M5-T15) is read along with threads, using the same `review` event and token.
+     * Read the draft buffer along with threads, using the same `review` event and token.
      * A read failure gets no separate error display. Keep the last known buffer on screen,
      * and reload it at the next revision.
      */
@@ -468,10 +468,10 @@ export function App({ store, session, token }: AppProps) {
         pciStats?.files ?? 0,
     );
 
-    // --- Route generation: endpoints, long-running task, default view for a small PR (M2-T10) ---
+    // --- Route generation: endpoints, long-running task, default view for a small PR ---
 
     const route = currentReview.route;
-    // The tour starts as soon as there is a snapshot and diff, without waiting for a route (decision 2026-09-04).
+    // The tour starts as soon as a state snapshot and diff exist. It does not wait for a route.
     const tourActive = useTourActive(state !== null && currentDiff !== null);
 
     const {
@@ -507,13 +507,13 @@ export function App({ store, session, token }: AppProps) {
     /** The Route tab renders any live snapshot, including the old one during a rebuild. */
     const routeViewSnapshot = routeKind === 'workspace' && !resolved.routeless ? (route?.snapshot ?? null) : null;
     /**
-     * Generation cap (SPEC §4.1). The server calculates it from the active snapshot, so it stays
+     * Generation cap (docs/design/SPEC-elements.md §4.1). The server calculates it from the active snapshot, so it stays
      * silent when reading a previous iteration because the displayed route belongs to another iteration.
      */
     const generationCap = readOnly ? null : (state?.generationCap ?? null);
     /**
      * The second-pass banner is dismissed for this snapshot. It describes a filter, so it is dismissible
-     * (SPEC §2.21). Dismissal lives in the tab session and resets when a new snapshot arrives.
+     * (docs/design/SPEC-elements.md §2.21). Dismissal lives in the tab session and clears when a new snapshot arrives.
      */
     const [dismissedSecondPass, setDismissedSecondPass] = useState<string | null>(null);
     const secondPassVisible = secondPassBannerVisible(
@@ -529,8 +529,8 @@ export function App({ store, session, token }: AppProps) {
     const routeHasChanges = routeChangedStops > 0;
     /**
      * The "what is new" filter is invalid on a ready snapshot without classified stops
-     * (decision 6) and resets. Otherwise it would stay in the URL and silently activate on the next
-     * pass with classifications, even though the reviewer did not enable it then.
+     * and resets. Otherwise it would stay in the URL and silently activate on the next pass
+     * that has classifications, even though the reviewer did not enable it then.
      */
     useEffect(() => {
         if (routeFilter === 'new' && routeSnapshot !== null && !routeHasChanges) {
@@ -604,7 +604,7 @@ export function App({ store, session, token }: AppProps) {
 
     const [dismissedNotesLost, setDismissedNotesLost] = useState<string | null>(null);
     /**
-     * "Keep it" on the route language banner (M5-T4): tab-local memory, keyed by snapshot id.
+     * "Keep it" on the route language banner: tab memory keyed by snapshot id.
      * A new snapshot in a different language asks again.
      */
     const [keptRouteLocale, setKeptRouteLocale] = useState<string | null>(null);
@@ -757,7 +757,7 @@ export function App({ store, session, token }: AppProps) {
         [session],
     );
     /**
-     * "View at the old commit" (SPEC §2.17) opens the pinned iteration in the Full diff tab.
+     * "Show on old commit" (docs/design/SPEC-elements.md §2.17) opens the pinned iteration in the full diff tab.
      * It usually has no route. Patch the selection and `thread` into the fragment together,
      * or changing iterations would clear `thread` as an anchor from another diff.
      */
@@ -777,7 +777,7 @@ export function App({ store, session, token }: AppProps) {
         [activeDiffId, currentDiff, openThreadAtIteration],
     );
 
-    /** Tour step 06 opens the chat panel and closes it on leaving the step (SPEC-onboarding §2). */
+    /** Tour step 06 opens the chat panel and closes it on leaving the step (docs/design/SPEC-onboarding-2026-09-02.md §2). */
     const openChatPanel = useCallback(() => {
         session.setChatOpen(true);
     }, [session]);
@@ -794,9 +794,9 @@ export function App({ store, session, token }: AppProps) {
         completed: completion !== null,
     });
     /**
-     * Tour scaffold replaces an empty Route tab: until a route exists, anchors for steps 01–03
+     * Tour scaffold in place of an empty route tab. Without a route, steps 01–03
      * have no targets. A small PR or previous iteration will never have a route, so the scaffold
-     * would misrepresent that state, and the steps use fallback placement.
+     * would misrepresent them. Those steps use their fallback positions instead.
      */
     const tourScaffoldVisible =
         tourActive &&
@@ -804,7 +804,7 @@ export function App({ store, session, token }: AppProps) {
         completion === null &&
         !resolved.routeless &&
         (routeKind === 'invitation' || routeKind === 'reading' || routeKind === 'failed');
-    // Update toast (M5-T9) waits for the tour to finish. It does not appear on top of it.
+    // The update toast waits for the tour to end. It never appears over the tour.
     const updateToast = useUpdateToast(state?.update ?? null, tourActive);
 
     if (snapshot.connection === 'fatal') {
@@ -1026,7 +1026,7 @@ export function App({ store, session, token }: AppProps) {
                 />
             )}
 
-            {/* Tour scaffold: placeholder anchors in the Route tab until a route exists (M5-T8). */}
+            {/* Tour scaffold: placeholder step targets on the route tab until a route exists. */}
             {tourScaffoldVisible ? <TourScaffold /> : null}
                 </div>
                 {chatOpen ? (

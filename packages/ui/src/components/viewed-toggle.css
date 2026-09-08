@@ -1,5 +1,5 @@
 /*
- * Viewed checkbox (SPEC §2.10): 11px, an empty border when unviewed,
+ * Viewed checkbox (docs/design/SPEC-elements.md §2.10): 11px, an empty border when unviewed,
  * a fill with an icon when viewed. The caller sets the geometry around the box
  * (`.route-stop__viewed`, `.file-card__viewed`). The box itself is shared.
  */
@@ -20,7 +20,7 @@
         border-color var(--motion-hover) var(--motion-hover-ease);
 }
 
-/* SPEC §2.10: on hover the border brightens and the box gets quarter-opacity fill. The quarter-opacity
+/* docs/design/SPEC-elements.md §2.10: on hover, the border brightens and the box gets a quarter fill. The fill
    by a quarter applies to the empty box: on a filled one it would remove the background and hide the icon. */
 .viewed-toggle:not(.is-viewed):not(:disabled):hover .viewed-toggle__box {
     border-color: var(--read-border);
@@ -33,7 +33,7 @@
     color: var(--surface-app);
 }
 
-/* SPEC §2.10: pressing fills instantly, without the 90ms hover transition. */
+/* docs/design/SPEC-elements.md §2.10: pressing fills it immediately, without the 90-millisecond hover transition. */
 .viewed-toggle:not(:disabled):active .viewed-toggle__box {
     border-color: var(--read-border);
     background: var(--read-fill);

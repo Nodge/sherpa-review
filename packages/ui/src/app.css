@@ -1,4 +1,4 @@
-/* Main page shell: message screens and connection banners left over from M0. */
+/* Main page shell: message screens and connection banners. */
 
 /*
  * The page is a window-height column with a toolbar, connection banner and view. The view gets
@@ -26,7 +26,7 @@
 }
 
 .app-workspace__content {
-    /* Tour scaffold coordinate system (M5-T8): it sits above the view without moving it. */
+    /* Coordinate system for the tour scaffold, which overlays the view without moving it. */
     position: relative;
     display: flex;
     flex: 1;
@@ -93,7 +93,7 @@
     color: var(--text-dim) !important;
 }
 
-/* The M0 transport notice stays separate from the M1-T15 product banner slot. */
+/* The connection notice stays separate from the product banner slot. */
 .connection-banner {
     margin: var(--space-control) var(--space-page) 0;
     padding: var(--space-inner) 13px;

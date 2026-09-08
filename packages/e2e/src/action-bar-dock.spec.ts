@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * M5-T22: the floating action bar centres on the content column, not the window. With
+ * The floating action bar centers on the content column, not the window. With
  * docked chat (≥1280), it does not overlap the chat on X. In overlay mode (<1280),
  * it sits under the scrim, and final actions wait until chat closes, including shortcuts that
  * the scrim alone would not stop.

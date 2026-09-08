@@ -43,7 +43,7 @@ for (const bundle of bundles) {
 writeVersionFile();
 
 /**
- * `dist/version.json` follows `distributionVersionSchema` (M5, planning decision 7): the server compares
+ * `dist/version.json` follows `distributionVersionSchema`. The server compares
  * this file from main with the embedded version. Release fields (`releasedAt`, `whatsNew`) are filled by
  * `scripts/release.mjs` in the target directory. They are absent from the build artifact.
  */

@@ -7,7 +7,7 @@ import { createShortcutRegistry } from '../../shortcuts/registry.js';
 import { generateCommand, PRESET_COMMAND_LABEL, presetCommand } from './route-commands.tsx';
 
 /**
- * The "toggle preset" command shares one declaration between the `t` shortcut and the palette (SPEC §5).
+ * The "toggle preset" command shares one declaration between the `t` shortcut and the palette (docs/design/SPEC-elements.md §5).
  * The registry is shared, so the tests check both its description and what `action` does.
  */
 

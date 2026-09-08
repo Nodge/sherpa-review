@@ -10,7 +10,7 @@ import { createShortcutRegistry } from '../shortcuts/registry.js';
 import { CommandPalette } from './command-palette.tsx';
 
 /**
- * A command that replies inside the palette (M5-T9): "Check for updates" asks the palette
+ * A command that replies with a line in the palette: "Check for updates" asks the palette
  * to stay open (`keepOpen`) and puts its reply in the hint area and live region.
  */
 

@@ -3,12 +3,12 @@ import { sameViewing, VIEWING_CURRENT } from '../iterations/viewing.js';
 import type { ViewId } from './views.js';
 
 /**
- * UI session state, what the README calls "Per session (UI)": how the PR is viewed,
- * rather than its contents. The store lives outside the React tree (requirements §1/C3), with subscriptions
- * and `useSyncExternalStore`, without synchronization effects.
+ * Session UI state is what `docs/design/README.md` calls "Per session (UI)": how
+ * the PR is viewed, not what it contains. The store lives outside the React tree (docs/architecture.md §1)
+ * and uses subscriptions plus `useSyncExternalStore`, with no synchronization effects.
  *
- * State holds the active view and selected file filter. Later tasks add their own fields
- * (panels, palette), which is why the mechanism is generic.
+ * State holds the active view and selected file filter. The mechanism is generic, so new fields
+ * (panels, palette) can be added alongside them.
  */
 
 export interface ThreadsShow {
@@ -33,17 +33,17 @@ export function isNoteStackExpanded(
 }
 
 /**
- * Route stop expansion in the current session (M2-T6). Sets instead of one flag: the
+ * Route stop expansions in the current session. Sets are used instead of a single flag. The
  * "viewed" mark collapses hunks but preserves previous expansion. Clearing the mark must
- * restore the card to exactly the state it was left in (SPEC §2.9).
+ * restore the card exactly as it was left (docs/design/SPEC-elements.md §2.9).
  *
- * The "viewed" mark itself does not live here: it persists per PR on the server (M2-T7,
- * README State model), held by `StopProgressStore`.
+ * The "viewed" mark itself does not live here. It is persisted per PR on the server
+ * (docs/design/README.md, "State model") and held by `StopProgressStore`.
  *
  * `expanded` means the stop is expanded despite tier-based collapse (low is collapsed by default).
  * `expandedViewed` means a viewed stop is temporarily expanded from its summary row.
- * `collapsed` means the stop was collapsed by hand (`x` shortcut, SPEC §5), regardless of tier.
- * `testCode` means a digest stop's test code is expanded (README §2, M2-T9). A set instead of a shared
+ * `collapsed` means the stop was collapsed by hand (`x` shortcut, §5), regardless of tier.
+ * `testCode` means test code is expanded in a digest stop (README §2). A set instead of a shared
  * flag allows multiple digests in a route, so expanding one digest's test code must not
  * expand another's. This toggle only changes the display and leaves the "viewed" mark alone.
  */
@@ -62,9 +62,9 @@ export const EMPTY_STOPS: StopsState = {
 };
 
 /**
- * Route preset (README State model, SPEC §2.5): `triage` is the plan's "most important first" order,
- * `tour` is the narrative reading order from the snapshot's `tourOrder`. The preset does not affect
- * stop numbers, which are fixed by the plan (SPEC §8 item 4).
+ * Route preset (docs/design/README.md "State model", docs/design/SPEC-elements.md §2.5).
+ * `triage` uses the plan's "important first" order. `tour` uses the narrative reading order in the snapshot's `tourOrder`
+ * field. Stop numbers are independent of the preset and fixed by the plan (§8 item 4).
  */
 export type RoutePreset = 'triage' | 'tour';
 
@@ -76,8 +76,8 @@ export function parsePreset(value: string | null): RoutePreset | null {
 }
 
 /**
- * "What is new since the last pass" filter (README §9, decision 6): `new` leaves in the route
- * only stops classified relative to the previous snapshot. Stop numbers
+ * "What is new since the previous pass" filter (docs/design/README.md §9). `new` keeps
+ * only route stops classified relative to the previous snapshot. Stop numbers
  * stay fixed by the plan, and the file filter applies on top.
  */
 export type RouteFilter = 'all' | 'new';
@@ -92,18 +92,18 @@ export function parseRouteFilter(value: string | null): RouteFilter | null {
 export interface SessionState {
     readonly view: ViewId;
     /**
-     * What the tab is viewing: the current PR state, a previous snapshot, or an iteration without a route
-     * (M4-T9). Selection is client-side and lives in the URL fragment.
+     * What the tab is viewing: current PR state, a previous snapshot or an iteration without a route.
+     * The selection is client-side and lives in the URL fragment.
      */
     readonly viewing: Viewing;
-    /** File filter id (README §Filters). One model for the tree, cards and, in M2, the route. */
+    /** File filter id (docs/design/README.md §Filters). One model for the tree, cards and route. */
     readonly filter: string;
     readonly preset: RoutePreset;
     readonly routeFilter: RouteFilter;
     /** Additive thread sources. They live only in the current tab session. */
     readonly threadsShow: ThreadsShow;
     /**
-     * "Threads by one author" lens in Full diff (M5-T16): the login of the participant selected
+     * The "threads by one author" lens in Full diff holds the login of the participant selected
      * in the discussion card. Stored in the tab, never written to the URL. Survives PR and iteration
      * changes, but not a reload.
      */
@@ -127,7 +127,7 @@ export interface SessionStore {
     readonly getViewSelectionSnapshot: () => number;
     /**
      * The reviewer chose the view through a link with the `view` parameter or manually in this session. The default view
-     * can change to suit the data (a small PR opens in the full diff, SPEC §4.1).
+     * may change to suit the data (small PRs open in full diff, docs/design/SPEC-elements.md §4.1).
      * A chosen view must never change automatically.
      */
     readonly viewPinned: () => boolean;
@@ -137,7 +137,7 @@ export interface SessionStore {
     readonly setRouteFilter: (routeFilter: RouteFilter) => void;
     /**
      * `fragment` contains URL keys to set in the same patch as the selection change.
-     * Otherwise `viewingFragmentPatch` removes them as anchors from another diff (M4-T10 "View at the
+     * Otherwise, `viewingFragmentPatch` removes them as anchors from another diff ("show at the
      * old commit" sets `thread`).
      */
     readonly setViewing: (viewing: Viewing, fragment?: Readonly<Record<string, string | null>>) => void;
@@ -158,7 +158,7 @@ export interface SessionStore {
     readonly setViewedStopExpanded: (stopId: string, expanded: boolean) => void;
     /** Manual collapse of a stop in any tier. */
     readonly setStopCollapsed: (stopId: string, collapsed: boolean) => void;
-    /** Show/Hide test code on a digest stop (README §2). */
+    /** Show/Hide test code on a digest stop (docs/design/README.md §2). */
     readonly setStopTestCode: (stopId: string, shown: boolean) => void;
     /**
      * The mark was cleared. Temporary expansion of a viewed stop lasts only while it is

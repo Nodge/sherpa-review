@@ -1,7 +1,7 @@
 import type { Locale, LocaleSetting } from '@sherpa/protocol';
 
 /**
- * Generation language (M5, task breakdown decision 2): the model uses it for routes and chat answers. It is also
+ * Generation language: the model uses it for routes and chat replies, and it is also
  * stored in snapshot `provenance.locale` and used for server strings the reviewer sees alongside them.
  *
  * Resolution follows the UI language order, with one difference: the UI knows the browser language, but the server

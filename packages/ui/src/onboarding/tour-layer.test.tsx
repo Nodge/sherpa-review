@@ -9,7 +9,7 @@ import type { TourStep } from './tour-model.js';
 import { tourSteps } from './tour-model.js';
 
 /**
- * Tour layer anchor selection. Geometry cannot be checked here, since jsdom gives everything zero rectangles,
+ * The tour layer's choice of step target. Geometry cannot be tested here because jsdom gives everything zero rectangles,
  * but the chosen target is visible: the layer lends it `aria-describedby` pointing to the card body (§7).
  */
 
@@ -34,7 +34,7 @@ function step(id: TourStep['id']): TourStep {
     return found;
 }
 
-/** Page markup beneath the layer: anchors appear in document order. */
+/** Page markup under the layer: step targets appear in document order. */
 function page(html: string): void {
     document.body.innerHTML = html;
 }

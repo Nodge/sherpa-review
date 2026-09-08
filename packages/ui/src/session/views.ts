@@ -1,6 +1,6 @@
 /**
- * Three views of the PR workspace (README §0, SPEC §2.1). The order in `VIEWS` determines tab order
- * and the order of keys 1/2/3.
+ * Three PR workspace views (docs/design/README.md §0, docs/design/SPEC-elements.md §2.1).
+ * The order in `VIEWS` defines tab order and the order of keys 1/2/3.
  */
 
 import type { MessageKey } from '../i18n/ru.js';
@@ -21,7 +21,7 @@ export const VIEWS: readonly ViewDescriptor[] = [
     { id: 'diff', label: 'view.diff', command: 'shortcut.view.diff' },
 ];
 
-/** Always start in Overview (decision log, #2): the route is not ready when opened, so there is nothing to show. */
+/** Always start with Overview. The route is not ready when opened, so there is nothing to view there. */
 export const DEFAULT_VIEW: ViewId = 'overview';
 
 /** `null` means the string is not a view identifier (invalid URL value). */

@@ -1,5 +1,5 @@
 /**
- * Parses markdown into nodes from which React builds elements (decision dated 2026-08-27, M2F-T5).
+ * Parse markdown into nodes that React turns into elements.
  * No HTML string is produced here. Raw HTML in the source stays text,
  * and React escapes it by construction, so no separate sanitizing layer is needed.
  *

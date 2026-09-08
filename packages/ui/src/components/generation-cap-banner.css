@@ -1,4 +1,5 @@
-/* Generation cap banner (SPEC §4.1), using the same amber token group as the other banners. */
+/* Generation limit banner, docs/design/SPEC-elements.md §4.1, with the same amber token group
+   as other banners. */
 
 .generation-cap-banner {
     display: flex;

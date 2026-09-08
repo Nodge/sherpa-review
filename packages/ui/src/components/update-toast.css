@@ -1,8 +1,8 @@
 /*
- * Update toast, M5 task breakdown decision 8 (no mockup, designed by Fable). Popover background,
+ * Update toast has no handoff mockup. Its appearance follows neighbouring components. Popover background,
  * bottom left corner, z-index 65, below the action bar (70), tour (88) and palette (100).
  *
- * The action bar (M5-T22) is centered on the content column and, on a wide PR, reaches
+ * The action bar is centred on the content column. In a wide PR its left edge reaches
  * the toast, so the toast sits above it rather than on the same line. Otherwise the bar
  * would cover "How to update" and "Don't remind me" and intercept their clicks.
  */

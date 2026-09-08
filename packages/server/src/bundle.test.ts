@@ -15,7 +15,7 @@ import { get, makeTempSherpaDir, removeTempSherpaDir } from './test-support.js';
 
 /**
  * Fixture host key: this suite tests the process, not the adapter. Live review hosts
- * are forbidden in tests (requirements §7), since a live host key would make route warmup fetch the diff over the network.
+ * is forbidden in tests (docs/testing.md). A live-host key would make route warm-up fetch the diff over the network.
  */
 const PR_KEY = 'fixture-medium';
 const TEST_TIMEOUT_MS = 40_000;
@@ -26,7 +26,7 @@ const packageRoot = path.resolve(import.meta.dirname, '..');
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa-server.mjs');
 /**
  * Distribution version from the root package.json: the build embeds it in the bundle, while `SERVER_VERSION`
- * in this process is zero (development fallback), so it provides no useful comparison.
+ * in this process is zero (the development default), so it cannot be used for comparison.
  */
 const releaseVersion = (
     JSON.parse(readFileSync(path.join(packageRoot, '../../package.json'), 'utf8')) as { version: string }
@@ -74,7 +74,7 @@ describe('server bundle', () => {
             expect(health.status).toBe(200);
             expect(await health.json()).toMatchObject({ ok: true, prKey: PR_KEY, serverVersion: releaseVersion });
 
-            // Static assets need no token: they contain no secrets (rpc-design §8).
+            // Static assets need no token: they contain no secrets (docs/protocol.md §8).
             const index = await get(manifest.port, '/');
             expect(index.status).toBe(200);
             expect(index.headers.get('content-type')).toContain('text/html');

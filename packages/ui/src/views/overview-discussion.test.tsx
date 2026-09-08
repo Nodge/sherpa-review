@@ -15,7 +15,7 @@ import { OverviewDiscussion } from './overview-discussion.tsx';
 import { ViewFrame } from './view-frames.tsx';
 
 /**
- * Discussion card in Overview (SPEC additions §1e): summary and entry point. It expands human threads outside the diff
+ * Discussion card in Overview (docs/design/SPEC-additions-2026-08-26.md §1e): a summary and entry point. It expands human threads outside the diff
  * because there is nowhere else to read them, never expands bot threads, and shows at
  * most six participants.
  */

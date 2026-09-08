@@ -9,7 +9,7 @@ import { droppedWhitespaceLines, spanLines, uncoveredRanges } from './anchor-cli
 import { planLabel } from './route-model.js';
 
 /**
- * Route in the full diff margins (README §10): which stop explains each file, what has no
+ * Route in full diff margins (docs/design/README.md §10): which stop explains each file, which lines have no
  * stop at all, and how many there are. A pure module with no React or DOM.
  *
  * Unlike `buildRouteModel`, which needs threads, composers and models trimmed to stop cards,
@@ -140,13 +140,13 @@ export function treeBadgeLabel(file: RouteMarginFile, t: Translate): string {
     return file.stops.length === 1 ? first.planLabel : `${first.planLabel} +${String(file.stops.length - 1)}`;
 }
 
-/** Card badge (README §10): "explained in 02 · stop title". */
+/** Card badge (docs/design/README.md §10): "explained in 02 · stop title". */
 export function marginBadgeLabel(file: RouteMarginFile, t: Translate): string {
     const first = file.stops[0];
     if (first === undefined) {
         return t('margin.notPlacedCard');
     }
-    // The badge is a single-line chip. It cannot take markdown, so the model's backticks are stripped (M2F-T5).
+    // The badge is a single-line chip. It cannot render markdown, so model backticks are stripped.
     const title = stripInlineCode(first.title);
     return file.stops.length === 1
         ? t('margin.badge.explained', first.planLabel, title)
@@ -192,7 +192,7 @@ export function marginStripSummary(spans: readonly AnchorSpan[], t: Translate): 
 }
 
 /**
- * File panel footer note (README §10). Counts are computed: while patches are being parsed, the note
+ * File panel footer note (docs/design/README.md §10). Counts are computed. While patches are being parsed, the note
  * says it is counting instead of showing an intermediate total.
  */
 export function marginFooterNote(model: RouteMarginModel, t: Translate): string | null {
@@ -210,8 +210,8 @@ export function marginFooterNote(model: RouteMarginModel, t: Translate): string 
  * Changed file lines use the same `changedLinesOf` rule as everywhere else. Without a model,
  * use patch counts. Binary files and mode changes give zero and get no badge.
  *
- * Empty and whitespace-only lines outside anchors are subtracted, as in the route view denominator (decision
- * log, 2026-08-26): a file with no other changes has nowhere to go, so the hatched
+ * Empty and whitespace-only lines outside anchors are subtracted, as in the route view's denominator. A file
+ * with no other changes has nowhere to be placed. A hatched
  * "outside route" badge would link to Other, which does not contain this file.
  */
 function changedLineCount(model: DiffFileModel | null, file: FileDiff, anchors: readonly AnchorSpan[]): number {

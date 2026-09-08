@@ -3,7 +3,8 @@ import type { PrDiff } from '@sherpa/protocol';
 /**
  * Changed diff lines are the route validator's only basis for resolving anchors.
  * Scanning `@@` hunks in `FileDiff.patch` puts added lines on the `new` side and removed lines on `old`
- * (the same definition as SPEC §2.4 coverage math: `changed = added + removed`).
+ * (the same definition as the coverage calculations in `docs/design/SPEC-elements.md §2.4`:
+ * `changed = added + removed`).
  *
  * The UI parser runs in a browser worker and builds a complete line model. This module
  * only needs changed line numbers. Both must read hunk structure

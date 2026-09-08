@@ -12,11 +12,11 @@ import { sameViewing } from './viewing.js';
 import './snapshot-picker.css';
 
 /**
- * Snapshot picker (README §1: pill on the right of the PR header. §6: "Snapshots" card on Overview).
+ * Snapshot picker (docs/design/README.md §1: pill on the right of the PR header. §6: "Snapshots" card on Overview).
  * The prototype has no menu drawing. It uses the pill tokens and follows the filter
  * select: Esc closes it and restores focus, arrows navigate, ⏎ selects.
  *
- * The third menu section is "Show changes since iteration…" (T12). Selecting a row opens a slice
+ * The third menu section is "Show changes since iteration…". Selecting a row opens a slice
  * between the selected iteration and the active one.
  */
 
@@ -85,9 +85,9 @@ export function rowText(row: PickerRow, now: number, t: Translate, locale: Local
 }
 
 /**
- * Snapshot provenance in words: "claude-code · sonnet-5 · 9f3c1ab" (README §13). Route language
+ * Snapshot provenance in words: "claude-code · sonnet-5 · 9f3c1ab" (docs/design/README.md §13). The route language
  * is appended under the same rule as in the Overview pill: only when it differs from the language
- * of the tab (M5-T4).
+ * tab language.
  */
 export function provenanceText(row: PickerRow, t: Translate, uiLocale: Locale): string {
     const locale = row.locale ?? 'en';
@@ -332,8 +332,8 @@ function SnapshotPillMenu({
 }
 
 /**
- * The "Snapshots" card on Overview (README §6): the same rows as in the pill menu, plus provenance
- * for each snapshot on a separate line (SPEC §4.4).
+ * "Snapshots" card on Overview (docs/design/README.md §6): the same rows as the pill menu,
+ * plus a separate provenance line for each snapshot (docs/design/SPEC-elements.md §4.4).
  */
 export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMenu, 'initialOpen'>) {
     const t = useT();

@@ -46,16 +46,14 @@ import type { ReviewFeed } from './review-feed.js';
 import type { RouteStore } from './route-store.js';
 
 /**
- * UI review endpoints (M1-T10): active iteration diff, threads, lenses, file content.
- * PR metadata has no endpoint of its own. It travels in the `uiState` snapshot (M2F-T4).
- * "Open in external editor" lives here too. It does not involve the host, but belongs alongside
- * the other reader endpoints.
+ * UI review endpoints: active iteration diff, threads, lenses, file contents.
+ * PR metadata has no endpoint of its own. It comes in the `uiState` snapshot.
  *
  * Fail-closed in both directions: the adapter validates host responses against its schemas, and the server validates
  * what it sends to the UI against the contract schemas. No host (prKey did not map to anything) means `no_review_host`.
  * A host failure (network, token, invalid response) means `host_unavailable` with a readable reason.
  *
- * Reading progress (T8) is the exception. It is local, stored in this PR SQLite DB, and works without a host.
+ * Reading progress is the exception: it is local, lives in this PR's SQLite database and works without a host.
  * Its endpoints never return `no_review_host`.
  */
 
@@ -69,7 +67,7 @@ export interface ReviewRoutesOptions {
     readonly route: Pick<RouteStore, 'read' | 'listSnapshots'>;
     /** PR metadata cache: publishing a verdict changes the status, and capabilities determine whether slices are available. */
     readonly prMeta: Pick<PrMetaCache, 'refresh' | 'get'>;
-    /** Draft buffer (M5-T15): all draft writes go through it, both creation and editing. */
+    /** Draft buffer: all draft writes go through it, both creation and editing. */
     readonly draftBuffer: DraftBufferWriter;
     /** Local storage for iteration patches. If absent, there is nowhere to save the diff (tests without a database). */
     readonly iterations?: IterationStore | null;
@@ -195,7 +193,7 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const request = await readRequest(ctx, uiDeleteDraftRequestSchema, 'deleting a draft');
                 await deleteDraftConvergently(host, request.commentId);
                 // The draft is gone, so there is nowhere to deliver the pending edit. Letting it block ship
-                // would block it forever. Remove the buffer records for this comment along with it (M5-T15).
+                // would last forever, so entries for this comment are removed along with it.
                 options.draftBuffer.forgetComment(request.commentId);
                 options.reviewFeed?.bumpLocalWrite();
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
@@ -507,7 +505,7 @@ async function diffOfIteration(
     const active = options.iterationFeed?.active() ?? null;
     if (diffId === undefined || active === null || active.diffId === diffId) {
         const diff = await call(() => host.getDiff());
-        // Store the active iteration patch locally (brief §4a). The endpoint response does not wait for it.
+        // The active iteration's patch is saved to storage (docs/product.md §4a). The endpoint response does not wait for it.
         const iterations = options.iterations;
         if (iterations != null) {
             void rememberIterationDiff(iterations, host, diff);
@@ -701,7 +699,7 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The contract schema validates the response body. Invalid data never leaves the server (requirements §7).
+ * The response body is checked against the contract schema: invalid data never leaves the server (docs/testing.md).
  * `local` means the server built the response itself (reading progress), so any mismatch is its own fault.
  */
 export function respond<T>(schema: z.ZodType<T>, body: unknown, source: 'host' | 'local' = 'host'): JsonResponse {

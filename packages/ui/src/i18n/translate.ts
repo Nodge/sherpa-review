@@ -12,7 +12,7 @@ type MessageArgs<K extends MessageKey> = Dictionary[K] extends (...args: infer A
 export type Translate = <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
 
 /**
- * Language priority (M5 planning decision 1): explicit settings → agent hint
+ * Language priority: explicit choice in settings → agent hint
  * (`uiState.worker.lang`) → first browser language, where anything starting with `ru` means Russian,
  * and everything else means English. `auto` means "agent, then browser".
  */

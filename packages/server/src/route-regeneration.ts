@@ -4,7 +4,7 @@ import type { IterationMap } from './iterations/index.js';
 import { byteLength, fitText, unavailableBlock } from './payload-budget.js';
 
 /**
- * Context files for route regeneration after a push (M4-T7): the previous route and discussion
+ * Context files for route regeneration after a push: the previous route and discussion
  * added since then. The shared patch printer (`route-payload.ts`) prints the interdiff.
  * This module covers only what the first generation never has.
  *

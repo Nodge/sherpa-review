@@ -23,17 +23,17 @@ import './file-tree.css';
 import { treeKeyCommand } from './tree-keys.js';
 
 /**
- * Full diff left panel (README §10, SPEC §2.20): search field, lens filter chips
- * and file tree. The panel loads nothing and owns only its local
+ * Left panel of the full diff (docs/design/README.md §10, docs/design/SPEC-elements.md §2.20):
+ * filter field, lens filter chips and file tree. The panel loads nothing and owns only its local
  * state: collapsed directories, search text and keyboard cursor position.
  *
  * A single-file PR gets a file outline, a list of hunks, instead of a single-row tree.
  */
 
-/** Tree row height (SPEC §2.20). The virtualizer needs an exact size, not an estimate. */
+/** Tree row height (docs/design/SPEC-elements.md §2.20). The virtualizer needs an exact size, not an estimate. */
 const ROW_HEIGHT = 26;
 
-/** Row indentation: base plus nesting level (README §10). */
+/** Row indentation: base plus nesting depth (docs/design/README.md §10). */
 const INDENT_BASE = 8;
 const INDENT_STEP = 13;
 
@@ -64,16 +64,16 @@ export interface FilePanelProps {
     /** null means no ownership lens. Roots outside your ownership zone are not dimmed. */
     readonly mineFileIds: ReadonlySet<string> | null;
     readonly readState: ReadonlyMap<string, FileReadState>;
-    /** Route in the margins (README §10): row badges and footer note. null means no route. */
+    /** Route in the margins (docs/design/README.md §10): row badges and footer note. null means no route. */
     readonly route: RouteMarginModel | null;
     /** Navigate to a stop on the route tab. Without this, badges remain labels. */
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
     /** The active file is the top card in the viewport (right-panel scroll-spy). */
     readonly activeFileId: string | null;
     readonly onOpenFile: (fileId: string) => void;
-    /** Shared action for the viewed checkbox and the `v` key on a file row (SPEC §2.10). */
+    /** Shared action for the viewed checkbox and the `v` key on a file row (docs/design/SPEC-elements.md §2.10). */
     readonly onToggleViewed: (fileId: string) => void;
-    /** Failed mark write from the tree: an inline hint with retry (SPEC §1.2, §2.10). */
+    /** Failed mark write from the tree: inline hint with retry (docs/design/SPEC-elements.md §1.2, §2.10). */
     readonly writeError: { readonly text: string; readonly onRetry: () => void } | null;
     /** Outline instead of a tree. null means the PR has more than one file. */
     readonly outline: FileOutlineModel | null;
@@ -154,7 +154,8 @@ export function FilePanel(props: FilePanelProps) {
                 <FileOutline outline={outline} onOpenHunk={props.onOpenHunk} name={files[0]?.path ?? ''} />
             )}
 
-            {/* Footer note, README §10: computed counts, below the tree and outside its scroll area. */}
+            {/* Route footer note (docs/design/README.md §10): computed counts, placed
+                below the tree, outside its scroll area. */}
             {footer === null ? null : <p className="file-panel__footer">{footer}</p>}
         </aside>
     );
@@ -179,7 +180,7 @@ function FileTreeView({
     onJumpToStop,
 }: FileTreeViewProps) {
     const t = useT();
-    // Marking viewed is available only in the active iteration (M4 scope).
+    // Only the active iteration allows marking files viewed.
     const readOnly = useReadOnlyIteration();
     // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
     // and directories without a record follow the size-based default.
@@ -258,9 +259,9 @@ function FileTreeView({
     };
 
     const cursorRow = cursor < 0 ? undefined : tree.rows[cursor];
-    // `v` is a registry command (requirements §3.3), not a separate key handler, so it appears in the palette
-    // and shortcuts sheet. It acts on the row under the cursor, only while the tree has focus.
-    // Previous iterations have no viewed marks, so the command is unavailable (M4 scope).
+    // `v` is a registry command (docs/architecture.md §7.3), rather than a separate key handler, so it
+    // appears in the palette and shortcuts sheet. It acts on the row under the cursor only while the tree has
+    // focus. Previous iterations have no marks, so the command is unavailable there.
     useShortcut({
         id: 'diff.markViewed',
         keys: ['v'],
@@ -320,8 +321,8 @@ function FileTreeView({
                                     : undefined
                             }
                             className={rowClassName(row, activeFileId, item.index === cursor)}
-                            // Position with `top`, not `transform`. Lesson from T6: transforms break
-                            // sticky elements inside a scrolling panel.
+                            // Position with `top`. Using `transform` breaks sticky
+                            // elements inside the scrollable panel.
                             style={{ top: `${String(item.start)}px`, paddingLeft: `${String(INDENT_BASE + row.depth * INDENT_STEP)}px` }}
                             onClick={(event) => {
                                 setCursor(item.index);
@@ -435,7 +436,7 @@ function FileRow({
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true" />
-            {/* Three read-state values (SPEC §2.12). The tooltip always has counts. */}
+            {/* Three read-state values (docs/design/SPEC-elements.md §2.12). The tooltip always includes counts. */}
             <button
                 type="button"
                 className={`file-tree__read file-tree__read--${readBox(row.read.state)}`}
@@ -484,7 +485,7 @@ function FileRow({
 }
 
 /**
- * Row label (SPEC §1.2): truncate the directory chain from the left, letting it give up space first.
+ * Row label (docs/design/SPEC-elements.md §1.2): the directory chain truncates from the left and gives up space first,
  * Preserve the last segment with its extension as long as possible. `bdi` isolates text direction,
  * otherwise left truncation (`direction: rtl`) would move the slash to the other end.
  */
@@ -516,9 +517,8 @@ function Counts({ additions, deletions }: { additions: number; deletions: number
 }
 
 /**
- * Single-file PR outline (SPEC §2.20: "the tree is replaced by the file's outline").
- * Entries are hunks with entity labels from the T5 model. This approximates real symbol
- * navigation, which comes in M5.
+ * Single-file PR outline (docs/design/SPEC-elements.md §2.20: "the tree is replaced by the file's outline").
+ * Items are hunks with entity labels from the diff model, an approximation of symbol navigation.
  */
 function FileOutline({
     outline,

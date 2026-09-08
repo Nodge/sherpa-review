@@ -3,7 +3,7 @@ import type { Comment, CommentDraft, UiSaveDraftResponse, UiUpdateDraftResponse 
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 
 /**
- * `clientKey` identifies a logical record in the server buffer (M5-T15). One key per write until
+ * `clientKey` identifies a logical write in the server buffer. Each write keeps its key until
  * it succeeds, so retries are safe and cannot create a copy.
  */
 export interface ComposerTransport {
@@ -66,7 +66,7 @@ export function closeCommentComposers(store: ThreadStore, commentIds: readonly s
     }
 }
 
-/** Closes the named composers and forgets their controllers (buffer reconciliation, M5-T15). */
+/** Closes the named composers and forgets their controllers (buffer reconciliation). */
 export function closeComposersByKey(store: ThreadStore, keys: readonly string[]): void {
     const byKey = controllers.get(store);
     for (const key of keys) {
@@ -83,7 +83,7 @@ export function closePublishedComposers(store: ThreadStore, commentIds: readonly
 /**
  * Explicit draft saving: the first save returns an id, followed by update calls.
  *
- * A `buffered` response (M5-T15) is not an error: the server accepted the text, the host has not yet. The composer
+ * A `buffered` response is not an error: the server accepted the text, but the host has not yet. The composer
  * stays open and editable, and keeps `clientKey` until the write succeeds, so a retry
  * upserts the same buffer entry without creating a duplicate.
  */
@@ -107,7 +107,7 @@ export function createComposerController(options: ComposerControllerOptions): Co
     // reach the host on the next save.
     let lastWrittenIssue: boolean | undefined = opened?.status === 'buffered' ? undefined : opened?.issue;
     /**
-     * This composer's buffer record (M5-T15): updated on every server response, even when
+     * This composer's buffer entry is updated on every server response, even when
      * there is no one left to show the result to (discarding is in progress). `undefined` means no responses
      * have arrived yet, so the composer snapshot is the source of truth.
      */

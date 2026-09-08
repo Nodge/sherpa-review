@@ -9,7 +9,7 @@ import { Icon } from './icon.tsx';
 const SPRITE = readFileSync(fileURLToPath(new URL('./sprite.svg', import.meta.url)), 'utf8');
 const ICONS_CSS = readFileSync(fileURLToPath(new URL('./icons.css', import.meta.url)), 'utf8');
 const DESIGN = readFileSync(
-    fileURLToPath(new URL('../../../../design/design_handoff_sherpa/Sherpa Additions.dc.html', import.meta.url)),
+    fileURLToPath(new URL('../../../../docs/design/Sherpa Additions.dc.html', import.meta.url)),
     'utf8',
 );
 

@@ -1,5 +1,5 @@
 /**
- * Onboarding tour (M5-T8, SPEC-onboarding-2026-09-02). Exports 3 things: state
+ * Onboarding tour (docs/design/SPEC-onboarding-2026-09-02.md). Exports three things: tour state
  * (`useTour`), its screen layer (`TourLayer`) and a placeholder for the route tab
  * when no route exists (`TourScaffold`). Geometry and the step list are pure modules covered by unit tests.
  */

@@ -8,8 +8,8 @@ import { PNG_AFTER_BASE64, PNG_BEFORE_BASE64, PNG_DELETED_BASE64, SVG_BASE64, SV
 import type { FixtureData, FixtureInterdiff, FixtureIteration } from './types.js';
 
 /**
- * Main fixture: PR from the design handoff, "Enforce the 30-minute edit window for scheduled
- * deliveries", 18 files, `+806 −56` (README §1), plus three M5-T23 images: the added SVG
+ * Main fixture: the PR from the design handoff, "Enforce the 30-minute edit window for scheduled
+ * deliveries", 18 files, `+806 −56` (`docs/design/README.md §1`), plus three images. The added SVG
  * contributes 6 lines, so the declared count is `+812 −56`. The screen proportions depend on these exact numbers,
  * so a test checks the total, and the lockfile fills the remainder up to the target (see `lockfile`).
  */
@@ -19,14 +19,14 @@ const DIFF_ID = '182734';
 const BASE_COMMIT = '4c1f0b7a9d3e5f2b8c6a1d4e7f0b3c5a9d2e6f81';
 const HEAD_COMMIT = '9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316';
 
-/** Declared PR size: numbers from the handoff README plus three images (M5-T23). */
+/** Declared PR size: the design handoff counts plus three images. */
 export const MEDIUM_TOTALS = { files: 21, additions: 812, deletions: 56 } as const;
 
 /** Iteration for the route in `route-medium.ts`: anchors and the snapshot must reference it. */
 export { BASE_COMMIT as MEDIUM_BASE_COMMIT, DIFF_ID as MEDIUM_DIFF_ID, HEAD_COMMIT as MEDIUM_HEAD_COMMIT };
 
 /**
- * The second iteration is a normal push on top of the first (README §9: "the PR is now on a71d4e2").
+ * The second iteration is a regular push on top of the first (`docs/design/README.md §9`: "the PR is now on a71d4e2").
  * The third is a force-push on top of the second, which makes the host stop listing the second.
  * The base stays put: there is no rebase in this scenario.
  */
@@ -42,7 +42,7 @@ const CREATED_AT_V1 = '2026-08-19T16:42:00.000Z';
 const CREATED_AT_V2 = '2026-08-21T11:05:00.000Z';
 const CREATED_AT_V3 = '2026-08-21T15:20:00.000Z';
 
-/** First-iteration thread pin: it does not move with the anchor (SPEC §4.5 "pinned to 9f3c1ab"). */
+/** Pin for first-iteration threads: it does not move with the anchor (`docs/design/SPEC-elements.md §4.5`, "pinned to 9f3c1ab"). */
 const V1_PIN: ThreadPin = { diffId: DIFF_ID, commit: HEAD_COMMIT };
 
 /** File removed from the PR with the second push: the author moved the payment changes to a separate PR. */
@@ -81,7 +81,7 @@ const ROLLOUT_CHECKS = [
     'flag cleanup filed',
 ] as const;
 
-/** 63 lines bring the ownership part of the fixture to the 570 lines in README §6. */
+/** These 63 lines bring the fixture ownership portion to the 570 lines in `docs/design/README.md §6`. */
 function rolloutChecklistLines(): string[] {
     return [
         '+',
@@ -92,7 +92,7 @@ function rolloutChecklistLines(): string[] {
 }
 
 /**
- * PR images (M5-T23): a PNG change with transparency, an added SVG (it also has a text
+ * PR images: a modified PNG with transparency, an added SVG (which also has a text
  * patch, the entire file as added lines), and a deleted PNG. The raster sides are binary,
  * so they have no patch at all.
  */
@@ -1087,7 +1087,7 @@ const HAND_WRITTEN: readonly FileSpec[] = [
 
 /**
  * The lockfile brings the PR up to its declared size: a real `pnpm-lock.yaml` in such a PR does
- * does contain hundreds of generated lines, and the header counts must match the handoff.
+ * contain hundreds of generated lines, and the header counts must match the design handoff.
  */
 function lockCounts(rest: readonly FileDiff[]): { additions: number; deletions: number } {
     const written = totalChanges(rest);
@@ -1150,7 +1150,7 @@ function files(): FileDiff[] {
 }
 
 /*
- * Second push (README §9). It touches files in 3 stops of the v1 route: `edit-policy.ts` (stop 02),
+ * Second push (`docs/design/README.md §9`). It touches files in three v1 route stops: `edit-policy.ts` (stop 02),
  * `handlers.ts` with the new `rejection-status.ts` and removed `card-token.ts` (stop 03), and
  * the rebuilt lockfile (stop 06, no lines of the previous block remain, hence `new`).
  * Each edit addresses a comment in the first-iteration threads.
@@ -1627,7 +1627,7 @@ function interdiffs(): FixtureInterdiff[] {
 /**
  * Threads: 4 human (including resolved, outdated, and a deep branching chain),
  * 2 bot threads and one PR-level thread. Ids follow the host convention: inline ids are positive,
- * PR-level ids are negative (M1-T1 spike). Code must not assume `id > 0`.
+ * PR-level ids are negative. Code must not assume `id > 0`.
  *
  * `second` contains the same threads as seen after the push: anchors are reanchored to its files,
  * `pinnedTo` stays on v1, and threads on changed ranges are marked `outdated`.
@@ -1711,7 +1711,7 @@ function threads(diffId: HostId, second = false): Thread[] {
         }),
         thread({
             // The push touched range 48–51 of the first iteration: the anchor moves to the nearest
-            // surviving line, and the thread is marked outdated (SPEC §2.17).
+            // surviving line, and the thread is marked outdated.
             anchor: second
                 ? anchor(diffId, 'services/orders/src/api/handlers.ts', { side: 'new', line: 49 })
                 : anchor(diffId, 'services/orders/src/api/handlers.ts', { side: 'new', line: 48, size: 4 }),
@@ -1766,7 +1766,7 @@ function threads(diffId: HostId, second = false): Thread[] {
         }),
         thread({
             // The file left the PR with the second push, so the anchor stays on the first-iteration file.
-            // The UI groups these threads under "on files no longer present" (SPEC §2.17).
+            // The UI groups such threads under "on files no longer present" (`docs/design/SPEC-elements.md §2.17`).
             anchor: anchor(DIFF_ID, 'services/orders/src/payments/card-token.ts', { side: 'new', line: 45 }),
             outdated: second,
             pinnedTo: V1_PIN,
@@ -1887,7 +1887,7 @@ const OWNERSHIP_ZONES: readonly LensZone[] = [
     },
 ];
 
-/** PCI scope overlaps with generated (`psp-schema.ts`), a real case from the M1-T1 spike. */
+/** PCI scope overlaps with generated files (`psp-schema.ts`), a real case from live PRs. */
 const PCI_FILES = [
     'services/orders/src/payments/card-token.ts',
     'services/orders/src/payments/pci-audit.ts',

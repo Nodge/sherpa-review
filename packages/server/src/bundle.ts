@@ -14,7 +14,7 @@ import { UI_ASSETS } from './ui-assets.js';
  * Server bundle entry point `sherpa-server.mjs`: foreground server process for one PR.
  * `sherpa up` handles daemonization, logging and waiting for the manifest. This is just the server,
  * that lives until SIGINT/SIGTERM or the idle threshold (`idle.ts`). The UI is embedded in the bundle and served
- * from memory (rpc-design §2).
+ * from memory (docs/protocol.md §2).
  *
  * No token in stdout: output goes to a log file that outlives the server, and the CLI prints the link with the token
  * after reading the manifest.
@@ -37,7 +37,7 @@ async function main(argv: readonly string[]): Promise<number> {
     // The process inherits its launcher's cwd, so resolve the state path to an absolute path.
     const sherpaDir = path.resolve(readOption(argv, '--sherpa-dir') ?? DEFAULT_SHERPA_DIR);
 
-    // Only the CLI knows where the distribution is installed. The server compares its version with main (M5-T9).
+    // Only the CLI knows where the distribution is installed. The server compares this version with main.
     const installDir = readOption(argv, '--install-dir');
 
     const idleSeconds = readIdleSeconds(process.env);

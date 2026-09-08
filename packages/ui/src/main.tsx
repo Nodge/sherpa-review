@@ -82,24 +82,24 @@ if (token === null) {
 
     const viewFromUrl = parseViewId(readFragmentParam(window.location.hash, 'view'));
     // What the tab is viewing: `snapshot=` takes precedence over the `base=&head=` slice, which takes precedence over `diff=`,
-    // "current" is not written to the URL (M4-T9, M4-T12).
+    // and "current" is not written to the URL.
     let persistedViewing: Viewing = parseViewing(
         readFragmentParam(window.location.hash, 'snapshot'),
         readFragmentParam(window.location.hash, 'diff'),
         readFragmentParam(window.location.hash, 'base'),
         readFragmentParam(window.location.hash, 'head'),
     );
-    // The only keyboard listener on the page. Commands are declared only here (requirements §3.3).
+    // The only keyboard listener on the page. Commands are declared only here (docs/architecture.md §7.3).
     const shortcuts = createShortcutRegistry();
     attachShortcuts(window, shortcuts);
 
     /**
      * Create the session store and its commands after server state loads: the initial view
-     * depends on whether the onboarding tour is complete (M5-T8), a field in global settings.
+     * depends on whether the onboarding tour is complete, a global settings field.
      */
     const startSession = (defaultView: ViewId): SessionStore => {
         const session = createSessionStore({
-            // A view from the URL is the reviewer's choice. A small PR does not override it (SPEC §4.1).
+            // The URL view is the reviewer's choice. A small PR does not override it (docs/design/SPEC-elements.md §4.1).
             viewPinned: viewFromUrl !== null,
             initial: {
                 view: viewFromUrl ?? defaultView,
@@ -124,7 +124,7 @@ if (token === null) {
         VIEWS.forEach((view, index) => {
             shortcuts.register({
                 id: `view.${view.id}`,
-                // The `g o`/`g r`/`g d` chord is a second binding for the same command (SPEC §5), not a new one.
+                // The `g o`/`g r`/`g d` chord is another binding for the same command (docs/design/SPEC-elements.md §5), not a new command.
                 keys: [String(index + 1), `g ${VIEW_CHORD[view.id]}`],
                 label: view.command,
                 scope: 'global',
@@ -154,7 +154,7 @@ if (token === null) {
         /*
          * An incomplete tour opens the tab on Route: its first three steps describe the
          * route, so starting on Overview serves no purpose. This changes the default during loading.
-         * A view from the URL takes priority, and the tour does not switch views while running (onboarding spec §2).
+         * A view from the URL takes precedence, and the tour never switches views as it runs (docs/design/SPEC-onboarding-2026-09-02.md §2).
          * Settings arriving after the timeout have no say here. They do not start the tour
          * either, since defaults would make it appear incomplete for everyone.
          */

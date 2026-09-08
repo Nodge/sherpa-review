@@ -59,7 +59,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                         )}
                     />
                     {/*
-                      "Of that, read outside the route" (README §13) is part of what was already seen, so
+                      "Of that, read outside the route" (docs/design/README.md §13) is part of what has already been seen, so
                       this row depends on the Other mark, which means the uncovered ranges
                       were read as raw diff. Without it, the number would describe only the route model.
                     */}
@@ -97,7 +97,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
     );
 }
 
-/** "7 of 7 · Other read as a raw diff" (README §13): the second clause appears only when true. */
+/** "7 of 7 · Other read as raw diff" (docs/design/README.md §13): the second clause appears only when true. */
 function stopsValue(route: NonNullable<ReviewCompletion['route']>, t: Translate): string {
     const counted = t('complete.stopsViewed.value', route.stopsViewed, route.stopsTotal);
     return route.otherViewed ? t('complete.stopsViewed.other', counted) : counted;

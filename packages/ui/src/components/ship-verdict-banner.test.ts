@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { INITIAL_SHIP_VERDICT_WATCH, newShipVerdict, observeShipVerdicts } from './ship-verdict-banner.tsx';
 
-/** "Someone else ships first" (M5-T15): the event is a new ship by another reviewer, not an existing ship. */
+/** "Someone else ships first": the event is another person's ship appearing, not the presence of a ship. */
 
 function verdict(login: string, value: ReviewerVerdict['verdict']): ReviewerVerdict {
     return { user: { login, displayName: null, bot: false }, verdict: value };

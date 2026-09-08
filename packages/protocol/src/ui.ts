@@ -24,11 +24,11 @@ import { priorityClassSchema, taskIdSchema, taskTypeSchema } from './task.js';
 import { semverSchema } from './version.js';
 
 /**
- * UI↔server contract (rpc-design §2): REST for actions, SSE for reactivity.
+ * UI↔server contract (`docs/protocol.md §2`): REST for actions, SSE for reactive updates.
  * The UI consumes nothing that has not passed these schemas, fail-closed on both sides.
  */
 
-/** Task lifecycle (rpc-design §5). Terminal statuses (`done`/`failed`/`cancelled`) are irreversible. */
+/** Task lifecycle (`docs/protocol.md §5`). Terminal statuses (`done`/`failed`/`cancelled`) are irreversible. */
 export const taskStatusSchema = z.enum(['queued', 'leased', 'done', 'failed', 'cancelled']);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
@@ -43,7 +43,7 @@ export const uiTaskSchema = z.object({
     status: taskStatusSchema,
     /**
      * The worker holds the task: `leased`, or `cancelled` if the worker has not learned of the cancellation
-     * (it learns this on the next CLI call, rpc-design §5). While true, the agent is busy with this task,
+     * yet (it will on the next CLI call, `docs/protocol.md §5`). While true, the agent is busy with this task,
      * even if nobody needs its result anymore. The UI does not present the session as idle.
      */
     heldByWorker: z.boolean(),
@@ -59,9 +59,9 @@ export const uiTaskSchema = z.object({
 export type UiTask = z.infer<typeof uiTaskSchema>;
 
 /**
- * Feedback channel availability (M2F-T19). Depends only on the issue channel credentials
+ * Feedback channel availability. Depends only on the feedback channel token
  * in the reviewer's environment. Neither the review host nor a live worker is required. Travels
- * in the snapshot so the form explains reduced functionality before sending (SPEC §1.1).
+ * in the snapshot so the form explains reduced functionality before submission (`docs/design/SPEC-elements.md §1.1`).
  */
 export const uiFeedbackAvailabilitySchema = z.object({
     available: z.boolean(),
@@ -71,7 +71,7 @@ export const uiFeedbackAvailabilitySchema = z.object({
 export type UiFeedbackAvailability = z.infer<typeof uiFeedbackAvailabilitySchema>;
 
 /**
- * Distribution installation source (M5, slicing decision 7) determines which
+ * Where the distribution was installed determines which command
  * update instructions to show.
  * With `copy`, the distribution was copied elsewhere and has no update command.
  * The toast asks the reviewer to copy the directory again.
@@ -85,7 +85,7 @@ export const uiUpdateInstallSchema = z.object({
 export type UiUpdateInstall = z.infer<typeof uiUpdateInstallSchema>;
 
 /**
- * "New version available" (M5-T9): result of checking `version.json` in main against the embedded
+ * "A new version is available": the result of comparing `version.json` in main with the embedded
  * server version. Appears in the snapshot only when `latest > current` and the version has not been dismissed
  * (`settings.updates.dismissedVersion`). "Later" stays in tab memory and does not change the snapshot.
  */
@@ -99,7 +99,7 @@ export const uiUpdateSchema = z.object({
 export type UiUpdate = z.infer<typeof uiUpdateSchema>;
 
 /**
- * Generation cap (SPEC §4.1, M5-T14): the payload budget truncated the skeleton context. The server counts
+ * Generation cap (`docs/design/SPEC-elements.md §4.1`): the payload budget truncated the skeleton context. The server computes it
  * when enqueueing `route.skeleton` (`payload-budget.ts`). The UI says "plan
  * covers N of M files, K generated files in one stop" in the route header and shows a banner if truncation
  * affected files that are not generated.
@@ -117,7 +117,7 @@ export type UiGenerationCap = z.infer<typeof uiGenerationCapSchema>;
 
 /**
  * PR state snapshot for the UI. Returned by `GET state` and sent in full by the SSE channel
- * on every change. The queue is small in M0, so granular events are not worth the cost.
+ * on every change. The queue is small, so granular events are not worth it.
  */
 export const uiStateSchema = z.object({
     prKey: prKeySchema,
@@ -125,30 +125,30 @@ export const uiStateSchema = z.object({
     tasks: z.array(uiTaskSchema),
     /**
      * Name of this PR's host adapter (`fixture`). null means prKey maps to no host,
-     * so review endpoints are unavailable (an M0-style server only has the queue).
+     * does not map to one, review endpoints are unavailable. This server has only a queue.
      */
     reviewHost: z.string().nullable(),
     /**
-     * PR metadata from `ReviewHost.getPr()` (M2F-T4). Unlike the diff and threads, it is small,
+     * PR metadata from `ReviewHost.getPr()`. Unlike the diff and threads, it is small,
      * so it travels in every snapshot. The breadcrumb and view headers use the same source.
      * null if there is no host or metadata has not loaded yet (the server populates the cache outside snapshot
      * assembly and refreshes it after publishing a verdict, so the status arrives over SSE).
      */
     pr: prMetaSchema.nullable(),
-    /** Feedback channel availability (M2F-T19): depends only on issue channel credentials in the environment. */
+    /** Feedback channel availability: depends only on its token in the environment. */
     feedback: uiFeedbackAvailabilitySchema,
     /**
-     * PR iterations (M4): the host's list plus `gone` entries from local storage, in order
+     * PR iterations, the host's list supplemented with `gone` entries from local storage, in order
      * of appearance. Empty if there is no host or the list has not loaded yet. A new push arrives in this same
      * snapshot over SSE `state`, with no separate event.
      */
     iterations: z.array(iterationSchema),
     /**
-     * New distribution version (M5-T9). null means no check was made (dev build `0.0.0`,
+     * A newer distribution version. null if the check was not run (dev build `0.0.0`,
      * fixture host), the check failed, the version is current or the reviewer dismissed it.
      */
     update: uiUpdateSchema.nullable(),
-    /** Generation cap for the current route snapshot (M5-T14). null means no snapshot or no truncation. */
+    /** Generation cap for the current route snapshot. null if there is no snapshot or nothing was truncated. */
     generationCap: uiGenerationCapSchema.nullable(),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
@@ -169,7 +169,7 @@ export type UiEnqueueRequest = z.infer<typeof uiEnqueueRequestSchema>;
 export const uiEnqueueResponseSchema = z.object({ task: uiTaskSchema });
 export type UiEnqueueResponse = z.infer<typeof uiEnqueueResponseSchema>;
 
-/** Cancels a task from the UI (rpc-design §5). A leased task is marked cancelled. The worker learns on its next call. */
+/** Cancel a task from the UI (`docs/protocol.md §5`). A leased task is formally cancelled, the worker learns on its next call. */
 export const uiCancelRequestSchema = z.object({ taskId: taskIdSchema });
 export type UiCancelRequest = z.infer<typeof uiCancelRequestSchema>;
 
@@ -177,14 +177,14 @@ export const uiCancelResponseSchema = z.object({ outcome: z.enum(['cancelled', '
 export type UiCancelResponse = z.infer<typeof uiCancelResponseSchema>;
 
 /**
- * PR review data (M1-T10). Separate endpoints keep diffs and threads out of `uiState`.
+ * PR review data. Served through separate endpoints instead of `uiState`, since the diff and threads
  * They weigh megabytes (host comments have no pagination), too much for every SSE snapshot.
  * The `UI_REVIEW_EVENT` event signals changes, and the UI refetches the relevant endpoint.
  * PR metadata is the exception. It is small and lives in `uiStateSchema.pr`.
  */
 /**
- * Diff selection (M4). No parameters means the host's active iteration. `diffId` selects a saved
- * iteration (including `gone`: the patch is local, brief §4a). `base`+`head` selects a slice between
+ * Diff selection. Without parameters, the active host iteration. `diffId` selects a saved
+ * iteration (including `gone`, since the patch is stored locally, `docs/product.md §4a`). `base`+`head` selects a slice between
  * two iterations ("what is new" in the reader). Only the UI knows which iteration the tab is viewing
  * (selection in the URL fragment). The server is not queried about the "current view".
  */
@@ -238,13 +238,13 @@ export const uiReviewLensesResponseSchema = z.object({
 export type UiReviewLensesResponse = z.infer<typeof uiReviewLensesResponseSchema>;
 
 /**
- * UI route state (M2). Phases: `none` means generation has not started and is not needed
+ * Route state for the UI. Phases: `none` means generation has not started and is not needed
  * (no snapshot, combined with `smallPr` to distinguish "invitation to start the skill" from "small PR,
- * no route needed"). `reading` means the skeleton is in progress (README §6, phase A). `filling` means
+ * no route needed"). `reading` means skeleton generation is in progress (`docs/design/README.md §6`, phase A). `filling` means
  * the plan is accepted and sections are being filled (§7–8). `ready`. `failed` means the skeleton failed
  * validation or attempts ran out (§12). A section failure is not a phase, it is
- * `status: 'failed'` on its stop. "Agent died mid-generation" is not a separate phase:
- * the UI combines `filling` with the worker status (SPEC §4.4).
+ * `status: 'failed'` on its stop. "The agent died during generation" has no separate phase.
+ * The UI combines `filling` with worker status (`docs/design/SPEC-elements.md §4.4`).
  */
 export const uiRoutePhaseSchema = z.enum(['none', 'reading', 'filling', 'ready', 'failed']);
 export type UiRoutePhase = z.infer<typeof uiRoutePhaseSchema>;
@@ -258,7 +258,7 @@ export const uiRouteFailureSchema = z.object({
 export type UiRouteFailure = z.infer<typeof uiRouteFailureSchema>;
 
 /**
- * "Route is stale" (brief §9, README §9): the host's active iteration has advanced past the iteration
+ * "Route is stale" (`docs/product.md §9`, `docs/design/README.md §9`): the active host iteration has advanced beyond the iteration
  * of the current snapshot. The UI stays on the snapshot's iteration (anchors do not drift). The stale banner
  * offers to rebuild the route or open the new diff without it. There is no automatic regeneration.
  */
@@ -276,11 +276,11 @@ export type UiRouteStale = z.infer<typeof uiRouteStaleSchema>;
 
 export const uiRouteStateSchema = z.object({
     phase: uiRoutePhaseSchema,
-    /** PR below the route threshold (requirements §3.6): no generation task, UI opens on Full diff with a note. */
+    /** PR below the route threshold (`docs/architecture.md §7.6`). Generation is not queued, the UI opens on the full diff with a notice. */
     smallPr: z.boolean(),
     /**
      * Current snapshot, present since skeleton acceptance, partial in `filling`
-     * (see `stops[].status`). During regeneration from `ready` (M2F-T28), the old snapshot stays
+     * (see `stops[].status`). When regenerating from `ready`, the old snapshot remains
      * until the new skeleton is accepted. `reading` with a non-null snapshot means "building a new one,
      * the old one is readable". Replacement is atomic upon acceptance. Previous snapshots are served
      * by `reviewRoute?snapshot=`, the list by `reviewSnapshots`.
@@ -304,7 +304,7 @@ export const uiReviewRouteResponseSchema = z.object({
 export type UiReviewRouteResponse = z.infer<typeof uiReviewRouteResponseSchema>;
 
 /**
- * PR snapshot list (snapshot picker in the pill, "Snapshots" card in Overview, README §6).
+ * PR snapshots (snapshot picker pill, "Snapshots" card on Overview, `docs/design/README.md §6`).
  * `current` is the current snapshot (exactly one if any exist). `stale` is a previous snapshot whose iteration
  * is still in the PR. `gone` means the snapshot's iteration left the PR (force-push), and the snapshot is readable from
  * the locally saved diff. Previous snapshots are read-only.
@@ -330,16 +330,16 @@ export type UiReviewSnapshotsResponse = z.infer<typeof uiReviewSnapshotsResponse
 
 /**
  * Start/restart route generation (Retry from Generation failed, "regenerate"
- * from the palette. Since M2F-T28, also regeneration from `ready`, with the old snapshot
+ * from the palette, and regeneration from `ready`, with the old snapshot
  * remaining until the new skeleton is accepted). Enqueues `route.skeleton` even without a live
  * worker. The task waits in the queue, and the agent pill shows the reduced functionality.
  * `already_running` only applies to `reading`/`filling` (generation already in progress).
- * `small_pr` means refusal: this endpoint does not bypass the threshold (requirements §3.6).
+ * `small_pr` rejects the request. The endpoint does not bypass the threshold (`docs/architecture.md §7.6`).
  */
 export const uiRouteGenerateRequestSchema = z.object({
     /**
      * Generation language, the effective UI locale resolved in order "setting → agent `--lang` → browser"
-     * (M5, task breakdown decision 2). Without it (old client, server auto-start), the server resolves it
+     * Without it (old client, server autostart), the server resolves the language
      * itself: `settings.locale` ≠ `auto` → `worker.lang` → `ru`.
      */
     locale: localeSchema.optional(),
@@ -352,8 +352,8 @@ export const uiRouteGenerateResponseSchema = z.object({
 export type UiRouteGenerateResponse = z.infer<typeof uiRouteGenerateResponseSchema>;
 
 /**
- * Fills one unfilled stop (M2F-T41): the button on the slot marked
- * "not filled, the agent stopped early" (SPEC §4.3). The stop moves to `queued`,
+ * Fill one unfilled stop, using the button in the slot
+ * "not filled, the agent stopped early" (`docs/design/SPEC-elements.md §4.3`). The stop moves to `queued`,
  * the phase to `filling`, then normal reconciliation takes over. Full regeneration returns
  * `already_running` during this time. `snapshotId` prevents a race with snapshot replacement,
  * since stop ids are not stable across snapshots. `stale_snapshot` means the snapshot changed.
@@ -372,7 +372,7 @@ export const uiRouteFillStopResponseSchema = z.object({
 export type UiRouteFillStopResponse = z.infer<typeof uiRouteFillStopResponseSchema>;
 
 /**
- * Chat with the agent and notes (M3, domain schemas in `chat.ts`). History uses a separate
+ * Agent chat and notes (domain schemas in `chat.ts`). History uses a separate
  * endpoint instead of `uiState` (it grows without bounds). SSE event
  * `UI_CHAT_EVENT` signals changes with a revision. `ask` returns the created exchange (as with `saveDraft`,
  * the UI needs the id immediately for cancel and the popover's in-flight indicator). Later status updates
@@ -394,7 +394,7 @@ export const uiChatAskRequestSchema = z.object({
     text: z.string().min(1).max(4000),
     /** If absent, the question concerns the entire PR (Ask AI). */
     anchor: uiChatAskAnchorSchema.optional(),
-    /** Response language uses the same fallback order as `uiRouteGenerateRequestSchema.locale`. */
+    /** Answer language, same resolution order and fallback as `uiRouteGenerateRequestSchema.locale`. */
     locale: localeSchema.optional(),
 });
 export type UiChatAskRequest = z.infer<typeof uiChatAskRequestSchema>;
@@ -403,9 +403,9 @@ export const uiChatAskResponseSchema = z.object({ exchange: chatExchangeSchema }
 export type UiChatAskResponse = z.infer<typeof uiChatAskResponseSchema>;
 
 /**
- * Stop an exchange ("Stop", SPEC §2.18). `cancelled` applies to both queued
+ * Stop an exchange ("Stop", `docs/design/SPEC-elements.md §2.18`). `cancelled` applies both to queued
  * and leased exchanges, a formal cancellation the worker learns of on its next CLI call
- * (rpc-design §5). `noop` means the exchange is already terminal.
+ * (`docs/protocol.md §5`). `noop` means the exchange is already terminal.
  */
 export const uiChatCancelRequestSchema = z.object({ exchangeId: chatExchangeIdSchema });
 export type UiChatCancelRequest = z.infer<typeof uiChatCancelRequestSchema>;
@@ -414,7 +414,7 @@ export const uiChatCancelResponseSchema = z.object({ outcome: z.enum(['cancelled
 export type UiChatCancelResponse = z.infer<typeof uiChatCancelResponseSchema>;
 
 /**
- * Retry a question from `failed` or `cancelled` (SPEC §2.18: question preserved): the same
+ * Retry a question from `failed` or `cancelled` (`docs/design/SPEC-elements.md §2.18`, the question is preserved). The same
  * exchange returns to `queued`, and a new task is enqueued with the same text and anchor.
  * `noop` means the exchange is not in a terminal failure state (`done` cannot be retried).
  */
@@ -424,12 +424,12 @@ export type UiChatRetryRequest = z.infer<typeof uiChatRetryRequestSchema>;
 export const uiChatRetryResponseSchema = z.object({ outcome: z.enum(['retried', 'noop']) });
 export type UiChatRetryResponse = z.infer<typeof uiChatRetryResponseSchema>;
 
-/** Delete a note (SPEC §2.16). Leaves chat history intact. Repeated deletion is a no-op, also ack. */
+/** Delete a note (`docs/design/SPEC-elements.md §2.16`). Leaves chat history intact. Repeated deletion is a no-op, also acknowledged. */
 export const uiChatNoteDeleteRequestSchema = z.object({ noteId: agentNoteIdSchema });
 export type UiChatNoteDeleteRequest = z.infer<typeof uiChatNoteDeleteRequestSchema>;
 
 /**
- * Sending feedback (M2F-T19): Feedback button in the top bar → project issue.
+ * Sending feedback: Feedback button in the top bar → project issue.
  * The UI supplies the view and route phase as automatic context (unknown to the server). The server adds the rest
  * (versions, prKey, worker status, login) to the issue itself. Without channel credentials,
  * returns `outcome: 'unavailable'` with instructions for sending feedback manually. This is reduced functionality,
@@ -463,7 +463,7 @@ export const uiFeedbackResponseSchema = z.object({
 export type UiFeedbackResponse = z.infer<typeof uiFeedbackResponseSchema>;
 
 /**
- * Forced update check ("Check for updates" palette command, M5-T9): the cache is
+ * Force an update check ("Check for updates" palette command), ignoring the cache
  * at `~/.sherpa/update-check.json`. The response is the same as what goes into `uiState.update`.
  * `update: null` means the version is current, was dismissed or the check failed. The UI has no reason
  * to distinguish them. The server writes the failure reason to stderr.
@@ -480,8 +480,9 @@ export const uiDevUpdateAvailableRequestSchema = z.object({
 export type UiDevUpdateAvailableRequest = z.infer<typeof uiDevUpdateAvailableRequestSchema>;
 
 /**
- * Global UI settings (M3-T16): one user has one set of settings across all PRs (SPEC §2.8,
- * README "Diff mode is global"). They live on the server in `~/.sherpa/settings.json`, not in the browser:
+ * Global UI settings, one user with one set of settings across all PRs
+ * (`docs/design/SPEC-elements.md §2.8`, `docs/design/README.md` «Diff mode is global»).
+ * Stored on the server in `~/.sherpa/settings.json`, not in the browser,
  * since each PR server listens on a random port, with a new origin and empty `localStorage`.
  * Every field has a default, so a missing or corrupt file falls back to defaults instead of an error.
  * Per-PR state (collapsed directories, recent palette commands) does not belong here.
@@ -490,10 +491,10 @@ const uiSettingsFields = {
     diffMode: z.enum(['unified', 'split']),
     shipMode: z.enum(['ship', 'sticky_ship']),
     composerLayout: z.enum(['visual', 'markdown']),
-    /** UI language (M5, planning decision 1). */
+    /** UI language. */
     locale: localeSettingSchema,
     /**
-     * Onboarding tour (M5, planning decision 3): `completedAt` means completed or skipped
+     * Onboarding tour: `completedAt` means completed or skipped
      * (skipping is permanent). `step` is where an unfinished tour paused, and it resumes there
      * on any PR and after a server restart. Replay from the palette resets both.
      */
@@ -501,7 +502,7 @@ const uiSettingsFields = {
         completedAt: z.iso.datetime().nullable(),
         step: z.number().int().min(0),
     }),
-    /** "Do not remind me about X" in the update toast (M5-T9) dismisses only this version. The next one will appear. */
+    /** "Don't remind me about X" in the update toast dismisses exactly this version. The next one will appear. */
     updates: z.object({
         dismissedVersion: semverSchema.nullable(),
     }),
@@ -530,7 +531,7 @@ export const uiSettingsPatchSchema = z.object(uiSettingsFields).partial();
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>;
 
 /**
- * UI state for one PR (M3-T18): tree directories and diff cards collapsed by the reviewer, recent
+ * UI state for one PR: tree directories and diff cards collapsed by the reviewer, recent
  * command palette entries. Lives in the server's per-PR SQLite for the same reason as global settings:
  * the tab origin changes with the port, so `localStorage` does not survive a restart. Maps store only
  * explicit reviewer choices. A missing key means "default", not `false`. The order of
@@ -557,8 +558,8 @@ export const uiPrStatePatchSchema = z.object(uiPrStateFields).partial();
 export type UiPrStatePatch = z.infer<typeof uiPrStatePatchSchema>;
 
 /**
- * Reading progress (M1-T8, requirements §3.1): manual marks only, no viewport
- * viewport. `viewed` has 3 values (M2F-T40): `true` is a manual mark that pins `read`
+ * Reading progress (`docs/architecture.md §7.1`): manual marks only, no viewport
+ * tracking. `viewed` has three values: `true` is a manual mark that pins `read`
  * permanently. `false` explicitly clears the mark (unpins the generated default or undoes a manual
  * mark). `null` means the reviewer has made no choice, the record exists only for
  * seen ranges. The UI applies defaults as if there were no record
@@ -593,7 +594,7 @@ export const uiStopProgressSchema = z.object({
 export type UiStopProgress = z.infer<typeof uiStopProgressSchema>;
 
 /**
- * Which iteration's progress to read (M4): without `diffId`, the active iteration. With it, a saved
+ * Which iteration's progress to read: without `diffId`, the active one. With it, the saved
  * iteration as is (an old snapshot shows its own progress, which cannot be edited).
  * Progress write endpoints accept only the active iteration.
  */
@@ -624,16 +625,16 @@ export const uiSetFileViewedResponseSchema = z.object({
 export type UiSetFileViewedResponse = z.infer<typeof uiSetFileViewedResponseSchema>;
 
 /**
- * A route stop's "viewed" mark (M2-T7, requirements §3.1). Writes the stop mark
+ * Viewed mark for a route stop (`docs/architecture.md §7.1`). Writes the stop mark
  * and its files' seen ranges in one transaction. The UI calculates ranges from its diff
  * model (anchors clipped to the actual diff, uncovered lines for "Other",
  * which the server cannot calculate without a diff model). The server stores them bound to the stop
  * without interpreting them. Clearing the mark removes only this stop's ranges and leaves
- * other stops' ranges and manual file marks untouched (SPEC §2.10).
+ * other stops' ranges and manual file marks untouched (`docs/design/SPEC-elements.md §2.10`).
  * The request carries `snapshotId`: a late write from a previous route must not reach
  * a new stop with the same deterministic id. The field is optional for older UI bundles.
  * The stop mark itself is not mirrored to the host. The UI reports files becoming "read" through range
- * ranges, the UI reports it through the separate `reviewViewedMirror` endpoint (M2F-T38).
+ * coverage via a separate endpoint, `reviewViewedMirror`.
  */
 export const uiStopSeenRangeSchema = uiSeenRangeSchema.extend({ fileId: hostIdSchema });
 export type UiStopSeenRange = z.infer<typeof uiStopSeenRangeSchema>;
@@ -654,7 +655,7 @@ export const uiSetStopViewedResponseSchema = z.object({
 export type UiSetStopViewedResponse = z.infer<typeof uiSetStopViewedResponseSchema>;
 
 /**
- * Mirrors "viewed" to the host without a local write (M2F-T38). The UI reports
+ * Mirrors viewed marks to the host without a local write. The UI reports
  * files changing to `read` and back through range coverage
  * (marking or clearing a stop, server-side symmetry when clearing a file): no explicit file
  * mark was made, so the `reviewFileViewed` mirror endpoint does not know about the change.
@@ -671,8 +672,8 @@ export const uiViewedMirrorRequestSchema = z.object({
 export type UiViewedMirrorRequest = z.infer<typeof uiViewedMirrorRequestSchema>;
 
 /**
- * Comment writes (M1-T13, the brief two-stage model): a draft is saved
- * to the host immediately, a verdict publishes the batch (T14). A successful write increments
+ * Writing comments (two-stage model, `docs/product.md §3`, principle 6): a draft
+ * is saved to the host immediately, the batch is published with a verdict. A successful write increments
  * `threadsRevision`. The source of truth arrives when the threads endpoint is reread after the SSE event
  * `review`. Until then, the UI uses optimistic state. `saveDraft` returns
  * the created comment: the composer needs its id for `updateDraft`/`deleteDraft`.
@@ -680,7 +681,7 @@ export type UiViewedMirrorRequest = z.infer<typeof uiViewedMirrorRequestSchema>;
 export const uiSaveDraftRequestSchema = z.object({
     draft: commentDraftSchema,
     /**
-     * Buffer record key (M5-T15): composer UUID, one per logical write until it succeeds.
+     * Buffer entry key: the composer's UUID, one per logical write until it succeeds.
      * A retry with the same key upserts the same record and reaches the host with the same
      * idempotency key. No duplicate is created even if the previous attempt's response was lost.
      */
@@ -689,8 +690,9 @@ export const uiSaveDraftRequestSchema = z.object({
 export type UiSaveDraftRequest = z.infer<typeof uiSaveDraftRequestSchema>;
 
 /**
- * Draft write result (M5-T15): `saved` means the host accepted it, `buffered` means the host did not respond or
- * rejected it. The text is in the server buffer and will be retried (SPEC §4.5 "we will save it once
+ * Draft write result: `saved` means the host accepted it, `buffered` means the host did not respond or
+ * refused. The text is in the server buffer and will be retried (`docs/design/SPEC-elements.md §4.5`
+ * "we'll save it when
  * the connection returns"). Network and validation errors in the endpoint itself remain HTTP errors:
  * only failures in the "server → host" step are buffered.
  */
@@ -703,7 +705,7 @@ export type UiSaveDraftResponse = z.infer<typeof uiSaveDraftResponseSchema>;
 export const uiUpdateDraftRequestSchema = z.object({
     commentId: hostIdSchema,
     body: z.string().min(1),
-    /** Changes the draft issue status (M2F-T39). undefined leaves it unchanged. */
+    /** Change the draft's issue status. undefined leaves it unchanged. */
     issue: z.boolean().optional(),
     /** See `uiSaveDraftRequestSchema.clientKey`. */
     clientKey: z.string().min(1),
@@ -717,7 +719,7 @@ export const uiUpdateDraftResponseSchema = z.discriminatedUnion('outcome', [
 export type UiUpdateDraftResponse = z.infer<typeof uiUpdateDraftResponseSchema>;
 
 /**
- * Draft buffer for this PR (M5-T15). Changes on save/update, server retries, `retry`
+ * Draft buffer for this PR. Changes on save/update, server retries, `retry`
  * and `discard`. Each change increments `threadsRevision`. The UI rereads the buffer along
  * with threads on the SSE event `review`.
  */
@@ -738,11 +740,11 @@ export const uiSetThreadResolvedRequestSchema = z.object({
 export type UiSetThreadResolvedRequest = z.infer<typeof uiSetThreadResolvedRequestSchema>;
 
 /**
- * Publishes the accumulated batch with a verdict (M1-T14) in one `publishBatch`
+ * Publishing the accumulated batch with a verdict: one `publishBatch` call to the
  * host call. The response is the result as returned: `verdictApplied: false` on any failure
- * (SPEC §4.5, the review is NOT complete, and the UI shows failed items
- * from `failed`). Retry calls the same endpoint again. The adapter preserves
- * already published items (`publishedSilently` T12). Success bumps `threadsRevision`
+ * (`docs/design/SPEC-elements.md §4.5`, the review is NOT considered finished, the UI shows
+ * the unsuccessful entries from `failed`). A retry calls the same endpoint again: the adapter does not discard
+ * already published entries (`publishedSilently`). Success increments `threadsRevision`
  * (drafts became published comments). The source of truth arrives via the threads endpoint.
  * The server rereads PR metadata after the verdict and broadcasts it in a snapshot.
  */
@@ -876,7 +878,7 @@ export const UI_ENDPOINTS = {
 export const UI_DEV_ENDPOINTS = {
     /** POST without a body → `uiReviewWriteAckSchema`: the fixture "receives a push", the next declared iteration becomes active. */
     fixtureAdvanceIteration: '/api/dev/fixture/advance-iteration',
-    /** POST `uiDevFixtureFailDraftWritesRequestSchema` → `uiReviewWriteAckSchema`: fixture refuses draft writes (buffer, M5-T15). */
+    /** POST `uiDevFixtureFailDraftWritesRequestSchema` → `uiReviewWriteAckSchema`: the fixture refuses draft writes (buffer). */
     fixtureFailDraftWrites: '/api/dev/fixture/fail-draft-writes',
     /** POST `uiDevUpdateAvailableRequestSchema` → `uiUpdateCheckResponseSchema`: inject a "new version" into `uiState.update`. */
     updateAvailable: '/api/dev/update-available',

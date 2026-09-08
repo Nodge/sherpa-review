@@ -27,10 +27,10 @@ export {
     MEDIUM_HEAD_COMMIT_V3,
     MEDIUM_TOTALS,
 } from './data/index.js';
-/** Chat and local agent notes (M3): history for the gallery without a server. */
+/** Chat and local agent notes: history for the gallery without a server. */
 export { chatFixtures } from './data/index.js';
 export type { ChatFixtures } from './data/index.js';
-/** Route (M2): generation states for the gallery and prepared model outputs for e2e. */
+/** Route: generation states for the gallery and predefined model outputs for e2e. */
 export { routeFixtures } from './data/index.js';
 /**
  * Domain object builders: the gallery and tests use them to build thread sets missing from the
@@ -39,7 +39,7 @@ export { routeFixtures } from './data/index.js';
 export { anchor, bot, comment, human, lens, singleIteration, thread } from './builders.js';
 export type { CommentSpec, LensSpec, ThreadSpec } from './builders.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './data/index.js';
-/** Image outside `medium`: the gallery needs a second side with different dimensions (M5-T25). */
+/** Image outside `medium`: the gallery needs a second side of a different size. */
 export { PNG_SMALL_BASE64 } from './data/images.js';
 /** File text on both sides: the state gallery needs it without a server or host. */
 export { fileContentOf } from './file-content.js';

@@ -6,12 +6,12 @@ import { modulePathOf, synthesizeFiles } from './synthetic.js';
 import type { FixtureData } from './types.js';
 
 /**
- * Performance fixture (requirements §6–7): 100 files and over 20 000 changed lines, a size at which
+ * Performance fixture (`docs/testing.md §5`): 100 files and over 20 000 changed lines, the size used
  * to measure time to first frame, worker parsing, and scroll frame time. In a normal review, such a
  * PR would not be read. It provides a size limit here, rather than a realistic reading scenario.
  *
  * The size distribution resembles a large PR: dozens of small edits, a couple of dozen medium ones,
- * a few large ones and exactly one file above the collapse threshold (SPEC §2.13).
+ * a few large ones, and exactly one file above the collapse threshold (`docs/design/SPEC-elements.md §2.13`).
  */
 
 const PR_ID = '5486';
@@ -35,7 +35,7 @@ const FILE_KINDS = ['service.ts', 'repository.ts', 'mapper.ts', 'handlers.ts', '
 export const HUGE_PARSED_FILE_COUNT = 76;
 export const HUGE_PARSED_LINE_COUNT = 21_260;
 
-/** The only file above the collapse threshold: its card starts collapsed (SPEC §2.13). */
+/** The only file above the collapse threshold: its card opens collapsed. */
 const COLLAPSED_FILE_INDEX = 0;
 export const HUGE_COLLAPSED_FILE_LINES = 2412;
 export const HUGE_COLLAPSED_FILE_PATH = `${modulePathOf(ROOT, 0)}/${FILE_KINDS[0]}`;

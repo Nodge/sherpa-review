@@ -1,7 +1,7 @@
 import type { UiFileProgress, UiReviewProgressResponse, UiStopProgress, UiStopSeenRange } from '@sherpa/protocol';
 
 /**
- * Coordinating "viewed" marks (T8, M2-T7): optimistic writes, a write queue per key,
+ * Coordinate viewed marks: optimistic writes, a write queue per key,
  * rollback on failure, and merging refetched snapshots with writes the endpoint may have missed.
  * Pure module: store and network operations come through callbacks, with no React dependency.
  *
@@ -29,7 +29,7 @@ export interface ProgressWriterOptions {
     readonly initialRevision: number;
     /** Current file record in the store. Rollback of the first write starts from here. */
     readonly read: (fileId: string) => UiFileProgress | null;
-    /** Optimistic store mark, so the control responds without waiting for the network (SPEC §1.2). */
+    /** Optimistic mark in the store: the control responds without waiting for the network (docs/design/SPEC-elements.md §1.2). */
     readonly apply: (fileId: string, viewed: boolean) => void;
     readonly restore: (fileId: string, record: UiFileProgress | null) => void;
     /** Writes to the endpoint. Returns the progress revision after the write. */

@@ -4,7 +4,7 @@ import type { SherpaServerHandle } from './sherpa-fixture.js';
 import { expect, sherpaAuth, test } from './sherpa-fixture.js';
 
 /**
- * M5-T15: a draft is not lost when the host rejects it. A development endpoint on the fixture host enables the failure.
+ * The draft survives a host failure. The fixture host development endpoint enables the failure.
  * The text goes into the server buffer, survives a tab reload and reaches the host on retry.
  */
 

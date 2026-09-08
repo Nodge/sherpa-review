@@ -15,7 +15,7 @@ import {
 } from './tour-model.js';
 
 /**
- * Onboarding tour state (SPEC-onboarding §5–§6, Alice Ingram's decision, 2026-09-04).
+ * Onboarding tour state (docs/design/SPEC-onboarding-2026-09-02.md §5–§6).
  *
  * Persistence uses `settings.onboarding`: `step` is written on each transition, `completedAt` on
  * "Skip tour" and "Start reviewing". An unfinished tour resumes from the same step on any PR
@@ -28,7 +28,7 @@ import {
 
 /**
  * Whether the tour is active: unfinished and data ready. It starts as soon as the UI first opens,
- * without waiting for a route. The scaffold supplies missing anchors (`tour-scaffold.tsx`).
+ * without waiting for a route, because the placeholder supplies missing step targets (`tour-scaffold.tsx`).
  *
  * Settings must be real instead of defaults: rendering starts after the loading timeout,
  * and the default `completedAt` is empty. Showing the tour from defaults is already wrong, and the first

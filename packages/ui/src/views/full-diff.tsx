@@ -81,7 +81,7 @@ import { FilePanel } from '../tree/file-panel.tsx';
 import './full-diff.css';
 
 /**
- * The "Full diff" view (README §10): PR header and sticky toolbar span the full width, with
+ * Full diff view (docs/design/README.md §10): the PR header and sticky toolbar span the full width, with
  * the file tree panel and diff cards below. A single filter model serves the tree and the cards. It lives in the session
  * store and survives reloads through the URL fragment.
  */
@@ -107,7 +107,7 @@ export interface FullDiffViewProps {
     readonly isSelectionPending: (anchor: UiChatAskAnchor | null) => boolean;
     readonly onSelectionAnchorChange: (anchor: UiChatAskAnchor | null) => void;
     /**
-     * Prefill the chat composer (README §10): the hatched strip asks about its own
+     * Prefill the chat composer with a question (docs/design/README.md §10). The hatched strip asks about its
      * range. The question stays unsent so the reviewer can read it and send it.
      */
     readonly onComposeQuestion?: (text: string, anchor?: UiChatAskAnchor) => void;
@@ -119,20 +119,20 @@ export interface FullDiffViewProps {
     readonly onPaletteActiveFileChange?: (fileId: string | null) => void;
     readonly onFilterChangeHandler?: (handler: ((id: string) => void) | null) => void;
     /**
-     * Ready route for reader margins (README §10). Only `ready`: in `filling`, coverage
+     * Ready route for the reader margins (docs/design/README.md §10). Only `ready`: in `filling`, coverage
      * is incomplete, and "not placed" would misrepresent an empty plan slot. No snapshot means no layer.
      */
     readonly routeSnapshot?: RouteSnapshot | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
-    /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
+    /** PR below the route threshold: a subdued note in the reader header (docs/design/SPEC-elements.md §4.1). */
     readonly smallPr?: boolean;
-    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    /** Right edge of the PR header: the snapshot picker from App (docs/design/README.md §1). */
     readonly headerAside?: ReactNode;
-    /** The tab is viewing a slice between iterations (M4-T12): the commits on its sides. */
+    /** The tab shows a slice between iterations: the commits on each side. */
     readonly slice?: SliceCommits | null;
     /** Exit the slice: an empty slice or endpoint error returns to the active iteration. */
     readonly onActiveIteration?: () => void;
-    /** Skeleton delay (SPEC §3: nothing for the first 200 ms). Zero shows it immediately in the gallery. */
+    /** Skeleton delay (docs/design/SPEC-elements.md §3: nothing for 200 ms). At 0, the gallery shows it immediately. */
     readonly skeletonDelayMs?: number;
 }
 
@@ -226,7 +226,7 @@ export function FullDiffView({
     );
     const failure = diffError ?? lensesError ?? (progress === null ? progressError : null);
     // The view chrome stays the same in every frame. The PR header with its pill and panel remain while content
-    // loads or fails (SPEC §3: incoming data does not shift the layout).
+    // loads or fails (docs/design/SPEC-elements.md §3: incoming data does not shift the layout).
     const frame = { pr, counts: diff === null ? null : prHeaderCounts(diff), headerAside };
     if (failure !== null) {
         return (
@@ -255,7 +255,7 @@ export function FullDiffView({
             </StatusFrame>
         );
     }
-    // Empty PR (SPEC §4.1): no changes at all, so show an explicit notice instead of an empty file list.
+    // Empty PR (docs/design/SPEC-elements.md §4.1): no changes at all, so show a dedicated screen instead of an empty file list.
     // The action panel lives one level up and stays in place: an empty PR can still be shipped.
     if (slice === null && diff !== null && diff.files.length === 0) {
         return (
@@ -319,7 +319,7 @@ export function FullDiffView({
     );
 }
 
-/** Skeleton delay: nothing flashes during the first 200 ms (SPEC §3). */
+/** Skeleton delay: nothing flashes for the first 200 ms (docs/design/SPEC-elements.md §3). */
 const SKELETON_DELAY_MS = PENDING_DELAY_MS;
 
 /**
@@ -368,7 +368,7 @@ function StatusFrame({
     );
 }
 
-/** Empty PR screen (SPEC §4.1). Overview shows the same two lines. */
+/** Empty PR screen (docs/design/SPEC-elements.md §4.1). Overview shows the same two lines. */
 export function EmptyPrNotice() {
     const t = useT();
     return (
@@ -394,7 +394,7 @@ function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () =>
 }
 
 /**
- * File list skeleton (SPEC §3: "per-file skeleton cards, 3 visible"). The first 200 ms show
+ * File list skeleton (docs/design/SPEC-elements.md §3: "per-file skeleton cards, 3 visible"). The first 200 ms show
  * nothing so a fast response does not flash. Each card has the height of a collapsed file card,
  * so incoming data does not shift the layout.
  */
@@ -420,7 +420,7 @@ function DiffSkeleton({ delayMs, note }: { delayMs: number; note: MessageKey | n
 
 const SKELETON_CARDS = [0, 1, 2] as const;
 
-/** "Expand file" in a slice: head contents cannot be linked to its `fileId` (M4-T12 scope). */
+/** "Expand file" in a slice: head content cannot be mapped to its `fileId`. */
 const SLICE_NO_CONTENT_REASON: MessageKey = 'fullDiff.slice.noContent';
 
 /** "Ask agent" in a slice: the question would anchor to a `fileId` absent from the iteration. */
@@ -435,7 +435,7 @@ export interface DiffWorkspaceProps {
     readonly threads?: readonly Thread[];
     readonly prKey: string;
     readonly session: SessionStore;
-    /** Patch parsing uses a worker for live data and a synchronous parser in the gallery. */
+    /** See the comment on `parse` in `diff-view/file-list.tsx`. */
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     /** Write a mark for a standalone workspace (gallery and tests). */
@@ -462,15 +462,15 @@ export interface DiffWorkspaceProps {
     readonly notes?: readonly AgentNote[];
     readonly onOpenNoteInChat?: (note: AgentNote) => void;
     readonly onDeleteNote?: (noteId: number) => Promise<void>;
-    /** Ready route in reader margins (README §10). null leaves Full diff as it is without a route. */
+    /** Ready route in the reader margins (docs/design/README.md §10). At null, Full diff has no route. */
     readonly routeSnapshot?: RouteSnapshot | null;
     readonly onJumpToStop?: ((stopId: string) => void) | undefined;
-    /** PR below the route threshold: a quiet note in the reader header (SPEC §4.1). */
+    /** See `FullDiffViewProps.smallPr`. */
     readonly smallPr?: boolean;
-    /** Right edge of the PR header: the snapshot picker from App (README §1). */
+    /** See `FullDiffViewProps.headerAside`. */
     readonly headerAside?: ReactNode;
     /**
-     * The tab is viewing a slice between iterations (M4-T12): its `fileId` values belong to another
+     * The tab shows a slice between iterations: its `fileId` values belong to another
      * namespace, so file contents are not requested from the host.
      */
     readonly slice?: SliceCommits | null;
@@ -605,7 +605,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     }, [filter.id, filterId, session]);
 
     // The top card in the viewport tells the view which file the reviewer is reading now.
-    // Filter changes ("kept in view", SPEC §2.7) and moving to the next file after
+    // Filter changes ("kept in view", docs/design/SPEC-elements.md §2.7) and navigation to the next file after
     // marking both need it, so a ref also holds it for handlers to read without being recreated.
     const [topFileId, setTopFileId] = useState<string | null>(null);
     const topRef = useRef<string | null>(null);
@@ -613,7 +613,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         topRef.current = topFileId;
     }, [topFileId]);
 
-    // Reading progress (T8): optimistic writes, rollback on failure and tab convergence through SSE.
+    // Reading progress: optimistic writes, rollback on failure and tab synchronization through SSE.
     // `ProgressWriter` handles write order, rollback and revisions. The view only renders.
     const [writesSettled, setWritesSettled] = useState(0);
     const [writeError, setWriteError] = useState<{ fileId: string; viewed: boolean } | null>(null);
@@ -625,7 +625,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 apply: store.markViewed,
                 restore: store.restoreProgress,
                 send: onSetViewed,
-                // The full diff has no stop marks: the route has its own view (M2-T7).
+                // Full diff has no stop marks: the route has its own view.
                 stops: NO_STOP_WRITES,
                 // In-flight writes defer the reread. The decision is reconsidered after the response.
                 onSettled: () => {
@@ -646,7 +646,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     const markViewed = useCallback(
         async function mark(fileId: string, viewed: boolean): Promise<Feedback> {
             setWriteError(null);
-            // "Scrolling follows collapse" (decision log 2026-09-02): when the reviewer marks the file
+            // "Scrolling follows collapsing": when the reviewer marks the file
             // they are reading, the screen moves to the next one. Clearing a mark, marking
             // any other file and noninteractive toggles leave scrolling alone.
             if (viewed && fileId === topRef.current) {
@@ -655,7 +655,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             if (await writer.write(fileId, viewed)) {
                 return null;
             }
-            // The optimistic write failed. The control has already returned to its previous state (SPEC §1.2),
+            // The optimistic write failed: the control has already returned to its previous state (docs/design/SPEC-elements.md §1.2),
             // so all that remains is offering a retry.
             return { text: t('diff.file.notSaved'), retry: () => mark(fileId, viewed) };
         },
@@ -776,7 +776,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const [keptFileId, setKeptFileId] = useState<string | null>(null);
 
-    // The label clears on the next reviewer scroll (SPEC §2.7). The list
+    // The reviewer's next scroll clears the mark (docs/design/SPEC-elements.md §2.7). The list itself
     // distinguishes its own scroll adjustments: programmatic scrolling does not reach this handler.
     const onScroll = useCallback(() => {
         setKeptFileId(null);
@@ -795,8 +795,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             const top = topRef.current;
             const kept = top !== null && next.fileIds !== null && !next.fileIds.has(top) ? top : null;
             setKeptFileId(kept);
-            // Nothing under the cursor disappears (SPEC §2.7), and scrolling stays anchored to the top
-            // card (SPEC §2.6). After a filter change the list returns to it automatically.
+            // Nothing under the cursor disappears (docs/design/SPEC-elements.md §2.7), and scrolling anchors to the top
+            // card (docs/design/SPEC-elements.md §2.6): the list returns to it automatically after a filter change.
             pendingScroll.current = kept ?? top;
             session.setFilter(next.id);
         },
@@ -913,7 +913,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     }, [diff.files, lenses]);
 
     /**
-     * Route in the margins (README §10). The file→stops map is computed from anchors and available immediately.
+     * Route in the margins (docs/design/README.md §10). The file→stops map is computed from anchors and available immediately.
      * Uncovered ranges come from parsed patches, so files the reviewer has not
      * scrolled to are parsed in the background. Otherwise the footer note counts would never add up.
      */
@@ -964,7 +964,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                   }),
         [diff.files, failedParse, routeSnapshot, snapshot.models],
     );
-    // Strip entry point (README §10): a question anchored to exactly this range. While that question
+    // Strip entry point (docs/design/README.md §10): a question anchored to this exact range. While the question
     // is in flight, the strip shows a chip using the same flag as the selection popover.
     const marginActions = useMemo<MarginStripActions | null>(
         () =>
@@ -1021,7 +1021,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             lineNavigationCleanup.current?.();
             lineNavigationCleanup.current = null;
 
-            // Expand any collapsed block before scrolling and looking up the DOM target (SPEC §2.11).
+            // Every fold must expand before scrolling and looking up the DOM target (docs/design/SPEC-elements.md §2.11).
             store.revealFile(fileId);
             store.openFile(fileId);
             store.showWhitespace(fileId);
@@ -1134,7 +1134,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         }
     }, [goToLine, paletteNavigation, session, shown]);
 
-    // Single-file PR outline: hunks from the already parsed model (SPEC §2.20).
+    // Outline for a single-file PR: hunks from the parsed model (docs/design/SPEC-elements.md §2.20).
     const only = diff.files.length === 1 ? diff.files[0] : undefined;
     // If the only file is filtered out, there is no outline. The panel must say
     // that this filter is empty.
@@ -1233,7 +1233,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         },
     });
 
-    // --- Full diff navigation keys (SPEC §5) ---
+    // --- Full diff navigation keys (docs/design/SPEC-elements.md §5) ---
 
     /**
      * Scroll to a file without expanding it: `j`/`k`/`n`/`p` follow the list just like navigation
@@ -1267,7 +1267,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     /**
      * `n`/`p` go to the next unread file. `partial` counts as unviewed because it
      * still has unseen lines. Navigation works at file level: the keys
-     * do not navigate within a file (T5 scope).
+     * do not jump to ranges within a file.
      */
     const goToUnread = useCallback(
         (direction: 1 | -1) => {
@@ -1434,7 +1434,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
 
                 <div className="full-diff__main">
                     {/* An empty result describes the filter, not the list: the explanation sits next to
-                        the card, which stays on screen, instead of replacing it (SPEC §2.7). */}
+                        the card kept on screen instead of replacing it (docs/design/SPEC-elements.md §2.7). */}
                     {treeFiles.length === 0 ? (
                         <div className="full-diff__zero">
                             <p className="full-diff__zero-text">{zeroResultText(filter, t)}</p>
@@ -1524,7 +1524,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
 }
 
-/** Sticky full diff toolbar that measures its own height (README §1, §10). */
+/** Sticky Full diff toolbar with its own height measurement (docs/design/README.md §1 and §10). */
 export function FullDiffToolbar({
     store,
     filters,
@@ -1551,7 +1551,7 @@ export function FullDiffToolbar({
     const t = useT();
     const ref = useRef<HTMLDivElement | null>(null);
 
-    // Measure before paint, or the first frame will use the height fallback from full-diff.css.
+    // Measure before painting, or the first frame will shift to the fallback height from full-diff.css.
     // Take the initial measurement manually because ResizeObserver stays silent in background tabs.
     useLayoutEffect(() => {
         const element = ref.current;
@@ -1665,7 +1665,7 @@ export function commentPosition(
 }
 
 /**
- * Outline entries use the hunk entity from the T5 model. If the parser is unsure, they use the line range
+ * Outline items: the hunk entity from the diff model or, if the parser is unsure, the line range
  * on the new side from the `@@` header. Never display "unknown".
  *
  * Not parsed yet and nothing to outline are different answers: the first is temporary, the second final,

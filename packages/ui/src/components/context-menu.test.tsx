@@ -7,7 +7,7 @@ import type { FileMenuTarget } from './context-menu.tsx';
 import { FileContextMenu, useContextMenu } from './context-menu.tsx';
 
 /**
- * File context menu (SPEC §2.11): both ways to open it, wrapping keyboard navigation,
+ * File context menu (docs/design/SPEC-elements.md §2.11). Both opening methods, wrapping keyboard navigation,
  * disabled items without actions, and focus restoration. The clipboard is mocked because jsdom has none.
  */
 

@@ -175,7 +175,7 @@ export function useChat({
         [session],
     );
     /**
-     * Notes with anchors lost after a push (M4-T11). Banner dismissal lives in the tab session
+     * Notes that lost their anchors after a push. Dismissing the banner lasts for the tab session
      * and resets as soon as another note loses its anchor.
      */
     const lostNotes = useMemo(() => chatData.notes.filter((note) => note.lostAnchor), [chatData.notes]);
@@ -183,7 +183,7 @@ export function useChat({
     /** "Show" navigates to the first note with a lost anchor, in chat feed order. */
     const firstLostNote = lostNotes[0];
     /**
-     * Code shows notes for this iteration, using its anchors and excluding lost anchors (M4-T11).
+     * Only notes for this iteration appear in code, with its anchors and excluding lost anchors.
      * A slice has no code notes. Their anchors use iteration `fileId` values, while a slice has its own.
      */
     const notesInCode = useMemo(
@@ -217,7 +217,7 @@ export function useChat({
     );
     /**
      * Shared chat entry point: save the anchor and prefill the question without sending it. The reviewer presses ⏎
-     * (README §2, §10). Without text, this simply opens the panel for the selection.
+     * (docs/design/README.md §2, §10). Without text, this just opens the panel for the selection.
      */
     const openChatWithQuestion = useCallback(
         (text: string | null, anchor: UiChatAskAnchor | null) => {

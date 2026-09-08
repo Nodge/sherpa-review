@@ -38,7 +38,7 @@ export interface StopViewed {
 }
 
 /**
- * The viewed mark on a stop (SPEC §2.10, requirements §3.1): an explicit write with ranges,
+ * A stop's viewed mark (docs/design/SPEC-elements.md §2.10, docs/architecture.md §7.1): manual writes with ranges,
  * automatic marking based on file-mark coverage, and an aria announcement of the result.
  */
 export function useStopViewed({
@@ -124,12 +124,12 @@ export function useStopViewed({
                 return next;
             });
 
-            // The UI calculates ranges: the server has no diff model (decision log, 2026-08-26).
+            // The UI counts ranges: the server has no diff model.
             const written = writer.writeStop(stopId, viewed, viewed ? stopSeenRanges(entry) : []);
             if (viewed && withFeedback) {
                 const next = nextVisibleEntry(stopId);
                 if (next !== null) {
-                    // This continues collapsing, not stepping: keep the lens and the state of the next entry.
+                    // This continues collapsing, not a wizard step: the lens and the next entry's state stay unchanged.
                     requestJump(next, null);
                 }
             }

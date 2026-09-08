@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { promptLocale, sectionGuide, sectionInstructions, skeletonGuide, skeletonInstructions } from './route-prompts.js';
 
 import { bannedPhrases } from './route/voice.js';
- * Regression for worker behaviour rules (M2F-T31): the short task instruction must say
+
 /**
- * never submits the finished result (dogfooding incident from 2026-08-28).
+ * Regression coverage for worker behaviour rules. Short task instructions must say that the server validates and
  * forbid self-validation that installs packages. Otherwise the worker silently fails to submit a finished result.
- * Also generation language (M5-T4): the instructions must require exactly one response language and list
+ * Also covers generation language. The guide must require exactly one response language and name
  * exactly the filler phrases the server rejects.
  */
 const instructions = [skeletonInstructions('ru'), sectionInstructions('ru', [2, 3])];

@@ -25,7 +25,7 @@ export type SqlRow = Record<string, NodeSqlite.SQLOutputValue>;
 
 /**
  * Opens (or creates) PR storage and brings its schema up to date.
- * WAL allows concurrent UI reads and worker writes (spec §1/C2).
+ * WAL allows UI readers and worker writes to run concurrently (docs/architecture.md §1).
  */
 export function openDatabase(file: string, migrations: readonly Migration[] = MIGRATIONS): SherpaDatabase {
     const db = new (loadSqlite().DatabaseSync)(file);

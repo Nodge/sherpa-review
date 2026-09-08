@@ -33,7 +33,7 @@ describe('storage', () => {
     });
 
     it('creates the PR database in WAL mode on the server', async () => {
-        // Live review hosts are forbidden in tests (requirements §7): without a host, route warmup makes no calls.
+        // Tests must not call a live review host (docs/testing.md). Without a host, route warm-up makes no requests.
         servers.push(await startServer({ prKey: 'github-quillmart--quillmart--42', sherpaDir, reviewHostFactory: () => null }));
         const file = databasePathFor(sherpaDir, 'github-quillmart--quillmart--42');
 
@@ -95,7 +95,7 @@ describe('storage', () => {
         return MIGRATIONS.slice(0, index);
     }
 
-    // The dogfooding database keeps its route when migrating to multiple snapshots (M4-T3).
+    // An existing database must retain its route when switching to multiple snapshots.
     it('moves the snapshot from route_state to route_snapshots during the iteration migration', () => {
         const file = `${sherpaDir}/route-snapshot.db`;
         const snapshot = {
@@ -206,7 +206,7 @@ describe('storage', () => {
         }
     });
 
-    // Dogfooding database progress is preserved when its tables gain an iteration dimension (M4-T6).
+    // Existing database progress survives when an iteration dimension is added to its tables.
     it('moves progress records to the active iteration and stop marks to the current snapshot during migration', () => {
         const file = `${sherpaDir}/progress-iterations.db`;
 
@@ -302,7 +302,7 @@ describe('storage', () => {
         }
     });
 
-    // The dogfooding DB note sits where it was pinned. Before T11, the schema had no original location.
+    // An existing database note stays where it was pinned. The schema previously had no original location.
     it('fills the original location with a copy of the current one during the note anchor migration', () => {
         const file = `${sherpaDir}/notes-anchors.db`;
         const anchor = {
@@ -344,7 +344,7 @@ describe('storage', () => {
         }
     });
 
-    // The draft buffer (M5-T15) starts as an empty table and leaves existing state alone.
+    // The draft buffer arrives as an empty table and leaves existing state alone.
     it('creates a table with state validation during the draft buffer migration', () => {
         const file = `${sherpaDir}/draft-buffer.db`;
 
@@ -381,7 +381,7 @@ describe('storage', () => {
         }
     });
 
-    // Exchange language (M5-T4) starts as an empty column. Existing exchanges stay Russian.
+    // The exchange language arrives as an empty column. Existing exchanges remain in Russian.
     it('creates the chat language column and reads old exchanges as Russian during migration', () => {
         const file = `${sherpaDir}/chat-locale.db`;
         const at = '2026-09-04T10:00:00.000Z';
@@ -392,7 +392,7 @@ describe('storage', () => {
                 `INSERT INTO chat_exchanges (
                     id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
                     created_at, updated_at
-                 ) VALUES (1, 'question before M5', NULL, 'done', 'answer', NULL, NULL, NULL, 'head-1', ?, ?)`,
+                 ) VALUES (1, 'question from an old exchange', NULL, 'done', 'answer', NULL, NULL, NULL, 'head-1', ?, ?)`,
             )
             .run(at, at);
         before.close();
@@ -405,7 +405,7 @@ describe('storage', () => {
             ]);
 
             const store = new ChatStore({ db: after });
-            // `null` in the column means a pre-M5 exchange, which the contract returns as "unknown language".
+            // `null` in the column means an exchange predating language support. The contract returns it as "language unknown".
             expect(store.read().exchanges[0]?.locale).toBeNull();
             store.close();
         } finally {
@@ -413,14 +413,14 @@ describe('storage', () => {
         }
     });
 
-    // The M3 dogfooding database migrates to iterations through the full 010…015 migration chain at once.
-    it('the migration chain upgrades an M3 database to iterations without losing data', () => {
-        const file = `${sherpaDir}/m3-to-m4.db`;
+    // The full chain of migrations 010…015 upgrades an existing pre-iteration database in one go.
+    it('upgrades a pre-iteration database through the migration chain without losing anything', () => {
+        const file = `${sherpaDir}/legacy-to-iterations.db`;
         const at = '2026-08-25T10:00:00.000Z';
         const snapshot = {
-            snapshotId: 'snap-m3',
-            commit: 'head-m3',
-            diffId: 'iter-m3',
+            snapshotId: 'snap-legacy-iter',
+            commit: 'head-legacy',
+            diffId: 'iter-legacy',
             createdAt: at,
             provenance: { harness: 'claude-code', model: 'opus', locale: null },
             summary: 'route built before iterations',
@@ -428,7 +428,7 @@ describe('storage', () => {
             tourOrder: [],
             contentHash: 'abcdef123456',
         };
-        // The M3 note anchor names no iteration, since the schema had no such field yet.
+        // An old note anchor does not name an iteration. That field did not exist in the schema yet.
         const anchor = { fileId: 'file-1', path: 'src/main.ts', side: 'new', start: 10, end: 12 };
 
         const before = openDatabase(file, migrationsBefore('010-iterations'));
@@ -452,13 +452,13 @@ describe('storage', () => {
                 `INSERT INTO chat_exchanges (
                     id, question, anchor, status, answer, progress_text, error, task_id, head_commit,
                     created_at, updated_at
-                 ) VALUES (1, 'question', ?, 'done', 'answer', NULL, NULL, NULL, 'head-m3', ?, ?)`,
+                 ) VALUES (1, 'question', ?, 'done', 'answer', NULL, NULL, NULL, 'head-legacy', ?, ?)`,
             )
             .run(JSON.stringify(anchor), at, at);
         before
             .prepare(
                 `INSERT INTO agent_notes (id, exchange_id, anchor, text, commit_hash, created_at)
-                 VALUES (1, 1, ?, 'answer', 'head-m3', ?)`,
+                 VALUES (1, 1, ?, 'answer', 'head-legacy', ?)`,
             )
             .run(JSON.stringify(anchor), at);
         before.close();
@@ -469,7 +469,7 @@ describe('storage', () => {
 
             // The snapshot moved as an unchanged blob and remained the current PR route.
             const store = new RouteStore({ db: after });
-            expect(store.current()?.snapshotId).toBe('snap-m3');
+            expect(store.current()?.snapshotId).toBe('snap-legacy-iter');
             expect(after.prepare('SELECT snapshot_json FROM route_snapshots').get()).toMatchObject({
                 snapshot_json: JSON.stringify(snapshot),
             });
@@ -477,18 +477,18 @@ describe('storage', () => {
             // Stop marks are keyed by snapshot, not PR. `carried` describes carryover, which
             // these marks never underwent. The reviewer set them by hand.
             expect(after.prepare('SELECT snapshot_id, stop_id, carried FROM stop_progress ORDER BY stop_id').all()).toEqual([
-                { snapshot_id: 'snap-m3', stop_id: 's01', carried: 0 },
-                { snapshot_id: 'snap-m3', stop_id: 's03', carried: 0 },
+                { snapshot_id: 'snap-legacy-iter', stop_id: 's01', carried: 0 },
+                { snapshot_id: 'snap-legacy-iter', stop_id: 's03', carried: 0 },
             ]);
 
-            // The M3 database has no iterations, so progress moves to the snapshot iteration:
+            // This database has no iterations at all, so progress moves to the snapshot iteration,
             // the one the reviewer read. `LEGACY_DIFF_ID` is only for a database without a route.
             expect(after.prepare('SELECT diff_id, file_id, viewed FROM file_progress').all()).toEqual([
-                { diff_id: 'iter-m3', file_id: 'file-1', viewed: 1 },
+                { diff_id: 'iter-legacy', file_id: 'file-1', viewed: 1 },
             ]);
             expect(
                 after.prepare('SELECT diff_id, start_line, end_line, carried_from FROM file_seen_ranges').all(),
-            ).toEqual([{ diff_id: 'iter-m3', start_line: 3, end_line: 7, carried_from: null }]);
+            ).toEqual([{ diff_id: 'iter-legacy', start_line: 3, end_line: 7, carried_from: null }]);
             expect(after.prepare('SELECT COUNT(*) AS count FROM progress_carries').get()).toMatchObject({ count: 0 });
 
             // An anchor without an iteration reads as `LEGACY_DIFF_ID`. The feed adopts it when the host
@@ -496,7 +496,7 @@ describe('storage', () => {
             const chat = new ChatStore({ db: after });
             const note = chat.read().notes[0];
             expect(note?.anchor).toEqual({ ...anchor, diffId: 'unknown' });
-            expect(note?.origin).toEqual({ commit: 'head-m3', anchor: { ...anchor, diffId: 'unknown' } });
+            expect(note?.origin).toEqual({ commit: 'head-legacy', anchor: { ...anchor, diffId: 'unknown' } });
             expect(note?.lostAnchor).toBe(false);
             chat.close();
         } finally {
@@ -504,9 +504,9 @@ describe('storage', () => {
         }
     });
 
-    // Upgrade a 0.3.x database used for dogfooding: progress exists, iterations don't. Carryover must find it (M5-T20).
+    // Upgrading an existing 0.3.x database: progress exists but iterations do not. Carryover must find it.
     it('moves marks to the iteration the server started on after a 0.3.x upgrade', async () => {
-        const file = `${sherpaDir}/m3-carry.db`;
+        const file = `${sherpaDir}/legacy-carry.db`;
         const at = '2026-08-25T10:00:00.000Z';
         const v1 = fixtureIteration('medium', 0);
         const v2 = fixtureIteration('medium', 1);
@@ -517,7 +517,7 @@ describe('storage', () => {
             throw new Error('medium fixture has no files');
         }
         const snapshot = {
-            snapshotId: 'snap-m3',
+            snapshotId: 'snap-legacy-iter',
             commit: v1.iteration.headCommit,
             diffId: v1.iteration.diffId,
             createdAt: at,

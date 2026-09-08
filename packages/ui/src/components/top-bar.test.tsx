@@ -73,7 +73,7 @@ describe('top bar brandcrumb', () => {
         );
     });
 
-    it('uses a text fallback from the PR key before metadata arrives', () => {
+    it('uses fallback text from the PR key before metadata arrives', () => {
         const html = topBar(null);
 
         expect(html).toContain('<span class="top-bar__breadcrumb-item">PR 4821</span>');
@@ -93,10 +93,9 @@ describe('agent pill popover', () => {
 
         expect(html).toContain('Connect the agent');
         expect(html).toContain('/sherpa fixture-medium');
-        expect(html).not.toContain('Agent chat will appear here in M3.');
     });
 
-    it('keeps the removed banner wording: the reader works in full (decision #32)', () => {
+    it('explains agent disconnection: the reader remains fully functional', () => {
         const html = renderToStaticMarkup(
             <AgentPill
                 view={agentPillView({ kind: 'never' }, [], t)}
@@ -128,7 +127,6 @@ describe('agent pill popover', () => {
         );
 
         expect(html).not.toContain('The reader works in full');
-        expect(html).not.toContain('Agent chat will appear here in M3.');
         expect(html).not.toContain('agent-popover');
     });
 });

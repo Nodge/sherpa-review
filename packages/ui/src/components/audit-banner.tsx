@@ -6,8 +6,8 @@ import type { ViewId } from '../session/views.js';
 import './audit-banner.css';
 
 /**
- * Audit-scope banner (README §Filters, SPEC §2.21): while the `pci` filter is active, the reviewer must
- * know they are not viewing the whole PR. The banner describes the filter, so it can be dismissed,
+ * Audit scope banner (docs/design/README.md §Filters, docs/design/SPEC-elements.md §2.21):
+ * while the `pci` filter is active, the reviewer must know they are not seeing the entire PR. The banner describes the filter, so it can be dismissed,
  * and has exactly one action: clear the filter.
  *
  * The component renders in the shared App-level banner slot. The slot source registry
@@ -19,8 +19,7 @@ const LISTED_PATHS = 3;
 
 /**
  * Audit scope matters where the filter actually hides files: Full diff and
- * on the route (M2-T6 showed a PCI chip in the route header, while its banner remained only
- * in Full diff. Since M2-T7 they appear together).
+ * in the route view. The PCI chip in the route header and its banner appear together in both views.
  */
 export function auditScopeBannerVisible(
     view: ViewId,
@@ -34,7 +33,7 @@ export function auditScopeBannerVisible(
 export interface AuditScopeBannerProps {
     readonly filter: FileFilter;
     readonly stats: FilterStats;
-    /** Scope file paths in the current diff. README requires a list. */
+    /** Scope file paths in the current diff. `docs/design/README.md` §Filters requires the list. */
     readonly paths: readonly string[];
     readonly onShowAll: () => void;
     readonly onDismiss: () => void;
@@ -54,7 +53,7 @@ export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }:
                 <div className="audit-banner__line">
                     {t('audit.line', stats.files, stats.changedLines, stats.totalChangedLines)}
                 </div>
-                {/* README §Filters requires the scope file list and the consequence for sign-off.
+                {/* docs/design/README.md §Filters always requires the scope file list and the sign-off consequence.
                     The host's `note` adds to them and cannot replace them. */}
                 <div className="audit-banner__note">
                     {scope}

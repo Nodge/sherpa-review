@@ -13,7 +13,7 @@ import { createThreadStore } from '../threads/store.js';
 import { DiffWorkspace } from './full-diff.tsx';
 
 /**
- * Author lens in Full diff (M5-T16): the discussion card in Overview sets it,
+ * Author lens in the full diff: the Overview discussion card sets it, and
  * the toolbar chip beside the comment sources clears it.
  */
 

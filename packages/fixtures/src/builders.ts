@@ -14,7 +14,7 @@ export function human(login: string, displayName: string | null = null): ReviewU
 
 /**
  * Bot source. `displayName` is a label such as "AI Review (security)": the host
- * supplies it, and the UI shows it as a source chip (brief F4).
+ * supplies it, and the UI shows it as a source chip.
  */
 export function bot(login: string, displayName: string): ReviewUser {
     return { login, displayName, bot: true };

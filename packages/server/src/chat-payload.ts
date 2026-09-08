@@ -45,7 +45,7 @@ export interface ChatPayloadContext {
     readonly fileContent: FileContent | null;
     readonly route: UiRouteState;
     readonly history: readonly ChatExchange[];
-    /** Response language (M5-T4). Defaults to Russian, as pre-M5 exchanges did. */
+    /** Answer language. Defaults to English, which is also how exchanges saved before language selection are read. */
     readonly locale?: Locale;
 }
 

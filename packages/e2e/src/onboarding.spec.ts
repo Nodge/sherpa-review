@@ -8,11 +8,11 @@ import { fillSections, mediumRawResults, MEDIUM_SECTION_COUNT, sectionFor, submi
 import { expect, test } from './sherpa-fixture.js';
 
 /**
- * Onboarding tour (M5-T8). Completion flag and step number live in `<sherpaDir>/settings.json`,
+ * Onboarding tour. The completion flag and step number live in `<sherpaDir>/settings.json`,
  * so a "second visit" here means a second server with the same state root, rather than a tab reload.
  *
- * The tour starts as soon as the UI first opens, without waiting for a route. Until one exists, step anchors
- * come from a scaffold with a placeholder (Alice Ingram's decision, 2026-09-04).
+ * The tour starts as soon as the UI first opens and does not wait for a route: until it arrives,
+ * the scaffold provides step targets with a placeholder.
  */
 
 const CARD = '.tour-card';
@@ -29,7 +29,7 @@ test('first visit: the tour appears immediately on Route, with a / 07 counter wi
     await expect(page.locator(CARD)).toBeVisible();
     await expect(page.locator(COUNTER)).toHaveText('01 / 07');
     await expect(page.locator(CARD)).toContainText('The route decides what you read first');
-    // No route yet, so the scaffold placeholder holds the anchor and the ring outlines it.
+    // No route yet: the scaffold placeholder is the step target, and the ring outlines it.
     await expect(page.locator('.tour-scaffold [data-tour="narrative"]')).toBeVisible();
     await expectRingAround(page, '[data-tour="narrative"]');
 });
@@ -47,7 +47,7 @@ test('a route arrives during the tour: the ring moves to a real stop', async ({ 
     const section = await takeTask(worker, 'route.section');
     await submit(worker, section.taskId, sectionFor(section.planIndexes));
 
-    // The route replaces the scaffold, and the step anchor moves to the first stop.
+    // The route replaces the scaffold, and the step target moves to the first stop.
     await expect(page.locator('.tour-scaffold')).toHaveCount(0);
     await expect(page.locator('[data-stop="s01"] [data-tour="narrative"]')).toBeVisible();
     await expectRingAround(page, '[data-tour="narrative"]');
@@ -198,7 +198,7 @@ async function replayFromPalette(page: Page): Promise<void> {
     await expect(palette).toHaveCount(0);
 }
 
-/** The ring outlines the target with a 5px gap (onboarding spec §3). */
+/** The ring outlines the target with a 5px gap (docs/design/SPEC-onboarding-2026-09-02.md §3). */
 async function expectRingAround(page: Page, selector: string): Promise<void> {
     const ring: Locator = page.locator(RING);
     await expect(ring).toBeVisible();

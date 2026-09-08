@@ -9,10 +9,10 @@ import { copyText } from './clipboard.js';
 import './context-menu.css';
 
 /**
- * File context menu (SPEC §2.11, amended 2026-09-03): opens on right-clicking the
+ * File context menu (docs/design/SPEC-elements.md §2.11 with 2026-09-03 amendments): opens on a right-click on the
  * card header or tree row, or through their "⋯" button. Item order is fixed.
  * Unavailable items stay disabled so the menu does not change shape between files.
- * The only optional item is "Comment on the file" for image cards (M5-T24):
+ * The only optional item is "Comment on file" for image cards:
  * comments on other files attach to a line.
  *
  * The menu uses a portal in `body`. Cards clip their contents with `overflow`, and tree rows
@@ -58,7 +58,7 @@ const GAP = 4;
 const VIEWPORT_MARGIN = 8;
 
 /**
- * The component sets menu width (README §Raised surfaces) instead of CSS because it also calculates
+ * The component sets menu width (docs/design/README.md §Raised surfaces), rather than CSS. The same width positions
  * its right edge against the button, and that calculation must not depend on whether CSS has loaded.
  */
 const MENU_WIDTH = 240;
@@ -310,7 +310,7 @@ export interface FileContextMenuProps {
     readonly viewed: boolean;
     readonly onToggleViewed: () => void;
     /**
-     * File comment without a line (M5-T24): an image card has no lines, but can still be discussed.
+     * File comment without a line. Image cards have no lines but still need a place for comments.
      * Without a handler, the item is absent from the menu.
      */
     readonly onCommentFile?: (() => void) | undefined;
@@ -321,7 +321,7 @@ export interface FileContextMenuProps {
 
 /**
  * Single-file menu: copy path and links, open the file on the web, toggle viewed. Marks
- * can change only in the active iteration (M4 boundaries), so read-only mode disables the last item
+ * is only available in the active iteration, so read-only mode disables the last item
  * with the same reason as the viewed checkbox.
  */
 export function FileContextMenu({

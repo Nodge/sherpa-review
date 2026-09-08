@@ -27,7 +27,7 @@ describe('system opener', () => {
         expect(unref).toHaveBeenCalledOnce();
     });
 
-    it('falls back silently on spawn errors and unknown platforms', () => {
+    it('silently falls back on spawn errors and unknown platforms', () => {
         expect(() => {
             openBrowser({
                 uiUrl: UI_URL,

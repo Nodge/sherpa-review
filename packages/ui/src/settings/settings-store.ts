@@ -2,7 +2,7 @@ import type { UiSettings, UiSettingsPatch } from '@sherpa/protocol';
 import { uiSettingsSchema } from '@sherpa/protocol';
 
 /**
- * Global UI settings (M3-T16): diff mode, ship mode, composer layout, language. Stored on the
+ * Global UI settings: diff mode, ship mode, composer layout, language. Stored on the
  * server in `~/.sherpa/settings.json` instead of `localStorage` because each PR server listens on
  * a random port, giving each PR its own browser storage.
  *

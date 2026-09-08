@@ -9,7 +9,7 @@ import type { ThreadSourceCounts } from '../threads/model.js';
 import { FilterSelect } from './filter-select.tsx';
 import './toolbar-controls.css';
 
-/** Shared right cluster for the route and full diff toolbars in README §1 order. */
+/** Shared right-hand controls of the route and full diff toolbars in docs/design/README.md §1 order. */
 export function ToolbarRightCluster({
     store,
     filters,
@@ -27,7 +27,7 @@ export function ToolbarRightCluster({
     readonly threadsShow: ThreadsShow;
     readonly threadCounts: ThreadSourceCounts;
     readonly onThreadsShow: (show: ThreadsShow) => void;
-    /** Author lens from the discussion card (M5-T16). `null` means no lens and no chip. */
+    /** Author lens from the discussion card. `null` means no lens and no chip. */
     readonly authorLens?: AuthorLens | null;
 }) {
     const t = useT();
@@ -64,7 +64,10 @@ function AuthorLensChip({ lens }: { lens: AuthorLens }) {
     );
 }
 
-/** Diff mode toggle, "deliberately quiet" (README §1) and global across views (SPEC §2.6). */
+/**
+ * Diff mode toggle is "deliberately quiet" (docs/design/README.md §1), global across all views
+ * (docs/design/SPEC-elements.md §2.6).
+ */
 export function DiffModeToggle({ store }: { store: DiffViewStore }) {
     const t = useT();
     const { diffMode, splitAvailable, effectiveMode } = useSyncExternalStore(
@@ -73,7 +76,7 @@ export function DiffModeToggle({ store }: { store: DiffViewStore }) {
         store.getSnapshot,
     );
 
-    // Below 1100px there is no choice (SPEC §2.6), and the label always names the mode,
+    // Below 1100px there is no choice (docs/design/SPEC-elements.md §2.6), and the label always names the mode
     // currently rendering the diff, not the user's deferred selection.
     return (
         <button
@@ -93,7 +96,7 @@ export function DiffModeToggle({ store }: { store: DiffViewStore }) {
 
 /**
  * Comment sources: 3 additive chips. The last one can be disabled, but then the chips
- * are replaced with a "Comments hidden" message and undo (SPEC §2.8).
+ * are replaced with a "Comments hidden" label and undo action (docs/design/SPEC-elements.md §2.8).
  */
 export function CommentSources({
     show,

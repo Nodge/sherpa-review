@@ -38,21 +38,21 @@ import type { SharedPayloadStore } from './shared-payload.js';
 import type { WorkerRegistry } from './worker-registry.js';
 
 /**
- * Route orchestration (M2-T4): a state machine, "no route → skeleton → sections → ready".
+ * Route orchestration: a state machine from "no route → skeleton → sections → ready".
  *
  * The state of `RouteStore` alongside the queue state is the single source of truth for what
  * to do next. Reconciliation (`reconcile`) computes transitions instead of recording them as events. Reconciliation
  * is idempotent, so a server restart during generation, agent death and session eviction
- * recover automatically, with no special-case code (SPEC §4.4).
+ * recover on their own, with no special-case code (docs/design/SPEC-elements.md §4.4).
  *
  * Result acceptance attaches to the queue through a synchronous acceptor: validation runs inside
  * the `complete` transaction (fail-closed, rejection leaves the model holding the lease), and the accepted result is written
  * after it commits.
  */
 
-/** Route thresholds and section batching. T12 will tune the batch size while measuring latency. */
+/** Route thresholds and section batching: latency measurements kept the batch at one stop. */
 export interface RouteConfig {
-    /** At most this many changed lines (additions + deletions): small PR, no route needed (requirements §3.6). */
+    /** At or below this many changed lines (additions + deletions), the PR is small and needs no route (docs/architecture.md §7.6). */
     readonly smallPrMaxChangedLines: number;
     /** How many plan stops go into one `route.section` task. */
     readonly sectionBatchSize: number;
@@ -74,7 +74,7 @@ export const MAX_SKELETON_TASKS = 3;
 const ROUTE_TASK_PREFIX = 'route.';
 
 /**
- * Delay for the one-off check after server startup: "diff on screen in under 2 seconds" (requirements §7),
+ * Delay for a one-time check after server startup: "diff on screen in under two seconds",
  * so startup does not wait for `getDiff()`. Warmup moves to a deferred timer that does not keep
  * the process alive (`unref`) and does not count as activity for idle tracking.
  */
@@ -93,7 +93,7 @@ interface GenerationContext {
     readonly previousSnapshotId: string | null;
     /** Line mapping "previous snapshot iteration → generation iteration". null means there is no interdiff. */
     readonly map: IterationMap | null;
-    /** The same slice as patches, sent to the model in a context file (M4-T7). */
+    /** The same slice as patches: sent to the model as a context file. */
     readonly interdiff: PrDiff | null;
     /** PR threads at generation start. null means no previous snapshot, a host failure or a restart. */
     readonly threads: readonly Thread[] | null;
@@ -110,15 +110,15 @@ export interface RouteOrchestratorOptions {
     /** Shared PR context: the guide and diff use a stable path, not a copy per task. */
     readonly shared: SharedPayloadStore;
     /**
-     * Reading progress: carryover marks stops in the new snapshot during acceptance
-     * (planning decision 4). `null` means nowhere to carry progress to (tests without progress).
+     * Reading progress: carryover sets the new snapshot's stop marks when it is accepted.
+     * `null` means there is nowhere to carry them to (tests without progress).
      */
     readonly progress?: StopProgressCarry | null;
     /** Local storage for iteration patches. `null` means there is nowhere to save the generation diff (tests without a DB). */
     readonly iterations?: IterationStore | null;
     /**
-     * Global UI settings supply the generation language when the request omits it
-     * (M5-T4). `null` means no settings, so the fallback order reaches the agent hint and Russian.
+     * Global UI settings provide the generation language when the request does not specify one.
+     * `null` means settings are unavailable, so the fallback order continues with the agent hint and English.
      */
     readonly settings?: Pick<SettingsStore, 'read'> | null;
     readonly config?: Partial<RouteConfig>;
@@ -141,7 +141,7 @@ export class RouteOrchestrator {
     /**
      * Context for the generation running in this process. Section acceptance is synchronous, while `getDiff`
      * and interdiff are network calls. The generation iteration is fixed when generation starts and does not change,
-     * even if the author pushes (planning decision 10: generation finishes, and the snapshot
+     * even if the author pushes (generation runs to completion, and the snapshot
      * is already stale when created).
      */
     private generation: GenerationContext | null = null;
@@ -181,7 +181,7 @@ export class RouteOrchestrator {
         this.unsubscribeQueue = this.queue.subscribeChanges(() => {
             this.reconcile();
         });
-        // Once the agent connects, someone can execute generation tasks (requirements §8).
+        // Once an agent connects, someone can execute generation tasks.
         this.unsubscribeWorker = this.registry.subscribe((status: WorkerStatus) => {
             if (status.kind === 'connected') {
                 this.warmupInBackground();
@@ -266,7 +266,7 @@ export class RouteOrchestrator {
      * remains readable until the new skeleton is accepted, and its progress carries over to the new snapshot
      * during acceptance.
      *
-     * `requestedLocale` is the effective language of the tab whose button was clicked (M5-T4). Without it,
+     * `requestedLocale` is the effective language of the tab where the button was clicked. Without it,
      * `resolveGenerationLocale` chooses the language using the fallback order.
      */
     async generate(requestedLocale?: Locale): Promise<UiRouteGenerateResponse['outcome']> {
@@ -523,8 +523,8 @@ export class RouteOrchestrator {
             this.enqueueSections(pending);
             return;
         }
-        // No open section tasks remain, so the snapshot can be frozen (decision 4:
-        // a section failure does not fail the phase, and its stop keeps `status: 'failed'`).
+        // No open section tasks remain, so the snapshot can be frozen
+        // (failure of an individual section does not fail the phase, and the stop keeps `status: 'failed'`).
         const stops = this.store.read().snapshot?.stops ?? [];
         if (!stops.some((stop) => stop.status === 'queued' || stop.status === 'filling')) {
             this.markReadyCarryingProgress();
@@ -572,7 +572,7 @@ export class RouteOrchestrator {
 
     /**
      * Carry progress over to the snapshot within its write transaction. `carried` counts marked
-     * stops against stops with anchors (second-pass banner, README §9):
+     * stops against stops with anchors (second pass banner, docs/design/README.md §9).
      * Carryover cannot cover the synthetic "Other" stop or unfilled stops, so they do not belong
      * in the denominator. When carryover is zero, include the reason.
      */
@@ -630,7 +630,7 @@ export class RouteOrchestrator {
 
         const last = skeletons.at(-1)?.record;
         if (last === undefined) {
-            // Server restarted during a phase with no task: enqueue the skeleton again (decision 8).
+            // The server restarted with no task for this phase. Queue the skeleton again.
             this.restartSkeletonTask(skeletons.length, null);
             return;
         }
@@ -698,7 +698,7 @@ export class RouteOrchestrator {
             threads: await threads,
         });
         if (previous.diffId === diff.diffId) {
-            // Regeneration within the same iteration: lines have not moved (planning decision 4).
+            // Regeneration on the same iteration. Lines have not moved.
             return { ...(await base()), map: identityMap(), interdiff: null };
         }
 
@@ -1002,7 +1002,7 @@ export class RouteOrchestrator {
     /**
      * Fetch the active iteration diff along with PR metadata and the iteration list. Store the patch
      * synchronously after the response. A snapshot built on this iteration must remain
-     * readable after the next push (brief §4a), so generation cannot start before the write.
+     * readable after the next push (docs/product.md §4a), and generation cannot start before the write.
      *
      * Do not cache it for the process lifetime. `generationDiff` holds the generation iteration. Concurrent
      * calls share one request so warmup and the `generate` endpoint do not query the host twice.
@@ -1109,7 +1109,7 @@ const STALE_GENERATION =
     'Call `worker next` and work on the task it gives you.';
 
 /**
- * Route threshold (requirements §3.6): a tiny PR can be read in full, so a route adds overhead.
+ * Route threshold (docs/architecture.md §7.6). A tiny PR can be read in full, and a route adds overhead.
  * Measure only the size of the change across all files. A single 500-line file also needs a route.
  */
 export function isSmallPr(diff: PrDiff, config: RouteConfig): boolean {
@@ -1143,7 +1143,7 @@ function stopStatusOf(task: TaskRecord, strings: RouteStrings): RouteStopStatusU
 /**
  * Why mark carryover yielded zero. "Carried over 0 of 8" reads as "everything changed", but
  * there are 2 distinct reasons: the reviewer marked nothing in the previous iteration, or marked stops
- * but no stop stayed fully viewed (M5-T20, M5-T21).
+ * but none remained fully viewed.
  *
  * Query the source iteration, not the destination. Carryover may have preserved no lines (the interdiff
  * touched every range, conservative mode, or regeneration on the same iteration), and "there were
@@ -1175,7 +1175,10 @@ function zeroCarryNote(reason: RouteCarriedZeroReason | null): string {
     }
 }
 
-/** Generation failure reason for the red card in README §12, one sentence in the route language. */
+/**
+ * Generation failure reason for the red card (docs/design/README.md §12), one sentence
+ * in the route language.
+ */
 function skeletonFailureMessage(task: TaskRecord, strings: RouteStrings): string {
     return strings.skeletonFailed((task.failReason ?? '').trim());
 }

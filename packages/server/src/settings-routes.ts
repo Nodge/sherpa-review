@@ -12,7 +12,7 @@ export interface SettingsRoutesOptions {
 }
 
 /**
- * Global UI settings endpoints (M3-T16). They need no review host: settings are local and shared
+ * Global UI settings endpoints. They don't need a review host because settings are local and shared
  * by all PRs. PATCH returns the entire merged result. The second tab catches up with the first
  * when it reads the endpoint again.
  */

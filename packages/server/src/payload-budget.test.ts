@@ -4,7 +4,7 @@ import type { PayloadFileSpec } from './payload-budget.js';
 import { byteLength, fitPayloadFiles, fitText, truncateUtf8, unavailableBlock } from './payload-budget.js';
 
 /**
- * Fitting payloads to a budget (rpc-design §4). Budgets count bytes, so every check
+ * Fits payloads within the budget (docs/protocol.md §4). The budget counts bytes, so every check
  * here uses bytes, not string length. Those differ for non-ASCII letters and emoji.
  */
 
