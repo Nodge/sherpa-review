@@ -190,7 +190,7 @@ The feedback channel needs credentials in the environment that starts the server
 
 ## Version
 
-`0.5.0` is printed by `sherpa --version` and shown in the UI top bar.
+`0.5.2` is printed by `sherpa --version` and shown in the UI top bar.
 
 ## Development
 

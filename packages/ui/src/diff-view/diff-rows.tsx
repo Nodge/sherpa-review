@@ -59,7 +59,8 @@ export interface DiffRowsProps {
     readonly contextAvailable?: boolean;
 }
 
-const NOOP_EXPAND = (): Promise<GapExpandResult> => Promise.resolve({ feedback: null, loaded: 0, hidden: 0 });
+const NOOP_EXPAND = (): Promise<GapExpandResult> =>
+    Promise.resolve({ feedback: null, loaded: 0, hidden: 0, hiddenChanged: 0 });
 const NOOP_ANNOUNCE = (): void => undefined;
 
 export function DiffRows({
@@ -104,7 +105,9 @@ export function DiffRows({
                 if (row.kind === 'gap') {
                     return (
                         <GapRow
-                            key={gapKeyOf(row.gap)}
+                            // Pieces of the same slice gap share an expansion key, but each gets its own row.
+                            // The React key also needs the piece boundaries.
+                            key={`${gapKeyOf(row.gap)}:${String(row.gap.oldStart)}:${String(row.gap.newStart)}`}
                             gap={row.gap}
                             content={content}
                             mode={effective}
@@ -324,8 +327,9 @@ function GapRow({
                     setFailed(true);
                     return;
                 }
-                // Expansion leaves changed lines from other stops alone. The gap hides the same count as before.
-                onExpanded(result.loaded, result.hidden, gap.hiddenChanged ?? 0);
+                // Count remaining changes from other stops across all pieces of the key. Expansion splits the gap,
+                // so the count for this piece would describe only its half.
+                onExpanded(result.loaded, result.hidden, result.hiddenChanged);
             },
             () => {
                 if (timer.current !== null) {

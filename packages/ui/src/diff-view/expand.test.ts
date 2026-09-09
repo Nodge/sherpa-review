@@ -178,13 +178,21 @@ describe('directional context expansion', () => {
         const expansion = expandGap(EMPTY_EXPANSION, key, 'down');
         const after = expandFileContext(model, CONTENT, expansion);
 
-        expect(gapExpansionDelta(before, after, CONTENT, key)).toEqual({ loaded: 20, hidden: 59 });
+        expect(gapExpansionDelta(before, after, CONTENT, key)).toEqual({
+            loaded: 20,
+            hidden: 59,
+            hiddenChanged: 0,
+        });
 
         const shortLines = LINES.slice(0, 55);
         const short: FileContent = { oldText: shortLines.join('\n'), newText: shortLines.join('\n') };
         const beforeLast = expandFileContext(model, short, EMPTY_EXPANSION);
         const afterLast = expandFileContext(model, short, expansion);
-        expect(gapExpansionDelta(beforeLast, afterLast, short, key)).toEqual({ loaded: 14, hidden: 0 });
+        expect(gapExpansionDelta(beforeLast, afterLast, short, key)).toEqual({
+            loaded: 14,
+            hidden: 0,
+            hiddenChanged: 0,
+        });
     });
 
     it('"expand file" leaves no gaps', () => {
@@ -287,6 +295,40 @@ describe('changed lines from other stops', () => {
         expect(gaps(model)).toHaveLength(3);
         expect(remainingHiddenLines(model, CONTENT)).toBe(0);
         expect(remainingHiddenChanged(model)).toBe(9);
+    });
+
+    it('sums the remainder for a shared key across all its pieces', () => {
+        const model = twoHunks();
+        if (model.content.kind !== 'text') {
+            throw new Error('fixture needs a text model');
+        }
+        const inner = gaps(model).find((gap) => gap.edge === 'inner');
+        if (inner === undefined) {
+            throw new Error('model has no inner gap');
+        }
+        // A slice gap looks like this after expansion splits it into pieces that share a key.
+        const key = gapKeyOf(inner);
+        const split: DiffFileModel = {
+            ...model,
+            content: {
+                kind: 'text',
+                blocks: model.content.blocks.flatMap((block) =>
+                    block === inner
+                        ? [
+                              { ...inner, sourceKey: key, hiddenLines: 0, hiddenChanged: 2 },
+                              { ...inner, sourceKey: key, hiddenLines: 9, hiddenChanged: 3 },
+                          ]
+                        : [block],
+                ),
+            },
+        };
+
+        // Count changes from other stops across all pieces too. One count would describe only half.
+        expect(gapExpansionDelta(model, split, CONTENT, key)).toEqual({
+            loaded: 10,
+            hidden: 9,
+            hiddenChanged: 5,
+        });
     });
 
     it('expanding the file leaves gaps containing only changes from other stops untouched', () => {

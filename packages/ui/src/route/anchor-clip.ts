@@ -227,11 +227,13 @@ export function clipModelToAnchors(
     for (const block of model.content.blocks) {
         if (block.kind === 'gap') {
             // A gap in the original model keeps its key and expands before anchor clipping.
+            // The slice key yields to it when the slice only hid changed lines from other stops.
+            // That key has nothing to expand, and the merged gap has a single target.
             skipped = {
                 ...skipped,
                 context: skipped.context + (block.hiddenLines ?? 0),
                 ...(block.hiddenLines === null ? { toEndOfFile: true } : {}),
-                key: skipped.key ?? gapKeyOf(block),
+                key: skipped.context === 0 ? gapKeyOf(block) : (skipped.key ?? gapKeyOf(block)),
             };
             continue;
         }
@@ -294,7 +296,7 @@ interface Sides {
 
 /**
  * Hunk lines to keep: anchors, base context and directed expansion of specific
- * gaps. A changed line from another stop always stops expansion.
+ * gaps. Expansion skips changed lines from other stops, leaving them hidden.
  */
 function keepPlan(
     lines: readonly DiffLine[],
@@ -361,26 +363,34 @@ function keepPlan(
         // whichever of the two controls was clicked.
         const above = start > 0;
         const below = end < lines.length - 1;
-        revealContext(mask, lines, start, 1, above ? (below ? up : Math.max(up, down)) : 0);
-        revealContext(mask, lines, end, -1, below ? (above ? down : Math.max(up, down)) : 0);
+        revealContext(mask, lines, start, end, 1, above ? (below ? up : Math.max(up, down)) : 0);
+        revealContext(mask, lines, start, end, -1, below ? (above ? down : Math.max(up, down)) : 0);
     }
 
     return { mask, gapKeys };
 }
 
+/**
+ * Up to `amount` unchanged lines in the gap `[start, end]`, starting at its edge in direction `step`.
+ * Expansion skips changed lines from other stops because this stop cannot show them. They
+ * stay hidden as their own gap, just as when expanding the whole file.
+ */
 function revealContext(
     mask: boolean[],
     lines: readonly DiffLine[],
     start: number,
+    end: number,
     step: 1 | -1,
     amount: number,
 ): void {
-    for (let offset = 0; offset < amount; offset += 1) {
-        const index = start + step * offset;
-        if (lines[index]?.kind !== 'context') {
-            break;
+    let revealed = 0;
+    let index = step === 1 ? start : end;
+    while (revealed < amount && index >= start && index <= end) {
+        if (lines[index]?.kind === 'context') {
+            mask[index] = true;
+            revealed += 1;
         }
-        mask[index] = true;
+        index += step;
     }
 }
 

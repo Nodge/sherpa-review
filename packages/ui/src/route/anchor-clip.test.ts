@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
+import type { FileExpansion } from '../diff-view/expand.js';
 import {
     expandAllGaps,
     expandFileContext,
@@ -204,6 +205,90 @@ describe('clipping the model by anchors', () => {
         );
         expect(nextGap?.sourceKey).toBe(key);
         expect(nextGap?.hiddenChanged).toBe(gap.hiddenChanged);
+    });
+
+    it('expansion skips changed lines from other stops at the gap boundary', () => {
+        const context = Array.from({ length: 25 }, (_, index) => ` line-${String(index + 8)}`);
+        const model = parseFileDiff({
+            fileId: 'route-foreign',
+            path: 'src/route-foreign.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            // Another stop's change follows the anchor context. Unchanged lines follow that change.
+            patch: [
+                '@@ -1,32 +1,32 @@',
+                ' line-1',
+                ' line-2',
+                '-old-3',
+                '+new-3',
+                ' line-4',
+                ' line-5',
+                ' line-6',
+                '-old-7',
+                '+new-7',
+                ...context,
+            ].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [{ side: 'new', start: 3, end: 3 }];
+        const initial = clipModelToAnchors(model, anchors);
+        const gap = gapsAt(initial, 'trailing')[0];
+        if (gap === undefined) {
+            throw new Error('slice has no trailing gap');
+        }
+        const key = gapKeyOf(gap);
+        expect(gap.hiddenChanged).toBe(2);
+
+        const expanded = clipModelToAnchors(model, anchors, ANCHOR_CONTEXT, expandGap(new Map(), key, 'down', 20));
+        const revealed = lines(expanded.model).filter((line) => line.kind === 'context');
+
+        expect(revealed.length).toBe(lines(initial.model).filter((line) => line.kind === 'context').length + 20);
+        // The other stop's change stays hidden as its own gap. The chunks share expansion.
+        for (const line of lines(expanded.model)) {
+            expect(line.kind === 'context' || (line.newLine ?? 0) === 3).toBe(true);
+        }
+        expect(gapsOf(expanded).map((block) => gapKeyOf(block))).toContain(key);
+        expect(gapsOf(expanded).filter((block) => (block.hiddenChanged ?? 0) > 0)).toHaveLength(2);
+    });
+
+    it('a hunk tail made only of changes from other stops gives its target to the merged model gap', () => {
+        const fileLines = Array.from({ length: 60 }, (_, index) => `line-${String(index + 1)}`);
+        const content: FileContent = { oldText: fileLines.join('\n'), newText: fileLines.join('\n') };
+        const model = parseFileDiff({
+            fileId: 'route-merged-gap',
+            path: 'src/route-merged-gap.ts',
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            // After the anchor context, the hunk ends with another stop's additions, followed by a model gap.
+            patch: [
+                '@@ -1,6 +1,9 @@',
+                ' line-1',
+                ' line-2',
+                '-old-3',
+                '+new-3',
+                ' line-4',
+                ' line-5',
+                ' line-6',
+                '+new-7',
+                '+new-8',
+            ].join('\n'),
+        });
+        const anchors: readonly AnchorSpan[] = [{ side: 'new', start: 3, end: 3 }];
+        const show = (expansion: FileExpansion): ClippedModel =>
+            clipModelToAnchors(expandFileContext(model, content, expansion), anchors, ANCHOR_CONTEXT, expansion);
+
+        const initial = show(new Map());
+        const tail = gapsAt(initial, 'trailing')[0];
+        if (tail === undefined) {
+            throw new Error('slice has no trailing gap');
+        }
+        // The slice itself has nothing to expand. The real model gap got the key, so the target works.
+        expect(tail.hiddenChanged).toBe(2);
+        expect(gapKeyOf(tail).startsWith('clip:')).toBe(false);
+
+        const expanded = show(expandGap(new Map(), gapKeyOf(tail), 'down'));
+        expect(lines(expanded.model).length).toBe(lines(initial.model).length + 20);
     });
 
     it('keeps expanded context from the original gap visible and preserves its key until it disappears', () => {

@@ -105,15 +105,41 @@ export function hiddenLinesOf(gap: DiffGap, content: FileContent | null): number
     return total === 0 ? null : Math.max(total - gap.newStart + 1, 0);
 }
 
-/** Lines remaining in a specific visible gap. A gap that disappeared is fully expanded. */
+/**
+ * Number of lines remaining behind this key. A gap that disappears is fully expanded. Several gaps can
+ * share a key when a stop slice splits the gap with changed lines from other stops,
+ * and the resulting pieces share one expansion state.
+ */
 export function hiddenLinesForGap(model: DiffFileModel, content: FileContent | null, key: GapKey): number | null {
     if (model.content.kind !== 'text') {
         return 0;
     }
-    const gap = model.content.blocks.find(
-        (block): block is DiffGap => block.kind === 'gap' && gapKeyOf(block) === key,
-    );
-    return gap === undefined ? 0 : hiddenLinesOf(gap, content);
+    let total = 0;
+    for (const block of model.content.blocks) {
+        if (block.kind !== 'gap' || gapKeyOf(block) !== key) {
+            continue;
+        }
+        const hidden = hiddenLinesOf(block, content);
+        if (hidden === null) {
+            return null;
+        }
+        total += hidden;
+    }
+    return total;
+}
+
+/** Changed lines from other stops remaining behind this key, summed across all its pieces. */
+export function hiddenChangedForGap(model: DiffFileModel, key: GapKey): number {
+    if (model.content.kind !== 'text') {
+        return 0;
+    }
+    let total = 0;
+    for (const block of model.content.blocks) {
+        if (block.kind === 'gap' && gapKeyOf(block) === key) {
+            total += block.hiddenChanged ?? 0;
+        }
+    }
+    return total;
 }
 
 /** Exact counts for one action, measured on models before and after expansion. */
@@ -122,10 +148,14 @@ export function gapExpansionDelta(
     after: DiffFileModel,
     content: FileContent | null,
     key: GapKey,
-): { readonly loaded: number; readonly hidden: number } {
+): { readonly loaded: number; readonly hidden: number; readonly hiddenChanged: number } {
     const beforeHidden = hiddenLinesForGap(before, content, key) ?? 0;
     const afterHidden = hiddenLinesForGap(after, content, key) ?? 0;
-    return { loaded: Math.max(0, beforeHidden - afterHidden), hidden: afterHidden };
+    return {
+        loaded: Math.max(0, beforeHidden - afterHidden),
+        hidden: afterHidden,
+        hiddenChanged: hiddenChangedForGap(after, key),
+    };
 }
 
 /**

@@ -252,7 +252,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         async (request: ContextExpandRequest): Promise<GapExpandResult> => {
             const result = await actions.onExpand(file.fileId, request);
             if (result.feedback !== null || request.kind !== 'gap' || model === null) {
-                return { feedback: result.feedback, loaded: 0, hidden: 0 };
+                return { feedback: result.feedback, loaded: 0, hidden: 0, hiddenChanged: 0 };
             }
 
             const beforeExpanded = expandFileContext(model, result.content, expansion);

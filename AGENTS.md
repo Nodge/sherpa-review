@@ -23,6 +23,8 @@ Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pa
 
 Everything the model reads (SKILL.md, CLI output, task text, HTTP errors from worker endpoints) is in English. UI, `server.log`, code comments and docs are in Russian. Loop markers ("stop the loop", "No tasks", "DONE") are a contract between SKILL.md and the code, enforced by a test in `packages/skill`.
 
+Text the reviewer reads (UI, route text, release `--notes` in the update toast) describes what they see on screen, using their vocabulary: "context expansion is no longer blocked by changes outside your ownership zone" → "the arrows that reveal hidden diff lines work again in the route".
+
 ## UI
 
 A test checks the design tokens in `packages/ui/src/styles/tokens.css` against `docs/design/README.md`. The state gallery (`packages/ui/gallery.html`, `src/dev/gallery/`) renders every screen state with fixtures from `@sherpa/fixtures`. A new state or component needs a new gallery card. Visual acceptance compares the gallery and prototype side by side in the same viewport until they match.

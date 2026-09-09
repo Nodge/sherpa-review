@@ -23,6 +23,8 @@ export interface GapExpandResult {
     readonly feedback: string | null;
     readonly loaded: number;
     readonly hidden: number;
+    /** Remaining changed lines from other stops under the same key. Expansion splits the gap into pieces. */
+    readonly hiddenChanged: number;
 }
 
 interface ExpandContextOptions {
