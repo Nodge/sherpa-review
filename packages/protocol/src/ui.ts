@@ -493,6 +493,8 @@ const uiSettingsFields = {
     composerLayout: z.enum(['visual', 'markdown']),
     /** UI language. */
     locale: localeSettingSchema,
+    /** UI theme, shared across PRs. */
+    theme: z.enum(['dark', 'light']),
     /**
      * Onboarding tour: `completedAt` means completed or skipped
      * (skipping is permanent). `step` is where an unfinished tour paused, and it resumes there
@@ -513,6 +515,7 @@ export const uiSettingsSchema = z.object({
     shipMode: uiSettingsFields.shipMode.default('ship'),
     composerLayout: uiSettingsFields.composerLayout.default('visual'),
     locale: uiSettingsFields.locale.default('auto'),
+    theme: uiSettingsFields.theme.default('dark'),
     onboarding: uiSettingsFields.onboarding.default({ completedAt: null, step: 0 }),
     updates: uiSettingsFields.updates.default({ dismissedVersion: null }),
 });

@@ -15,6 +15,7 @@ createRoot(container).render(
     <StrictMode>
         <IconSprite />
         <Gallery
+            initialTheme={readFragmentParam(window.location.hash, 'theme') === 'light' ? 'light' : 'dark'}
             initialId={readFragmentParam(window.location.hash, 'state')}
             initialLocale={parseGalleryLocale(readFragmentParam(window.location.hash, 'locale'))}
         />

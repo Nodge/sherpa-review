@@ -26,6 +26,7 @@ import {
 import type { ViewId } from './session/views.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { SettingsProvider } from './settings/context.tsx';
+import { ThemeSync } from './settings/theme.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
@@ -166,6 +167,7 @@ if (token === null) {
                 <IconSprite />
                 <ShortcutsProvider registry={shortcuts}>
                     <SettingsProvider store={settings}>
+                        <ThemeSync />
                         <AgentLocaleProvider store={store}>
                             <PrStateProvider store={prState}>
                                 <App store={store} session={session} token={token} />

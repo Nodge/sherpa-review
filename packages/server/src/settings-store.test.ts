@@ -23,9 +23,18 @@ describe('global UI settings', () => {
             shipMode: 'ship',
             composerLayout: 'visual',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
+    });
+
+    it('preserves other settings in an old file and keeps the theme after reopening', async () => {
+        await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify({ diffMode: 'split', locale: 'en' }));
+        const store = new SettingsStore(sherpaDir);
+        expect(store.read()).toMatchObject({ theme: 'dark', diffMode: 'split', locale: 'en' });
+        store.patch({ theme: 'light' });
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme: 'light', diffMode: 'split', locale: 'en' });
     });
 
     it('falls back to defaults for malformed JSON without throwing an error', async () => {
@@ -51,6 +60,7 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -104,6 +114,7 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });

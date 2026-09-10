@@ -440,6 +440,9 @@ describe('locale, onboarding, update', () => {
             updates: { dismissedVersion: null },
         });
         expect(uiSettingsSchema.safeParse({ locale: 'de' }).success).toBe(false);
+        expect(uiSettingsSchema.parse({ diffMode: 'split' })).toMatchObject({ theme: 'dark', diffMode: 'split' });
+        expect(uiSettingsSchema.safeParse({ theme: 'sepia' }).success).toBe(false);
+        expect(uiSettingsPatchSchema.parse({ theme: 'light' })).toEqual({ theme: 'light' });
         expect(uiSettingsSchema.safeParse({ onboarding: { completedAt: null, step: -1 } }).success).toBe(false);
         expect(uiSettingsSchema.safeParse({ updates: { dismissedVersion: 'latest' } }).success).toBe(false);
 

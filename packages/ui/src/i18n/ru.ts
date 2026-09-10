@@ -38,6 +38,11 @@ export const ru = {
     'command.manual': 'Команда выделена — скопируй вручную',
     'command.aria': 'Команда запуска Шерпы',
 
+    'theme.dark': 'Тёмная тема',
+    'theme.light': 'Светлая тема',
+    'theme.toLight': 'Включить светлую тему',
+    'theme.toDark': 'Включить тёмную тему',
+
     'topbar.breadcrumb': 'Пул-реквест',
     'topbar.search': 'Поиск',
     'topbar.agent.disconnected': 'Агент отключён. Читалка продолжает работать полностью.',

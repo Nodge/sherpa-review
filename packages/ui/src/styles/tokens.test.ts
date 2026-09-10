@@ -347,8 +347,59 @@ describe('design tokens', () => {
         });
     }
 
-    it('each token is declared once', () => {
-        const declarations = [...TOKENS_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]);
-        expect(declarations).toHaveLength(new Set(declarations).size);
+    it('each token is declared once in each palette', () => {
+        for (const block of TOKENS_CSS.matchAll(/\{([^{}]*)\}/g)) {
+            const declarations = [...(block[1] ?? '').matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]);
+            expect(declarations).toHaveLength(new Set(declarations).size);
+        }
     });
 });
+
+describe('light palette', () => {
+    const lightCss = TOKENS_CSS.split(":root[data-theme='light']")[1] ?? '';
+    const light = parseRootTokens(`:root ${lightCss}`);
+    const dark = parseRootTokens(TOKENS_CSS);
+    const design = readFileSync(
+        fileURLToPath(new URL('../../../../docs/design/theme-light.md', import.meta.url)),
+        'utf8',
+    );
+
+    it('overrides all color roles without changing geometry', () => {
+        const colors = [...dark].filter(([, value]) => /#|rgba\(/.test(value)).map(([name]) => name);
+        expect([...light.keys()].sort()).toEqual(colors.sort());
+        expect(lightCss).toContain('color-scheme: light;');
+    });
+
+    it('matches the design table', () => {
+        const documented = new Map([...design.matchAll(/\| `(--[a-z0-9-]+)` \| `([^`]+)` \|/g)]
+            .map((match) => [match[1], normalize(match[2] ?? '')]));
+        expect(light).toEqual(documented);
+    });
+
+    it('keeps body text, syntax and change labels readable on a light card', () => {
+        const background = light.get('--surface-diff-card') ?? '';
+        const textTokens = [
+            '--text-primary', '--text-body', '--text-muted', '--code-text', '--code-text-del',
+            '--syntax-keyword', '--syntax-string', '--syntax-comment', '--syntax-decorator',
+            '--diff-add-text', '--diff-del-text', '--accent-text',
+        ];
+        for (const name of textTokens) {
+            expect(contrast(light.get(name) ?? '', background), name).toBeGreaterThanOrEqual(4.5);
+        }
+        expect(contrast(light.get('--accent-ink') ?? '', light.get('--accent') ?? '')).toBeGreaterThanOrEqual(4.5);
+    });
+});
+
+/** Contrast between opaque colours using relative sRGB luminance. */
+function contrast(first: string, second: string): number {
+    const luminance = (hex: string): number => {
+        const channels = [1, 3, 5].map((offset) => {
+            const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return (channels[0] ?? 0) * 0.2126 + (channels[1] ?? 0) * 0.7152 + (channels[2] ?? 0) * 0.0722;
+    };
+    const a = luminance(first);
+    const b = luminance(second);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}

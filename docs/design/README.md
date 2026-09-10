@@ -445,6 +445,9 @@ text, anchor}], unexplained?: true }`.
 
 ## Design tokens
 
+The light palette and theme switching are described in [theme-light.md](theme-light.md). The values below are for the dark theme.
+
+
 **Surfaces** — app `#0d0e10`; panels `#101113`, `#121316`; diff card `#0f1012`; card header
 `#141518`; inputs/chips `#15171b`, `#131417`, `#161819`; raised (menus, floating bar) `#181a1e`,
 `#1b1e24`; selected row `#1f2228`.

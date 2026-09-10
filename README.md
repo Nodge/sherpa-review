@@ -118,13 +118,18 @@ Russian or English. By default, the agent supplies the language through the skil
 
 The agent writes the route and chat answers in the same language. Sherpa records the generation language when it builds the route. If you later change the interface language, the provenance indicator names the route language and a banner offers to rebuild it in the new one. The existing route is not translated automatically.
 
+### Interface theme
+
+Light and dark. The button in the top bar shows the current theme and switches it without
+a reload. The choice is saved for all PRs and survives restarts. Dark is the default.
+
 ### Updates
 
 The server checks the npm registry for a newer published version at most once every 30 minutes. It caches the result so servers for all your PRs do not keep calling the API. If a newer version is published, a toast in the bottom-left corner shows what is new in one sentence and how to update. Nothing downloads or installs automatically. To check now, use the ⌘K palette → "Check for updates". "Do not remind me about X" silences that version only. The next version will appear again.
 
 ### Settings
 
-Settings survive restarts: diff mode, ship mode, editor layout, language and onboarding state live in `~/.sherpa/settings.json` (shared across all PRs). Collapsed directories, cards and recent palette commands live in each PR's database.
+Settings survive startup. Diff mode, ship mode, editor layout, language, theme and onboarding state live in `~/.sherpa/settings.json`, shared by all PRs. Collapsed directories, cards and recent palette commands live in the database for the specific PR.
 
 ## Environment variables
 

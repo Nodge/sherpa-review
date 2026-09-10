@@ -33,6 +33,11 @@ export const en: Dictionary = {
     'command.manual': 'The command is selected — copy it manually',
     'command.aria': 'Sherpa launch command',
 
+    'theme.dark': 'Dark theme',
+    'theme.light': 'Light theme',
+    'theme.toLight': 'Switch to light theme',
+    'theme.toDark': 'Switch to dark theme',
+
     'topbar.breadcrumb': 'Pull request',
     'topbar.search': 'Search',
     'topbar.agent.disconnected': 'Agent disconnected. The reader keeps working in full.',

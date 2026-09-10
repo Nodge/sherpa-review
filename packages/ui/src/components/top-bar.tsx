@@ -11,6 +11,7 @@ import { CommandBox } from './command-box.tsx';
 import type { FeedbackPreviewContext } from './feedback-button.tsx';
 import { FeedbackButton } from './feedback-button.tsx';
 import './top-bar.css';
+import { ThemeToggle } from './theme-toggle.tsx';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
@@ -105,6 +106,7 @@ export function TopBar({
                 onToggleChat={onToggleChat}
             />
             <SearchButton onClick={onOpenSearch} />
+            <ThemeToggle />
             <FeedbackButton availability={feedback} context={feedbackContext} onSend={onSendFeedback} />
         </header>
     );

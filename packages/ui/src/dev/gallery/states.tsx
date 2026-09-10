@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { agentPillView } from '../../components/agent-pill-view.js';
 import { useT } from '../../i18n/index.js';
 import { reconnectCommand } from '../../components/reconnect-command.js';
+import { ThemeToggle } from '../../components/theme-toggle.tsx';
 import { AgentPill, TopBar } from '../../components/top-bar.tsx';
 import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
@@ -140,6 +141,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         group: 'Top bar',
         title: 'complete, fixture PR',
         render: () => <TopBarState />,
+    },
+    {
+        id: 'theme-toggle',
+        group: 'Top bar',
+        title: 'light and dark themes',
+        render: () => <ThemeToggle />,
     },
     ...OVERVIEW_STATES.filter((state) => state.id !== START_STATE_ID),
     ...REVIEW_COMPLETION_STATES,

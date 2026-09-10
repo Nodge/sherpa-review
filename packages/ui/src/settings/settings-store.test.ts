@@ -37,6 +37,7 @@ describe('global UI settings', () => {
             shipMode: 'ship',
             composerLayout: 'visual',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -56,6 +57,17 @@ describe('global UI settings', () => {
 
         await flush();
         expect(patches).toEqual([{ diffMode: 'split' }]);
+    });
+
+    it('keeps the chosen theme after a late load and writes changes in switching order', async () => {
+        const { patches, send } = recording();
+        const store = createUiSettingsStore({ send });
+        store.update({ theme: 'light' });
+        store.applyLoaded(merged({ theme: 'dark', diffMode: 'split' }));
+        expect(store.getSnapshot()).toMatchObject({ theme: 'light', diffMode: 'split' });
+        store.update({ theme: 'dark' });
+        await flush();
+        expect(patches).toEqual([{ theme: 'light' }, { theme: 'dark' }]);
     });
 
     it('does not send a repeated value', async () => {
@@ -119,6 +131,7 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'markdown',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -128,6 +141,7 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'markdown',
             locale: 'auto',
+            theme: 'dark',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -143,6 +157,7 @@ describe('global UI settings', () => {
                 shipMode: 'ship',
                 composerLayout: 'visual',
                 locale: 'auto',
+                theme: 'dark',
                 onboarding: { completedAt: null, step: 0 },
                 updates: { dismissedVersion: null },
             }),

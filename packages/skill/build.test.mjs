@@ -46,7 +46,7 @@ describe('skill package build', () => {
         const head = git(['rev-parse', '--short', 'HEAD']);
         expect(distVersion).toEqual({
             version: releaseVersion,
-            builtFrom: git(['status', '--porcelain']) === '' ? head : `${head}-dirty`,
+            builtFrom: head === null ? null : git(['status', '--porcelain']) === '' ? head : `${head}-dirty`,
             releasedAt: null,
             whatsNew: null,
         });
@@ -108,5 +108,14 @@ describe('skill package build', () => {
 });
 
 function git(args) {
-    return execFileSync('git', args, { cwd: resolve(packageRoot, '../..'), encoding: 'utf8' }).trim();
+    try {
+        return execFileSync('git', args, {
+            cwd: resolve(packageRoot, '../..'),
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+    } catch {
+        // A source copy without Git records builtFrom: null.
+        return null;
+    }
 }

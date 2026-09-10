@@ -1,3 +1,4 @@
+import { useUiSettings } from '../../settings/context.tsx';
 import tokensCss from '../../styles/tokens.css?raw';
 
 /**
@@ -32,13 +33,18 @@ function parseGroups(css: string): readonly TokenGroup[] {
     return groups;
 }
 
-const GROUPS = parseGroups(tokensCss);
+const GROUPS = parseGroups(tokensCss.split(":root[data-theme='light']")[0] ?? '');
+const LIGHT_VALUES = new Map(
+    [...(tokensCss.split(":root[data-theme='light']")[1] ?? '').matchAll(/(--[a-z0-9-]+): ([^;]+);/g)]
+        .map((match) => [match[1], match[2]]),
+);
 
 function isPaint(value: string): boolean {
     return value.startsWith('#') || value.startsWith('rgba(') || value.includes('gradient(');
 }
 
 export function TokenSwatches() {
+    const { theme } = useUiSettings();
     return (
         <div className="showcase">
             {GROUPS.map((group) => (
@@ -53,7 +59,9 @@ export function TokenSwatches() {
                                     <span className="swatch__paint swatch__paint--empty" />
                                 )}
                                 <span className="swatch__name">{token.name}</span>
-                                <span className="swatch__value">{token.value}</span>
+                                <span className="swatch__value">
+                                    {theme === 'light' ? LIGHT_VALUES.get(token.name) ?? token.value : token.value}
+                                </span>
                             </div>
                         ))}
                     </div>
