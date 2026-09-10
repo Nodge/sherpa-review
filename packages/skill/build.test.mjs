@@ -43,10 +43,10 @@ describe('skill package build', () => {
     it('includes the distribution version and working tree state in version.json', () => {
         const distVersion = JSON.parse(readFileSync(join(distDir, 'version.json'), 'utf8'));
 
-        const head = git(['rev-parse', '--short', 'HEAD']);
+        const head = git(['rev-parse', 'HEAD']);
         expect(distVersion).toEqual({
             version: releaseVersion,
-            builtFrom: head === null ? null : git(['status', '--porcelain', '--', '.']) === '' ? head : `${head}-dirty`,
+            builtFrom: head === null ? null : git(['status', '--short', '--', '.']) === '' ? head : `${head}-dirty`,
             releasedAt: null,
             whatsNew: null,
         });
@@ -117,7 +117,7 @@ function git(args) {
             stdio: ['ignore', 'pipe', 'ignore'],
         }).trim();
     } catch {
-        // A source copy without Git records builtFrom: null.
+        // A source copy outside a git checkout correctly builds with builtFrom: null.
         return null;
     }
 }

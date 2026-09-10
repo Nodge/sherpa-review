@@ -13,7 +13,7 @@ export const DISTRIBUTION_WHATS_NEW_MAX_CHARS = 140;
  */
 export const distributionVersionSchema = z.object({
     version: semverSchema,
-    /** Build source identifier: short HEAD hash, `-dirty` for uncommitted changes. null means no git. */
+    /** Build source identifier: Git HEAD hash, with `-dirty` for uncommitted changes, or null outside a checkout. */
     builtFrom: z.string().nullable(),
     releasedAt: z.iso.datetime().nullable(),
     /** One "what is new" phrase for the update toast, not a changelog. */
