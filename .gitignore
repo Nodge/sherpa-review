@@ -8,3 +8,6 @@ coverage/
 *.log
 # Working trees for parallel tasks: full repository checkouts inside the repository itself.
 .claude/worktrees/
+# Local session setup: workflows and rules for this workstation
+.claude/workflows/
+CLAUDE.local.md
