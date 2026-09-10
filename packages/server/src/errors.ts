@@ -33,3 +33,30 @@ export class ServerAlreadyRunningError extends Error {
         this.pid = details.pid;
     }
 }
+
+/**
+ * Describes a `fetch` network error for logs and endpoint responses. `fetch` itself throws a generic
+ * "fetch failed", with the cause (`SELF_SIGNED_CERT_IN_CHAIN`, `ECONNREFUSED`) in `cause`.
+ * Without it, logs cannot explain the failure. `AbortSignal.timeout` timeouts get a dedicated message.
+ */
+export function describeFetchError(error: unknown): string {
+    if (!(error instanceof Error)) {
+        return String(error);
+    }
+    if (error.name === 'TimeoutError') {
+        return 'timeout';
+    }
+    const cause = describeCause(error.cause);
+    return cause === null ? error.message : `${error.message}: ${cause}`;
+}
+
+function describeCause(cause: unknown): string | null {
+    if (!(cause instanceof Error)) {
+        return null;
+    }
+    const code = 'code' in cause && typeof cause.code === 'string' ? cause.code : null;
+    if (code === null) {
+        return cause.message;
+    }
+    return cause.message === '' ? code : `${code} ${cause.message}`;
+}

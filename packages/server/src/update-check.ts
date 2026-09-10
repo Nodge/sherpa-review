@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import type { DistributionVersion, UiUpdate, UiUpdateInstall } from '@sherpa/protocol';
 import { distributionVersionSchema } from '@sherpa/protocol';
 
+import { describeFetchError } from './errors.js';
 
 
 
@@ -239,7 +240,7 @@ export class UpdateChecker {
             
             return { ok: true, latest: distributionVersionSchema.parse(await response.json()) };
         } catch (error) {
-            const reason = messageOf(error);
+            const reason = describeFetchError(error);
             process.stderr.write(`sherpa-server: update check failed: ${reason}\n`);
             return { ok: false, reason };
         }
@@ -279,7 +280,7 @@ export class UpdateChecker {
             fs.renameSync(temp, this.cacheFile);
         } catch (error) {
             fs.rmSync(temp, { force: true });
-            process.stderr.write(`sherpa-server: could not write update check cache: ${messageOf(error)}\n`);
+            process.stderr.write(`sherpa-server: failed to write update check cache: ${describeFetchError(error)}\n`);
         }
     }
 
@@ -345,6 +346,3 @@ function parseCache(payload: unknown): UpdateCheckCache | null {
     return parsed.success ? { checkedAt, latest: parsed.data } : null;
 }
 
-function messageOf(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}

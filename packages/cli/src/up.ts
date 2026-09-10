@@ -27,6 +27,13 @@ const LOG_TAIL_LINES = 20;
 /** State directory permissions: only the owner can read the contents (`docs/architecture.md §6`). */
 const STATE_DIR_MODE = 0o700;
 
+/**
+ * The server may call services signed by an internal CA. That CA is in the system
+ * store, but Node trusts only its own bundle by default and fails with `SELF_SIGNED_CERT_IN_CHAIN`.
+ * The flag appeared in 22.15/23.8. Older supported runtimes (minimum 22.13) omit it.
+ */
+const SYSTEM_CA_FLAG = '--use-system-ca';
+
 /** How long to wait for exit after each signal in `terminateChild`. */
 const TERMINATE_GRACE_MS = 2_000;
 const EXIT_POLL_INTERVAL_MS = 20;
@@ -168,6 +175,7 @@ function isProcessAlive(pid: number): boolean {
 async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logPath: string): Promise<Daemon> {
     const installDir = path.dirname(path.dirname(await fs.realpath(serverBin)));
     const args = [
+        ...systemCaArgs(),
         serverBin,
         '--pr',
         options.prKey,
@@ -194,6 +202,11 @@ async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logP
         // spawn duplicated the descriptor into the child process. Our copy can now close.
         await log.close();
     }
+}
+
+/** System certificate store flag for the daemon, only if the current Node supports it. */
+export function systemCaArgs(): readonly string[] {
+    return process.allowedNodeEnvironmentFlags.has(SYSTEM_CA_FLAG) ? [SYSTEM_CA_FLAG] : [];
 }
 
 /** Waits for the daemon to publish a manifest and answer `/healthz`. No point waiting if it died or failed to start. */

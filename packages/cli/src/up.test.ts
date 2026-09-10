@@ -170,6 +170,23 @@ describe('server startup in `up`', () => {
         throw new Error('server did not publish a manifest');
     }
 
+    it.skipIf(!process.allowedNodeEnvironmentFlags.has('--use-system-ca'))(
+        'daemon receives `--use-system-ca` so Node trusts the internal CA',
+        async () => {
+            const guarded = `
+                if (!process.execArgv.includes('--use-system-ca')) {
+                    console.error('missing --use-system-ca');
+                    process.exit(3);
+                }
+                ${WORKING_SERVER}
+            `;
+
+            const result = await up(await fakeServer(guarded));
+
+            expect(result.started).toBe(true);
+        },
+    );
+
     it('starts the daemon when there is no manifest and builds the link from its manifest', async () => {
         const result = await up(await fakeServer(WORKING_SERVER));
 
