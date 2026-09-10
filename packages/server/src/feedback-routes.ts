@@ -10,30 +10,29 @@ import type { z } from 'zod';
 import { RpcFailure } from './errors.js';
 import type { JsonResponse, RequestContext, Route } from './http.js';
 import { handlingRpcFailures, readJsonBody } from './http.js';
-import {
-    DEFAULT_FEEDBACK_PARENT,
-    DEFAULT_FEEDBACK_QUEUE,
-    IssueClient,
+
 
 
 
 import { SERVER_VERSION } from './version.js';
 
-/** Where to send feedback manually. Uses the configured parent, not a hardcoded default. */
-export function feedbackUnavailableMessage(parent: string): string {
-    return `You can send feedback directly to issue ${parent} or to Alice Ingram.`;
+
+export const NO_ISSUE_TOKEN_REASON =
+    'No token for feedback: none is configured on the server.';
+
+/** Unavailability message: the reason, then where to send feedback manually. The UI shows the discussion link. */
+export function feedbackUnavailableMessage(reason: string = NO_ISSUE_TOKEN_REASON): string {
+    return `${reason} You can send feedback directly to ${FEEDBACK_QUEUE} issues or the Sherpa discussion.`;
 }
 
-const SUMMARY_PREFIX = '[Sherpa] ';
 const SUMMARY_MAX_CHARS = 100;
 const DEFAULT_CURRENT_USER_TIMEOUT_MS = 500;
 
 export interface FeedbackIntegrationOptions {
     readonly env?: NodeJS.ProcessEnv;
+    
     readonly fetch?: IssueFetchLike;
     readonly baseUrl?: string;
-    readonly queue?: string;
-    readonly parent?: string;
     readonly retryAttempts?: number;
     readonly retryBaseMs?: number;
     readonly timeoutMs?: number;
@@ -49,27 +48,21 @@ export interface FeedbackRoutesOptions extends FeedbackIntegrationOptions {
     readonly currentUser?: () => string | null | Promise<string | null>;
 }
 
-/** Channel availability for the UI snapshot. Checks only the environment. */
-export function feedbackAvailability(env: NodeJS.ProcessEnv = process.env): UiFeedbackAvailability {
-    const parent = nonEmpty(env.SHERPA_FEEDBACK_PARENT) ?? DEFAULT_FEEDBACK_PARENT;
-    return issueTokenAvailable({ env })
+/** Channel availability for the UI snapshot, checked without launching processes. */
+export function feedbackAvailability(options: FeedbackIntegrationOptions = {}): UiFeedbackAvailability {
+    return issueTokenAvailable(tokenOptions(options))
         ? { available: true, reason: null }
-        : { available: false, reason: feedbackUnavailableMessage(parent) };
+        : { available: false, reason: feedbackUnavailableMessage() };
 }
 
 /** The feedback POST endpoint does not depend on the review host or a live worker. */
 export function createFeedbackRoutes(options: FeedbackRoutesOptions): Route[] {
-    const env = options.env ?? process.env;
-    const parent = nonEmpty(options.parent ?? env.SHERPA_FEEDBACK_PARENT) ?? DEFAULT_FEEDBACK_PARENT;
-    const availability: UiFeedbackAvailability = issueTokenAvailable({ env })
-        ? { available: true, reason: null }
-        : { available: false, reason: feedbackUnavailableMessage(parent) };
+    const availability = feedbackAvailability(options);
+    const token = issueTokenSource(tokenOptions(options));
     
-        token: issueTokenSource({ env }),
+        token,
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
-        queue: nonEmpty(options.queue ?? env.SHERPA_FEEDBACK_QUEUE) ?? DEFAULT_FEEDBACK_QUEUE,
-        parent,
         ...(options.retryAttempts === undefined ? {} : { retryAttempts: options.retryAttempts }),
         ...(options.retryBaseMs === undefined ? {} : { retryBaseMs: options.retryBaseMs }),
         ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
@@ -88,7 +81,17 @@ export function createFeedbackRoutes(options: FeedbackRoutesOptions): Route[] {
                         outcome: 'unavailable',
                         issueKey: null,
                         issueUrl: null,
-                        message: availability.reason ?? feedbackUnavailableMessage(parent),
+                        message: availability.reason ?? feedbackUnavailableMessage(),
+                    });
+                }
+                const tokenProblem = await tokenUnavailableReason(token);
+                if (tokenProblem !== null) {
+                    process.stderr.write(`sherpa-server: feedback channel unavailable: ${tokenProblem}\n`);
+                    return respond({
+                        outcome: 'unavailable',
+                        issueKey: null,
+                        issueUrl: null,
+                        message: feedbackUnavailableMessage(tokenProblem),
                     });
                 }
 
@@ -159,7 +162,7 @@ function workerDescription(worker: WorkerStatus): string {
 function feedbackSummary(text: string): string {
     const [rawFirstLine = ''] = text.split(/\r?\n/, 1);
     const firstLine = rawFirstLine.trim();
-    return `${SUMMARY_PREFIX}${firstLine === '' ? 'Feedback' : firstLine}`.slice(0, SUMMARY_MAX_CHARS);
+    return (firstLine === '' ? 'Feedback' : firstLine).slice(0, SUMMARY_MAX_CHARS);
 }
 
 async function bestEffortCurrentUser(
@@ -220,4 +223,25 @@ function respond(body: UiFeedbackResponse): JsonResponse {
 function nonEmpty(value: string | null | undefined): string | null {
     const trimmed = value?.trim() ?? '';
     return trimmed === '' ? null : trimmed;
+}
+
+function tokenOptions(options: FeedbackIntegrationOptions): IssueTokenOptions {
+    return {
+        ...(options.env === undefined ? {} : { env: options.env }),
+    };
+}
+
+/**
+ * The token is acquired lazily on the first submission. Acquisition failure makes the
+ * channel unavailable (HTTP 200, the form keeps its text), rather than failing the endpoint. Returns a reason or null.
+ */
+async function tokenUnavailableReason(source: IssueTokenSource): Promise<string | null> {
+    try {
+        return (await source()) === null ? NO_ISSUE_TOKEN_REASON : null;
+    } catch (error) {
+        if (error instanceof RpcFailure) {
+            return [error.message, ...(error.details ?? [])].join(' ');
+        }
+        throw error;
+    }
 }

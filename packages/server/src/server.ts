@@ -342,7 +342,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 iterationFeed,
                 prMeta,
                 update: updateChecker,
-                feedback: feedbackAvailability(options.feedback?.env ?? process.env),
+                feedback: feedbackAvailability(options.feedback),
                 progress,
                 route: routeStore,
                 chat: chatStore,

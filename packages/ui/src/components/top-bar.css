@@ -416,6 +416,13 @@ a.top-bar__breadcrumb-item:hover {
     margin-top: var(--space-control);
 }
 
+.feedback-popover__chat {
+    margin: var(--space-inner) 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary);
+    line-height: 1.45;
+}
+
 .feedback-popover__primary,
 .feedback-popover__secondary {
     height: 29px;

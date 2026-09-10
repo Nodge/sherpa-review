@@ -88,9 +88,9 @@ describe('feedback channel', () => {
         const body = jsonRequestBody(requests[0]?.init) as Record<string, string>;
         expect(body).toMatchObject({
             queue: 'SHERPA',
-            parent: '#2300',
-            summary: '[Sherpa] Publication status is not visible',
+            summary: 'Publication status is not visible',
         });
+        expect(body).not.toHaveProperty('parent');
         expect(body.description).toContain('Publication status is not visible\nProblem details.');
         expect(body.description).toContain(`Version: UI 0.6.0, server ${SERVER_VERSION}, protocol ${PROTOCOL_VERSION}`);
         expect(body.description).toContain('PR: fixture-medium');
@@ -142,13 +142,72 @@ describe('feedback channel', () => {
         );
 
         expect(state.feedback.available).toBe(false);
-        expect(state.feedback.reason).toContain('#2300');
+        
+        expect(state.feedback.reason).toContain('project issues');
         expect(uiFeedbackResponseSchema.parse(await response.json())).toEqual({
             outcome: 'unavailable',
             issueKey: null,
             issueUrl: null,
             message: state.feedback.reason,
         });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    
+        const requests: RequestInit[] = [];
+        const server = await start({
+            env: {},
+            
+            fetch: (_url, init) => {
+                requests.push(init ?? {});
+                
+            },
+        });
+
+        const state = uiStateSchema.parse(
+            await (await get(server.port, UI_ENDPOINTS.state, server.token)).json(),
+        );
+        expect(state.feedback).toEqual({ available: true, reason: null });
+
+        for (const text of ['First', 'Second']) {
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.feedback,
+                { text, includeContext: false, context: null },
+                server.token,
+            );
+            expect(response.status).toBe(200);
+            expect(uiFeedbackResponseSchema.parse(await response.json()).outcome).toBe('created');
+        }
+
+        
+        expect(requests.map((init) => new Headers(init.headers).get('authorization'))).toEqual([
+        ]);
+    });
+
+    
+        const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
+            Promise.resolve(new Response(JSON.stringify({ key: 'FB-unexpected' }), { status: 201 })),
+        );
+        const server = await start({
+            env: {},
+            
+            
+            fetch: fetchMock,
+        });
+
+        const response = await postJson(
+            server.port,
+            UI_ENDPOINTS.feedback,
+            { text: 'Keep this text', includeContext: false, context: null },
+            server.token,
+        );
+
+        expect(response.status).toBe(200);
+        const body = uiFeedbackResponseSchema.parse(await response.json());
+        expect(body.outcome).toBe('unavailable');
+        
+        expect(body.message).toContain('project issues');
         expect(fetchMock).not.toHaveBeenCalled();
     });
 

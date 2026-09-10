@@ -668,6 +668,8 @@ export const en: Dictionary = {
     'feedback.context.aria': 'Feedback context',
     'feedback.context.none': 'No context will be attached.',
     'feedback.unavailable': 'The feedback channel is unavailable right now.',
+    'feedback.chat': 'Ask or discuss in the',
+    'feedback.chat.link': 'Sherpa chat',
     'feedback.noLink': 'The server created a ticket but returned no link. The text is kept, send it again.',
     'feedback.copied': 'Text copied.',
     'feedback.copyFailed': 'Could not copy automatically. The text is selected.',

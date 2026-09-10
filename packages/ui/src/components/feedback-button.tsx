@@ -11,6 +11,9 @@ import type { Translate } from '../i18n/index.js';
 import { useT } from '../i18n/index.js';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 
+/** Sherpa discussion for questions and conversation when no issue is needed or the channel is unavailable. */
+export const SHERPA_CHAT_URL = 'https://github.com/quillmart/quillmart/discussions';
+
 export interface FeedbackPreviewContext {
     readonly uiVersion: string;
     readonly prKey: string;
@@ -41,14 +44,16 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
 
     const unavailableReason = availability.available ? serverUnavailable : availability.reason;
 
+    // An "unavailable" response applies to one attempt. The server retries acquiring the token, so
+    // closing the form enables submission again while keeping the text.
     const close = useCallback((): void => {
         setOpen(false);
         setError(null);
         setCopyStatus(null);
+        setServerUnavailable(null);
         if (created !== null) {
             setText('');
             setCreated(null);
-            setServerUnavailable(null);
         }
     }, [created]);
 
@@ -216,6 +221,12 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                     {t('feedback.cancel')}
                                 </button>
                             </div>
+                            <p className="feedback-popover__chat">
+                                {t('feedback.chat')}{' '}
+                                <a href={SHERPA_CHAT_URL} target="_blank" rel="noreferrer">
+                                    {t('feedback.chat.link')}
+                                </a>
+                            </p>
                         </form>
                     ) : (
                         <div className="feedback-popover__success" role="status">

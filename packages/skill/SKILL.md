@@ -1,6 +1,6 @@
 ---
 name: sherpa
-description: Runs Sherpa — local PR code review: gives the reviewer a link to the UI and executes their tasks in this session.
+description: "Runs Sherpa — local PR code review: gives the reviewer a link to the UI and executes their tasks in this session."
 ---
 
 # Sherpa

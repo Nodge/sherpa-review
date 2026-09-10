@@ -96,7 +96,9 @@ describe('UI endpoints', () => {
             expect(state.tasks).toEqual([]);
             expect(state.feedback).toEqual({
                 available: false,
-                reason: 'You can send feedback directly to issue #2300 or to Alice Ingram.',
+                reason:
+                    'No token for feedback: none is configured on the server. ' +
+                    'You can send feedback directly to project issues or the Sherpa discussion.',
             });
             // This suite has no host, so there is no source for PR metadata, and the snapshot is empty.
             expect(state.pr).toBeNull();

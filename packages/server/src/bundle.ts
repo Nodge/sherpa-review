@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { ServerAlreadyRunningError } from './errors.js';
+import { feedbackOptionsFor } from './feedback-launch.js';
 import { formatIdlePeriod, readIdleSeconds } from './idle.js';
 import { readOption } from './launch.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
@@ -50,6 +51,7 @@ async function main(argv: readonly string[]): Promise<number> {
             assets: bundledAssets(UI_ASSETS),
             idleSeconds,
             updateCheck: installDir === null ? {} : { installDir },
+            feedback: feedbackOptionsFor(installDir),
             onIdleStop: (seconds) => {
                 writeLog(`idle shutdown: ${formatIdlePeriod(seconds)} without requests or open connections`);
             },

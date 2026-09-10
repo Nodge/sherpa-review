@@ -88,8 +88,10 @@ describe('skill package build', () => {
         const cli = readFileSync(cliPath, 'utf8');
         const server = readFileSync(serverPath, 'utf8');
 
-        // Quotes in SKILL.md surround exactly the phrases the model looks for in output.
-        const markers = [...skill.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+        // Quotes in the SKILL.md body enclose exactly the phrases the model looks for in output.
+        // Frontmatter does not count. Its quotes are required by the YAML validator.
+        const body = skill.replace(/^---\n[\s\S]*?\n---\n/u, '');
+        const markers = [...body.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
         expect(markers).toEqual(expect.arrayContaining(['No tasks', 'stop the loop']));
 
         for (const marker of [...markers, 'DONE']) {

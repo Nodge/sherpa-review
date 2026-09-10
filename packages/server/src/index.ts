@@ -7,7 +7,12 @@ export type { SherpaDatabase } from './db.js';
 export { applyMigrations, openDatabase, readSchemaVersion, transaction } from './db.js';
 export { RpcFailure, ServerAlreadyRunningError } from './errors.js';
 export type { FeedbackIntegrationOptions, FeedbackRoutesOptions } from './feedback-routes.js';
-export { createFeedbackRoutes, feedbackAvailability, feedbackUnavailableMessage } from './feedback-routes.js';
+export {
+    createFeedbackRoutes,
+    feedbackAvailability,
+    feedbackUnavailableMessage,
+    NO_ISSUE_TOKEN_REASON,
+} from './feedback-routes.js';
 export type {
     JsonResponse,
     JsonRoute,
@@ -31,8 +36,7 @@ export {
 } from './http.js';
 
 export {
-    DEFAULT_FEEDBACK_PARENT,
-    DEFAULT_FEEDBACK_QUEUE,
+    FEEDBACK_QUEUE,
     ISSUE_API_BASE,
     IssueClient,
 
@@ -41,6 +45,7 @@ export {
     resolveIssueToken,
     ISSUE_TOKEN_ENV_VARS,
     issueTokenAvailable,
+    issueTokenFromEnv,
     issueTokenSource,
 
 

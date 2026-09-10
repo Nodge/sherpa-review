@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FeedbackButton } from './feedback-button.tsx';
+import { FeedbackButton, SHERPA_CHAT_URL } from './feedback-button.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,9 +63,20 @@ function button(host: HTMLElement, label: string): HTMLButtonElement {
     return found;
 }
 
+function typeText(host: HTMLElement, value: string): void {
+    const textarea = host.querySelector('textarea');
+    if (textarea === null) {
+        throw new Error('no feedback field');
+    }
+    act(() => {
+        Object.defineProperty(textarea, 'value', { configurable: true, value, writable: true });
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+}
+
 describe('Feedback form', () => {
     it('without credentials shows the reason and keeps the text available to copy', () => {
-        const reason = 'You can send feedback directly to issue #2300.';
+        const reason = 'You can send feedback directly to project issues.';
         const host = mountFeedback(
             { available: false, reason },
             () => Promise.reject(new Error('sending unavailable')),
@@ -79,6 +90,65 @@ describe('Feedback form', () => {
         expect(button(host, 'Copy the text').disabled).toBe(true);
         expect(host.querySelector('textarea')).not.toBeNull();
         expect([...host.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Send')).toBe(false);
+    });
+
+    it('restores sending after closing the form following an unavailable response and preserves the text', async () => {
+        const responses = [
+            { outcome: 'unavailable' as const, issueKey: null, issueUrl: null, message: 'Cannot obtain a token.' },
+            {
+                outcome: 'created' as const,
+                issueKey: '#7',
+                issueUrl: 'https://github.com/quillmart/quillmart/issues/7',
+                message: null,
+            },
+        ];
+        const onSend = vi.fn((_request: UiFeedbackRequest) => {
+            const next = responses.shift();
+            if (next === undefined) {
+                throw new Error('unexpected onSend call');
+            }
+            return Promise.resolve(next);
+        });
+        const host = mountFeedback({ available: true, reason: null }, onSend);
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+        typeText(host, 'Keep this');
+
+        await act(async () => {
+            button(host, 'Send').click();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain('Cannot obtain a token.');
+        expect([...host.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Send')).toBe(false);
+
+        act(() => {
+            button(host, 'Cancel').click();
+        });
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+        expect(host.querySelector('textarea')?.value).toBe('Keep this');
+        await act(async () => {
+            button(host, 'Send').click();
+            await Promise.resolve();
+        });
+
+        expect(onSend).toHaveBeenCalledTimes(2);
+        expect(host.querySelector('a[href="https://github.com/quillmart/quillmart/issues/7"]')).not.toBeNull();
+    });
+
+    it('includes a link to the Sherpa discussion in the form', () => {
+        const host = mountFeedback({ available: true, reason: null }, () => Promise.reject(new Error('not called')));
+
+        act(() => {
+            button(host, 'Feedback').click();
+        });
+
+        const link = host.querySelector<HTMLAnchorElement>('.feedback-popover__chat a');
+        expect(link?.href).toBe(SHERPA_CHAT_URL);
+        expect(link?.target).toBe('_blank');
+        expect(link?.textContent).toBe('Sherpa chat');
     });
 
     it('shows a link to the created issue after successful submission', async () => {

@@ -677,6 +677,8 @@ export const ru = {
     'feedback.context.aria': 'Контекст фидбека',
     'feedback.context.none': 'Контекст не будет приложен.',
     'feedback.unavailable': 'Канал фидбека сейчас недоступен.',
+    'feedback.chat': 'Спросить или обсудить можно в',
+    'feedback.chat.link': 'чате Шерпы',
     'feedback.noLink': 'Сервер создал тикет, но не вернул ссылку. Текст сохранён, повтори отправку.',
     'feedback.copied': 'Текст скопирован.',
     'feedback.copyFailed': 'Не удалось скопировать автоматически. Текст выделен.',

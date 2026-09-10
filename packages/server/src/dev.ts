@@ -1,4 +1,5 @@
 import { ServerAlreadyRunningError } from './errors.js';
+import { feedbackOptionsFor } from './feedback-launch.js';
 import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
@@ -30,6 +31,7 @@ async function main(argv: readonly string[]): Promise<number> {
         sherpaDir,
         idleSeconds: 0,
         updateCheck: installDir === null ? {} : { installDir },
+        feedback: feedbackOptionsFor(installDir),
     };
 
     let server: SherpaServer;

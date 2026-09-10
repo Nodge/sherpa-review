@@ -142,8 +142,6 @@ All are optional. Sherpa uses defaults when they are absent.
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
 | `SHERPA_SERVER_BIN` | Path to the server bundle | adjacent `sherpa-server.mjs` in the skill directory |
 
-
-
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
 | `SHERPA_WORKER_ID` | Debug. Pins the worker session identity | identity from this PR's `worker-id` file |
 | `SHERPA_SERVER` | Debug, UI development server only. Running server address for the `/api` proxy | first running server manifest |
@@ -183,9 +181,11 @@ Nothing else: no telemetry. The server listens on `127.0.0.1`. The UI access tok
 
 ## Feedback
 
-The Feedback button in the UI creates a sub-issue of [#2300](https://github.com/quillmart/quillmart/issues/2300) with your text and, unless you clear the checkbox, context (version, PR, screen, route phase, worker). You can see the context before sending.
+The Feedback button in the UI creates an issue through the configured feedback channel, with your text and, unless you clear the checkbox, context (version, PR, screen, route phase and worker). You can see the context before sending.
 
-The feedback channel needs credentials in the environment that starts the server (see the table above). Without them, the button says the channel is unavailable. Write directly in #2300 or to `@alice` instead.
+If the feedback channel is unavailable, the button says so and your text stays in the form for copying.
+
+The Feedback form also links to a [project discussion](https://github.com/quillmart/quillmart/discussions) for questions, discussion and feedback without an issue.
 
 ## Limits
 
