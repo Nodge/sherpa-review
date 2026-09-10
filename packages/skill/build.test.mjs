@@ -46,7 +46,7 @@ describe('skill package build', () => {
         const head = git(['rev-parse', '--short', 'HEAD']);
         expect(distVersion).toEqual({
             version: releaseVersion,
-            builtFrom: head === null ? null : git(['status', '--porcelain']) === '' ? head : `${head}-dirty`,
+            builtFrom: head === null ? null : git(['status', '--porcelain', '--', '.']) === '' ? head : `${head}-dirty`,
             releasedAt: null,
             whatsNew: null,
         });

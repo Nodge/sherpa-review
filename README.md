@@ -195,7 +195,7 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 
 ## Version
 
-`0.5.2` is printed by `sherpa --version` and shown in the UI top bar.
+`0.6.0` is printed by `sherpa --version` and shown in the UI top bar.
 
 ## Development
 

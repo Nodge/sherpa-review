@@ -62,6 +62,8 @@ function writeVersionFile() {
  * Build source identifier: short HEAD hash plus `-dirty` if the working tree has
  * uncommitted or untracked changes. The distribution is built from the working tree, rather than
  * HEAD. Without the suffix, the hash would point to code the bundle was not built from.
+ * Check status only within the Sherpa root. In a large repository, unrelated changes nearby
+ * have no bearing on the build.
  */
 function buildRevision() {
     const head = git(['rev-parse', '--short', 'HEAD']);
@@ -69,7 +71,7 @@ function buildRevision() {
         return null;
     }
     // Could not determine tree state. Marking the build is more honest than claiming a clean hash.
-    const status = git(['status', '--porcelain']);
+    const status = git(['status', '--porcelain', '--', '.']);
     return status === '' ? head : `${head}${DIRTY_SUFFIX}`;
 }
 
