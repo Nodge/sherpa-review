@@ -1,5 +1,7 @@
 import type { Comment, CommentDraft, UiSaveDraftResponse, UiUpdateDraftResponse } from '@sherpa/protocol';
 
+import { newUuid } from '../components/uuid.js';
+
 import type { ComposerSnapshot, ThreadStore } from './store.js';
 
 /**
@@ -89,7 +91,7 @@ export function closePublishedComposers(store: ThreadStore, commentIds: readonly
  */
 export function createComposerController(options: ComposerControllerOptions): ComposerController {
     const slowMs = options.slowMs ?? 500;
-    const newClientKey = options.newClientKey ?? ((): string => crypto.randomUUID());
+    const newClientKey = options.newClientKey ?? newUuid;
     let slow: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
     let inFlight: Promise<boolean> | null = null;

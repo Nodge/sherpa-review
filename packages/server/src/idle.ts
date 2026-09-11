@@ -7,9 +7,6 @@
 /** Default idle threshold: a quarter hour without the UI or CLI calls. */
 export const DEFAULT_IDLE_SECONDS = 15 * 60;
 
-/** Local loopback remains the safe default when the server address is not configured. */
-export const DEFAULT_LISTEN_HOST = '127.0.0.1';
-
 /** Idle check interval. A minute is enough for a quarter-hour threshold, shorter thresholds are checked more often. */
 const MAX_CHECK_INTERVAL_MS = 60_000;
 const MIN_CHECK_INTERVAL_MS = 50;
@@ -134,17 +131,6 @@ export function readIdleSeconds(env: NodeJS.ProcessEnv): number {
 
     const seconds = Number(raw);
     return Number.isFinite(seconds) && seconds >= 0 ? seconds : DEFAULT_IDLE_SECONDS;
-}
-
-/** Listening socket address from the entry point's environment. Whitespace counts as an absent setting. */
-export function readListenHost(env: NodeJS.ProcessEnv): string {
-    const host = env.SHERPA_LISTEN_HOST?.trim();
-    return host === undefined || host === '' ? DEFAULT_LISTEN_HOST : host;
-}
-
-/** An external listener uses the machine hostname in the UI URL. Loopback keeps the exact address. */
-export function uiHostForListenHost(listenHost: string, machineHost: string): string {
-    return ['127.0.0.1', '::1', 'localhost'].includes(listenHost) ? listenHost : machineHost;
 }
 
 /** Idle threshold for a log line, in minutes for whole-minute values and seconds otherwise. */

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 
 import { PROTOCOL_VERSION, rpcErrorSchema, serverManifestSchema } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -127,16 +128,19 @@ describe('startServer', () => {
                 protocolVersion: PROTOCOL_VERSION,
                 serverVersion: SERVER_VERSION,
             });
+            expect(server.uiHost).toBe('127.0.0.1');
 
             const stat = await fs.stat(manifestPath);
             expect(stat.mode & 0o777).toBe(0o600);
         });
 
-        it('persists the UI address with an external listener', async () => {
+        it('uses the machine name in the UI link for an external listener, not the socket address', async () => {
             const server = await start(PR_KEY, '::');
 
             const manifest = await readManifest(manifestPathFor(sherpaDir, PR_KEY));
-            expect(manifest).toMatchObject({ port: server.port, uiHost: '::' });
+            // `http://[::]:<port>` goes nowhere. The manifest must contain the machine name.
+            expect(manifest).toMatchObject({ port: server.port, uiHost: os.hostname() });
+            expect(server.uiHost).toBe(os.hostname());
         });
 
         it('restricts state directories with 0700 permissions', async () => {

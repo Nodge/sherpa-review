@@ -138,7 +138,7 @@ Maintenance: each new decision gets a dated entry in its section. When supersedi
 
 ## Server and storage
 
-- **2026-09-09 · Set the server listen address with `SHERPA_LISTEN_HOST`.** The default remains `127.0.0.1`. A value of `::` allows direct IPv6 access to the VM and preserves the CLI's local IPv4 connection. The manifest stores the UI URL address, so repeated `sherpa up` calls show the same link. Token checks remain in place. Direct HTTP access is unencrypted. Changing the address requires a server restart.
+- **2026-09-09 · `SHERPA_LISTEN_HOST` can set the server's listening address.** The default remains `127.0.0.1`. The value `::` gives direct IPv6 access to a VM while preserving the CLI's local IPv4 connection. The UI link address is written to the manifest, so another `sherpa up` shows the same link. Token checks remain in place. Direct HTTP access is unencrypted, and changing the address requires a server restart. A second trade-off is accepted: behind an HTTP proxy, the SSE token in `?token=` ends up in its access logs. There is already no encryption, and the token lives no longer than the server.
 
 - **2026-08-19 · The UI channel uses SSE, with a complete state snapshot on every change.** WebSocket is unnecessary (dependencies and manual reconnection), and granular events do not pay off because the queue is small. A tick every 30 s sends a fresh snapshot and also lazily expires leases when nobody calls the server. The UI↔server contract also lives in `@sherpa/protocol`, and the UI validates every snapshot with fail-closed behaviour.
 - **2026-08-19 · Events take the token as a query parameter, while static assets need no token.** EventSource cannot set headers, so only the events endpoint accepts `?token=`, with the same constant-time comparison. Static assets contain no secrets. The token arrives in the URL fragment and never reaches the server. All `/api/*` endpoints require a token.
@@ -155,6 +155,7 @@ Maintenance: each new decision gets a dated entry in its section. When supersedi
 
 ## UI: keyboard, palette, i18n, onboarding, settings
 
+- **2026-09-11 · The UI must work in an insecure context.** Over HTTP on a VM hostname (`SHERPA_LISTEN_HOST=::`), the browser provides neither `crypto.randomUUID` nor `navigator.clipboard`. The `localhost` exception does not apply here. APIs that require a secure context therefore go through a wrapper with a fallback or reduced functionality. `components/uuid.ts` builds a UUID v4 from `crypto.getRandomValues`, and `components/clipboard.ts` reports "unavailable". The synchronous `crypto.randomUUID()` call in the comment composer failed before the `try` in `run`, so the composer didn't even enter `error` and the reviewer saw nothing.
 - **2026-09-10 · Theme is a global `dark | light` setting, defaulting to `dark`.** The toggle is available in the top bar on every screen. The choice lives in the shared `settings.json`, so it survives server restarts and opening another PR on a new port. `localStorage` does not work for this. The existing dark appearance remains the default, unaffected by the OS theme. The light palette overrides color tokens at the document root, including the diff, syntax, portals and native controls. Geometry stays the same. The new schema field has a default for older settings files and does not change the worker task protocol.
 
 

@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { hostname } from 'node:os';
 
 import type { ServerManifest } from '@sherpa/protocol';
 import { LONG_POLL_DEFAULT_SECONDS, PROTOCOL_VERSION } from '@sherpa/protocol';
@@ -19,9 +20,10 @@ import type { ReviewHostFactory } from './hosts/select.js';
 import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
-import { DEFAULT_IDLE_SECONDS, DEFAULT_LISTEN_HOST, IdleWatch } from './idle.js';
+import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
 import { IterationFeed } from './iteration-feed.js';
 import { IterationStore } from './iteration-store.js';
+import { DEFAULT_LISTEN_HOST, uiHostForListenHost } from './listen-host.js';
 import {
     claimManifest,
     cleanStaleManifests,
@@ -75,8 +77,6 @@ export interface StartServerOptions {
     sherpaDir?: string;
     /** TCP listen address, defaults to local IPv4 loopback. */
     host?: string;
-    /** Address in the UI URL, saved in the manifest for repeated `sherpa up` calls. */
-    uiHost?: string;
     /**
      * Long-poll window for `worker next` when the call provides no `waitSeconds`.
      * Defaults to `LONG_POLL_DEFAULT_SECONDS`. Shortened in tests.
@@ -129,6 +129,8 @@ export interface SherpaServer {
     readonly port: number;
     readonly token: string;
     readonly prKey: string;
+    /** Name or address in the UI link. The manifest contains the same value. */
+    readonly uiHost: string;
     /** This PR's queue, used by UI endpoints and tests until the UI channel exists. */
     readonly queue: TaskQueue;
     /** This PR's worker lifecycle: status and connected/disconnected events for the UI. */
@@ -162,7 +164,8 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     const prKey = assertValidPrKey(options.prKey);
     const sherpaDir = options.sherpaDir ?? DEFAULT_SHERPA_DIR;
     const host = options.host ?? DEFAULT_LISTEN_HOST;
-    const uiHost = options.uiHost ?? host;
+    // A link to `[::]` doesn't work, so an external listener uses the machine name in the UI.
+    const uiHost = uiHostForListenHost(host, hostname());
     const serversDir = serversDirOf(sherpaDir);
     const manifestPath = manifestPathFor(sherpaDir, prKey);
 
@@ -402,6 +405,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
 
         const handle = createHandle({
             manifest: claimed,
+            uiHost,
             manifestPath,
             httpServer,
             db,
@@ -503,6 +507,7 @@ function healthRoute(prKey: string): Route {
 
 function createHandle(parts: {
     manifest: ServerManifest;
+    uiHost: string;
     manifestPath: string;
     httpServer: http.Server;
     db: SherpaDatabase;
@@ -529,6 +534,7 @@ function createHandle(parts: {
         port: parts.manifest.port,
         token: parts.manifest.token,
         prKey: parts.manifest.prKey,
+        uiHost: parts.uiHost,
         queue: parts.queue,
         workerRegistry: parts.workerRegistry,
         route: parts.routeOrchestrator,

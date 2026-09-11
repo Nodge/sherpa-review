@@ -2,6 +2,7 @@ import type { PriorityClass, TaskStatus, UiState, UiTask, WorkerStatus } from '@
 import { useState, useSyncExternalStore } from 'react';
 
 import { ApiError, cancelTask, enqueueEchoTask } from '../../api.js';
+import { copyText } from '../../components/clipboard.js';
 import type { Store, StoreSnapshot } from '../../store.js';
 
 /**
@@ -113,14 +114,9 @@ function CopyCommand({ command }: { command: string }) {
     const [copied, setCopied] = useState(false);
 
     const copy = (): void => {
-        navigator.clipboard.writeText(command).then(
-            () => {
-                setCopied(true);
-            },
-            () => {
-                setCopied(false);
-            },
-        );
+        void copyText(command).then((outcome) => {
+            setCopied(outcome === 'copied');
+        });
     };
 
     return (

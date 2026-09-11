@@ -3,15 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { PROTOCOL_VERSION, UI_ENDPOINTS, WORKER_ENDPOINTS } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-    DEFAULT_IDLE_SECONDS,
-    DEFAULT_LISTEN_HOST,
-    formatIdlePeriod,
-    IdleWatch,
-    readIdleSeconds,
-    readListenHost,
-    uiHostForListenHost,
-} from './idle.js';
+import { DEFAULT_IDLE_SECONDS, formatIdlePeriod, IdleWatch, readIdleSeconds } from './idle.js';
 import { readManifest } from './manifest.js';
 import { manifestPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
@@ -164,21 +156,6 @@ describe('readIdleSeconds', () => {
         for (const raw of ['', '   ', 'soon', '-5', 'NaN']) {
             expect(readIdleSeconds({ SHERPA_IDLE_SECONDS: raw }), raw).toBe(DEFAULT_IDLE_SECONDS);
         }
-    });
-});
-
-describe('server address', () => {
-    it('keeps IPv4 loopback for an empty or whitespace-only address', () => {
-        for (const raw of [undefined, '', '   ']) {
-            expect(readListenHost({ SHERPA_LISTEN_HOST: raw })).toBe(DEFAULT_LISTEN_HOST);
-        }
-    });
-
-    it('preserves an explicit address and uses the machine hostname in the URL for an external listener', () => {
-        expect(readListenHost({ SHERPA_LISTEN_HOST: ' :: ' })).toBe('::');
-        expect(uiHostForListenHost('::', 'sherpa-vm.example')).toBe('sherpa-vm.example');
-        expect(uiHostForListenHost('127.0.0.1', 'sherpa-vm.example')).toBe('127.0.0.1');
-        expect(uiHostForListenHost('::1', 'sherpa-vm.example')).toBe('::1');
     });
 });
 
