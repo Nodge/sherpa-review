@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Fragment } from 'react';
 
-import type { LanguageId } from '../diff/model.js';
-import { tokenizeLine } from '../diff/syntax.js';
+import type { LanguageId, SyntaxToken } from '../diff/model.js';
+import { highlightText, languageByName } from '../diff/syntax.js';
 
 import type {
     HeadingLevel,
@@ -32,33 +32,6 @@ export function Markdown({ text, profile }: { text: string; profile: MarkdownPro
 
 const HEADING_TAGS = { 1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4', 5: 'h5', 6: 'h6' } as const;
 
-/**
- * Fence info string → diff highlighting profile. Keys are the language names used in comments.
- * Values are the only languages the `diff/syntax.ts` lexer knows.
- */
-const FENCE_LANGUAGES: Readonly<Record<string, LanguageId>> = {
-    ts: 'ts',
-    typescript: 'ts',
-    tsx: 'ts',
-    mts: 'ts',
-    cts: 'ts',
-    js: 'ts',
-    javascript: 'ts',
-    jsx: 'ts',
-    mjs: 'ts',
-    cjs: 'ts',
-    py: 'py',
-    python: 'py',
-    go: 'go',
-    golang: 'go',
-    json: 'json',
-    yaml: 'yaml',
-    yml: 'yaml',
-    css: 'css',
-    md: 'md',
-    markdown: 'md',
-};
-
 function renderBlock(block: MarkdownBlock, index: number): ReactNode {
     switch (block.kind) {
         case 'heading': {
@@ -72,10 +45,11 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
             );
         }
         case 'code': {
-            const language = block.lang === null ? undefined : FENCE_LANGUAGES[block.lang];
+            // Unrecognised language: keep the fence as text, with the info string still visible in `data-lang`.
+            const language = block.lang === null ? null : languageByName(block.lang);
             return (
                 <pre key={index} className="md-pre" data-lang={block.lang ?? undefined}>
-                    <code>{language === undefined ? block.text : highlighted(block.text, language)}</code>
+                    <code>{language === null ? block.text : highlighted(block.text, language)}</code>
                 </pre>
             );
         }
@@ -139,23 +113,24 @@ function alignStyle(align: TableAlign): CSSProperties | undefined {
 }
 
 /**
- * Highlight the fence body with the same lexer as the diff. It keeps no state between lines,
- * so processing one line at a time is exactly what it expects.
+ * Highlight fence contents with the same engine as the diff. A fence is a complete code fragment,
+ * so highlight it in one call rather than line by line.
  */
 function highlighted(text: string, language: LanguageId): ReactNode[] {
+    const tokens = highlightText(text, language);
     return text.split('\n').map((line, index) => (
         <Fragment key={index}>
             {index === 0 ? null : '\n'}
-            {lineTokens(line, language)}
+            {lineTokens(line, tokens[index] ?? [])}
         </Fragment>
     ));
 }
 
-function lineTokens(line: string, language: LanguageId): ReactNode[] {
+function lineTokens(line: string, tokens: readonly SyntaxToken[]): ReactNode[] {
     const nodes: ReactNode[] = [];
     let at = 0;
 
-    for (const token of tokenizeLine(line, language)) {
+    for (const token of tokens) {
         if (token.from > at) {
             nodes.push(line.slice(at, token.from));
         }

@@ -61,6 +61,7 @@ Maintenance: each new decision gets a dated entry in its section. When supersedi
 - **2026-08-27 · The ±20 step belongs in gaps between hunks, and the file card header button expands the entire file.** Supersedes `docs/design/SPEC-elements.md §2.13` for the ±20 button.
 - **2026-08-28 · Loaded context is not persisted.** Expanded gaps live in tab memory. Context provides a view around changes rather than review progress, and does not change file read status.
 
+
 ## Route
 
 - **2026-08-25 · The route snapshot contains only model output. The UI calculates derived data.** The snapshot contains the plan (id, number, tier, title), stop content (paragraph, bridge, anchors, test digest, dropped assertions, validator notes), summary, traversal order and provenance. The UI derives file chips, counters, coverage fractions and the contents of "Other" from anchors and its own diff model. The snapshot has no derived fields, so they cannot drift out of sync. The model places anchors by file path, and the validator converts them to `fileId`.

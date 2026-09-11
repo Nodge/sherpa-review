@@ -17,8 +17,9 @@ interface DeclarationPattern {
     group: number;
 }
 
-const DECLARATIONS: Readonly<Record<LanguageId, readonly DeclarationPattern[]>> = {
-    ts: [
+/** If a language is absent from the table, do not look for declarations. Guessing an "entity" in an unfamiliar grammar gives false results. */
+const DECLARATIONS: Readonly<Partial<Record<LanguageId, readonly DeclarationPattern[]>>> = {
+    typescript: [
         {
             re: /^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\*?|class|interface|enum|namespace|type)\s+([A-Za-z_$][\w$]*)/,
             group: 1,
@@ -30,16 +31,11 @@ const DECLARATIONS: Readonly<Record<LanguageId, readonly DeclarationPattern[]>> 
             group: 1,
         },
     ],
-    py: [{ re: /^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_]\w*)/, group: 1 }],
+    python: [{ re: /^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_]\w*)/, group: 1 }],
     go: [
         { re: /^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)/, group: 1 },
         { re: /^\s*type\s+([A-Za-z_]\w*)/, group: 1 },
     ],
-    // Data has no declarations. Guessing an "entity" in json/yaml/css/md would be misleading.
-    json: [],
-    yaml: [],
-    css: [],
-    md: [],
 };
 
 export interface EntityInput {
@@ -101,7 +97,7 @@ function declarationName(text: string, language: LanguageId | null): string | nu
     if (language === null) {
         return null;
     }
-    for (const pattern of DECLARATIONS[language]) {
+    for (const pattern of DECLARATIONS[language] ?? []) {
         const match = pattern.re.exec(text);
         const name = match?.[pattern.group];
         if (name !== undefined) {

@@ -93,6 +93,45 @@ describe('diff parser on real fixture patches', () => {
     });
 });
 
+describe('hunk highlighting by side', () => {
+    /** Line categories with their text show what is highlighted without offset arithmetic. */
+    function painted(model: DiffFileModel, index: number): [string, string][] {
+        const line = hunks(model)[0]?.lines[index];
+        if (line === undefined) {
+            throw new Error(`no line at index ${String(index)}`);
+        }
+        return (line.tokens ?? []).map((token) => [token.kind, line.text.slice(token.from, token.to)]);
+    }
+
+    it('a comment opened on the old side does not leak into an added line', () => {
+        const model = modelOf(
+            patchOf(['@@ -10,2 +10,2 @@', '-/* legacy note', '+const answer = 42;', ' still inside */']),
+        );
+
+        expect(painted(model, 0)).toEqual([['comment', '/* legacy note']]);
+        expect(painted(model, 1)).toEqual([
+            ['keyword', 'const'],
+            ['string', '42'],
+        ]);
+    });
+
+    it('highlights every line of a multiline comment', () => {
+        const model = modelOf(
+            patchOf(['@@ -10,3 +10,3 @@', '+/* open', '+   body', '+   close */', '-const a = 1;']),
+        );
+
+        expect(painted(model, 0)).toEqual([['comment', '/* open']]);
+        expect(painted(model, 1)).toEqual([['comment', '   body']]);
+        expect(painted(model, 2)).toEqual([['comment', '   close */']]);
+    });
+
+    it('gives no tokens to a file without a registered language', () => {
+        const model = modelOf(patchOf(['@@ -1,1 +1,1 @@', '+const a = 1;']), 'services/orders/.gitignore');
+
+        expect(hunks(model)[0]?.lines[0]?.tokens).toBeUndefined();
+    });
+});
+
 describe('raw edge cases', () => {
     it('binary: no content, explicit model variant', () => {
         const model = parse(fileByPath('edge', 'services/orders/assets/edit-window-flow.png'));

@@ -60,8 +60,8 @@ describe('markdown, comment profile', () => {
     });
 
     it('sets only data-lang for an unknown language and omits the attribute for a fence without a language', () => {
-        expect(comment('```rust\nfn main() {}\n```')).toBe(
-            '<pre class="md-pre" data-lang="rust"><code>fn main() {}</code></pre>',
+        expect(comment('```brainfuck\n+[----->+++<]>.\n```')).toBe(
+            '<pre class="md-pre" data-lang="brainfuck"><code>+[-----&gt;+++&lt;]&gt;.</code></pre>',
         );
         expect(comment('```\nfn main() {}\n```')).toBe('<pre class="md-pre"><code>fn main() {}</code></pre>');
     });

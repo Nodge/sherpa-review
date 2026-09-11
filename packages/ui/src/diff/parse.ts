@@ -11,8 +11,9 @@ import type {
     DiffParseRequest,
     LanguageId,
     ModeChange,
+    SyntaxToken,
 } from './model.js';
-import { languageOf, tokenizeLine } from './syntax.js';
+import { highlightable, highlightText, languageOf } from './syntax.js';
 import { diffWords } from './word-diff.js';
 
 /**
@@ -202,12 +203,7 @@ function readHunk(
 
     markWords(body);
     if (language !== null) {
-        for (const line of body) {
-            const tokens = tokenizeLine(line.text, language);
-            if (tokens.length > 0) {
-                line.tokens = tokens;
-            }
-        }
+        highlightHunk(body, language);
     }
 
     const hunkSection = section.length === 0 ? null : section;
@@ -229,6 +225,54 @@ function readHunk(
     };
 
     return { hunk, malformed, next: index };
+}
+
+/**
+ * Highlight a hunk by side, not line by line: old (`del` + context) and new (`add` + context)
+ * are assembled into separate texts and highlighted as a whole. Line-by-line highlighting fails for multiline
+ * comments and template strings, which then get colour only on the first line. Mixing sides fails too:
+ * two file versions mixed together are not code. A hunk is a fragment for hljs, which is fine:
+ * its modes tolerate text that starts and ends in the middle of a construct.
+ *
+ * Context takes tokens from the new side, which the reviewer reads as the current code.
+ */
+function highlightHunk(lines: readonly DiffLine[], language: LanguageId): void {
+    const oldSide = lines.filter((line) => line.kind !== 'add');
+    const newSide = lines.filter((line) => line.kind !== 'del');
+    const oldTokens = sideTokens(oldSide, language);
+    const newTokens = sideTokens(newSide, language);
+
+    if (newTokens !== null) {
+        for (const [index, line] of newSide.entries()) {
+            setTokens(line, newTokens[index]);
+        }
+    }
+    if (oldTokens !== null) {
+        for (const [index, line] of oldSide.entries()) {
+            if (line.kind === 'del' || newTokens === null) {
+                setTokens(line, oldTokens[index]);
+            }
+        }
+    }
+}
+
+/** Tokens for one side of a hunk. null means the side is empty or exceeds the length limit. */
+function sideTokens(lines: readonly DiffLine[], language: LanguageId): SyntaxToken[][] | null {
+    if (lines.length === 0) {
+        return null;
+    }
+    const texts = lines.map((line) => line.text);
+    if (!highlightable(texts)) {
+        return null;
+    }
+    return highlightText(texts.join('\n'), language);
+}
+
+/** An empty token set is omitted from the model: the line simply has no `tokens` key. */
+function setTokens(line: DiffLine, tokens: SyntaxToken[] | undefined): void {
+    if (tokens !== undefined && tokens.length > 0) {
+        line.tokens = tokens;
+    }
 }
 
 /**

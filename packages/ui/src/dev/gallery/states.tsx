@@ -12,6 +12,7 @@ import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
 import { UI_VERSION } from '../../version.js';
 import { DIFF_STATES } from './diff-states.tsx';
+import { SYNTAX_STATES } from './syntax-states.tsx';
 import { FULL_DIFF_STATES } from './full-diff-states.tsx';
 import { REVIEW_COMPLETION_STATES } from './review-completion-states.tsx';
 import { OVERVIEW_STATES } from './overview-states.tsx';
@@ -180,6 +181,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...DIFF_STATES.map((state) => ({
         id: state.id,
         group: 'Diff',
+        title: state.title,
+        render: state.render,
+    })),
+    ...SYNTAX_STATES.map((state) => ({
+        id: state.id,
+        group: 'Syntax highlighting',
         title: state.title,
         render: state.render,
     })),

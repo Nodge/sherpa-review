@@ -1,309 +1,302 @@
-import type { LanguageId, SyntaxToken } from './model.js';
+import type { Element, RootContent } from 'hast';
+
+import { lowlight } from './languages.js';
+import type { LanguageId, SyntaxKind, SyntaxToken } from './model.js';
 
 /**
- * Line-by-line highlighting lexer. docs/design/README.md §1: highlighting is "intentionally minimal", four categories
- * without claiming to parse the language. One rule for ambiguous cases: when unsure, use plain.
+ * Syntax highlighting with highlight.js (`lowlight` wrapper, grammar registry in `languages.ts`).
  *
- * The lexer deliberately keeps no state between lines. A hunk mixes lines from the old and new versions,
- * so shared state (an open block comment) would give incorrect results.
- * Multiline constructs are approximated within each line (JSDoc continuation,
- * an unclosed `/*`, Python triple quotes).
+ * docs/design/README.md §1: highlighting is "intentionally minimal", with 4 categories. hljs has
+ * an order of magnitude more scopes, so this table maps scopes to categories. Anything absent inherits
+ * its parent category, with plain at the root. The rule for ambiguous cases is unchanged: when in doubt, use plain.
  */
 
-interface LanguageProfile {
-    keywords: ReadonlySet<string>;
-    lineComment: readonly string[];
-    blockComment: { open: string; close: string } | null;
-    quotes: readonly string[];
-    /** Python triple quotes: highlight the docstring as a string to the end of the line. */
-    tripleQuotes: boolean;
-    /** `@decorator` in Python/TS, `@media` in CSS. */
-    decorators: boolean;
-    numbers: boolean;
+/**
+ * hljs scope → highlighting category. The key is the first scope segment. Compound scopes (`title.function`,
+ * `char.escape`) arrive in hast with `hljs-title` or `hljs-char` as the first class.
+ *
+ * A `null` value resets the category: `subst` (template string substitution) is inside `string`,
+ * but it is code, not a string. A missing key inherits the parent category, so
+ * `doctag` inside a comment remains a comment, and `title` inside `keyword` gets no color.
+ */
+const SCOPE_KINDS = new Map<string, SyntaxKind | null>([
+    ['keyword', 'keyword'],
+    ['built_in', 'keyword'],
+    ['type', 'keyword'],
+    ['literal', 'keyword'],
+    // Markdown heading: the old lexer used keyword colour, so keep that colour.
+    ['section', 'keyword'],
+    ['string', 'string'],
+    // JSON/YAML keys and XML attributes keep configs from fading to values alone.
+    ['attr', 'string'],
+    // docs/design/README.md §1 gives numbers the same color as strings.
+    ['number', 'string'],
+    ['regexp', 'string'],
+    ['char', 'string'],
+    ['symbol', 'string'],
+    // Markdown code: colour only inline code in backticks, see `kindOf`.
+    ['code', 'string'],
+    ['comment', 'comment'],
+    ['doctag', 'comment'],
+    // `@decorator`, `#include`, shebang, C# attributes: everything hljs calls meta.
+    ['meta', 'decorator'],
+    ['subst', null],
+]);
+
+/**
+ * Above this size, highlighting is not worth the cost: it is a minified bundle or generated
+ * data that nobody will read line by line anyway, and hljs takes tens of
+ * milliseconds on such text. The per-line threshold matches `MARKUP_LIMIT` in `diff-view/line-segments.ts`:
+ * long lines there already render without markup.
+ */
+export const MAX_HIGHLIGHT_CHARS = 200_000;
+const MAX_HIGHLIGHT_LINE = 4000;
+
+/** The fragment is worth highlighting: not a minified bundle and no excessively long lines. */
+export function highlightable(lines: readonly string[]): boolean {
+    let total = 0;
+    for (const line of lines) {
+        if (line.length > MAX_HIGHLIGHT_LINE) {
+            return false;
+        }
+        total += line.length + 1;
+        if (total > MAX_HIGHLIGHT_CHARS) {
+            return false;
+        }
+    }
+    return true;
 }
 
-const TS_KEYWORDS = keywords(`
-    export import from as default declare namespace module
-    const let var function class interface type enum extends implements
-    return if else for while do switch case break continue new delete void
-    async await yield typeof instanceof in of this super
-    try catch finally throw
-    readonly public private protected static get set abstract
-    satisfies keyof infer null undefined true false
-`);
+/** File extensions → hljs language. The whole JS family uses `typescript`: its grammar is a superset. */
+const EXTENSIONS = new Map<string, LanguageId>([
+    ['ts', 'typescript'],
+    ['tsx', 'typescript'],
+    ['mts', 'typescript'],
+    ['cts', 'typescript'],
+    ['js', 'typescript'],
+    ['jsx', 'typescript'],
+    ['mjs', 'typescript'],
+    ['cjs', 'typescript'],
+    ['py', 'python'],
+    ['pyi', 'python'],
+    ['pyw', 'python'],
+    ['go', 'go'],
+    ['java', 'java'],
+    ['kt', 'kotlin'],
+    ['kts', 'kotlin'],
+    ['c', 'c'],
+    ['cc', 'cpp'],
+    ['cpp', 'cpp'],
+    ['cxx', 'cpp'],
+    ['h', 'cpp'],
+    ['hh', 'cpp'],
+    ['hpp', 'cpp'],
+    ['rs', 'rust'],
+    ['rb', 'ruby'],
+    ['php', 'php'],
+    ['cs', 'csharp'],
+    ['swift', 'swift'],
+    ['scala', 'scala'],
+    ['sc', 'scala'],
+    ['sql', 'sql'],
+    ['sh', 'bash'],
+    ['bash', 'bash'],
+    ['zsh', 'bash'],
+    ['yaml', 'yaml'],
+    ['yml', 'yaml'],
+    ['json', 'json'],
+    ['css', 'css'],
+    ['scss', 'scss'],
+    ['less', 'less'],
+    ['xml', 'xml'],
+    ['html', 'xml'],
+    ['htm', 'xml'],
+    ['svg', 'xml'],
+    ['md', 'markdown'],
+    ['markdown', 'markdown'],
+    ['mk', 'makefile'],
+    ['proto', 'protobuf'],
+    ['ini', 'ini'],
+    ['toml', 'ini'],
+    ['cfg', 'ini'],
+    ['properties', 'properties'],
+    ['graphql', 'graphql'],
+    ['gql', 'graphql'],
+    ['lua', 'lua'],
+    ['pl', 'perl'],
+    ['pm', 'perl'],
+    ['r', 'r'],
+    ['cmake', 'cmake'],
+    ['groovy', 'groovy'],
+    ['gradle', 'groovy'],
+    ['dart', 'dart'],
+    ['hs', 'haskell'],
+    ['erl', 'erlang'],
+    ['ex', 'elixir'],
+    ['exs', 'elixir'],
+    ['clj', 'clojure'],
+    ['cljs', 'clojure'],
+    ['diff', 'diff'],
+    ['patch', 'diff'],
+]);
 
-const PY_KEYWORDS = keywords(`
-    def class lambda return yield pass raise import from as global nonlocal
-    if elif else for while break continue try except finally with assert del
-    in is not and or None True False async await self
-`);
+/** Files recognized by their full name instead of their extension. */
+const FILENAMES = new Map<string, LanguageId>([
+    ['makefile', 'makefile'],
+    ['gnumakefile', 'makefile'],
+    ['dockerfile', 'dockerfile'],
+    ['cmakelists.txt', 'cmake'],
+    ['gemfile', 'ruby'],
+    ['rakefile', 'ruby'],
+]);
 
-const GO_KEYWORDS = keywords(`
-    package import func type struct interface map chan const var
-    return if else for range switch case default break continue fallthrough
-    go defer select goto nil true false
-`);
+/**
+ * Fence info strings that the hljs registry does not know by that name. It has enough aliases
+ * of its own (`ts`, `py`, `c++`, `yml`), so the table only fills the gaps.
+ */
+const NAME_ALIASES = new Map<string, LanguageId>([
+    ['cfg', 'ini'],
+    ['conf', 'ini'],
+    ['docker', 'dockerfile'],
+    ['jsonc', 'json'],
+    ['plain', 'plaintext'],
+    ['text', 'plaintext'],
+]);
 
-const JSON_KEYWORDS = keywords('true false null');
-const YAML_KEYWORDS = keywords('true false null yes no');
-
-const PROFILES: Record<Exclude<LanguageId, 'md'>, LanguageProfile> = {
-    ts: {
-        keywords: TS_KEYWORDS,
-        lineComment: ['//'],
-        blockComment: { open: '/*', close: '*/' },
-        quotes: ['"', "'", '`'],
-        tripleQuotes: false,
-        decorators: true,
-        numbers: true,
-    },
-    py: {
-        keywords: PY_KEYWORDS,
-        lineComment: ['#'],
-        blockComment: null,
-        quotes: ['"', "'"],
-        tripleQuotes: true,
-        decorators: true,
-        numbers: true,
-    },
-    go: {
-        keywords: GO_KEYWORDS,
-        lineComment: ['//'],
-        blockComment: { open: '/*', close: '*/' },
-        quotes: ['"', '`'],
-        tripleQuotes: false,
-        decorators: false,
-        numbers: true,
-    },
-    json: {
-        keywords: JSON_KEYWORDS,
-        lineComment: [],
-        blockComment: null,
-        quotes: ['"'],
-        tripleQuotes: false,
-        decorators: false,
-        numbers: true,
-    },
-    yaml: {
-        keywords: YAML_KEYWORDS,
-        lineComment: ['#'],
-        blockComment: null,
-        quotes: ['"', "'"],
-        tripleQuotes: false,
-        decorators: false,
-        numbers: true,
-    },
-    css: {
-        keywords: keywords(''),
-        lineComment: [],
-        blockComment: { open: '/*', close: '*/' },
-        quotes: ['"', "'"],
-        tripleQuotes: false,
-        decorators: true,
-        numbers: true,
-    },
-};
-
-const EXTENSIONS: Readonly<Record<string, LanguageId>> = {
-    ts: 'ts',
-    tsx: 'ts',
-    mts: 'ts',
-    cts: 'ts',
-    js: 'ts',
-    jsx: 'ts',
-    mjs: 'ts',
-    cjs: 'ts',
-    py: 'py',
-    pyi: 'py',
-    go: 'go',
-    json: 'json',
-    yaml: 'yaml',
-    yml: 'yaml',
-    css: 'css',
-    md: 'md',
-};
-
-/** null means the extension has no profile. Render the file without highlighting. */
+/** null means the registry has no language for this file: it renders without highlighting. */
 export function languageOf(path: string): LanguageId | null {
-    const name = path.slice(path.lastIndexOf('/') + 1);
+    const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+
+    const byName = FILENAMES.get(name);
+    if (byName !== undefined) {
+        return registered(byName);
+    }
+
     const dot = name.lastIndexOf('.');
     if (dot <= 0) {
         return null;
     }
-    return EXTENSIONS[name.slice(dot + 1).toLowerCase()] ?? null;
-}
-
-export function tokenizeLine(text: string, language: LanguageId): SyntaxToken[] {
-    if (language === 'md') {
-        return tokenizeMarkdown(text);
-    }
-
-    const profile = PROFILES[language];
-    const continuation = commentContinuation(text, profile);
-    if (continuation !== null) {
-        return [continuation];
-    }
-
-    const tokens: SyntaxToken[] = [];
-    let i = 0;
-    while (i < text.length) {
-        const char = text[i] ?? '';
-
-        const lineComment = profile.lineComment.find((prefix) => text.startsWith(prefix, i));
-        if (lineComment !== undefined) {
-            tokens.push({ from: i, to: text.length, kind: 'comment' });
-            break;
-        }
-
-        const block = profile.blockComment;
-        if (block !== null && text.startsWith(block.open, i)) {
-            const close = text.indexOf(block.close, i + block.open.length);
-            const to = close === -1 ? text.length : close + block.close.length;
-            tokens.push({ from: i, to, kind: 'comment' });
-            i = to;
-            continue;
-        }
-
-        if (profile.tripleQuotes && (text.startsWith('"""', i) || text.startsWith("'''", i))) {
-            const quote = text.slice(i, i + 3);
-            const close = text.indexOf(quote, i + 3);
-            const to = close === -1 ? text.length : close + 3;
-            tokens.push({ from: i, to, kind: 'string' });
-            i = to;
-            continue;
-        }
-
-        if (profile.quotes.includes(char)) {
-            const to = scanString(text, i, char);
-            tokens.push({ from: i, to, kind: 'string' });
-            i = to;
-            continue;
-        }
-
-        if (profile.decorators && char === '@' && isIdentifierStart(text[i + 1] ?? '')) {
-            const to = scanIdentifier(text, i + 1);
-            tokens.push({ from: i, to, kind: 'decorator' });
-            i = to;
-            continue;
-        }
-
-        if (isIdentifierStart(char)) {
-            const to = scanIdentifier(text, i);
-            if (profile.keywords.has(text.slice(i, to))) {
-                tokens.push({ from: i, to, kind: 'keyword' });
-            }
-            i = to;
-            continue;
-        }
-
-        if (profile.numbers && isDigit(char)) {
-            const to = scanNumber(text, i);
-            if (to > i) {
-                // `docs/design/README.md` §1 colours numbers like strings, without a separate category.
-                tokens.push({ from: i, to, kind: 'string' });
-                i = to;
-                continue;
-            }
-        }
-
-        i += 1;
-    }
-    return tokens;
+    const byExtension = EXTENSIONS.get(name.slice(dot + 1));
+    return byExtension === undefined ? null : registered(byExtension);
 }
 
 /**
- * A block comment continuation is a line starting with an asterisk (JSDoc body or closing
- * line). This is the lexer's only multiline guess. An expression wrapped onto a line starting
- * with an asterisk (`* 2;`) also gets highlighted as a comment, a trade-off of "intentionally minimal",
- * and a small one: JSDoc bodies are orders of magnitude more common in diffs.
+ * Language name (Markdown fence info string) → registry language. null means it is absent from the registry.
+ * The hljs registry resolves aliases (`ts`, `golang`, `c++`) itself.
  */
-const COMMENT_CONTINUATION_RE = /^\s*\*(\s|\/|$)/;
-
-function commentContinuation(text: string, profile: LanguageProfile): SyntaxToken | null {
-    if (profile.blockComment === null || !COMMENT_CONTINUATION_RE.test(text)) {
+export function languageByName(name: string): LanguageId | null {
+    const key = name.trim().toLowerCase().split(/\s+/)[0] ?? '';
+    if (key.length === 0) {
         return null;
     }
-    const from = text.indexOf('*');
-    return { from, to: text.length, kind: 'comment' };
+    return registered(NAME_ALIASES.get(key) ?? key);
 }
 
-const MD_HEADING_RE = /^ {0,3}#{1,6}\s/;
-
-/** Markdown: whole heading and inline code. The rest is plain text with nothing to highlight. */
-function tokenizeMarkdown(text: string): SyntaxToken[] {
-    if (MD_HEADING_RE.test(text)) {
-        return [{ from: 0, to: text.length, kind: 'keyword' }];
-    }
-
-    const tokens: SyntaxToken[] = [];
-    let i = 0;
-    while (i < text.length) {
-        if (text[i] !== '`') {
-            i += 1;
-            continue;
-        }
-        const close = text.indexOf('`', i + 1);
-        if (close === -1) {
-            break;
-        }
-        tokens.push({ from: i, to: close + 1, kind: 'string' });
-        i = close + 1;
-    }
-    return tokens;
+function registered(name: string): LanguageId | null {
+    return lowlight.registered(name) ? name : null;
 }
-
-/** End of a string literal: closing quote (with escapes handled) or end of line. */
-function scanString(text: string, start: number, quote: string): number {
-    let i = start + 1;
-    while (i < text.length) {
-        const char = text[i];
-        if (char === '\\') {
-            i += 2;
-            continue;
-        }
-        if (char === quote) {
-            return i + 1;
-        }
-        i += 1;
-    }
-    return text.length;
-}
-
-function scanIdentifier(text: string, start: number): number {
-    let i = start;
-    while (i < text.length && isIdentifierPart(text[i] ?? '')) {
-        i += 1;
-    }
-    return i;
-}
-
-const NUMBER_RE = /^(?:0[xXbBoO][0-9a-fA-F_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)n?/;
 
 /**
- * End of a numeric literal, or `start` if there is no number here. Digits followed immediately by a letter
- * (`01hq` in `key-01hq`) are not a number, they are part of something else.
+ * Multiline text tokens split into lines: the result index is the line number
+ * in `text.split('\n')`, and token offsets are relative to the start of each line. A token crossing a newline
+ * (block comment, template string) is split across lines.
  */
-function scanNumber(text: string, start: number): number {
-    const match = NUMBER_RE.exec(text.slice(start));
-    if (match === null) {
-        return start;
+export function highlightText(text: string, language: LanguageId): SyntaxToken[][] {
+    const lines: SyntaxToken[][] = text.split('\n').map(() => []);
+    if (!lowlight.registered(language)) {
+        return lines;
     }
-    const to = start + match[0].length;
-    return isIdentifierPart(text[to] ?? '') ? start : to;
+
+    walk(lowlight.highlight(language, text).children, null, lines, { line: 0, column: 0 });
+    return lines.map(merge);
 }
 
-function isIdentifierStart(char: string): boolean {
-    return /[A-Za-z_$]/.test(char);
+/** Tokens for a single line, a thin wrapper around `highlightText`. */
+export function tokenizeLine(text: string, language: LanguageId): SyntaxToken[] {
+    return highlightText(text, language)[0] ?? [];
 }
 
-function isIdentifierPart(char: string): boolean {
-    return /[\w$]/.test(char);
+/** Traversal position in the source text: hast returns nodes in order, so this is enough. */
+interface Cursor {
+    line: number;
+    column: number;
 }
 
-function isDigit(char: string): boolean {
-    return char >= '0' && char <= '9';
+function walk(nodes: readonly RootContent[], kind: SyntaxKind | null, lines: SyntaxToken[][], cursor: Cursor): void {
+    for (const node of nodes) {
+        if (node.type === 'text') {
+            emit(node.value, kind, lines, cursor);
+            continue;
+        }
+        if (node.type === 'element') {
+            walk(node.children, kindOf(node, kind), lines, cursor);
+        }
+    }
 }
 
-function keywords(list: string): ReadonlySet<string> {
-    return new Set(list.split(/\s+/).filter((word) => word.length > 0));
+/** Node category: its own if the table has its scope (including a reset), otherwise its parent category. */
+function kindOf(node: Element, parent: SyntaxKind | null): SyntaxKind | null {
+    const classes = node.properties.className;
+    const first = Array.isArray(classes) ? classes[0] : undefined;
+    if (typeof first !== 'string' || !first.startsWith('hljs-')) {
+        return parent;
+    }
+    const scope = first.slice('hljs-'.length);
+    if (!SCOPE_KINDS.has(scope)) {
+        return parent;
+    }
+    // hljs marks both inline code in backticks and an entire fenced block, including its fences,
+    // with the `code` scope. Colour inline code as a string (as the old lexer did), and leave the fence
+    // plain: giving every code block body in an .md diff string colour fills the screen with noise.
+    if (scope === 'code' && spansLines(node)) {
+        return parent;
+    }
+    const own = SCOPE_KINDS.get(scope) ?? null;
+    // Inside meta (`#include <x>`, `@dataclass(frozen=True)`), hljs marks both keywords
+    // and literals. The reviewer sees a single construct, so decorator colour holds to the end,
+    // with only strings overriding it.
+    if (parent === 'decorator' && own !== 'string') {
+        return parent;
+    }
+    return own;
+}
+
+/** The node text spans more than one line. */
+function spansLines(node: Element): boolean {
+    return node.children.some(
+        (child) =>
+            (child.type === 'text' && child.value.includes('\n')) ||
+            (child.type === 'element' && spansLines(child)),
+    );
+}
+
+/** Convert node text into tokens, one piece per line. Empty pieces and plain are not emitted. */
+function emit(value: string, kind: SyntaxKind | null, lines: SyntaxToken[][], cursor: Cursor): void {
+    for (const [index, piece] of value.split('\n').entries()) {
+        if (index > 0) {
+            cursor.line += 1;
+            cursor.column = 0;
+        }
+        if (piece.length === 0) {
+            continue;
+        }
+        if (kind !== null) {
+            lines[cursor.line]?.push({ from: cursor.column, to: cursor.column + piece.length, kind });
+        }
+        cursor.column += piece.length;
+    }
+}
+
+/** Merge adjacent tokens of the same category, which hljs splits into nested nodes. */
+function merge(tokens: readonly SyntaxToken[]): SyntaxToken[] {
+    const merged: SyntaxToken[] = [];
+    for (const token of tokens) {
+        const last = merged.at(-1);
+        if (last?.kind === token.kind && last.to === token.from) {
+            merged[merged.length - 1] = { ...last, to: token.to };
+            continue;
+        }
+        merged.push(token);
+    }
+    return merged;
 }

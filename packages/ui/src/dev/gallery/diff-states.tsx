@@ -239,7 +239,8 @@ function ParseErrorState({ fixture, path }: { fixture: FixtureName; path: string
     );
 }
 
-function galleryActions(store: DiffViewStore): FileCardActions {
+/** Card actions without a server: everything runs in the store synchronously. */
+export function galleryActions(store: DiffViewStore): FileCardActions {
     return {
         onViewed: (fileId, viewed) => {
             store.markViewed(fileId, viewed);

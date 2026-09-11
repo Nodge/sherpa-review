@@ -1,7 +1,7 @@
 import type { FileContent } from '@sherpa/protocol';
 
-import type { DiffBlock, DiffFileModel, DiffGap, DiffHunk, DiffLine } from '../diff/model.js';
-import { tokenizeLine } from '../diff/syntax.js';
+import type { DiffBlock, DiffFileModel, DiffGap, DiffHunk, DiffLine, LanguageId } from '../diff/model.js';
+import { highlightable, highlightText } from '../diff/syntax.js';
 
 /** Context gap bar expansion step. */
 export const EXPAND_STEP = 20;
@@ -264,16 +264,34 @@ function reveal(
             break;
         }
 
-        const line: DiffLine = { kind: 'context', oldLine, newLine, text, sourceGapKey };
-        if (model.language !== null) {
-            const tokens = tokenizeLine(text, model.language);
-            if (tokens.length > 0) {
-                line.tokens = tokens;
-            }
-        }
-        lines.push(line);
+        lines.push({ kind: 'context', oldLine, newLine, text, sourceGapKey });
     }
+
+    highlightRevealed(lines, model.language);
     return lines;
+}
+
+/**
+ * Expanded lines are highlighted together as a contiguous file fragment. Highlighting line by line
+ * cannot handle its multiline constructs (see `highlightHunk` in `diff/parse.ts`).
+ * The length safeguard matches the parser.
+ */
+function highlightRevealed(lines: readonly DiffLine[], language: LanguageId | null): void {
+    if (language === null || lines.length === 0) {
+        return;
+    }
+    const texts = lines.map((line) => line.text);
+    if (!highlightable(texts)) {
+        return;
+    }
+
+    const tokens = highlightText(texts.join('\n'), language);
+    for (const [index, line] of lines.entries()) {
+        const lineTokens = tokens[index];
+        if (lineTokens !== undefined && lineTokens.length > 0) {
+            line.tokens = lineTokens;
+        }
+    }
 }
 
 /** Append expanded lines to an existing hunk. */

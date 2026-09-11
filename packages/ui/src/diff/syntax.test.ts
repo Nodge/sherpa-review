@@ -1,35 +1,77 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LanguageId, SyntaxKind } from './model.js';
-import { languageOf, tokenizeLine } from './syntax.js';
+import { highlightable, highlightText, languageByName, languageOf, tokenizeLine } from './syntax.js';
 
 /** Tokens as "category → text" pairs show exactly what received colour. */
 function paint(text: string, language: LanguageId): [SyntaxKind, string][] {
     return tokenizeLine(text, language).map((token) => [token.kind, text.slice(token.from, token.to)]);
 }
 
-describe('language by extension', () => {
-    it('maps the whole JS family to one profile', () => {
-        expect(languageOf('src/a.ts')).toBe('ts');
-        expect(languageOf('src/a.tsx')).toBe('ts');
-        expect(languageOf('src/a.jsx')).toBe('ts');
-        expect(languageOf('src/a.mjs')).toBe('ts');
+/** The same for multiline text: an array of lines, each with its own pairs. */
+function paintText(text: string, language: LanguageId): [SyntaxKind, string][][] {
+    const lines = text.split('\n');
+    return highlightText(text, language).map((tokens, index) =>
+        tokens.map((token) => [token.kind, (lines[index] ?? '').slice(token.from, token.to)]),
+    );
+}
+
+describe('language from the file path', () => {
+    it('the entire JS family uses the typescript grammar', () => {
+        expect(languageOf('src/a.ts')).toBe('typescript');
+        expect(languageOf('src/a.tsx')).toBe('typescript');
+        expect(languageOf('src/a.jsx')).toBe('typescript');
+        expect(languageOf('src/a.mjs')).toBe('typescript');
+        expect(languageOf('src/a.cts')).toBe('typescript');
     });
 
-    it('other profiles and files without a profile', () => {
-        expect(languageOf('service/order_service.py')).toBe('py');
+    it('extensions for other languages', () => {
+        expect(languageOf('service/order_service.py')).toBe('python');
         expect(languageOf('cmd/main.go')).toBe('go');
         expect(languageOf('services/orders/.github/CODEOWNERS')).toBe('yaml');
-        expect(languageOf('README.md')).toBe('md');
-        expect(languageOf('scripts/rollout.sh')).toBeNull();
-        expect(languageOf('Makefile')).toBeNull();
+        expect(languageOf('README.md')).toBe('markdown');
+        expect(languageOf('api/order.proto')).toBe('protobuf');
+        expect(languageOf('src/main/java/Order.kt')).toBe('kotlin');
+        expect(languageOf('src/lib.rs')).toBe('rust');
+        expect(languageOf('include/order.hpp')).toBe('cpp');
+    });
+
+    it('languages missing from the old lexer no longer return null', () => {
+        expect(languageOf('scripts/rollout.sh')).toBe('bash');
+        expect(languageOf('Makefile')).toBe('makefile');
+        expect(languageOf('build/Dockerfile')).toBe('dockerfile');
+        expect(languageOf('CMakeLists.txt')).toBe('cmake');
+    });
+
+    it('files with no language', () => {
         expect(languageOf('.gitignore')).toBeNull();
+        expect(languageOf('pnpm-lock.lock')).toBeNull();
+        expect(languageOf('assets/logo.png')).toBeNull();
+        expect(languageOf('LICENSE')).toBeNull();
+    });
+
+    it('language names use hljs aliases and a table of missing names, unknown names return null', () => {
+        expect(languageByName('ts')).toBe('ts');
+        expect(languageByName('golang')).toBe('golang');
+        expect(languageByName('C++')).toBe('c++');
+        expect(languageByName('docker')).toBe('dockerfile');
+        expect(languageByName('ts title="a.ts"')).toBe('ts');
+        expect(languageByName('brainfuck')).toBeNull();
+        expect(languageByName('   ')).toBeNull();
+    });
+
+    it('Object.prototype property names are ordinary unknown names and do not crash', () => {
+        expect(languageByName('constructor')).toBeNull();
+        expect(languageByName('__proto__')).toBeNull();
+        expect(languageOf('src/constructor')).toBeNull();
+        expect(languageOf('src/a.constructor')).toBeNull();
+        expect(languageOf('src/__proto__.toString')).toBeNull();
     });
 });
 
-describe('TypeScript lexer', () => {
-    it('keywords, strings and numbers in a fixture line', () => {
-        expect(paint('export const EDIT_WINDOW_MS = 30 * 60 * 1000;', 'ts')).toEqual([
+describe('highlight categories', () => {
+    it('highlights TypeScript keywords and numbers, with numbers in the string color', () => {
+        expect(paint('export const EDIT_WINDOW_MS = 30 * 60 * 1000;', 'typescript')).toEqual([
             ['keyword', 'export'],
             ['keyword', 'const'],
             ['string', '30'],
@@ -39,105 +81,155 @@ describe('TypeScript lexer', () => {
     });
 
     it('an import path is a string', () => {
-        expect(paint('import { Clock } from "../infra/clock";', 'ts')).toEqual([
+        expect(paint('import { Clock } from "../infra/clock";', 'typescript')).toEqual([
             ['keyword', 'import'],
             ['keyword', 'from'],
             ['string', '"../infra/clock"'],
         ]);
     });
 
-    it('single-line JSDoc and multiline continuation', () => {
-        expect(paint('/** How long the window stays open. */', 'ts')).toEqual([
-            ['comment', '/** How long the window stays open. */'],
-        ]);
-        expect(paint('     * courier has been dispatched — dispatch wins.', 'ts')).toEqual([
-            ['comment', '* courier has been dispatched — dispatch wins.'],
-        ]);
-    });
-
-    it('an expression wrapped onto a line starting with an asterisk is highlighted as a comment, a known heuristic trade-off', () => {
-        expect(paint('        * 2;', 'ts')).toEqual([['comment', '* 2;']]);
-    });
-
-    it('decorator', () => {
-        expect(paint('@Injectable()', 'ts')).toEqual([['decorator', '@Injectable']]);
-    });
-
     it('an ordinary identifier has no category and falls back to plain', () => {
-        expect(paint('recomputeEditWindow(order);', 'ts')).toEqual([]);
+        expect(paint('recomputeEditWindow(order);', 'typescript')).toEqual([]);
     });
 
-    it('highlights an unclosed string to the end of the line and handles escapes', () => {
-        expect(paint('const s = "unterminated', 'ts')).toEqual([
-            ['keyword', 'const'],
-            ['string', '"unterminated'],
-        ]);
-        expect(paint('const s = "a\\"b";', 'ts')).toEqual([
-            ['keyword', 'const'],
-            ['string', '"a\\"b"'],
+    it('a decorator has its own category', () => {
+        expect(paint('@Injectable()', 'typescript')).toEqual([['decorator', '@Injectable']]);
+    });
+
+    it('a shebang receives decorator colour: hljs calls it meta', () => {
+        expect(paint('#!/bin/sh', 'bash')).toEqual([['decorator', '#!/bin/sh']]);
+    });
+
+    it('meta gets decorator colour throughout, with only strings overriding it inside', () => {
+        expect(paint('@dataclass(frozen=True)', 'python')).toEqual([['decorator', '@dataclass(frozen=True)']]);
+        expect(paint('#include <vector>', 'cpp')).toEqual([
+            ['decorator', '#include '],
+            ['string', '<vector>'],
         ]);
     });
-});
 
-describe('Python lexer', () => {
-    it('function declaration', () => {
-        expect(paint('def apply_edit(self, order: Order) -> None:', 'py')).toEqual([
+    it('highlights JSON and YAML keys in the string color', () => {
+        expect(paint('  "editWindowMs": 1800000,', 'json')).toEqual([
+            ['string', '"editWindowMs"'],
+            ['string', '1800000'],
+        ]);
+        expect(paint('replicas: 3', 'yaml')).toEqual([
+            ['string', 'replicas:'],
+            ['string', '3'],
+        ]);
+    });
+
+    it('python: declaration, literals and comment', () => {
+        expect(paint('def apply_edit(self, order: Order) -> None:', 'python')).toEqual([
             ['keyword', 'def'],
-            ['keyword', 'self'],
             ['keyword', 'None'],
         ]);
-    });
-
-    it('hash starts a comment through the end of the line', () => {
-        expect(paint('    total = 0  # running sum', 'py')).toEqual([
+        expect(paint('    total = 0  # running sum', 'python')).toEqual([
             ['string', '0'],
             ['comment', '# running sum'],
         ]);
     });
 
-    it('decorator and docstring', () => {
-        expect(paint('@dataclass(frozen=True)', 'py')).toEqual([
-            ['decorator', '@dataclass'],
-            ['keyword', 'True'],
+    it('go: keyword and string', () => {
+        expect(paint('func main() {', 'go')).toEqual([['keyword', 'func']]);
+        expect(paint('\tfmt.Println("hi")', 'go')).toEqual([['string', '"hi"']]);
+    });
+
+    it('markdown: headings are keyword, inline code is string', () => {
+        expect(paint('## Domain', 'markdown')).toEqual([['keyword', '## Domain']]);
+        expect(paint('- `order.ts` — the aggregate root.', 'markdown')).toEqual([['string', '`order.ts`']]);
+    });
+
+    it('markdown: a fenced code block does not get string colour throughout', () => {
+        expect(paintText('# Title\n\n```ts\nconst a = 1;\n```\n\ntext `inline` here', 'markdown')).toEqual([
+            [['keyword', '# Title']],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [['string', '`inline`']],
         ]);
-        expect(paint('    """Apply the edit if the window is open."""', 'py')).toEqual([
-            ['string', '"""Apply the edit if the window is open."""'],
+    });
+
+    it('a template string substitution is code, not a string', () => {
+        expect(paint('const t = `id-${String(x)} ok`;', 'typescript')).toEqual([
+            ['keyword', 'const'],
+            ['string', '`id-'],
+            // `String` is built_in inside subst: the string category resets and keyword takes over.
+            ['keyword', 'String'],
+            ['string', ' ok`'],
         ]);
-        expect(paint('    """Open docstring, closes on another line', 'py')).toEqual([
-            ['string', '"""Open docstring, closes on another line'],
+    });
+
+    it('a doctag inside a comment stays a comment instead of becoming a decorator', () => {
+        expect(paintText('/**\n * @param order the aggregate root\n */', 'typescript')).toEqual([
+            [['comment', '/**']],
+            [['comment', ' * @param order the aggregate root']],
+            [['comment', ' */']],
+        ]);
+    });
+
+    it('adjacent tokens of the same category merge: an escape inside a string stays one piece', () => {
+        expect(paint('const s = "a\\"b";', 'typescript')).toEqual([
+            ['keyword', 'const'],
+            ['string', '"a\\"b"'],
+        ]);
+    });
+
+    it('offsets use the raw string with tabs', () => {
+        expect(tokenizeLine('\tconst\tx = "tab";', 'typescript')).toEqual([
+            { from: 1, to: 6, kind: 'keyword' },
+            { from: 11, to: 16, kind: 'string' },
         ]);
     });
 });
 
-describe('data and markup lexers', () => {
-    it('yaml: comment, literals, numbers', () => {
-        expect(paint('  enabled: true  # off in main', 'yaml')).toEqual([
-            ['keyword', 'true'],
-            ['comment', '# off in main'],
+describe('multiline constructs', () => {
+    it('a block comment receives colour on all its lines, unlike with the line-by-line lexer', () => {
+        expect(paintText('/*\n * body\n */\nconst x = 1;', 'typescript')).toEqual([
+            [['comment', '/*']],
+            [['comment', ' * body']],
+            [['comment', ' */']],
+            [
+                ['keyword', 'const'],
+                ['string', '1'],
+            ],
         ]);
     });
 
-    it('yaml: digits within a word are not numbers', () => {
-        expect(paint('  secret: key-01hq', 'yaml')).toEqual([]);
-    });
-
-    it('json: literals and strings', () => {
-        expect(paint('  "strict": true,', 'json')).toEqual([
-            ['string', '"strict"'],
-            ['keyword', 'true'],
+    it('a Python docstring continues until the closing quotes', () => {
+        expect(paintText('"""doc\nmore"""\nx = 1', 'python')).toEqual([
+            [['string', '"""doc']],
+            [['string', 'more"""']],
+            [['string', '1']],
         ]);
     });
 
-    it('css: at-rule and block comment, number with a unit stays unhighlighted', () => {
-        expect(paint('@media (max-width: 640px) { /* narrow */', 'css')).toEqual([
-            ['decorator', '@media'],
-            ['comment', '/* narrow */'],
+    it('a token splits at newlines with offsets from the start of each line', () => {
+        const tokens = highlightText('  /* a\n b */', 'typescript');
+        expect(tokens).toEqual([
+            [{ from: 2, to: 6, kind: 'comment' }],
+            [{ from: 0, to: 5, kind: 'comment' }],
         ]);
-        expect(paint('  opacity: 0.72;', 'css')).toEqual([['string', '0.72']]);
     });
 
-    it('md: whole heading and inline code', () => {
-        expect(paint('## Domain', 'md')).toEqual([['keyword', '## Domain']]);
-        expect(paint('- `order.ts` — the aggregate root.', 'md')).toEqual([['string', '`order.ts`']]);
+    it('the output line count matches the input line count', () => {
+        expect(highlightText('a\n\nb\n', 'typescript')).toHaveLength(4);
+        expect(highlightText('', 'typescript')).toEqual([[]]);
+    });
+});
+
+describe('length limit', () => {
+    it('an ordinary fragment gets highlighted', () => {
+        expect(highlightable(['const a = 1;', 'const b = 2;'])).toBe(true);
+    });
+
+    it('a minified bundle does not: one line exceeds the markup threshold', () => {
+        expect(highlightable(['x'.repeat(4001)])).toBe(false);
+    });
+
+    it('generated data does not: the whole fragment exceeds the threshold', () => {
+        expect(highlightable(new Array<string>(2000).fill('y'.repeat(200)))).toBe(false);
     });
 });

@@ -108,8 +108,11 @@ export type DiffFileContent =
     /** No text diff: empty patch, rename/copy without edits, or mode-only change. */
     | { kind: 'none' };
 
-/** Languages with a highlighting profile. `ts` covers the whole JS family (ts/tsx/js/jsx/mjs/cjs). */
-export type LanguageId = 'ts' | 'py' | 'go' | 'json' | 'yaml' | 'css' | 'md';
+/**
+ * Language name in the highlight.js registry (`diff/languages.ts`): `typescript`, `python`, `bash`.
+ * A string, not a union: the registry has about fifty languages, so there is no need to list them in the type.
+ */
+export type LanguageId = string;
 
 export interface ModeChange {
     from: string;
@@ -121,7 +124,7 @@ export interface DiffFileModel {
     path: string;
     oldPath: string | null;
     changeType: FileChangeType;
-    /** null means the extension has no highlighting profile. */
+    /** null means the highlighting registry has no language for this file. */
     language: LanguageId | null;
     /**
      * Permission change from the patch header (docs/design/SPEC-elements.md §2.14, single-line notice).
