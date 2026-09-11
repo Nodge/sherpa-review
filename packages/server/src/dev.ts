@@ -1,5 +1,8 @@
+import { hostname } from 'node:os';
+
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
+import { readListenHost, uiHostForListenHost } from './idle.js';
 import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
@@ -23,12 +26,16 @@ async function main(argv: readonly string[]): Promise<number> {
     const uiDir = await resolveUiDir(readOption(argv, '--ui'));
     // As in the bundle: both the gallery and e2e need installation classification for the update toast.
     const installDir = readOption(argv, '--install-dir');
+    const host = readListenHost(process.env);
+    const uiHost = uiHostForListenHost(host, hostname());
 
     // Idle shutdown is disabled. The dev server holds the developer terminal open,
     // and dying unexpectedly during coding would get in the way. Ctrl+C stops it.
     const base = {
         prKey,
         sherpaDir,
+        host,
+        uiHost,
         idleSeconds: 0,
         updateCheck: installDir === null ? {} : { installDir },
         feedback: feedbackOptionsFor(installDir),
@@ -52,7 +59,7 @@ async function main(argv: readonly string[]): Promise<number> {
             `manifest: ${manifestPathFor(sherpaDir, server.prKey)}`,
             uiDir === null
                 ? `UI: not built. ${UI_BUILD_HINT}, then restart with \`--ui <path>\``
-                : formatUiUrl(server.port, server.token),
+                : formatUiUrl(server.port, server.token, uiHost),
             'Ctrl+C to stop.',
             '',
         ].join('\n'),

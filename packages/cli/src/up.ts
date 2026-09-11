@@ -74,7 +74,7 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
 
     const running = await readManifestFile(manifestPath);
     if (running !== null && running.prKey === options.prKey && (await isManifestServerAlive(running))) {
-        return { uiUrl: formatUiUrl(running.port, running.token), started: false };
+        return { uiUrl: formatUiUrl(running.port, running.token, running.uiHost), started: false };
     }
 
     const serverBin = await resolveServerBin(options.entry, options.serverBin);
@@ -90,7 +90,7 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
     }
 
     const started = daemon.process.pid !== undefined && manifest.pid === daemon.process.pid;
-    return { uiUrl: formatUiUrl(manifest.port, manifest.token), started };
+    return { uiUrl: formatUiUrl(manifest.port, manifest.token, manifest.uiHost), started };
 }
 
 /**

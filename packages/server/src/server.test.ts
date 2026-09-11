@@ -29,13 +29,39 @@ describe('startServer', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    async function start(prKey = PR_KEY): Promise<SherpaServer> {
+    async function start(prKey = PR_KEY, host?: string): Promise<SherpaServer> {
         // Tests must not call a live review host (docs/testing.md). Without a host, the route does not warm up,
         // and this suite's review key stays just a key.
-        const server = await startServer({ prKey, sherpaDir, reviewHostFactory: () => null });
+        const server = await startServer({
+            prKey,
+            sherpaDir,
+            reviewHostFactory: () => null,
+            ...(host === undefined ? {} : { host }),
+        });
         servers.push(server);
         return server;
     }
+
+    describe('listen address', () => {
+        it('accepts only IPv4 loopback when no address is given', async () => {
+            const server = await start();
+
+            expect((await get(server.port, '/healthz', server.token)).status).toBe(200);
+            await expect(fetch(`http://[::1]:${String(server.port)}/healthz`)).rejects.toThrow();
+        });
+
+        it(':: accepts IPv6 and preserves IPv4 discovery and token validation', async () => {
+            const server = await start(PR_KEY, '::');
+            const url = `http://[::1]:${String(server.port)}/healthz`;
+
+            expect((await fetch(url)).status).toBe(401);
+            const response = await fetch(url, { headers: { authorization: `Bearer ${server.token}` } });
+            expect(response.status).toBe(200);
+            expect(await response.json()).toMatchObject({ ok: true, prKey: PR_KEY });
+            expect((await get(server.port, '/healthz', server.token)).status).toBe(200);
+            await expect(start()).rejects.toThrow(ServerAlreadyRunningError);
+        });
+    });
 
     describe('authentication', () => {
         it('/healthz returns 401 in rpcError format without a token', async () => {
@@ -95,6 +121,7 @@ describe('startServer', () => {
             expect(manifest).toMatchObject({
                 prKey: PR_KEY,
                 port: server.port,
+                uiHost: '127.0.0.1',
                 pid: process.pid,
                 token: server.token,
                 protocolVersion: PROTOCOL_VERSION,
@@ -103,6 +130,13 @@ describe('startServer', () => {
 
             const stat = await fs.stat(manifestPath);
             expect(stat.mode & 0o777).toBe(0o600);
+        });
+
+        it('persists the UI address with an external listener', async () => {
+            const server = await start(PR_KEY, '::');
+
+            const manifest = await readManifest(manifestPathFor(sherpaDir, PR_KEY));
+            expect(manifest).toMatchObject({ port: server.port, uiHost: '::' });
         });
 
         it('restricts state directories with 0700 permissions', async () => {

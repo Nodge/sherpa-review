@@ -137,6 +137,8 @@ Maintenance: each new decision gets a dated entry in its section. When supersedi
 
 ## Server and storage
 
+- **2026-09-09 · Set the server listen address with `SHERPA_LISTEN_HOST`.** The default remains `127.0.0.1`. A value of `::` allows direct IPv6 access to the VM and preserves the CLI's local IPv4 connection. The manifest stores the UI URL address, so repeated `sherpa up` calls show the same link. Token checks remain in place. Direct HTTP access is unencrypted. Changing the address requires a server restart.
+
 - **2026-08-19 · The UI channel uses SSE, with a complete state snapshot on every change.** WebSocket is unnecessary (dependencies and manual reconnection), and granular events do not pay off because the queue is small. A tick every 30 s sends a fresh snapshot and also lazily expires leases when nobody calls the server. The UI↔server contract also lives in `@sherpa/protocol`, and the UI validates every snapshot with fail-closed behaviour.
 - **2026-08-19 · Events take the token as a query parameter, while static assets need no token.** EventSource cannot set headers, so only the events endpoint accepts `?token=`, with the same constant-time comparison. Static assets contain no secrets. The token arrives in the URL fragment and never reaches the server. All `/api/*` endpoints require a token.
 - **2026-08-21 · Heavy review data uses separate GET endpoints instead of the snapshot.** The diff and threads weigh megabytes and cannot enter every tick's snapshot. The event carries only a monotonic thread revision, and the UI rereads the endpoint. Error codes are `no_review_host` (404) and `host_unavailable` (502).

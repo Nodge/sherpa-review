@@ -19,7 +19,7 @@ import type { ReviewHostFactory } from './hosts/select.js';
 import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
 import { createRequestListener } from './http.js';
-import { DEFAULT_IDLE_SECONDS, IdleWatch } from './idle.js';
+import { DEFAULT_IDLE_SECONDS, DEFAULT_LISTEN_HOST, IdleWatch } from './idle.js';
 import { IterationFeed } from './iteration-feed.js';
 import { IterationStore } from './iteration-store.js';
 import {
@@ -73,6 +73,10 @@ export interface StartServerOptions {
     prKey: string;
     /** State root, defaults to `~/.sherpa`. */
     sherpaDir?: string;
+    /** TCP listen address, defaults to local IPv4 loopback. */
+    host?: string;
+    /** Address in the UI URL, saved in the manifest for repeated `sherpa up` calls. */
+    uiHost?: string;
     /**
      * Long-poll window for `worker next` when the call provides no `waitSeconds`.
      * Defaults to `LONG_POLL_DEFAULT_SECONDS`. Shortened in tests.
@@ -150,13 +154,15 @@ export interface HealthResponse {
 const CLAIM_ATTEMPTS = 5;
 
 /**
- * Starts the local PR server: 127.0.0.1 only, random port, bearer token on every endpoint,
+ * Starts the PR server at the configured address (127.0.0.1 by default), on a random port, with a bearer token on every endpoint,
  * and a discovery manifest at `<sherpaDir>/servers/<prKey>.json` (docs/protocol.md §2, §8).
  * If a server for the same PR is already alive, throws `ServerAlreadyRunningError` without starting a second process.
  */
 export async function startServer(options: StartServerOptions): Promise<SherpaServer> {
     const prKey = assertValidPrKey(options.prKey);
     const sherpaDir = options.sherpaDir ?? DEFAULT_SHERPA_DIR;
+    const host = options.host ?? DEFAULT_LISTEN_HOST;
+    const uiHost = options.uiHost ?? host;
     const serversDir = serversDirOf(sherpaDir);
     const manifestPath = manifestPathFor(sherpaDir, prKey);
 
@@ -193,13 +199,14 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     try {
         // Listen before claiming the manifest. Once it's published, a competing process can
         // check us through `/healthz` and must get a response.
-        const port = await listen(httpServer);
+        const port = await listen(httpServer, host);
         claimed = await claimPr({
             prKey,
             manifestPath,
             manifest: {
                 prKey,
                 port,
+                uiHost,
                 pid: process.pid,
                 token,
                 protocolVersion: PROTOCOL_VERSION,
@@ -581,13 +588,13 @@ function messageOf(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function listen(httpServer: http.Server): Promise<number> {
+async function listen(httpServer: http.Server, host: string): Promise<number> {
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error): void => {
             reject(error);
         };
         httpServer.once('error', onError);
-        httpServer.listen(0, '127.0.0.1', () => {
+        httpServer.listen(0, host, () => {
             httpServer.removeListener('error', onError);
             resolve();
         });

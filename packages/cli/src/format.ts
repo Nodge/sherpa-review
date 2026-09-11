@@ -40,8 +40,9 @@ export function formatTask(task: Task): string {
  * The only link the skill shows the reviewer. Keep its format stable.
  * The token is in the fragment: it never reaches the server but survives page reloads (`docs/protocol.md §8`).
  */
-export function formatUiUrl(port: number, token: string): string {
-    return `http://127.0.0.1:${String(port)}/#t=${token}`;
+export function formatUiUrl(port: number, token: string, host = '127.0.0.1'): string {
+    const authority = host.includes(':') ? `[${host}]` : host;
+    return `http://${authority}:${String(port)}/#t=${token}`;
 }
 
 /**

@@ -217,6 +217,23 @@ describe('server startup in `up`', () => {
         expect((await readManifest(sherpaDir)).pid).toBe(firstPid);
     });
 
+    it('takes the UI address from the live server manifest instead of the new CLI environment', async () => {
+        const serverBin = await fakeServer(WORKING_SERVER);
+        await up(serverBin);
+        const manifest = await readManifest(sherpaDir);
+        await fs.writeFile(
+            manifestPathFor(sherpaDir, PR_KEY),
+            JSON.stringify({ ...manifest, uiHost: 'sherpa-vm.example' }),
+        );
+
+        const result = await up(serverBin);
+
+        expect(result).toEqual({
+            uiUrl: `http://sherpa-vm.example:${String(manifest.port)}/#t=${manifest.token}`,
+            started: false,
+        });
+    });
+
     it('does not treat another server manifest after spawn as a cold start', async () => {
         const serverBin = await fakeServer(WORKING_SERVER);
         const foreign = spawn(
@@ -321,6 +338,7 @@ interface TestManifest {
     readonly port: number;
     readonly pid: number;
     readonly token: string;
+    readonly uiHost?: string;
     /** Outside the manifest: the fake server writes its `--install-dir` here for the test to inspect. */
     readonly installDir?: string;
 }

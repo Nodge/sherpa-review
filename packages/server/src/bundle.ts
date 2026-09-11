@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { hostname } from 'node:os';
 
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
 import { formatIdlePeriod, readIdleSeconds } from './idle.js';
+import { readListenHost, uiHostForListenHost } from './idle.js';
 import { readOption } from './launch.js';
 import { DEFAULT_SHERPA_DIR, manifestPathFor } from './paths.js';
 import { checkNodeVersion } from './runtime.js';
@@ -42,6 +44,7 @@ async function main(argv: readonly string[]): Promise<number> {
     const installDir = readOption(argv, '--install-dir');
 
     const idleSeconds = readIdleSeconds(process.env);
+    const host = readListenHost(process.env);
 
     let server: SherpaServer;
     try {
@@ -50,6 +53,8 @@ async function main(argv: readonly string[]): Promise<number> {
             sherpaDir,
             assets: bundledAssets(UI_ASSETS),
             idleSeconds,
+            host,
+            uiHost: uiHostForListenHost(host, hostname()),
             updateCheck: installDir === null ? {} : { installDir },
             feedback: feedbackOptionsFor(installDir),
             onIdleStop: (seconds) => {

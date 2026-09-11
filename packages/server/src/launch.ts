@@ -42,6 +42,7 @@ export async function isDirectory(dir: string): Promise<boolean> {
  * UI URL for development launches. The token is in the fragment, so it never reaches the server but survives
  * a page reload. `sherpa up` prints the same URL for the reviewer, built in the CLI.
  */
-export function formatUiUrl(port: number, token: string): string {
-    return `UI: http://127.0.0.1:${String(port)}/#t=${token}`;
+export function formatUiUrl(port: number, token: string, host = '127.0.0.1'): string {
+    const authority = host.includes(':') ? `[${host}]` : host;
+    return `UI: http://${authority}:${String(port)}/#t=${token}`;
 }

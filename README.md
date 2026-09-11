@@ -40,6 +40,16 @@ The UI opens in your browser automatically, and the agent prints the link either
 
 The agent then runs the loop and waits for tasks from the UI.
 
+### Direct VM access over IPv6
+
+By default, the server listens only on `127.0.0.1`. For network access, start a new server
+with `SHERPA_LISTEN_HOST=::`. It accepts IPv6 and IPv4 connections, including local
+CLI requests, and `sherpa up` prints a link with the VM's DNS name. The variable takes effect
+when the server starts. Restart an existing server to apply it.
+
+This exposes the port on the network interfaces. Token checks still apply, but HTTP
+does not encrypt the connection. Use an SSH tunnel or HTTPS proxy for encrypted access.
+
 ## Features
 
 ### Route
@@ -140,6 +150,7 @@ All are optional. Sherpa uses defaults when they are absent.
 
 | `SHERPA_DIR` | Sherpa state root | `~/.sherpa` |
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
+| `SHERPA_LISTEN_HOST` | Listen address for a new server. `::` enables IPv6 and IPv4 | `127.0.0.1` |
 | `SHERPA_SERVER_BIN` | Path to the server bundle | adjacent `sherpa-server.mjs` in the skill directory |
 
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
@@ -165,7 +176,7 @@ Three things leave the machine:
 - **Feedback**, only when you click Feedback and have a token for the channel.
 - **Update checks** ask the npm registry for the latest published version, at most once every 30 minutes.
 
-Nothing else: no telemetry. The server listens on `127.0.0.1`. The UI access token lives in the link fragment and never reaches the server.
+There is no telemetry. The server listens on `127.0.0.1` by default. The UI access token lives in the link fragment and is not sent to the server.
 
 ## Troubleshooting
 

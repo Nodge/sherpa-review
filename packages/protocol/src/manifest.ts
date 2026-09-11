@@ -18,6 +18,8 @@ export type PrKey = z.infer<typeof prKeySchema>;
 export const serverManifestSchema = z.object({
     prKey: prKeySchema,
     port: z.number().int().min(1).max(65535),
+    /** Name or address from the UI link. Old manifests without this field stay local. */
+    uiHost: z.string().min(1).optional(),
     pid: z.number().int().positive(),
     token: z.string().min(1),
     protocolVersion: semverSchema,

@@ -21,8 +21,12 @@ const task: Task = {
 };
 
 describe('UI link', () => {
-    it('uses the short fragment parameter name', () => {
+    it('uses the short fragment parameter name and loopback by default', () => {
         expect(formatUiUrl(4317, 'Ab_cd-12')).toBe('http://127.0.0.1:4317/#t=Ab_cd-12');
+    });
+
+    it('escapes an IPv6 address in the URL', () => {
+        expect(formatUiUrl(4317, 'Ab_cd-12', '::1')).toBe('http://[::1]:4317/#t=Ab_cd-12');
     });
 });
 

@@ -39,6 +39,12 @@ describe('server launch', () => {
         });
     });
 
+    describe('UI URL', () => {
+        it('wraps an IPv6 address in square brackets', () => {
+            expect(formatUiUrl(4317, 'token', '::1')).toBe('UI: http://[::1]:4317/#t=token');
+        });
+    });
+
     describe('UI directory', () => {
         it('reports a missing --ui with an absolute path and a build hint', async () => {
             const missing = path.join(tempDir, 'does-not-exist');
