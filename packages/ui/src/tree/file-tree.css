@@ -230,8 +230,9 @@
 
 /*
  * Truncation per docs/design/SPEC-elements.md §1.2: the path truncates from the left (`…/api/v3/handlers.py`), while the final segment
- * with its extension while space allows. Left truncation uses `direction: rtl` with left
- * alignment. `bdi` isolates the content so character order does not reverse.
+ * with its extension stays intact as long as space allows. When it no longer fits, the name truncates from the end
+ * (`feedback-st…`), not the start. Left truncation uses `direction: rtl` with left alignment only
+ * on the directory chain. `bdi` isolates the contents, so character order does not reverse.
  */
 .file-tree__label {
     display: flex;
@@ -248,6 +249,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.file-tree__label-dir {
     direction: rtl;
     text-align: left;
 }

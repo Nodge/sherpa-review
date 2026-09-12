@@ -22,7 +22,7 @@ Every interactive element must implement all applicable states:
 | selected / on | as specified (usually `#22252b` + `#e0e2e7`); must be distinguishable from hover without colour alone — pair with a ✓, a filled box, or a weight change |
 | disabled | opacity .45, `cursor:default`, no hover, and a `title` that says **why** |
 | loading | label stays, a 10px spinner replaces the leading glyph; the element keeps its width (no layout shift) |
-| error | border `#3d2a2c`, text `#d99a95`, message below in 11.5px |
+| error | border `#3d2a2c`, text `#d99a95`, message below in 12px |
 
 ### 1.2 Cross-cutting
 
@@ -34,7 +34,7 @@ Every interactive element must implement all applicable states:
 - **Truncation.** Paths truncate from the left (`…/api/v3/handlers.py`), file names never truncate
   before the extension, stop titles wrap to at most 3 lines then ellipsis, code never truncates —
   it scrolls horizontally per row.
-- **Tooltips.** 400ms delay, plain `title`-equivalent, 11.5px, max 320px, never carry information
+- **Tooltips.** 400ms delay, plain `title`-equivalent, 12px, max 320px, never carry information
   that exists nowhere else except for read-state and coverage details.
 - **Optimistic UI.** Viewed marks, collapses, filters and comment drafts apply instantly; a failed
   write reverts the control and shows an inline error with "Retry". Never a modal.
@@ -137,7 +137,7 @@ Every interactive element must implement all applicable states:
 
 ### 2.9 Stop card
 
-- **Rest / viewed.** Viewed drops the left column to opacity .72 and collapses hunks to a summary
+- **Rest / viewed.** Viewed switches the left column to the muted text roles (title and paragraph one step down, no opacity — `SPEC-theming-2026-09-12.md` §4) and collapses hunks to a summary
   row "3 files · 76 lines · viewed" that re-expands on click. Un-marking restores the previous
   expansion, not a full expansion.
 - **Hover on the card** does nothing (the card is not a button). Hover on its header row reveals the
@@ -242,7 +242,7 @@ Every interactive element must implement all applicable states:
 ### 2.17 Threads and replies
 
 - Rest / hover: hover lifts the row bg one step and reveals "Resolve", "Quote reply", "Copy link".
-- Reply composer: 12.5px input, "saved as a draft" hint under it, ⌘⏎ saves the draft, Esc discards
+- Reply composer: 13px input, "saved as a draft" hint under it, ⌘⏎ saves the draft, Esc discards
   with a confirm if non-empty. A draft is saved to the backend within 1s of the last keystroke and
   shows "draft · publishes on ship".
 - **Edge cases:** a thread resolved by someone else while you were typing — the composer stays, with
@@ -257,7 +257,7 @@ Every interactive element must implement all applicable states:
 
 ### 2.18 Chat panel
 
-- Width 392px fixed; the diff column reflows, it is never overlaid. Below 1280px total width the
+- Width `clamp(392px, 26vw, 560px)`; the diff column reflows, it is never overlaid. Below 1280px total width the
   panel becomes an overlay with a scrim.
 - States: **empty** ("Ask about the PR or select lines and ask about them" + 3 example prompts),
   **queued** (banner: "Generating the route · your question is next"), **streaming** (token stream
@@ -414,7 +414,7 @@ generated from one registry (no drift between the two).
 ## 6. Accessibility
 
 - Contrast: body `#a9aeb7` on `#0d0e10` ≈ 8.4:1; muted `#8a8f98` ≈ 6.2:1; dim `#6b7078` ≈ 4.1:1 —
-  dim is allowed **only** for 11px+ mono meta, never for instructions. Accent `#7f8cff` on `#0d0e10`
+  dim is allowed **only** for 11.5px+ mono meta, never for instructions. Accent `#7f8cff` on `#0d0e10`
   ≈ 6.6:1. On-accent ink `#101223` on `#7f8cff` ≈ 7.9:1. Code `#cfd3da` on `#0f1012` ≈ 11:1.
   Add/del tints must keep code text above 7:1.
 - Focus order follows visual order: top bar → banners → toolbar → stops (left column then right) →

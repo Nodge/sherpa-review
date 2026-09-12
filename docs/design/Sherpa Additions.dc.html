@@ -1070,7 +1070,7 @@ class Component extends DCLogic {
 
     const offThreads = [
       { author: 'morgan', ini: 'MP', bot: false, state: 'open', body: 'This is the third PR with DISPATCH_LOCK in a different module. We need to settle who owns the locks before merging, otherwise no one will find them a month from now.', meta: 'outside the diff · 2 replies', link: '' },
-      { author: 'pci-lint', ini: 'PL', bot: true, state: 'open', body: 'PCI DSS 6.5.8: this PR touches 3 files in the payments zone. The review requires a second approval from someone with the payments-reviewer role.', code: 'policy: pci/checkout-scope.yaml#L118', link: 'https://wiki.example.internal/security/payments/checkout-scope-and-review-rules', meta: 'outside the diff · bot, auto-resolves after 7 days' },
+      { author: 'pci-lint', ini: 'PL', bot: true, state: 'open', body: 'PCI DSS 6.5.8: the PR touches 3 files in the payments area. The review requires a second approval from someone with the payments-reviewer role.', code: 'policy: pci/checkout-scope.yaml#L118', link: 'https://github.com/quillmart/quillmart/blob/main/docs/security/pci-dss/checkout-scope-and-review-rules.md', meta: 'outside the diff · bot, resolves automatically after 7 days' },
     ].map(t => ({
       ...t, avStyle: av(t.bot),
       stateStyle: "font-family:'IBM Plex Mono',monospace;font-size:10px;color:#e2b878;background:#241f14;border:1px solid #4a4230;border-radius:4px;padding:1px 5px",

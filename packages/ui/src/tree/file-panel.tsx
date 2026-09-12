@@ -486,8 +486,8 @@ function FileRow({
 
 /**
  * Row label (docs/design/SPEC-elements.md §1.2): the directory chain truncates from the left and gives up space first,
- * Preserve the last segment with its extension as long as possible. `bdi` isolates text direction,
- * otherwise left truncation (`direction: rtl`) would move the slash to the other end.
+ * the final segment with its extension holds out longest and truncates from the end if it still does not fit.
+ * `bdi` isolates direction, or left truncation (`direction: rtl`) would move the slash to the other edge.
  */
 function Label({ label, title }: { label: string; title: string }) {
     const { dir, name } = splitLabel(label);
