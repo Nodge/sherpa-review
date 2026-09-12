@@ -1,10 +1,11 @@
+/* Shared width: the action bar subtracts the same width from the content column (`--dock-right`). */
 .chat-panel {
     position: sticky;
     top: 46px;
     display: flex;
-    flex: 0 0 392px;
+    flex: 0 0 var(--width-agent-panel);
     flex-direction: column;
-    width: 392px;
+    width: var(--width-agent-panel);
     height: calc(100vh - 46px);
     min-height: 0;
     border-left: 1px solid var(--border-standard);

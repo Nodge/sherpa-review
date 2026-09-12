@@ -1,6 +1,6 @@
 /*
- * Full diff view, docs/design/README.md §10: PR header in normal flow, sticky toolbar, then a row
- * with a 290px file panel and cards. The view itself is the only scroll container.
+ * Full diff view, docs/design/README.md §10: PR header in normal flow, sticky toolbar, then
+ * a row with the file panel (`--width-file-tree`) and cards. The view itself is the only scroll container.
  */
 
 .full-diff {
@@ -37,7 +37,7 @@
 /* File panel space in a status frame keeps the card column in the same place as when data is present. */
 .full-diff__panel-placeholder {
     flex: none;
-    width: 290px;
+    width: var(--width-file-tree);
     border-right: 1px solid var(--border-standard);
     background: var(--surface-panel);
 }
@@ -57,6 +57,12 @@
     scroll-margin-top: var(--full-diff-toolbar-height);
 }
 
+/*
+ * View heading row. In the prototype, it lives inside the card column and has the same
+ * `--diff-max` limit. Here it is a sticky bar across the view, so its width is limited by right padding
+ * instead of `max-width` (which would end the bar halfway across the window and let the PR header scroll
+ * beneath its cut-off edge). The content's right edge aligns exactly with the cards' right edge.
+ */
 .full-diff__toolbar {
     position: sticky;
     top: 0;
@@ -66,6 +72,10 @@
     flex: none;
     gap: var(--space-control);
     padding: var(--space-control) var(--space-page) 11px;
+    padding-right: max(
+        var(--space-page),
+        100% - var(--width-file-tree) - var(--space-page) - var(--diff-max)
+    );
     border-bottom: 1px solid var(--border-hairline-strong);
     background: var(--surface-toolbar);
     backdrop-filter: blur(8px);
@@ -101,15 +111,28 @@
     flex: 1;
 }
 
+/*
+ * Blocks in the card column that replace or sit above cards keep the same
+ * `--diff-max` limit, otherwise they exceed their replacements in a wide window and loading the diff shifts
+ * the layout horizontally. The page gutter uses margin here instead of padding, so the limit measures the same
+ * box as a card. The card list itself has no limit. Its width determines
+ * whether side-by-side mode is available (see `diff-view.css`).
+ */
+.full-diff__status,
+.full-diff__status-actions,
+.full-diff__skeleton,
+.full-diff__zero {
+    max-width: var(--diff-max);
+}
+
 .full-diff__status {
-    margin: 0;
-    padding: 0 var(--space-page);
+    margin: 0 var(--space-page);
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
 }
 
 .full-diff__status-actions {
-    padding: var(--space-control) var(--space-page) var(--space-page);
+    margin: var(--space-control) var(--space-page) 30px;
 }
 
 /*
@@ -120,7 +143,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-card);
-    padding: 0 var(--space-page);
+    margin: 0 var(--space-page);
 }
 
 .full-diff__skeleton-note {

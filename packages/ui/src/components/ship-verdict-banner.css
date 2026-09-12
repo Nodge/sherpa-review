@@ -5,7 +5,6 @@
     align-items: center;
     gap: var(--space-control);
     margin: 18px var(--space-page) 0;
-    max-width: 1560px;
     padding: 11px var(--space-control);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-card);

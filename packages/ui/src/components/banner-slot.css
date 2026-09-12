@@ -11,7 +11,6 @@
 
 .banner-slot__item {
     width: 100%;
-    max-width: 1560px;
 }
 
 .banner-slot__item--secondary {
@@ -33,6 +32,13 @@
     color: var(--text-muted);
 }
 
-.banner-slot .audit-banner {
+/*
+ * The slot sets margins and vertical spacing. Banners have their own `margin: 18px var(--space-page) 0`
+ * for standalone display (a gallery card). Inside the slot this would double the side margin. With a responsive
+ * margin, the extra gap grows more noticeable as the window gets wider.
+ */
+.banner-slot .audit-banner,
+.banner-slot .generation-cap-banner,
+.banner-slot .ship-verdict-banner {
     margin: 0;
 }

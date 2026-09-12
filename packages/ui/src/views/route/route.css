@@ -1,7 +1,8 @@
 /*
  * Route view, triage preset, docs/design/README.md §1–2. All values come from there: grid
- * `minmax(300px,368px) minmax(0,1fr)` grid with a 40px gap, sticky left column, tier ruler
- * at 3×15px, and tier-specific heading typography.
+ * `clamp(300px,26%,500px) minmax(0,1fr)` with a `--space-column` gap, sticky left column,
+ * 3×15px tier rule, title typography by tier. View content has no limit. Only
+ * the diff column has one (`--diff-max`).
  *
  * One deliberate departure from the design: the prototype scrolls the whole page, and sticky
  * elements use its top as their origin (toolbar 46px, left column 132px). In the app,
@@ -26,7 +27,7 @@
 }
 
 .route--status {
-    padding: var(--space-page);
+    padding: 30px var(--space-page);
 }
 
 .route__status {
@@ -59,7 +60,6 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    max-width: 1560px;
 }
 
 /* Route filter row, currently holding only the "what is new" chip. */
@@ -68,7 +68,6 @@
     align-items: center;
     gap: var(--space-inner);
     margin-top: 9px;
-    max-width: 1560px;
 }
 
 /* "What is new since the previous pass" filter chip, docs/design/README.md §9. Same height and radius as "Comments from" chips. */
@@ -92,13 +91,11 @@
 
 .route-toolbar__strip {
     margin-top: 11px;
-    max-width: 1560px;
 }
 
 /* Generation cap row (docs/design/SPEC-elements.md §4.1) uses the bar legend's muted tone and monospace numbers. */
 .route-toolbar__cap {
     margin-top: 5px;
-    max-width: 1560px;
     font-family: var(--font-mono);
     font-size: var(--font-size-secondary);
     color: var(--text-dim);
@@ -254,14 +251,13 @@
 
 .route__stops {
     padding: 0 var(--space-page) var(--space-bar-reserve);
-    max-width: 1560px;
 }
 
 .route-stop {
     display: grid;
-    grid-template-columns: minmax(300px, 368px) minmax(0, 1fr);
+    grid-template-columns: clamp(300px, 26%, 500px) minmax(0, 1fr);
     gap: var(--space-column);
-    padding: var(--space-page) 0 34px;
+    padding: 30px 0 34px;
     border-bottom: 1px solid var(--border-hairline);
 }
 
@@ -662,12 +658,14 @@
 
 /* --- Right column --- */
 
+/* Code panel height limit depends on diff mode. The rest of the right track stays empty. */
 .route-stop__diff {
     position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-inner);
     min-width: 0;
+    max-width: var(--diff-max);
 }
 
 /* Space for the diff column removed from the DOM, at its last measured height. */
@@ -871,7 +869,6 @@
 /* Reading phase: coverage bar on its own, since the filter toolbar has nothing to show. */
 .route-skeleton__bar {
     flex: none;
-    max-width: 1560px;
     padding: 20px var(--space-page) 0;
 }
 
@@ -1073,7 +1070,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-control);
-    margin: var(--space-page) 0 var(--space-card);
+    margin: 30px 0 var(--space-card);
     padding: var(--space-control) 16px;
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius-card);

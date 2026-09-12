@@ -5,8 +5,22 @@
 
 @import '../diff/syntax.css';
 
+/*
+ * Code panel limit for the actual diff mode. The view root (`.route`,
+ * `.full-diff`) sets the attribute, and all its code panels inherit the value. It uses the actual mode:
+ * side-by-side is unavailable in a narrow window, so the unified limit applies there.
+ */
+[data-diff-mode='split'] {
+    --diff-max: 1920px;
+}
+
 /* --- Card list: a regular block inside the outer view scroller --- */
 
+/*
+ * The limit is on the card container, outside the list itself. The list width determines
+ * side-by-side availability (`store.setAvailableWidth`), so limiting it would create a feedback loop
+ * of "mode → width → mode".
+ */
 .diff-list {
     position: relative;
     padding: 0 var(--space-page) var(--space-bar-reserve);
@@ -15,6 +29,7 @@
 .diff-list__inner {
     position: relative;
     width: 100%;
+    max-width: var(--diff-max);
 }
 
 .diff-list__item {

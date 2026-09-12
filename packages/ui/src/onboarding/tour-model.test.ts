@@ -80,6 +80,7 @@ describe('tour model', () => {
             anyStopFilled: true,
             chatOpen: false,
             completed: false,
+            diffMode: 'unified',
         };
 
         // The first filled stop is an event. The second, third and seventh are not.
@@ -90,6 +91,8 @@ describe('tour model', () => {
         expect(tourAnchorEpoch({ ...base, view: 'diff' })).not.toBe(tourAnchorEpoch(base));
         expect(tourAnchorEpoch({ ...base, chatOpen: true })).not.toBe(tourAnchorEpoch(base));
         expect(tourAnchorEpoch({ ...base, completed: true })).not.toBe(tourAnchorEpoch(base));
+        // Changing diff mode changes code panel widths and thus the frame around the step target.
+        expect(tourAnchorEpoch({ ...base, diffMode: 'split' })).not.toBe(tourAnchorEpoch(base));
     });
 
     it('persists a canonical number regardless of whether the pass included the chat step', () => {

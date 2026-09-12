@@ -262,16 +262,22 @@ const EXPECTED: Record<string, string> = {
     '--radius-floating': '11px',
     '--radius-panel': '12px',
 
-    // Spacing — 30px page gutter · 40px column gap · 22px card gap · 14px control gap ·
-    // 8–10px inner gap.
-    '--space-page': '30px',
-    '--space-column': '40px',
+    // Spacing — page gutter `clamp(30px, 2.4vw, 60px)` · column gap `clamp(40px, 3vw, 72px)` ·
+    // 22px card gap · 14px control gap · 8–10px inner gap.
+    '--space-page': 'clamp(30px, 2.4vw, 60px)',
+    '--space-column': 'clamp(40px, 3vw, 72px)',
     '--space-card': '22px',
     '--space-control': '14px',
     '--space-inner': '10px',
     '--space-inner-tight': '8px',
     // Prototype: Sherpa.dc.html:217 reserves 180px below Route. Shared by all reader views.
     '--space-bar-reserve': '180px',
+
+    // Widths — docs/design/README.md §4 (agent panel `clamp(392px, 26vw, 560px)`), §10 (file tree
+    // `clamp(320px, 22vw, 560px)`) and "Spacing" (`--diff-max` 1280px unified / 1920px side by side).
+    '--width-agent-panel': 'clamp(392px, 26vw, 560px)',
+    '--width-file-tree': 'clamp(320px, 22vw, 560px)',
+    '--diff-max': '1280px',
 
     // Shadows — docs/design/SPEC-additions-2026-08-26.md §1d line comment `0 1px 4px rgba(0,0,0,.45)`; popover
     // `0 8px 24px rgba(0,0,0,.5)` · menu `0 16px 40px rgba(0,0,0,.6)` · floating bar

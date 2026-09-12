@@ -313,7 +313,7 @@ export function DiffFileList({
     }, []);
 
     // Width available to the diff. Side-by-side is unavailable below 1100px (docs/design/SPEC-elements.md §2.6). Measure
-    // list itself, not the window. The tree panel on its left takes 290px that the diff cannot use.
+    // the list itself, not the window. The tree panel on the left takes width away from the diff.
     // Use the padding-box (`clientWidth`), since page padding is part of the space given to the diff.
     // Otherwise the reference 1440px viewport (`docs/design/README.md`, "Fidelity") would never pass the threshold.
     // Read the initial value immediately. ResizeObserver does not fire in a background tab.

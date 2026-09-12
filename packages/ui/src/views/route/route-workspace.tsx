@@ -648,6 +648,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             id="view-route"
             ref={setContainer}
             onScroll={handleScroll}
+            /* The code panel limit (`--diff-max`) uses the actual mode, not the setting. */
+            data-diff-mode={diffSnapshot.effectiveMode}
             style={
                 toolbarHeight === null
                     ? undefined

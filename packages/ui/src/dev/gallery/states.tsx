@@ -50,7 +50,7 @@ import { FILE_MENU_STATES } from './file-menu-states.tsx';
 import { REVIEW_BAR_CHAT_DOCK_STATES } from './review-bar-chat-dock-states.tsx';
 import { IMAGE_VIEWER_STATES } from './image-viewer-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
-import { TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
+import { LayoutWidths, TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
 /**
  * Gallery state registry: each state renders deterministically, without a server
@@ -303,6 +303,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         group: 'Tokens',
         title: 'typography scale',
         render: () => <TypographyScale />,
+    },
+    {
+        id: 'tokens-widths',
+        group: 'Tokens',
+        title: 'widths and code panel limit',
+        render: () => <LayoutWidths />,
     },
 ];
 

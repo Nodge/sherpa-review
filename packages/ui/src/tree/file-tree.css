@@ -1,13 +1,13 @@
 /*
- * Full diff left panel, docs/design/README.md §10: 290px wide, its own scrolling, panel background
- * and standard right border. Tree rows are 26px (docs/design/SPEC-elements.md §2.20).
+ * Full diff left panel, docs/design/README.md §10: `--width-file-tree` width, its own scroll area,
+ * panel background and standard right border. Tree rows are 26px (docs/design/SPEC-elements.md §2.20).
  */
 
 .file-panel {
     display: flex;
     flex-direction: column;
     flex: none;
-    width: 290px;
+    width: var(--width-file-tree);
     min-height: 0;
     padding: var(--space-control) 0 0;
     border-right: 1px solid var(--border-standard);

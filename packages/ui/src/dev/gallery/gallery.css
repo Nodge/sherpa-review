@@ -12,7 +12,7 @@
     align-self: start;
     height: 100vh;
     overflow-y: auto;
-    padding: var(--space-control) 0 var(--space-page);
+    padding: var(--space-control) 0 30px;
     background: var(--surface-panel);
     border-right: 1px solid var(--border-standard);
 }
@@ -189,7 +189,7 @@
     right: 0;
     bottom: 0;
     display: flex;
-    width: 392px;
+    width: var(--width-agent-panel);
 }
 
 .gallery-dock-chat .chat-panel {
@@ -319,6 +319,38 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Bar exactly as wide as the measured value: its width is visible, the number is in the label. */
+.width-sample {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: center;
+    gap: 2px var(--space-inner);
+    margin-bottom: var(--space-inner-tight);
+}
+
+.width-sample__label {
+    grid-row: span 2;
+    font-size: var(--font-size-secondary);
+    color: var(--text-secondary);
+}
+
+/* A bar wider than the frame is clipped by its track: measure it at full width without affecting gallery scrolling. */
+.width-sample__track {
+    overflow: hidden;
+}
+
+.width-sample__bar {
+    height: 10px;
+    border-radius: var(--radius-key);
+    background: var(--tier-low);
+}
+
+.width-sample__value {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-scope);
+    color: var(--text-dim);
 }
 
 .sample {

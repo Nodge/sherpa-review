@@ -1367,6 +1367,8 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             className="full-diff selection-popover-host"
             ref={setScrollElement}
             data-shown-files={treeFiles.length}
+            /* The code panel limit (`--diff-max`) uses the actual mode, not the setting. */
+            data-diff-mode={snapshot.effectiveMode}
             style={layoutStyle}
         >
             <PrHeader

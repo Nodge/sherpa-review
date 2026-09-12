@@ -505,7 +505,7 @@ function Label({ label, title }: { label: string; title: string }) {
     );
 }
 
-/** Show `−M` only when there is something to show. Space is scarce in a 290px panel. */
+/** Show `−M` only when there is something to show. Space is scarce in a narrow panel. */
 function Counts({ additions, deletions }: { additions: number; deletions: number }) {
     const { count } = useFormat();
     return (

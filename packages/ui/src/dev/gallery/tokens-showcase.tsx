@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 import { useUiSettings } from '../../settings/context.tsx';
 import tokensCss from '../../styles/tokens.css?raw';
 
@@ -67,6 +69,76 @@ export function TokenSwatches() {
                     </div>
                 </section>
             ))}
+        </div>
+    );
+}
+
+/**
+ * Responsive widths (docs/design/SPEC-theming-2026-09-12.md §6): values depend on the window,
+ * so the display shows what the browser resolves them to right now, instead of the declaration.
+ * The "at 2560: tree 560, agent panel 560, limit 1280/1920" acceptance check is visible as numbers. The narrative
+ * column is absent here: its `26%` is based on view content, and outside the route the number would be wrong.
+ */
+const WIDTH_SAMPLES: readonly { readonly label: string; readonly value: string }[] = [
+    { label: 'view side margin', value: 'var(--space-page)' },
+    { label: 'narrative ↔ diff gap', value: 'var(--space-column)' },
+    { label: 'Full diff file tree', value: 'var(--width-file-tree)' },
+    { label: 'agent panel', value: 'var(--width-agent-panel)' },
+];
+
+function WidthBar({ label, value }: { label: string; value: string }) {
+    const [measured, setMeasured] = useState<number | null>(null);
+    const ref = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const element = ref.current;
+        if (element === null) {
+            return;
+        }
+        const report = (): void => {
+            setMeasured(Math.round(element.getBoundingClientRect().width));
+        };
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    return (
+        <div className="width-sample">
+            <span className="width-sample__label">{label}</span>
+            <div className="width-sample__track">
+                <div className="width-sample__bar" ref={ref} style={{ width: value }} />
+            </div>
+            <span className="width-sample__value">
+                {value} → {measured === null ? '—' : `${String(measured)}px`}
+            </span>
+        </div>
+    );
+}
+
+/** Layout widths and code panel limit by diff mode. */
+export function LayoutWidths() {
+    return (
+        <div className="showcase">
+            <section className="showcase__group">
+                <h3 className="showcase__group-title">Layout widths</h3>
+                {WIDTH_SAMPLES.map((sample) => (
+                    <WidthBar key={sample.label} label={sample.label} value={sample.value} />
+                ))}
+            </section>
+
+            <section className="showcase__group">
+                <h3 className="showcase__group-title">Code panel limit</h3>
+                {/* The view sets the same attribute on its root: switching modes changes the limit. */}
+                <div data-diff-mode="unified">
+                    <WidthBar label="unified" value="var(--diff-max)" />
+                </div>
+                <div data-diff-mode="split">
+                    <WidthBar label="side by side" value="var(--diff-max)" />
+                </div>
+            </section>
         </div>
     );
 }

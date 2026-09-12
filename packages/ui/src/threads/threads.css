@@ -750,7 +750,7 @@
 }
 
 .thread-outside {
-    margin: var(--space-card) var(--space-page) var(--space-page);
+    margin: var(--space-card) var(--space-page) 30px;
     border: 1px solid var(--border-control);
     border-radius: var(--radius-card);
     background: var(--surface-panel);

@@ -91,6 +91,9 @@ import { RouteFailedView, RouteReadingView } from './views/route/route-generatin
 import { RouteView } from './views/route/route-view.tsx';
 import { IterationWithoutRoute, SliceWithoutOverview, ViewFrame } from './views/view-frames.tsx';
 
+/** Subscription to a store that does not exist yet. The reference must stay stable. */
+const noSubscribe = (): (() => void) => () => undefined;
+
 /** Shortcut registry scope for the open view (docs/design/SPEC-elements.md §5). */
 const SCOPE_OF_VIEW: Readonly<Record<ViewId, ShortcutScope>> = {
     overview: 'overview',
@@ -232,6 +235,15 @@ export function App({ store, session, token }: AppProps) {
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
     const { diffStore, loadBlob } = useDiffStore({ diff: currentDiff, prKey, blobsAvailable, token });
+    /*
+     * The app needs the actual diff mode for one reason: it changes the code panel limit,
+     * and therefore the tour frame. The subscription returns a string, so other store updates (model parsing,
+     * progress) do not trigger a React render because the value stays the same.
+     */
+    const effectiveDiffMode = useSyncExternalStore(
+        diffStore?.subscribe ?? noSubscribe,
+        () => diffStore?.getSnapshot().effectiveMode ?? 'unified',
+    );
     const { progressWriter, stopProgress, mirroredFileWrites, progressWritesSettled } = useProgressWriter({
         viewKey,
         diffStore,
@@ -792,6 +804,7 @@ export function App({ store, session, token }: AppProps) {
         anyStopFilled: routeViewSnapshot?.stops.some((stop) => stop.status === 'ready') === true,
         chatOpen,
         completed: completion !== null,
+        diffMode: effectiveDiffMode,
     });
     /**
      * Tour scaffold in place of an empty route tab. Without a route, steps 01–03

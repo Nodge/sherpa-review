@@ -1,8 +1,7 @@
-/* PR header, docs/design/README.md §1 ("PR header", padding 26px 30px 0). */
+/* PR header, docs/design/README.md §1 ("PR header"). Full view width with no limit. */
 
 .pr-header {
     padding: 26px var(--space-page) 0;
-    max-width: 1560px;
 }
 
 .pr-header__meta {

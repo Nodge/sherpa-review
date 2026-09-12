@@ -3,7 +3,7 @@
 .review-complete {
     display: grid;
     place-items: center;
-    padding: var(--space-column) var(--space-page);
+    padding: 40px var(--space-page);
 }
 
 .review-complete__card {

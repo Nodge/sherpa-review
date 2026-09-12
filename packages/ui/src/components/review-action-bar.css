@@ -3,8 +3,9 @@
 /*
  * Docked column widths: floating elements center on the content column, not the window.
  * There are no docked columns on the left yet (the file tree lives inside the view). The variable starts
- * at zero so the formula already accounts for it. Values live here rather than in `tokens.css`, which
- * is pinned to the handoff token table. These values describe layout state.
+ * at zero so the formula already accounts for it. The `--dock-*` variables live here, not in `tokens.css`:
+ * they describe layout state, not a value from the handoff. The agent panel width, on the other hand,
+ * comes from the handoff as the `--width-agent-panel` token.
  */
 :root {
     --dock-left: 0px;
@@ -18,7 +19,7 @@
  */
 @media (min-width: 1280px) {
     :root.is-chat-docked {
-        --dock-right: 392px;
+        --dock-right: var(--width-agent-panel);
     }
 }
 

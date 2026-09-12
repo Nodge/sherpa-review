@@ -3,11 +3,15 @@
 .view-frame,
 .route-empty,
 .overview {
-    max-width: 1560px;
-    padding: 26px var(--space-page) var(--space-page);
+    padding: 26px var(--space-page) 30px;
 }
 
+/*
+ * Overview is the only content with a width limit: two columns of text instead of code. Status frames
+ * for Route and Full diff do not use it: they have one card centred in the window.
+ */
 .overview {
+    max-width: 1700px;
     padding-bottom: var(--space-bar-reserve);
 }
 

@@ -29,7 +29,7 @@ const KNOWN_LABELS: Readonly<Record<string, MessageKey>> = {
     [GENERATED_FILTER_ID]: 'lens.generated',
 };
 
-/** Short label for a left-panel chip. All filters share 290px there. */
+/** Short label for a left-panel chip: all filters share one narrow column there. */
 const SHORT_LABELS: Readonly<Record<string, MessageKey>> = {
     [ALL_FILTER_ID]: 'lens.all.short',
     [MINE_FILTER_ID]: 'lens.mine.short',

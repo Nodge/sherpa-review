@@ -244,6 +244,8 @@ The values below are for the dark theme. Light values for each color and light-t
 
 **Spacing** — page gutter `clamp(30px, 2.4vw, 60px)` · column gap `clamp(40px, 3vw, 72px)` · 22px card gap · 14px control gap · 8–10px inner gap · 26/30/34px vertical rhythm between stops. No global max-width; code panels cap at `--diff-max` (1280px unified / 1920px side by side), Overview at 1700px.
 
+**Widths** — agent panel `clamp(392px, 26vw, 560px)` (§4) · Full diff file tree `clamp(320px, 22vw, 560px)` (§10) · stop narrative column `clamp(300px, 26%, 500px)` (§1).
+
 **Shadows** — popover `0 8px 24px rgba(0,0,0,.5)` · menu `0 16px 40px rgba(0,0,0,.6)` · floating bar `0 16px 44px rgba(0,0,0,.6)` · dialog `0 24px 64px rgba(0,0,0,.65)`.
 
 **Motion** — spinner `spin .8s linear infinite` · skeleton/streaming `shimmer 1.6s ease-in-out infinite` (0.35 → 0.8 → 0.35 opacity) · caret `caret 1s step-end infinite` · jump scroll ~320ms ease-in-out cubic · jump flash ~900ms. Nothing else animates; the reader must feel static.

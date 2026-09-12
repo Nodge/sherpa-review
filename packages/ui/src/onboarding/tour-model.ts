@@ -99,6 +99,11 @@ export interface TourAnchorEpoch {
     readonly anyStopFilled: boolean;
     readonly chatOpen: boolean;
     readonly completed: boolean;
+    /**
+     * Actual diff mode: it changes the code panel limit (`--diff-max`), and thus the width of
+     * the diff column and cards, the targets of steps 03 and 07.
+     */
+    readonly diffMode: string;
 }
 
 /**
@@ -113,6 +118,7 @@ export function tourAnchorEpoch(epoch: TourAnchorEpoch): string {
         epoch.anyStopFilled ? 'filled' : '',
         epoch.chatOpen ? 'chat' : '',
         epoch.completed ? 'done' : '',
+        epoch.diffMode,
     ].join('|');
 }
 

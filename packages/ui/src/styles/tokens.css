@@ -231,14 +231,24 @@
     --radius-panel: 12px;
 
     /* --- Spacing --- */
-    --space-page: 30px;
-    --space-column: 40px;
+    --space-page: clamp(30px, 2.4vw, 60px);
+    --space-column: clamp(40px, 3vw, 72px);
     --space-card: 22px;
     --space-control: 14px;
     --space-inner: 10px;
     --space-inner-tight: 8px;
     /* Prototype: space for the floating bottom bar in long reader views. */
     --space-bar-reserve: 180px;
+
+    /* --- Layout widths --- */
+    --width-agent-panel: clamp(392px, 26vw, 560px);
+    --width-file-tree: clamp(320px, 22vw, 560px);
+    /*
+     * Code panel width limit: the interface has no overall limit, but code columns do, with
+     * different limits for each diff mode. This is the unified value. Split overrides
+     * it at the view root (`diff-view/diff-view.css`).
+     */
+    --diff-max: 1280px;
 
     /* --- Shadows --- */
     /* docs/design/SPEC-additions-2026-08-26.md §1d: comment button in the gutter. */
