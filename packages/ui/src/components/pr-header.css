@@ -42,6 +42,8 @@
     background: transparent;
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
+    /* The chip height is fixed. Tight line height keeps size L text from overflowing. */
+    line-height: 1;
     color: var(--attention-text-dim);
     white-space: nowrap;
     cursor: pointer;
@@ -136,7 +138,8 @@
     height: 18px;
     border-radius: 50%;
     background: var(--read-box-border);
-    font-size: var(--font-size-tag);
+    /* Initials are a glyph. Text at the shared minimum font size does not fit in an 18px circle. */
+    font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
 }

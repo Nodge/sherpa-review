@@ -47,6 +47,16 @@ describe('component styles', () => {
             expect(literals).toEqual([]);
         });
 
+        // Text size is entirely in rem through tokens (docs/design/theme.md, "Typography"):
+        // px would detach the interface from the system font size and L mode again.
+        it(`${name}: text sizes use tokens only`, () => {
+            const sizes = [...css.matchAll(/font-size:\s*([^;]+);/g)].map((match) => match[1]?.trim());
+
+            expect(
+                sizes.filter((size) => size === undefined || !(size.startsWith('var(') || size === 'inherit')),
+            ).toEqual([]);
+        });
+
         it(`${name}: uses only declared tokens`, () => {
             const used = [...css.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((match) => match[1]);
             // A file-local variable is not a second set of values. It gives this view's layout constant

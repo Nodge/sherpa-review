@@ -362,7 +362,7 @@
 .ownership-row__note {
     overflow: hidden;
     color: var(--text-muted-dim);
-    font-size: 12px;
+    font-size: var(--font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }

@@ -63,7 +63,9 @@
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 18px;
+    font-size: var(--font-size-close-glyph);
+    /* The 28×28 button is fixed-size. The close glyph must not stretch the row. */
+    line-height: 1;
 }
 
 .chat-panel__close:hover {
@@ -407,6 +409,8 @@
     border: 0;
     background: transparent;
     color: inherit;
+    /* Fixed 17×17 square: the cross glyph must not stretch the row. */
+    line-height: 1;
     cursor: pointer;
 }
 

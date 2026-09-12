@@ -1,5 +1,5 @@
 import type { Locale, UiSettings } from '@sherpa/protocol';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { updateFragment } from '../../fragment.js';
 import { LocaleProvider } from '../../i18n/index.js';
@@ -17,7 +17,8 @@ import { GALLERY_STATES } from './states.tsx';
  *
  * The locale is selected in the header and stored in the URL (`#locale=ru`): states need inspection in both
  * languages, so the provider gets the language as an explicit prop. Theme and text size live in the local settings
- * store and in the URL (`#theme=light`, `#textsize=l`). The same toggle works without a server.
+ * store and in the URL (`#theme=light`, `#textsize=l`). The theme toggle is the same as in the product, while
+ * the gallery has its own M/L toggle. The product switches text size through the settings menu.
  * The theme defaults to dark here rather than the product's `auto`: cards must render identically
  * under any system theme unless `#theme=auto` is explicitly requested.
  */
@@ -45,6 +46,8 @@ export function Gallery({
     }), [settings]);
     const [selectedId, setSelectedId] = useState(initialId ?? GALLERY_STATES[0]?.id ?? '');
     const [locale, setLocale] = useState<Locale>(initialLocale);
+    // `DocumentSettingsSync` sets the attribute on `<html>` from the store, as in the product.
+    const textSize = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().textSize);
     const selected = GALLERY_STATES.find((state) => state.id === selectedId) ?? GALLERY_STATES[0];
 
     const select = (id: string): void => {
@@ -56,6 +59,11 @@ export function Gallery({
     const selectLocale = (next: Locale): void => {
         setLocale(next);
         history.replaceState(null, '', updateFragment(window.location.hash, { locale: next }));
+    };
+
+    const selectTextSize = (next: UiSettings['textSize']): void => {
+        // The store subscription above will update the URL.
+        settings.update({ textSize: next });
     };
 
     return (
@@ -108,9 +116,25 @@ export function Gallery({
                                         </button>
                                     ))}
                                 </div>
+                                <div className="gallery__textsize" role="group" aria-label="Text size">
+                                    {TEXT_SIZES.map((option) => (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            aria-pressed={option === textSize}
+                                            onClick={() => {
+                                                selectTextSize(option);
+                                            }}
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            {/* key: changing state or language remounts the renderer, so initial props (defaultMenuOpen, etc.) apply again. */}
-                            <div className="gallery__canvas" key={`${selected.id}:${locale}`}>
+                            {/* key: changing state, language or text size remounts the render, so initial props
+                                (defaultMenuOpen etc.) apply again, and measurements such as the tour frame
+                                are recalculated for the new font size. */}
+                            <div className="gallery__canvas" key={`${selected.id}:${locale}:${textSize}`}>
                                 <LocaleProvider locale={locale}>{selected.render()}</LocaleProvider>
                             </div>
                         </>
@@ -122,6 +146,9 @@ export function Gallery({
 }
 
 const LOCALES: readonly Locale[] = ['ru', 'en'];
+
+/** Stage text sizes: `m` has a 16px base, `l` has 18px (docs/design/theme.md, "Typography"). */
+const TEXT_SIZES: readonly UiSettings['textSize'][] = ['m', 'l'];
 
 /** `#locale=ru` from the URL. Everything else (including empty) means English. */
 export function parseGalleryLocale(value: string | null): Locale {

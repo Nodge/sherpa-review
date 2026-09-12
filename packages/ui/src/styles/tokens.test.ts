@@ -18,35 +18,32 @@ const EXPECTED: Record<string, string> = {
     '--disabled-opacity': '.45',
 
     // Type — IBM Plex Sans 400/450/500/600 for UI, IBM Plex Mono 400/500 for code, paths, numbers,
-    // commits, keys and all machine data. Scale: 24px/600 PR title on Overview · 22px/600 PR title ·
-    // 19px/600 screen title · 17px/600 high-tier stop title · 15.5px/600 stop title ·
-    // 15px/600 section title · 13.5px input · 13px/1.62 body · 12.5px UI text · 12px secondary ·
-    // 11.5px controls and mono file names · 11px mono meta · 10.5px mono gutters and paths ·
-    // 10px badges · 9.5px prototype/scope labels. Code: 12px mono, line-height 20px.
+    // commits, keys and all machine data. The scale lives in docs/design/theme.md, in the
+    // "Typography" section: sizes in rem, an 11px floor. A separate test checks the values below
+    // against that table, so there is no reason to repeat it in prose here.
     '--font-sans': "'IBM Plex Sans',system-ui,sans-serif",
     '--font-mono': "'IBM Plex Mono',ui-monospace,monospace",
-    // This size is outside the handoff scales. It comes from the prototype's Overview screen.
-    '--font-size-pr-title-overview': '24px',
-    '--font-size-pr-title': '22px',
-    '--font-size-screen-title': '19px',
-    '--font-size-stop-title-high': '17px',
-    '--font-size-stop-title': '15.5px',
-    '--font-size-section-title': '15px',
-    '--font-size-input': '13.5px',
-    '--font-size-body': '13px',
-    '--font-size-ui': '12.5px',
-    '--font-size-secondary': '12px',
-    '--font-size-control': '11.5px',
-    '--font-size-meta': '11px',
-    '--font-size-gutter': '10.5px',
-    '--font-size-badge': '10px',
-    '--font-size-scope': '9.5px',
-    // docs/design/README.md §10: `pci` tag, 9px mono, outside the main scale.
-    '--font-size-tag': '9px',
-    // Prototype: initials in the 18×18 reply avatar.
-    '--font-size-avatar-glyph': '9px',
-    '--font-size-code': '12px',
+    '--font-size-pr-title-overview': '1.5rem',
+    '--font-size-pr-title': '1.375rem',
+    '--font-size-screen-title': '1.1875rem',
+    '--font-size-stop-title-high': '1.0625rem',
+    '--font-size-stop-title': '0.9688rem',
+    '--font-size-section-title': '0.9688rem',
+    '--font-size-input': '0.875rem',
+    '--font-size-body': '0.8438rem',
+    '--font-size-ui': '0.8125rem',
+    '--font-size-secondary': '0.7813rem',
+    '--font-size-control': '0.75rem',
+    '--font-size-meta': '0.7188rem',
+    '--font-size-gutter': '0.6875rem',
+    '--font-size-badge': '0.6875rem',
+    '--font-size-scope': '0.6875rem',
+    '--font-size-tag': '0.6875rem',
+    '--font-size-avatar-glyph': '0.5625rem',
+    '--font-size-close-glyph': '1.125rem',
+    '--font-size-code': '0.75rem',
     '--line-height-body': '1.62',
+    // The only size still in px: code line density does not depend on text size.
     '--line-height-code': '20px',
 
     // Radius — 2–3px (rules, tier marks) · 4–5px (badges, small chips) · 6px (buttons, rows) ·
@@ -148,10 +145,35 @@ function parseThemeDoc(markdown: string): { dark: Map<string, string>; light: Ma
     return { dark, light };
 }
 
+/**
+ * The "token | rem | px at M | px at L | where" table under "Typography" in docs/design/theme.md.
+ * The px columns derive from rem. The test recalculates them.
+ */
+function parseTypographyDoc(markdown: string): Map<string, { rem: string; m: string; l: string }> {
+    const scale = new Map<string, { rem: string; m: string; l: string }>();
+    for (const [, name, rem, m, l] of markdown.matchAll(
+        /^\| `(--font-size-[a-z0-9-]+)` \| `([\d.]+rem)` \| ([\d.]+) \| ([\d.]+) \| [^|]+\|$/gm,
+    )) {
+        if (name !== undefined && rem !== undefined && m !== undefined && l !== undefined) {
+            scale.set(name, { rem, m, l });
+        }
+    }
+    if (scale.size === 0) {
+        throw new Error('font scale table not found in theme.md');
+    }
+    return scale;
+}
+
+/** rem → px at `base`, rounded to tenths without a trailing zero, as in the table. */
+function remToPx(rem: string, base: number): string {
+    return String(Math.round(Number.parseFloat(rem) * base * 10) / 10);
+}
+
 const darkPalette = parseRootTokens(TOKENS_CSS);
 const lightCss = TOKENS_CSS.split(":root[data-theme='light']")[1] ?? '';
 const lightPalette = parseRootTokens(`:root ${lightCss}`);
 const documented = parseThemeDoc(THEME_MD);
+const documentedScale = parseTypographyDoc(THEME_MD);
 
 describe('design tokens', () => {
     it(':root declares exactly the non-colour tokens from the handoff and colour tokens from theme.md', () => {
@@ -175,6 +197,40 @@ describe('design tokens', () => {
             const declarations = [...(block[1] ?? '').matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]);
             expect(declarations).toHaveLength(new Set(declarations).size);
         }
+    });
+});
+
+/**
+ * Font scale: docs/design/SPEC-theming-2026-09-12.md §5. Everything uses rem relative to the `html` base, with an
+ * 11px floor (0.6875rem). Only decorative glyphs with no text of their own sit below it.
+ */
+describe('font scale', () => {
+    const GLYPHS = new Set(['--font-size-avatar-glyph']);
+    const FLOOR_REM = 0.6875;
+
+    it('the theme.md table lists exactly the font tokens from tokens.css', () => {
+        const inCss = [...darkPalette.keys()].filter((name) => name.startsWith('--font-size-'));
+        expect(inCss.sort()).toEqual([...documentedScale.keys()].sort());
+    });
+
+    for (const [name, row] of documentedScale) {
+        it(`${name} = ${row.rem}`, () => {
+            expect(darkPalette.get(name)).toBe(normalize(row.rem));
+            expect(row.m).toBe(remToPx(row.rem, 16));
+            expect(row.l).toBe(remToPx(row.rem, 18));
+        });
+    }
+
+    it('only decorative glyphs fall below the 11px minimum', () => {
+        const below = [...documentedScale]
+            .filter(([name, row]) => !GLYPHS.has(name) && Number.parseFloat(row.rem) < FLOOR_REM)
+            .map(([name]) => name);
+        expect(below).toEqual([]);
+    });
+
+    it('the scale base and L text size are set on html', () => {
+        expect(TOKENS_CSS).toMatch(/html\s*\{\s*font-size:\s*100%;\s*\}/);
+        expect(TOKENS_CSS).toMatch(/html\[data-textsize='l']\s*\{\s*font-size:\s*112\.5%;\s*\}/);
     });
 });
 

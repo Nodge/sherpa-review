@@ -20,19 +20,34 @@
     color: var(--text-secondary);
 }
 
+/* The title, context and counters are rows that do not stretch. With large text (size L,
+   system scaling), they no longer fit within the modal width. Wrapping moves
+   the end of the header to a second line, and `flex-end` aligns it right (the spacer takes
+   up the free space on the first line, so it stays left-aligned).
+   The right padding makes room for the close button. It is out of flow to stay
+   in the corner instead of wrapping to a second line on its own. */
 .pr-comments-modal__header {
+    position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: 10px;
-    padding: 13px 15px;
+    padding: 13px 50px 13px 15px;
     border-bottom: 1px solid var(--border-hairline-strong);
     background: var(--surface-card-header);
+}
+
+.pr-comments-modal__header > .pr-comments-modal__icon-button {
+    position: absolute;
+    top: 13px;
+    right: 15px;
 }
 
 .pr-comments-modal__header h2 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--font-size-body);
     font-weight: 600;
 }
 
@@ -44,7 +59,7 @@
 
 .pr-comments-modal__context {
     color: var(--text-dim);
-    font-size: 10.5px;
+    font-size: var(--font-size-gutter);
 }
 
 .pr-comments-modal__header-spacer,
@@ -56,7 +71,7 @@
 .pr-comments-modal__open-threads {
     color: var(--text-muted);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--font-size-badge);
     white-space: nowrap;
 }
 
@@ -66,7 +81,7 @@
     border-radius: 4px;
     background: var(--attention-surface);
     color: var(--attention-text);
-    font-size: 10px;
+    font-size: var(--font-size-badge);
 }
 
 .pr-comments-modal__icon-button {
@@ -142,7 +157,7 @@
 .pr-comments-modal__empty {
     padding: 22px 0;
     color: var(--text-dim-strong);
-    font-size: 12.5px;
+    font-size: var(--font-size-ui);
     text-align: center;
 }
 
@@ -184,20 +199,20 @@
     background: var(--border-strong);
     color: var(--text-secondary);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
 }
 
 .pr-comments-modal__item-header strong {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: var(--font-size-secondary);
     font-weight: 500;
 }
 
 .pr-comments-modal__item-header time {
     color: var(--text-dim-strong);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--font-size-gutter);
 }
 
 .pr-comments-modal__chip {
@@ -207,7 +222,7 @@
     background: var(--pr-comments-published-chip-surface);
     color: var(--pr-comments-published-chip-text);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: var(--font-size-scope);
     white-space: nowrap;
 }
 
@@ -230,7 +245,7 @@
 
 .pr-comments-modal__body {
     color: var(--pr-comments-body-text);
-    font-size: 12.5px;
+    font-size: var(--font-size-ui);
     line-height: 1.6;
     text-wrap: pretty;
 }
@@ -253,7 +268,7 @@
     border-radius: 6px;
     background: var(--pr-comments-delete-surface);
     color: var(--diff-del-text-strong);
-    font-size: 12px;
+    font-size: var(--font-size-secondary);
 }
 
 .pr-comments-modal__delete-button,
@@ -262,7 +277,7 @@
     padding: 0 9px;
     border-radius: 5px;
     font: inherit;
-    font-size: 11.5px;
+    font-size: var(--font-size-control);
     white-space: nowrap;
     cursor: pointer;
 }
@@ -311,7 +326,7 @@
     background: var(--surface-diff-gap);
     color: var(--text-dim-strong);
     font: inherit;
-    font-size: 12.5px;
+    font-size: var(--font-size-ui);
     text-align: left;
     cursor: text;
 }
@@ -328,7 +343,7 @@
 .pr-comments-modal__composer .thread-composer__context {
     min-height: 0;
     margin-bottom: 9px;
-    font-size: 10.5px;
+    font-size: var(--font-size-gutter);
 }
 
 .pr-comments-modal__composer .thread-composer__markdown,
@@ -348,7 +363,7 @@
     gap: 6px;
     color: var(--text-muted-dim);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: var(--font-size-control);
     white-space: nowrap;
 }
 
@@ -369,7 +384,7 @@
     padding-top: 10px;
     border-top: 1px solid var(--border-hairline-soft);
     color: var(--text-dim);
-    font-size: 11.5px;
+    font-size: var(--font-size-control);
 }
 
 .pr-comments-modal__ship-note > svg {
@@ -377,18 +392,7 @@
 }
 
 @media (max-width: 640px) {
-    .pr-comments-modal__header {
-        flex-wrap: wrap;
-    }
-
-    .pr-comments-modal__header-spacer {
-        display: none;
-    }
-
-    .pr-comments-modal__draft-count {
-        margin-left: auto;
-    }
-
+    /* Header wrapping is shared now. A narrow window only needs to hide the keyboard shortcut hint. */
     .pr-comments-modal__shortcuts {
         display: none;
     }
@@ -422,7 +426,7 @@
 .pr-comments-modal__buffered h3 {
     margin: 0;
     color: var(--attention-text);
-    font-size: 11px;
+    font-size: var(--font-size-meta);
     font-weight: 500;
 }
 
@@ -435,7 +439,7 @@
 .pr-comments-modal__buffered-text {
     overflow: hidden;
     color: var(--text-secondary);
-    font-size: 11.5px;
+    font-size: var(--font-size-control);
     white-space: nowrap;
     text-overflow: ellipsis;
 }

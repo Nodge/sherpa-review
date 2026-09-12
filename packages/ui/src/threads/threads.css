@@ -211,7 +211,7 @@
     border-radius: 6px;
     background: var(--pr-comments-delete-surface);
     color: var(--diff-del-text-strong);
-    font-size: 12px;
+    font-size: var(--font-size-secondary);
 }
 
 .thread__delete-confirm-button,
@@ -220,7 +220,7 @@
     padding: 0 9px;
     border-radius: 5px;
     font: inherit;
-    font-size: 11.5px;
+    font-size: var(--font-size-control);
     white-space: nowrap;
     cursor: pointer;
 }
@@ -577,9 +577,14 @@
     pointer-events: none;
 }
 
+/* At larger text sizes, buttons and the keyboard hint no longer fit in a narrow composer
+   (the comments modal at size L). The hint wraps to a second line and aligns
+   right instead of overflowing the edge. */
 .thread-composer__actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--space-inner);
     margin-top: var(--space-inner);
 }

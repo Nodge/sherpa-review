@@ -1,6 +1,6 @@
 /*
- * Design tokens: geometry, fonts and motion in docs/design/README.md, under "Design tokens".
- * Colours for both themes are in docs/design/theme.md.
+ * Design tokens: geometry and motion in docs/design/README.md, "Design tokens" section.
+ * The font scale is in docs/design/theme.md, under "Typography", as are the colours for both themes.
  * The only place in the UI for hex values, shadows, hatches and scales: component styles cannot
  * contain values, only these variables. The handoff table is checked against them
  * mechanically by `src/styles/tokens.test.ts`.
@@ -8,6 +8,20 @@
  * Names are semantic: a variable is named for its role ("application surface"), not its
  * shade ("grey-1"). Otherwise recolouring the system would require rewriting every component.
  */
+
+/*
+ * Type scale base. All text sizes use rem, so the system or browser
+ * font size scales the entire interface. `100%` is the browser base (usually 16px).
+ * L text size (`data-textsize` on `<html>`) raises the base to 18px in one line,
+ * because no text sizes remain in px.
+ */
+html {
+    font-size: 100%;
+}
+
+html[data-textsize='l'] {
+    font-size: 112.5%;
+}
 
 :root {
     color-scheme: dark;
@@ -212,29 +226,37 @@
     --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
+    /*
+     * Scale: docs/design/theme.md, "Typography" section. rem relative to the html base, with an 11px floor
+     * (0.6875rem at a 16px base). Four small tokens hit the floor and now match. They stay
+     * separate because they name different roles and will diverge if the scale moves again.
+     */
     /* Overview screen in the prototype: its PR title is larger than in Route and Full diff. */
-    --font-size-pr-title-overview: 24px;
-    --font-size-pr-title: 22px;
-    --font-size-screen-title: 19px;
-    --font-size-stop-title-high: 17px;
-    --font-size-stop-title: 15.5px;
-    --font-size-section-title: 15px;
-    --font-size-input: 13.5px;
-    --font-size-body: 13px;
-    --font-size-ui: 12.5px;
-    --font-size-secondary: 12px;
-    --font-size-control: 11.5px;
-    --font-size-meta: 11px;
-    --font-size-gutter: 10.5px;
-    --font-size-badge: 10px;
-    --font-size-scope: 9.5px;
-    /* docs/design/README.md §10: the `pci` tag in the tree is 9px, outside the main scale. */
-    --font-size-tag: 9px;
-    /* Prototype: initials in the 18×18 reply avatar. */
-    --font-size-avatar-glyph: 9px;
-    --font-size-code: 12px;
+    --font-size-pr-title-overview: 1.5rem;
+    --font-size-pr-title: 1.375rem;
+    --font-size-screen-title: 1.1875rem;
+    --font-size-stop-title-high: 1.0625rem;
+    --font-size-stop-title: 0.9688rem;
+    --font-size-section-title: 0.9688rem;
+    --font-size-input: 0.875rem;
+    --font-size-body: 0.8438rem;
+    --font-size-ui: 0.8125rem;
+    --font-size-secondary: 0.7813rem;
+    --font-size-control: 0.75rem;
+    --font-size-meta: 0.7188rem;
+    --font-size-gutter: 0.6875rem;
+    --font-size-badge: 0.6875rem;
+    --font-size-scope: 0.6875rem;
+    /* docs/design/README.md §10: the `pci` tag in the tree. */
+    --font-size-tag: 0.6875rem;
+    /* Decorative glyphs below the floor: initials larger than 9px do not fit an 18×18 avatar. */
+    --font-size-avatar-glyph: 0.5625rem;
+    /* The close cross in a 28×28 button is also a glyph, not text. */
+    --font-size-close-glyph: 1.125rem;
+    --font-size-code: 0.75rem;
 
     --line-height-body: 1.62;
+    /* docs/design/SPEC-theming-2026-09-12.md §5: code line density does not depend on text size. */
     --line-height-code: 20px;
 
     /* --- Radii --- */

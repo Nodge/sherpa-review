@@ -82,12 +82,15 @@
 }
 
 /* Locale switch: the gallery shows the state in both languages. */
-.gallery__locales {
+/* Gallery controls: language and text size use identical rows of monospace buttons. */
+.gallery__locales,
+.gallery__textsize {
     display: flex;
     gap: 4px;
 }
 
-.gallery__locales button {
+.gallery__locales button,
+.gallery__textsize button {
     padding: 2px 8px;
     border: 1px solid var(--border-standard);
     border-radius: var(--radius-badge);
@@ -99,7 +102,8 @@
     cursor: pointer;
 }
 
-.gallery__locales button[aria-pressed='true'] {
+.gallery__locales button[aria-pressed='true'],
+.gallery__textsize button[aria-pressed='true'] {
     background: var(--surface-selected);
     color: var(--text-primary);
 }
@@ -231,7 +235,7 @@
     background: var(--surface-diff-card);
     font-family: var(--font-mono);
     font-size: var(--font-size-code);
-    line-height: 20px;
+    line-height: var(--line-height-code);
 }
 
 .gallery-selection-popover__header {

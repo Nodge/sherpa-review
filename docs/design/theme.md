@@ -1,10 +1,10 @@
 # Dark and light themes
 
 The only source of colour values is `packages/ui/src/styles/tokens.css`. Dark values are declared
-in `:root`, and light values override them in `:root[data-theme='light']`. Geometry, fonts, radii,
-spacing and motion are shared between themes and documented in `README.md`, under "Design tokens". The table below
-is checked against CSS by `packages/ui/src/styles/tokens.test.ts`. Both lists must match
-in both keys and values.
+in `:root`, and light values override them in `:root[data-theme='light']`. Geometry, radii,
+spacing and motion are shared between themes and documented in `README.md`, under "Design tokens". The font
+scale is below, under "Typography". Both tables in this document are checked against CSS by
+`packages/ui/src/styles/tokens.test.ts`. The lists must match in both keys and values.
 
 The `data-theme` attribute is on `<html>`. Switching it also switches `color-scheme`, which controls
 native scrollbars, inputs and dropdowns. The reviewer chooses the theme: `dark`,
@@ -37,6 +37,44 @@ fills combine migrated components.
   so the button has its own pair.
 - A viewed stop and a read file chip aren't dimmed with opacity. The former uses
   muted heading and paragraph tokens, and the latter uses only a green checkmark.
+
+## Typography
+
+Text sizes use rem relative to the `html` base, per `SPEC-theming-2026-09-12.md` §5. The base is `100%`,
+so it uses the browser size (usually 16px). The system or browser font size setting
+scales the entire interface. Text size L uses `data-textsize='l'` on `<html>`, with a
+`112.5%` (18px) base. There are no other sizes, as the spec rejected S (§9).
+
+The scale's minimum is 11px (`0.6875rem`). Everything that was 9–10.5px in production was raised to it, so
+4 small tokens now have the same size. Decorative glyphs without their own text fall outside
+the scale, as they have no text of their own: the close icon (18px) and avatar initials. Only the
+initials stay below the minimum because they do not fit in an 18×18 circle above 9px. `--line-height-code` deliberately stays
+in px because code line density does not depend on text size.
+
+The "px at M" and "px at L" columns are derived (`rem × 16` and `rem × 18`, rounded to tenths).
+The test recalculates them to keep the table in sync with CSS.
+
+| Token | rem | px at M | px at L | Where |
+|---|---|---|---|---|
+| `--font-size-pr-title-overview` | `1.5rem` | 24 | 27 | PR title in Overview |
+| `--font-size-pr-title` | `1.375rem` | 22 | 24.8 | PR title in Route and Full diff |
+| `--font-size-screen-title` | `1.1875rem` | 19 | 21.4 | screen headings |
+| `--font-size-close-glyph` | `1.125rem` | 18 | 20.3 | panel close icon (glyph) |
+| `--font-size-stop-title-high` | `1.0625rem` | 17 | 19.1 | high-tier stop title |
+| `--font-size-stop-title` | `0.9688rem` | 15.5 | 17.4 | stop title |
+| `--font-size-section-title` | `0.9688rem` | 15.5 | 17.4 | section headings |
+| `--font-size-input` | `0.875rem` | 14 | 15.8 | input fields, tour card title |
+| `--font-size-body` | `0.8438rem` | 13.5 | 15.2 | stop paragraphs, brand in the header |
+| `--font-size-ui` | `0.8125rem` | 13 | 14.6 | `body` base, main UI text, tour card body |
+| `--font-size-secondary` | `0.7813rem` | 12.5 | 14.1 | secondary UI text |
+| `--font-size-control` | `0.75rem` | 12 | 13.5 | controls, filenames, monospace button labels |
+| `--font-size-code` | `0.75rem` | 12 | 13.5 | code in the diff and snippets |
+| `--font-size-meta` | `0.7188rem` | 11.5 | 12.9 | monospace metadata and counters |
+| `--font-size-gutter` | `0.6875rem` | 11 | 12.4 | gutters, paths, monospace labels |
+| `--font-size-badge` | `0.6875rem` | 11 | 12.4 | badges, counters, ⌘K |
+| `--font-size-scope` | `0.6875rem` | 11 | 12.4 | kickers and scope labels |
+| `--font-size-tag` | `0.6875rem` | 11 | 12.4 | scope tag in the tree and card header |
+| `--font-size-avatar-glyph` | `0.5625rem` | 9 | 10.1 | avatar initials (glyph) |
 
 ## Colour tokens
 
