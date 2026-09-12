@@ -2,7 +2,8 @@ import type { UiSettings, UiSettingsPatch } from '@sherpa/protocol';
 import { uiSettingsSchema } from '@sherpa/protocol';
 
 /**
- * Global UI settings: diff mode, ship mode, composer markup, language and theme. They live on the
+ * Global UI settings include diff mode, ship mode, composer markup, language, theme and text
+ * size. They live on the
  * server in `~/.sherpa/settings.json` instead of `localStorage` because each PR server listens on
  * a random port, giving each PR its own browser storage.
  *
@@ -22,6 +23,7 @@ const SETTINGS_FIELDS = [
     'composerLayout',
     'locale',
     'theme',
+    'textSize',
     // Nested objects use reference equality for "same value", so the patch is always sent.
     // Each has one writer: the onboarding tour and "do not remind me about this version".
     'onboarding',

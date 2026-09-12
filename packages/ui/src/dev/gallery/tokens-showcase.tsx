@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { useUiSettings } from '../../settings/context.tsx';
+import { useResolvedTheme } from '../../settings/document-settings.tsx';
 import tokensCss from '../../styles/tokens.css?raw';
 
 /**
@@ -46,7 +46,7 @@ function isPaint(value: string): boolean {
 }
 
 export function TokenSwatches() {
-    const { theme } = useUiSettings();
+    const theme = useResolvedTheme();
     return (
         <div className="showcase">
             {GROUPS.map((group) => (

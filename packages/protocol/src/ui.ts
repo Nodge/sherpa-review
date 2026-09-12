@@ -493,8 +493,10 @@ const uiSettingsFields = {
     composerLayout: z.enum(['visual', 'markdown']),
     /** UI language. */
     locale: localeSettingSchema,
-    /** UI theme, shared across PRs. */
-    theme: z.enum(['dark', 'light']),
+    /** UI theme, shared across all PRs. `auto` follows the system theme, an explicit choice does not. */
+    theme: z.enum(['auto', 'dark', 'light']),
+    /** Interface text size. `l` uses the same scale at a larger size (`docs/design/SPEC-theming-2026-09-12.md §5`). */
+    textSize: z.enum(['m', 'l']),
     /**
      * Onboarding tour: `completedAt` means completed or skipped
      * (skipping is permanent). `step` is where an unfinished tour paused, and it resumes there
@@ -515,7 +517,8 @@ export const uiSettingsSchema = z.object({
     shipMode: uiSettingsFields.shipMode.default('ship'),
     composerLayout: uiSettingsFields.composerLayout.default('visual'),
     locale: uiSettingsFields.locale.default('auto'),
-    theme: uiSettingsFields.theme.default('dark'),
+    theme: uiSettingsFields.theme.default('auto'),
+    textSize: uiSettingsFields.textSize.default('m'),
     onboarding: uiSettingsFields.onboarding.default({ completedAt: null, step: 0 }),
     updates: uiSettingsFields.updates.default({ dismissedVersion: null }),
 });

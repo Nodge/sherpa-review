@@ -19,12 +19,24 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { databasePathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
 import { startServer } from './server.js';
+import { SettingsStore } from './settings-store.js';
 import { directoryAssets } from './static.js';
-import { get, makeTempSherpaDir, postJson, removeTempSherpaDir } from './test-support.js';
+import { get, makeTempSherpaDir, patchJson, postJson, removeTempSherpaDir } from './test-support.js';
 
 const PR_KEY = 'github-quillmart--quillmart--4242';
 const WORKER = 'w-ui';
 const WORKER_BASE = { protocolVersion: PROTOCOL_VERSION, cliVersion: '0.1.0', workerId: WORKER };
+/** Minimal UI build document: state injection must handle any valid html. */
+const INDEX_HTML = [
+    '<!doctype html>',
+    '<html lang="ru">',
+    '    <head>',
+    '        <title>Sherpa</title>',
+    '        <link rel="stylesheet" href="/assets/app.css" />',
+    '    </head>',
+    '    <body><div id="root"></div></body>',
+    '</html>',
+].join('\n');
 
 describe('UI endpoints', () => {
     let sherpaDir: string;
@@ -327,7 +339,7 @@ describe('UI endpoints', () => {
         beforeEach(async () => {
             uiDir = path.join(sherpaDir, 'ui-dist');
             await fs.mkdir(path.join(uiDir, 'assets'), { recursive: true });
-            await fs.writeFile(path.join(uiDir, 'index.html'), '<!doctype html><title>Sherpa</title>');
+            await fs.writeFile(path.join(uiDir, 'index.html'), INDEX_HTML);
             await fs.writeFile(path.join(uiDir, 'assets', 'app.js'), 'export const ok = 1;');
             await fs.writeFile(path.join(sherpaDir, 'secret.txt'), 'token and other secrets');
         });
@@ -340,6 +352,37 @@ describe('UI endpoints', () => {
             expect(response.status).toBe(200);
             expect(response.headers.get('content-type')).toContain('text/html');
             expect(await response.text()).toContain('Sherpa');
+        });
+
+        it('includes the saved theme and text size in the first frame', async () => {
+            new SettingsStore(sherpaDir).patch({ theme: 'light', textSize: 'l' });
+            const server = await start(uiDir);
+
+            const html = await (await get(server.port, '/')).text();
+
+            expect(html).toContain('data-theme="light"');
+            expect(html).toContain('data-textsize="l"');
+            expect(html).not.toContain('prefers-color-scheme');
+        });
+
+        it('auto mode: the embedded script sets the theme before stylesheets load', async () => {
+            const server = await start(uiDir);
+
+            const html = await (await get(server.port, '/')).text();
+
+            // A fresh `settings.json` means `auto`: nothing to inject, because the browser knows the system theme.
+            expect(html).not.toContain('data-theme=');
+            expect(html).toContain('prefers-color-scheme: dark');
+            expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
+        });
+
+        it('applies a theme change to the next index.html request without a restart', async () => {
+            const server = await start(uiDir);
+            expect(await (await get(server.port, '/')).text()).not.toContain('data-theme=');
+
+            await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'dark' }, server.token);
+
+            expect(await (await get(server.port, '/')).text()).toContain('data-theme="dark"');
         });
 
         it('serves assets with the correct content-type', async () => {

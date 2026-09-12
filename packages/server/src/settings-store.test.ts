@@ -23,7 +23,8 @@ describe('global UI settings', () => {
             shipMode: 'ship',
             composerLayout: 'visual',
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -32,7 +33,7 @@ describe('global UI settings', () => {
     it('preserves other settings in an old file and keeps the theme after reopening', async () => {
         await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify({ diffMode: 'split', locale: 'en' }));
         const store = new SettingsStore(sherpaDir);
-        expect(store.read()).toMatchObject({ theme: 'dark', diffMode: 'split', locale: 'en' });
+        expect(store.read()).toMatchObject({ theme: 'auto', textSize: 'm', diffMode: 'split', locale: 'en' });
         store.patch({ theme: 'light' });
         expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme: 'light', diffMode: 'split', locale: 'en' });
     });
@@ -60,7 +61,8 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -114,7 +116,8 @@ describe('global UI settings', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });

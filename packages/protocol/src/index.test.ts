@@ -436,13 +436,19 @@ describe('locale, onboarding, update', () => {
     it('settings: new fields get defaults, patches have no defaults and replace fields as a whole', () => {
         expect(uiSettingsSchema.parse({})).toMatchObject({
             locale: 'auto',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
         expect(uiSettingsSchema.safeParse({ locale: 'de' }).success).toBe(false);
-        expect(uiSettingsSchema.parse({ diffMode: 'split' })).toMatchObject({ theme: 'dark', diffMode: 'split' });
+        // An old settings file with an explicit theme is read as is. It has no text size.
+        expect(uiSettingsSchema.parse({ theme: 'dark' })).toMatchObject({ theme: 'dark', textSize: 'm' });
         expect(uiSettingsSchema.safeParse({ theme: 'sepia' }).success).toBe(false);
+        expect(uiSettingsSchema.safeParse({ textSize: 'xl' }).success).toBe(false);
         expect(uiSettingsPatchSchema.parse({ theme: 'light' })).toEqual({ theme: 'light' });
+        expect(uiSettingsPatchSchema.parse({ textSize: 'l' })).toEqual({ textSize: 'l' });
+        expect(uiSettingsPatchSchema.safeParse({ textSize: 'm', theme: 'auto' }).success).toBe(true);
         expect(uiSettingsSchema.safeParse({ onboarding: { completedAt: null, step: -1 } }).success).toBe(false);
         expect(uiSettingsSchema.safeParse({ updates: { dismissedVersion: 'latest' } }).success).toBe(false);
 

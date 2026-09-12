@@ -111,7 +111,7 @@ There is no separate F4 spec. Threads from colleagues and the AI review bot are 
 
 The remaining specs cover element behaviour from `docs/design/SPEC-elements.md`: `action-bar-dock`, `context-expansion`, `draft-buffer`, `empty-pr`, `file-menu`, `icons`, `image-diff`, `keyboard` (the full key map), `line-wrapping`, `locale`, `onboarding`, `route-file-collapse`, `route-fill-stop`, `route-regeneration`, `route-unmount`, `scroll-stability`, `sticky-file-header`, `ui-pr-state`, `ui-settings`, `update-toast`.
 
-Timeouts: 120 s per test, 10 s for `expect`, one worker process without parallelism (servers use real ports), viewport 1440×900, browser locale pinned to `ru-RU` (the UI language defaults to automatic, while Chromium arrives with `en-US`). Both F3 specs raise their timeout to 240 s because each runs two full route generations through the CLI bundle. Traces and screenshots are saved only on failure.
+Timeouts: 120 s per test, 10 s for `expect`, one worker with no parallelism (servers occupy real ports), viewport 1440×900, browser locale pinned to `ru-RU` (the UI language defaults to automatic, and Chromium starts with `en-US`), system theme pinned to dark (the UI theme defaults to `auto`, and specs check dark palette colours. The theme spec switches it itself). Both F3 specs raise their timeout to 240 s because each generates two full routes through the CLI bundle. Traces and screenshots are saved only on failure.
 
 ## 5. Performance budgets
 
@@ -150,7 +150,7 @@ The `HUGE_BUDGET_ENFORCED` switch at the top of the spec is currently `true`. It
 pnpm --filter @sherpa/ui dev
 ```
 
-and open `/gallery.html`. States are grouped by subsystem on the left, with the selected state on the right. State and language live in the address bar (`#state=…&locale=en`), so you can share a link to a specific state. Changing either remounts the render so initial props apply again. The gallery is excluded from the production build, which builds only `index.html`.
+and open `/gallery.html`. States grouped by subsystem are on the left, the selected state is on the right. State, language, theme and text size live in the address bar (`#state=…&locale=ru&theme=auto|dark|light&textsize=m|l`. The theme defaults to dark so cards don't depend on the system theme), so a link to a specific state can be shared. Changing the state or language remounts the render and reapplies initial props. The gallery isn't included in the production build, which builds only `index.html`.
 
 The gallery is used for visual acceptance. Open it beside the `docs/design/Sherpa.dc.html` prototype at the same viewport size and fix differences until they match. A new state or component needs a new gallery card.
 

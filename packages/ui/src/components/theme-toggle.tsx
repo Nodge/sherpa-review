@@ -1,10 +1,15 @@
 import { useT } from '../i18n/index.js';
-import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
+import { useUiSettingsStore } from '../settings/context.tsx';
+import { useResolvedTheme } from '../settings/document-settings.tsx';
 
-/** The label names the current theme. The accessible name and tooltip describe the click action. */
+/**
+ * The label names the theme the reviewer currently sees. The accessible name and tooltip describe the action
+ * on click. Clicking sets the explicit opposite theme. In `auto` mode, it chooses the opposite of the theme
+ * supplied by the system.
+ */
 export function ThemeToggle() {
     const t = useT();
-    const { theme } = useUiSettings();
+    const theme = useResolvedTheme();
     const settings = useUiSettingsStore();
     const action = t(theme === 'dark' ? 'theme.toLight' : 'theme.toDark');
     return (

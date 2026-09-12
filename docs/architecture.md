@@ -105,7 +105,9 @@ The **PR database** is `sherpa.db`, with WAL enabled. A migration list maintains
 
 These survive server restarts: task queue and leases, worker identity, reading progress (file and stop marks, ranges), route snapshots and generation state, iterations and computed interdiffs, chat history and agent notes, draft buffer, per-PR UI state, idle counter. Only cheap-to-recreate state lives in memory: host subscriptions, open SSE channels, the tab's parsed-patch cache.
 
-UI settings (`diffMode`, `shipMode`, composer layout, language, onboarding and update notification state) live in one file per user, outside the PR database. Each PR server listens on a random port, and the browser's `localStorage` is empty for each new port. Disk is always the source of truth. Both reads and patch merges use fresh file contents.
+UI settings (`diffMode`, `shipMode`, composer layout, language, theme, text size, onboarding state and update notifications) live in one file per user, outside the PR database. Each PR server listens on a random port, and the browser's `localStorage` is empty for each new port. Disk is always the source of truth. Both reads and patch merges use the latest file contents.
+
+The server injects the theme and text size into the served `index.html` (`packages/server/src/ui-document.ts`). The first frame must use the saved theme, while the `GET /api/ui/settings` response arrives in the second frame. An explicit theme travels as the `data-theme` attribute on `<html>`. Auto mode uses an inline script in `<head>` to set the attribute from the system theme before styles load. The UI takes over from there (`packages/ui/src/settings/document-settings.tsx`). `data-theme` always holds the resolved value. CSS knows nothing about `auto`. The UI does not overwrite attributes before `GET /api/ui/settings` responds. The first render runs on a timeout, so a slow or failed endpoint leaves the store with defaults instead of the reviewer's choice.
 
 ## 4. Route: orchestrator and validator
 

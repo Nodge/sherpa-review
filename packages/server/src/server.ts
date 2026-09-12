@@ -61,6 +61,7 @@ import { createSettingsRoutes } from './settings-routes.js';
 import { SettingsStore } from './settings-store.js';
 import { holdsPayload, SharedPayloadStore } from './shared-payload.js';
 import type { StaticAssets } from './static.js';
+import { withDocumentSettings } from './ui-document.js';
 import { UiPresence } from './ui-presence.js';
 import { createUiRoutes } from './ui-routes.js';
 import type { UpdateCheckOptions } from './update-check.js';
@@ -173,6 +174,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
     await cleanStaleManifests(serversDir);
 
     const token = createToken();
+    // Settings are global. The settings endpoint, update check (`dismissedVersion`)
+    // and `index.html` serving read them. The first frame must use the saved theme.
+    const settingsStore = new SettingsStore(sherpaDir);
     // Worker endpoints join this array after the database opens. Before claiming the manifest,
     // the server must respond only to `/healthz`, which competing processes use to check whether we're alive.
     const routes: Route[] = [healthRoute(prKey)];
@@ -192,7 +196,9 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
         routes,
         activity: idleWatch,
         ready: routesReady,
-        ...(options.assets === undefined ? {} : { assets: options.assets }),
+        ...(options.assets === undefined
+            ? {}
+            : { assets: withDocumentSettings(options.assets, () => settingsStore.read()) }),
     };
     const httpServer = http.createServer(createRequestListener(listenerOptions));
     const shutdownController = new AbortController();
@@ -271,8 +277,6 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             store: new DraftBufferStore(options.now === undefined ? { db } : { db, now: options.now }),
             reviewFeed,
         });
-        // Settings are global: both the settings endpoint and update checker read them (`dismissedVersion`).
-        const settingsStore = new SettingsStore(sherpaDir);
         // Check for a newer version in main. Disabled on the fixture host, where the version
         // comes from a dev endpoint instead of the review host.
         const updateChecker = new UpdateChecker({

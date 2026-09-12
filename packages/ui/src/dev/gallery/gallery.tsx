@@ -6,8 +6,8 @@ import { LocaleProvider } from '../../i18n/index.js';
 import './gallery.css';
 import { ThemeToggle } from '../../components/theme-toggle.tsx';
 import { SettingsProvider } from '../../settings/context.tsx';
+import { DocumentSettingsSync } from '../../settings/document-settings.tsx';
 import { createUiSettingsStore } from '../../settings/settings-store.js';
-import { ThemeSync } from '../../settings/theme.tsx';
 import type { GalleryState } from './states.tsx';
 import { GALLERY_STATES } from './states.tsx';
 
@@ -16,23 +16,31 @@ import { GALLERY_STATES } from './states.tsx';
  * No server or token, only fixtures and static props.
  *
  * The locale is selected in the header and stored in the URL (`#locale=ru`): states need inspection in both
- * languages. The provider receives the language as an explicit prop. The theme lives in a local settings store
- * and in the URL (`#theme=light`). The same toggle works without a server.
+ * languages, so the provider gets the language as an explicit prop. Theme and text size live in the local settings
+ * store and in the URL (`#theme=light`, `#textsize=l`). The same toggle works without a server.
+ * The theme defaults to dark here rather than the product's `auto`: cards must render identically
+ * under any system theme unless `#theme=auto` is explicitly requested.
  */
 export function Gallery({
     initialId,
     initialLocale = 'en',
     initialTheme = 'dark',
+    initialTextSize = 'm',
 }: {
     initialId: string | null;
     initialLocale?: Locale;
     initialTheme?: UiSettings['theme'];
+    initialTextSize?: UiSettings['textSize'];
 }) {
     const [settings] = useState(() =>
-        createUiSettingsStore({ loaded: true, initial: { theme: initialTheme } }),
+        createUiSettingsStore({ loaded: true, initial: { theme: initialTheme, textSize: initialTextSize } }),
     );
     useEffect(() => settings.subscribe(() => {
-        const fragment = updateFragment(window.location.hash, { theme: settings.getSnapshot().theme });
+        const snapshot = settings.getSnapshot();
+        const fragment = updateFragment(window.location.hash, {
+            theme: snapshot.theme,
+            textsize: snapshot.textSize,
+        });
         history.replaceState(null, '', fragment);
     }), [settings]);
     const [selectedId, setSelectedId] = useState(initialId ?? GALLERY_STATES[0]?.id ?? '');
@@ -52,7 +60,7 @@ export function Gallery({
 
     return (
         <SettingsProvider store={settings}>
-            <ThemeSync />
+            <DocumentSettingsSync />
             <div className="gallery">
                 <nav className="gallery__sidebar" aria-label="States">
                     <div className="gallery__brand">State gallery</div>
@@ -118,6 +126,16 @@ const LOCALES: readonly Locale[] = ['ru', 'en'];
 /** `#locale=ru` from the URL. Everything else (including empty) means English. */
 export function parseGalleryLocale(value: string | null): Locale {
     return value === 'ru' ? 'ru' : 'en';
+}
+
+/** `#theme=auto|dark|light`. All other values mean dark, so cards do not depend on the system theme. */
+export function parseGalleryTheme(value: string | null): UiSettings['theme'] {
+    return value === 'light' || value === 'auto' ? value : 'dark';
+}
+
+/** `#textsize=l`. Any other value uses the normal size. */
+export function parseGalleryTextSize(value: string | null): UiSettings['textSize'] {
+    return value === 'l' ? 'l' : 'm';
 }
 
 function groupBy(states: readonly GalleryState[]): [string, GalleryState[]][] {

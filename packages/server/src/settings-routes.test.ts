@@ -52,7 +52,8 @@ describe('global UI settings endpoint', () => {
             shipMode: 'ship',
             composerLayout: 'visual',
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -70,7 +71,8 @@ describe('global UI settings endpoint', () => {
             shipMode: 'sticky_ship',
             composerLayout: 'visual',
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
@@ -91,7 +93,8 @@ describe('global UI settings endpoint', () => {
         expect(uiSettingsResponseSchema.parse(await response.json()).settings).toMatchObject({
             onboarding: { completedAt: null, step: 3 },
             locale: 'auto',
-            theme: 'dark',
+            theme: 'auto',
+            textSize: 'm',
         });
     });
 
