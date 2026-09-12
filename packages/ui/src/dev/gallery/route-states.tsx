@@ -174,7 +174,7 @@ export const ROUTE_STATES: readonly RouteGalleryState[] = [
     },
     {
         id: 'route-viewed',
-        title: 'stop viewed: column dimmed, hunks collapsed',
+        title: 'stop viewed: title and paragraph dimmed, hunks collapsed',
         render: () => <RouteState stopViewed={['s01']} />,
     },
     {

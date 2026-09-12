@@ -86,7 +86,7 @@
     width: 19px;
     height: 19px;
     border-radius: 50%;
-    background: var(--surface-segment-active);
+    background: var(--surface-selected);
     font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
@@ -235,7 +235,7 @@
     width: 19px;
     height: 19px;
     border-radius: 50%;
-    background: var(--surface-segment-active);
+    background: var(--surface-selected);
     font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);

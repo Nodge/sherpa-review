@@ -32,6 +32,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-inner-tight);
+    /* Size the bar to its content. Without this, large text made it wrap onto 3 lines. */
+    width: max-content;
     max-width: calc(100vw - var(--dock-left, 0px) - var(--dock-right, 0px) - 44px);
     padding: 8px 9px;
     transform: translateX(-50%);

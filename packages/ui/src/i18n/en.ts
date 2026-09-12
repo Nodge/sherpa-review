@@ -483,7 +483,6 @@ export const en: Dictionary = {
     'diff.gap.both': (unchanged: string, elsewhere: string) => `${unchanged} and ${elsewhere}`,
     'diff.gap.expandFailed': 'could not load · retry',
     'diff.gap.loading': 'loading…',
-    'diff.gap.expandHint': (base: string) => `${base} — expand`,
     'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} ${form(step, 'line', 'lines')} up · ${base}`,
     'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} ${form(step, 'line', 'lines')} down · ${base}`,
     'diff.gap.aria': 'direction to expand the hidden context',

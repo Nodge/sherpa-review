@@ -94,7 +94,12 @@
     min-width: 0;
 }
 
-/* The name only shrinks when it alone does not fit. It stays whole while a path remains beside it (docs/design/SPEC-elements.md §1.2). */
+/*
+ * Header truncation (docs/design/SPEC-elements.md §1.2) matches the file tree (`tree/file-tree.css`):
+ * the directory chain shrinks first and truncates on the left (`…/api/v3`). The filename gives up space
+ * only to itself and truncates at the end.
+ * `bdi` isolates direction, or left truncation (`direction: rtl`) would move the slash to the other edge.
+ */
 .file-card__name {
     flex: 0 0 auto;
     max-width: 100%;
@@ -110,20 +115,49 @@
     text-decoration: line-through;
 }
 
-/* The path shrinks first, down to zero. */
+/*
+ * Path to the file, plus the old path for renames. Each directory chain truncates
+ * separately, and the old filename holds its space to the end, just like the new one.
+ */
 .file-card__path {
+    display: flex;
+    align-items: baseline;
     flex: 0 1 auto;
     min-width: 0;
+    overflow: hidden;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--text-dim-strong);
-    /* The path truncates from the left (docs/design/SPEC-elements.md §1.2). rtl truncates the start of the line, and `bdi` isolates the contents,
-       so the path itself reads in the normal order. `unicode-bidi: plaintext` does not work because it moves truncation to the right. */
+}
+
+/*
+ * The directory chain shrinks first, down to zero. `direction: rtl` truncates the beginning of the line,
+ * while `bdi` isolates the contents so the path itself reads in the usual order.
+ * `unicode-bidi: plaintext` does not work here because it moves truncation to the right.
+ */
+.file-card__path-dir {
+    flex: 0 1 auto;
+    min-width: 0;
     direction: rtl;
     text-align: left;
+}
+
+/* The name gives up space only to itself. */
+.file-card__path-name {
+    flex: 0 0 auto;
+    max-width: 100%;
+}
+
+.file-card__path-dir,
+.file-card__path-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.file-card__path-arrow {
+    flex: none;
+    padding: 0 4px;
 }
 
 .file-card__old-path {

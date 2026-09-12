@@ -1,5 +1,6 @@
 /*
- * Design handoff tokens (docs/design/README.md, "Design tokens" section).
+ * Design tokens: geometry, fonts and motion in docs/design/README.md, under "Design tokens".
+ * Colours for both themes are in docs/design/theme.md.
  * The only place in the UI for hex values, shadows, hatches and scales: component styles cannot
  * contain values, only these variables. The handoff table is checked against them
  * mechanically by `src/styles/tokens.test.ts`.
@@ -13,76 +14,76 @@
 
     /* --- Surfaces --- */
     --surface-app: #0d0e10;
-    --surface-panel: #101113;
-    --surface-panel-deep: #121316;
-    --surface-diff-card: #0f1012;
-    --surface-card-header: #141518;
-    --surface-input: #15171b;
-    --surface-chip: #131417;
-    --surface-control: #161819;
-    --surface-raised: #181a1e;
-    --surface-popover: #1b1e24;
-    --surface-selected: #1f2228;
+    --surface-panel: #121315;
+    --surface-panel-deep: #16171b;
+    --surface-diff-card: #111214;
+    --surface-card-header: #1a1b1e;
+    --surface-input: #1b1e24;
+    --surface-chip: #18191d;
+    --surface-control: #1d2020;
+    --surface-raised: #212429;
+    --surface-popover: #262b34;
+    --surface-selected: #2d323b;
     /* docs/design/README.md §11 and §6: dedicated banner, command and ownership chip surfaces. */
-    --surface-offline-banner: #151619;
-    --surface-command: #0e0f11;
-    --ownership-mine-surface: #132019;
+    --surface-offline-banner: #1b1c20;
+    --surface-command: #0f1012;
+    --ownership-mine-surface: #182e20;
     /* docs/design/README.md §2: `uncovered` footer row in the test digest. */
-    --surface-digest-footer: #151316;
+    --surface-digest-footer: #1b171b;
     /* docs/design/README.md §14: backdrop under the command palette. */
     --overlay-dialog: rgba(7, 8, 9, 0.66);
     /* docs/design/README.md §1: sticky route toolbar uses the application background with transparency for blur(8px). */
     --surface-toolbar: rgba(13, 14, 16, 0.92);
     /* docs/design/SPEC-additions-2026-08-26.md §1c/§1d: comment states and draft editing. */
     --pr-comments-overlay: rgba(8, 9, 10, 0.55);
-    --pr-comments-draft-surface: #131210;
-    --comment-edit-surface: #12141c;
-    --pr-comments-published-chip-surface: #191b21;
-    --comment-edit-chip-surface: #1b2030;
-    --pr-comments-delete-surface: #170f0f;
+    --pr-comments-draft-surface: #181510;
+    --comment-edit-surface: #161926;
+    --pr-comments-published-chip-surface: #23252f;
+    --comment-edit-chip-surface: #262e4a;
+    --pr-comments-delete-surface: #1f100e;
     --pr-comments-delete-button-surface: #3a1f1e;
     --pr-comments-delete-button-hover: #4a2725;
     /* docs/design/SPEC-additions-2026-08-26.md §1e: code block inside an "outside the diff" thread card. */
-    --surface-code-inset: #0b0c0e;
+    --surface-code-inset: #090a0c;
 
     /* --- Borders --- */
-    --border-hairline: #1a1d21;
-    --border-hairline-strong: #1e2126;
-    --border-hairline-soft: #191c20;
-    --border-standard: #22252b;
-    --border-control: #24272d;
-    --border-chip: #262a30;
+    --border-hairline: #24292f;
+    --border-hairline-strong: #2c3038;
+    --border-hairline-soft: #23272d;
+    --border-standard: #333741;
+    --border-control: #363b44;
+    --border-chip: #3a404a;
     /* docs/design/README.md §1: toolbar control separator, 1×18px. */
-    --border-divider: #26292f;
-    --border-strong: #2b2f36;
-    --border-strong-lifted: #2f333a;
+    --border-divider: #3a3f48;
+    --border-strong: #434954;
+    --border-strong-lifted: #4a515c;
     --ownership-mine-border: #24422f;
-    --border-raised-bar: #303540;
-    --border-raised-dialog: #313640;
-    --border-raised-popover: #333842;
+    --border-raised-bar: #4c5466;
+    --border-raised-dialog: #4e5666;
+    --border-raised-popover: #515a6a;
     --pr-comments-draft-border: #33301f;
     --comment-edit-border: #3c4560;
     --pr-comments-delete-border: #4a2f2d;
     --pr-comments-delete-button-border: #5c3230;
-    --pr-comments-editor-border: #343941;
+    --pr-comments-editor-border: #535b68;
 
     /* --- Text --- */
-    --text-primary: #f0f1f4;
-    --text-primary-soft: #e9eaee;
-    --text-secondary: #c7cad1;
-    --text-secondary-dim: #b9bec7;
-    --text-body: #a9aeb7;
-    --text-muted: #9ba1ab;
-    --text-muted-dim: #8a8f98;
-    --text-dim: #6b7078;
-    --text-dim-strong: #5e636b;
-    --text-gutter: #43474e;
-    --pr-comments-published-chip-text: #8a90a0;
+    --text-primary: #ffffff;
+    --text-primary-soft: #ffffff;
+    --text-secondary: #ffffff;
+    --text-secondary-dim: #ffffff;
+    --text-body: #ffffff;
+    --text-muted: #ffffff;
+    --text-muted-dim: #ffffff;
+    --text-dim: #e7f1ff;
+    --text-dim-strong: #dae4f3;
+    --text-gutter: #6e7580;
+    --pr-comments-published-chip-text: #eef8ff;
     --comment-edit-chip-text: #9ea8ff;
-    --pr-comments-body-text: #c3c8d1;
-    --chat-body-text: #c2c7d0;
+    --pr-comments-body-text: #ffffff;
+    --chat-body-text: #ffffff;
     --pr-comments-delete-button-text: #f2c4c0;
-    --pr-comments-note-icon: #8a7550;
+    --pr-comments-note-icon: #9c8760;
 
     /* --- Accent: "you can act here" and the AI layer (docs/design/SPEC-elements.md §1.2) --- */
     --accent: #7f8cff;
@@ -93,9 +94,9 @@
     --accent-text-soft: #c9cdf0;
     --accent-text-bright: #dfe2ff;
     /* docs/design/README.md §7: queued plan item, text on the generation card accent surface. */
-    --accent-text-queued: #5c6288;
+    --accent-text-queued: #7d83ad;
     --accent-surface: #131424;
-    --accent-surface-alt: #141520;
+    --accent-surface-alt: #1a1b2d;
     --accent-border: #262a45;
     --accent-selection: rgba(127, 140, 255, 0.13);
     --accent-text-selection: rgba(127, 140, 255, 0.28);
@@ -106,88 +107,106 @@
     --attention-text-dim: #c9a464;
     --attention-text-soft: #e6d7bd;
     --attention-surface: #241f14;
-    --attention-surface-alt: #191712;
+    --attention-surface-alt: #231e14;
     --attention-border: #4a4230;
     --attention-border-alt: #3d3524;
     --attention-border-strong: #6b5b39;
-    /* docs/design/README.md §9: the iteration banner's primary button uses `--attention` fill and `#1b1508` ink. */
-    --attention-ink: #1b1508;
+    /* docs/design/SPEC-theming-2026-09-12.md §1: amber primary banner button has its own pair. Its light-theme
+       fill is darker than the shared `--attention` (orange with black text on cream looked muddy). */
+    --attention-button: #e2954c;
+    --attention-button-ink: #1b1508;
     /* docs/design/README.md §1 item 4: "why the stop changed" block, label and body. */
-    --attention-label: #8a7550;
+    --attention-label: #9c8760;
     --attention-body: #d8c9ad;
     /* docs/design/SPEC-additions-2026-08-26.md §1d: closed field with a draft and confirmed autosave. */
-    --draft-field-surface: #141210;
+    --draft-field-surface: #1a1510;
     --draft-saved: #5e8a6d;
     /* docs/design/README.md §10: the `pci` tag in the tree row has a border in its own shade. */
     --tag-pci-border: #3d3a2c;
 
     /* --- Onboarding (docs/design/README.md §16): tour card and dashed underline under "Skip" --- */
-    --surface-tour-card: #171a1f;
-    --tour-skip-underline: #3a3f47;
+    --surface-tour-card: #1f242b;
+    --tour-skip-underline: #5e6673;
 
     /* --- Diff and statuses --- */
     --diff-add-bg: rgba(66, 160, 110, 0.11);
     --diff-add-text: #6cc38f;
     --diff-add-text-strong: #86d9a8;
-    --diff-add-gutter: #4f7f66;
+    --diff-add-gutter: #5f9478;
     --diff-del-bg: rgba(224, 108, 102, 0.10);
     --diff-del-text: #dd8a84;
     --diff-del-text-strong: #e8a29c;
-    --diff-del-gutter: #7f5a56;
-    --read-fill: #2b7a55;
+    --diff-del-gutter: #a0736e;
+    --read-fill: #3a8f66;
     /* docs/design/README.md §1: stop mark in the "viewed" state has its own surface and border. */
-    --viewed-surface: #16211a;
+    --viewed-surface: #1d3022;
     --viewed-border: #25422f;
+    /* docs/design/SPEC-theming-2026-09-12.md §4: hovering the mark uses a green background, not grey. */
+    --viewed-hover-surface: #25422f;
+    --viewed-hover-border: #3a8f66;
     /* docs/design/README.md §13: successful review completion circle. */
     --success-surface: #1f3d2c;
     /* docs/design/SPEC-elements.md §2.10, hover on "viewed": the box fills with green at quarter opacity. */
-    --read-fill-hover: rgba(43, 122, 85, 0.25);
+    --read-fill-hover: rgba(58, 143, 102, 0.25);
     --read-border: #3f7a5a;
     --error: #e0736c;
     --error-text: #d99a95;
-    --error-surface: #171315;
+    --error-surface: #1f1719;
     --error-border: #3d2a2c;
 
     /* --- Diff rendering: lines, highlighting, checkboxes
        (docs/design/README.md §1, docs/design/SPEC-elements.md §2.12, §2.14) --- */
-    --code-text: #cfd3da;
+    --code-text: #ffffff;
     --code-text-del: #d5c0be;
-    --surface-diff-empty: #0c0d0f;
-    --surface-diff-gap: #111214;
+    --surface-diff-empty: #0b0c0e;
+    /* Deviation from §2 (`#141517`): the row blended into the card, so it uses the card header value. */
+    --surface-diff-gap: #1a1b1e;
     --diff-add-word: rgba(66, 160, 110, 0.22);
     --diff-del-word: rgba(224, 108, 102, 0.22);
     --diff-trailing-space: rgba(224, 108, 102, 0.25);
     --row-hover: rgba(255, 255, 255, 0.04);
-    --checkbox-border: #3a3f47;
-    --read-box-border: #33383f;
+    --checkbox-border: #5e6673;
+    --read-box-border: #515a65;
+    /* docs/design/SPEC-theming-2026-09-12.md §4: transparent "expand lines" button uses an outline instead of a fill,
+       the grey fill looked disabled. */
+    --border-button-outline: #7b8390;
+    --border-button-outline-hover: #dae4f3;
 
     /* --- Syntax highlighting: deliberately sparse (docs/design/README.md §1) --- */
     --syntax-keyword: #9aa6ff;
     --syntax-string: #d3b183;
-    --syntax-comment: #5f646d;
+    /* Deviation from §2 (`#dae4f3`): comments must be noticeably more subdued than code, docs/decisions.md, 2026-09-12. */
+    --syntax-comment: #8a919c;
     --syntax-decorator: #d99a5c;
 
     /* --- Neutral tier fills --- */
-    --tier-medium: #4a5160;
-    --tier-low: #2b2f36;
+    --tier-medium: #7b87a0;
+    --tier-low: #434954;
     --tier-unfilled: #2a2e4a;
 
     /* --- "Not explained" hatch --- */
-    --hatch: repeating-linear-gradient(115deg, #33373e 0 3px, #1b1e22 3px 6px);
-    --hatch-sidebar: repeating-linear-gradient(115deg, #2a2e34 0 3px, #1b1e22 3px 6px);
-    --hatch-footer: repeating-linear-gradient(115deg, #191c20 0 3px, #141518 3px 6px);
+    --hatch: repeating-linear-gradient(115deg, #515863 0 3px, #262b30 3px 6px);
+    --hatch-sidebar: repeating-linear-gradient(115deg, #414851 0 3px, #262b30 3px 6px);
+    --hatch-footer: repeating-linear-gradient(115deg, #23272d 0 3px, #1a1b1e 3px 6px);
 
     /* --- Control states (docs/design/SPEC-elements.md §1.1) --- */
     /* These are absent from the handoff token table, but every control must have a state matrix:
        the highlight step, focus ring and disabled opacity live here too. */
-    --hover-selected: #282c33;
-    /* Active segment of the tab control (docs/design/README.md §0). */
-    --surface-segment-active: #2b2f36;
+    --hover-selected: #3e444f;
+    /* Active tab-control segment (docs/design/README.md §0, docs/design/SPEC-theming-2026-09-12.md §1):
+       in the light theme it is a raised white pill, so it has both text and a shadow. */
+    --surface-segment-active: #434954;
+    --text-on-segment-active: #ffffff;
+    --shadow-segment-active: none;
+    /* Enabled chip (People/Bots/Resolved, file filter) is indigo in both themes. */
+    --surface-chip-active: #1e2240;
+    --border-chip-active: #3f4880;
+    --text-chip-active: #c3caff;
     --focus-ring-color: rgba(127, 140, 255, 0.55);
-    --text-on-selected: #e0e2e7;
+    --text-on-selected: #ffffff;
     --disabled-opacity: 0.45;
     /* Breadcrumb separator (docs/design/README.md §0). */
-    --text-separator: #4a4f57;
+    --text-separator: #7b8390;
 
     /* --- Typography --- */
     --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
@@ -261,7 +280,7 @@
     /* docs/design/README.md §16: tour card and ring glow around the highlighted element. */
     --shadow-tour-card: 0 20px 52px rgba(0, 0, 0, 0.62);
     --shadow-tour-ring: 0 0 0 3px rgba(127, 140, 255, 0.13), 0 0 26px rgba(127, 140, 255, 0.16);
-    --pr-comments-list-fade: linear-gradient(180deg, rgba(15, 16, 18, 0) 0%, #0f1012 92%);
+    --pr-comments-list-fade: linear-gradient(180deg, rgba(17, 18, 20, 0) 0%, #111214 92%);
 
     /* --- Motion --- */
     /* Anything not listed stays still. The reader must remain static. */
@@ -274,151 +293,162 @@
     --motion-jump-ease: cubic-bezier(0.65, 0, 0.35, 1);
     --motion-flash: 900ms;
 }
-
-/* Light palette: docs/design/theme-light.md. Geometry and typography are shared. */
+/* Light palette: docs/design/theme.md. Geometry and typography are shared. */
 :root[data-theme='light'] {
     color-scheme: light;
 
-    --surface-app: #f5f6f8;
+    --surface-app: #f6f7f9;
     --surface-panel: #ffffff;
-    --surface-panel-deep: #f0f2f5;
+    --surface-panel-deep: #fdfdfd;
     --surface-diff-card: #ffffff;
-    --surface-card-header: #f2f4f7;
-    --surface-input: #ffffff;
-    --surface-chip: #f0f2f5;
-    --surface-control: #f5f6f8;
+    --surface-card-header: #f2f3f6;
+    --surface-input: #f3f4f8;
+    --surface-chip: #fafbfc;
+    --surface-control: #e8eaef;
     --surface-raised: #ffffff;
-    --surface-popover: #ffffff;
-    --surface-selected: #e7ebf2;
-    --surface-offline-banner: #edf0f4;
-    --surface-command: #f5f6f8;
-    --ownership-mine-surface: #edf7ef;
-    --surface-digest-footer: #faf2f2;
-    --overlay-dialog: rgba(23, 30, 43, 0.28);
-    --surface-toolbar: rgba(245, 246, 248, 0.94);
-    --pr-comments-overlay: rgba(23, 30, 43, 0.24);
-    --pr-comments-draft-surface: #fffaf0;
-    --comment-edit-surface: #f1f3ff;
-    --pr-comments-published-chip-surface: #edf0f4;
-    --comment-edit-chip-surface: #e7ebff;
-    --pr-comments-delete-surface: #fff4f3;
-    --pr-comments-delete-button-surface: #fce1de;
-    --pr-comments-delete-button-hover: #f8d0cc;
-    --surface-code-inset: #f5f6f8;
-    --border-hairline: #e5e8ee;
-    --border-hairline-strong: #dce1e8;
-    --border-hairline-soft: #e9ecf1;
-    --border-standard: #d5dbe4;
-    --border-control: #bcc5d2;
-    --border-chip: #d0d7e1;
-    --border-divider: #ccd3de;
-    --border-strong: #bac4d1;
-    --border-strong-lifted: #aeb9c9;
-    --ownership-mine-border: #b7d5bf;
-    --border-raised-bar: #c5cdda;
-    --border-raised-dialog: #bfc8d6;
-    --border-raised-popover: #b9c3d1;
-    --pr-comments-draft-border: #e4d4a7;
-    --comment-edit-border: #bac5ef;
-    --pr-comments-delete-border: #e7b7b1;
-    --pr-comments-delete-button-border: #d99890;
-    --pr-comments-editor-border: #bfc8d6;
-    --text-primary: #202631;
-    --text-primary-soft: #29313d;
-    --text-secondary: #384354;
-    --text-secondary-dim: #445064;
-    --text-body: #4b586b;
-    --text-muted: #566277;
-    --text-muted-dim: #606c7e;
-    --text-dim: #677387;
-    --text-dim-strong: #606c80;
-    --text-gutter: #697587;
-    --pr-comments-published-chip-text: #58657a;
-    --comment-edit-chip-text: #394da8;
-    --pr-comments-body-text: #3d495a;
-    --chat-body-text: #3d495a;
-    --pr-comments-delete-button-text: #912c23;
-    --pr-comments-note-icon: #826226;
-    --accent: #4b5bd5;
-    --accent-hover: #3c4dc2;
-    --accent-hover-strong: #29399c;
+    --surface-popover: #e2e5ea;
+    --surface-selected: #e2e5ea;
+    --surface-offline-banner: #f3f4f8;
+    --surface-command: #f0f1f5;
+    --ownership-mine-surface: #e4f6ea;
+    --surface-digest-footer: #feefec;
+    --overlay-dialog: rgba(236, 238, 242, 0.7);
+    --surface-toolbar: rgba(246, 247, 249, 0.92);
+    --pr-comments-overlay: rgba(236, 238, 242, 0.6);
+    --pr-comments-draft-surface: #fffaec;
+    --comment-edit-surface: #f0f1ff;
+    --pr-comments-published-chip-surface: #e8eaef;
+    --comment-edit-chip-surface: #dfe2fa;
+    --pr-comments-delete-surface: #feecea;
+    --pr-comments-delete-button-surface: #f0d2d0;
+    --pr-comments-delete-button-hover: #e6c0bd;
+    --surface-code-inset: #f3f4f6;
+    --border-hairline: #e4e6eb;
+    --border-hairline-strong: #e0e2e7;
+    --border-hairline-soft: #e8eaee;
+    --border-standard: #dadee4;
+    --border-control: #d2d5dd;
+    --border-chip: #c9ced6;
+    --border-divider: #cdd3da;
+    --border-strong: #c8cdd5;
+    --border-strong-lifted: #bbc2cb;
+    --ownership-mine-border: #cde9d8;
+    --border-raised-bar: #b7bec8;
+    --border-raised-dialog: #bfc6cf;
+    --border-raised-popover: #b0b7c1;
+    --pr-comments-draft-border: #ecdfc4;
+    --comment-edit-border: #c3c7e6;
+    --pr-comments-delete-border: #f0d2d0;
+    --pr-comments-delete-button-border: #d9a9a5;
+    --pr-comments-editor-border: #b1b8c2;
+    --text-primary: #000000;
+    --text-primary-soft: #000000;
+    --text-secondary: #000000;
+    --text-secondary-dim: #00000a;
+    --text-body: #00000a;
+    --text-muted: #000813;
+    --text-muted-dim: #0c1420;
+    --text-dim: #19212d;
+    --text-dim-strong: #28303b;
+    --text-gutter: #9198a2;
+    --pr-comments-published-chip-text: #0c1420;
+    --comment-edit-chip-text: #4c5ae0;
+    --pr-comments-body-text: #000000;
+    --chat-body-text: #000000;
+    --pr-comments-delete-button-text: #7a2622;
+    --pr-comments-note-icon: #7f6c3e;
+    --accent: #5a68e8;
+    --accent-hover: #4c5ae0;
+    --accent-hover-strong: #3a47bd;
     --accent-ink: #ffffff;
-    --accent-text: #4051b5;
-    --accent-text-soft: #495791;
-    --accent-text-bright: #303f96;
-    --accent-text-queued: #68739b;
-    --accent-surface: #eef0ff;
-    --accent-surface-alt: #f3f4ff;
-    --accent-border: #c9cff1;
-    --accent-selection: rgba(75, 91, 213, 0.10);
-    --accent-text-selection: rgba(75, 91, 213, 0.22);
-    --attention: #e2954c;
-    --attention-text: #835015;
-    --attention-text-dim: #8a5b20;
-    --attention-text-soft: #745027;
-    --attention-surface: #fff4df;
-    --attention-surface-alt: #fff9ee;
-    --attention-border: #dfc799;
-    --attention-border-alt: #e8d8b9;
-    --attention-border-strong: #b78e47;
-    --attention-ink: #1b1508;
-    --attention-label: #826226;
-    --attention-body: #735734;
-    --draft-field-surface: #fffaf2;
-    --draft-saved: #3a754d;
-    --tag-pci-border: #dfceaa;
+    --accent-text: #4350cc;
+    --accent-text-soft: #3a4390;
+    --accent-text-bright: #262f8a;
+    --accent-text-queued: #6b719f;
+    --accent-surface: #f0f1fc;
+    --accent-surface-alt: #f0f1ff;
+    --accent-border: #dfe2fa;
+    --accent-selection: rgba(90, 104, 232, 0.12);
+    --accent-text-selection: rgba(90, 104, 232, 0.22);
+    --attention: #d8791c;
+    --attention-text: #9d6410;
+    --attention-text-dim: #7f5612;
+    --attention-text-soft: #3f3014;
+    --attention-surface: #fbf3df;
+    --attention-surface-alt: #fffaec;
+    --attention-border: #d9c9a4;
+    --attention-border-alt: #ecdfc4;
+    --attention-border-strong: #bba777;
+    --attention-button: #b8641c;
+    --attention-button-ink: #ffffff;
+    --attention-label: #7f6c3e;
+    --attention-body: #5a4a24;
+    --draft-field-surface: #fffaec;
+    --draft-saved: #268f52;
+    --tag-pci-border: #e9dfc3;
     --surface-tour-card: #ffffff;
-    --tour-skip-underline: #9da9ba;
-    --diff-add-bg: rgba(36, 134, 74, 0.09);
-    --diff-add-text: #23723f;
-    --diff-add-text-strong: #1c6837;
-    --diff-add-gutter: #427754;
-    --diff-del-bg: rgba(197, 58, 48, 0.08);
-    --diff-del-text: #a4382e;
-    --diff-del-text-strong: #942d24;
-    --diff-del-gutter: #995950;
-    --read-fill: #2b7a55;
-    --viewed-surface: #edf7ef;
-    --viewed-border: #b7d5bf;
-    --success-surface: #dcefe2;
-    --read-fill-hover: rgba(43, 122, 85, 0.15);
-    --read-border: #3f7a5a;
-    --error: #b63d33;
-    --error-text: #a43a31;
-    --error-surface: #fff1ef;
-    --error-border: #e4beb8;
-    --code-text: #303b4b;
-    --code-text-del: #573c3a;
-    --surface-diff-empty: #f0f2f5;
-    --surface-diff-gap: #f5f6f8;
-    --diff-add-word: rgba(36, 134, 74, 0.19);
-    --diff-del-word: rgba(197, 58, 48, 0.18);
-    --diff-trailing-space: rgba(197, 58, 48, 0.24);
-    --row-hover: rgba(23, 30, 43, 0.04);
-    --checkbox-border: #8b99ac;
-    --read-box-border: #94a0b1;
-    --syntax-keyword: #4251b5;
-    --syntax-string: #805416;
-    --syntax-comment: #647082;
-    --syntax-decorator: #92511e;
-    --tier-medium: #8b97aa;
-    --tier-low: #c3cad5;
-    --tier-unfilled: #d7dcf0;
-    --hatch: repeating-linear-gradient(115deg, #c6cdd7 0 3px, #e8ecf1 3px 6px);
-    --hatch-sidebar: repeating-linear-gradient(115deg, #cdd4de 0 3px, #e8ecf1 3px 6px);
-    --hatch-footer: repeating-linear-gradient(115deg, #e0e5ed 0 3px, #f2f4f7 3px 6px);
-    --hover-selected: #dce2ec;
-    --surface-segment-active: #dce2ec;
-    --focus-ring-color: rgba(60, 77, 194, 0.70);
-    --text-on-selected: #293548;
-    --text-separator: #758196;
-    --shadow-line-comment: 0 1px 4px rgba(23, 30, 43, 0.16);
-    --shadow-popover: 0 8px 24px rgba(23, 30, 43, 0.12);
-    --shadow-menu: 0 16px 40px rgba(23, 30, 43, 0.15);
-    --shadow-floating: 0 16px 44px rgba(23, 30, 43, 0.15);
-    --shadow-dialog: 0 24px 64px rgba(23, 30, 43, 0.18);
-    --shadow-pr-comments: 0 18px 50px rgba(23, 30, 43, 0.15);
-    --shadow-tour-card: 0 20px 52px rgba(23, 30, 43, 0.16);
-    --shadow-tour-ring: 0 0 0 3px rgba(75, 91, 213, 0.13), 0 0 26px rgba(75, 91, 213, 0.12);
+    --tour-skip-underline: #a1a7b3;
+    --diff-add-bg: rgba(38, 143, 82, 0.10);
+    --diff-add-text: #268f52;
+    --diff-add-text-strong: #1e7f47;
+    --diff-add-gutter: #3a835d;
+    --diff-del-bg: rgba(207, 70, 64, 0.09);
+    --diff-del-text: #c94842;
+    --diff-del-text-strong: #c33f39;
+    --diff-del-gutter: #a45a54;
+    --read-fill: #2f8557;
+    --viewed-surface: #e8f7ec;
+    --viewed-border: #cde9d8;
+    --viewed-hover-surface: #cde9d8;
+    --viewed-hover-border: #2f8557;
+    --success-surface: #bfe4cd;
+    --read-fill-hover: rgba(47, 133, 87, 0.25);
+    --read-border: #46a672;
+    --error: #cf4640;
+    --error-text: #b5423c;
+    --error-surface: #feecea;
+    --error-border: #f0d2d0;
+    --code-text: #000000;
+    --code-text-del: #87332e;
+    --surface-diff-empty: #f3f4f6;
+    /* Departure from §2 (`#ffffff`): the row blended into the card, so it uses the card header value. */
+    --surface-diff-gap: #f2f3f6;
+    --diff-add-word: rgba(38, 143, 82, 0.22);
+    --diff-del-word: rgba(207, 70, 64, 0.22);
+    --diff-trailing-space: rgba(207, 70, 64, 0.25);
+    --row-hover: rgba(20, 24, 32, 0.04);
+    --checkbox-border: #a1a7b3;
+    --read-box-border: #afb5c0;
+    --border-button-outline: #828894;
+    --border-button-outline-hover: #28303b;
+    --syntax-keyword: #5462e3;
+    --syntax-string: #8a5f1c;
+    /* Departure from §2 (`#28303b`): same reason as in dark, comments are quieter than code. */
+    --syntax-comment: #646b76;
+    --syntax-decorator: #b46a1f;
+    --tier-medium: #7b8390;
+    --tier-low: #c8cdd5;
+    --tier-unfilled: #dde0f8;
+    --hatch: repeating-linear-gradient(115deg, #b1b8c2 0 3px, #e9ecef 3px 6px);
+    --hatch-sidebar: repeating-linear-gradient(115deg, #c5cad2 0 3px, #e9ecef 3px 6px);
+    --hatch-footer: repeating-linear-gradient(115deg, #e8eaee 0 3px, #f2f3f6 3px 6px);
+    --hover-selected: #dadee4;
+    --surface-segment-active: #ffffff;
+    --text-on-segment-active: #000000;
+    --shadow-segment-active: 0 1px 2px rgba(20, 24, 32, 0.18), 0 0 0 1px rgba(20, 24, 32, 0.08);
+    --surface-chip-active: #e8eaff;
+    --border-chip-active: #b9c0f4;
+    --text-chip-active: #2b3690;
+    --focus-ring-color: rgba(90, 104, 232, 0.55);
+    --text-on-selected: #000000;
+    --text-separator: #828894;
+    --shadow-line-comment: 0 1px 4px rgba(20, 24, 32, 0.1);
+    --shadow-popover: 0 8px 24px rgba(20, 24, 32, 0.12);
+    --shadow-menu: 0 16px 40px rgba(20, 24, 32, 0.16);
+    --shadow-floating: 0 16px 44px rgba(20, 24, 32, 0.16);
+    --shadow-dialog: 0 24px 64px rgba(20, 24, 32, 0.18);
+    --shadow-pr-comments: 0 18px 50px rgba(20, 24, 32, 0.14);
+    --shadow-tour-card: 0 20px 52px rgba(20, 24, 32, 0.18);
+    --shadow-tour-ring: 0 0 0 3px rgba(90, 104, 232, 0.12), 0 0 26px rgba(90, 104, 232, 0.16);
     --pr-comments-list-fade: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 92%);
 }

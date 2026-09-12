@@ -246,7 +246,8 @@
 
 .ownership-segments button[aria-pressed='true'] {
     background: var(--surface-segment-active);
-    color: var(--text-primary);
+    box-shadow: var(--shadow-segment-active);
+    color: var(--text-on-segment-active);
     font-weight: 500;
 }
 

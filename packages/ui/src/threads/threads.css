@@ -80,7 +80,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: var(--surface-segment-active);
+    background: var(--surface-selected);
     font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
@@ -429,7 +429,7 @@
 }
 
 .thread-composer__tool:active {
-    background: var(--surface-segment-active);
+    background: var(--hover-selected);
 }
 
 .thread-composer__tool:disabled {
@@ -473,8 +473,9 @@
 
 .thread-composer__layout button.is-active {
     background: var(--surface-segment-active);
+    box-shadow: var(--shadow-segment-active);
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-on-segment-active);
 }
 
 .thread-composer__markdown,
@@ -600,7 +601,7 @@
 }
 
 .thread-composer__actions .thread-composer__save:hover {
-    background: var(--surface-segment-active);
+    background: var(--hover-selected);
 }
 
 .thread-composer__actions .ghost-button:disabled {
@@ -627,7 +628,7 @@
 .thread-composer__issue:hover,
 .thread-composer__issue.is-active {
     border-color: var(--border-strong);
-    background: var(--surface-segment-active);
+    background: var(--hover-selected);
     color: var(--text-primary-soft);
 }
 

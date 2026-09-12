@@ -237,8 +237,9 @@
 
 .route-preset__option.is-active {
     background: var(--surface-segment-active);
+    box-shadow: var(--shadow-segment-active);
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-on-segment-active);
 }
 
 /* No route yet, so nothing to switch (docs/design/SPEC-elements.md §2.5). */
@@ -278,8 +279,17 @@
     border-left-color: var(--accent);
 }
 
-.route-stop.is-viewed .route-stop__side {
-    opacity: 0.72;
+/*
+ * Viewed stops do not use reduced opacity (docs/design/SPEC-theming-2026-09-12.md §4).
+ * Title and paragraph tokens provide the muted tone. The grey levels match in the dark theme,
+ * so the difference is only visible in the light theme, as intended.
+ */
+.route-stop.is-viewed .route-stop__title {
+    color: var(--text-secondary);
+}
+
+.route-stop.is-viewed .route-stop__paragraph {
+    color: var(--text-muted);
 }
 
 .route-stop__head {
@@ -381,8 +391,17 @@
     cursor: pointer;
 }
 
+/*
+ * Hovering over the mark is green in both states (docs/design/SPEC-theming-2026-09-12.md §4).
+ * Text becomes brighter only when unchecked. When checked, it is already green like the checkmark.
+ */
 .route-stop__viewed:hover:not(:disabled) {
-    background: var(--surface-popover);
+    border-color: var(--viewed-hover-border);
+    background: var(--viewed-hover-surface);
+}
+
+.route-stop__viewed:not(.is-viewed):hover:not(:disabled) {
+    color: var(--text-secondary);
 }
 
 /* Stop ranges are still being counted, so it cannot be marked yet. */
@@ -560,9 +579,9 @@
     background: var(--surface-raised);
 }
 
+/* Only the green checkmark indicates read state (docs/design/SPEC-theming-2026-09-12.md §4). */
 .route-chip.is-read {
     border-color: var(--border-standard);
-    opacity: 0.62;
 }
 
 /*
@@ -961,17 +980,31 @@
 .route-other__action {
     height: 28px;
     padding: 0 11px;
-    border: 1px solid var(--border-strong-lifted);
+    border: 1px solid var(--border-button-outline);
     border-radius: var(--radius-button);
-    background: var(--border-standard);
+    background: transparent;
     font-size: var(--font-size-secondary);
-    color: var(--text-secondary);
+    color: var(--text-primary-soft);
     white-space: nowrap;
     cursor: pointer;
 }
 
+/*
+ * Only the primary action, "Open N lines", gets the label weight and hover border
+ * (docs/design/SPEC-theming-2026-09-12.md §4). The spec leaves the secondary action unchanged, so both
+ * rules skip it. Otherwise, the buttons would have the same weight, and the secondary hover border
+ * would become almost white.
+ */
+.route-other__action:not(.route-other__action--secondary) {
+    font-weight: 500;
+}
+
+.route-other__action:not(.route-other__action--secondary):hover:not(:disabled) {
+    border-color: var(--border-button-outline-hover);
+}
+
 .route-other__action:hover:not(:disabled) {
-    background: var(--hover-selected);
+    background: var(--surface-popover);
 }
 
 .route-other__action:disabled {
@@ -979,7 +1012,7 @@
     opacity: var(--disabled-opacity);
 }
 
-/* The card's second action is secondary (docs/design/README.md §2): the same geometry without a fill. */
+/* The card's second action is secondary (docs/design/README.md §2): same geometry, muted border and label. */
 .route-other__action--secondary {
     border-color: var(--border-control);
     background: transparent;

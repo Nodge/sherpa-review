@@ -66,6 +66,23 @@ describe('file card', () => {
         expect(render(plain)).not.toContain('file-card__badge--conflict');
     });
 
+    it('old rename path separates directories and filename for different truncation', () => {
+        const renamed = DATA.diff.files.find((file) => file.oldPath !== null && file.oldPath !== file.path);
+        const oldPath = renamed?.oldPath ?? null;
+        if (renamed === undefined || oldPath === null) {
+            throw new Error('edge fixture needs a renamed file');
+        }
+        const cut = oldPath.lastIndexOf('/');
+        const html = render(renamed);
+
+        expect(html).toContain(
+            `<span class="file-card__old-path file-card__path-dir"><bdi>${oldPath.slice(0, cut)}</bdi></span>`,
+        );
+        expect(html).toContain(
+            `<span class="file-card__old-path file-card__path-name"><bdi>${oldPath.slice(cut)}</bdi></span>`,
+        );
+    });
+
     it('collapsed card summary uses the supplied slice counters', () => {
         const file = DATA.diff.files.find(
             (candidate) => !candidate.binary && candidate.additions !== 3 && candidate.deletions !== 2,

@@ -490,7 +490,6 @@ export const ru = {
     'diff.gap.both': (unchanged: string, elsewhere: string) => `${unchanged} и ${elsewhere}`,
     'diff.gap.expandFailed': 'не удалось догрузить · повторить',
     'diff.gap.loading': 'догружаю…',
-    'diff.gap.expandHint': (base: string) => `${base} — раскрыть`,
     'diff.gap.expandUp': (step: number, base: string) => `+${num(step)} ${form(step, 'строка', 'строки', 'строк')} вверх · ${base}`,
     'diff.gap.expandDown': (step: number, base: string) => `+${num(step)} ${form(step, 'строка', 'строки', 'строк')} вниз · ${base}`,
     'diff.gap.aria': 'направление раскрытия скрытого контекста',

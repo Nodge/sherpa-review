@@ -79,11 +79,11 @@ Left column, in order:
 
 Right column: one card per hunk, border `1px solid #363b44`, radius 9px, bg `#111214`.
 - Card header: bg `#1a1b1e`, bottom border `1px solid #2c3038`, padding 9px 13px — file name 12px mono `#ffffff`, path 11px mono `#dae4f3`, `+N/−M`, entity header 11px mono `#e7f1ff` ("apply_edit · 142–164", "new file · class EditPolicy"), then **Expand context** and the per-file **Mark viewed** checkbox (11px box: unchecked border `#5e6673`; checked bg `#3a8f66`, border `#3f7a5a`, ✓).
-- Collapsed-context row: "↕ 21 unchanged lines", 11.5px mono `#dae4f3`, bg `#141517`.
+- Collapsed-context row: "↕ 21 unchanged lines", 11.5px mono `#dae4f3`, bg `#1a1b1e` (the card-header surface: the §2 value `#141517` merged with the card).
 - Diff rows (unified): `display:grid; grid-template-columns:46px 46px 16px minmax(0,1fr)`, line-height 20px, 12px mono. Old/new gutters 11px mono right-aligned (ctx `#6e7580`, add `#5f9478`, del `#a0736e`). Add row bg `rgba(66,160,110,.11)` with `+` `#6cc38f`, del row bg `rgba(224,108,102,.10)` with `−` `#dd8a84`, code `#ffffff` (del `#d5c0be`), `white-space:pre; overflow-x:auto`.
 - Diff rows (side by side): `grid-template-columns:46px 14px minmax(0,1fr) 46px 14px minmax(0,1fr)`; old on the left, new on the right, del/add runs paired, empty side `#0b0c0e`, code cells `overflow-x:auto`. **One-sided files (only additions or only deletions) fall back to full-width unified in this mode** so half the card is not wasted.
 - Selected range: bg `rgba(127,140,255,.13)` + `box-shadow:inset 2px 0 0 #7f8cff` — identical in both modes.
-- Syntax highlighting is intentionally minimal: keywords `#9aa6ff`, strings/numbers `#d3b183`, comments `#dae4f3` italic, decorators `#d99a5c`.
+- Syntax highlighting is intentionally minimal: keywords `#9aa6ff`, strings/numbers `#d3b183`, comments `#8a919c` italic (a deliberate step off the §2 ladder: `#dae4f3` was indistinguishable from the code), decorators `#d99a5c`.
 
 ### 2. Stop kinds
 
@@ -218,7 +218,7 @@ Route stop shape used by the UI: `{ id, planIndex, tier: high|medium|low|other, 
 
 ## Design tokens
 
-The values below are for the dark theme. Light values for each color and light-theme rules that cannot be inferred from the table are in `SPEC-theming-2026-09-12.md` §1–2. The theme uses the `data-theme` attribute on `<html>` together with `color-scheme`. Auto follows the system theme and is the default.
+The dark theme is below. `theme.md` lists every colour token's value in both themes and the light-theme rules that cannot be inferred from the table. The original design table is in `SPEC-theming-2026-09-12.md` §1–2. The theme is the `data-theme` attribute on `<html>` together with `color-scheme`. Auto follows the system theme and is the default.
 
 **Surfaces** — app `#0d0e10`; panels `#121315`, `#16171b`; diff card `#111214`; card header `#1a1b1e`; inputs/chips `#1b1e24`, `#18191d`, `#1d2020`; raised (menus, floating bar) `#212429`, `#262b34`; selected row `#2d323b`.
 
@@ -260,6 +260,7 @@ The values below are for the dark theme. Light values for each color and light-t
 ## Files
 
 - `SPEC-theming-2026-09-12.md` is the **delta spec for the current stage**: theme model and tokens, light palette, rebuilt dark palette, settings menu, language, typography in rem, responsive width, acceptance checklist and open questions.
+- `theme.md` contains the **colour token table for both themes**: each token's value in the dark and light palettes, its source and light-theme rules that cannot be inferred from the table. A test checks it against `tokens.css`.
 - `SPEC-elements.md` — **element-level spec**: state matrix for every control (hover, active, focus, disabled, loading, error), per-component behaviour, data edge cases, loading timings, keyboard map, accessibility and the acceptance checklist. Read it together with this document: the README defines *what* each screen is, SPEC-elements defines *how every part behaves*.
 - `Sherpa.dc.html` — the clickable prototype (all 13 states + the onboarding tour; `SCENARIOS` menu switches between them).
 - `SPEC-onboarding-2026-09-02.md` — **onboarding handoff spec**: card and ring anatomy, the eight steps with final copy and anchors, placement algorithm, states, show-once and resume model, degradation, keyboard/a11y, telemetry, open questions, acceptance checklist.

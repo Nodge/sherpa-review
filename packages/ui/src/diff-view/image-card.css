@@ -42,8 +42,9 @@
 
 .image-card__mode.is-active {
     background: var(--surface-segment-active);
+    box-shadow: var(--shadow-segment-active);
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-on-segment-active);
 }
 
 .image-card__mode:disabled {

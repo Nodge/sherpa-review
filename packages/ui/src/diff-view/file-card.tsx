@@ -517,31 +517,55 @@ function CollapsedFileSummary({
     );
 }
 
+/**
+ * Card header with filename and path, kept separate because they truncate differently:
+ * directories first and from the left, filename from the end only when space runs out (`diff-view.css`).
+ * The old rename path has the same structure. Its directories give up space before its filename.
+ */
 function FileName({ file }: { file: FileDiff }) {
-    const cut = file.path.lastIndexOf('/');
-    const name = cut === -1 ? file.path : file.path.slice(cut + 1);
-    const dir = cut === -1 ? '' : file.path.slice(0, cut);
-    const renamed = file.oldPath !== null && file.oldPath !== file.path;
+    const { dir, name } = splitPath(file.path);
+    const oldPath = file.oldPath !== null && file.oldPath !== file.path ? file.oldPath : null;
+    const old = oldPath === null ? null : splitPath(oldPath);
 
     return (
         <span className="file-card__title">
             <span className={`file-card__name${file.changeType === 'delete' ? ' file-card__name--deleted' : ''}`}>
-                {name}
+                <bdi>{name}</bdi>
             </span>
-            <span className="file-card__path" title={file.path}>
-                {/* `bdi` isolates the contents from rtl truncation, so the path and rename arrow read in the normal order. */}
-                <bdi>
-                    {renamed ? (
-                        <>
-                            <span className="file-card__old-path">{file.oldPath}</span> → {dir}
-                        </>
-                    ) : (
-                        dir
-                    )}
-                </bdi>
+            <span className="file-card__path" title={oldPath === null ? file.path : `${oldPath} → ${file.path}`}>
+                {/* `bdi` isolates the content from rtl truncation so directories read in the usual order. */}
+                {old === null ? null : (
+                    <>
+                        {old.dir === '' ? null : (
+                            <span className="file-card__old-path file-card__path-dir">
+                                <bdi>{old.dir}</bdi>
+                            </span>
+                        )}
+                        <span className="file-card__old-path file-card__path-name">
+                            <bdi>{old.dir === '' ? old.name : `/${old.name}`}</bdi>
+                        </span>
+                        <span className="file-card__path-arrow">→</span>
+                    </>
+                )}
+                {dir === '' ? null : (
+                    <span className="file-card__path-dir">
+                        <bdi>{dir}</bdi>
+                    </span>
+                )}
             </span>
         </span>
     );
+}
+
+/**
+ * Path split into a directory chain and the final segment (docs/design/SPEC-elements.md §1.2).
+ * The separator belongs to neither part. The header renders filename and directories separately, and for the old
+ * path the slash is appended to the filename. This leaves no neutral character at the left truncation edge
+ * of the directories that could disrupt the order.
+ */
+function splitPath(path: string): { readonly dir: string; readonly name: string } {
+    const cut = path.lastIndexOf('/');
+    return cut === -1 ? { dir: '', name: path } : { dir: path.slice(0, cut), name: path.slice(cut + 1) };
 }
 
 /**

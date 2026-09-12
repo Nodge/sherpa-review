@@ -23,9 +23,9 @@
     padding: 0 11px;
     border: 0;
     border-radius: var(--radius-button);
-    background: var(--attention);
+    background: var(--attention-button);
     font-size: var(--font-size-secondary);
-    color: var(--attention-ink);
+    color: var(--attention-button-ink);
     white-space: nowrap;
     cursor: pointer;
 }

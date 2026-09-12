@@ -450,9 +450,10 @@ function gapCounterLabel(
 ): string {
     const hidden = hiddenLinesOf(gap, content);
     const base = gapLabel(gap, content, t);
-    // Invite expansion only when there is context to expand: a gap with only other stops' changes has no targets.
+    // A remainder smaller than the step has one target that expands everything. The label omits the invitation
+    // to avoid looking clickable (decision 2026-09-12), and "+20 up" on hover would overstate the amount.
     if (hidden !== null && hidden > 0 && hidden < EXPAND_STEP) {
-        return t('diff.gap.expandHint', base);
+        return base;
     }
     if (hovered === 'up') {
         return t('diff.gap.expandUp', EXPAND_STEP, base);

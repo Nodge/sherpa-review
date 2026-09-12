@@ -108,7 +108,7 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
     expect(revealed).toBe(direction === 'up' ? adjacent + 20 : adjacent - 20);
     expect(await page.locator('.full-diff').evaluate((element) => element.scrollTop)).toBe(beforeScroll);
     expect(await gapGeometry(gap)).toEqual(beforeGeometry);
-    await expect(gap.locator('.diff-gap__counter')).toContainText(`${String(remaining)} unchanged lines — expand`);
+    await expect(gap.locator('.diff-gap__counter')).toHaveText(`${String(remaining)} unchanged lines`);
     await expect(gap.locator('.diff-gap__counter')).toHaveCSS('pointer-events', 'none');
 }
 

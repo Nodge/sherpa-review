@@ -90,10 +90,11 @@
     color: var(--text-secondary);
 }
 
+/* The active chip is indigo in both themes (docs/design/SPEC-theming-2026-09-12.md §1). */
 .file-panel__chip.is-on {
-    border-color: var(--border-strong-lifted);
-    background: var(--border-standard);
-    color: var(--text-on-selected);
+    border-color: var(--border-chip-active);
+    background: var(--surface-chip-active);
+    color: var(--text-chip-active);
 }
 
 .file-panel__chip-count {

@@ -156,7 +156,8 @@ a.top-bar__breadcrumb-item:hover {
 /* The selected tab differs in both colour and weight (docs/design/SPEC-elements.md §1.1). */
 .view-tabs__tab[aria-selected='true'] {
     background: var(--surface-segment-active);
-    color: var(--text-primary);
+    box-shadow: var(--shadow-segment-active);
+    color: var(--text-on-segment-active);
     font-weight: 500;
 }
 

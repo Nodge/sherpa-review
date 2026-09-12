@@ -106,7 +106,8 @@ describe('context gap bars', () => {
         expect(target).not.toBeNull();
         expect(target?.getAttribute('aria-label')).toBe('load 19 lines, 19 lines hidden');
         expect(target?.querySelector('svg[data-icon="updown"]')).not.toBeNull();
-        expect(inner?.textContent).toContain('19 unchanged lines — expand');
+        expect(inner?.textContent).toContain('19 unchanged lines');
+        expect(inner?.textContent).not.toContain('expand');
     });
 
     it('arrow keys change the selected direction visually and through aria-activedescendant', () => {
