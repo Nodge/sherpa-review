@@ -290,6 +290,16 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         const viewed = page.locator('.file-card button.viewed-toggle').first();
         await expect(viewed).toBeDisabled();
         await expect(viewed).toHaveAttribute('title', 'only in the active iteration');
+        // The pencil is disabled, but stays hidden until hover: the global `[disabled]` dimming
+        // must not reveal it on every line.
+        const pencilRow = page.locator('.diff-row:has(.diff-row__comment)').first();
+        const pencil = pencilRow.locator('.diff-row__comment');
+        await expect(pencil).toBeDisabled();
+        await expect(pencil).toHaveCSS('opacity', '0');
+        await pencilRow.hover();
+        await expect(pencil).toHaveCSS('opacity', '0.45');
+        await expect(pencil).toHaveAttribute('title', 'only in the active iteration');
+        await page.mouse.move(0, 0);
 
         await readOnly.locator('button.iteration-banner__action').click();
         await expect.poll(() => fragmentParam(page, 'diff')).toBeNull();

@@ -321,6 +321,24 @@ describe('diff view store', () => {
         expect(store.getSnapshot().selection).toBeNull();
     });
 
+    it('mouse movement extends selection only during an active drag', () => {
+        const store = createDiffViewStore({ files: [file('a')] });
+
+        // A held button without a drag from the gutter (text selection in code) starts nothing.
+        store.dragSelection('a', 'a37');
+        expect(store.getSnapshot().selection).toBeNull();
+
+        store.beginSelection();
+        store.startSelection('a', 'c40:42');
+        store.dragSelection('a', 'a37');
+        expect(store.getSnapshot().selection).toMatchObject({ anchor: 'c40:42', focus: 'a37' });
+        store.finishSelection();
+
+        // Movement with a held button over lines no longer changes a completed selection.
+        store.dragSelection('a', 'a50');
+        expect(store.getSnapshot().selection).toMatchObject({ anchor: 'c40:42', focus: 'a37' });
+    });
+
     it('remembers whitespace-only line expansion outside FileCard', () => {
         const store = createDiffViewStore({ files: [file('a')] });
 

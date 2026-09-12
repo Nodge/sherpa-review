@@ -215,7 +215,7 @@ export function useStopCards({
                     store.startSelection(fileId, key, side);
                 }
             },
-            onSelectExtend: store.extendSelection,
+            onSelectExtend: store.dragSelection,
             onCommentLine: commentLine,
             onCommentFile: commentFile,
             onLineFocus: (fileId, side, line) => {

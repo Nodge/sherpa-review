@@ -541,7 +541,7 @@ export function DiffFileList({
                     store.startSelection(fileId, key, side);
                 }
             },
-            onSelectExtend: store.extendSelection,
+            onSelectExtend: store.dragSelection,
             onCommentLine,
             onCommentFile,
             onLineFocus,

@@ -85,6 +85,12 @@ export interface DiffViewStore {
     readonly beginSelection: () => void;
     readonly startSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
     readonly extendSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
+    /**
+     * Extends selection on mouse movement only between `beginSelection` and `finishSelection`.
+     * Otherwise any movement with a held button over lines, while selecting text in code or a popover,
+     * would extend the active selection from an old anchor.
+     */
+    readonly dragSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
     readonly finishSelection: () => void;
     readonly clearSelection: () => void;
 }
@@ -243,6 +249,24 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             collapseExpanded: new Set(snapshot.collapseExpanded).add(fileId),
             collapseCollapsed: collapsed,
             collapsePreferences: new Map(snapshot.collapsePreferences).set(fileId, false),
+        });
+    };
+
+    const extendSelection = (fileId: string, key: LineKey, side?: 'old' | 'new'): void => {
+        const current = snapshot.selection;
+        const sameFile = current !== null && current.fileId === fileId;
+        const anchor = sameFile ? current.anchor : key;
+        const selectedSide = sameFile ? current.side : side;
+        if (sameFile && current.focus === key) {
+            return;
+        }
+        update({
+            selection: {
+                fileId,
+                ...(selectedSide === undefined ? {} : { side: selectedSide }),
+                anchor,
+                focus: key,
+            },
         });
     };
 
@@ -409,22 +433,12 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             update({ selection: { fileId, ...(side === undefined ? {} : { side }), anchor: key, focus: key } });
         },
 
-        extendSelection: (fileId, key, side) => {
-            const current = snapshot.selection;
-            const sameFile = current !== null && current.fileId === fileId;
-            const anchor = sameFile ? current.anchor : key;
-            const selectedSide = sameFile ? current.side : side;
-            if (sameFile && current.focus === key) {
-                return;
+        extendSelection,
+
+        dragSelection: (fileId, key, side) => {
+            if (snapshot.selectionDragging) {
+                extendSelection(fileId, key, side);
             }
-            update({
-                selection: {
-                    fileId,
-                    ...(selectedSide === undefined ? {} : { side: selectedSide }),
-                    anchor,
-                    focus: key,
-                },
-            });
         },
 
         finishSelection: () => {

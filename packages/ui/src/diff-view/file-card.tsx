@@ -732,6 +732,7 @@ function Body(props: BodyProps) {
                 props.onSelectStart(key, side, event.shiftKey);
             }}
             onMouseOver={(event) => {
+                // Extends only a drag started in the gutter, as enforced by the store's `dragSelection`.
                 if (event.buttons !== 1) {
                     return;
                 }

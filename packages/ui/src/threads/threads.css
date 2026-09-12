@@ -725,8 +725,17 @@
     box-shadow: var(--shadow-line-comment);
     color: var(--surface-app);
     cursor: pointer;
+    /* The visible button opacity has its own variable. Global `[disabled]` in base.css
+       has the same specificity and comes later in the cascade, so it would otherwise override `opacity: 0`,
+       revealing the pencil in every row of a previous iteration. */
+    --comment-opacity: 1;
     opacity: 0;
     pointer-events: none;
+}
+
+.diff-row__comment[disabled] {
+    --comment-opacity: var(--disabled-opacity);
+    opacity: 0;
 }
 
 .diff-row:not(.diff-row--pair):hover .diff-row__comment,
@@ -736,7 +745,7 @@
 .diff-row--pair:has(> .diff-side[data-side='old']:focus-within) > .diff-row__gutter[data-side='old'] .diff-row__comment,
 .diff-row--pair:has(> .diff-side[data-side='new']:focus-within) > .diff-row__gutter[data-side='new'] .diff-row__comment,
 .diff-row__comment.is-selection-start {
-    opacity: 1;
+    opacity: var(--comment-opacity);
     pointer-events: auto;
 }
 
