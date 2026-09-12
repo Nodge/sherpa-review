@@ -52,7 +52,7 @@ pnpm --filter @sherpa/ui dev
 
 The development proxy in `packages/ui/vite.config.ts` forwards `/api` to a running server. It takes the address from `SHERPA_SERVER`, or from the first manifest in `~/.sherpa/servers/*.json`. The port is ephemeral and cannot be hardcoded. Starting a server after `vite dev` requires restarting vite. Open `http://localhost:5173/#t=<token>` with the token from the link the server printed.
 
-Skill from a checkout: build (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and link the distribution into the harness, `~/.claude/skills/sherpa` → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides server-bundle discovery next to the CLI if you need a different one.
+To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into your harness: `~/.claude/skills/sherpa` (Claude Code) or `~/.agents/skills/sherpa` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server bundle lookup beside the CLI if you need a different bundle.
 
 ## State gallery
 

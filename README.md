@@ -15,11 +15,12 @@ For reviewers in a monorepo whose PR queue exceeds what they can read line by li
 
 ## Installation
 
-Symlink the `skill` directory into the harness's skills:
+Symlink the `skill` directory into your harness skills directory (use your checkout path):
 
 ```
+mkdir -p ~/.claude/skills ~/.agents/skills
 ln -s ~/src/sherpa-review/skill ~/.claude/skills/sherpa   # Claude Code
-ln -s ~/src/sherpa-review/skill ~/.codex/skills/sherpa    # Codex
+ln -s ~/src/sherpa-review/skill ~/.agents/skills/sherpa   # Codex
 ```
 
 The directory is self-contained: 2 built `.mjs` files (the CLI and server with the UI embedded), zero runtime dependencies. Neither pnpm nor a repository checkout is needed. You can copy it anywhere instead of symlinking it.
