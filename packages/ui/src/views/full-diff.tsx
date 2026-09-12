@@ -1573,8 +1573,10 @@ export function FullDiffToolbar({
 
     return (
         <div className="full-diff__toolbar" ref={ref}>
-            <h1 className="full-diff__title">{t('view.diff')}</h1>
-            <span className="full-diff__subtitle">{t('fullDiff.subtitle')}</span>
+            <div className="full-diff__heading">
+                <h1 className="full-diff__title">{t('view.diff')}</h1>
+                <span className="full-diff__subtitle">{t('fullDiff.subtitle')}</span>
+            </div>
             {smallPr ? <span className="full-diff__small-pr">{t('route.smallPr.chip')}</span> : null}
             <span className="full-diff__spacer" />
             <ToolbarRightCluster

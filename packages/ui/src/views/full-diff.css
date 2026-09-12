@@ -81,6 +81,14 @@
     backdrop-filter: blur(8px);
 }
 
+/* The heading and caption use different font sizes but share a baseline instead of aligning by their line centres. */
+.full-diff__heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-control);
+    min-width: 0;
+}
+
 .full-diff__title {
     margin: 0;
     font-size: var(--font-size-section-title);
