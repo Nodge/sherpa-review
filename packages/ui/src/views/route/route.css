@@ -569,7 +569,23 @@
     opacity: 0.62;
 }
 
+/*
+ * The chip stays on one line (docs/design/SPEC-elements.md §2.11). Name and path take all available
+ * space. Counters and the box never shrink. The name stays whole while it fits, and directories truncate on the left
+ * (docs/design/SPEC-elements.md §1.2), using the same technique as the file tree.
+ */
+.route-chip__file {
+    display: flex;
+    align-items: center;
+    gap: var(--space-inner-tight);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* The name gives up space only to itself. */
 .route-chip__name {
+    flex: 0 0 auto;
+    max-width: 100%;
     overflow: hidden;
     font-family: var(--font-mono);
     font-size: var(--font-size-control);
@@ -578,30 +594,37 @@
     text-overflow: ellipsis;
 }
 
+/*
+ * The directory chain shrinks first, down to zero. Left truncation uses `direction: rtl` with left
+ * alignment, as in the file tree. The path itself sits in `bdi`, so character order stays intact.
+ */
 .route-chip__path {
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--text-dim-strong);
+    direction: rtl;
+    text-align: left;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-.route-chip__spacer {
-    flex: 1;
-}
-
 .route-chip__add {
+    flex: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--diff-add-text);
+    white-space: nowrap;
 }
 
 .route-chip__del {
+    flex: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--diff-del-text);
+    white-space: nowrap;
 }
 
 /* Read-state box has the same 3 states as the tree and card (docs/design/SPEC-elements.md §2.12). */

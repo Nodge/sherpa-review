@@ -529,13 +529,16 @@ function FileName({ file }: { file: FileDiff }) {
                 {name}
             </span>
             <span className="file-card__path" title={file.path}>
-                {renamed ? (
-                    <>
-                        <span className="file-card__old-path">{file.oldPath}</span> → {dir}
-                    </>
-                ) : (
-                    dir
-                )}
+                {/* `bdi` isolates the contents from rtl truncation, so the path and rename arrow read in the normal order. */}
+                <bdi>
+                    {renamed ? (
+                        <>
+                            <span className="file-card__old-path">{file.oldPath}</span> → {dir}
+                        </>
+                    ) : (
+                        dir
+                    )}
+                </bdi>
             </span>
         </span>
     );

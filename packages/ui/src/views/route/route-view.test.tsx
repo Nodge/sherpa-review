@@ -112,6 +112,16 @@ function render(
     );
 }
 
+/**
+ * Path tooltips from file chips only. The same path is in the tooltip of the file card on the right,
+ * so searching for a `title="…"` substring alone would check the wrong element.
+ */
+function chipPathTitles(html: string): string[] {
+    return [...html.matchAll(/<span\b[^>]*\bclass="route-chip__path"[^>]*>/g)]
+        .map((tag) => /\btitle="([^"]*)"/.exec(tag[0])?.[1])
+        .filter((title): title is string => title !== undefined);
+}
+
 /** Stop order in the markup, read from the `data-stop` attribute. */
 function order(html: string): string[] {
     return [...html.matchAll(/data-stop="([^"]+)"/g)].map((match) => match[1] ?? '');
@@ -508,6 +518,11 @@ describe('route view', () => {
         expect(html).toContain('route-chip__read');
         expect(html).toContain('edit-window.ts');
         expect(html).toContain('Go to this file in the stop’s diff');
+        // The path is truncated on the left, so only the tooltip has the full path (docs/design/SPEC-elements.md §1.2).
+        expect(chipPathTitles(html)).toContain('services/orders/src/domain/edit-window.ts');
+        // The name and path container makes room for counters, not a spacer.
+        expect(html).toContain('route-chip__file');
+        expect(html).not.toContain('route-chip__spacer');
     });
 
     it('a digest stop renders assertions instead of test code', () => {

@@ -70,9 +70,17 @@ function FileChip({
                 onOpen(group.fileId);
             }}
         >
-            <span className="route-chip__name">{group.name}</span>
-            <span className="route-chip__path">{group.dir}</span>
-            <span className="route-chip__spacer" />
+            <span className="route-chip__file">
+                <span className="route-chip__name">{group.name}</span>
+                {/*
+                 * The tooltip holds the full path. The chip only shows its tail
+                 * (docs/design/SPEC-elements.md §1.2). `bdi` isolates directories from rtl truncation,
+                 * as in the file tree, otherwise the character order reverses.
+                 */}
+                <span className="route-chip__path" title={group.path}>
+                    <bdi>{group.dir}</bdi>
+                </span>
+            </span>
             <span className="route-chip__add">+{count(group.additions)}</span>
             <span className="route-chip__del">−{count(group.deletions)}</span>
             {/* The checkbox uses the shared tri-state `readStateOf`: the tooltip always includes counts (docs/design/SPEC-elements.md §2.12). */}

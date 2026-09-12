@@ -46,6 +46,8 @@ interface CardStateProps {
     /** Initial card hint: shows a write failure that cannot occur without a click. */
     readonly hint?: Feedback;
     readonly gapError?: boolean;
+    /** Replace fixture file paths: long paths for the card header, which do not exist in the fixtures themselves. */
+    readonly override?: Partial<Pick<FileDiff, 'path' | 'oldPath'>>;
 }
 
 const EMPTY_EXPANSION: FileExpansion = new Map();
@@ -95,9 +97,10 @@ function CardState({
     keptInView = false,
     hint,
     gapError = false,
+    override,
 }: CardStateProps) {
     const data = useMemo(() => fixtureIteration(fixture), [fixture]);
-    const file = useMemo(() => fileOf(fixture, path), [fixture, path]);
+    const file = useMemo(() => ({ ...fileOf(fixture, path), ...override }), [fixture, path, override]);
     const contentAvailable = data.pr.capabilities.fileContent;
 
     const store = useMemo(() => {
@@ -280,6 +283,16 @@ const ORDER = 'services/orders/src/domain/order.ts';
 const HANDLERS = 'services/orders/src/api/handlers.ts';
 const CARD_TOKEN = 'services/orders/src/payments/card-token.ts';
 
+/** Paths longer than the header: the gallery shows left truncation. No fixture files have these paths. */
+const LONG_PATH = {
+    path: 'services/orders/src/domain/scheduling/windows/expiration/adapters/legacy/internal/compat/rules/generated/v3/handlers/compliance/policies/order.ts',
+};
+const LONG_RENAME = {
+    oldPath:
+        'services/orders/src/infra/legacy/platform/time/providers/generated/v2/internal/adapters/system/compat/clock.ts',
+    path: 'services/orders/src/infra/platform/time/providers/generated/v3/internal/adapters/legacy/system/monotonic-clock.provider.ts',
+};
+
 export interface DiffGalleryState {
     readonly id: string;
     readonly title: string;
@@ -403,6 +416,18 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-rename',
         title: 'rename',
         render: () => <CardState fixture="edge" path="services/orders/src/infra/time/clock.ts" />,
+    },
+    {
+        id: 'diff-long-path',
+        title: 'header: deep path truncated on the left, full filename',
+        render: () => <CardState fixture="medium" path={ORDER} override={LONG_PATH} />,
+    },
+    {
+        id: 'diff-long-path-rename',
+        title: 'header: rename with long paths',
+        render: () => (
+            <CardState fixture="edge" path="services/orders/src/infra/time/clock.ts" override={LONG_RENAME} />
+        ),
     },
     {
         id: 'diff-delete',

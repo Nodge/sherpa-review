@@ -22,6 +22,7 @@ import { ROUTE_PRESET_STATES } from './route-presets-states.tsx';
 import { ROUTE_DIGEST_STATES } from './route-digest-states.tsx';
 import { ROUTE_GENERATION_STATES } from './route-generation-states.tsx';
 import { ROUTE_BADGE_STATES } from './route-badges-states.tsx';
+import { ROUTE_LONG_PATH_STATES } from './route-long-paths-states.tsx';
 import { FILTER_STATES } from './filters-states.tsx';
 import { COMMENT_COMPOSER_STATES } from './comment-composer-states.tsx';
 import { ROUTE_REBUILD_STATES } from './route-rebuild-states.tsx';
@@ -227,6 +228,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         ...ROUTE_DIGEST_STATES,
         ...ROUTE_GENERATION_STATES,
         ...ROUTE_BADGE_STATES,
+        ...ROUTE_LONG_PATH_STATES,
         ...ROUTE_REBUILD_STATES,
         ...ROUTE_STOP_FAILURE_STATES,
         ...AGENT_ASK_ROUTE_STATES,
