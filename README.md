@@ -9,6 +9,7 @@ For reviewers in a monorepo whose PR queue exceeds what they can read line by li
 ## Requirements
 
 - Credentials for the review host. No separate sign-in or browser OAuth.
+
 - Node ≥ 22.13 (on the 23 release line, 23.4 or later, because earlier versions lack `node:sqlite`).
 - An agent harness: Claude Code (tested) or Codex (supported, tested less). Any other harness works too if it supports skills and can call bash.
 - Model: this configuration has been tested with `opus:high` and `gpt-5.60-sol:high`. These are the recommended models.
@@ -173,7 +174,7 @@ All state lives in `~/.sherpa` (directories 0700, manifests 0600):
 
 Three things leave the machine:
 
-- **Review host**, using your credentials: diff, file contents, threads, comment publishing, ship, ownership zones, PCI DSS scope.
+
 - **Feedback**, only when you click Feedback and have a token for the channel.
 - **Update checks** ask the npm registry for the latest published version, at most once every 30 minutes.
 

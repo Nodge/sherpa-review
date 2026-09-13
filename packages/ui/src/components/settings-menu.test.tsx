@@ -67,6 +67,7 @@ function mount({ agentConnected = true }: { agentConnected?: boolean } = {}): Ha
                     <FilterSelect filters={FILTERS} active={selectFilter(FILTERS, 'all')} onSelect={() => undefined} />
                     <ReviewActionBar
                         pr={MEDIUM.pr}
+                        reviewHost="fixture"
                         diff={MEDIUM.diff}
                         diffStore={createDiffViewStore({ files: MEDIUM.diff.files })}
                         threadStore={createThreadStore(MEDIUM.threads, MEDIUM_FILE_IDS)}

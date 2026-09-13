@@ -180,6 +180,10 @@ There are 2 implementations: **local checkout** (`packages/server/src/hosts/loca
 
 
 
+
+
+
+
 The local host reviews the working tree of a project directory in a Git checkout against a base commit, combining committed, staged, unstaged and untracked changes into one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter records previous iterations itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/`, and also supply the slice between 2 iterations. Of the 6 flags, `fileContent`, `blobs` and `iterations` are enabled. Without the last one, editing a single file would clear viewed marks across the whole diff. A tree has no head commit. An iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside the review state because they have no remote host. Publishing clears the draft flag, records the verdict and opens a round. The orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns that round into a `review.feedback` task. The agent edits code and replies in threads with bot comments. Its edits create a new iteration, making the route stale so the reviewer reads again.
 
 Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`: `local-git-<directory>-<hash>` means a local checkout, `fixture-<name>` means a fixture. Any other key has no host, and review endpoints respond with `no_review_host`. The local host also needs the project directory, supplied by `sherpa up --local <path>` (server argument `--repo`) and saved in `~/.sherpa/prs/<key>/local-host.json`, so the daemon can restart without the flag. Reading progress remains available because it is local and needs no host.

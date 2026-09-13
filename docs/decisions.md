@@ -46,7 +46,10 @@ To maintain the log, add each new decision as a dated entry in its section. When
 
 ## Host adapters
 
-- **2026-08-20 · The diff and all PR data come from the REST API, with no checkout needed to read them.** The entire patch arrives in one request in half a second.
+
+
+
+
 - **2026-08-21 · Fixtures live in a separate `@sherpa/fixtures` package.** It has 2 consumers, server contract tests and the browser state gallery, so the package has no Node APIs and depends only on `@sherpa/protocol`.
 - **2026-08-21 · UI lens labels are defined by lens ID, with the host label as a fallback.** The UI labels known IDs (`mine`, `pci`) itself. An unknown lens from a future host uses the host's label. Filters are extensible and must neither crash nor disappear.
 - **2026-08-27 · A lens with zero files in this PR is not rendered at all**, either as a chip or as a select option. The PCI chip in the header and the audit banner use the same visibility rule. Supersedes `docs/design/SPEC-elements.md §4.2` for empty lenses.
@@ -70,7 +73,8 @@ To maintain the log, add each new decision as a dated entry in its section. When
 ## Diffs and images
 
 - **2026-08-20 · Diffs travel as raw per-file unified diff (`FileDiff.patch`), and only the UI worker parses them into a line model.** The adapter and server do not interpret patch text.
-- **2026-08-21 · The adapter counts review host diff statistics from the patch body.** The change list has no ready-made statistics. A rename in the source patch is a pair of blocks, "delete old path, add new path in full". The adapter takes the new-path block, so a pure move shows "+N/−0". The actual delta requires a separate text-diff request.
+
+
 - **2026-08-22 · For context expansion, the host returns the entire file contents, and the UI computes the expansion.** An optional `ReviewHost.getFileContent(fileId)` → `{oldText, newText}` and `capabilities.fileContent` replace a context-width protocol. Context lines are identical in both versions. The UI fills gaps itself and gives the trailing gap its actual length.
 - **2026-08-27 · The ±20 step belongs in gaps between hunks, and the file card header button expands the entire file.** Supersedes `docs/design/SPEC-elements.md §2.13` for the ±20 button.
 - **2026-08-28 · Loaded context is not persisted.** Expanded gaps live in tab memory. Context provides a view around changes rather than review progress, and does not change file read status.
