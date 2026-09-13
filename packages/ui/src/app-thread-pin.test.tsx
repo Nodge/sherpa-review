@@ -128,7 +128,7 @@ function mountApp(): Mounted {
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: THREADS }));
             case UI_ENDPOINTS.reviewProgress:
-                return Promise.resolve(json({ files: [], stops: [], progressRevision: 1 }));
+                return Promise.resolve(json({ diffId: query.get('diffId') ?? V2.diff.diffId, files: [], stops: [], progressRevision: 1 }));
             case UI_ENDPOINTS.reviewRoute:
                 return Promise.resolve(json({ route: ROUTE, routeRevision: 1 }));
             case UI_ENDPOINTS.reviewSnapshots:

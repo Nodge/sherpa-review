@@ -61,8 +61,14 @@ export interface ProgressWriter {
     readonly shouldReload: (revision: number | null) => boolean;
     /** Refetch start marker: the endpoint response may miss writes made after it. */
     readonly beginReload: () => number;
-    /** Endpoint response with writes that it missed added back in. */
-    readonly finishReload: (response: UiReviewProgressResponse, mark: number) => MergedProgress;
+    /**
+     * Endpoint response with missed writes added. The writer knows nothing about the response iteration:
+     * the caller checks it against the displayed diff before this call.
+     */
+    readonly finishReload: (
+        response: Pick<UiReviewProgressResponse, 'files' | 'stops' | 'progressRevision'>,
+        mark: number,
+    ) => MergedProgress;
 }
 
 /** Last server-confirmed state for a key, restored on rollback. */

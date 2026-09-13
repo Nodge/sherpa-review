@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
+import { localPrKey } from './local.js';
 
 const PR_KEY = 'github-quillmart--quillmart--777';
 
@@ -60,6 +61,7 @@ describe('CLI against server', () => {
         readonly extraEnv?: Record<string, string>;
         readonly ensureServer?: NonNullable<CliIo['ensureServer']>;
         readonly openBrowser?: NonNullable<CliIo['openBrowser']>;
+        readonly runCommand?: NonNullable<CliIo['runCommand']>;
     }
 
     async function sherpaWith(overrides: Overrides, ...argv: string[]): Promise<Invocation> {
@@ -73,6 +75,7 @@ describe('CLI against server', () => {
             entry: fileURLToPath(import.meta.url),
             ...(overrides.ensureServer === undefined ? {} : { ensureServer: overrides.ensureServer }),
             ...(overrides.openBrowser === undefined ? {} : { openBrowser: overrides.openBrowser }),
+            ...(overrides.runCommand === undefined ? {} : { runCommand: overrides.runCommand }),
         };
 
         const code = await run(argv, io);
@@ -134,6 +137,36 @@ describe('CLI against server', () => {
             workerId: await readWorkerIdFile(),
             harness: 'claude-code',
         });
+    });
+
+    // `--local` names a directory, not a PR. The key comes from the directory and branch and overrides even SHERPA_PR.
+    it('up --local starts a directory review and names the directory in output', async () => {
+        const localKey = localPrKey(await fs.realpath(workDir), 'feature', 'main~3');
+        server = await startServer({
+            prKey: localKey,
+            sherpaDir,
+            longPollSeconds: 0.2,
+            reviewHostFactory: () => null,
+        });
+        const git: NonNullable<CliIo['runCommand']> = (_command, args) =>
+            Promise.resolve({
+                exitCode: 0,
+                stdout:
+                    args[0] === 'root'
+                        ? `${workDir}\n`
+                        : JSON.stringify({ branch: 'feature', user_login: 'alice', hash: 'a'.repeat(40) }),
+                stderr: '',
+                failure: null,
+            });
+
+        const result = await sherpaWith({ runCommand: git }, 'up', '--local', workDir, '--base', 'main~3');
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain(`http://127.0.0.1:${String(server.port)}/#t=`);
+        expect(result.stdout).toContain('Reviewing the working tree of');
+        expect(result.stdout).toContain('on branch feature, base main~3');
+        expect(result.stdout).toContain(`sherpa worker next --pr ${localKey}`);
+        expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected' });
     });
 
     it('opens the browser only on a cold start and without --no-open', async () => {

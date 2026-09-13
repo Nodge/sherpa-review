@@ -19,8 +19,15 @@ export interface CommandOutcome {
     readonly failure: CommandFailure | null;
 }
 
-/** External command runner, injected so tests never call the real VCS executable. */
-export type CommandRunner = (command: string, args: readonly string[]) => Promise<CommandOutcome>;
+/**
+ * External command runner, injected so tests do not call a live `git`.
+ * Local review needs `cwd` because it queries the named directory, not the launch directory.
+ */
+export type CommandRunner = (
+    command: string,
+    args: readonly string[],
+    options?: { readonly cwd?: string },
+) => Promise<CommandOutcome>;
 
 export type PrDiscovery =
     | { readonly kind: 'found'; readonly prKey: string }
@@ -149,10 +156,11 @@ function detailOf(stderr: string): string {
 }
 
 /**
- * Real runner: finds the executable in PATH and inherits cwd and environment from the CLI call.
- * Discovery answers "which PR belongs to the directory I was launched from".
+ * Real runner: finds the binary in PATH and inherits the CLI invocation's environment. Without `cwd`,
+ * it also inherits the launch directory. Discovery answers "which PR belongs to the directory
+ * I was launched from".
  */
-export const runVcsCommand: CommandRunner = async (command, args) =>
+export const runVcsCommand: CommandRunner = async (command, args, options) =>
     new Promise<CommandOutcome>((resolve) => {
         execFile(
             command,
@@ -162,6 +170,7 @@ export const runVcsCommand: CommandRunner = async (command, args) =>
                 maxBuffer: MAX_OUTPUT_BYTES,
                 encoding: 'utf8',
                 windowsHide: true,
+                ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
             },
             (error, stdout, stderr) => {
                 resolve(

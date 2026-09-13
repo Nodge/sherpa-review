@@ -17,6 +17,7 @@ describe('second pass gallery', () => {
     it('registers exactly the ids declared in the file', () => {
         expect(ITERATION_SECOND_PASS_STATES.map((state) => state.id)).toEqual([
             'iterations-stale-banner',
+            'iterations-stale-banner-local',
             'iterations-second-pass-banner',
             'iterations-second-pass-zero-carry',
             'iterations-filter-new',
@@ -35,6 +36,16 @@ describe('second pass gallery', () => {
         expect(html).toContain('2 new iterations');
         expect(html).toContain('stops 02, 03 and 06 are affected');
         expect(html).toContain('Rebuild the route');
+    });
+
+    it('in local review the stale banner names the working tree rather than the PR', () => {
+        const html = markup('iterations-stale-banner-local');
+
+        expect(html).toContain('the working tree is at');
+        expect(html).not.toContain('the PR is already at');
+        // Local review iterations differ in the first characters of the diff fingerprint.
+        expect(html).toContain('6c1f9a3');
+        expect(html).toContain('a3d52f8');
     });
 
     it('the second pass banner shows progress carryover and offers a filter', () => {

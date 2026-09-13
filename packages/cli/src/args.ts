@@ -10,6 +10,10 @@ export type Command =
     | {
           readonly kind: 'up';
           readonly prKey: string | undefined;
+          /** Local review project directory (`--local`). Mutually exclusive with `--pr`. */
+          readonly local: string | undefined;
+          /** Local review comparison base (`--base`). Requires `--local`. */
+          readonly base: string | undefined;
           /** Harness label for worker status in the UI. Optional. */
           readonly harness: string | undefined;
           /** Worker model name for worker status in the UI. Optional. */
@@ -54,7 +58,18 @@ export type Command =
           readonly reason: string;
       };
 
-const OPTIONS = ['--pr', '--file', '--text', '--reason', '--harness', '--model', '--lang', '--wait-seconds'] as const;
+const OPTIONS = [
+    '--pr',
+    '--local',
+    '--base',
+    '--file',
+    '--text',
+    '--reason',
+    '--harness',
+    '--model',
+    '--lang',
+    '--wait-seconds',
+] as const;
 const FLAGS = ['--no-open'] as const;
 type OptionName = (typeof OPTIONS)[number];
 type FlagName = (typeof FLAGS)[number];
@@ -82,6 +97,9 @@ export function parseArgs(argv: readonly string[]): Command {
 
     if (group !== 'up' && flags.size > 0) {
         throw new CliError('sherpa: --no-open is only available for `sherpa up`.');
+    }
+    if (group !== 'up' && (options.has('--local') || options.has('--base'))) {
+        throw new CliError('sherpa: --local and --base are only available for `sherpa up`.');
     }
     if (group === 'up') {
         return parseUpCommand(positionals, options, flags, prKey);
@@ -127,21 +145,54 @@ function parseUpCommand(
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up [--pr <pr key>] [--harness <harness name>] [--model <model name>] ' +
-                '[--lang <ru|en>] [--no-open]`; ' +
-                'without `--pr` the PR is taken from the Git branch of the current directory.',
+                'Expected `sherpa up [--pr <pr key> | --local <path> [--base <ref>]] ' +
+                '[--harness <harness name>] [--model <model name>] [--lang <ru|en>] [--no-open]`; ' +
+                'without `--pr` and `--local` the PR is taken from the Git branch of the current directory.',
+        );
+    }
+
+    const local = parseLocal(options.get('--local'));
+    const base = options.get('--base')?.trim();
+    if (local !== undefined && prKey !== undefined) {
+        throw new CliError(
+            'sherpa: `--local` and `--pr` mean different reviews — pass one of them.\n' +
+                'Use `--local <path>` to review the working tree of a checkout, `--pr <pr key>` to review a PR.',
+        );
+    }
+    if (base !== undefined && local === undefined) {
+        throw new CliError(
+            'sherpa: `--base` only makes sense with `--local`.\n' +
+                'Call `sherpa up --local <path> --base <ref>`; for a PR the base comes from the host.',
         );
     }
 
     return {
         kind: 'up',
         prKey,
+        local,
+        base: base === '' ? undefined : base,
         harness: sanitizeLabel(options.get('--harness')),
         model: sanitizeLabel(options.get('--model')),
         lang: parseLang(options.get('--lang')),
         noOpen: flags.has('--no-open'),
     };
 }
+
+/** Project directory from `--local`. A path is required, and an empty value counts as absent. */
+function parseLocal(raw: string | undefined): string | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+    const value = raw.trim();
+    if (value === '') {
+        throw new CliError(MISSING_LOCAL_PATH);
+    }
+    return value;
+}
+
+const MISSING_LOCAL_PATH =
+    'sherpa: `--local` needs the path of the project directory to review.\n' +
+    'Call `sherpa up --local <path>` — `.` is the directory you are in right now.';
 
 function parseWorkerCommand(
     positionals: readonly string[],
@@ -320,7 +371,10 @@ function splitArgs(argv: readonly string[]): {
 
         const value = argv[index + 1];
         if (value === undefined || value.startsWith('--')) {
-            throw new CliError(`sherpa: flag ${name} has no value.`);
+            // The project directory cannot be guessed, so the failure names exactly what is missing.
+            throw new CliError(
+                name === '--local' ? MISSING_LOCAL_PATH : `sherpa: flag ${name} has no value.`,
+            );
         }
         options.set(name, value);
         index += 1;

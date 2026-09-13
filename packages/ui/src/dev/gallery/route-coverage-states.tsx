@@ -151,6 +151,7 @@ const ROUTE_COMPLETION: ReviewCompletion = {
     prId: DATA.pr.id,
     headCommit: DATA.diff.headCommit,
     hostName: 'FixtureHost',
+    reviewHost: 'fixture',
     publishedComments: 2,
     publishedReplies: 1,
     progress: { filesSeen: 18, filesTotal: 18, linesSeen: 862, linesTotal: 862, percentSeen: 100 },

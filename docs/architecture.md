@@ -60,7 +60,8 @@ A lease does not remove a task from the queue. A lease that expires silently ret
 - `echo`: tests the loop. The result is not parsed.
 - `route.skeleton`: PR summary, stop plan, Full tour order.
 - `route.section`: fills stops from the plan.
-- `chat` is a reviewer question with selection context. The answer is Markdown, with no result schema.
+- `chat`: reviewer's question with selection context. The answer is markdown, with no result schema.
+- `review.feedback`: a batch of published local review comments. The agent edits code in the project directory and replies in each thread.
 
 Regeneration after a push uses the same `route.*` tasks with extra context. There is no separate type.
 
@@ -87,9 +88,13 @@ State lives under `~/.sherpa`. Tests and development runs override it with `SHER
     sherpa.db              SQLite database for this PR
     server.log             daemon log: the server writes it, the CLI reads it if the server fails to start
     worker-id              session identity: the server writes it on registration, the CLI reads it
+    local-host.json        only for a `local-git-*` key: project directory, branch and base, 0600
+    local-review.json      only for a `local-git-*` key: local review comments, 0600
+    local-iterations/      only for a `local-git-*` key: working-tree iteration history, index and new-side blobs, 0700/0600
     payload/shared/        context shared across tasks: diff, files, guidance
     payload/route/         route generation payload, cleared for each generation
     payload/chat/          chat question payload, one directory per task
+    payload/feedback/      only for a `local-git-*` key: publication round payloads, one directory per round
     blobs/                 cache of diff image bytes
   settings.json            global UI settings, 0600
   update-check.json        version check cache, expires after 30 minutes
@@ -103,7 +108,7 @@ The **manifest** (`serverManifestSchema`) contains `prKey`, port, PID, token, pr
 
 The **PR database** is `sherpa.db`, with WAL enabled. A migration list maintains its schema (`packages/server/src/migrations.ts`). A migration's name is fixed forever. Never rewrite SQL in an applied migration. `node:sqlite` has no nested transactions, so all server operations use the `transaction` helper with `BEGIN IMMEDIATE`. Domain errors return as values, not exceptions, because an exception rolls back everything.
 
-These survive server restarts: task queue and leases, worker identity, reading progress (file and stop marks, ranges), route snapshots and generation state, iterations and computed interdiffs, chat history and agent notes, draft buffer, per-PR UI state, idle counter. Only cheap-to-recreate state lives in memory: host subscriptions, open SSE channels, the tab's parsed-patch cache.
+The following survive server restarts: task queue and leases, worker identity, reading progress (file and stop marks, ranges), route snapshots and generation state, iterations and computed interdiffs, chat history and agent notes, draft buffer, links between local review rounds and their tasks, per-PR UI state, and the idle counter. Memory holds only what is cheap to recreate: host subscriptions, open SSE channels, and the tab's parsed patch cache.
 
 UI settings (`diffMode`, `shipMode`, composer layout, language, theme, text size, onboarding state and update notifications) live in one file per user, outside the PR database. Each PR server listens on a random port, and the browser's `localStorage` is empty for each new port. Disk is always the source of truth. Both reads and patch merges use the latest file contents.
 
@@ -171,13 +176,15 @@ The `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`) declares host c
 
 **Invariant: a method is implemented if and only if its corresponding flag is set.** The shared `describeReviewHostContract` suite (`packages/server/src/hosts/review-host-contract.ts`) enforces it with the same tests for every implementation. It also checks response shapes against protocol schemas, subscription promises, the two-stage draft model and consistency between `file.viewed` and `fileViewedSync`.
 
-The **fixture host** (`packages/fixtures`) provides deterministic PRs for development, the state gallery and e2e.
+There are 2 implementations: **local checkout** (`packages/server/src/hosts/local-git/`) and **fixture host** (`packages/fixtures`), which supplies deterministic PRs for dev mode, the state gallery and e2e.
 
 
 
-Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`. `fixture-<name>` selects a fixture. Any other key has no host, and review endpoints return `no_review_host`. Reading progress remains available because it is local and needs no host.
+The local host reviews the working tree of a project directory in a Git checkout against a base commit, combining committed, staged, unstaged and untracked changes into one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter records previous iterations itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/`, and also supply the slice between 2 iterations. Of the 6 flags, `fileContent`, `blobs` and `iterations` are enabled. Without the last one, editing a single file would clear viewed marks across the whole diff. A tree has no head commit. An iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside the review state because they have no remote host. Publishing clears the draft flag, records the verdict and opens a round. The orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns that round into a `review.feedback` task. The agent edits code and replies in threads with bot comments. Its edits create a new iteration, making the route stale so the reviewer reads again.
 
-**Host specifics stay inside the adapter.** Host identifiers are opaque (`hostIdSchema`), and the contract promises only equality. Sticky ship is a verdict, not a mechanism. The few adapter-specific controls that need to leave the adapter (review status subscriptions, fixture development "push" and the write-failure switch) live in `SelectedHost` and go no further than the registration of their routes. Shared server code knows nothing about fixtures.
+Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`: `local-git-<directory>-<hash>` means a local checkout, `fixture-<name>` means a fixture. Any other key has no host, and review endpoints respond with `no_review_host`. The local host also needs the project directory, supplied by `sherpa up --local <path>` (server argument `--repo`) and saved in `~/.sherpa/prs/<key>/local-host.json`, so the daemon can restart without the flag. Reading progress remains available because it is local and needs no host.
+
+**Host-specific details stay inside the adapter.** Host identifiers are opaque (`hostIdSchema`), and the contract promises only equality. Sticky ship is a verdict rather than a mechanism. The few things an adapter must expose (forced working-tree polling and publication rounds for the local host, dev "push" and a write-failure toggle for the fixture) live in `SelectedHost` and go no further than the registration point for the corresponding routes. Shared server code knows nothing about fixtures.
 
 ## 6. Non-functional requirements
 

@@ -364,26 +364,76 @@ describe('picker rows', () => {
     it('snapshots appear newest first with provenance and status', () => {
         const rows = pickerRows({ snapshots: [summary(), CURRENT], iterations: [], activeIteration: null });
 
-        expect(rows.snapshots.map((row) => row.id)).toEqual(['route-new', 'route-old']);
-        expect(rows.snapshots[0]).toMatchObject({ status: 'current', model: 'sonnet-5', harness: 'claude-code' });
-        expect(rows.snapshots[1]?.status).toBe('stale');
+        expect(rows.iterations.map((row) => row.id)).toEqual(['route-new', 'route-old']);
+        expect(rows.iterations[0]).toMatchObject({ status: 'current', model: 'sonnet-5', harness: 'claude-code' });
+        expect(rows.iterations[1]?.status).toBe('stale');
     });
 
-    it('lists iterations without snapshots in a separate section, newest first', () => {
+    it('the active iteration without a route is the first row, above snapshots of previous iterations', () => {
         const rows = pickerRows({
             snapshots: [summary()],
             iterations: [
-                iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous' }),
-                iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'gone' }),
+                iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'gone', createdAt: '2026-08-31T03:00:00.000Z' }),
+                iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous', createdAt: '2026-08-31T05:00:00.000Z' }),
                 iteration(),
             ],
             activeIteration: null,
         });
 
-        // 182800 has a snapshot, so it is absent from the iterations section.
-        expect(rows.iterations.map((row) => row.id)).toEqual(['182801', '182799']);
+        // Active iteration 182801 has no route but comes first. 182800 appears as its snapshot.
+        expect(rows.iterations.map((row) => row.id)).toEqual(['182801', 'route-old', '182799']);
         expect(rows.iterations[0]?.status).toBe('activeIteration');
-        expect(rows.iterations[1]?.status).toBe('gone');
+        expect(rows.iterations[1]?.kind).toBe('snapshot');
+        expect(rows.iterations[2]?.status).toBe('gone');
+    });
+
+    it('a snapshot sits beside its iteration instead of in a separate section at the top', () => {
+        const older = summary({ snapshotId: 'route-older', diffId: '182799', createdAt: '2026-08-31T04:00:00.000Z' });
+        const rows = pickerRows({
+            snapshots: [older, summary()],
+            iterations: [
+                iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'previous', createdAt: '2026-08-31T03:00:00.000Z' }),
+                iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous', createdAt: '2026-08-31T05:00:00.000Z' }),
+                iteration({ createdAt: '2026-08-31T09:00:00.000Z' }),
+            ],
+            activeIteration: null,
+        });
+
+        expect(rows.iterations.map((row) => row.id)).toEqual(['182801', 'route-old', 'route-older']);
+    });
+
+    it('identical 7-character commit prefixes expand until distinct', () => {
+        const head = '6630996aa1b2c3d4e5f60718293a4b5c6d7e8f90';
+        const rows = pickerRows({
+            snapshots: [],
+            iterations: [
+                iteration({ diffId: '1', headCommit: `${head}+11111111`, status: 'previous', createdAt: '2026-08-31T03:00:00.000Z' }),
+                iteration({ diffId: '2', headCommit: `${head}+22222222`, status: 'previous', createdAt: '2026-08-31T05:00:00.000Z' }),
+                iteration({ diffId: '3', headCommit: head, createdAt: '2026-08-31T09:00:00.000Z' }),
+            ],
+            activeIteration: null,
+        });
+
+        expect(rows.iterations.map((row) => row.short)).toEqual(['6630996…8f90', '6630996…2222', '6630996…1111']);
+    });
+
+    it('2 iterations with the same commit label their rows with the exact time', () => {
+        const rows = pickerRows({
+            snapshots: [],
+            iterations: [
+                iteration({ diffId: '1', status: 'previous', createdAt: '2026-08-31T03:00:00.000Z' }),
+                iteration({ diffId: '2', status: 'previous', createdAt: '2026-08-31T05:00:00.000Z' }),
+                iteration({ diffId: '3', headCommit: OLD_COMMIT, createdAt: '2026-08-31T09:00:00.000Z' }),
+            ],
+            activeIteration: null,
+        });
+
+        // Both the commit and short id match entirely for the first 2. Only the time distinguishes them.
+        expect(rows.iterations.map((row) => [row.id, row.ambiguous])).toEqual([
+            ['3', false],
+            ['2', true],
+            ['1', true],
+        ]);
     });
 
     it('an empty iteration list produces an active row from App facts', () => {
@@ -393,7 +443,7 @@ describe('picker rows', () => {
             activeIteration: { diffId: STALE.prDiffId, commit: STALE.prCommit },
         });
 
-        expect(rows.iterations).toHaveLength(1);
+        expect(rows.iterations.map((row) => row.id)).toEqual(['182801', 'route-old']);
         expect(rows.iterations[0]).toMatchObject({ id: '182801', commit: NEW_COMMIT, status: 'activeIteration' });
     });
 

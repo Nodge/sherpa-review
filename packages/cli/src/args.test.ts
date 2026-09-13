@@ -18,6 +18,8 @@ describe('argument parsing', () => {
             {
                 kind: 'up',
                 prKey: 'github-quillmart--quillmart--1',
+                local: undefined,
+                base: undefined,
                 harness: 'claude-code',
                 model: 'claude-opus-5',
                 lang: undefined,
@@ -27,6 +29,8 @@ describe('argument parsing', () => {
         expect(parseArgs(['up'])).toEqual({
             kind: 'up',
             prKey: undefined,
+            local: undefined,
+            base: undefined,
             harness: undefined,
             model: undefined,
             lang: undefined,
@@ -34,7 +38,35 @@ describe('argument parsing', () => {
         });
         expect(parseArgs(['up', '--no-open'])).toMatchObject({ kind: 'up', noOpen: true });
         expect(() => parseArgs(['up', '--no-open=true'])).toThrow('does not take a value');
-        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up [--pr <pr key>]');
+        expect(() => parseArgs(['up', 'server'])).toThrow('sherpa up [--pr <pr key> | --local <path>');
+    });
+
+    it('up --local: accepts a project directory instead of a PR, with a base', () => {
+        expect(parseArgs(['up', '--local', '.', '--base', 'main~3'])).toMatchObject({
+            kind: 'up',
+            prKey: undefined,
+            local: '.',
+            base: 'main~3',
+        });
+        expect(parseArgs(['up', '--local=/tmp/app'])).toMatchObject({ local: '/tmp/app', base: undefined });
+    });
+
+    it('up --local without a path: rejects with a hint instead of a generic "missing value"', () => {
+        // The directory cannot be guessed, so the hint names it explicitly.
+        expect(() => parseArgs(['up', '--local'])).toThrow('needs the path of the project directory');
+        expect(() => parseArgs(['up', '--local', '--no-open'])).toThrow('needs the path of the project directory');
+        expect(() => parseArgs(['up', '--local='])).toThrow('needs the path of the project directory');
+    });
+
+    it('up: --local and --pr select different reviews, --base requires --local', () => {
+        expect(() => parseArgs(['up', '--local', '.', '--pr', 'github-quillmart--quillmart--1'])).toThrow('pass one of them');
+        expect(() => parseArgs(['up', '--base', 'main'])).toThrow('only makes sense with `--local`');
+        expect(() => parseArgs(['worker', 'next', '--local', '.'])).toThrow(
+            'only available for `sherpa up`',
+        );
+        expect(() => parseArgs(['worker', 'next', '--base', 'main'])).toThrow(
+            'only available for `sherpa up`',
+        );
     });
 
     it('worker next, with and without a PR flag', () => {

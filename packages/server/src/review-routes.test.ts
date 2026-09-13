@@ -836,7 +836,7 @@ describe('server review endpoints', () => {
         it('an empty PR has no records and revision zero', async () => {
             const server = await start(FIXTURE_PR);
 
-            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
+            expect(await readProgress(server)).toMatchObject({ files: [], stops: [], progressRevision: 0 });
         });
 
         it('a stop mark without a route is not written because there is no snapshot to attach it to', async () => {
@@ -848,7 +848,7 @@ describe('server review endpoints', () => {
 
             expect(written.status).toBe(200);
             expect(uiSetStopViewedResponseSchema.parse(await written.json()).progressRevision).toBe(0);
-            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
+            expect(await readProgress(server)).toMatchObject({ files: [], stops: [], progressRevision: 0 });
         });
 
         it('marking a stop writes its ranges', async () => {
@@ -1039,7 +1039,7 @@ describe('server review endpoints', () => {
 
             expect(response.status).toBe(200);
             expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
-            expect(await readProgress(server)).toEqual({ files: [], stops: [], progressRevision: 0 });
+            expect(await readProgress(server)).toMatchObject({ files: [], stops: [], progressRevision: 0 });
         });
 
         it('a mirror failure does not roll back the write or break the response', async () => {

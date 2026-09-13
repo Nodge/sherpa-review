@@ -138,10 +138,14 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         await page.locator('button.snapshot-pill--button[aria-haspopup="menu"]').click();
         const menu = page.locator('[role="menu"][aria-label="Snapshots and iterations"]');
         await expect(menu.locator('.snapshot-picker__section')).toHaveText([
-            'Snapshots',
-            'Iterations without a route',
+            'Snapshots and iterations',
             'Show changes since iteration…',
         ]);
+
+        // The active iteration is the first row even without a route, because the reviewer looks for it first.
+        await expect(menu.locator('.snapshot-picker__row').first()).toHaveText(
+            `${V3_SHORT} · active iteration · no route`,
+        );
 
         // The second-pass snapshot remains the current PR route. The force-push removed its iteration,
         // but the reviewer does not have to rebuild the route and keeps reading it until rebuilding.
@@ -149,10 +153,6 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         await expect(snapshots).toHaveCount(2);
         await expect(snapshots.nth(0)).toHaveText(new RegExp(`^${V2_SHORT} · .* · current$`));
         await expect(snapshots.nth(1)).toHaveText(new RegExp(`^${V1_SHORT} · .* · stale$`));
-
-        await expect(menu.locator('.snapshot-picker__row[data-diff]')).toHaveText(
-            `${V3_SHORT} · active iteration · no route`,
-        );
 
         // The review host refuses to calculate a slice with a gone iteration, so it has no row.
         await expect(menu.locator(`.snapshot-picker__row[data-slice="${MEDIUM_DIFF_ID_V2}"]`)).toHaveCount(0);
@@ -197,15 +197,18 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         ]);
         expect(carriedToV2).toContain(`${README}:new:43-52`);
 
-        // Stop marks are keyed by snapshot and carried over when it is frozen. The route was not
-        // rebuilt on c4f9b17, so marked stops stayed with snapshot a71d4e2.
-        expect((await progressOf(page, server, MEDIUM_DIFF_ID_V3)).stops).toEqual([]);
-        expect((await progressOf(page, server, MEDIUM_DIFF_ID_V2)).stops).toEqual([
+        // Stop marks are keyed by snapshot. The route was not rebuilt on c4f9b17, so the current
+        // snapshot is still a71d4e2. Its marks are returned for both iterations. Asking for the
+        // active iteration is the same as asking with no parameter. The tab renders this route on it.
+        const marked = [
             { stopId: 's01', viewed: true },
             { stopId: 's02', viewed: true },
             { stopId: 's04', viewed: true },
             { stopId: 's05', viewed: true },
-        ]);
+        ];
+        expect((await progressOf(page, server, MEDIUM_DIFF_ID_V3)).stops).toEqual(marked);
+        expect((await progressOf(page, server)).stops).toEqual(marked);
+        expect((await progressOf(page, server, MEDIUM_DIFF_ID_V2)).stops).toEqual(marked);
     });
 });
 

@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http';
 
-import type { PrDiff, ReviewHost } from '@sherpa/protocol';
+import type { PrDiff, ReviewHost, UiStopSeenRange } from '@sherpa/protocol';
 import {
     UI_ENDPOINTS,
     uiReviewBlobRequestSchema,
@@ -75,6 +75,11 @@ export interface ReviewRoutesOptions {
     readonly iterationFeed?: IterationFeed | null;
     /** On-disk image byte cache. If absent, every request goes to the host (tests without state). */
     readonly blobs?: BlobCache | null;
+    /**
+     * Publication completed. Registered only where publishing has a consequence:
+     * for the local host, it enqueues an agent task.
+     */
+    readonly onPublished?: () => void;
 }
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
@@ -222,6 +227,8 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 // The endpoint response does not wait for this: publication has already completed, and the host's `getPr()` may
                 // spend tens of seconds retrying with timeouts. `refresh` swallows its own errors.
                 void options.prMeta.refresh();
+                // Enqueuing the round task does not hold up the response either: the reviewer has already published.
+                options.onPublished?.();
                 return respond(uiPublishResponseSchema, { result });
             }),
         },
@@ -259,8 +266,8 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             stream: (ctx) => serveBlob(options, ctx),
         },
         {
-            // Progress is scoped to an iteration: without a parameter, return the active one and its current snapshot,
-            // with `diffId`, return the stored iteration as is (old snapshots are readable, not editable).
+            // Progress is scoped to an iteration: the active one (implicit or named explicitly) responds
+            // with the current snapshot, a previous one as is (an old snapshot is read-only).
             method: 'GET',
             path: UI_ENDPOINTS.reviewProgress,
             handle: handlingRpcFailures(async (ctx) => {
@@ -269,14 +276,22 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                     { ...optionalParam(ctx, 'diffId') },
                     'reading progress',
                 );
-                const diffId = request.diffId ?? (await activeDiffId(options));
-                const snapshotId =
-                    request.diffId === undefined
-                        ? (options.route.read().snapshot?.snapshotId ?? null)
-                        : lastSnapshotOf(options, request.diffId);
+                const active = await activeDiffId(options);
+                // The server has no iterations at all: all progress lives under `LEGACY_DIFF_ID`, regardless of
+                // what the tab calls the only diff. Any `diffId` it sends refers to that diff.
+                const single = withoutIterations(options, active);
+                const asActive = single || request.diffId === undefined || request.diffId === active;
+                const diffId = asActive ? active : (request.diffId ?? active);
+                const snapshotId = asActive
+                    ? (options.route.read().snapshot?.snapshotId ?? null)
+                    : lastSnapshotOf(options, diffId);
                 return respond(
                     uiReviewProgressResponseSchema,
                     {
+                        // The iteration the response was read from: the tab uses it to check whether it received
+                        // its own `fileId`. The server gives the only iteration its internal name,
+                        // and the tab uses the name from the diff, so we respond with the tab's name.
+                        diffId: single ? (request.diffId ?? diffId) : diffId,
                         files: options.progress.read(diffId),
                         stops: snapshotId === null ? [] : options.progress.readStops(snapshotId),
                         progressRevision: options.progress.revision,
@@ -291,13 +306,24 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(ctx, uiSetFileViewedRequestSchema, 'setting a viewed mark');
                 // The local record is the source of truth. The host learns about it next, and only if it supports it.
-                // Marks can only be set in the active iteration.
-                const progressRevision = options.progress.setFileViewed(
-                    await activeDiffId(options),
+                const active = await activeDiffId(options);
+                const diffId = writtenIteration(options, active, [request.fileId]);
+                let progressRevision = options.progress.setFileViewed(
+                    diffId,
                     request.fileId,
                     request.viewed,
                     options.route.read().snapshot?.snapshotId ?? null,
                 );
+                if (diffId !== active) {
+                    progressRevision = carryFileViewed(
+                        options,
+                        diffId,
+                        active,
+                        request.fileId,
+                        request.viewed,
+                        progressRevision,
+                    );
+                }
                 mirrorFileViewed(request.fileId, request.viewed);
                 return respond(uiSetFileViewedResponseSchema, { progressRevision }, 'local');
             }),
@@ -316,16 +342,24 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const activeSnapshotId = options.route.read().snapshot?.snapshotId ?? null;
                 const stale = request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId;
                 // Stop marks are keyed by snapshot: without a route, there is nowhere to write them.
-                const progressRevision =
-                    stale || activeSnapshotId === null
-                        ? options.progress.revision
-                        : options.progress.setStopViewed(
-                              activeSnapshotId,
-                              await activeDiffId(options),
-                              request.stopId,
-                              request.viewed,
-                              request.ranges,
-                          );
+                if (stale || activeSnapshotId === null) {
+                    return respond(
+                        uiSetStopViewedResponseSchema,
+                        { progressRevision: options.progress.revision },
+                        'local',
+                    );
+                }
+                const active = await activeDiffId(options);
+                let progressRevision = options.progress.revision;
+                for (const write of stopWrites(options, active, request)) {
+                    progressRevision = options.progress.setStopViewed(
+                        activeSnapshotId,
+                        write.diffId,
+                        request.stopId,
+                        request.viewed,
+                        write.ranges,
+                    );
+                }
                 return respond(uiSetStopViewedResponseSchema, { progressRevision }, 'local');
             }),
         },
@@ -557,6 +591,158 @@ function lastSnapshotOf(options: ReviewRoutesOptions, diffId: string): string | 
     return own.at(-1)?.snapshotId ?? null;
 }
 
+/**
+ * Whether the server uses a single iteration: there is no host, or the host has no iterations. Then all
+ * progress lives under `LEGACY_DIFF_ID`, and any `diffId` from the tab refers to it.
+ *
+ * A host with iterations whose list has not arrived yet (`listIterations` failed) does not qualify:
+ * treating a previous iteration as active would return progress from another iteration.
+ */
+function withoutIterations(options: ReviewRoutesOptions, active: string): boolean {
+    return (
+        active === LEGACY_DIFF_ID &&
+        (options.iterationFeed == null || options.prMeta.get()?.capabilities.iterations === false)
+    );
+}
+
+/**
+ * The current snapshot's iteration, when it differs from the active one and its diff is saved. This is the stale
+ * window: a push has arrived, but the tab still renders the snapshot's diff. `null` means there is no such window.
+ */
+function snapshotIteration(options: ReviewRoutesOptions, active: string): string | null {
+    const snapshotDiffId = options.route.read().snapshot?.diffId ?? null;
+    if (snapshotDiffId === null || snapshotDiffId === active || withoutIterations(options, active)) {
+        return null;
+    }
+    return options.iterations?.get(snapshotDiffId) == null ? null : snapshotDiffId;
+}
+
+/**
+ * The iteration a mark is written under: usually the active one, but during the stale window the tab
+ * still renders the snapshot iteration's diff, so the mark must go under that iteration. Otherwise it will not return
+ * when progress for the same diff is read again.
+ *
+ * There are two candidates: the active iteration and the current snapshot's iteration. The tab cannot show
+ * any others with marks enabled, since a previous snapshot is read-only.
+ */
+function writtenIteration(options: ReviewRoutesOptions, active: string, fileIds: readonly string[]): string {
+    const snapshotDiffId = snapshotIteration(options, active);
+    if (snapshotDiffId === null || fileIds.length === 0) {
+        return active;
+    }
+    const own = new Set((options.iterations?.get(snapshotDiffId)?.diff.files ?? []).map((file) => file.fileId));
+    return fileIds.every((fileId) => own.has(fileId)) ? snapshotDiffId : active;
+}
+
+/** Where the ranges of one stop mark go: the iteration and its translated `fileId`. */
+interface StopWrite {
+    readonly diffId: string;
+    readonly ranges: readonly UiStopSeenRange[];
+}
+
+/**
+ * Records for one stop mark. Normally there is one, under the active iteration.
+ * During the stale window there are 2: under the iteration rendered by the tab and under the active one.
+ * Carryover for the pair runs once and has already happened by this point. Without the second write, the ranges
+ * would disappear on route rebuild along with the stop's viewed state.
+ *
+ * Clearing a mark sends no ranges, so they cannot tell us which iteration the tab rendered:
+ * both iterations it could have shown are cleared.
+ */
+function stopWrites(
+    options: ReviewRoutesOptions,
+    active: string,
+    request: z.infer<typeof uiSetStopViewedRequestSchema>,
+): readonly StopWrite[] {
+    if (!request.viewed) {
+        const drawn = snapshotIteration(options, active);
+        const wiped = drawn === null ? [active] : [drawn, active];
+        return wiped.map((diffId) => ({ diffId, ranges: [] }));
+    }
+    const drawn = writtenIteration(
+        options,
+        active,
+        request.ranges.map((range) => range.fileId),
+    );
+    if (drawn === active) {
+        return [{ diffId: active, ranges: request.ranges }];
+    }
+    const carried = carriedFileIds(options, drawn, active);
+    const ranges =
+        carried === null
+            ? []
+            : request.ranges.flatMap((range) => {
+                  const fileId = carried.get(range.fileId);
+                  return fileId === undefined ? [] : [{ ...range, fileId }];
+              });
+    return [
+        { diffId: drawn, ranges: request.ranges },
+        { diffId: active, ranges },
+    ];
+}
+
+/**
+ * A mark made during the stale window is repeated on the active iteration: carryover for the pair
+ * runs once and has already happened by this point. Without the second write, the mark would disappear
+ * when the route is rebuilt.
+ */
+function carryFileViewed(
+    options: ReviewRoutesOptions,
+    from: string,
+    active: string,
+    fileId: string,
+    viewed: boolean,
+    revision: number,
+): number {
+    const target = carriedFileIds(options, from, active)?.get(fileId) ?? null;
+    return target === null ? revision : options.progress.setFileViewed(active, target, viewed, null);
+}
+
+/**
+ * Translates `fileId` from iteration `from` to the active one by file path. Only a file
+ * untouched by the slice is translated: its contents are the same in both iterations, so the mark is
+ * valid. No slice available (the host does not support them, or it has not been computed yet) means no translation:
+ * falsely marking a changed file is worse than losing a mark.
+ */
+function carriedFileIds(
+    options: ReviewRoutesOptions,
+    from: string,
+    active: string,
+): ReadonlyMap<string, string> | null {
+    const iterations = options.iterations;
+    if (iterations == null) {
+        return null;
+    }
+    const source = iterations.get(from)?.diff.files ?? null;
+    const target = iterations.get(active)?.diff.files ?? null;
+    const interdiff = iterations.peekInterdiff(from, active);
+    if (source === null || target === null || interdiff === null) {
+        return null;
+    }
+    const touched = new Set<string>();
+    for (const file of interdiff.files) {
+        touched.add(file.path);
+        if (file.oldPath != null) {
+            touched.add(file.oldPath);
+        }
+    }
+    const idOfPath = new Map<string, string>();
+    for (const file of target) {
+        // The first file with this path wins, as in `indexDiff`.
+        if (!idOfPath.has(file.path)) {
+            idOfPath.set(file.path, file.fileId);
+        }
+    }
+    const carried = new Map<string, string>();
+    for (const file of source) {
+        const id = touched.has(file.path) ? undefined : idOfPath.get(file.path);
+        if (id !== undefined) {
+            carried.set(file.fileId, id);
+        }
+    }
+    return carried;
+}
+
 /** A query parameter, if present: a missing key in the parsed object means "not specified". */
 export function optionalParam(ctx: RequestContext, name: string): Record<string, string> {
     const value = ctx.url.searchParams.get(name);
@@ -680,7 +866,7 @@ function hostOf(options: ReviewRoutesOptions): ReviewHost {
     if (options.host === null) {
         throw new RpcFailure(
             'no_review_host',
-            'This PR has no host adapter: its PR key is not recognized as a supported host or fixture key.',
+            'This review has no host adapter. The key was not recognized as hosted, local or fixture.',
         );
     }
     return options.host;

@@ -17,6 +17,7 @@ const COMPLETION: ReviewCompletion = {
     prId: DATA.pr.id,
     headCommit: DATA.diff.headCommit,
     hostName: 'FixtureHost',
+    reviewHost: 'fixture',
     publishedComments: 2,
     publishedReplies: 1,
     route: null,
@@ -90,6 +91,16 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         render: () => <CompleteState completion={COMPLETION} />,
     },
     {
+        id: 'review-complete-local',
+        group: 'Finish review',
+        title: 'Review complete for local review',
+        render: () => (
+            <CompleteState
+                completion={{ ...COMPLETION, reviewHost: 'local-git', hostName: 'local checkout' }}
+            />
+        ),
+    },
+    {
         id: 'review-complete-open-thread',
         group: 'Finish review',
         title: 'Review complete with an open thread',
@@ -143,6 +154,7 @@ function BarState({
                 threadStore={threadStore}
                 connection="online"
                 hostName="FixtureHost"
+                reviewHost="fixture"
                 composerTransport={TRANSPORT}
                 onPublish={() => Promise.reject(new Error('the gallery does not write to the host'))}
                 onComplete={() => undefined}

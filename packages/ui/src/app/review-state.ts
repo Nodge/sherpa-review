@@ -66,7 +66,11 @@ export interface ReviewState {
 }
 
 const EMPTY_SLICE_LENSES: UiReviewLensesResponse = { ownership: null, extra: [] };
-const EMPTY_SLICE_PROGRESS: UiReviewProgressResponse = { files: [], stops: [], progressRevision: 0 };
+
+/** Placeholder slice progress belongs to the slice itself. The server never returns progress for it. */
+function emptySliceProgress(diff: PrDiff | null): UiReviewProgressResponse {
+    return { diffId: diff?.diffId ?? '', files: [], stops: [], progressRevision: 0 };
+}
 
 /**
  * Tab state in a slice: lenses, progress and threads are replaced with empty values. Their endpoints
@@ -78,7 +82,7 @@ export function sliceReviewState(current: ReviewState): ReviewState {
         lenses: EMPTY_SLICE_LENSES,
         lensesError: null,
         lensesLoading: false,
-        progress: EMPTY_SLICE_PROGRESS,
+        progress: emptySliceProgress(current.diff),
         progressError: null,
         progressLoading: false,
         threads: EMPTY_THREADS,
@@ -148,9 +152,15 @@ export function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+/** Local review adapter name in `uiState.reviewHost`. It has its own UI wording. */
+export const LOCAL_GIT_HOST = 'local-git';
+
 export function hostDisplayName(host: string, t: Translate): string {
     if (host === 'github') {
         return t('host.github');
+    }
+    if (host === LOCAL_VCS_HOST) {
+        return t('host.local');
     }
     return host === 'fixture' ? 'FixtureHost' : host;
 }

@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 
 import type { MessageKey, Translate } from '../i18n/index.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { relativeTime } from '../i18n/index.js';
+import { formatDateTime, relativeTime } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import { localeNameKey } from '../route/generation.js';
@@ -35,12 +35,20 @@ const STATUS_LABELS = {
     previousIteration: 'iteration.status.previousIteration',
 } as const satisfies Readonly<Record<string, MessageKey>>;
 
+/**
+ * Status label. Local review has no PR: an iteration disappears from working-tree
+ * history, so the wording must describe what the reviewer sees on screen.
+ */
+function statusText(status: keyof typeof STATUS_LABELS, t: Translate, localHost: boolean): string {
+    return t(status === 'gone' && localHost ? 'iteration.status.goneLocal' : STATUS_LABELS[status]);
+}
+
 /** "snapshot 9f3c1ab · current", "diff a71d4e2 · no route" or "slice 9f3c1ab → a71d4e2". */
-export function pillText(label: ViewingLabel, t: Translate): string {
+export function pillText(label: ViewingLabel, t: Translate, localHost = false): string {
     if (label.kind === 'slice') {
         return t('iteration.pill.slice', shortCommit(label.baseCommit), shortCommit(label.commit));
     }
-    const status = t(STATUS_LABELS[label.status]);
+    const status = statusText(label.status, t, localHost);
     return label.kind === 'snapshot'
         ? t('iteration.pill.snapshot', shortCommit(label.commit), status)
         : t('iteration.pill.diff', shortCommit(label.commit), status);
@@ -57,30 +65,48 @@ export function pillTitle(label: ViewingLabel, t: Translate): string {
 }
 
 /**
+ * Row time. Usually rounded ("6 hr. ago"), but if the commit cannot distinguish the row,
+ * use the exact time so 2 iterations of the same commit do not look identical.
+ */
+function rowTime(row: PickerRow, now: number, locale: Locale): string | null {
+    if (row.createdAt === null) {
+        return null;
+    }
+    return row.ambiguous ? formatDateTime(row.createdAt, locale) : relativeTime(row.createdAt, now, locale);
+}
+
+/**
  * Menu row: "9f3c1ab · 6 h ago · sonnet-5 · current" for a snapshot,
  * "a71d4e2 · active iteration · no route" for an iteration without a route, and
  * "9f3c1ab · 6 h ago · → a71d4e2" for a slice to the active iteration.
  */
-export function rowText(row: PickerRow, now: number, t: Translate, locale: Locale): string {
+export function rowText(row: PickerRow, now: number, t: Translate, locale: Locale, localHost = false): string {
+    const time = rowTime(row, now, locale);
     if (row.kind === 'slice') {
-        const parts = [shortCommit(row.commit)];
-        if (row.createdAt !== null) {
-            parts.push(relativeTime(row.createdAt, now, locale));
+        const parts = [row.short];
+        if (time !== null) {
+            parts.push(time);
         }
-        parts.push(`→ ${shortCommit(row.toCommit ?? '')}`);
+        parts.push(`→ ${row.toShort ?? ''}`);
         return parts.join(' · ');
     }
     if (row.kind === 'diff') {
-        return `${shortCommit(row.commit)} · ${t(STATUS_LABELS[row.status])} · ${t(STATUS_LABELS.noRoute)}`;
+        // An iteration without a route shows no time. Its commit and status already identify it.
+        const parts = [row.short];
+        if (row.ambiguous && time !== null) {
+            parts.push(time);
+        }
+        parts.push(statusText(row.status, t, localHost), t(STATUS_LABELS.noRoute));
+        return parts.join(' · ');
     }
-    const parts = [shortCommit(row.commit)];
-    if (row.createdAt !== null) {
-        parts.push(relativeTime(row.createdAt, now, locale));
+    const parts = [row.short];
+    if (time !== null) {
+        parts.push(time);
     }
     if (row.model !== null && row.model !== '') {
         parts.push(row.model);
     }
-    parts.push(t(STATUS_LABELS[row.status]));
+    parts.push(statusText(row.status, t, localHost));
     return parts.join(' · ');
 }
 
@@ -91,7 +117,7 @@ export function rowText(row: PickerRow, now: number, t: Translate, locale: Local
  */
 export function provenanceText(row: PickerRow, t: Translate, uiLocale: Locale): string {
     const locale = row.locale ?? 'en';
-    return join([row.harness, row.model, shortCommit(row.commit), locale === uiLocale ? null : t(localeNameKey(locale))]);
+    return join([row.harness, row.model, row.short, locale === uiLocale ? null : t(localeNameKey(locale))]);
 }
 
 /** The tooltip shows the same text with the full commit so the reviewer can compare it with the host. */
@@ -121,6 +147,8 @@ export interface SnapshotMenu {
     readonly viewing: Viewing;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
+    /** Local review uses different wording for a past iteration because there is no PR. */
+    readonly localHost?: boolean;
     readonly onSelect: (viewing: Viewing) => void;
     /** The gallery shows an open menu. */
     readonly initialOpen?: boolean;
@@ -134,33 +162,28 @@ export interface MenuSection {
 }
 
 /**
- * Menu sections: snapshots always appear (the empty section explains that there are none), while iterations
- * without a route and slices appear only when they have rows.
+ * Menu sections: snapshots and iterations in one list (an empty section explains there is nothing to view),
+ * slices in a separate section, shown only when it has entries.
  */
 export function menuSections(rows: PickerRows): readonly MenuSection[] {
-    const sections: MenuSection[] = [{ title: 'iteration.menu.snapshots', rows: rows.snapshots, offset: 0 }];
-    let offset = rows.snapshots.length;
-    for (const [title, section] of [
-        ['iteration.menu.iterations', rows.iterations],
-        ['iteration.menu.slices', rows.slices],
-    ] as const) {
-        if (section.length > 0) {
-            sections.push({ title, rows: section, offset });
-            offset += section.length;
-        }
+    const sections: MenuSection[] = [{ title: 'iteration.menu.timeline', rows: rows.iterations, offset: 0 }];
+    if (rows.slices.length > 0) {
+        sections.push({ title: 'iteration.menu.slices', rows: rows.slices, offset: rows.iterations.length });
     }
     return sections;
 }
 
 export interface SnapshotPillProps {
     readonly label: ViewingLabel;
+    /** Local review uses different wording for a past iteration because there is no PR. */
+    readonly localHost?: boolean;
     /** Without a menu, the indicator is static because there is nothing to select. */
     readonly menu?: SnapshotMenu;
 }
 
-export function SnapshotPill({ label, menu }: SnapshotPillProps) {
+export function SnapshotPill({ label, localHost = false, menu }: SnapshotPillProps) {
     const t = useT();
-    const text = pillText(label, t);
+    const text = pillText(label, t, localHost);
     const title = pillTitle(label, t);
     if (menu === undefined) {
         return (
@@ -260,7 +283,9 @@ function SnapshotPillMenu({
                 <span className="snapshot-picker__tick" aria-hidden="true">
                     {checked ? <Icon name="check" size={13} /> : null}
                 </span>
-                <span className="snapshot-picker__row-text">{rowText(row, menu.now, t, locale)}</span>
+                <span className="snapshot-picker__row-text">
+                    {rowText(row, menu.now, t, locale, menu.localHost ?? false)}
+                </span>
             </div>
         );
     };
@@ -335,10 +360,16 @@ function SnapshotPillMenu({
  * "Snapshots" card on Overview (docs/design/README.md §6): the same rows as the indicator menu,
  * plus a separate provenance line for each snapshot (docs/design/SPEC-elements.md §4.4).
  */
-export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMenu, 'initialOpen'>) {
+export function SnapshotsCard({
+    rows,
+    viewing,
+    now,
+    localHost = false,
+    onSelect,
+}: Omit<SnapshotMenu, 'initialOpen'>) {
     const t = useT();
     const locale = useLocale();
-    const all = [...rows.snapshots, ...rows.iterations];
+    const all = rows.iterations;
     if (all.length === 0) {
         return <p className="overview-card__empty">{t('iteration.empty')}</p>;
     }
@@ -359,7 +390,7 @@ export function SnapshotsCard({ rows, viewing, now, onSelect }: Omit<SnapshotMen
                                 onSelect(row.viewing);
                             }}
                         >
-                            <span className="snapshot-list__line">{rowText(row, now, t, locale)}</span>
+                            <span className="snapshot-list__line">{rowText(row, now, t, locale, localHost)}</span>
                             {row.kind === 'snapshot' ? (
                                 <span className="snapshot-list__provenance">
                                     {provenanceText(row, t, locale)}

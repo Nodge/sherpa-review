@@ -9,6 +9,7 @@ import {
     EMPTY_ITERATIONS,
     EMPTY_THREADS,
     hostDisplayName,
+    LOCAL_VCS_HOST,
     reviewStateForKeys,
     sliceReviewState,
 } from './app/review-state.js';
@@ -143,6 +144,8 @@ export function App({ store, session, token }: AppProps) {
     // The browser tab identifies the PR (#37). Before metadata arrives, it uses the number from the key, so it is never empty.
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
+    /** Local review has no PR. The UI uses its own wording for a missing iteration. */
+    const localHost = reviewHost === LOCAL_VCS_HOST;
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
     const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
 
@@ -564,6 +567,7 @@ export function App({ store, session, token }: AppProps) {
         factsDiffId: facts.diffId,
         factsCommit: facts.commit,
         interdiffAvailable,
+        localHost,
         resolved,
         now,
     });
@@ -636,6 +640,7 @@ export function App({ store, session, token }: AppProps) {
 
     const bannerSources = buildBannerSources({
         view,
+        reviewHost,
         session,
         now,
         readOnly,
@@ -1026,7 +1031,7 @@ export function App({ store, session, token }: AppProps) {
                     lensesError={currentReview.lensesError}
                     threadsError={currentReview.threadsError}
                     {...(threadStore === null ? {} : { threadStore })}
-                    picker={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+                    picker={{ rows: pickerMenuRows, viewing: resolved.viewing, now, localHost, onSelect: selectViewing }}
                     {...(snapshotPill === null ? {} : { headerAside: snapshotPill })}
                     {...(showReviewActionBar && reviewActionBarDataReady
                         ? { onWritePrComment: prComments.openModal }
@@ -1111,7 +1116,7 @@ export function App({ store, session, token }: AppProps) {
             <CommandPalette
                 open={paletteOpen}
                 source={paletteSource}
-                iterations={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+                iterations={{ rows: pickerMenuRows, viewing: resolved.viewing, now, localHost, onSelect: selectViewing }}
                 chat={paletteChat}
                 sourceError={currentReview.diffError}
                 status={paletteStatus}
@@ -1153,6 +1158,7 @@ export function App({ store, session, token }: AppProps) {
                         threadStore={threadStore}
                         connection={snapshot.connection}
                         hostName={hostDisplayName(reviewHost, t)}
+                        reviewHost={reviewHost}
                         route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                         composerTransport={composerTransport}
                         draftBuffer={draftBuffer}

@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
 import { formatUiUrl, readOption, resolveUiDir, UI_BUILD_HINT } from './launch.js';
@@ -15,7 +17,8 @@ async function main(argv: readonly string[]): Promise<number> {
     const prKey = readOption(argv, '--pr');
     if (prKey === null) {
         process.stderr.write(
-            'Usage: dev --pr <PR key> [--sherpa-dir <path>] [--ui <path to dist>] [--install-dir <path>]\n',
+            'Usage: dev --pr <PR key> [--sherpa-dir <path>] [--ui <dist path>] ' +
+                '[--install-dir <path>] [--repo <project directory>] [--base <ref>] [--branch <branch>]\n',
         );
         return 1;
     }
@@ -25,21 +28,28 @@ async function main(argv: readonly string[]): Promise<number> {
     // As in the bundle: both the gallery and e2e need installation classification for the update toast.
     const installDir = readOption(argv, '--install-dir');
     const host = readListenHost(process.env);
+    // Local review uses the same project directory, comparison base and branch arguments as the bundle.
+    const repo = readOption(argv, '--repo');
+    const reviewBase = readOption(argv, '--base');
+    const reviewBranch = readOption(argv, '--branch');
 
     // Idle shutdown is disabled. The dev server holds the developer terminal open,
     // and dying unexpectedly during coding would get in the way. Ctrl+C stops it.
-    const base = {
+    const options = {
         prKey,
         sherpaDir,
         host,
         idleSeconds: 0,
+        ...(repo === null ? {} : { repo: path.resolve(repo) }),
+        ...(reviewBase === null ? {} : { base: reviewBase }),
+        ...(reviewBranch === null ? {} : { branch: reviewBranch }),
         updateCheck: installDir === null ? {} : { installDir },
         feedback: feedbackOptionsFor(installDir),
     };
 
     let server: SherpaServer;
     try {
-        server = await startServer(uiDir === null ? base : { ...base, assets: directoryAssets(uiDir) });
+        server = await startServer(uiDir === null ? options : { ...options, assets: directoryAssets(uiDir) });
     } catch (error) {
         if (error instanceof ServerAlreadyRunningError) {
             process.stderr.write(`${error.message}\n`);

@@ -464,6 +464,26 @@ export const MIGRATIONS: readonly Migration[] = [
             ALTER TABLE chat_exchanges ADD COLUMN locale TEXT;
         `,
     },
+    {
+        // Links a local review round to its `review.feedback` task. The rounds themselves live in
+        // the host file. This only links to the queue, and it must survive a restart. Otherwise,
+        // reconciliation would schedule a second task for the same round. `state` distinguishes an open task from
+        // a failed one. Failure leaves the round `pending`, but nothing schedules it again,
+        // or the loop would keep running the same unmanageable task. `locale` is the language in which
+        // the task requested an answer. It also determines validation of the submitted result, so a settings change
+        // between scheduling and submission must not affect validation.
+        name: '021-feedback-tasks',
+        sql: `
+            CREATE TABLE feedback_tasks (
+                round_id TEXT PRIMARY KEY,
+                task_id INTEGER NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('open', 'done', 'failed')),
+                locale TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        `,
+    },
 ];
 
 /** Schema version key in the `meta` table. */

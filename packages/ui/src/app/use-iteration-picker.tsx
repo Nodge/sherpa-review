@@ -16,6 +16,8 @@ export interface IterationPickerOptions {
     readonly factsCommit: string | null;
     /** The host supplies slices between iterations. Otherwise this picker section stays hidden. */
     readonly interdiffAvailable: boolean;
+    /** Local review uses different wording for a past iteration because there is no PR. */
+    readonly localHost: boolean;
     readonly resolved: ResolvedViewing;
     readonly now: number;
 }
@@ -37,6 +39,7 @@ export function useIterationPicker({
     factsDiffId,
     factsCommit,
     interdiffAvailable,
+    localHost,
     resolved,
     now,
 }: IterationPickerOptions): IterationPickerResult {
@@ -79,7 +82,8 @@ export function useIterationPicker({
         resolved.label === null ? null : (
             <SnapshotPill
                 label={resolved.label}
-                menu={{ rows: pickerMenuRows, viewing: resolved.viewing, now, onSelect: selectViewing }}
+                localHost={localHost}
+                menu={{ rows: pickerMenuRows, viewing: resolved.viewing, now, localHost, onSelect: selectViewing }}
             />
         );
 

@@ -21,6 +21,7 @@ import {
     formatUpReady,
     helpText,
 } from './format.js';
+import { resolveLocalTarget } from './local.js';
 import { serverBinOverrideFrom, sherpaDirFrom } from './paths.js';
 import type { CommandRunner } from './pr-discovery.js';
 import type { EnsureServerOptions, EnsureServerResult } from './up.js';
@@ -83,19 +84,25 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
 async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise<number> {
     // Resolve the PR key before starting the server. The server would reject an invalid one too, but later and at a higher cost,
     // and discovery from cwd (`pr-discovery.ts`) must happen exactly once per command.
-    const prKey = await resolvePrKey(command.prKey, io.env, io.runCommand);
+    // `--local` names a directory, not a PR. The key comes from the directory and branch, not the host.
+    const local =
+        command.local === undefined
+            ? null
+            : await resolveLocalTarget(command.local, command.base, io.runCommand);
+    const prKey = local?.prKey ?? (await resolvePrKey(command.prKey, io.env, io.runCommand));
 
     const server = await (io.ensureServer ?? ensureServer)({
         prKey,
         sherpaDir: sherpaDirFrom(io.env),
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
+        ...(local === null ? {} : { repo: local.repo, base: local.base, branch: local.branch }),
     });
     // A fresh session always gets the worker slot. The server takes it even from a live previous session,
     // so `up` registers through the normal path, with no fallback paths.
     await registerWorker(prKey, labelsOf(command), io);
 
-    io.out(formatUpReady(server.uiUrl, prKey));
+    io.out(formatUpReady(server.uiUrl, prKey, local));
     if (server.started && !command.noOpen) {
         try {
             (io.openBrowser ?? openBrowser)({ uiUrl: server.uiUrl });

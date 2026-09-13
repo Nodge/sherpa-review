@@ -14,9 +14,9 @@ import type {
 
 /**
  * Host adapter interface (`docs/architecture.md §5`, `docs/product.md §4a`). One
- * abstraction, two implementations: a review host adapter and a fixture host for UI and tests. All
- * host-specific details stay behind this boundary. The core (route, queue, progress, snapshots)
- * knows nothing about the host. The same contract suite (`docs/testing.md §3`) runs against every implementation.
+ * abstraction with 3 implementations: a remote review host, a local Git checkout, and a fixture host for the UI and
+ * tests. Everything specific to a host stays behind this boundary. The core (route, queue, progress,
+ * snapshots) knows nothing about the host. Contract tests (`docs/testing.md §3`) run the same suite against every implementation.
  */
 export interface ReviewHost {
     getPr(): Promise<PrMeta>;

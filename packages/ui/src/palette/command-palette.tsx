@@ -28,6 +28,8 @@ export interface PaletteIterations {
     readonly viewing: Viewing;
     /** Reference time for relative timestamps, to keep the gallery deterministic. */
     readonly now: number;
+    /** Local review uses different wording for a past iteration because there is no PR. */
+    readonly localHost?: boolean;
     readonly onSelect: (viewing: Viewing) => void;
 }
 
@@ -421,7 +423,7 @@ export function CommandPalette({
             const items = menuSections(iterations.rows).flatMap((section) =>
                 section.rows
                     .map((row): PaletteItem => {
-                        const text = rowText(row, iterations.now, t, locale);
+                        const text = rowText(row, iterations.now, t, locale, iterations.localHost ?? false);
                         return {
                             // Keyed by kind+id, as in the picker itself: one commit can have
                             // several snapshots after route regeneration.

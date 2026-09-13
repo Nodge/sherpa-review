@@ -52,7 +52,7 @@ Three separate guards check:
 
 ## 3. The `ReviewHost` contract suite
 
-`packages/server/src/hosts/review-host-contract.ts` exports the function `describeReviewHostContract(name, makeHost, { writes?, advance? })`, rather than a test. Both implementations call it: `FixtureHost` (a loop over all fixtures) and the review host adapter with mocked transport. One suite, two implementations. Adapter differences are caught where they arise (`docs/architecture.md §5`).
+`packages/server/src/hosts/review-host-contract.ts` is a function, `describeReviewHostContract(name, makeHost, { writes?, advance? })`, rather than a test. All 3 implementations call it: `FixtureHost` (a loop over all fixtures), the remote review host with mocked transport, and `LocalGitHost` with a fake `git` and a temporary directory. One suite, 3 implementations. Adapter differences are caught where they originate (`docs/architecture.md §5`).
 
 What the tests check:
 

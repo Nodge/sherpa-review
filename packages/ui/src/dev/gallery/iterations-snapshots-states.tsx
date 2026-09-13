@@ -89,12 +89,66 @@ const ITERATIONS: readonly Iteration[] = [
 
 const ROWS = pickerRows({ snapshots: SNAPSHOTS, iterations: ITERATIONS, activeIteration: null });
 
-function pill(label: ViewingLabel, viewing: Viewing, initialOpen = false) {
+/**
+ * Local review: iterations have suffixes on the same working tree commit,
+ * and the first 7 characters match for all of them, so the menu must distinguish them by their suffixes.
+ */
+const LOCAL_HEAD = '6630996aa1b2c3d4e5f60718293a4b5c6d7e8f90';
+const LOCAL_ITERATIONS: readonly Iteration[] = [
+    {
+        diffId: 'local-1',
+        baseCommit: CURRENT.baseCommit,
+        headCommit: `${LOCAL_HEAD}+1a2b3c4d`,
+        createdAt: '2026-08-31T06:00:00.000Z',
+        status: 'gone',
+    },
+    {
+        diffId: 'local-2',
+        baseCommit: CURRENT.baseCommit,
+        headCommit: `${LOCAL_HEAD}+5e6f7a8b`,
+        createdAt: '2026-08-31T09:00:00.000Z',
+        status: 'previous',
+    },
+    {
+        diffId: 'local-3',
+        baseCommit: CURRENT.baseCommit,
+        headCommit: LOCAL_HEAD,
+        createdAt: '2026-08-31T11:40:00.000Z',
+        status: 'active',
+    },
+];
+
+const LOCAL_ROWS = pickerRows({ snapshots: [], iterations: LOCAL_ITERATIONS, activeIteration: null });
+
+function pill(label: ViewingLabel, viewing: Viewing, initialOpen = false, localHost = false) {
     return (
         <SnapshotPill
             label={label}
-            menu={{ rows: ROWS, viewing, now: GALLERY_NOW, onSelect: () => undefined, initialOpen }}
+            localHost={localHost}
+            menu={{ rows: ROWS, viewing, now: GALLERY_NOW, localHost, onSelect: () => undefined, initialOpen }}
         />
+    );
+}
+
+/** Expanded local review picker for checking row order and short identifiers. */
+function LocalPickerState() {
+    return (
+        <div className="gallery__viewport">
+            <div className="pr-header">
+                <SnapshotPill
+                    label={{ kind: 'diff', commit: LOCAL_HEAD, status: 'noRoute' }}
+                    localHost
+                    menu={{
+                        rows: LOCAL_ROWS,
+                        viewing: VIEWING_CURRENT,
+                        now: GALLERY_NOW,
+                        localHost: true,
+                        onSelect: () => undefined,
+                        initialOpen: true,
+                    }}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -103,6 +157,8 @@ interface ReadingStateProps {
     readonly viewing: Viewing;
     readonly createdAt: string | null;
     readonly gone?: boolean;
+    /** Local review uses different wording for a past iteration because there is no PR. */
+    readonly localHost?: boolean;
     readonly menuOpen?: boolean;
     readonly readOnly?: boolean;
 }
@@ -113,6 +169,7 @@ function ReadingState({
     viewing,
     createdAt,
     gone = false,
+    localHost = false,
     menuOpen = false,
     readOnly = true,
 }: ReadingStateProps) {
@@ -139,6 +196,7 @@ function ReadingState({
                     createdAt={createdAt}
                     now={GALLERY_NOW}
                     gone={gone}
+                    localHost={localHost}
                     onCurrent={() => undefined}
                 />
             ),
@@ -158,7 +216,7 @@ function ReadingState({
                     store={store}
                     threadStore={threadStore}
                     threadNow={GALLERY_NOW}
-                    headerAside={pill(label, viewing, menuOpen)}
+                    headerAside={pill(label, viewing, menuOpen, localHost)}
                     parse={(file) => Promise.resolve(parseFileDiff(toParseRequest(file)))}
                     loadContent={(fileId) => {
                         const file = DATA.diff.files.find((candidate) => candidate.fileId === fileId);
@@ -207,7 +265,7 @@ const CURRENT_LABEL: ViewingLabel = { kind: 'snapshot', commit: CURRENT.commit, 
 export const ITERATION_SNAPSHOT_STATES: readonly RouteGalleryState[] = [
     {
         id: 'iterations-snapshot-picker',
-        title: 'picker menu: 3 snapshots and the active iteration without a route',
+        title: 'picker menu: active iteration without a route first, followed by previous snapshots',
         render: () => (
             <ReadingState
                 label={CURRENT_LABEL}
@@ -242,8 +300,26 @@ export const ITERATION_SNAPSHOT_STATES: readonly RouteGalleryState[] = [
         ),
     },
     {
+        id: 'iterations-snapshot-gone-readonly-local',
+        title: 'local review, removed iteration: tree state no longer in history',
+        render: () => (
+            <ReadingState
+                label={GONE_LABEL}
+                viewing={{ kind: 'snapshot', snapshotId: 'route-medium-b0d3f77' }}
+                createdAt="2026-08-29T09:00:00.000Z"
+                gone
+                localHost
+            />
+        ),
+    },
+    {
         id: 'iterations-overview-snapshots-card',
         title: 'Overview: Snapshots card with provenance',
         render: () => <OverviewSnapshotsState />,
+    },
+    {
+        id: 'iterations-picker-local-host',
+        title: 'local review picker menu: identical commits distinguished by their suffixes',
+        render: () => <LocalPickerState />,
     },
 ];

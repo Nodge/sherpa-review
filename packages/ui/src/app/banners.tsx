@@ -30,8 +30,12 @@ import {
 import { RegenerateBanner } from '../views/route/other-card.tsx';
 import type { ViewId } from '../session/views.js';
 
+import { LOCAL_VCS_HOST } from './review-state.js';
+
 export interface BannerSourcesOptions {
     readonly view: ViewId;
+    /** Adapter name (`uiState.reviewHost`). Local review has its own stale-state wording. */
+    readonly reviewHost: string | null;
     readonly session: SessionStore;
     readonly now: number;
     readonly readOnly: boolean;
@@ -84,6 +88,7 @@ export interface BannerSourcesOptions {
 export function buildBannerSources(options: BannerSourcesOptions): readonly BannerSource[] {
     const {
         view,
+        reviewHost,
         session,
         now,
         readOnly,
@@ -162,6 +167,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                     <RouteStaleBanner
                         stale={route.stale}
                         stops={route.snapshot.stops}
+                        localHost={reviewHost === LOCAL_VCS_HOST}
                         onRegenerate={startGeneration}
                         onOpenDiffWithoutRoute={openIterationWithoutRoute}
                     />
@@ -178,6 +184,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                         createdAt={resolved.createdAt}
                         now={now}
                         gone={resolved.gone}
+                        localHost={reviewHost === LOCAL_VCS_HOST}
                         onCurrent={() => {
                             session.setViewing(VIEWING_CURRENT);
                         }}

@@ -117,6 +117,12 @@ describe('server startup in `up`', () => {
         const prKey = process.argv[process.argv.indexOf('--pr') + 1];
         const sherpaDir = process.argv[process.argv.indexOf('--sherpa-dir') + 1];
         const installDir = process.argv[process.argv.indexOf('--install-dir') + 1];
+        const repoIndex = process.argv.indexOf('--repo');
+        const repo = repoIndex === -1 ? null : process.argv[repoIndex + 1];
+        const baseIndex = process.argv.indexOf('--base');
+        const base = baseIndex === -1 ? null : process.argv[baseIndex + 1];
+        const branchIndex = process.argv.indexOf('--branch');
+        const branch = branchIndex === -1 ? null : process.argv[branchIndex + 1];
         const token = 'f'.repeat(64);
 
         let slowFirstHealth = process.argv.includes('--slow-first-health');
@@ -138,6 +144,9 @@ describe('server startup in `up`', () => {
         const manifest = {
             prKey,
             installDir,
+            repo,
+            base,
+            branch,
             port: server.address().port,
             pid: process.pid,
             token,
@@ -149,13 +158,16 @@ describe('server startup in `up`', () => {
         await fs.writeFile(path.join(sherpaDir, 'servers', prKey + '.json'), JSON.stringify(manifest));
     `;
 
-    async function up(serverBin: string) {
+    async function up(serverBin: string, local?: { repo: string; base?: string; branch?: string }) {
         return ensureServer({
             prKey: PR_KEY,
             sherpaDir,
             entry: undefined,
             serverBin,
             startupTimeoutMs: STARTUP_TIMEOUT_MS,
+            ...(local === undefined
+                ? {}
+                : { repo: local.repo, base: local.base, branch: local.branch }),
         });
     }
 
@@ -203,6 +215,26 @@ describe('server startup in `up`', () => {
         await up(await fakeServer(WORKING_SERVER));
 
         expect((await readManifest(sherpaDir)).installDir).toBe(await fs.realpath(path.join(workDir, 'skill')));
+    });
+
+    // Only the CLI knows the directory, base and branch. It passes them to the server as spawn arguments.
+    // The branch matters: it defines the key, and the checkout may switch branches between `up` and the first snapshot.
+    it('passes local review --repo, --base and --branch to the daemon', async () => {
+        await up(await fakeServer(WORKING_SERVER), { repo: '/repo/app', base: 'main~3', branch: 'feature' });
+
+        const manifest = await readManifest(sherpaDir);
+        expect(manifest.repo).toBe('/repo/app');
+        expect(manifest.base).toBe('main~3');
+        expect(manifest.branch).toBe('feature');
+    });
+
+    it('passes neither --repo, --base nor --branch to the daemon outside local review', async () => {
+        await up(await fakeServer(WORKING_SERVER));
+
+        const manifest = await readManifest(sherpaDir);
+        expect(manifest.repo).toBeNull();
+        expect(manifest.base).toBeNull();
+        expect(manifest.branch).toBeNull();
     });
 
     it('reuses a live manifest without starting a second server', async () => {
@@ -341,6 +373,10 @@ interface TestManifest {
     readonly uiHost?: string;
     /** Outside the manifest: the fake server writes its `--install-dir` here for the test to inspect. */
     readonly installDir?: string;
+    /** Likewise, the local review arguments the CLI passes to the daemon. */
+    readonly repo?: string | null;
+    readonly base?: string | null;
+    readonly branch?: string | null;
 }
 
 async function readManifest(sherpaDir: string): Promise<TestManifest> {

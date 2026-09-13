@@ -4,7 +4,9 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { SnapshotPill } from './snapshot-picker.tsx';
+import { createT } from '../i18n/index.js';
+
+import { rowText, SnapshotPill } from './snapshot-picker.tsx';
 import type { Viewing, ViewingLabel } from './viewing.js';
 import { pickerRows, VIEWING_CURRENT } from './viewing.js';
 
@@ -116,7 +118,7 @@ describe('slice section in the picker menu', () => {
     it('offers slices only from previous iterations, excluding active and gone ones', () => {
         const { host } = render({ interdiff: true });
 
-        expect(sections(host)).toEqual(['Snapshots', 'Iterations without a route', 'Show changes since iteration…']);
+        expect(sections(host)).toEqual(['Снапшоты и итерации', 'Показать изменения с итерации…']);
         const slices = [...host.querySelectorAll('[data-slice]')];
         expect(slices.map((node) => node.getAttribute('data-slice'))).toEqual(['182800']);
         expect(slices[0]?.textContent).toContain(`→ ${NEW_COMMIT.slice(0, 7)}`);
@@ -126,14 +128,14 @@ describe('slice section in the picker menu', () => {
     it('omits the section for a host without iterations', () => {
         const { host } = render({});
 
-        expect(sections(host)).toEqual(['Snapshots', 'Iterations without a route']);
+        expect(sections(host)).toEqual(['Snapshots and iterations']);
         expect(host.querySelector('[data-slice]')).toBeNull();
     });
 
     it('omits the section when no iterations qualify', () => {
         const { host } = render({ interdiff: true, iterations: [iteration({})] });
 
-        expect(sections(host)).toEqual(['Snapshots']);
+        expect(sections(host)).toEqual(['Snapshots and iterations']);
     });
 
     it('clicking a row selects a slice to the active iteration', () => {
@@ -180,5 +182,42 @@ describe('slice section in the picker menu', () => {
         const checked = [...host.querySelectorAll('[aria-checked="true"]')];
         expect(checked).toHaveLength(1);
         expect(checked[0]?.getAttribute('data-slice')).toBe('182800');
+    });
+});
+
+describe('menu rows with indistinguishable commits', () => {
+    it('2 iterations of the same commit show the exact time instead of "6 hr. ago"', () => {
+        const rows = pickerRows({
+            snapshots: [],
+            iterations: [
+                iteration({ diffId: '182799', status: 'previous', createdAt: '2026-08-31T09:00:00.000Z' }),
+                iteration({ diffId: '182800', status: 'previous', createdAt: '2026-08-31T10:30:00.000Z' }),
+            ],
+            activeIteration: null,
+        });
+        const t = createT('en');
+        const texts = rows.iterations.map((row) => rowText(row, NOW, t, 'en'));
+
+        expect(new Set(texts).size).toBe(2);
+        for (const text of texts) {
+            expect(text).not.toContain('ago');
+        }
+    });
+
+    it('distinct commits in the menu keep rounded times', () => {
+        const rows = pickerRows({
+            snapshots: [],
+            iterations: [
+                iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous' }),
+                iteration({}),
+            ],
+            activeIteration: null,
+        });
+        const t = createT('en');
+
+        expect(rows.iterations.map((row) => rowText(row, NOW, t, 'en'))).toEqual([
+            `${NEW_COMMIT.slice(0, 7)} · active iteration · no route`,
+            `${OLD_COMMIT.slice(0, 7)} · previous iteration · no route`,
+        ]);
     });
 });

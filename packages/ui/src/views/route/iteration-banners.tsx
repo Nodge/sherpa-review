@@ -130,13 +130,21 @@ export interface RouteStaleBannerProps {
     readonly stale: UiRouteStale;
     /** Current snapshot stops supply the plan numbers of affected stops. */
     readonly stops: readonly RouteStop[];
+    /** Local review has no PR. The working tree itself has moved ahead. */
+    readonly localHost?: boolean;
     /** The same regeneration as the other route buttons. */
     readonly onRegenerate: () => void;
     /** Switch to the active iteration without a route. Without this callback, the button is absent. */
     readonly onOpenDiffWithoutRoute?: (diffId: HostId) => void;
 }
 
-export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithoutRoute }: RouteStaleBannerProps) {
+export function RouteStaleBanner({
+    stale,
+    stops,
+    localHost = false,
+    onRegenerate,
+    onOpenDiffWithoutRoute,
+}: RouteStaleBannerProps) {
     const t = useT();
     const byId = new Map(stops.map((stop) => [stop.id, stop]));
     const affected = stale.affectedStopIds
@@ -153,7 +161,7 @@ export function RouteStaleBanner({ stale, stops, onRegenerate, onOpenDiffWithout
                     <code className="iteration-banner__commit" title={stale.routeCommit}>
                         {shortCommit(stale.routeCommit)}
                     </code>
-                    {t('iteration.stale.prAt')}
+                    {t(localHost ? 'iteration.stale.treeAt' : 'iteration.stale.prAt')}
                     <code className="iteration-banner__commit" title={stale.prCommit}>
                         {prCommit}
                     </code>
@@ -186,6 +194,8 @@ export interface ReadOnlyIterationBannerProps {
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
     readonly now: number;
     readonly gone: boolean;
+    /** Local review: the iteration disappears from working-tree history instead of a PR. */
+    readonly localHost?: boolean;
     readonly onCurrent: () => void;
 }
 
@@ -193,7 +203,14 @@ export interface ReadOnlyIterationBannerProps {
  * Reading a previous iteration is a condition, so there is no close button (docs/design/SPEC-elements.md §2.21).
  * The date uses the same relative time format as other timestamps in the UI.
  */
-export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent }: ReadOnlyIterationBannerProps) {
+export function ReadOnlyIterationBanner({
+    label,
+    createdAt,
+    now,
+    gone,
+    localHost = false,
+    onCurrent,
+}: ReadOnlyIterationBannerProps) {
     const t = useT();
     const locale = useLocale();
     if (label.kind === 'slice') {
@@ -229,7 +246,7 @@ export function ReadOnlyIterationBanner({ label, createdAt, now, gone, onCurrent
                     {/* Time is a separate segment after "·": the formatter can return "yesterday", which does not fit a preposition. */}
                     {createdAt === null ? '' : ` · ${relativeTime(createdAt, now, locale)}`}
                     {t('iteration.readOnly.tail')}
-                    {gone ? t('iteration.gone.tail') : ''}
+                    {gone ? t(localHost ? 'iteration.goneLocal.tail' : 'iteration.gone.tail') : ''}
                 </div>
             </div>
             <button type="button" className="iteration-banner__action" onClick={onCurrent}>

@@ -45,17 +45,32 @@ export function formatUiUrl(port: number, token: string, host = '127.0.0.1'): st
     return `http://${authority}:${String(port)}/#t=${token}`;
 }
 
+/** What is being reviewed locally, as a line in the `up` output. */
+export interface LocalReviewSummary {
+    readonly repo: string;
+    readonly branch: string;
+    /** Explicit base. undefined means the server computes it. */
+    readonly base: string | undefined;
+}
+
 /**
  * `sherpa up` output: a link for the reviewer and the session's next step.
  * The output hides the server and registration. The model doesn't need to know about them.
  */
-export function formatUpReady(uiUrl: string, prKey: string): string {
-    return [
-        uiUrl,
-        '',
+export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSummary | null = null): string {
+    const lines = [uiUrl, ''];
+    if (local !== null) {
+        lines.push(
+            `Reviewing the working tree of ${local.repo} on branch ${local.branch}, ` +
+                `base ${local.base ?? 'merge-base with main'}.`,
+        );
+    }
+
+    lines.push(
         'Show this link to the user in full — it opens the review in their browser.',
         `Then run \`sherpa worker next --pr ${prKey}\` and follow the instructions in its output.`,
-    ].join('\n');
+    );
+    return lines.join('\n');
 }
 
 /** Worker work is finished. The word DONE tells the session to end (`docs/protocol.md §3`). */
@@ -139,8 +154,8 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
         [
-            'sherpa up [--harness <name>] [--model <name>] [--lang <ru|en>] [--no-open]',
-            'start the PR server and become its worker',
+            'sherpa up [--local <path>] [--harness <name>] [--model <name>] [--lang <ru|en>] [--no-open]',
+            'start the review server and become its worker',
         ],
         [
             'sherpa worker register [--harness <name>] [--model <name>] [--lang <ru|en>]',
@@ -156,6 +171,11 @@ export function helpText(): string {
     ];
     const flags: readonly (readonly [string, string])[] = [
         ['--pr <key>', 'the PR to connect to. Defaults to SHERPA_PR, then to the PR of the Git branch here'],
+        [
+            '--local <path>',
+            'review the working tree of this project directory instead of a PR; only for `up`',
+        ],
+        ['--base <ref>', 'what the working tree is compared with; only with `--local`'],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
         [

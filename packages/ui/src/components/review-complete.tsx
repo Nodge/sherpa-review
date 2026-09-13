@@ -34,7 +34,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
 
                 <div className="review-complete__delivery">
                     <span>{t('complete.batch', completion.publishedComments)}</span>
-                    <span>{t('complete.deliveredTo', completion.hostName)}</span>
+                    <span>{deliveryText(completion, t)}</span>
                 </div>
 
                 <dl className="review-complete__counters">
@@ -95,6 +95,16 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
             </section>
         </main>
     );
+}
+
+/**
+ * Where the comments went. Local review does not deliver them elsewhere. The round becomes a task
+ * for the agent in this same session.
+ */
+function deliveryText(completion: ReviewCompletion, t: Translate): string {
+    return completion.reviewHost === 'local-git'
+        ? t('complete.handedToAgent')
+        : t('complete.deliveredTo', completion.hostName);
 }
 
 /** "7 of 7 · Other read as raw diff" (docs/design/README.md §13): the second clause appears only when true. */

@@ -42,9 +42,9 @@ More details: `architecture.md` (packages, data flow, storage, orchestrator), `p
 
 Everything specific to a host lives in the `ReviewHost` adapter (diff source, comments and drafts, verdicts, viewed marks, ownership lens, statuses). The core, including the route, task loop, tiers, progress, chat and snapshots, is independent of the host. The data schema rule is that host concepts (for example, "sticky ship") stay within host verdicts and never enter the route model or state.
 
-The **fixture adapter** provides deterministic data for tests, dev mode and the state gallery (`packages/server/src/hosts/select.ts`, PR key `fixture-<name>`).
+There are 3 adapters: **review host** for pull request review, **local checkout** for reviewing a project directory's working tree against a base commit (key `local-git-<directory>-<hash>`), and **fixture** for deterministic data in tests, development and the state gallery (`packages/server/src/hosts/select.ts`, PR key `fixture-<name>`).
 
-There is one real review host. Some capabilities depend on the adapter: the ownership lens reads CODEOWNERS, and the PCI DSS lens is available only from an adapter that provides it. The core learns what a host supports from `HostCapabilities` flags, without checking its name.
+There are 2 real hosts: the remote review host and the local checkout. Some capabilities depend on the remote host, including ownership rules and the PCI DSS lens. Local review treats each working-tree state as an iteration and keeps its own history. Its comments remain local, with no remote host. Publishing sends them to the agent in the same session. Each published round becomes a task, and the agent's replies appear in the same threads. The core learns what a host supports from `HostCapabilities` flags, rather than checks against its name.
 
 ## 5. Glossary
 

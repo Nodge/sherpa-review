@@ -213,6 +213,7 @@ function mount(options: MountOptions = {}): Mounted {
             case UI_ENDPOINTS.reviewProgress:
                 return Promise.resolve(
                     json({
+                        diffId: DATA.diff.diffId,
                         files: progress.read(),
                         stops: progress.readStops(),
                         progressRevision: progress.revision,

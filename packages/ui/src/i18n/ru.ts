@@ -30,6 +30,7 @@ export const ru = {
     'app.closeChat': 'Закрыть чат',
 
     
+    'host.local': 'локальный чекаут',
 
     'command.hint': 'Запусти в любом харнесе — сессия станет воркером.',
     'command.copy': 'Скопировать',
@@ -281,6 +282,7 @@ export const ru = {
     'chat.composer.send': 'Отправить',
     'chat.queue.route': 'Генерирую маршрут · ваш вопрос следующий',
     'chat.queue.busy': 'Агент занят · ваш вопрос следующий',
+    'chat.queue.feedback': 'Правит по замечаниям · ваш вопрос следующий',
     'chat.note.pinned': (anchor: string) => `◆ Закреплено заметкой у ${anchor}`,
     'chat.note.lostAnchor': (anchor: string) => `якорь потерян после пуша · ${anchor}`,
     'chat.answering': 'Отвечаю',
@@ -324,6 +326,7 @@ export const ru = {
     'iteration.stale.aria': 'Маршрут устарел',
     'iteration.stale.builtFor': 'Маршрут построен для ',
     'iteration.stale.prAt': ', PR уже на ',
+    'iteration.stale.treeAt': ', рабочее дерево уже на ',
     'iteration.stale.newIterations': (iterations: number) =>
         ` — ${num(iterations)} ${form(iterations, 'новая итерация', 'новые итерации', 'новых итераций')}`,
     'iteration.stale.affected': (stops: string) => `; затронуты остановки ${stops}`,
@@ -335,6 +338,7 @@ export const ru = {
     'iteration.snapshot.lead': 'Вы смотрите снапшот ',
     'iteration.previous.lead': 'Вы смотрите прошлую итерацию ',
     'iteration.gone.tail': ' · коммита больше нет в PR',
+    'iteration.goneLocal.tail': ' · состояния дерева больше нет в истории',
     'iteration.toActive': 'К активной итерации',
     'iteration.toCurrent': 'К текущему',
     'iteration.secondPass.aria': 'Маршрут перестроен',
@@ -356,6 +360,7 @@ export const ru = {
     'iteration.status.current': 'текущий',
     'iteration.status.stale': 'устарел',
     'iteration.status.gone': 'коммита больше нет в PR',
+    'iteration.status.goneLocal': 'состояния дерева больше нет в истории',
     'iteration.status.noRoute': 'без маршрута',
     'iteration.status.slice': 'срез',
     'iteration.status.activeIteration': 'активная итерация',
@@ -367,8 +372,7 @@ export const ru = {
     'iteration.title.snapshot': (commit: string) => `Маршрут построен для коммита ${commit}`,
     'iteration.title.iteration': (commit: string) => `Итерация PR с коммитом ${commit}`,
     'iteration.menu.aria': 'Снапшоты и итерации',
-    'iteration.menu.snapshots': 'Снапшоты',
-    'iteration.menu.iterations': 'Итерации без маршрута',
+    'iteration.menu.timeline': 'Снапшоты и итерации',
     'iteration.menu.slices': 'Показать изменения с итерации…',
     'iteration.empty': 'Снапшотов нет — появятся с первым маршрутом.',
     'iteration.readOnly.reason': 'только в активной итерации',
@@ -700,6 +704,8 @@ export const ru = {
     'feedback.worker.unknownModel': 'модель неизвестна',
 
     'complete.deliveredTo': (host: string) => `доставлено в ${host}`,
+    // Local reviews aren't delivered anywhere. Comments go to the agent as a task in the same session.
+    'complete.handedToAgent': 'передано агенту',
     'complete.filesSeen': 'Файлы просмотрены',
     'complete.filesSeen.value': (seen: number, total: number) => `${num(seen)} из ${num(total)}`,
     'complete.stopsViewed': 'Остановки просмотрены',

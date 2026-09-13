@@ -17,19 +17,22 @@ describe('iteration snapshots gallery', () => {
             'iterations-snapshot-picker',
             'iterations-old-snapshot-readonly',
             'iterations-snapshot-gone-readonly',
+            'iterations-snapshot-gone-readonly-local',
             'iterations-overview-snapshots-card',
+            'iterations-picker-local-host',
         ]);
     });
 
-    it('the picker menu lists snapshots newest first and an iteration without a route', () => {
+    it('the picker menu starts with the active iteration, followed by snapshots', () => {
         const html = markup('iterations-snapshot-picker');
 
-        expect(html).toContain('Snapshots');
-        expect(html).toContain('Iterations without a route');
+        expect(html).toContain('Snapshots and iterations');
         expect(html).toContain('9f3c1ab');
         expect(html).toContain('5c1d0aa');
         expect(html).toContain('commit no longer in the PR');
         expect(html).toContain('a71d4e2 · active iteration · no route');
+        // The active iteration row is above snapshots from previous passes.
+        expect(html.indexOf('a71d4e2 · active iteration')).toBeLessThan(html.indexOf('5c1d0aa · 6 hr. ago'));
         // The row shows the snapshot model. The tooltip shows its full provenance.
         expect(html).toContain('5c1d0aa · 6 hr. ago · opus-5 · stale');
         expect(html).toContain('claude-code · opus-5 · 5c1d0aa8b7e6f4302d9c8b7a6f5e4d3c2b1a0999');
@@ -54,6 +57,24 @@ describe('iteration snapshots gallery', () => {
 
         expect(html).toContain('read-only · the commit is no longer in the PR');
         expect(html).toContain('snapshot b0d3f77 · commit no longer in the PR');
+    });
+
+    it('local review: a removed iteration in the read-only banner refers to tree history rather than the PR', () => {
+        const html = markup('iterations-snapshot-gone-readonly-local');
+
+        expect(html).toContain('read-only · no longer in the tree history');
+        expect(html).toContain('snapshot b0d3f77 · no longer in the tree history');
+        expect(html).not.toContain('no longer in the PR');
+    });
+
+    it('local review: rows differ by the commit suffix, and a removed iteration uses its own wording', () => {
+        const html = markup('iterations-picker-local-host');
+
+        expect(html).toContain('6630996…8f90 · active iteration · no route');
+        expect(html).toContain('6630996…7a8b');
+        expect(html).toContain('6630996…3c4d');
+        expect(html).toContain('no longer in the tree history');
+        expect(html).not.toContain('no longer in the PR');
     });
 
     it('the Snapshots card in Overview shows provenance for every snapshot', () => {

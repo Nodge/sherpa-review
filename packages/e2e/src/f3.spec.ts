@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { MEDIUM_DIFF_ID, MEDIUM_HEAD_COMMIT, MEDIUM_HEAD_COMMIT_V2 } from '@sherpa/fixtures';
+import { MEDIUM_DIFF_ID, MEDIUM_DIFF_ID_V2, MEDIUM_HEAD_COMMIT, MEDIUM_HEAD_COMMIT_V2 } from '@sherpa/fixtures';
 
 import { answerChat, buildRoute, buildRouteV2, takeTask } from './route-worker.js';
 import type { SherpaServerHandle } from './sherpa-fixture.js';
@@ -316,6 +316,121 @@ test('F3: push while reading → stale route → rebuild with progress and note 
         await expect(page.locator(`#thread-${DEPARTED_THREAD}`)).toBeVisible();
     });
 });
+
+/**
+ * Viewed marks while the route is stale: a push has arrived, the route has not been rebuilt, and the tab
+ * still renders the diff from the snapshot iteration. Progress is read for that same iteration,
+ * or every progress event would clear the marks on screen.
+ *
+ * Three files untouched by the second push: one marked before the push, one while the route is stale,
+ * and one marked outside the UI (an external write that makes the tab reread progress).
+ */
+const BEFORE_PUSH = EDIT_WINDOW;
+const IN_WINDOW = 'services/orders/src/domain/order.ts';
+const OUTSIDE_UI = 'services/orders/src/api/schemas.ts';
+
+test('F3: viewed marks survive a new iteration without reloading the tab', async ({
+    page,
+    launchSherpa,
+}) => {
+    const server = await launchSherpa('fixture-medium');
+    const worker = server.worker;
+
+    await test.step('the first-pass route is built and the full diff for iteration 9f3c1ab is open', async () => {
+        await page.goto(server.url);
+        await page.getByRole('tab', { name: 'Route', exact: true }).click();
+        expect((await worker.register('claude-code')).code).toBe(0);
+        await buildRoute(worker);
+        await expect(page.locator('[data-stop]')).toHaveCount(7);
+
+        await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
+    });
+
+    const v1 = new Map((await diffOf(page, server)).map((file) => [file.path, file.fileId]));
+
+    await test.step('a file is marked viewed before the push', async () => {
+        await markViewed(page, BEFORE_PUSH, v1.get(BEFORE_PUSH) ?? '');
+    });
+
+    await test.step('push: the mark stays on screen without reloading the tab', async () => {
+        await advanceIteration(page, server);
+        await expect(page.locator('.banner-slot .iteration-banner[aria-label="Route is stale"]')).toBeVisible();
+
+        await expectViewed(page, BEFORE_PUSH, v1.get(BEFORE_PUSH) ?? '');
+    });
+
+    await test.step('a viewed mark made while the route is stale survives an external progress event', async () => {
+        // Progress carryover to the new iteration is asynchronous: wait for it, or the mark made
+        // while the route is stale would be carried over too, leaving nothing to check.
+        const carried = new Map((await diffOf(page, server, MEDIUM_DIFF_ID_V2)).map((f) => [f.path, f.fileId]));
+        await expect
+            .poll(async () => viewedFileIds(await progressOf(page, server, MEDIUM_DIFF_ID_V2)), { timeout: 30_000 })
+            .toContain(carried.get(BEFORE_PUSH) ?? '');
+
+        await markViewed(page, IN_WINDOW, v1.get(IN_WINDOW) ?? '');
+
+        // An external write advances the progress revision, so the tab rereads the snapshot over SSE.
+        const written = await page.request.post(new URL('/api/ui/review/file-viewed', server.url).href, {
+            headers: sherpaAuth(server),
+            data: { fileId: v1.get(OUTSIDE_UI) ?? '', viewed: true },
+        });
+        expect(written.status(), await written.text()).toBe(200);
+
+        for (const path of [OUTSIDE_UI, IN_WINDOW, BEFORE_PUSH]) {
+            await expectViewed(page, path, v1.get(path) ?? '');
+        }
+    });
+
+    await test.step('route rebuild: marks move to the new iteration', async () => {
+        await page.locator('.iteration-banner[aria-label="Route is stale"] button.iteration-banner__action').click();
+        await buildRouteV2(worker);
+        // The snapshot moved to the new iteration: the stale-route banner is gone, and the tab reread the diff.
+        await expect(page.locator('.iteration-banner[aria-label="Route is stale"]')).toHaveCount(0);
+
+        await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
+        const v2 = new Map((await diffOf(page, server)).map((file) => [file.path, file.fileId]));
+        for (const path of [BEFORE_PUSH, IN_WINDOW, OUTSIDE_UI]) {
+            await expectViewed(page, path, v2.get(path) ?? '');
+        }
+    });
+});
+
+/** The viewed checkbox in the file-card header. */
+function viewedToggle(page: Page, fileId: string) {
+    return page.locator(`.file-card[data-file="${fileId}"] button.file-card__viewed`);
+}
+
+/**
+ * Scroll the full diff to a file: cards are virtualized, so the target may not
+ * be in the DOM. The file tree scrolls it into view.
+ */
+async function openFile(page: Page, path: string): Promise<void> {
+    const search = page.locator('.file-panel__input');
+    await search.fill(path.split('/').at(-1) ?? path);
+    await page
+        .locator('.file-tree__row--file')
+        .filter({ has: page.locator(`[title="${path}"]`) })
+        .first()
+        .click();
+    await search.fill('');
+    await expect(page.locator(`.file-card[data-file]`).first()).toBeVisible();
+}
+
+async function markViewed(page: Page, path: string, fileId: string): Promise<void> {
+    await openFile(page, path);
+    await viewedToggle(page, fileId).click();
+    await expect(viewedToggle(page, fileId)).toHaveAttribute('aria-pressed', 'true');
+}
+
+async function expectViewed(page: Page, path: string, fileId: string): Promise<void> {
+    await openFile(page, path);
+    await expect(viewedToggle(page, fileId)).toHaveAttribute('aria-pressed', 'true');
+}
+
+/** Files in the iteration with a manual viewed mark. */
+function viewedFileIds(progress: { readonly files: readonly { fileId: string; viewed: boolean | null }[] }): string[] {
+    return progress.files.filter((file) => file.viewed === true).map((file) => file.fileId);
+}
 
 /** The active iteration file's `fileId`: a question anchor addresses the file by it (chat contract). */
 async function fileIdOf(page: Page, server: SherpaServerHandle, path: string): Promise<string> {

@@ -54,6 +54,14 @@ export interface EnsureServerOptions {
     readonly entry: string | undefined;
     /** Explicit server bundle path from `SHERPA_SERVER_BIN`, for development scenarios. */
     readonly serverBin?: string | undefined;
+    /**
+     * Local review: project directory, comparison base and the branch used to build the key. Only the
+     * CLI knows these. It passes them to the server as arguments, which are saved in key state
+     * so a restart does not need them.
+     */
+    readonly repo?: string | undefined;
+    readonly base?: string | undefined;
+    readonly branch?: string | undefined;
     /** How long to wait for manifest publication. Shortened in tests. */
     readonly startupTimeoutMs?: number;
 }
@@ -183,6 +191,9 @@ async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logP
         options.sherpaDir,
         '--install-dir',
         installDir,
+        ...(options.repo === undefined ? [] : ['--repo', options.repo]),
+        ...(options.base === undefined ? [] : ['--base', options.base]),
+        ...(options.branch === undefined ? [] : ['--branch', options.branch]),
     ];
 
     const log = await fs.open(logPath, 'a');

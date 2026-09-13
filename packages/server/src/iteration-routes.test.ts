@@ -87,7 +87,8 @@ describe('iterations in UI endpoints', () => {
         await removeTempSherpaDir(sherpaDir);
     });
 
-    async function start(): Promise<SherpaServer> {
+    /** `brokenIterations`: the host returns no iteration list, so the feed cannot identify the active one. */
+    async function start(options: { brokenIterations?: boolean } = {}): Promise<SherpaServer> {
         const host = makeFixtureHost('medium');
         const getDiff = host.getDiff.bind(host);
         host.getDiff = (slice) => {
@@ -96,6 +97,9 @@ describe('iterations in UI endpoints', () => {
             }
             return getDiff(slice);
         };
+        if (options.brokenIterations === true) {
+            host.listIterations = () => Promise.reject(new Error('host is down'));
+        }
         const server = await startServer({
             prKey: PR,
             sherpaDir,
@@ -313,16 +317,144 @@ describe('iterations in UI endpoints', () => {
 
         // The route stayed on the previous iteration, with its snapshot and marks.
         const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.diffId).toBe(V1.diffId);
         expect(past.stops).toEqual([{ stopId: 's01', viewed: true }]);
         expect(past.files).toEqual([
             { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 3, end: 7 }] },
         ]);
 
-        // The new iteration has no snapshot yet, so it shows no stop marks.
+        // Explicitly requesting the active iteration behaves like a request without a parameter: stop
+        // marks come from the current snapshot, even if it was built on a previous iteration.
         const active = await readProgress(server, `?diffId=${V2.diffId}`);
-        expect(active.stops).toEqual([]);
+        const noParam = await readProgress(server);
+        expect(active.diffId).toBe(V2.diffId);
+        expect(active.stops).toEqual([{ stopId: 's01', viewed: true }]);
+        expect(active.files).toEqual(noParam.files);
+        expect(active.stops).toEqual(noParam.stops);
         expect(active.progressRevision).toBe(past.progressRevision);
     });
+
+    it('stores a mark made while the route is stale under the snapshot iteration and repeats it on the active one', async () => {
+        const server = await start();
+        await completeRoute(server);
+        const stream = await openState(server);
+        await nextState(stream);
+        await advance(server);
+        await nextState(stream);
+
+        // Cache the slice with an explicit request: without it, there is no way to repeat the mark.
+        const slice = await readDiff(server, `?base=${V1.diffId}&head=${V2.diffId}`);
+        const touched = new Set(slice.files.map((file) => file.path));
+        const v1 = await readDiff(server, `?diffId=${V1.diffId}`);
+        const v2 = await readDiff(server, `?diffId=${V2.diffId}`);
+        const v2Paths = new Set(v2.files.map((file) => file.path));
+        const carried = v1.files.find((file) => !touched.has(file.path) && v2Paths.has(file.path));
+        const changed = v1.files.find((file) => touched.has(file.path));
+        if (carried === undefined || changed === undefined) {
+            throw new Error('medium fixture needs both a file untouched by the second push and a changed file');
+        }
+        const carriedInV2 = v2.files.find((file) => file.path === carried.path)?.fileId ?? '';
+
+        for (const fileId of [carried.fileId, changed.fileId]) {
+            const written = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewFileViewed,
+                { fileId, viewed: true },
+                server.token,
+            );
+            expect(written.status).toBe(200);
+        }
+
+        // Marks were stored under the iteration whose `fileId` values the UI sent, the one displayed on screen.
+        const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.files).toContainEqual({ fileId: carried.fileId, viewed: true, seenRanges: [] });
+        expect(past.files).toContainEqual({ fileId: changed.fileId, viewed: true, seenRanges: [] });
+
+        // Only the file untouched by the slice was repeated on the active iteration: the reviewer never saw the changed one.
+        const active = await readProgress(server, `?diffId=${V2.diffId}`);
+        expect(active.files).toContainEqual({ fileId: carriedInV2, viewed: true, seenRanges: [] });
+        const changedInV2 = v2.files.find((file) => file.path === changed.path)?.fileId ?? null;
+        expect(active.files.some((file) => file.fileId === changedInV2 && file.viewed === true)).toBe(false);
+    });
+
+    it('repeats stop ranges marked while the route is stale on the active iteration and clears them from both', async () => {
+        const server = await start();
+        await completeRoute(server);
+        const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
+        const stream = await openState(server);
+        await nextState(stream);
+        await advance(server);
+        await nextState(stream);
+
+        const { carried, carriedInV2 } = await untouchedFile(server);
+        const seenRanges = [{ side: 'new' as const, start: 3, end: 7 }];
+        const written = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopViewed,
+            { snapshotId, stopId: 's01', viewed: true, ranges: [{ fileId: carried, ...seenRanges[0] }] },
+            server.token,
+        );
+        expect(written.status).toBe(200);
+
+        // Ranges were stored under the displayed iteration and repeated on the active one: a route
+        // rebuild reads active progress, and without the second write the stop would return as unviewed.
+        const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.files).toContainEqual({ fileId: carried, viewed: null, seenRanges });
+        const active = await readProgress(server, `?diffId=${V2.diffId}`);
+        expect(active.files).toContainEqual({ fileId: carriedInV2, viewed: null, seenRanges });
+
+        const cleared = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopViewed,
+            { snapshotId, stopId: 's01', viewed: false, ranges: [] },
+            server.token,
+        );
+        expect(cleared.status).toBe(200);
+        for (const diffId of [V1.diffId, V2.diffId]) {
+            const after = await readProgress(server, `?diffId=${diffId}`);
+            expect(after.files.filter((file) => file.seenRanges.length > 0)).toEqual([]);
+        }
+    });
+
+    it('host returned no iteration list: does not substitute active progress for the requested previous iteration', async () => {
+        const server = await start();
+        await completeRoute(server);
+        const fileId = (await readDiff(server, `?diffId=${V1.diffId}`)).files[0]?.fileId ?? '';
+        const written = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewFileViewed,
+            { fileId, viewed: true },
+            server.token,
+        );
+        expect(written.status).toBe(200);
+        await server.close();
+        servers.length = 0;
+
+        // The feed cannot identify the active iteration, but the host has iterations: read the requested one as is,
+        // not as the "only" one, otherwise the marks on screen would disappear.
+        const restarted = await start({ brokenIterations: true });
+        const past = await readProgress(restarted, `?diffId=${V1.diffId}`);
+        expect(past.diffId).toBe(V1.diffId);
+        expect(past.files).toContainEqual({ fileId, viewed: true, seenRanges: [] });
+    });
+
+    /** Fixture file untouched by the second push: marks are repeated on this file. */
+    async function untouchedFile(server: SherpaServer): Promise<{ carried: string; carriedInV2: string }> {
+        // Cache the slice with an explicit request: without it, there is no way to repeat the mark.
+        const slice = await readDiff(server, `?base=${V1.diffId}&head=${V2.diffId}`);
+        const touched = new Set(slice.files.map((file) => file.path));
+        const v1 = await readDiff(server, `?diffId=${V1.diffId}`);
+        const v2 = await readDiff(server, `?diffId=${V2.diffId}`);
+        const v2Paths = new Set(v2.files.map((file) => file.path));
+        const carried = v1.files.find((file) => !touched.has(file.path) && v2Paths.has(file.path));
+        if (carried === undefined) {
+            throw new Error('medium fixture needs a file untouched by the second push');
+        }
+        return {
+            carried: carried.fileId,
+            carriedInV2: v2.files.find((file) => file.path === carried.path)?.fileId ?? '',
+        };
+    }
 
     async function readProgress(server: SherpaServer, query = '') {
         const response = await get(server.port, `${UI_ENDPOINTS.reviewProgress}${query}`, server.token);

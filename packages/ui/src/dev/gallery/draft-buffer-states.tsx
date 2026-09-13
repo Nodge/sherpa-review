@@ -107,6 +107,7 @@ function BufferedBarState() {
             threadStore={threadStore}
             connection="online"
             hostName="FixtureHost"
+            reviewHost="fixture"
             composerTransport={TRANSPORT}
             draftBuffer={[BUFFERED]}
             onPublish={() => Promise.reject(new Error('gallery does not write to the host'))}

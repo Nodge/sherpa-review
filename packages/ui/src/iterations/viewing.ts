@@ -345,6 +345,8 @@ export interface PickerRow {
     readonly id: string;
     readonly diffId: string;
     readonly commit: string;
+    /** Short commit identifier unique within the menu (`shortCommits`). */
+    readonly short: string;
     /** null means the time is unknown (an iteration from `stale`). */
     readonly createdAt: string | null;
     readonly model: string | null;
@@ -354,6 +356,10 @@ export interface PickerRow {
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
     /** Slice head (active iteration commit). Null for other rows. */
     readonly toCommit: string | null;
+    /** Short slice head identifier. Null for other rows. */
+    readonly toShort: string | null;
+    /** The commit does not distinguish this row from another in the menu, so show the exact time. */
+    readonly ambiguous: boolean;
     readonly viewing: Viewing;
 }
 
@@ -370,21 +376,27 @@ export interface PickerRowsInput {
 }
 
 export interface PickerRows {
-    readonly snapshots: readonly PickerRow[];
+    /**
+     * Snapshots and iterations without routes in one list: active iteration first (with its snapshot
+     * if a route was built on it), then newest to oldest by iteration time. A snapshot sits
+     * beside its iteration. Multiple snapshots of one iteration appear newest first.
+     */
     readonly iterations: readonly PickerRow[];
     /** "Show changes since iteration…": a slice from each qualifying iteration to the active one. */
     readonly slices: readonly PickerRow[];
 }
 
+/** Row before labels calculated across the whole menu: short id and uniqueness. */
+type RawRow = Omit<PickerRow, 'short' | 'toShort' | 'ambiguous'>;
+
 /**
- * Picker rows: snapshots newest first, followed by iterations without snapshots.
- * Even an empty iteration list yields the active iteration row if it has no snapshot:
- * its `diffId` and commit are known from the route without parameters (the server may send
+ * Picker rows. An empty iteration list still yields an active iteration row if it has no
+ * snapshot: its `diffId` and commit are known from the route without parameters (the server may send
  * `iterations: []`).
  */
 export function pickerRows(input: PickerRowsInput): PickerRows {
     const snapshots = [...input.snapshots].reverse().map(
-        (summary): PickerRow => ({
+        (summary): RawRow => ({
             kind: 'snapshot',
             id: summary.snapshotId,
             diffId: summary.diffId,
@@ -400,10 +412,10 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
     );
 
     const withSnapshot = new Set(input.snapshots.map((summary) => summary.diffId));
-    const iterations = input.iterations
+    const routeless = input.iterations
         .filter((iteration) => !withSnapshot.has(iteration.diffId))
         .map(
-            (iteration): PickerRow => ({
+            (iteration): RawRow => ({
                 kind: 'diff',
                 id: iteration.diffId,
                 diffId: iteration.diffId,
@@ -425,8 +437,8 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
         .reverse();
 
     const active = input.activeIteration;
-    if (iterations.length === 0 && active !== null && !withSnapshot.has(active.diffId)) {
-        iterations.push({
+    if (routeless.length === 0 && active !== null && !withSnapshot.has(active.diffId)) {
+        routeless.push({
             kind: 'diff',
             id: active.diffId,
             diffId: active.diffId,
@@ -441,7 +453,113 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
         });
     }
 
-    return { snapshots, iterations, slices: sliceRows(input) };
+    const timeline = orderedTimeline([...snapshots, ...routeless], input);
+    const slices = sliceRows(input);
+    // Calculate short identifiers across the whole menu, where they must be distinct.
+    const short = shortCommits(
+        [...timeline, ...slices].flatMap((row) =>
+            row.toCommit === null ? [row.commit] : [row.commit, row.toCommit],
+        ),
+    );
+    // A commit shared by multiple menu rows does not distinguish them. Show
+    // exact times instead of rounded ones (iterations without routes had no time at all before).
+    const perCommit = new Map<string, number>();
+    for (const row of [...timeline, ...slices]) {
+        perCommit.set(row.commit, (perCommit.get(row.commit) ?? 0) + 1);
+    }
+    const dressed = (row: RawRow): PickerRow => ({
+        ...row,
+        short: short.get(row.commit) ?? row.commit,
+        toShort: row.toCommit === null ? null : (short.get(row.toCommit) ?? row.toCommit),
+        ambiguous: (perCommit.get(row.commit) ?? 0) > 1,
+    });
+    return { iterations: timeline.map(dressed), slices: slices.map(dressed) };
+}
+
+/**
+ * Menu row order: active iteration first, then newest to oldest by iteration time.
+ * Snapshots do not form a separate section at the top. The reviewer looks for an iteration,
+ * regardless of whether a route was built on it.
+ */
+function orderedTimeline(rows: readonly RawRow[], input: PickerRowsInput): RawRow[] {
+    const times = new Map(input.iterations.map((iteration) => [iteration.diffId, iteration.createdAt]));
+    const groups = new Map<string, RawRow[]>();
+    for (const row of rows) {
+        const group = groups.get(row.diffId);
+        if (group === undefined) {
+            groups.set(row.diffId, [row]);
+        } else {
+            group.push(row);
+        }
+    }
+    /** Iteration time. For an unknown iteration, use its latest snapshot time, otherwise place it last. */
+    const timeOf = (diffId: string, group: readonly RawRow[]): string | null =>
+        times.get(diffId) ??
+        group.map((row) => row.createdAt).filter((at) => at !== null).toSorted().at(-1) ??
+        null;
+
+    const activeDiffId =
+        input.iterations.find((iteration) => iteration.status === 'active')?.diffId ??
+        input.activeIteration?.diffId ??
+        null;
+    return [...groups.entries()]
+        .map(([diffId, group]) => ({ diffId, group, time: timeOf(diffId, group) }))
+        .toSorted((left, right) => {
+            if (left.diffId === activeDiffId || right.diffId === activeDiffId) {
+                return left.diffId === activeDiffId ? -1 : 1;
+            }
+            if (left.time === right.time) {
+                return 0;
+            }
+            // An iteration without a time is oldest. Substituting "now" would move it to the top.
+            return left.time === null ? 1 : right.time === null ? -1 : right.time.localeCompare(left.time);
+        })
+        .flatMap((entry) => entry.group);
+}
+
+/** Commits never shrink below seven characters, as specified in the handoff (docs/design/README.md §13). */
+const SHORT_COMMIT = 7;
+/** Maximum prefix length. Show the shared suffix after an ellipsis. */
+const LONGEST_PREFIX = 12;
+/** Minimum suffix length after the ellipsis: one character is too short to read as an id. */
+const SHORTEST_SUFFIX = 4;
+
+/**
+ * Short commit identifiers within one menu: seven characters, as elsewhere in the UI,
+ * extended on collision until distinct, like short git hashes.
+ *
+ * Identifiers with a long shared prefix (local review iterations recorded with the old
+ * `<sha HEAD>+<8 hex>` formula differ only by suffix) cannot be distinguished by prefix alone. Show those
+ * rows with the beginning and end separated by an ellipsis.
+ */
+export function shortCommits(commits: readonly string[]): ReadonlyMap<string, string> {
+    const unique = [...new Set(commits)];
+    const prefix = shortestUnique(unique, SHORT_COMMIT, (commit, length) => commit.slice(0, length));
+    if (prefix !== null && prefix <= LONGEST_PREFIX) {
+        return new Map(unique.map((commit) => [commit, commit.slice(0, prefix)]));
+    }
+    const suffix = shortestUnique(unique, SHORTEST_SUFFIX, (commit, length) => commit.slice(-length));
+    if (suffix !== null && suffix <= LONGEST_PREFIX) {
+        return new Map(
+            unique.map((commit) => [commit, `${commit.slice(0, SHORT_COMMIT)}…${commit.slice(-suffix)}`]),
+        );
+    }
+    return new Map(unique.map((commit) => [commit, commit.slice(0, prefix ?? commit.length)]));
+}
+
+/** Smallest length starting at `shortest` that makes all strings distinct. null means no length does. */
+function shortestUnique(
+    commits: readonly string[],
+    shortest: number,
+    cut: (commit: string, length: number) => string,
+): number | null {
+    const longest = Math.max(shortest, ...commits.map((commit) => commit.length));
+    for (let length = shortest; length <= longest; length += 1) {
+        if (new Set(commits.map((commit) => cut(commit, length))).size === commits.length) {
+            return length;
+        }
+    }
+    return null;
 }
 
 /**
@@ -449,7 +567,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
  * is not compared with itself, and a gone (`gone`) one is never offered. The review host returns
  * 400 for it because the commit is no longer in the PR.
  */
-function sliceRows(input: PickerRowsInput): readonly PickerRow[] {
+function sliceRows(input: PickerRowsInput): readonly RawRow[] {
     const listed = input.iterations.find((iteration) => iteration.status === 'active') ?? null;
     const active =
         listed === null ? input.activeIteration : { diffId: listed.diffId, commit: listed.headCommit };
@@ -464,7 +582,7 @@ function sliceRows(input: PickerRowsInput): readonly PickerRow[] {
                 iteration.status !== 'gone',
         )
         .map(
-            (iteration): PickerRow => ({
+            (iteration): RawRow => ({
                 kind: 'slice',
                 id: iteration.diffId,
                 diffId: iteration.diffId,

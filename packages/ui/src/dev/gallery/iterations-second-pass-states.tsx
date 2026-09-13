@@ -72,6 +72,10 @@ function secondPassSnapshot(
     };
 }
 
+/** Local review iterations: `headCommit` is a diff fingerprint, rather than a commit. */
+const LOCAL_ROUTE_DIFF_ID = '6c1f9a3d41f07f0b2f0f9cbb2b6d2f4a1d1a7f8c0e6d5b4a3928176c5d4e3f20';
+const LOCAL_TREE_DIFF_ID = 'a3d52f80b91c4e7d6a2f0c8b5e4d3a291f7c6b5a4938271605d4c3b2a1908f7e';
+
 function staleOf(snapshot: RouteSnapshot): UiRouteStale {
     return {
         routeCommit: snapshot.commit,
@@ -79,6 +83,20 @@ function staleOf(snapshot: RouteSnapshot): UiRouteStale {
         prDiffId: PR_DIFF_ID,
         newIterations: 2,
         affectedStopIds: ['s02', 's03', 's06'],
+    };
+}
+
+/**
+ * The same stale state in local review: there is no PR, the working tree moved ahead, and a diff
+ * fingerprint identifies the iteration. The first characters distinguish both sides.
+ */
+function localStaleOf(): UiRouteStale {
+    return {
+        routeCommit: LOCAL_ROUTE_DIFF_ID,
+        prCommit: LOCAL_TREE_DIFF_ID,
+        prDiffId: LOCAL_TREE_DIFF_ID,
+        newIterations: 1,
+        affectedStopIds: ['s02'],
     };
 }
 
@@ -131,7 +149,7 @@ function IterationState({ snapshot, routeFilter = 'all', banners = [] }: Iterati
     );
 }
 
-function staleBanners(snapshot: RouteSnapshot): readonly BannerSource[] {
+function staleBanners(snapshot: RouteSnapshot, localHost = false): readonly BannerSource[] {
     return [
         {
             id: 'route-stale',
@@ -139,8 +157,9 @@ function staleBanners(snapshot: RouteSnapshot): readonly BannerSource[] {
             active: () => true,
             render: () => (
                 <RouteStaleBanner
-                    stale={staleOf(snapshot)}
+                    stale={localHost ? localStaleOf() : staleOf(snapshot)}
                     stops={snapshot.stops}
+                    localHost={localHost}
                     onRegenerate={() => undefined}
                     onOpenDiffWithoutRoute={() => undefined}
                 />
@@ -180,6 +199,14 @@ export const ITERATION_SECOND_PASS_STATES: readonly RouteGalleryState[] = [
         render: () => {
             const snapshot = readySnapshot();
             return <IterationState snapshot={snapshot} banners={staleBanners(snapshot)} />;
+        },
+    },
+    {
+        id: 'iterations-stale-banner-local',
+        title: 'stale route: local review, working tree moved ahead',
+        render: () => {
+            const snapshot = readySnapshot();
+            return <IterationState snapshot={snapshot} banners={staleBanners(snapshot, true)} />;
         },
     },
     {

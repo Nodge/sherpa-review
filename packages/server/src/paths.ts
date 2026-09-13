@@ -59,6 +59,21 @@ export function databasePathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'sherpa.db');
 }
 
+/** Directory reviewed by a local host key: project directory, branch and base. */
+export function localHostStatePathFor(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'local-host.json');
+}
+
+/** Local review comments: they have no remote host, so they live here. */
+export function localReviewPathFor(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'local-review.json');
+}
+
+/** Local review iteration history: index and blobs for the new sides of text files. */
+export function localIterationsDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'local-iterations');
+}
+
 /** PR task payload root. Route and chat writers get separate subdirectories. */
 export function payloadDirOf(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'payload');
@@ -72,6 +87,11 @@ export function routePayloadDirOf(sherpaDir: string, prKey: string): string {
 /** Chat question payload: a separate immutable subdirectory for each task. */
 export function chatPayloadDirOf(sherpaDir: string, prKey: string): string {
     return path.join(payloadDirOf(sherpaDir, prKey), 'chat');
+}
+
+/** Local review round payload: a separate subdirectory for each round. */
+export function feedbackPayloadDirOf(sherpaDir: string, prKey: string): string {
+    return path.join(payloadDirOf(sherpaDir, prKey), 'feedback');
 }
 
 /**

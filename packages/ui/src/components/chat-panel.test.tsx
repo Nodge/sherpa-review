@@ -165,6 +165,11 @@ describe('chat panel model', () => {
         expect(queueBannerText([task(1, 'chat', 'done')])).toBeNull();
     });
 
+    it('uses distinct banner wording for applying review feedback', () => {
+        expect(queueBannerText([task(1, 'review.feedback', 'leased')])).toBe('chat.queue.feedback');
+        expect(queueBannerText([task(1, 'review.feedback', 'cancelled', true)])).toBe('chat.queue.busy');
+    });
+
     it('does not present a held cancelled route task as ongoing generation', () => {
         expect(queueBannerText([task(1, 'route.section', 'cancelled', true)])).toBe('chat.queue.busy');
         expect(queueBannerText([task(1, 'route.section', 'cancelled', false)])).toBeNull();

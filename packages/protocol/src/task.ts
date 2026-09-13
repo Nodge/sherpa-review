@@ -3,12 +3,20 @@ import { z } from 'zod';
 /**
  * Task types. `echo` is a dummy task to exercise the loop. `route.skeleton` produces the summary,
  * stop plan and tour order. `route.section` fills planned stops. `chat` is a reviewer
- * question with selection context, answered in Markdown without a result schema.
+ * question with selection context and a markdown answer without a result schema.
+ * `review.feedback` is a round of published local review comments. The agent edits code
+ * and replies in threads.
  * Regeneration after a push uses the same `route.*` types with extra context
  * (previous route, interdiff), with no separate task types.
  * Validation rejects unknown types, fail-closed.
  */
-export const taskTypeSchema = z.enum(['echo', 'route.skeleton', 'route.section', 'chat']);
+export const taskTypeSchema = z.enum([
+    'echo',
+    'route.skeleton',
+    'route.section',
+    'chat',
+    'review.feedback',
+]);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 
 /** Two priority classes (`docs/protocol.md §5`). Interactive tasks always precede background tasks, FIFO within each class. */

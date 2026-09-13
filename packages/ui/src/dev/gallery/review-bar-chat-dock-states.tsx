@@ -105,6 +105,7 @@ function DockState({ overlay }: { overlay: boolean }) {
                 threadStore={threadStore}
                 connection="online"
                 hostName="FixtureHost"
+                reviewHost="fixture"
                 composerTransport={TRANSPORT}
                 onPublish={() => Promise.reject(new Error('the gallery does not write to the host'))}
                 onComplete={() => undefined}

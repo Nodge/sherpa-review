@@ -390,3 +390,23 @@ export const lensSchema = z.object({
     zones: z.array(lensZoneSchema).nullable(),
 });
 export type Lens = z.infer<typeof lensSchema>;
+
+/**
+ * The `review.feedback` task result, the agent's response to a round of published local review
+ * comments (validated fail-closed on `complete`. The schema is included in the task payload
+ * as a file). Replies target the thread's `threadId`. A thread without a reply is not an error,
+ * as the reviewer can already see whom the agent has not answered.
+ */
+export const reviewFeedbackResultSchema = z.object({
+    replies: z
+        .array(
+            z.object({
+                threadId: hostIdSchema,
+                body: z.string().min(1).max(20_000),
+            }),
+        )
+        .max(200),
+    /** Short round summary for the reviewer, what the agent did about the comments. */
+    summary: z.string().min(1).max(4000),
+});
+export type ReviewFeedbackResult = z.infer<typeof reviewFeedbackResultSchema>;

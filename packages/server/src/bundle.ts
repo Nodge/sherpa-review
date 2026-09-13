@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
+import { readLocalGitHostState } from './hosts/local-git/index.js';
 import { formatIdlePeriod, readIdleSeconds } from './idle.js';
 import { readOption } from './launch.js';
 import { readListenHost } from './listen-host.js';
@@ -21,7 +22,9 @@ import { UI_ASSETS } from './ui-assets.js';
  * No token in stdout: output goes to a log file that outlives the server, and the CLI prints the link with the token
  * after reading the manifest.
  */
-const USAGE = 'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>]';
+const USAGE =
+    'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
+    '[--repo <project directory>] [--base <ref>] [--branch <branch>]';
 
 async function main(argv: readonly string[]): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
@@ -42,6 +45,18 @@ async function main(argv: readonly string[]): Promise<number> {
     // Only the CLI knows where the distribution is installed. The server compares this version with main.
     const installDir = readOption(argv, '--install-dir');
 
+    // Local review: project directory, comparison base and the key's branch. They come from
+    // `sherpa up --local`. A daemon restart uses the saved key state.
+    const repo = readOption(argv, '--repo');
+    const base = readOption(argv, '--base');
+    const branch = readOption(argv, '--branch');
+    if (repo === null && localReviewUnconfigured(prKey, sherpaDir)) {
+        writeLog(
+            `no review host: key ${prKey} is local, but neither --repo nor a saved local-host.json is available. ` +
+                'Run `sherpa up --local <path>` from the project directory',
+        );
+    }
+
     const idleSeconds = readIdleSeconds(process.env);
     const host = readListenHost(process.env);
 
@@ -53,6 +68,9 @@ async function main(argv: readonly string[]): Promise<number> {
             assets: bundledAssets(UI_ASSETS),
             idleSeconds,
             host,
+            ...(repo === null ? {} : { repo: path.resolve(repo) }),
+            ...(base === null ? {} : { base }),
+            ...(branch === null ? {} : { branch }),
             updateCheck: installDir === null ? {} : { installDir },
             feedback: feedbackOptionsFor(installDir),
             onIdleStop: (seconds) => {
@@ -87,6 +105,11 @@ async function main(argv: readonly string[]): Promise<number> {
     process.once('SIGTERM', stop);
 
     return 0;
+}
+
+/** A local key without a project directory has no host. Explain why to the user. */
+function localReviewUnconfigured(prKey: string, sherpaDir: string): boolean {
+    return prKey.startsWith('local-git-') && readLocalGitHostState(sherpaDir, prKey) === null;
 }
 
 function writeLog(text: string): void {

@@ -14,8 +14,10 @@ import { openDatabase } from './db.js';
 import { createDevRoutes } from './dev-routes.js';
 import { DraftBufferStore, DraftBufferWriter } from './draft-buffer.js';
 import { ServerAlreadyRunningError } from './errors.js';
+import { FeedbackOrchestrator } from './feedback-orchestrator.js';
 import type { FeedbackIntegrationOptions } from './feedback-routes.js';
 import { createFeedbackRoutes, feedbackAvailability } from './feedback-routes.js';
+import { FeedbackStore } from './feedback-store.js';
 import type { ReviewHostFactory } from './hosts/select.js';
 import { selectReviewHost } from './hosts/select.js';
 import type { RequestListenerOptions, Route } from './http.js';
@@ -39,6 +41,7 @@ import {
     databasePathFor,
     DEFAULT_SHERPA_DIR,
     ensurePrivateDir,
+    feedbackPayloadDirOf,
     manifestPathFor,
     prStateDirOf,
     routePayloadDirOf,
@@ -112,6 +115,14 @@ export interface StartServerOptions {
      * without a live service (`() => null` runs the server without review endpoints).
      */
     reviewHostFactory?: ReviewHostFactory;
+    /**
+     * Local review project directory (`--repo`), comparison base (`--base`) and branch used by
+     * the CLI used to build the key (`--branch`). Only `local-git-*` keys need these. Without them the local host
+     * starts from the state saved by the previous run.
+     */
+    repo?: string;
+    base?: string;
+    branch?: string;
     /** Feedback channel transport and environment. Tests replace fetch and credentials without a live issue service. */
     feedback?: FeedbackIntegrationOptions;
     /**
@@ -255,7 +266,12 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             iterations: iterationStore,
             ...(options.now === undefined ? {} : { now: options.now }),
         });
-        const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey);
+        const reviewHost = (options.reviewHostFactory ?? selectReviewHost)(prKey, {
+            sherpaDir,
+            repo: options.repo ?? null,
+            base: options.base ?? null,
+            branch: options.branch ?? null,
+        });
         const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel carries state only.
         // A review status change (someone else's ship) reloads metadata so verdicts reach the UI snapshot.
@@ -331,9 +347,27 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             settings: settingsStore,
             registry: workerRegistry,
         });
+        // Publication rounds become agent tasks only where the host supports it
+        // (a local checkout). Other hosts have no orchestrator.
+        const feedbackOrchestrator =
+            reviewHost?.feedback === undefined
+                ? null
+                : new FeedbackOrchestrator({
+                      host: reviewHost.feedback,
+                      queue,
+                      store: new FeedbackStore(
+                          options.now === undefined ? { db } : { db, now: options.now },
+                      ),
+                      payloadDir: feedbackPayloadDirOf(sherpaDir, prKey),
+                      settings: settingsStore,
+                      registry: workerRegistry,
+                  });
         queue.setResultAcceptor(
             (task, result) =>
-                routeOrchestrator.acceptResult(task, result) ?? chatOrchestrator.acceptResult(task, result),
+                routeOrchestrator.acceptResult(task, result) ??
+                chatOrchestrator.acceptResult(task, result) ??
+                feedbackOrchestrator?.acceptResult(task, result) ??
+                null,
         );
 
         routes.push(
@@ -373,6 +407,13 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 iterations: iterationStore,
                 iterationFeed,
                 blobs: new BlobCache(sherpaDir, blobsDirOf(sherpaDir, prKey)),
+                ...(feedbackOrchestrator === null
+                    ? {}
+                    : {
+                          onPublished: () => {
+                              void feedbackOrchestrator.reconcile();
+                          },
+                      }),
             }),
             ...createFeedbackRoutes({
                 prKey,
@@ -429,11 +470,14 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             routeOrchestrator,
             chatStore,
             chatOrchestrator,
+            feedbackOrchestrator,
         });
         // Warm up the route after building the handle, on its own timer. Server startup doesn't wait for `getDiff()`,
         // or the "diff on screen in under two seconds" target would have to wait on a host network call.
         routeOrchestrator.start();
         chatOrchestrator.start();
+        // Requeue a round that didn't reach the agent during the previous run.
+        void feedbackOrchestrator?.reconcile();
         // PR metadata also loads in the background. The snapshot is served immediately, and metadata arrives over SSE.
         prMeta.start();
         // Queue retries for drafts that weren't delivered during the previous run.
@@ -531,6 +575,7 @@ function createHandle(parts: {
     routeOrchestrator: RouteOrchestrator;
     chatStore: ChatStore;
     chatOrchestrator: ChatOrchestrator;
+    feedbackOrchestrator: FeedbackOrchestrator | null;
 }): SherpaServer {
     let closing: Promise<void> | null = null;
 
@@ -569,6 +614,7 @@ function createHandle(parts: {
                 parts.routeStore.close();
                 parts.chatOrchestrator.close();
                 parts.chatStore.close();
+                parts.feedbackOrchestrator?.close();
                 await removeOwnManifest(parts.manifestPath, parts.manifest);
                 await shutdown(parts.httpServer, parts.db);
             })();

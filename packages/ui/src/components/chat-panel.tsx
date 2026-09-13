@@ -84,19 +84,23 @@ export function chatActivityState(
 }
 
 /**
- * The queue banner names route generation explicitly and uses generic text for any other task. A task
- * counts as busy while held: a cancelled task the worker is still running also comes before the question.
- * A cancelled route task uses the generic text too: generation has stopped, and the route view
- * shows cancelled stops, so "Generating the route" would contradict it.
+ * The queue banner names route generation and review feedback separately, and uses generic wording
+ * for any other busy task. A held task counts as busy, so a cancelled task still running on the worker also stands
+ * ahead of the question. A cancelled task gets generic wording because the work is gone and the route view
+ * shows its stops as cancelled. "Generating route" would contradict that view.
  */
 export function queueBannerText(tasks: readonly UiTask[]): MessageKey | null {
     const current = tasks.find((task) => task.heldByWorker);
     if (current === undefined) {
         return null;
     }
-    const generating =
-        current.status !== 'cancelled' && (current.type === 'route.skeleton' || current.type === 'route.section');
-    return generating ? 'chat.queue.route' : 'chat.queue.busy';
+    if (current.status === 'cancelled') {
+        return 'chat.queue.busy';
+    }
+    if (current.type === 'route.skeleton' || current.type === 'route.section') {
+        return 'chat.queue.route';
+    }
+    return current.type === 'review.feedback' ? 'chat.queue.feedback' : 'chat.queue.busy';
 }
 
 export function sameChatAnchor(left: UiChatAskAnchor | null, right: UiChatAskAnchor | null): boolean {

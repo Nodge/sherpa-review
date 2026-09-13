@@ -74,6 +74,7 @@ function mountApp(options: { readonly notes?: readonly AgentNote[]; readonly vie
         new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
     globalThis.fetch = (input: RequestInfo | URL): Promise<Response> => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const query = new URLSearchParams(url.split('?')[1] ?? '');
         switch (url.split('?')[0] ?? '') {
             case UI_ENDPOINTS.reviewDiff:
                 return Promise.resolve(json({ diff: V2.diff }));
@@ -82,7 +83,7 @@ function mountApp(options: { readonly notes?: readonly AgentNote[]; readonly vie
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: V2.threads }));
             case UI_ENDPOINTS.reviewProgress:
-                return Promise.resolve(json({ files: [], stops: [], progressRevision: 1 }));
+                return Promise.resolve(json({ diffId: query.get('diffId') ?? V2.diff.diffId, files: [], stops: [], progressRevision: 1 }));
             case UI_ENDPOINTS.reviewRoute:
                 return Promise.resolve(json({ route, routeRevision: 1 }));
             case UI_ENDPOINTS.reviewChat:

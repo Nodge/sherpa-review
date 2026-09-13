@@ -70,6 +70,8 @@ export interface ReviewCompletion {
     readonly prId: string;
     readonly headCommit: string;
     readonly hostName: string;
+    /** Adapter name (`uiState.reviewHost`). Local review has its own delivery message. */
+    readonly reviewHost: string;
     readonly publishedComments: number;
     readonly publishedReplies: number;
     readonly progress: ReviewProgressSummary;
@@ -85,6 +87,8 @@ export interface ReviewActionBarProps {
     readonly threadStore: ThreadStore;
     readonly connection: ConnectionState;
     readonly hostName: string;
+    /** Adapter name passed to the publication result. The host label stays in `hostName`. */
+    readonly reviewHost: string;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
     /** Drafts in the server buffer: count in the batch and block ship until sent. */
@@ -200,6 +204,7 @@ export function ReviewActionBar({
     threadStore,
     connection,
     hostName,
+    reviewHost,
     route = null,
     composerTransport,
     draftBuffer = EMPTY_DRAFT_BUFFER,
@@ -352,6 +357,7 @@ export function ReviewActionBar({
                     prId: pr.id,
                     headCommit: diff.headCommit,
                     hostName,
+                    reviewHost,
                     publishedComments: publishedIds.length,
                     publishedReplies: countPublishedReplies(currentThreads, publishedIds),
                     progress: reviewProgressSummary(diff.files, diffStore.getSnapshot().readState),
@@ -375,6 +381,7 @@ export function ReviewActionBar({
             onPublish,
             pr.id,
             retryDisabledReason,
+            reviewHost,
             routeCompletion,
             setFailure,
             setMenuOpen,

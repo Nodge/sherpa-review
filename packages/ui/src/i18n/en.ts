@@ -25,6 +25,7 @@ export const en: Dictionary = {
     'app.closeChat': 'Close chat',
 
     
+    'host.local': 'local checkout',
 
     'command.hint': 'Run it in any harness — that session becomes the worker.',
     'command.copy': 'Copy',
@@ -273,6 +274,7 @@ export const en: Dictionary = {
     'chat.composer.send': 'Send',
     'chat.queue.route': 'Generating the route · your question is next',
     'chat.queue.busy': 'Agent busy · your question is next',
+    'chat.queue.feedback': 'Addressing review comments · your question is next',
     'chat.note.pinned': (anchor: string) => `◆ Pinned by a note at ${anchor}`,
     'chat.note.lostAnchor': (anchor: string) => `anchor lost after the push · ${anchor}`,
     'chat.answering': 'Answering',
@@ -316,6 +318,7 @@ export const en: Dictionary = {
     'iteration.stale.aria': 'Route is stale',
     'iteration.stale.builtFor': 'The route was built for ',
     'iteration.stale.prAt': ', the PR is already at ',
+    'iteration.stale.treeAt': ', the working tree is at ',
     'iteration.stale.newIterations': (iterations: number) =>
         ` — ${num(iterations)} new ${form(iterations, 'iteration', 'iterations')}`,
     'iteration.stale.affected': (stops: string) => `; stops ${stops} are affected`,
@@ -327,6 +330,7 @@ export const en: Dictionary = {
     'iteration.snapshot.lead': 'You are looking at snapshot ',
     'iteration.previous.lead': 'You are looking at the previous iteration ',
     'iteration.gone.tail': ' · the commit is no longer in the PR',
+    'iteration.goneLocal.tail': ' · no longer in the tree history',
     'iteration.toActive': 'To the active iteration',
     'iteration.toCurrent': 'To the current one',
     'iteration.secondPass.aria': 'Route rebuilt',
@@ -348,6 +352,7 @@ export const en: Dictionary = {
     'iteration.status.current': 'current',
     'iteration.status.stale': 'stale',
     'iteration.status.gone': 'commit no longer in the PR',
+    'iteration.status.goneLocal': 'no longer in the tree history',
     'iteration.status.noRoute': 'no route',
     'iteration.status.slice': 'slice',
     'iteration.status.activeIteration': 'active iteration',
@@ -359,8 +364,7 @@ export const en: Dictionary = {
     'iteration.title.snapshot': (commit: string) => `The route was built for commit ${commit}`,
     'iteration.title.iteration': (commit: string) => `PR iteration at commit ${commit}`,
     'iteration.menu.aria': 'Snapshots and iterations',
-    'iteration.menu.snapshots': 'Snapshots',
-    'iteration.menu.iterations': 'Iterations without a route',
+    'iteration.menu.timeline': 'Snapshots and iterations',
     'iteration.menu.slices': 'Show changes since iteration…',
     'iteration.empty': 'No snapshots yet — they appear with the first route.',
     'iteration.readOnly.reason': 'only in the active iteration',
@@ -689,6 +693,7 @@ export const en: Dictionary = {
     'feedback.worker.unknownModel': 'model unknown',
 
     'complete.deliveredTo': (host: string) => `delivered to ${host}`,
+    'complete.handedToAgent': 'handed to the agent',
     'complete.filesSeen': 'Files seen',
     'complete.filesSeen.value': (seen: number, total: number) => `${num(seen)} of ${num(total)}`,
     'complete.stopsViewed': 'Stops viewed',

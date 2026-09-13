@@ -316,6 +316,7 @@ export function useReviewData({
             !reviewReady ||
             reviewHost === null ||
             diffStore === null ||
+            currentDiff === null ||
             progressWriter === null ||
             viewPending ||
             // Progress uses iteration `fileId` values. A slice has its own values, with no marks for them.
@@ -323,17 +324,32 @@ export function useReviewData({
         ) {
             return;
         }
-        const initial = progress === null;
-        if (!initial && !progressWriter.shouldReload(progressRevision)) {
+        // Request progress for the iteration on screen. Until the route is rebuilt,
+        // the tab shows the snapshot iteration's diff, whose `fileId` values do not match the active iteration's marks.
+        const drawnDiffId = viewDiffId ?? currentDiff.diffId;
+        // Progress belongs to a different iteration than the one on screen. Refresh it regardless of revision:
+        // switching iterations does not create a gap in our revision, but the displayed marks no longer apply.
+        const otherIteration = progress?.diffId !== drawnDiffId;
+        if (!otherIteration && !progressWriter.shouldReload(progressRevision)) {
             return;
         }
 
         let alive = true;
         let retry: ReturnType<typeof setTimeout> | null = null;
         const mark = progressWriter.beginReload();
-        void fetchReviewProgress(token, viewDiffId).then(
+        void fetchReviewProgress(token, drawnDiffId).then(
             (response) => {
                 if (!alive) {
+                    return;
+                }
+                if (response.diffId !== drawnDiffId) {
+                    // A response for another iteration raced with a selection change. Applying it would
+                    // clear marks on the diff still on screen. Leave the refresh to the next progress
+                    // event. The writer is already requesting it.
+                    setReviewState((current) => ({
+                        ...reviewStateForKeys(current, reviewKey, viewKey),
+                        progressLoading: false,
+                    }));
                     return;
                 }
                 const merged = progressWriter.finishReload(response, mark);
@@ -377,6 +393,7 @@ export function useReviewData({
         };
     }, [
         progress,
+        currentDiff,
         diffStore,
         progressRetryAttempt,
         progressWriter,

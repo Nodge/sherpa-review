@@ -14,6 +14,7 @@ import {
     workerRegisterResponseSchema,
     workerStatusSchema,
 } from './messages.js';
+import { reviewFeedbackResultSchema } from './review.js';
 import { routeSectionResultSchema, routeSkeletonResultSchema, routeSnapshotSchema } from './route.js';
 import { leaseSchema, taskSchema } from './task.js';
 import {
@@ -55,6 +56,7 @@ export function generateJsonSchemas(): Record<string, unknown> {
         // Generation task result schemas are passed as files in the payload (`docs/protocol.md §4`).
         routeSkeletonResult: routeSkeletonResultSchema,
         routeSectionResult: routeSectionResultSchema,
+        reviewFeedbackResult: reviewFeedbackResultSchema,
     };
 
     // io: 'input' describes what the sender must supply.

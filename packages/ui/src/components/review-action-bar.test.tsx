@@ -74,6 +74,7 @@ function renderBar(
             threadStore={createThreadStore(threads, FILE_IDS)}
             connection="online"
             hostName="FixtureHost"
+            reviewHost="fixture"
             composerTransport={TRANSPORT}
             {...(options.draftBuffer === undefined ? {} : { draftBuffer: options.draftBuffer })}
             onPublish={() => Promise.reject(new Error('not called during static rendering'))}
@@ -123,6 +124,7 @@ function mountBar(): { readonly commentButton: HTMLButtonElement } {
                     threadStore={threadStore}
                     connection="online"
                     hostName="FixtureHost"
+                    reviewHost="fixture"
                     composerTransport={TRANSPORT}
                     onPublish={() => Promise.reject(new Error('the test does not publish'))}
                     onComplete={() => undefined}
@@ -229,6 +231,7 @@ function mountSharedGate(): { readonly outside: HTMLButtonElement } {
                     threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
                     connection="online"
                     hostName="FixtureHost"
+                    reviewHost="fixture"
                     composerTransport={TRANSPORT}
                     onPublish={() => Promise.reject(new Error('the test does not publish'))}
                     onComplete={() => undefined}
@@ -278,6 +281,7 @@ function mountShipBar(options: { readonly shipMode: UiSettings['shipMode']; read
                     threadStore={createThreadStore([], FILE_IDS)}
                     connection="online"
                     hostName="FixtureHost"
+                    reviewHost="fixture"
                     composerTransport={TRANSPORT}
                     onPublish={(verdict) => {
                         published.push(verdict);
@@ -507,6 +511,7 @@ describe('floating review bar', () => {
             threadStore: createThreadStore(DRAFT_THREADS, FILE_IDS),
             connection: 'online' as const,
             hostName: 'FixtureHost',
+            reviewHost: 'fixture',
             composerTransport: TRANSPORT,
             onPublish: () => Promise.reject(new Error('not called during static rendering')),
             onComplete: () => undefined,
@@ -526,6 +531,7 @@ describe('floating review bar', () => {
                 threadStore={createThreadStore(DRAFT_THREADS, FILE_IDS)}
                 connection="online"
                 hostName="FixtureHost"
+                reviewHost="fixture"
                 composerTransport={TRANSPORT}
                 onPublish={() => Promise.reject(new Error('not called during static rendering'))}
                 onComplete={() => undefined}
@@ -555,6 +561,7 @@ describe('Review complete screen', () => {
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
+                    reviewHost: 'github',
                     publishedComments: 2,
                     publishedReplies: 1,
                     progress: {
@@ -586,6 +593,37 @@ describe('Review complete screen', () => {
         expect(html).not.toContain('outside the route');
     });
 
+    it('sends local review comments to the agent', () => {
+        const html = renderToStaticMarkup(
+            <ReviewComplete
+                completion={{
+                    verdict: 'request_changes',
+                    prId: 'local-git-app-0badc0de',
+                    headCommit: '9f3c1ab012345',
+                    hostName: 'local checkout',
+                    reviewHost: 'local-git',
+                    publishedComments: 1,
+                    publishedReplies: 0,
+                    progress: {
+                        filesSeen: 1,
+                        filesTotal: 1,
+                        linesSeen: 10,
+                        linesTotal: 10,
+                        percentSeen: 100,
+                    },
+                    route: null,
+                    openThreads: 0,
+                    firstOpenThreadId: null,
+                }}
+                onOpenThread={() => undefined}
+                onOpenFullDiff={() => undefined}
+            />,
+        );
+
+        expect(html).toContain('handed to the agent');
+        expect(html).not.toContain('delivered to');
+    });
+
     it('shows stops, Other and lines read outside the route when a route exists', () => {
         const html = renderToStaticMarkup(
             <ReviewComplete
@@ -594,6 +632,7 @@ describe('Review complete screen', () => {
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
+                    reviewHost: 'github',
                     publishedComments: 2,
                     publishedReplies: 1,
                     progress: {
@@ -627,6 +666,7 @@ describe('Review complete screen', () => {
                     prId: '4821',
                     headCommit: '9f3c1ab012345',
                     hostName: 'GitHub',
+                    reviewHost: 'github',
                     publishedComments: 0,
                     publishedReplies: 0,
                     progress: {

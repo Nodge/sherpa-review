@@ -600,14 +600,20 @@ export const uiStopProgressSchema = z.object({
 export type UiStopProgress = z.infer<typeof uiStopProgressSchema>;
 
 /**
- * Which iteration's progress to read: without `diffId`, the active one. With it, the saved
- * iteration as is (an old snapshot shows its own progress, which cannot be edited).
- * Progress write endpoints accept only the active iteration.
+ * Which iteration to read progress for: the active one without `diffId`, the stored iteration
+ * with it (explicitly requesting the active one gives the same response as omitting the parameter). Write endpoints use the iteration whose
+ * `fileId` values the UI sent: the active one or the current snapshot's iteration until the route is rebuilt.
  */
 export const uiReviewProgressRequestSchema = z.object({ diffId: hostIdSchema.optional() });
 export type UiReviewProgressRequest = z.infer<typeof uiReviewProgressRequestSchema>;
 
 export const uiReviewProgressResponseSchema = z.object({
+    /**
+     * The iteration this response was read from: its `fileId` values address that iteration's files. The UI checks it
+     * against the iteration it renders and ignores responses for other iterations, otherwise viewed marks
+     * disappear from the diff still on screen.
+     */
+    diffId: hostIdSchema,
     files: z.array(uiFileProgressSchema),
     stops: z.array(uiStopProgressSchema),
     progressRevision: z.number().int().min(0),
