@@ -407,11 +407,8 @@ function viewedToggle(page: Page, fileId: string) {
 async function openFile(page: Page, path: string): Promise<void> {
     const search = page.locator('.file-panel__input');
     await search.fill(path.split('/').at(-1) ?? path);
-    await page
-        .locator('.file-tree__row--file')
-        .filter({ has: page.locator(`[title="${path}"]`) })
-        .first()
-        .click();
+    // The file path is in the tree row `title`, before its viewed state (SPEC-theming §6a).
+    await page.locator(`.file-tree__row--file[title^="${path} · "]`).first().click();
     await search.fill('');
     await expect(page.locator(`.file-card[data-file]`).first()).toBeVisible();
 }

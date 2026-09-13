@@ -1,6 +1,6 @@
 {
   "name": "sherpa",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Sherpa monorepo, a local code review tool with an AI route through a PR diff",
   "private": true,
   "license": "UNLICENSED",
