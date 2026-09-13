@@ -160,10 +160,11 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
             await expect(page.locator('.full-diff')).toHaveAttribute('data-shown-files', '21');
 
             const filterInput = page.getByRole('searchbox', { name: s.filterFiles });
+            // The file path is in the row `title`: the label only has the name (SPEC-theming §6a).
             const pciAuditFile = page.locator(
-                '.file-tree__label[title="services/orders/src/payments/pci-audit.ts"]',
+                '.file-tree__row--file[title^="services/orders/src/payments/pci-audit.ts · "]',
             );
-            const unrelatedFile = page.locator('.file-tree__label[title=".github/CODEOWNERS"]');
+            const unrelatedFile = page.locator('.file-tree__row--file[title^="services/orders/.github/CODEOWNERS · "]');
             await expect(pciAuditFile).toHaveCount(1);
             await expect(unrelatedFile).toHaveCount(1);
 

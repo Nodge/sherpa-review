@@ -65,6 +65,26 @@ describe('route margin markup', () => {
         expect(html).not.toContain('route-badge--hatched');
     });
 
+    it('labels the tree marker with its number so the stop title is not read before the filename', () => {
+        const html = renderToStaticMarkup(
+            <RouteBadge
+                file={marginFile({
+                    stops: [
+                        { stopId: 's02', planLabel: '02', title: 'cache resets after a write' },
+                        { stopId: 's05', planLabel: '05', title: 'index invalidation' },
+                    ],
+                })}
+                otherStopId="other"
+                variant="tree"
+                onJump={() => undefined}
+            />,
+        );
+
+        expect(html).toContain('aria-label="stop 02"');
+        // The tooltip still lists all stops.
+        expect(html).toContain('Explained in stops 02, 05 · cache resets after a write — go there');
+    });
+
     it('keeps the badge as a label without a navigation handler', () => {
         const html = renderToStaticMarkup(
             <RouteBadge file={marginFile()} otherStopId="other" variant="tree" />,
@@ -75,7 +95,7 @@ describe('route margin markup', () => {
         expect(html).toContain('>02<');
     });
 
-    it('tree hatching uses text and background and links to Other', () => {
+    it('uses background and tooltip for the tree hatch, with no marker text, and links to Other', () => {
         const html = renderToStaticMarkup(
             <RouteBadge
                 file={marginFile({ stops: [] })}
@@ -86,7 +106,9 @@ describe('route margin markup', () => {
         );
 
         expect(html).toContain('route-badge--hatched');
-        expect(html).toContain('>outside the route<');
+        // The 17×13 marker cannot fit text. The reason stays in the tooltip.
+        expect(html).toContain('No route stop — go to “Other”');
+        expect(html).toMatch(/><\/button>$/);
         expect(html).toContain('tabindex="-1"');
     });
 

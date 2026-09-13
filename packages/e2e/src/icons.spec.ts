@@ -20,6 +20,7 @@ const ICON_IDS = [
     'ic-codeblock',
     'ic-list',
     'ic-trash',
+    'ic-sliders',
 ];
 
 const ICON_SIZES = [9, 13, 14, 15];
@@ -194,7 +195,8 @@ for (const mode of ['unified', 'split'] as const) {
         await expect(lineComposer).toBeVisible();
         await expect(lineComposer).toHaveCSS('padding-left', '62px');
         await expect(lineComposer).toHaveCSS('background-color', 'rgb(13, 14, 16)');
-        await expect(lineComposer).toHaveCSS('border-top-color', 'rgb(25, 28, 32)');
+        // Dark-theme `--border-hairline-soft` (packages/ui/src/styles/tokens.css).
+        await expect(lineComposer).toHaveCSS('border-top-color', 'rgb(35, 39, 45)');
         await expect(lineComposer.locator('.thread-composer')).toHaveCSS('max-width', '620px');
         await expect(lineComposer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
     });

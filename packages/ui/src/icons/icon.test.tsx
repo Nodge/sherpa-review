@@ -12,6 +12,11 @@ const DESIGN = readFileSync(
     fileURLToPath(new URL('../../../../docs/design/Sherpa Additions.dc.html', import.meta.url)),
     'utf8',
 );
+/** Additions has no sliders icon. Its drawing comes from the settings menu trigger in the prototype. */
+const PROTOTYPE = readFileSync(
+    fileURLToPath(new URL('../../../../docs/design/Sherpa.dc.html', import.meta.url)),
+    'utf8',
+);
 
 const ICON_IDS = [
     'ic-search',
@@ -36,13 +41,30 @@ const ICON_IDS = [
 ] as const;
 
 describe('SVG icons', () => {
-    it('extracts the sprite verbatim from Sherpa Additions with all 19 symbols', () => {
+    it('19 symbols come verbatim from Sherpa Additions, the twentieth is the prototype sliders icon', () => {
         const designSprite = /<svg width="0" height="0" style="position:absolute" aria-hidden="true">[\s\S]*?<\/svg>/u.exec(
             DESIGN,
         )?.[0];
         expect(designSprite).toBeDefined();
-        expect(SPRITE.trim()).toBe(designSprite);
-        expect([...SPRITE.matchAll(/<symbol id="([^"]+)"/gu)].map((match) => match[1])).toEqual(ICON_IDS);
+
+        const design = symbols(designSprite ?? '');
+        expect(design.map(([id]) => id)).toEqual(ICON_IDS);
+        // Exact match: each symbol in the set is in the sprite exactly as the design supplied it.
+        for (const [, markup] of design) {
+            expect(SPRITE).toContain(markup);
+        }
+        expect(symbols(SPRITE).map(([id]) => id)).toEqual([...ICON_IDS, 'ic-sliders']);
+    });
+
+    it('the sliders drawing matches the settings menu trigger in the prototype', () => {
+        const prototypeIcon = /title="\{\{ L\.menuTitle \}\}"[\s\S]*?<svg[^>]*>([\s\S]*?)<\/svg>/u.exec(PROTOTYPE)?.[1];
+        expect(prototypeIcon).toBeDefined();
+
+        const sliders = symbols(SPRITE).find(([id]) => id === 'ic-sliders')?.[1] ?? '';
+        expect(sliders).toContain(prototypeIcon);
+        // Same stroke as the rest of the set: width between 1.35–1.7 and rounded ends.
+        expect(sliders).toContain('stroke="currentColor" stroke-width="1.4"');
+        expect(sliders).toContain('viewBox="0 0 16 16"');
     });
 
     it('svg has its own viewBox and exact size and is hidden from the accessibility tree', () => {
@@ -58,3 +80,8 @@ describe('SVG icons', () => {
         expect(ICONS_CSS).toMatch(/\.icon\s*\{[^}]*display:\s*block;[^}]*flex:\s*none;/su);
     });
 });
+
+/** Pairs of "id → symbol markup" in file order. */
+function symbols(sprite: string): [string, string][] {
+    return [...sprite.matchAll(/<symbol id="([^"]+)"[\s\S]*?<\/symbol>/gu)].map((match) => [match[1] ?? '', match[0]]);
+}

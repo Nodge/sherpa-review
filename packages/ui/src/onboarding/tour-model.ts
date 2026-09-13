@@ -87,9 +87,6 @@ const STEPS: readonly TourStep[] = [
     },
 ];
 
-/** All 8 steps. The palette command counter uses this list. */
-export const TOUR_STEP_COUNT = STEPS.length;
-
 /** What determines the placement of step targets on screen. */
 export interface TourAnchorEpoch {
     readonly view: string;
@@ -104,6 +101,8 @@ export interface TourAnchorEpoch {
      * the diff column and cards, the targets of steps 03 and 07.
      */
     readonly diffMode: string;
+    /** UI language: tab and button labels change width, and thus the frame around the step target. */
+    readonly locale: string;
 }
 
 /**
@@ -119,6 +118,7 @@ export function tourAnchorEpoch(epoch: TourAnchorEpoch): string {
         epoch.chatOpen ? 'chat' : '',
         epoch.completed ? 'done' : '',
         epoch.diffMode,
+        epoch.locale,
     ].join('|');
 }
 
@@ -128,6 +128,14 @@ export function tourAnchorEpoch(epoch: TourAnchorEpoch): string {
  */
 export function tourSteps(withChat: boolean): readonly TourStep[] {
     return withChat ? STEPS : STEPS.filter((step) => step.id !== 'chat');
+}
+
+/**
+ * Pass length: eight steps with an agent, seven without. A separate function because two entry points
+ * promise a step count, the settings menu item and palette command, and they must agree.
+ */
+export function tourStepCount(withChat: boolean): number {
+    return tourSteps(withChat).length;
 }
 
 /** Step position in the list. `-1` means absent from this list (the agent disconnected before reaching it). */

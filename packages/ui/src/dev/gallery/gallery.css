@@ -82,13 +82,15 @@
 }
 
 /* Locale switch: the gallery shows the state in both languages. */
-/* Gallery controls: language and text size use identical rows of monospace buttons. */
+/* Stage switches: theme, language and text size use matching rows of monospace buttons. */
+.gallery__themes,
 .gallery__locales,
 .gallery__textsize {
     display: flex;
     gap: 4px;
 }
 
+.gallery__themes button,
 .gallery__locales button,
 .gallery__textsize button {
     padding: 2px 8px;
@@ -102,6 +104,7 @@
     cursor: pointer;
 }
 
+.gallery__themes button[aria-pressed='true'],
 .gallery__locales button[aria-pressed='true'],
 .gallery__textsize button[aria-pressed='true'] {
     background: var(--surface-selected);
@@ -116,6 +119,26 @@
 
 .gallery__canvas {
     padding: var(--space-card);
+}
+
+/*
+ * Card with its own theme: `data-theme` is on this wrapper rather than `<html>`, so the background
+ * around the control uses its own palette. Otherwise a light card would sit on a dark stage.
+ */
+.gallery-themed {
+    margin: calc(-1 * var(--space-card));
+    padding: var(--space-card);
+    background: var(--surface-app);
+    color: var(--text-primary);
+}
+
+/* Settings menu: the panel opens leftwards from the trigger's right edge, so leave room for it. */
+.gallery-settings-menu {
+    display: flex;
+    justify-content: flex-end;
+    width: 320px;
+    /* The panel is taller than the card canvas: without space below, the stage edge would clip it. */
+    padding-bottom: 230px;
 }
 
 /* Stage for scrolling states: the view column sets the height in the app, this frame does it here. */

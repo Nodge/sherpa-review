@@ -67,9 +67,13 @@ async function dragBetween(page: Page, from: Locator, to: Locator): Promise<void
     if (start === null || end === null) {
         throw new Error('the drag target elements have not rendered');
     }
-    // Code column: start and end inside the text, away from the left edge.
-    await page.mouse.move(start.x + Math.min(start.width / 2, 40), start.y + start.height / 2);
+    // Code column: start and end inside the text, not at the left edge. Round the coordinates.
+    // Page margins in vw put the column at a fractional x, and Chromium will not start
+    // a selection drag at all from a subpixel point.
+    await page.mouse.move(Math.round(start.x + Math.min(start.width / 2, 40)), Math.round(start.y + start.height / 2));
     await page.mouse.down();
-    await page.mouse.move(end.x + Math.min(end.width / 2, 60), end.y + end.height / 2, { steps: 6 });
+    await page.mouse.move(Math.round(end.x + Math.min(end.width / 2, 60)), Math.round(end.y + end.height / 2), {
+        steps: 6,
+    });
     await page.mouse.up();
 }

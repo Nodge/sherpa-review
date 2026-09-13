@@ -292,8 +292,11 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
         ).toHaveText(String(SLICE_V1_V3_PATHS.length));
 
         // Only the force-push touched README. The slice across the missing iteration includes it.
+        // The file path is in the row `title`. The label shows only the name (SPEC-theming §6a).
         await page.locator('.file-panel__input').fill('README');
-        await expect(page.locator('.file-tree__row .file-tree__label')).toHaveAttribute('title', README);
+        const readmeRow = page.locator('.file-tree__row--file');
+        await expect(readmeRow).toHaveCount(1);
+        await expect(readmeRow).toHaveAttribute('title', new RegExp(`^${README.replaceAll('.', String.raw`\.`)} · `));
         await page.locator('.file-panel__input').fill('');
     });
 

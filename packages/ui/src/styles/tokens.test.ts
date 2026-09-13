@@ -39,6 +39,7 @@ const EXPECTED: Record<string, string> = {
     '--font-size-badge': '0.6875rem',
     '--font-size-scope': '0.6875rem',
     '--font-size-tag': '0.6875rem',
+    '--font-size-stop-mark': '0.625rem',
     '--font-size-avatar-glyph': '0.5625rem',
     '--font-size-close-glyph': '1.125rem',
     '--font-size-code': '0.75rem',
@@ -170,7 +171,8 @@ function remToPx(rem: string, base: number): string {
 }
 
 const darkPalette = parseRootTokens(TOKENS_CSS);
-const lightCss = TOKENS_CSS.split(":root[data-theme='light']")[1] ?? '';
+// The light palette selector is a list: the root and any subtree with the attribute (docs/design/theme.md).
+const lightCss = TOKENS_CSS.split(/:root\[data-theme='light'\][^{]*/)[1] ?? '';
 const lightPalette = parseRootTokens(`:root ${lightCss}`);
 const documented = parseThemeDoc(THEME_MD);
 const documentedScale = parseTypographyDoc(THEME_MD);
@@ -206,6 +208,11 @@ describe('design tokens', () => {
  */
 describe('font scale', () => {
     const GLYPHS = new Set(['--font-size-avatar-glyph']);
+    /**
+     * The only text below the floor is the stop label in a tree row (§5, §6a): 10px in a
+     * 17×13 label at the left edge. This list is closed. A second exception must go through the spec.
+     */
+    const FLOOR_EXCEPTIONS = new Set(['--font-size-stop-mark']);
     const FLOOR_REM = 0.6875;
 
     it('the theme.md table lists exactly the font tokens from tokens.css', () => {
@@ -221,11 +228,19 @@ describe('font scale', () => {
         });
     }
 
-    it('only decorative glyphs fall below the 11px minimum', () => {
+    it('only decorative glyphs and the stop label are below the 11px floor', () => {
         const below = [...documentedScale]
-            .filter(([name, row]) => !GLYPHS.has(name) && Number.parseFloat(row.rem) < FLOOR_REM)
+            .filter(
+                ([name, row]) =>
+                    !GLYPHS.has(name) && !FLOOR_EXCEPTIONS.has(name) && Number.parseFloat(row.rem) < FLOOR_REM,
+            )
             .map(([name]) => name);
         expect(below).toEqual([]);
+    });
+
+    it('there is exactly one floor exception, the stop label', () => {
+        expect([...FLOOR_EXCEPTIONS]).toEqual(['--font-size-stop-mark']);
+        expect(documentedScale.get('--font-size-stop-mark')?.rem).toBe('0.625rem');
     });
 
     it('the scale base and L text size are set on html', () => {
@@ -262,7 +277,7 @@ describe('theme palettes', () => {
  * 4.17, amber text on an amber background 4.45, decorator 4.18, amber button
  * ink 4.31, comment edit chip 4.26, delete confirmation text 4.50, "new" badge
  * 4.46, queued plan item on an alternate background 4.17, "saved" mark 3.69 on a
- * thread card (4.37 in dark) and 3.82 in the modal composer.
+ * thread card (4.37 in dark) and 3.82 in the modal composer, tree stop label 3.56.
  */
 interface TextPair {
     readonly text: string;
@@ -343,6 +358,8 @@ const TEXT_PAIRS: readonly TextPair[] = [
     { text: '--error-text', on: ['--error-surface'] },
     { text: '--error-text', on: ['--surface-digest-footer'] },
     { text: '--text-dim-strong', on: ['--surface-digest-footer'] },
+    // Stop label in a tree row (§6a): a secondary marker, using the pair from the spec.
+    { text: '--stop-mark-text', on: ['--surface-panel'], low: ['light'] },
     { text: '--chat-body-text', on: ['--surface-panel'] },
     { text: '--pr-comments-body-text', on: ['--surface-raised'] },
     { text: '--text-on-selected', on: ['--surface-selected'] },

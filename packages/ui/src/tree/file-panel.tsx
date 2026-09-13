@@ -34,10 +34,22 @@ import { treeKeyCommand } from './tree-keys.js';
 const ROW_HEIGHT = 26;
 
 /** Row indentation: base plus nesting depth (docs/design/README.md §10). */
-const INDENT_BASE = 8;
-const INDENT_STEP = 13;
+const INDENT_BASE = 4;
+const INDENT_STEP = 10;
+
+/**
+ * Minimum file row indentation: a 17×13 stop marker sits to the left of the name at the panel edge
+ * (docs/design/SPEC-theming-2026-09-12.md §6a), and the name must not overlap it.
+ */
+const FILE_INDENT_MIN = 26;
 
 const OVERSCAN = 8;
+
+/** Row indentation by kind and depth (docs/design/README.md §10). */
+function rowIndent(row: TreeRow): number {
+    const indent = INDENT_BASE + row.depth * INDENT_STEP;
+    return row.kind === 'dir' ? indent : Math.max(FILE_INDENT_MIN, indent);
+}
 
 /** A single hunk in the outline of a single-file PR. */
 export interface OutlineEntry {
@@ -318,12 +330,12 @@ function FileTreeView({
                             title={
                                 row.kind === 'dir'
                                     ? t('tree.dir.read', row.readFiles, row.files)
-                                    : undefined
+                                    : t('tree.file.title', row.path, readStateTooltip(t, row.read))
                             }
                             className={rowClassName(row, activeFileId, item.index === cursor)}
                             // Position with `top`. Using `transform` breaks sticky
                             // elements inside the scrollable panel.
-                            style={{ top: `${String(item.start)}px`, paddingLeft: `${String(INDENT_BASE + row.depth * INDENT_STEP)}px` }}
+                            style={{ top: `${String(item.start)}px`, paddingLeft: `${String(rowIndent(row))}px` }}
                             onClick={(event) => {
                                 setCursor(item.index);
                                 if (row.kind === 'dir') {
@@ -407,10 +419,10 @@ function DirRow({ row }: { row: TreeDirRow }) {
     return (
         <>
             <span className="file-tree__chevron" aria-hidden="true">
-                <Icon name={row.collapsed ? 'chev-right' : 'chev-down'} size={13} />
+                <Icon name={row.collapsed ? 'chev-right' : 'chev-down'} size={9} />
             </span>
             <Label label={row.label} title={row.path} />
-            <Counts additions={row.additions} deletions={row.deletions} />
+            <Counts additions={row.additions} />
         </>
     );
 }
@@ -435,7 +447,12 @@ function FileRow({
     const readOnlyReason = useReadOnlyReason();
     return (
         <>
+            {/* The file's chevron slot is empty. Without it, filenames would sit to the left of directory labels. */}
             <span className="file-tree__chevron" aria-hidden="true" />
+            {/* The stop marker lives in the row's indentation area, so it comes before everything else. */}
+            {row.route === null ? null : (
+                <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
+            )}
             {/* Three read-state values (docs/design/SPEC-elements.md §2.12). The tooltip always includes counts. */}
             <button
                 type="button"
@@ -455,15 +472,13 @@ function FileRow({
             >
                 {row.read.state === 'read' ? <Icon name="check" size={9} /> : null}
             </button>
-            <Label label={row.label} title={row.path} />
+            {/* The file label is just its name. The row tooltip keeps the full path. */}
+            <Label label={row.label} />
             {row.pci ? <span className="file-tree__tag">pci</span> : null}
             {row.generated ? <span className="file-tree__tag file-tree__tag--gen">gen</span> : null}
             {row.conflict ? (
                 <span className="file-tree__tag file-tree__tag--conflict">{t('file.conflict')}</span>
             ) : null}
-            {row.route === null ? null : (
-                <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />
-            )}
             {/* The menu button stays out of the tab order, like the read-state checkbox. Arrow keys navigate the tree. */}
             <button
                 type="button"
@@ -479,7 +494,7 @@ function FileRow({
             >
                 ⋯
             </button>
-            <Counts additions={row.additions} deletions={row.deletions} />
+            <Counts additions={row.additions} />
         </>
     );
 }
@@ -488,8 +503,11 @@ function FileRow({
  * Row label (docs/design/SPEC-elements.md §1.2): the directory chain truncates from the left and gives up space first,
  * the final segment with its extension holds out longest and truncates from the end if it still does not fit.
  * `bdi` isolates direction, or left truncation (`direction: rtl`) would move the slash to the other edge.
+ *
+ * Only directory rows have a chain. A file label is its name. Only directories also need
+ * `title` here. Files have it on the row itself, where it also describes reading progress.
  */
-function Label({ label, title }: { label: string; title: string }) {
+function Label({ label, title }: { label: string; title?: string }) {
     const { dir, name } = splitLabel(label);
     return (
         <span className="file-tree__label" title={title}>
@@ -505,15 +523,13 @@ function Label({ label, title }: { label: string; title: string }) {
     );
 }
 
-/** Show `−M` only when there is something to show. Space is scarce in a narrow panel. */
-function Counts({ additions, deletions }: { additions: number; deletions: number }) {
+/**
+ * Row size is just `+N` in the 30px right column (docs/design/SPEC-theming-2026-09-12.md §6a).
+ * The column reads top to bottom. Deletions remain in the diff card header.
+ */
+function Counts({ additions }: { additions: number }) {
     const { count } = useFormat();
-    return (
-        <span className="file-tree__counts">
-            <span className="file-tree__add">+{count(additions)}</span>
-            {deletions > 0 ? <span className="file-tree__del">−{count(deletions)}</span> : null}
-        </span>
-    );
+    return <span className="file-tree__counts">+{count(additions)}</span>;
 }
 
 /**

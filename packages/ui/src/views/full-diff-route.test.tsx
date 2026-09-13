@@ -206,8 +206,11 @@ describe('route in full diff margins', () => {
 
         expect(labels.length).toBeGreaterThan(0);
         expect(labels).toContain(planLabelOf('services/orders/src/api/handlers.ts'));
-        expect(labels).toContain('outside the route');
-        expect(badges(host, 'tree').some((badge) => badge.classList.contains('route-badge--hatched'))).toBe(true);
+        // The outside-route tree marker has no text. The reason is in its tooltip.
+        expect(labels).toContain('');
+        const hatched = badges(host, 'tree').filter((badge) => badge.classList.contains('route-badge--hatched'));
+        expect(hatched.length).toBeGreaterThan(0);
+        expect(hatched[0]?.getAttribute('title')).toContain('No route stop');
     });
 
     it('counts fixture lines and files in the panel footer note', () => {

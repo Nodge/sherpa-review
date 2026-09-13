@@ -131,13 +131,24 @@ export function marginTargetStopId(file: RouteMarginFile, otherStopId: string | 
     return file.stops[0]?.stopId ?? otherStopId;
 }
 
-/** Number in the tree row: the first stop plus "+N" if the file belongs to several. */
-export function treeBadgeLabel(file: RouteMarginFile, t: Translate): string {
+/**
+ * Number in the tree row marker. The marker is 17×13 at the left edge (docs/design/SPEC-theming-2026-09-12.md §6a):
+ * it fits only the first stop's number. The tooltip lists the others. A file without
+ * a stop has no marker text. The hatch conveys its state.
+ */
+export function treeBadgeLabel(file: RouteMarginFile): string {
+    return file.stops[0]?.planLabel ?? '';
+}
+
+/**
+ * Accessible label for the tree row marker. The marker is the row's first child, and the screen reader
+ * builds the row name from its contents. A full stop title would be read before the filename used
+ * for arrow-key navigation. The marker therefore labels itself with a number, while the stop list
+ * stays in the tooltip. The hatch label is already short enough.
+ */
+export function treeBadgeAria(file: RouteMarginFile, jumps: boolean, t: Translate): string {
     const first = file.stops[0];
-    if (first === undefined) {
-        return t('margin.notPlaced');
-    }
-    return file.stops.length === 1 ? first.planLabel : `${first.planLabel} +${String(file.stops.length - 1)}`;
+    return first === undefined ? marginBadgeTitle(file, jumps, t) : t('margin.badge.treeAria', first.planLabel);
 }
 
 /** Card badge (docs/design/README.md §10): "explained in 02 · stop title". */

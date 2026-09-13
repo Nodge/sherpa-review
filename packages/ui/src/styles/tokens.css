@@ -181,6 +181,9 @@ html[data-textsize='l'] {
     --row-hover: rgba(255, 255, 255, 0.04);
     --checkbox-border: #5e6673;
     --read-box-border: #515a65;
+    /* Stop marker at the left edge of a tree row (docs/design/SPEC-theming-2026-09-12.md §6a). */
+    --stop-mark-text: #7b8390;
+    --stop-mark-border: #2c3038;
     /* docs/design/SPEC-theming-2026-09-12.md §4: transparent "expand lines" button uses an outline instead of a fill,
        the grey fill looked disabled. */
     --border-button-outline: #7b8390;
@@ -249,6 +252,8 @@ html[data-textsize='l'] {
     --font-size-scope: 0.6875rem;
     /* docs/design/README.md §10: the `pci` tag in the tree. */
     --font-size-tag: 0.6875rem;
+    /* The only text below the floor: a 17×13 stop label in a tree row (SPEC-theming §5, §6a). */
+    --font-size-stop-mark: 0.625rem;
     /* Decorative glyphs below the floor: initials larger than 9px do not fit an 18×18 avatar. */
     --font-size-avatar-glyph: 0.5625rem;
     /* The close cross in a 28×28 button is also a glyph, not text. */
@@ -315,8 +320,13 @@ html[data-textsize='l'] {
     --motion-jump-ease: cubic-bezier(0.65, 0, 0.35, 1);
     --motion-flash: 900ms;
 }
-/* Light palette: docs/design/theme.md. Geometry and typography are shared. */
-:root[data-theme='light'] {
+/*
+ * Light palette: docs/design/theme.md. Geometry and typography are shared. In the product, the attribute is
+ * on `<html>`, but the selector applies to any subtree. The state gallery shows a card
+ * in the light theme without recolouring the gallery around it.
+ */
+:root[data-theme='light'],
+[data-theme='light'] {
     color-scheme: light;
 
     --surface-app: #f6f7f9;
@@ -441,6 +451,8 @@ html[data-textsize='l'] {
     --row-hover: rgba(20, 24, 32, 0.04);
     --checkbox-border: #a1a7b3;
     --read-box-border: #afb5c0;
+    --stop-mark-text: #828894;
+    --stop-mark-border: #e0e2e7;
     --border-button-outline: #828894;
     --border-button-outline-hover: #28303b;
     --syntax-keyword: #5462e3;

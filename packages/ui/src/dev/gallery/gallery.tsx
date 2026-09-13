@@ -4,7 +4,6 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { updateFragment } from '../../fragment.js';
 import { LocaleProvider } from '../../i18n/index.js';
 import './gallery.css';
-import { ThemeToggle } from '../../components/theme-toggle.tsx';
 import { SettingsProvider } from '../../settings/context.tsx';
 import { DocumentSettingsSync } from '../../settings/document-settings.tsx';
 import { createUiSettingsStore } from '../../settings/settings-store.js';
@@ -17,8 +16,8 @@ import { GALLERY_STATES } from './states.tsx';
  *
  * The locale is selected in the header and stored in the URL (`#locale=ru`): states need inspection in both
  * languages, so the provider gets the language as an explicit prop. Theme and text size live in the local settings
- * store and in the URL (`#theme=light`, `#textsize=l`). The theme toggle is the same as in the product, while
- * the gallery has its own M/L toggle. The product switches text size through the settings menu.
+ * store and in the URL (`#theme=light`, `#textsize=l`). All 3 controls belong to the gallery:
+ * in the product they live in the settings menu, which itself is one of the gallery states.
  * The theme defaults to dark here rather than the product's `auto`: cards must render identically
  * under any system theme unless `#theme=auto` is explicitly requested.
  */
@@ -48,6 +47,7 @@ export function Gallery({
     const [locale, setLocale] = useState<Locale>(initialLocale);
     // `DocumentSettingsSync` sets the attribute on `<html>` from the store, as in the product.
     const textSize = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().textSize);
+    const theme = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().theme);
     const selected = GALLERY_STATES.find((state) => state.id === selectedId) ?? GALLERY_STATES[0];
 
     const select = (id: string): void => {
@@ -64,6 +64,10 @@ export function Gallery({
     const selectTextSize = (next: UiSettings['textSize']): void => {
         // The store subscription above will update the URL.
         settings.update({ textSize: next });
+    };
+
+    const selectTheme = (next: UiSettings['theme']): void => {
+        settings.update({ theme: next });
     };
 
     return (
@@ -99,9 +103,20 @@ export function Gallery({
                                 {selected.group} · {selected.title}
                                 <code className="gallery__stage-id">{selected.id}</code>
                                 <div className="gallery__stage-spacer" />
-                                <LocaleProvider locale={locale}>
-                                    <ThemeToggle />
-                                </LocaleProvider>
+                                <div className="gallery__themes" role="group" aria-label="Theme">
+                                    {THEMES.map((option) => (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            aria-pressed={option === theme}
+                                            onClick={() => {
+                                                selectTheme(option);
+                                            }}
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
                                 <div className="gallery__locales" role="group" aria-label="Interface language">
                                     {LOCALES.map((option) => (
                                         <button
@@ -146,6 +161,9 @@ export function Gallery({
 }
 
 const LOCALES: readonly Locale[] = ['ru', 'en'];
+
+/** Stage themes: the same set as in the product settings menu. */
+const THEMES: readonly UiSettings['theme'][] = ['auto', 'dark', 'light'];
 
 /** Stage text sizes: `m` has a 16px base, `l` has 18px (docs/design/theme.md, "Typography"). */
 const TEXT_SIZES: readonly UiSettings['textSize'][] = ['m', 'l'];

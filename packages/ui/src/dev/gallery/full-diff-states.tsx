@@ -1,5 +1,5 @@
 import { fileContentOf, fixtureIteration } from '@sherpa/fixtures';
-import type { FixtureName } from '@sherpa/fixtures';
+import type { FixtureIterationView, FixtureName } from '@sherpa/fixtures';
 import type { Comment, FileDiff, Lens, Thread, UiFileProgress, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -33,6 +33,13 @@ interface WorkspaceStateProps {
     readonly preloadModels?: boolean;
     /** Keep one file in the diff to build any kind of single-file PR. */
     readonly onlyPath?: string;
+    /** Limit the diff to the listed files to build a tree shape missing from the fixtures. */
+    readonly paths?: readonly string[];
+    /**
+     * Rename files on top of the fixture: the fixtures lack names of the required length, and adding them there
+     * for one frame costs more. Lens membership moves with the path, so tags remain.
+     */
+    readonly renameTo?: Readonly<Record<string, string>>;
     readonly showThreads?: boolean;
     readonly threadsShow?: ThreadsShow;
     readonly threads?: readonly Thread[];
@@ -47,6 +54,8 @@ function WorkspaceState({
     records = [],
     preloadModels = true,
     onlyPath,
+    paths,
+    renameTo,
     showThreads = false,
     threadsShow = DEFAULT_THREADS_SHOW,
     threads,
@@ -54,11 +63,19 @@ function WorkspaceState({
 }: WorkspaceStateProps) {
     const data = useMemo(() => {
         const source = fixtureIteration(fixture);
-        if (onlyPath === undefined) {
-            return source;
-        }
-        return { ...source, diff: { ...source.diff, files: source.diff.files.filter((file) => file.path === onlyPath) } };
-    }, [fixture, onlyPath]);
+        const keep =
+            onlyPath === undefined
+                ? paths
+                : [onlyPath];
+        const narrowed =
+            keep === undefined
+                ? source
+                : {
+                      ...source,
+                      diff: { ...source.diff, files: source.diff.files.filter((file) => keep.includes(file.path)) },
+                  };
+        return renameTo === undefined ? narrowed : renamePaths(narrowed, renameTo);
+    }, [fixture, onlyPath, paths, renameTo]);
     const session = useMemo(
         () => createSessionStore({ initial: { view: 'diff', filter, threadsShow } }),
         [filter, threadsShow],
@@ -119,6 +136,35 @@ function WorkspaceState({
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 const DRAFT_SAVED_AT = Date.parse('2026-08-24T10:00:00.000Z');
 
+/**
+ * Directory `generated` with a single file next to regular `payments` files: the directory has
+ * its own row, and the file below carries only its name (SPEC-theming-2026-09-12 §6a). This is the
+ * case that collapsed into `/psp-schema.…` before T7.
+ */
+const SINGLE_FILE_DIR_PATHS = [
+    'services/orders/src/payments/card-token.ts',
+    'services/orders/src/payments/pci-audit.ts',
+    'services/orders/src/payments/generated/psp-schema.ts',
+];
+
+/**
+ * Name longer than the fixture name: in the narrow panel (320px at 1440px) it does not fit with 2 tags,
+ * showing that the name itself is truncated at the end, without a stray slash from the directory.
+ */
+const SINGLE_FILE_DIR_RENAME = {
+    'services/orders/src/payments/generated/psp-schema.ts':
+        'services/orders/src/payments/generated/psp-settlement-authorize-schema.ts',
+};
+
+/** Paths up to 3 levels deep from the panel root: checks that filenames fit in full. */
+const DEEP_PATHS = [
+    'services/orders/src/api/__tests__/handlers.test.ts',
+    'services/orders/src/domain/__tests__/edit-policy.test.ts',
+    'services/orders/src/domain/__tests__/edit-window.test.ts',
+    'services/orders/src/domain/policies/edit-policy.ts',
+    'services/orders/src/domain/order.ts',
+];
+
 const MEDIUM_VIEWED = [
     'services/orders/src/api/handlers.ts',
     'services/orders/src/api/schemas.ts',
@@ -163,6 +209,25 @@ const EMPTY_PCI: Lens = {
     note: 'This PR has no files in the PCI DSS audit scope.',
     zones: null,
 };
+
+/** Fixture with new filenames: lens membership moves along with the path. */
+function renamePaths(
+    view: FixtureIterationView,
+    renameTo: Readonly<Record<string, string>>,
+): FixtureIterationView {
+    const rename = (path: string): string => renameTo[path] ?? path;
+    const renameLens = (value: Lens): Lens => ({
+        ...value,
+        paths: value.paths.map(rename),
+        zones: value.zones?.map((zone) => ({ ...zone, paths: zone.paths.map(rename) })) ?? null,
+    });
+    return {
+        ...view,
+        diff: { ...view.diff, files: view.diff.files.map((file) => ({ ...file, path: rename(file.path) })) },
+        ownership: view.ownership === null ? null : renameLens(view.ownership),
+        extraLenses: view.extraLenses.map(renameLens),
+    };
+}
 
 const ALL_THREADS: ThreadsShow = { people: true, bots: true, resolved: true };
 
@@ -349,6 +414,23 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
         id: 'full-diff-pci',
         title: 'PCI DSS filter: chip active',
         render: () => <WorkspaceState fixture="medium" filter="pci" viewed={MEDIUM_VIEWED} />,
+    },
+    {
+        id: 'full-diff-tree-single-file-dir',
+        title: 'folder with one file: directory on its own row, long name with tags truncated at the end',
+        render: () => (
+            <WorkspaceState fixture="medium" paths={SINGLE_FILE_DIR_PATHS} renameTo={SINGLE_FILE_DIR_RENAME} />
+        ),
+    },
+    {
+        id: 'full-diff-tree-deep',
+        title: 'paths 3 levels deep: filenames are not truncated',
+        render: () => <WorkspaceState fixture="medium" paths={DEEP_PATHS} viewed={MEDIUM_VIEWED} />,
+    },
+    {
+        id: 'full-diff-tree-filtered-chains',
+        title: 'filter over chains: collapse is calculated from visible children',
+        render: () => <WorkspaceState fixture="large" filter="generated" preloadModels={false} />,
     },
     {
         id: 'full-diff-zero',

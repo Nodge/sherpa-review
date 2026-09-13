@@ -29,12 +29,12 @@ export {
     stepAt,
     stepAtCanonical,
     stepIndex,
-    TOUR_STEP_COUNT,
     tourAnchorEpoch,
+    tourStepCount,
     tourSteps,
 } from './tour-model.js';
 export type { TourRunOptions, TourRunState } from './tour-store.js';
-export { useTourActive, useTourReplayCommand, useTourRun } from './tour-store.js';
+export { useTourActive, useTourReplay, useTourReplayCommand, useTourRun } from './tour-store.js';
 export type { TourHostProps } from './tour-host.tsx';
 export { TourHost } from './tour-host.tsx';
 export { TourCard } from './tour-card.tsx';

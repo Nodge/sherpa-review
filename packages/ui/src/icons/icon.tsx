@@ -20,7 +20,9 @@ export type IconName =
     | 'code'
     | 'codeblock'
     | 'list'
-    | 'trash';
+    | 'trash'
+    /** Settings menu trigger. Additions has no such icon, so the geometry comes from the prototype. */
+    | 'sliders';
 
 export type IconSize = 9 | 13 | 14 | 15;
 
@@ -47,7 +49,10 @@ export function Icon({ name, size, className }: IconProps) {
     );
 }
 
-/** One inline sprite per document. Source symbols come verbatim from Sherpa Additions. */
+/**
+ * One embedded sprite per document. Nineteen symbols come verbatim from Sherpa Additions,
+ * The twentieth (`ic-sliders`) comes from the Sherpa.dc.html prototype.
+ */
 export function IconSprite() {
     return <div className="icon-sprite" aria-hidden="true" dangerouslySetInnerHTML={{ __html: sprite }} />;
 }

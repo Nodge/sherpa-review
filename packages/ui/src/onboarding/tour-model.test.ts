@@ -7,15 +7,15 @@ import {
     stepAt,
     stepAtCanonical,
     stepIndex,
-    TOUR_STEP_COUNT,
     tourAnchorEpoch,
+    tourStepCount,
     tourSteps,
 } from './tour-model.js';
 
 /** Step order and contents: docs/design/SPEC-onboarding-2026-09-02.md §2. Omitting the chat step: §5. */
 describe('tour model', () => {
     it('takes eight steps in the order of the reviewer journey', () => {
-        expect(TOUR_STEP_COUNT).toBe(8);
+        expect(tourStepCount(true)).toBe(8);
         expect(tourSteps(true).map((step) => step.id)).toEqual([
             'narrative',
             'fold',
@@ -32,6 +32,7 @@ describe('tour model', () => {
         const offline = tourSteps(false);
 
         expect(offline).toHaveLength(7);
+        expect(tourStepCount(false)).toBe(7);
         expect(offline.map((step) => step.id)).not.toContain('chat');
         // Counter `/ 07`: the full diff step becomes sixth instead of seventh.
         expect(stepIndex(offline, 'fulldiff')).toBe(5);
@@ -81,6 +82,7 @@ describe('tour model', () => {
             chatOpen: false,
             completed: false,
             diffMode: 'unified',
+            locale: 'ru',
         };
 
         // The first filled stop is an event. The second, third and seventh are not.
@@ -93,6 +95,8 @@ describe('tour model', () => {
         expect(tourAnchorEpoch({ ...base, completed: true })).not.toBe(tourAnchorEpoch(base));
         // Changing diff mode changes code panel widths and thus the frame around the step target.
         expect(tourAnchorEpoch({ ...base, diffMode: 'split' })).not.toBe(tourAnchorEpoch(base));
+        // Changing language changes target labels, so the tour card must remeasure (§8 of the theme spec).
+        expect(tourAnchorEpoch({ ...base, locale: 'en' })).not.toBe(tourAnchorEpoch(base));
     });
 
     it('persists a canonical number regardless of whether the pass included the chat step', () => {

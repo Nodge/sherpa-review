@@ -249,7 +249,7 @@ Production problem: the filename had less than half the row, so almost everythin
 | Stop marker `01…07` | badge on the right, 11px, border `#2b2f36`, text `#8a8f98` | **on the left, pinned to the panel edge**: 17×13, radius 3, **10px** mono (the only deliberate exception to the 11px minimum, a secondary marker), text `--c-4a4f57`, border `--c-1e2126`. `title` "explained in stop 02" |
 | "not placed" | hatched badge with text on the right | same slot on the left: 17×13 hatch `repeating-linear-gradient(115deg, --c-33373e 0 2px, --c-1b1e22 2px 4px)`, no text. `title` "no route stop covers this file" |
 | `+N` | right | right, `min-width:30px; text-align:right`. The counts form a column read from top to bottom |
-| Row `title` | — | `<name> · N of M lines seen` |
+| Row `title` | — | `<name> · N of M lines seen` *(implemented as `<path> · N of M changed lines viewed`. Deviation, `docs/decisions.md` 2026-09-13: the name is already in the row, while the path moved out of the label and lives only in the tooltip)* |
 
 Row order: chevron · marker (absolute) · read-state · name · `pci` · `+N`. At 1440px, the filename gets ~110–140px more than in production.
 

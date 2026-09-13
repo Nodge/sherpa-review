@@ -36,6 +36,8 @@ function topBar(pr: typeof PR | null): string {
             view="overview"
             onSelectView={() => undefined}
             onOpenSearch={() => undefined}
+            agentConnected
+            onReplayTour={() => undefined}
             feedback={{ available: true, reason: null }}
             feedbackContext={{
                 uiVersion: '0.0.0',

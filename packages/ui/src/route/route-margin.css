@@ -1,7 +1,8 @@
 /*
- * Route in the full diff margins, docs/design/README.md §10: a stop badge (`01`) or hatched "outside the
- * the route" in a tree row, "explained in 02 · title" in a card header and a hatched strip
- * below an uncovered range. Sidebar and footer hatches have their own token variants (docs/design/README.md, tokens).
+ * Route in full diff margins, docs/design/README.md §10: a stop marker (`01`) or
+ * "outside route" hatch at the tree row's left edge, "explained in 02 · title" in the card header
+ * and a hatched strip below each uncovered range. Sidebar and footer hatches have their own variants
+ * of the token (docs/design/README.md, tokens).
  */
 
 .route-badge {
@@ -26,9 +27,32 @@ button.route-badge:hover {
     color: var(--text-primary-soft);
 }
 
+/*
+ * Stop marker in a tree row (docs/design/SPEC-theming-2026-09-12.md §6a): 17×13 at the left edge,
+ * in the row's indentation area. It sits over padding-left without taking space from the filename.
+ * The only text below the type scale's minimum: 11px does not fit in this marker.
+ */
 .route-badge--tree {
-    padding: 1px 5px;
-    font-size: var(--font-size-scope);
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 13px;
+    padding: 0;
+    border-radius: var(--radius-mark);
+    border-color: var(--stop-mark-border);
+    font-size: var(--font-size-stop-mark);
+    line-height: 1;
+    color: var(--stop-mark-text);
+}
+
+/* "Not placed" uses the same marker without text. The hatch and tooltip convey its state. */
+.route-badge--tree.route-badge--hatched {
+    background: var(--hatch);
 }
 
 .route-badge--card {

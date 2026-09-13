@@ -4,9 +4,9 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { agentPillView } from '../../components/agent-pill-view.js';
-import { useT } from '../../i18n/index.js';
+import { LocaleProvider, useT } from '../../i18n/index.js';
 import { reconnectCommand } from '../../components/reconnect-command.js';
-import { ThemeToggle } from '../../components/theme-toggle.tsx';
+import { SettingsMenu } from '../../components/settings-menu.tsx';
 import { AgentPill, TopBar } from '../../components/top-bar.tsx';
 import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
@@ -145,10 +145,38 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         render: () => <TopBarState />,
     },
     {
-        id: 'theme-toggle',
-        group: 'Top bar',
-        title: 'light and dark themes',
-        render: () => <ThemeToggle />,
+        id: 'settings-menu',
+        group: 'Settings menu',
+        title: 'closed',
+        render: () => <SettingsMenuState />,
+    },
+    {
+        id: 'settings-menu-open',
+        group: 'Settings menu',
+        title: 'open',
+        render: () => <SettingsMenuState open />,
+    },
+    {
+        id: 'settings-menu-open-offline',
+        group: 'Settings menu',
+        title: 'open, no agent: 7 steps',
+        render: () => <SettingsMenuState open agentConnected={false} />,
+    },
+    {
+        id: 'settings-menu-open-ru',
+        group: 'Settings menu',
+        title: 'open, Russian',
+        render: () => (
+            <LocaleProvider locale="ru">
+                <SettingsMenuState open />
+            </LocaleProvider>
+        ),
+    },
+    {
+        id: 'settings-menu-open-light',
+        group: 'Settings menu',
+        title: 'open, light theme',
+        render: () => <SettingsMenuLightState />,
     },
     ...OVERVIEW_STATES.filter((state) => state.id !== START_STATE_ID),
     ...REVIEW_COMPLETION_STATES,
@@ -319,6 +347,36 @@ function AgentPillState({ worker, tasks }: { worker: WorkerStatus; tasks: readon
     );
 }
 
+/**
+ * Gallery settings menu: the wrapper aligns the trigger to the right. The panel opens from its right
+ * edge, so at the left edge of the canvas it would extend off screen.
+ */
+function SettingsMenuState({ open = false, agentConnected = true }: { open?: boolean; agentConnected?: boolean }) {
+    return (
+        <div className="gallery-settings-menu">
+            <SettingsMenu
+                agentConnected={agentConnected}
+                onOpenCommands={() => undefined}
+                onReplayTour={() => undefined}
+                defaultOpen={open}
+            />
+        </div>
+    );
+}
+
+/**
+ * The same menu in the light theme, independent of the gallery toggle. `data-theme` is on the
+ * card itself rather than `<html>`. Light tokens apply to any subtree (docs/design/theme.md).
+ * The surrounding gallery keeps its own theme, so its theme toggle does not conflict with the card.
+ */
+function SettingsMenuLightState() {
+    return (
+        <div data-theme="light" className="gallery-themed">
+            <SettingsMenuState open />
+        </div>
+    );
+}
+
 /** Gallery tabs are interactive, so their selected states can be compared. */
 function TopBarState() {
     const t = useT();
@@ -335,6 +393,8 @@ function TopBarState() {
             view={view}
             onSelectView={setView}
             onOpenSearch={() => undefined}
+            agentConnected
+            onReplayTour={() => undefined}
             feedback={{ available: true, reason: null }}
             feedbackContext={{
                 uiVersion: UI_VERSION,

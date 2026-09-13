@@ -15,6 +15,7 @@ import {
     marginStripSummary,
     marginStripText,
     marginTargetStopId,
+    treeBadgeAria,
     treeBadgeLabel,
 } from './margin-model.js';
 import './route-margin.css';
@@ -44,8 +45,9 @@ export function RouteBadge({ file, otherStopId, variant, onJump }: RouteBadgePro
     const target = marginTargetStopId(file, otherStopId);
     const jump = target === null ? undefined : onJump;
     const title = marginBadgeTitle(file, jump !== undefined, t);
-    const label = variant === 'tree' ? treeBadgeLabel(file, t) : marginBadgeLabel(file, t);
-    // Hatching adds more than colour: the badge also says in text that there is no stop.
+    const label = variant === 'tree' ? treeBadgeLabel(file) : marginBadgeLabel(file, t);
+    // The hatch adds more than color. In a card header, the badge also spells out its meaning,
+    // while the tree's 17×13 marker has no room for text and relies on the hatch and tooltip.
     const className = `route-badge route-badge--${variant}${file.stops.length === 0 ? ' route-badge--hatched' : ''}`;
 
     if (jump === undefined || target === null) {
@@ -60,7 +62,9 @@ export function RouteBadge({ file, otherStopId, variant, onJump }: RouteBadgePro
             type="button"
             className={className}
             title={title}
-            aria-label={title}
+            // The tree marker's accessible label is deliberately short. It is the row's first child,
+            // so a long stop title would be read before the filename.
+            aria-label={variant === 'tree' ? treeBadgeAria(file, true, t) : title}
             // The tree badge adds no tab stop. Rows use the tree's roving cursor
             // (docs/design/SPEC-elements.md §2.20), which an extra tab stop would disrupt.
             tabIndex={variant === 'tree' ? -1 : undefined}

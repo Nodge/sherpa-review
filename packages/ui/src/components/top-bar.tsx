@@ -10,8 +10,8 @@ import type { ChatScrollTarget } from './chat-panel.tsx';
 import { CommandBox } from './command-box.tsx';
 import type { FeedbackPreviewContext } from './feedback-button.tsx';
 import { FeedbackButton } from './feedback-button.tsx';
+import { SettingsMenu } from './settings-menu.tsx';
 import './top-bar.css';
-import { ThemeToggle } from './theme-toggle.tsx';
 import { ViewTabs } from './view-tabs.tsx';
 
 /**
@@ -33,6 +33,10 @@ export interface TopBarProps {
     readonly view: ViewId;
     readonly onSelectView: (view: ViewId) => void;
     readonly onOpenSearch: () => void;
+    /** Agent connected: the settings menu uses it to count steps in the replay onboarding row. */
+    readonly agentConnected: boolean;
+    /** Restart the tour pass from the settings menu, like the `tour.replay` palette command. */
+    readonly onReplayTour: () => void;
     readonly feedback: UiFeedbackAvailability;
     readonly feedbackContext: FeedbackPreviewContext;
     readonly onSendFeedback: (request: UiFeedbackRequest) => Promise<UiFeedbackResponse>;
@@ -50,6 +54,8 @@ export function TopBar({
     view,
     onSelectView,
     onOpenSearch,
+    agentConnected,
+    onReplayTour,
     feedback,
     feedbackContext,
     onSendFeedback,
@@ -106,8 +112,12 @@ export function TopBar({
                 onToggleChat={onToggleChat}
             />
             <SearchButton onClick={onOpenSearch} />
-            <ThemeToggle />
             <FeedbackButton availability={feedback} context={feedbackContext} onSend={onSendFeedback} />
+            <SettingsMenu
+                agentConnected={agentConnected}
+                onOpenCommands={onOpenSearch}
+                onReplayTour={onReplayTour}
+            />
         </header>
     );
 }

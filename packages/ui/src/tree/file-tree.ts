@@ -10,9 +10,10 @@ import type { RouteMarginFile } from '../route/margin-model.js';
  * docs/design/README.md §10). Pure module. Building, aggregation, collapse and search run
  * without React or the DOM. Rendering only draws the prepared rows.
  *
- * Directory chains with a single child collapse into one row (`services/orders`,
+ * Chains of directories containing a single directory combine into one row (`services/orders`,
  * `api/v3`), so a tree of two dozen files fits the panel instead of taking one row
- * per path segment.
+ * per path segment. A directory with a single file does not combine with its file.
+ * File rows show only the name (docs/design/SPEC-theming-2026-09-12.md §6a).
  */
 
 /** Directories with more than this many children collapse by default (docs/design/SPEC-elements.md §2.20). */
@@ -22,7 +23,7 @@ export interface TreeFileRow {
     readonly kind: 'file';
     /** File path, also the row key. */
     readonly path: string;
-    /** Filename with the collapsed directory chain attached. */
+    /** Filename. Directories have their own rows (docs/design/SPEC-theming-2026-09-12.md §6a). */
     readonly label: string;
     readonly depth: number;
     readonly fileId: string;
@@ -196,19 +197,14 @@ function emit(node: Node, depth: number, prefix: string, visible: boolean, conte
 
     for (const dir of dirs) {
         const chain = prefix === '' ? dir.segment : `${prefix}/${dir.segment}`;
-        const onlyDir = dir.dirs.size === 1 && dir.files.length === 0 ? [...dir.dirs.values()][0] : undefined;
-        const onlyFile = dir.dirs.size === 0 && dir.files.length === 1 ? dir.files[0] : undefined;
+        const onlyDir = dir.dirs.size === 1 && dir.files.length === 0;
 
-        // A "one directory → one child" chain renders as one row. The intermediate node has no row
-        // of its own, and its segment moves into the descendant's label.
-        if (onlyDir !== undefined) {
+        // A "directory → only directory" chain renders as one row. The intermediate node has no
+        // row of its own. Its segment moves into the descendant's label. A directory
+        // with a single file is excluded from the chain. File rows show only the name,
+        // otherwise the path takes the whole row from it (docs/design/SPEC-theming-2026-09-12.md §6a).
+        if (onlyDir) {
             emit(dir, depth, chain, visible, context);
-            continue;
-        }
-        if (onlyFile !== undefined) {
-            if (visible) {
-                context.rows.push({ ...onlyFile, label: `${chain}/${onlyFile.label}`, depth });
-            }
             continue;
         }
 
@@ -239,9 +235,11 @@ function emit(node: Node, depth: number, prefix: string, visible: boolean, conte
         emit(dir, depth + 1, '', visible && !collapsed, context);
     }
 
+    // A combined directory chain has no files of its own (otherwise it is not a chain), so
+    // a file label is always its name, with nothing added from `prefix`.
     if (visible) {
         for (const file of [...node.files].sort((a, b) => a.label.localeCompare(b.label))) {
-            context.rows.push({ ...file, label: prefix === '' ? file.label : `${prefix}/${file.label}`, depth });
+            context.rows.push({ ...file, depth });
         }
     }
 }

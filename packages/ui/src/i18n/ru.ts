@@ -38,10 +38,19 @@ export const ru = {
     'command.manual': 'Команда выделена — скопируй вручную',
     'command.aria': 'Команда запуска Шерпы',
 
-    'theme.dark': 'Тёмная тема',
-    'theme.light': 'Светлая тема',
-    'theme.toLight': 'Включить светлую тему',
-    'theme.toDark': 'Включить тёмную тему',
+    // Header settings menu (docs/design/SPEC-theming-2026-09-12.md §7–§8). The segment values
+    // "EN · RU" and "M · L" are the same in both languages and live in the component itself.
+    'settings.title': 'Настройки',
+    'settings.kicker': 'НАСТРОЙКИ',
+    'settings.auto': 'Авто',
+    'settings.theme': 'Тема',
+    'settings.theme.dark': 'Тёмная',
+    'settings.theme.light': 'Светлая',
+    'settings.language': 'Язык',
+    'settings.textSize': 'Размер текста',
+    'settings.replay': 'Повторить онбординг',
+    'settings.steps': (steps: number) => `${num(steps)} · ${form(steps, 'шаг', 'шага', 'шагов')}`,
+    'settings.commands': 'Команды',
 
     'topbar.breadcrumb': 'Пул-реквест',
     'topbar.search': 'Поиск',
@@ -573,6 +582,7 @@ export const ru = {
     'tree.empty.clear': 'Очистить',
     'tree.rows.aria': 'Дерево файлов',
     'tree.dir.read': (read: number, files: number) => `прочитано ${num(read)} из ${num(files)}`,
+    'tree.file.title': (path: string, progress: string) => `${path} · ${progress}`,
     'tree.outline.parsing': 'Дифф ещё разбирается.',
     'tree.outline.aria': (name: string) => `Аутлайн файла ${name}`,
 
@@ -588,13 +598,13 @@ export const ru = {
     'lens.zeroResult': (label: string) => `В этом PR нет файлов фильтра «${label}».`,
     'lens.showAll': 'Показать все файлы',
 
-    'margin.notPlaced': 'вне маршрута',
     'margin.notPlacedCard': 'без остановки маршрута',
     'margin.badge.explained': (stop: string, title: string) => `объяснено в ${stop} · ${title}`,
     'margin.badge.explainedMore': (stop: string, extra: number, title: string) =>
         `объяснено в ${stop} +${num(extra)} · ${title}`,
     'margin.badge.notPlaced': 'Без остановки маршрута',
     'margin.badge.notPlacedJump': 'Без остановки маршрута — перейти к «Прочему»',
+    'margin.badge.treeAria': (stop: string) => `остановка ${stop}`,
     'margin.badge.title': (stop: string, title: string) => `Объяснено в остановке ${stop} · ${title}`,
     'margin.badge.titleMany': (stops: string, title: string) => `Объяснено в остановках ${stops} · ${title}`,
     'margin.badge.titleJump': (where: string) => `${where} — перейти`,

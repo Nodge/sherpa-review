@@ -795,9 +795,10 @@ export function App({ store, session, token }: AppProps) {
     }, [session]);
     /** Pass key. "Show onboarding again" recreates the host so the tour starts at 01. */
     const [tourReplays, setTourReplays] = useState(0);
-    useTourReplayCommand(() => {
+    const replayTour = useCallback(() => {
         setTourReplays((count) => count + 1);
-    });
+    }, []);
+    useTourReplayCommand(replayTour, agentConnected);
     const tourEpoch = tourAnchorEpoch({
         view,
         routeKind,
@@ -805,6 +806,7 @@ export function App({ store, session, token }: AppProps) {
         chatOpen,
         completed: completion !== null,
         diffMode: effectiveDiffMode,
+        locale: uiLocale,
     });
     /**
      * Tour scaffold in place of an empty route tab. Without a route, steps 01–03
@@ -871,6 +873,8 @@ export function App({ store, session, token }: AppProps) {
                 onOpenSearch={() => {
                     session.setPaletteOpen(true);
                 }}
+                agentConnected={agentConnected}
+                onReplayTour={replayTour}
                 feedback={state.feedback}
                 feedbackContext={{
                     uiVersion: UI_VERSION,

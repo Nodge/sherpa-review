@@ -70,6 +70,8 @@ function UpdateTopBarState() {
             view="route"
             onSelectView={() => undefined}
             onOpenSearch={() => undefined}
+            agentConnected
+            onReplayTour={() => undefined}
             feedback={{ available: true, reason: null }}
             feedbackContext={{
                 uiVersion: CURRENT,

@@ -91,7 +91,8 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
     await expect(gap.locator('.diff-gap__counter')).toContainText(
         new RegExp(`\\+20 lines ${direction === 'up' ? 'up' : 'down'} · ${String(initialHidden)} unchanged`),
     );
-    await expect(gap.locator('.diff-gap__counter')).toHaveCSS('color', 'rgb(155, 161, 171)');
+    // On hover, the counter uses the dark theme's `--text-muted` (packages/ui/src/styles/tokens.css).
+    await expect(gap.locator('.diff-gap__counter')).toHaveCSS('color', 'rgb(255, 255, 255)');
     if (direction === 'down') {
         // Hover leaves the keyboard selection alone. Only ←/→ switches the arrow.
         await gap.focus();

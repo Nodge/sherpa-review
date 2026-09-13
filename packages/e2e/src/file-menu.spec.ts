@@ -30,7 +30,8 @@ test('file menu: tree right-click, card-header ⋯, clipboard and viewed mark', 
     });
 
     await test.step('Copy path writes the file path to the clipboard', async () => {
-        const path = await row.locator('.file-tree__label').getAttribute('title');
+        // The row `title` is "path · reading progress": check the clipboard against the first half.
+        const path = (await row.getAttribute('title'))?.split(' · ')[0];
         await menu.getByRole('menuitem', { name: 'Copy path', exact: true }).click();
 
         await expect(menu).toHaveCount(0);

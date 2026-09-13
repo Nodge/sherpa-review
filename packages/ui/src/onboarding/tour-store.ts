@@ -10,7 +10,7 @@ import {
     stepAt,
     stepAtCanonical,
     stepIndex,
-    TOUR_STEP_COUNT,
+    tourStepCount,
     tourSteps,
 } from './tour-model.js';
 
@@ -41,12 +41,29 @@ export function useTourActive(dataReady: boolean): boolean {
 }
 
 /**
- * "Replay the onboarding tour" palette command (§6): resets the completion flag and step number. Always
- * available, including outside the tour, since it is the only way back after "Skip tour".
- * `onReplay` restarts an active pass: the layer is recreated and starts at 01.
+ * "Replay the onboarding tour" (§6): resets the flag and step number. One action for two entry points,
+ * the palette command and settings menu item. `onReplay` restarts an ongoing pass: the layer
+ * is recreated and starts at 01.
  */
-export function useTourReplayCommand(onReplay: () => void): void {
+export function useTourReplay(onReplay: () => void): () => void {
     const settings = useUiSettingsStore();
+    const latest = useRef(onReplay);
+    useEffect(() => {
+        latest.current = onReplay;
+    });
+    return useCallback(() => {
+        settings.update({ onboarding: { completedAt: null, step: 0 } });
+        latest.current();
+    }, [settings]);
+}
+
+/**
+ * Palette command "Replay the onboarding tour". Always available, including outside the tour,
+ * because it is the only way back after "Skip tour". The label counts steps using the current
+ * agent state: the settings menu item promises the same action and count.
+ */
+export function useTourReplayCommand(onReplay: () => void, agentConnected: boolean): void {
+    const replay = useTourReplay(onReplay);
     useShortcut({
         id: 'tour.replay',
         keys: [],
@@ -55,11 +72,8 @@ export function useTourReplayCommand(onReplay: () => void): void {
         scope: 'global',
         section: 'navigation',
         consequence: 'shortcut.tour.replay.consequence',
-        consequenceArg: TOUR_STEP_COUNT,
-        action: () => {
-            settings.update({ onboarding: { completedAt: null, step: 0 } });
-            onReplay();
-        },
+        consequenceArg: tourStepCount(agentConnected),
+        action: replay,
     });
 }
 

@@ -1,0 +1,192 @@
+/*
+ * Settings menu in the header. See docs/design/SPEC-theming-2026-09-12.md §7. Geometry comes from there,
+ * and colors use only tokens: the table in §2 maps spec variables to tokens (the
+ * 2026-09-12 decision "tokens stay semantic"). The menu adds no colors. The 10px radius
+ * and 0 18px 44px shadow use the nearest existing tokens (`--radius-card`, `--shadow-menu`).
+ */
+
+.settings-menu {
+    position: relative;
+    flex: none;
+}
+
+/* --- Trigger: sliders icon instead of an avatar (§7) --- */
+
+.settings-menu__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color var(--motion-hover) var(--motion-hover-ease),
+        border-color var(--motion-hover) var(--motion-hover-ease), color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.settings-menu__trigger:hover {
+    background: var(--surface-raised);
+    border-color: var(--border-strong-lifted);
+    color: var(--text-secondary);
+}
+
+/* The trigger also indicates an open menu. It stays highlighted while the panel is on screen. */
+.settings-menu__trigger[aria-expanded='true'] {
+    background: var(--surface-popover);
+    border-color: var(--border-strong-lifted);
+    color: var(--text-primary-soft);
+}
+
+/* --- Panel --- */
+
+/*
+ * The panel has no transparent backdrop from §7. The menu lives inside `.top-bar`, which is its own
+ * stacking context (`position: sticky; z-index: 40`). A `position: fixed` backdrop cannot escape it
+ * and sits at level 40 for the rest of the page, above the file tree and toolbars.
+ * It would cover their buttons and intercept the first click on another trigger. Outside clicks
+ * already close the menu through a document listener, as in the Ship menu and filter select.
+ */
+.settings-menu__panel {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    z-index: 61;
+    width: 252px;
+    padding: 6px;
+    background: var(--surface-tour-card);
+    border: 1px solid var(--border-raised-dialog);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-menu);
+}
+
+.settings-menu__kicker {
+    padding: 6px var(--space-inner-tight) 4px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    letter-spacing: 0.07em;
+    color: var(--text-dim-strong);
+}
+
+/* --- Setting row --- */
+
+/*
+ * The spec height of 34px is a minimum, not a fixed value: at size L, Russian labels and segments
+ * do not fit within 252px. The segments then wrap to a second row, aligned right
+ * (the 2026-09-12 decision on dense rows), without clipping or overlapping the next row.
+ */
+.settings-menu__row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-inner-tight) var(--space-inner);
+    min-height: 34px;
+    /* 3px above and below make a 28px segment exactly 34px tall as the spec requires. */
+    padding: 3px var(--space-inner-tight);
+}
+
+.settings-menu__label {
+    font-size: var(--font-size-ui);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.settings-menu__segments {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 2px;
+    margin-left: auto;
+    padding: 2px;
+    background: var(--surface-control);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-input);
+}
+
+.settings-menu__segment {
+    height: 22px;
+    padding: 0 9px;
+    border: none;
+    border-radius: var(--radius-badge);
+    background: transparent;
+    color: var(--text-muted-dim);
+    font-size: var(--font-size-control);
+    cursor: pointer;
+    transition: background-color var(--motion-hover) var(--motion-hover-ease),
+        color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.settings-menu__segment:hover[aria-pressed='false'] {
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+}
+
+/* The selected value uses the same pill as view tabs, white with a shadow in the light theme. */
+.settings-menu__segment[aria-pressed='true'] {
+    background: var(--surface-segment-active);
+    box-shadow: var(--shadow-segment-active);
+    color: var(--text-on-segment-active);
+    font-weight: 500;
+}
+
+/* --- Actions below the divider --- */
+
+.settings-menu__divider {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--border-hairline-strong);
+}
+
+.settings-menu__action {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px var(--space-inner);
+    width: 100%;
+    min-height: 30px;
+    padding: 3px var(--space-inner-tight);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-button);
+    color: var(--text-secondary);
+    font-size: var(--font-size-ui);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--motion-hover) var(--motion-hover-ease);
+}
+
+.settings-menu__action:hover {
+    background: var(--surface-raised);
+}
+
+.settings-menu__action-label {
+    white-space: nowrap;
+}
+
+.settings-menu__meta {
+    flex: none;
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim-strong);
+    white-space: nowrap;
+}
+
+.settings-menu__key {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    height: 17px;
+    margin-left: auto;
+    padding: 0 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-key);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    line-height: 1;
+    color: var(--text-dim-strong);
+}

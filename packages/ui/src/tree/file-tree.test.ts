@@ -59,19 +59,61 @@ const FILES = [
 ];
 
 describe('buildFileTree', () => {
-    it('collapses chains of directories with a single child', () => {
+    it('combines directory chains with a single directory child', () => {
         const tree = buildFileTree(input(FILES));
 
         // The combined chain takes its root directory's alphabetical position
         // (`gen` before `market`), instead of moving to the end with top-level files.
         expect(tree.rows.map((row) => [row.kind, row.label, row.depth])).toEqual([
-            ['file', 'gen/go/market/order.pb.go', 0],
+            ['dir', 'gen/go/market', 0],
+            ['file', 'order.pb.go', 1],
             ['dir', 'services/orders', 0],
             ['dir', 'api/v3', 1],
             ['file', 'handlers.ts', 2],
             ['file', 'schemas.ts', 2],
-            ['file', 'domain/order.ts', 1],
+            ['dir', 'domain', 1],
+            ['file', 'order.ts', 2],
             ['file', 'pnpm-lock.yaml', 0],
+        ]);
+    });
+
+    it('does not combine a directory with its only file', () => {
+        // File rows show only the name (SPEC-theming-2026-09-12 §6a). A combined path
+        // took the whole row from the name. The directory shrank to zero and left an orphan slash.
+        const tree = buildFileTree(input([file('src/generated/index.test.ts', { generated: true })]));
+
+        expect(tree.rows.map((row) => [row.kind, row.label, row.depth])).toEqual([
+            ['dir', 'src/generated', 0],
+            ['file', 'index.test.ts', 1],
+        ]);
+    });
+
+    it('reduces descendant depth by the number of combined levels', () => {
+        const tree = buildFileTree(input([file('a/b/c/one.ts'), file('a/b/c/two.ts')]));
+
+        // Three directories in one row at depth 0. Children have depth 1, not 3.
+        expect(tree.rows.map((row) => [row.label, row.depth])).toEqual([
+            ['a/b/c', 0],
+            ['one.ts', 1],
+            ['two.ts', 1],
+        ]);
+    });
+
+    it('builds the chain from visible children when a filter is active', () => {
+        const files = [file('a/b/one.ts'), file('a/c/two.ts')];
+
+        // Without a filter, `a` has two children, so there is no chain.
+        expect(buildFileTree(input(files)).rows.map((row) => row.label)).toEqual([
+            'a',
+            'b',
+            'one.ts',
+            'c',
+            'two.ts',
+        ]);
+        // The filter leaves one child, so the chain combines into one row.
+        expect(buildFileTree(input(filterByQuery(files, 'one'))).rows.map((row) => row.label)).toEqual([
+            'a/b',
+            'one.ts',
         ]);
     });
 
@@ -79,7 +121,12 @@ describe('buildFileTree', () => {
         const tree = buildFileTree(input(FILES));
         const dirs = tree.rows.filter((row): row is TreeDirRow => row.kind === 'dir');
 
-        expect(dirs.map((row) => row.path)).toEqual(['services/orders', 'services/orders/api/v3']);
+        expect(dirs.map((row) => row.path)).toEqual([
+            'gen/go/market',
+            'services/orders',
+            'services/orders/api/v3',
+            'services/orders/domain',
+        ]);
     });
 
     it('sums directory aggregates over the whole subtree', () => {
@@ -124,9 +171,9 @@ describe('buildFileTree', () => {
                 file('src/b/two.ts'),
             ]),
         );
-        const dirs = tree.rows.filter((row): row is TreeDirRow => row.kind === 'dir');
+        const roots = tree.rows.filter((row): row is TreeDirRow => row.kind === 'dir' && row.depth === 0);
 
-        expect(dirs.map((row) => [row.label, row.generated])).toEqual([
+        expect(roots.map((row) => [row.label, row.generated])).toEqual([
             ['gen', true],
             ['src', false],
         ]);
@@ -139,7 +186,9 @@ describe('buildFileTree', () => {
             input(files, { mineFileIds: new Set(['f-mine/a/one.ts', 'f-mine/b/two.ts']) }),
         );
         expect(
-            withLens.rows.filter((row): row is TreeDirRow => row.kind === 'dir').map((row) => [row.label, row.foreign]),
+            withLens.rows
+                .filter((row): row is TreeDirRow => row.kind === 'dir' && row.depth === 0)
+                .map((row) => [row.label, row.foreign]),
         ).toEqual([
             ['foreign', true],
             ['mine', false],

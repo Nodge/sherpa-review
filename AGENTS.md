@@ -6,7 +6,7 @@ A local code review tool. The reviewer reads a PR diff in the browser, while an 
 
 Code. The documents in `docs/` describe what the code cannot tell you: the product, invariants, protocol and decisions. When documents disagree, follow `docs/product.md` → `docs/design/SPEC-elements.md` → `docs/design/README.md` → the prototype in `docs/design/Sherpa.dc.html`. The prototype is a reference, not a source of code. Do not implement the SCENARIOS button.
 
-Record any decision that changes behaviour, a contract or an invariant in `docs/decisions.md` (subsystem section, date, what and why). Mark an overturned decision as superseded. Do not delete it.
+Record any decision that changes behaviour, a contract or an invariant in `docs/decisions.md` (subsystem section, date, what and why). Mark a superseded decision as superseded, without deleting it. Each entry records a decision in 1–3 sentences: what was decided, why, and what it constrains going forward. Implementation progress, measurements, file lists, line numbers and lists of completed work belong in the code and PR, not here.
 
 ## Checks
 

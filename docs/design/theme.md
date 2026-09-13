@@ -10,7 +10,9 @@ The `data-theme` attribute is on `<html>`. Switching it also switches `color-sch
 native scrollbars, inputs and dropdowns. The reviewer chooses the theme: `dark`,
 `light` or `auto` (follows the system, the default). The toggle and choice persistence
 are described in settings. The `html`/`body` background equals `--surface-app` to prevent
-a flash of a different colour on load.
+a flash of the wrong colour on load. The light palette selector also matches any other element with this
+attribute. The state gallery uses this to show a light-theme card without recolouring the stand
+around it. The product has no nested themes.
 
 Token names are semantic. Each variable names a role rather than a shade. Values come
 from `SPEC-theming-2026-09-12.md`. The "source" column names a row in its §2 table (`--c-<hex>`
@@ -47,9 +49,12 @@ scales the entire interface. Text size L uses `data-textsize='l'` on `<html>`, w
 
 The scale's minimum is 11px (`0.6875rem`). Everything that was 9–10.5px in production was raised to it, so
 4 small tokens now have the same size. Decorative glyphs without their own text fall outside
-the scale, as they have no text of their own: the close icon (18px) and avatar initials. Only the
-initials stay below the minimum because they do not fit in an 18×18 circle above 9px. `--line-height-code` deliberately stays
-in px because code line density does not depend on text size.
+the scale: the close icon (18px) and avatar initials. The values below the minimum are
+initials (anything above 9px won't fit in an 18×18 circle) and one text token,
+`--font-size-stop-mark`. This is the only deliberate exception to the text minimum
+(`SPEC-theming-2026-09-12.md` §5 and §6a). The stop number lives in a 17×13 mark at the left edge
+of a tree row, a secondary marker next to the filename, and 11px won't fit in that mark.
+`--line-height-code` deliberately stays in px, so code line density doesn't depend on text size.
 
 The "px at M" and "px at L" columns are derived (`rem × 16` and `rem × 18`, rounded to tenths).
 The test recalculates them to keep the table in sync with CSS.
@@ -74,6 +79,7 @@ The test recalculates them to keep the table in sync with CSS.
 | `--font-size-badge` | `0.6875rem` | 11 | 12.4 | badges, counters, ⌘K |
 | `--font-size-scope` | `0.6875rem` | 11 | 12.4 | kickers and scope labels |
 | `--font-size-tag` | `0.6875rem` | 11 | 12.4 | scope tag in the tree and card header |
+| `--font-size-stop-mark` | `0.625rem` | 10 | 11.3 | stop mark in a tree row (exception to the minimum) |
 | `--font-size-avatar-glyph` | `0.5625rem` | 9 | 10.1 | avatar initials (glyph) |
 
 ## Colour tokens
@@ -201,6 +207,8 @@ The test recalculates them to keep the table in sync with CSS.
 | `--row-hover` | `rgba(255, 255, 255, 0.04)` | `rgba(20, 24, 32, 0.04)` | derived: neutral alpha, neighbour `--a-0005` |
 | `--checkbox-border` | `#5e6673` | `#a1a7b3` | `--c-3a3f47` |
 | `--read-box-border` | `#515a65` | `#afb5c0` | `--c-33383f` |
+| `--stop-mark-text` | `#7b8390` | `#828894` | `--c-4a4f57` (§6a) |
+| `--stop-mark-border` | `#2c3038` | `#e0e2e7` | `--c-1e2126` (§6a) |
 | `--border-button-outline` | `#7b8390` | `#828894` | `--c-4a4f57` |
 | `--border-button-outline-hover` | `#dae4f3` | `#28303b` | `--c-5e636b` |
 | `--syntax-keyword` | `#9aa6ff` | `#5462e3` | `--c-9aa6ff` |

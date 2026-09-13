@@ -110,7 +110,8 @@ describe('route in full diff margins', () => {
         expect(yaml.stops).toEqual([]);
         expect(yaml.changed).toBe(true);
         expect(marginBadgeShown(yaml)).toBe(true);
-        expect(treeBadgeLabel(yaml, t)).toBe('вне маршрута');
+        // The "not placed" marker has no text. The tree conveys it through the hatch and tooltip.
+        expect(treeBadgeLabel(yaml)).toBe('');
         expect(marginBadgeLabel(yaml, t)).toBe('no route stop');
         expect(marginTargetStopId(yaml, model.otherStopId)).toBe(model.otherStopId);
         expect(marginBadgeTitle(yaml, true, t)).toBe('No route stop — go to “Other”');
@@ -124,7 +125,7 @@ describe('route in full diff margins', () => {
         expect(marginBadgeLabel(schema, t)).toContain(`explained in ${schema.stops[0]?.planLabel ?? ''} · `);
     });
 
-    it('a file in several stops gets the first badge plus "+N", with all numbers in the tooltip', () => {
+    it('shows a tree marker and card badge for multiple stops, with all numbers in the tooltip', () => {
         const many: RouteMarginFile = {
             fileId: 'f1',
             stops: [
@@ -137,7 +138,8 @@ describe('route in full diff margins', () => {
             changed: true,
         };
 
-        expect(treeBadgeLabel(many, t)).toBe('02 +1');
+        // The 17×13 marker fits one number. "+1" remains in the card badge and tooltip.
+        expect(treeBadgeLabel(many)).toBe('02');
         expect(marginBadgeLabel(many, t)).toBe('explained in 02 +1 · cache resets after a write');
         expect(marginBadgeTitle(many, true, t)).toBe(
             'Explained in stops 02, 05 · cache resets after a write — go there',
