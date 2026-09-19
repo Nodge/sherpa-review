@@ -14,6 +14,7 @@ import { sameChatAnchor } from '../components/chat-panel.tsx';
 import { selectionAskDisabled } from '../components/selection-popover.tsx';
 import { noteAnchorForIteration, notesForIteration, noteVisibleInIteration } from '../notes/model.js';
 import type { PaletteChat } from '../palette/command-palette.tsx';
+import { useT } from '../i18n/index.js';
 import { selectionLinkHash } from '../selection-link.js';
 import type { SessionStore } from '../session/session-store.js';
 import type { ViewId } from '../session/views.js';
@@ -69,6 +70,7 @@ export function useChat({
     now,
     agentConnected,
 }: UseChatOptions) {
+    const t = useT();
     const [chatState, setChatState] = useState<ChatState>(() => emptyChatState(chatKey, reviewHost !== null));
     const currentChat = chatState.key === chatKey ? chatState : emptyChatState(chatKey, reviewHost !== null);
     const chatData = currentChat.data ?? EMPTY_CHAT_RESPONSE;
@@ -233,9 +235,9 @@ export function useChat({
     );
     const openChatForSelection = useCallback(
         (anchor: UiChatAskAnchor) => {
-            openChatWithQuestion(null, anchor);
+            openChatWithQuestion(anchor.selectedText === undefined ? null : t('markdown.explain'), anchor);
         },
-        [openChatWithQuestion],
+        [openChatWithQuestion, t],
     );
     useShortcut({
         id: 'agent.ask',
@@ -248,7 +250,7 @@ export function useChat({
         action: () => {
             const anchor = selectionAnchor.current;
             // Without a selection, the question covers the whole PR in the same composer, with no anchor.
-            openChatWithQuestion(null, anchor);
+            openChatWithQuestion(anchor?.selectedText === undefined ? null : t('markdown.explain'), anchor);
         },
     });
     /** "Other" on the Route: many ranges, but one question anchor, so the ranges are listed in the text. */

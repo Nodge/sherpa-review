@@ -217,3 +217,11 @@ To maintain the log, add each new decision as a dated entry in its section. When
 - **2026-08-25 · The frame-time budget on the large fixture is a mean ≤ 16.7 ms and p95 ≤ 33 ms** during programmatic scrolling in headless chromium. This gives twice the margin over the measured 2.3–5.4 ms so runs don't become flaky on a slow machine.
 - **2026-09-03 · Performance is measured by intervals between frames, not just the cost of work within a frame.** On a route of 25 stops, the previous method reported 0.08 ms and looked perfect, even though the frame exceeded 16.7 ms. The 149 thousand DOM nodes cost the browser time, outside our code, and were absent from the measurement. The old series stays because it shows our share. The measurement covers 76 files out of 100 because cards collapsed for a reason do not request parsing.
 - **2026-09-04 · Heavy routes shed work by unmounting a stop's diff column, rather than virtualizing individual lines.** The section, narrative, chips and viewed toggle always stay in the DOM. Beyond 2500px from the viewport, a placeholder of the measured height replaces the column, following the same contract as Full diff. `content-visibility: auto` was rolled back after measurement because it reduces neither the DOM nor the heap and worsens p95 on top of unmounting.
+
+## Markdown in review (2026-09-18)
+
+Markdown files have a switch between the source diff and rendered document, with a choice of the old or new side. Fragments separated by hidden lines are not joined. Full context is expanded through the diff controls.
+
+Selecting document text preserves the exact quote and source line range in the question anchor. Comments and notes keep their existing discussion identifiers and line numbers. Switching views does not create copies or change publication.
+
+Markdown renders in React through the existing safe parser. Raw HTML does not execute. Supported markup matches comments: headings, lists, quotes, tables and code blocks.

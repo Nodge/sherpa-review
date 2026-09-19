@@ -14,6 +14,7 @@ import { readStateTooltip } from '../progress/read-state.js';
 import { useBlobLoader } from './blob-loader.tsx';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import { DiffRows } from './diff-rows.tsx';
+import { MarkdownReview } from './markdown-review.tsx';
 import type { ImageBodyState } from './image-card.tsx';
 import { ImageBody } from './image-card.tsx';
 import type { FileExpansion } from './expand.js';
@@ -62,6 +63,8 @@ export interface FileCardActions {
     readonly onOpenFile: (fileId: string) => void;
     readonly onShowWhitespace: (fileId: string) => void;
     readonly onSelectStart: (fileId: string, key: LineKey, side: 'old' | 'new', extend: boolean) => void;
+    readonly onSelectText?: ((selection: LineSelection) => void) | undefined;
+    readonly onClearSelection?: (() => void) | undefined;
     readonly onSelectExtend: (fileId: string, key: LineKey, side: 'old' | 'new') => void;
     readonly onCommentLine?: ((fileId: string, side: 'old' | 'new', line: number) => void) | undefined;
     /** File comment without a line. The menu item appears only on image cards. */
@@ -107,6 +110,7 @@ export interface FileCardProps {
     readonly initialGapError?: boolean;
     /** Gallery only: initial image card mode. */
     readonly initialImage?: ImageBodyState | undefined;
+    readonly initialMarkdown?: boolean;
     /**
      * Post-process the model before rendering, after context expansion. Route uses this
      * to clip the model to stop anchors, so "Expand context" keeps working. Expansion
@@ -196,6 +200,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     const [hint, setHint] = useState<Feedback>(initialHint);
     const [announcement, setAnnouncement] = useState('');
     const menu = useContextMenu();
+    const markdownFile = /\.(?:md|markdown|mdown)$/i.test(file.path);
+    const [markdown, setMarkdown] = useState(props.initialMarkdown ?? false);
 
     // Model with context already expanded. Expansion is a pure function of the original model.
     const shown = useMemo(
@@ -335,6 +341,11 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 <span className="file-card__entity">{entityText(shown, t)}</span>
 
                 {routeBadge}
+                {markdownFile && shown?.content.kind === 'text' ? (
+                    <button type="button" className="file-card__header-action" aria-pressed={markdown} onClick={() => { actions.onClearSelection?.(); setMarkdown(!markdown); }}>
+                        {t(markdown ? 'markdown.code' : 'markdown.preview')}
+                    </button>
+                ) : null}
 
                 {/* The blame link moved into the menu ("Open on the web"). "⋯" takes its place in the header. */}
                 <span className="file-card__actions">
@@ -473,6 +484,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     textBody={file.patch === null ? null : body}
                     initial={initialImage}
                 />
+            ) : markdown && shown?.content.kind === 'text' ? (
+                <MarkdownReview model={shown} selection={selection} focusedThreadRange={focusedThreadRange} onSelect={actions.onSelectText} onClearSelection={actions.onClearSelection} renderAfterLine={renderAfterLine} />
             ) : (
                 body
             )}

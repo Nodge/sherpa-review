@@ -103,6 +103,7 @@ export function chatAnchorFromSelection(
     return range === null
         ? null
         : {
+              ...(selection.selectedText === undefined ? {} : { selectedText: selection.selectedText }),
               diffId,
               fileId: file.fileId,
               path: file.path,
@@ -367,7 +368,7 @@ function findSelectionRows(host: HTMLElement, fileId: string, keys: ReadonlySet<
         const rows = new Set<HTMLElement>();
         for (const key of keys) {
             const cell = card.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
-            const row = cell?.closest<HTMLElement>('.diff-row') ?? null;
+            const row = cell?.closest<HTMLElement>('.diff-row, .markdown-review__block') ?? null;
             if (row !== null) {
                 rows.add(row);
             }

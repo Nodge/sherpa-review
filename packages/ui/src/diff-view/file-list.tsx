@@ -533,6 +533,8 @@ export function DiffFileList({
             onToggleCollapse: store.toggleFileCollapse,
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
+            onSelectText: store.selectText,
+            onClearSelection: store.clearSelection,
             onSelectStart: (fileId, key, side, extend) => {
                 store.beginSelection();
                 if (extend) {

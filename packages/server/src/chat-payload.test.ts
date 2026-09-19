@@ -111,6 +111,14 @@ describe('anchored chat payload', () => {
         return materializeChatPayload(questionDirIn(payloadDir), shared, buildChatPayload(context, options));
     }
 
+    it('preserves the exact Markdown quote in the question context alongside the range', async () => {
+        const anchor = { ...fixtureAnchor(), selectedText: 'lower bound' };
+        const result = await materialize({ question: 'Explain the meaning', anchor, pr: META, diff: mediumDiff(), fileContent: fileContent(anchor), route: READY_ROUTE, history: [] });
+        const question = result.contextFiles.find((file) => file.endsWith('/question.md'));
+        expect(fs.readFileSync(question ?? '', 'utf8')).toContain(JSON.stringify(anchor.selectedText));
+        expect(fs.readFileSync(question ?? '', 'utf8')).toContain(`Selected range: ${anchor.path}:${String(anchor.start)}`);
+    });
+
     it('uses stable paths for shared context and a fresh question directory for its own files', async () => {
         const anchor = fixtureAnchor();
         const context = {

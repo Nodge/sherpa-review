@@ -267,6 +267,8 @@ export function galleryActions(store: DiffViewStore): FileCardActions {
         },
         onOpenFile: store.openFile,
         onShowWhitespace: store.showWhitespace,
+        onSelectText: store.selectText,
+        onClearSelection: store.clearSelection,
         onSelectStart: (fileId, key, side, extend) => {
             if (extend) {
                 store.extendSelection(fileId, key, side);

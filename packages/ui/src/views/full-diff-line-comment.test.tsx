@@ -232,3 +232,32 @@ describe('full diff line navigation', () => {
         expect(findLineRow(view.host, 'new', target)).not.toBeNull();
     });
 });
+
+
+describe('comments in Markdown and code', () => {
+    it('maps selected words to the source range and keeps the composer when switching views', () => {
+        const file: FileDiff = { ...FILE, fileId: 'markdown', path: 'docs/review.md', changeType: 'add', additions: 4, deletions: 0, patch: '@@ -0,0 +1,4 @@\n+# Документ\n+\n+Первое **предложение**.\n+Второе предложение.' };
+        const view = mount({ file });
+        const button = (text: string) => {
+            const found = [...view.host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent.trim() === text);
+            if (found === undefined) throw new Error(`button ${text} is missing`);
+            return found;
+        };
+        act(() => { button('Markdown').click(); });
+        const first = view.host.querySelector('strong')?.firstChild;
+        const last = view.host.querySelector('[data-source-line="4"]')?.firstChild;
+        if (first === null || first === undefined || last === null || last === undefined) throw new Error('document is missing');
+        const range = document.createRange(); range.setStart(first, 0); range.setEnd(last, 6);
+        window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range);
+        act(() => { view.host.querySelector('.markdown-review')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); });
+        expect(view.store.getSnapshot().selection).toMatchObject({ fileId: 'markdown', side: 'new', anchor: 'a3', focus: 'a4' });
+        expect(view.store.getSnapshot().selection?.selectedText).toContain('sentence');
+        act(() => { button('Comment').click(); });
+        expect(view.threadStore.getComposer('new:markdown:new:3')?.anchor?.position).toEqual({ side: 'new', line: 3, size: 2 });
+        expect(view.host.querySelectorAll('.thread-composer')).toHaveLength(1);
+        act(() => { button('Code').click(); });
+        expect(view.host.querySelectorAll('.thread-composer')).toHaveLength(1);
+        act(() => { button('Markdown').click(); });
+        expect(view.host.querySelectorAll('.thread-composer')).toHaveLength(1);
+    });
+});

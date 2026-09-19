@@ -108,7 +108,8 @@ export function sameChatAnchor(left: UiChatAskAnchor | null, right: UiChatAskAnc
         left?.fileId === right?.fileId &&
         left?.side === right?.side &&
         left?.start === right?.start &&
-        left?.end === right?.end
+        left?.end === right?.end &&
+        left?.selectedText === right?.selectedText
     );
 }
 
@@ -395,6 +396,7 @@ export function ChatPanel(props: ChatPanelProps) {
                         </span>
                     )}
                 </div>
+                {anchor?.selectedText === undefined ? null : <blockquote className="chat-panel__selection-quote">{anchor.selectedText}</blockquote>}
                 <textarea
                     ref={textareaRef}
                     className="chat-panel__textarea"

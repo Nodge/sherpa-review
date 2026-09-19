@@ -125,6 +125,8 @@ test.describe('browser locale en-US', () => {
 
 function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
     test(`F5: a full review of fixture-medium without an agent (${locale})`, async ({ page, launchSherpa }) => {
+        // Fixture comment dates are fixed: localization must not depend on the day the test runs.
+        await page.clock.setFixedTime(new Date('2026-08-20T12:00:00.000Z'));
         const server = await launchSherpa('fixture-medium');
 
         await test.step('the reader and reduced functionality without a worker', async () => {

@@ -4,7 +4,7 @@ import { useEscapeLayer } from '../shortcuts/context.tsx';
 import type { DiffViewStore } from './store.js';
 
 export function shouldClearSelectionOnPointerDown(target: EventTarget | null): boolean {
-    return !(target instanceof Element) || target.closest('.diff-rows, .selection-popover') === null;
+    return !(target instanceof Element) || target.closest('.diff-rows, .markdown-review, .selection-popover') === null;
 }
 
 /**

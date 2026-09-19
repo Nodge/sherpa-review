@@ -207,6 +207,8 @@ export function useStopCards({
             },
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
+            onSelectText: store.selectText,
+            onClearSelection: store.clearSelection,
             onSelectStart: (fileId, key, side, extend) => {
                 store.beginSelection();
                 if (extend) {
@@ -246,6 +248,10 @@ export function useStopCards({
                 // that is invisible everywhere, so hide it. A comment on such a file can be added
                 // in Full diff.
                 onCommentFile: group.whole ? actions.onCommentFile : undefined,
+                onSelectText: (selection) => {
+                    setSelectionCard({ stopId, group });
+                    store.selectText(selection);
+                },
                 onSelectStart: (fileId, lineKey, side, extend) => {
                     setSelectionCard({ stopId, group });
                     actions.onSelectStart(fileId, lineKey, side, extend);

@@ -26,6 +26,7 @@ export interface MarkdownList {
 }
 
 export interface MarkdownListItem {
+    readonly sourceLine?: number;
     readonly children: readonly InlineNode[];
     readonly list: MarkdownList | null;
     /** null means a regular item, a boolean means a checklist item `- [ ]` / `- [x]`. */
@@ -37,7 +38,9 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 /** null means the separator line has no colons specifying column alignment. */
 export type TableAlign = 'left' | 'center' | 'right' | null;
 
-export type MarkdownBlock =
+export interface MarkdownSource { readonly start: number; readonly end: number }
+
+export type MarkdownBlock = { readonly source?: MarkdownSource } & (
     /** Paragraph lines: single newlines are preserved because people write plain text. */
     | { readonly kind: 'paragraph'; readonly lines: readonly (readonly InlineNode[])[] }
     | { readonly kind: 'heading'; readonly level: HeadingLevel; readonly children: readonly InlineNode[] }
@@ -50,7 +53,7 @@ export type MarkdownBlock =
           readonly align: readonly TableAlign[];
           readonly head: readonly (readonly InlineNode[])[];
           readonly rows: readonly (readonly (readonly InlineNode[])[])[];
-      };
+      });
 
 /** Links render only with these schemes. Everything else (`javascript:`, `data:`) stays text. */
 const SAFE_HREF = /^(?:https?:\/\/|mailto:)[^\s]+$/i;
@@ -166,16 +169,18 @@ export function parseInline(source: string, profile: MarkdownProfile): readonly 
 }
 
 /** Block parsing for the `comment` profile: headings, blockquotes, tables, lists, code blocks, and paragraphs. */
-export function parseBlocks(source: string): readonly MarkdownBlock[] {
-    return parseLines(source.replace(/\r\n?/g, '\n').split('\n'), 0);
+export function parseBlocks(source: string, firstLine?: number): readonly MarkdownBlock[] {
+    return parseLines(source.replace(/\r\n?/g, '\n').split('\n'), 0, firstLine);
 }
 
-function parseLines(lines: readonly string[], quoteDepth: number): readonly MarkdownBlock[] {
+function parseLines(lines: readonly string[], quoteDepth: number, firstLine?: number): readonly MarkdownBlock[] {
     const blocks: MarkdownBlock[] = [];
     const quotesAllowed = quoteDepth < MAX_QUOTE_DEPTH;
     let index = 0;
 
     while (index < lines.length) {
+        const start = index;
+        const position = (end: number) => firstLine === undefined ? {} : { source: { start: firstLine + start, end: firstLine + Math.min(end, lines.length) - 1 } };
         const line = lines[index] ?? '';
 
         if (line.trim() === '') {
@@ -194,7 +199,7 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
             }
             // End of text closes an unclosed fence, otherwise the rest of the comment would disappear.
             index += 1;
-            blocks.push({ kind: 'code', lang: fenceLang(fence[2] ?? ''), text: body.join('\n') });
+            blocks.push({ ...position(index), kind: 'code', lang: fenceLang(fence[2] ?? ''), text: body.join('\n') });
             continue;
         }
 
@@ -202,6 +207,7 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
         if (heading !== null) {
             const text = (heading[2] ?? '').replace(/[ \t]+#+[ \t]*$/, '');
             blocks.push({
+                ...position(index + 1),
                 kind: 'heading',
                 level: headingLevel((heading[1] ?? '').length),
                 children: parseInline(text, 'comment'),
@@ -222,16 +228,17 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
                 index += 1;
             }
             blocks.push({
+                ...position(index),
                 kind: 'quote',
                 depth: quoteDepth === 0 ? 1 : 2,
-                children: parseLines(body, quoteDepth + 1),
+                children: parseLines(body, quoteDepth + 1, firstLine === undefined ? undefined : firstLine + start),
             });
             continue;
         }
 
         if (isTableStart(lines, index)) {
             const table = parseTable(lines, index, quotesAllowed);
-            blocks.push(table.block);
+            blocks.push({ ...table.block, ...position(table.next) });
             index = table.next;
             continue;
         }
@@ -244,6 +251,7 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
                     break;
                 }
                 raw.push({
+                    ...(firstLine === undefined ? {} : { sourceLine: firstLine + index }),
                     indent: (item[1] ?? '').replace(/\t/g, '    ').length,
                     ordered: /^[ \t]*\d/.test(lines[index] ?? ''),
                     text: item[2] ?? '',
@@ -251,7 +259,8 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
                 index += 1;
             }
             for (const list of buildLists(raw)) {
-                blocks.push({ kind: 'list', list });
+                const source = listSource(list);
+                blocks.push({ ...(source === undefined ? {} : { source }), kind: 'list', list });
             }
             continue;
         }
@@ -265,7 +274,7 @@ function parseLines(lines: readonly string[], quoteDepth: number): readonly Mark
             paragraph.push(parseInline(next, 'comment'));
             index += 1;
         }
-        blocks.push({ kind: 'paragraph', lines: paragraph });
+        blocks.push({ ...position(index), kind: 'paragraph', lines: paragraph });
     }
 
     return blocks;
@@ -410,7 +419,17 @@ function nodeText(node: InlineNode): string {
     }
 }
 
+/** A fragment may start with a nested list. The next outer list gets its own range. */
+function listSource(list: MarkdownList): MarkdownSource | undefined {
+    const lines = list.items.flatMap((item) => {
+        const nested = item.list === null ? undefined : listSource(item.list);
+        return [item.sourceLine, nested?.start, nested?.end].filter((line): line is number => line !== undefined);
+    });
+    return lines.length === 0 ? undefined : { start: Math.min(...lines), end: Math.max(...lines) };
+}
+
 interface RawItem {
+    readonly sourceLine?: number;
     readonly indent: number;
     readonly ordered: boolean;
     readonly text: string;
@@ -472,7 +491,7 @@ function buildList(
             index = built.next;
         }
         const task = taskOf(item.text);
-        items.push({ children: parseInline(task.text, 'comment'), list: nested, check: task.check });
+        items.push({ ...(item.sourceLine === undefined ? {} : { sourceLine: item.sourceLine }), children: parseInline(task.text, 'comment'), list: nested, check: task.check });
     }
 
     return { list: { ordered, items }, next: index };

@@ -23,6 +23,7 @@ export interface LineRange {
 }
 
 export interface LineSelection {
+    readonly selectedText?: string;
     readonly fileId: string;
     /** Numbering side. Older saved fixtures without this field derive it from the line key. */
     readonly side?: 'old' | 'new';

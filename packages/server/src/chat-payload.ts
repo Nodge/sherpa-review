@@ -258,7 +258,8 @@ function questionContext(
             : [`Pull request: ${pr.title}`, `URL: ${pr.url}`];
     // Name the missing diff here, since this task has no shared file containing it.
     const diffLines = diffAvailable ? [] : ['[UNAVAILABLE: the host could not provide the active diff.]'];
-    return ['# Reviewer question', '', question, '', `Scope: ${scope}`, ...prLines, ...diffLines, ''].join('\n');
+    const quote = anchor?.selectedText === undefined ? [] : ['', 'Selected text from the rendered document (reviewer quotation):', JSON.stringify(anchor.selectedText)];
+    return ['# Reviewer question', '', question, ...quote, '', `Scope: ${scope}`, ...prLines, ...diffLines, ''].join('\n');
 }
 
 /** Patch for the selected range. The same `walkPatch` numbers lines and validates route anchors. */

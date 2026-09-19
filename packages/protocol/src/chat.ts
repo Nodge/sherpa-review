@@ -24,6 +24,8 @@ export const chatAnchorSchema = z.object({
     diffId: hostIdSchema,
     fileId: hostIdSchema,
     path: z.string().min(1),
+    /** Exact quote from the displayed document. Lines remain the shared anchor. */
+    selectedText: z.string().min(1).max(4000).optional(),
     side: z.enum(['old', 'new']),
     /** Inclusive, with `end >= start`. Uses file line numbers on the corresponding side. */
     start: z.number().int().positive(),

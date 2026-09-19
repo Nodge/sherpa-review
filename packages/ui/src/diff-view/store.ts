@@ -92,6 +92,7 @@ export interface DiffViewStore {
      */
     readonly dragSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
     readonly finishSelection: () => void;
+    readonly selectText: (selection: LineSelection) => void;
     readonly clearSelection: () => void;
 }
 
@@ -446,6 +447,8 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
                 update({ selectionDragging: false });
             }
         },
+
+        selectText: (selection) => { update({ selection, selectionDragging: false }); },
 
         clearSelection: () => {
             if (snapshot.selection !== null || snapshot.selectionDragging) {

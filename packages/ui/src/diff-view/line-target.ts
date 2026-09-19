@@ -20,7 +20,7 @@ export function findLineRow(card: ParentNode, side: 'old' | 'new', line: number)
     const exact = side === 'new' ? `[data-key="a${number}"]` : `[data-key="d${number}"]`;
     const context = side === 'new' ? `[data-key^="c"][data-key$=":${number}"]` : `[data-key^="c${number}:"]`;
     const cell = card.querySelector<HTMLElement>(exact) ?? card.querySelector<HTMLElement>(context);
-    return cell === null ? null : (cell.closest<HTMLElement>('.diff-row') ?? cell);
+    return cell === null ? null : (cell.closest<HTMLElement>('.diff-row, .markdown-review__block') ?? cell);
 }
 
 /** Line flash: removes the class when the animation ends so another visit restarts it. */

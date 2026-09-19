@@ -32,14 +32,14 @@ export function Markdown({ text, profile }: { text: string; profile: MarkdownPro
 
 const HEADING_TAGS = { 1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4', 5: 'h5', 6: 'h6' } as const;
 
-function renderBlock(block: MarkdownBlock, index: number): ReactNode {
+export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
     switch (block.kind) {
         case 'heading': {
             // Real h1–h6: the level carries structure, while font size uses the three steps
             // of the handoff scale. Separate typography inside external text breaks the card rhythm.
             const Tag = HEADING_TAGS[block.level];
             return (
-                <Tag key={index} className={`md-heading ${headingClass(block.level)}`}>
+                <Tag key={index} data-source-line={block.source?.start} className={`md-heading ${headingClass(block.level)}`}>
                     {inlineNodes(block.children)}
                 </Tag>
             );
@@ -49,7 +49,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
             const language = block.lang === null ? null : languageByName(block.lang);
             return (
                 <pre key={index} className="md-pre" data-lang={block.lang ?? undefined}>
-                    <code>{language === null ? block.text : highlighted(block.text, language)}</code>
+                    <code>{block.source === undefined ? (language === null ? block.text : highlighted(block.text, language)) : block.text.split('\n').map((line, i) => <Fragment key={i}>{i === 0 ? null : '\n'}<span data-source-line={block.source === undefined ? undefined : block.source.start + i + 1}>{language === null ? line : highlighted(line, language)}</span></Fragment>)}</code>
                 </pre>
             );
         }
@@ -66,7 +66,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                 <div key={index} className="md-table-wrap">
                     <table className="md-table">
                         <thead>
-                            <tr>
+                            <tr data-source-line={block.source?.start}>
                                 {block.head.map((cell, cellIndex) => (
                                     <th key={cellIndex} style={alignStyle(block.align[cellIndex] ?? null)}>
                                         {inlineNodes(cell)}
@@ -77,7 +77,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                         {block.rows.length === 0 ? null : (
                             <tbody>
                                 {block.rows.map((row, rowIndex) => (
-                                    <tr key={rowIndex}>
+                                    <tr key={rowIndex} data-source-line={block.source === undefined ? undefined : block.source.start + rowIndex + 2}>
                                         {row.map((cell, cellIndex) => (
                                             <td key={cellIndex} style={alignStyle(block.align[cellIndex] ?? null)}>
                                                 {inlineNodes(cell)}
@@ -96,7 +96,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                     {block.lines.map((line, lineIndex) => (
                         <Fragment key={lineIndex}>
                             {lineIndex === 0 ? null : <br />}
-                            {inlineNodes(line)}
+                            {block.source === undefined ? inlineNodes(line) : <span data-source-line={block.source.start + lineIndex}>{inlineNodes(line)}</span>}
                         </Fragment>
                     ))}
                 </p>
@@ -154,7 +154,7 @@ function ListBlock({ list }: { list: MarkdownList }) {
             {item.check === null ? null : (
                 <span className={item.check ? 'md-check md-check--on' : 'md-check'} aria-hidden="true" />
             )}
-            {inlineNodes(item.children)}
+            {item.sourceLine === undefined ? inlineNodes(item.children) : <span data-source-line={item.sourceLine}>{inlineNodes(item.children)}</span>}
             {item.list === null ? null : <ListBlock list={item.list} />}
         </li>
     ));

@@ -11,6 +11,7 @@ import { AgentPill, TopBar } from '../../components/top-bar.tsx';
 import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
 import { UI_VERSION } from '../../version.js';
+import { MARKDOWN_STATES } from './markdown-states.tsx';
 import { DIFF_STATES } from './diff-states.tsx';
 import { SYNTAX_STATES } from './syntax-states.tsx';
 import { FULL_DIFF_STATES } from './full-diff-states.tsx';
@@ -207,7 +208,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
-    ...DIFF_STATES.map((state) => ({
+    ...[...DIFF_STATES, ...MARKDOWN_STATES].map((state) => ({
         id: state.id,
         group: 'Diff',
         title: state.title,
