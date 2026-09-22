@@ -131,6 +131,7 @@ function lineDraft(): Thread {
         draft: true,
         // The thread root carries the host issue status. Editing opens the toggle with that state.
         issue: true,
+        resolved: false,
         createdAt: '2026-08-31T11:42:00.000Z',
         editedAt: null,
         replies: [],

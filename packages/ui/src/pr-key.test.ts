@@ -14,8 +14,9 @@ const PR: PrMeta = {
     statusLabel: 'review_in_progress',
     checks: 'passed',
     updatedAt: '2026-08-24T06:00:00.000Z',
-    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false, blobs: false },
+    capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
     verdicts: [],
+    viewer: { login: 'alice', displayName: null, bot: false },
 };
 
 describe('breadcrumbFromPrKey', () => {

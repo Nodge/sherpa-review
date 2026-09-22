@@ -27,6 +27,7 @@ function thread(id: string, line: number | null): Thread {
             body: 'text',
             draft: false,
             issue: null,
+            resolved: null,
             createdAt: '2026-09-01T10:00:00.000Z',
             editedAt: null,
             replies: [],

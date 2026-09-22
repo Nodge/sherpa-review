@@ -515,6 +515,86 @@ describe('server review endpoints', () => {
             expect(resolve).toHaveBeenCalledWith(target.id, true);
         });
 
+        it('resolving a comment calls setCommentResolved', async () => {
+            const host = makeFixtureHost('medium');
+            const target = await host.saveDraft({ body: 'question', parentId: null, anchor: null, issue: true });
+            const resolve = vi.spyOn(host, 'setCommentResolved');
+            const server = await start(FIXTURE_PR, host);
+
+            const response = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewCommentResolved,
+                { commentId: target.id, resolved: true },
+                server.token,
+            );
+
+            expect(uiReviewWriteAckSchema.parse(await response.json())).toEqual({ acknowledged: true });
+            expect(resolve).toHaveBeenCalledWith(target.id, true);
+            const thread = (await host.getThreads()).find((candidate) => candidate.id === target.id);
+            expect(thread?.root.resolved).toBe(true);
+            expect(thread?.resolved).toBe(true);
+        });
+
+        it('editing and deleting published comments reach the host', async () => {
+            const host = makeFixtureHost('medium');
+            const server = await start(FIXTURE_PR, host);
+            const created = await host.saveDraft({ body: 'will publish', parentId: null, anchor: null });
+            await host.publishBatch('ship');
+
+            const updated = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewUpdateComment,
+                { commentId: created.id, body: 'published and rewritten' },
+                server.token,
+            );
+            expect(uiReviewWriteAckSchema.parse(await updated.json())).toEqual({ acknowledged: true });
+            expect((await host.getThreads()).find((thread) => thread.id === created.id)?.root.body).toBe(
+                'published and rewritten',
+            );
+
+            const deleted = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewDeleteComment,
+                { commentId: created.id },
+                server.token,
+            );
+            expect(uiReviewWriteAckSchema.parse(await deleted.json())).toEqual({ acknowledged: true });
+            expect((await host.getThreads()).some((thread) => thread.id === created.id)).toBe(false);
+        });
+
+        it('a host without the capability returns a clear error instead of crashing', async () => {
+            // `edge` cannot resolve by comment. All fixtures declare editing published comments,
+            // so build a host without that capability here by removing the methods.
+            const host = makeFixtureHost('edge');
+            delete host.updateComment;
+            delete host.deleteComment;
+            const server = await start(FIXTURE_PR, host);
+
+            const resolved = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewCommentResolved,
+                { commentId: '1', resolved: true },
+                server.token,
+            );
+            const updated = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewUpdateComment,
+                { commentId: '1', body: 'edit' },
+                server.token,
+            );
+            const deleted = await postJson(
+                server.port,
+                UI_ENDPOINTS.reviewDeleteComment,
+                { commentId: '1' },
+                server.token,
+            );
+
+            for (const response of [resolved, updated, deleted]) {
+                expect(response.status).toBe(400);
+                expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('bad_request');
+            }
+        });
+
         it('resolve and undo on one thread reach the host in order', async () => {
             const host = makeFixtureHost('medium');
             const target = (await host.getThreads()).find((thread) => !thread.resolved);

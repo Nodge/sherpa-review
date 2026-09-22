@@ -174,6 +174,9 @@ All endpoints require a bearer token, except SSE (§8). Review endpoints return 
 | `reviewDraftBufferDiscard` | `POST /api/ui/review/draft-buffer/discard` | discard a buffered draft |
 | `reviewDeleteDraft` | `POST /api/ui/review/draft/delete` | delete a comment draft |
 | `reviewThreadResolved` | `POST /api/ui/review/thread-resolved` | mark a thread as resolved |
+| `reviewCommentResolved` | `POST /api/ui/review/comment-resolved` | mark an issue comment as resolved |
+| `reviewUpdateComment` | `POST /api/ui/review/comment/update` | edit your published comment |
+| `reviewDeleteComment` | `POST /api/ui/review/comment/delete` | delete your published comment |
 | `reviewPublish` | `POST /api/ui/review/publish` | publish drafts with a verdict |
 | `reviewRoute` | `GET /api/ui/review/route` | snapshot route |
 | `reviewSnapshots` | `GET /api/ui/review/snapshots` | list route snapshots |

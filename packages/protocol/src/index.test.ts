@@ -14,6 +14,7 @@ import {
     iterationSchema,
     lensZoneSchema,
     LONG_POLL_CEILING_SECONDS,
+    prMetaSchema,
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
     RESULT_MAX_BYTES,
@@ -161,6 +162,7 @@ describe('review domain', () => {
         body: 'text',
         draft: false,
         issue: null,
+        resolved: null,
         createdAt: '2026-08-20T12:00:00.000Z',
         editedAt: null,
         replies,
@@ -214,6 +216,38 @@ describe('review domain', () => {
             }).success,
         ).toBe(true);
         expect(commentDraftSchema.safeParse({ body: '', parentId: null, anchor: null }).success).toBe(false);
+    });
+
+    it('accepts a reviewer or null in the PR header viewer, rejecting partial user data', () => {
+        const meta = {
+            id: '4242',
+            url: 'https://github.com/quillmart/quillmart/pull/4242',
+            title: 'Order edit window',
+            author,
+            fromBranch: 'alice/edit-window',
+            toBranch: 'main',
+            state: 'open',
+            statusLabel: 'review_in_progress',
+            checks: null,
+            updatedAt: '2026-08-20T12:00:00.000Z',
+            capabilities: {
+                stickyShip: true,
+                fileViewedSync: true,
+                fileContent: true,
+                commentIssues: true,
+                commentResolve: true,
+                editPublished: true,
+                iterations: true,
+                blobs: true,
+            },
+            verdicts: [],
+            viewer: author,
+        };
+        expect(prMetaSchema.parse(meta)).toEqual(meta);
+        expect(prMetaSchema.safeParse({ ...meta, viewer: null }).success).toBe(true);
+        expect(prMetaSchema.safeParse({ ...meta, viewer: { login: 'alice' } }).success).toBe(false);
+        const { viewer: _viewer, ...withoutViewer } = meta;
+        expect(prMetaSchema.safeParse(withoutViewer).success).toBe(false);
     });
 
     it('requires a boundary and at least one path for an ownership zone', () => {

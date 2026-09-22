@@ -58,7 +58,7 @@ export const DRAFT_BUFFER_STATES: readonly DraftBufferGalleryState[] = [
     {
         id: 'ship-verdict-banner',
         group: 'Draft buffer',
-        title: 'banner: someone else ships first',
+        title: 'banner: someone shipped first',
         render: () => (
             <ShipVerdictBanner
                 event={{ login: 'lead', displayName: 'Leah Lane', observedAt: GALLERY_NOW - 3 * 60_000 }}

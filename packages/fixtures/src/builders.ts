@@ -29,6 +29,8 @@ export interface CommentSpec {
     draft?: boolean;
     /** No status by default, as with a comment created outside Sherpa. */
     issue?: boolean;
+    /** Whether the comment issue is resolved. The host sets the status if the data omits it. */
+    resolved?: boolean;
     replies?: readonly Comment[];
 }
 
@@ -39,6 +41,7 @@ export function comment(spec: CommentSpec): Comment {
         body: spec.body,
         draft: spec.draft ?? false,
         issue: spec.issue ?? null,
+        resolved: spec.resolved ?? null,
         createdAt: spec.createdAt,
         editedAt: spec.editedAt ?? null,
         replies: [...(spec.replies ?? [])],

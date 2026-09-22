@@ -1,4 +1,4 @@
-import { FIXTURE_NAMES, makeFixtureHost } from '@sherpa/fixtures';
+import { fixtureData, FIXTURE_NAMES, makeFixtureHost } from '@sherpa/fixtures';
 
 import { describeReviewHostContract } from './review-host-contract.js';
 
@@ -6,15 +6,14 @@ import { describeReviewHostContract } from './review-host-contract.js';
 // they meet here. The adapter runs the same suite alongside its implementation.
 for (const name of FIXTURE_NAMES) {
     // Only `medium` declares iterations: other fixtures have nothing to advance.
-    describeReviewHostContract(
-        `FixtureHost(${name})`,
-        () => makeFixtureHost(name),
-        name === 'medium'
+    describeReviewHostContract(`FixtureHost(${name})`, () => makeFixtureHost(name), {
+        viewer: fixtureData(name).currentUser.login,
+        ...(name === 'medium'
             ? {
                   advance: (host): void => {
                       host.advanceIteration();
                   },
               }
-            : {},
-    );
+            : {}),
+    });
 }

@@ -11,6 +11,7 @@ function comment(id: string, issue: boolean | null): Comment {
         body: `text ${id}`,
         draft: true,
         issue,
+        resolved: issue === null ? null : false,
         createdAt: '2026-08-31T10:00:00.000Z',
         editedAt: null,
         replies: [],

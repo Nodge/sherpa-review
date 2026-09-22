@@ -177,6 +177,33 @@ export async function setReviewThreadResolved(token: string, threadId: string, r
     await post(UI_ENDPOINTS.reviewThreadResolved, token, { threadId, resolved }, uiReviewWriteAckSchema);
 }
 
+/** Resolves a single issue comment. Called only with `capabilities.commentResolve`. */
+export async function setReviewCommentResolved(
+    token: string,
+    commentId: string,
+    resolved: boolean,
+): Promise<void> {
+    await post(UI_ENDPOINTS.reviewCommentResolved, token, { commentId, resolved }, uiReviewWriteAckSchema);
+}
+
+/**
+ * Edits your own published comment. Called only with `capabilities.editPublished`.
+ * Does not use the draft buffer. A refusal is an endpoint error shown by the UI.
+ */
+export async function updateReviewComment(
+    token: string,
+    commentId: string,
+    body: string,
+    issue?: boolean,
+): Promise<void> {
+    await post(UI_ENDPOINTS.reviewUpdateComment, token, { commentId, body, issue }, uiReviewWriteAckSchema);
+}
+
+/** Deletes your own published comment. Called only with `capabilities.editPublished`. */
+export async function deleteReviewComment(token: string, commentId: string): Promise<void> {
+    await post(UI_ENDPOINTS.reviewDeleteComment, token, { commentId }, uiReviewWriteAckSchema);
+}
+
 /** Publishes accumulated drafts and applies the verdict only if the entire batch succeeds. */
 export async function publishReview(token: string, verdict: Verdict): Promise<PublishResult> {
     return (await post(UI_ENDPOINTS.reviewPublish, token, { verdict }, uiPublishResponseSchema)).result;

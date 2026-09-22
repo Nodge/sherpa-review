@@ -751,6 +751,29 @@ export const uiSetThreadResolvedRequestSchema = z.object({
 });
 export type UiSetThreadResolvedRequest = z.infer<typeof uiSetThreadResolvedRequestSchema>;
 
+/** Resolve an individual comment with an issue (`ReviewHost.setCommentResolved`, only with `capabilities.commentResolve`). */
+export const uiSetCommentResolvedRequestSchema = z.object({
+    commentId: hostIdSchema,
+    resolved: z.boolean(),
+});
+export type UiSetCommentResolvedRequest = z.infer<typeof uiSetCommentResolvedRequestSchema>;
+
+/**
+ * Edit and delete your own published comment (`ReviewHost.updateComment`/`deleteComment`,
+ * only with `capabilities.editPublished`). The draft buffer is not involved: a failure is an HTTP error,
+ * which the UI shows next to the comment with a retry option.
+ */
+export const uiUpdateCommentRequestSchema = z.object({
+    commentId: hostIdSchema,
+    body: z.string().min(1),
+    /** Change issue status. undefined leaves it unchanged. */
+    issue: z.boolean().optional(),
+});
+export type UiUpdateCommentRequest = z.infer<typeof uiUpdateCommentRequestSchema>;
+
+export const uiDeleteCommentRequestSchema = z.object({ commentId: hostIdSchema });
+export type UiDeleteCommentRequest = z.infer<typeof uiDeleteCommentRequestSchema>;
+
 /**
  * Publishing the accumulated batch with a verdict: one `publishBatch` call to the
  * host call. The response is the result as returned: `verdictApplied: false` on any failure
@@ -853,6 +876,12 @@ export const UI_ENDPOINTS = {
     reviewDeleteDraft: '/api/ui/review/draft/delete',
     /** POST `uiSetThreadResolvedRequestSchema` → `uiReviewWriteAckSchema`. */
     reviewThreadResolved: '/api/ui/review/thread-resolved',
+    /** POST `uiSetCommentResolvedRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewCommentResolved: '/api/ui/review/comment-resolved',
+    /** POST `uiUpdateCommentRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewUpdateComment: '/api/ui/review/comment/update',
+    /** POST `uiDeleteCommentRequestSchema` → `uiReviewWriteAckSchema`. */
+    reviewDeleteComment: '/api/ui/review/comment/delete',
     /** POST `uiPublishRequestSchema` → `uiPublishResponseSchema`. */
     reviewPublish: '/api/ui/review/publish',
     /** GET `?snapshot=` (`uiReviewRouteRequestSchema`) → `uiReviewRouteResponseSchema`. */

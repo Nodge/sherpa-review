@@ -4,7 +4,7 @@ import { anchor, comment, human, lens, singleIteration, thread } from '../builde
 import { tsLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff } from '../patch.js';
-import type { FixtureData } from './types.js';
+import type { FixtureDataInput } from './types.js';
 
 /**
  * Edge cases in PR structure and diff rendering (`docs/design/SPEC-elements.md §4.1, §2.11, §2.14`): rename,
@@ -151,7 +151,7 @@ const FILES: readonly FileSpec[] = [
     },
 ];
 
-export function makeEdgeFixture(): FixtureData {
+export function makeEdgeFixture(): FixtureDataInput {
     const reviewer = human('alice', 'Alice Ingram');
     const author = human('avery', 'Avery Vance');
 
@@ -195,7 +195,7 @@ export function makeEdgeFixture(): FixtureData {
             statusLabel: 'needs_work',
             checks: null,
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, iterations: false, blobs: false },
+            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, commentResolve: false, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

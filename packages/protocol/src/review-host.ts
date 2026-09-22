@@ -63,14 +63,34 @@ export interface ReviewHost {
     saveDraft(draft: CommentDraft, options?: { idempotencyKey?: string }): Promise<Comment>;
 
     /**
-     * Edits your own draft. `issue` is passed only with `capabilities.commentIssues`
-     * and only for thread roots / PR-level comments. undefined leaves the status unchanged.
+     * Edit your own draft. `issue` is passed only with `capabilities.commentIssues`,
+     * for any comment, including replies. undefined leaves the status unchanged.
      */
     updateDraft(commentId: HostId, body: string, issue?: boolean): Promise<void>;
 
     deleteDraft(commentId: HostId): Promise<void>;
 
+    /**
+     * Thread-level resolve for hosts without `capabilities.commentResolve`. Hosts with per-comment
+     * resolve still have this method, which acts on the thread root.
+     */
     setThreadResolved(threadId: HostId, resolved: boolean): Promise<void>;
+
+    /**
+     * Resolve an individual comment with an issue. Method presence must match
+     * `capabilities.commentResolve` (checked by the contract suite). Resolving a comment without an issue is
+     * a host error, not a silent success.
+     */
+    setCommentResolved?(commentId: HostId, resolved: boolean): Promise<void>;
+
+    /**
+     * Edit and delete your own published comment. The presence of both methods must match
+     * `capabilities.editPublished` (checked by the contract suite). The host may soft-delete a published
+     * comment, which must no longer be returned. Drafts go through
+     * `updateDraft`/`deleteDraft` and the draft buffer, never through these methods.
+     */
+    updateComment?(commentId: HostId, body: string, issue?: boolean): Promise<void>;
+    deleteComment?(commentId: HostId): Promise<void>;
 
     /**
      * Publish accumulated drafts as one batch and apply the verdict.

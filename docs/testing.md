@@ -57,11 +57,12 @@ Three separate guards check:
 What the tests check:
 
 - `getPr` and `getDiff` pass schema validation, and file identifiers are unique.
-- **Method ⇔ capability flag.** Every `HostCapabilities` field (`fileViewedSync`, `fileContent`, `blobs`, `iterations`, `commentIssues`, `stickyShip`) is checked in both directions. With the flag off, the host must not have the method, and data must reflect that (viewed mark `null`, image `null`, exactly one iteration, slices rejected). With the flag on, the method must exist. Declaring a capability without its method is as invalid as adding a method without declaring it.
+- **Method ⇔ capability flag.** Each `HostCapabilities` field (`fileViewedSync`, `fileContent`, `blobs`, `iterations`, `commentIssues`, `commentResolve`, `editPublished`, `stickyShip`) is checked in both directions. When the flag is off, the host must not have the method, and the data must reflect that (viewed mark `null`, image `null`, exactly one iteration, slices rejected). When the flag is on, the method must exist. Declaring a capability without a method is as invalid as providing a method without declaring it.
 - Behavioural consequences: `getFileContent` returns `null` for binary files. For text files, patch context lines appear at their exact line numbers in the text (otherwise context expansion would draw the wrong lines). A missing blob returns `null`, byte length matches the declared size, and an oversized image side returns `null`.
 - Iterations: exactly one is active, none are marked missing (the server sets that, not the host), and timestamps never decrease. A slice with an unknown iteration is rejected instead of returning an empty diff. After a "push", slice paths belong to the union of the two iterations.
 - Subscriptions: the initial snapshot arrives immediately, `getThreads` matches it, and each write delivers a **new** snapshot (the delivery count is checked separately, so returning a live reference to the host's array doesn't satisfy the contract). Unsubscribing stops the stream.
-- Writes (if the host supports them): draft lifecycle, idempotent saving by key, thread replies, thread resolution, batch publishing (no drafts left, verdict applied), viewed marks visible in the next `getDiff`.
+- Writes (if the host supports them): the draft lifecycle (including a reply's issue status), save idempotency by key, thread replies, resolving a thread and an individual issue comment, editing and deleting published comments, publishing as one batch (no drafts remain and the verdict is applied), and a viewed mark visible in the next `getDiff`.
+- Per-comment resolution: `Comment.resolved === null` exactly on hosts without `commentResolve`. On other hosts, each thread's `Thread.resolved` matches "there is at least one issue and all issues are resolved", computed from its comments.
 
 
 

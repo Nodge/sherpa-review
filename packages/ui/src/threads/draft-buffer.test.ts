@@ -148,6 +148,7 @@ function draftThread(commentId: string, body: string): Thread {
             editedAt: null,
             draft: true,
             issue: null,
+            resolved: null,
             replies: [],
         },
     };

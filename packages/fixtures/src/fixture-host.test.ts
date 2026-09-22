@@ -109,6 +109,22 @@ describe('FixtureHost', () => {
         expect(edge.issueOf(degraded.id)).toBeNull();
     });
 
+    it('clearing issue resets comment resolved and opens the thread', async () => {
+        const host = makeFixtureHost('medium');
+        const setResolved = host.setCommentResolved?.bind(host);
+        if (setResolved === undefined) {
+            throw new Error('medium fixture declares commentResolve');
+        }
+        const draft = await host.saveDraft({ body: 'issue', parentId: null, anchor: null, issue: true });
+        await setResolved(draft.id, true);
+
+        await host.updateDraft(draft.id, 'no longer an issue', false);
+
+        const thread = threadsOf(host).find((candidate) => candidate.id === draft.id);
+        expect(thread?.root.resolved).toBe(false);
+        expect(thread?.resolved).toBe(false);
+    });
+
     it('a reply to a comment in an existing thread joins its subtree', async () => {
         const host = makeFixtureHost('medium');
         const before = threadsOf(host);

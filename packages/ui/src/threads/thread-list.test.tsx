@@ -47,6 +47,7 @@ const DRAFT: Comment = {
     body: 'I will check the race again before Ship.',
     draft: true,
     issue: null,
+    resolved: null,
     createdAt: '2026-08-24T10:00:00.000Z',
     editedAt: null,
     replies: [],

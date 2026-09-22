@@ -2,7 +2,7 @@ import type { PrDiff, Thread } from '@sherpa/protocol';
 
 import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
 import { makeFileDiff } from '../patch.js';
-import type { FixtureData } from './types.js';
+import type { FixtureDataInput } from './types.js';
 
 /**
  * The PR is below the route threshold (`docs/architecture.md §7.6`: changed lines across all files ≤ 40),
@@ -17,7 +17,7 @@ const DIFF_ID = '190244';
 
 const UPDATED_AT = '2026-08-20T07:18:00.000Z';
 
-export function makeSmallFixture(): FixtureData {
+export function makeSmallFixture(): FixtureDataInput {
     const author = human('dana', 'Dana Stone');
     const reviewer = human('alice', 'Alice Ingram');
     const path = 'services/orders/src/infra/retry.ts';
@@ -89,7 +89,7 @@ export function makeSmallFixture(): FixtureData {
             statusLabel: 'waiting_for_review',
             checks: 'pending',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, iterations: false, blobs: false },
+            capabilities: { stickyShip: true, fileViewedSync: false, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(diff, threads, UPDATED_AT),

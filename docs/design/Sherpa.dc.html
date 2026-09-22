@@ -13,8 +13,19 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root { color-scheme: dark; --diff-max: 1280px;
+  --c-343941: #343941;
+  --c-191c2b: #191c2b;
+  --c-3c4560: #3c4560;
+  --c-6b78e6: #6b78e6;
+  --c-4a2725: #4a2725;
+  --c-3a1f1e: #3a1f1e;
+  --c-5c3230: #5c3230;
+  --c-f2c4c0: #f2c4c0;
+  --c-5e8a6d: #5e8a6d;
+  --c-c3c8d1: #c3c8d1;
+  --btn-bg: #333741; --btn-bd: #4a515c; --btn-fg: #ffffff; --btn-bg-hover: #434954; --btn-shadow: none;
   --seg-bg: #434954; --seg-fg: #ffffff; --seg-shadow: none;
-  --chip-bg: #1e2240; --chip-bd: #3f4880; --chip-fg: #c3caff;
+  --chip-bg: #1e2240; --chip-bd: #3f4880; --chip-fg: #c3caff; --chip-bg-hover: #262c52; --chip-bg-active: #2e3566;
   --amber-btn: #e2954c; --amber-btn-fg: #1b1508;
   --c-0c0d0f: #0b0c0e;
   --c-0d0e10: #0d0e10;
@@ -134,8 +145,19 @@
   --a-22410810210: rgba(224,108,102,.10);
   }
   :root[data-theme="light"] { color-scheme: light;
+  --c-343941: #c8cdd5;
+  --c-191c2b: #e8eaff;
+  --c-3c4560: #b9c0f4;
+  --c-6b78e6: #4353cf;
+  --c-4a2725: #f2c9c6;
+  --c-3a1f1e: #f8d9d7;
+  --c-5c3230: #e0a39f;
+  --c-f2c4c0: #7a2622;
+  --c-5e8a6d: #2f8557;
+  --c-c3c8d1: #0a0f16;
+  --btn-bg: #ffffff; --btn-bd: #8b94a3; --btn-fg: #0c1420; --btn-bg-hover: #eef0f4; --btn-shadow: 0 1px 2px rgba(20,24,32,.12);
   --seg-bg: #ffffff; --seg-fg: #000000; --seg-shadow: 0 1px 2px rgba(20,24,32,.18), 0 0 0 1px rgba(20,24,32,.08);
-  --chip-bg: #e8eaff; --chip-bd: #b9c0f4; --chip-fg: #2b3690;
+  --chip-bg: #e8eaff; --chip-bd: #b9c0f4; --chip-fg: #2b3690; --chip-bg-hover: #dfe2fb; --chip-bg-active: #d3d8f8;
   --amber-btn: #b8641c; --amber-btn-fg: #ffffff;
   --c-0c0d0f: #f3f4f6;
   --c-0d0e10: #f6f7f9;
@@ -265,6 +287,29 @@
   @keyframes spin { to { transform: rotate(360deg) } }
 </style>
 </helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6.9" cy="6.9" r="4.2"></circle><path d="M10.1 10.1 13.6 13.6"></path></symbol>
+  <symbol id="ic-chev-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.4 8 10.4 12 6.4"></path></symbol>
+  <symbol id="ic-chev-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 4 10.4 8 6.4 12"></path></symbol>
+  <symbol id="ic-thumb" viewBox="0 0 16 16"><path fill="currentColor" d="M6.3 7.3 8.7 2.7a1.55 1.55 0 0 1 2.3 1.65l-.6 2.5h2.7a1.4 1.4 0 0 1 1.35 1.8l-1.15 3.7a1.7 1.7 0 0 1-1.6 1.15H6.3Z"></path><rect x="1.7" y="7.3" width="3.1" height="6.2" rx="0.8" fill="currentColor"></rect></symbol>
+  <symbol id="ic-pencil" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 12.8l.55-2.45 6.9-6.9 1.9 1.9-6.9 6.9z"></path><path d="M9.4 4.8l1.9 1.9"></path></symbol>
+  <symbol id="ic-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.5 6.4 11.5 12.8 5.1"></path></symbol>
+  <symbol id="ic-dot" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"></circle></symbol>
+  <symbol id="ic-cross" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5"></path></symbol>
+  <symbol id="ic-swap" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 6.1h10.4M10.9 3.8 13.2 6.1 10.9 8.4M13.2 10.1H2.8M5.1 7.8 2.8 10.1 5.1 12.4"></path></symbol>
+  <symbol id="ic-arrow-up" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.2V3.4M4.5 6.9 8 3.4 11.5 6.9"></path></symbol>
+  <symbol id="ic-arrow-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.8v9.8M11.5 9.1 8 12.6 4.5 9.1"></path></symbol>
+  <symbol id="ic-updown" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6v10.8M5.3 5.3 8 2.6l2.7 2.7M5.3 10.7 8 13.4l2.7-2.7"></path></symbol>
+  <symbol id="ic-reply" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v7h8.8M10.5 7.6 13 10.1 10.5 12.6"></path></symbol>
+  <symbol id="ic-bold" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h3.6a2.5 2.5 0 0 1 0 5H5zM5 8h4.2a2.5 2.5 0 0 1 0 5H5z"></path></symbol>
+  <symbol id="ic-italic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.4 3h4.8M4.8 13h4.8M9.6 3 7 13"></path></symbol>
+  <symbol id="ic-link" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 9.4 9.4 6.6M6.9 4.6l1.4-1.4a2.7 2.7 0 0 1 3.8 3.8l-1.4 1.4M9.1 11.4l-1.4 1.4a2.7 2.7 0 0 1-3.8-3.8l1.4-1.4"></path></symbol>
+  <symbol id="ic-code" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.2 2.6 8 6 11.8M10 4.2 13.4 8 10 11.8"></path></symbol>
+  <symbol id="ic-codeblock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.6"></rect><path d="M6.4 6.6 4.8 8l1.6 1.4M9.6 6.6 11.2 8 9.6 9.4"></path></symbol>
+  <symbol id="ic-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 4.4h7.6M6 8h7.6M6 11.6h7.6"></path><circle cx="3" cy="4.4" r="1"></circle><circle cx="3" cy="8" r="1"></circle><circle cx="3" cy="11.6" r="1"></circle></symbol>
+  <symbol id="ic-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.6h9.6M6.4 4.6V3.2h3.2v1.4M4.6 4.6l.6 8.2h5.6l.6-8.2"></path></symbol>
+</svg>
 
 <div style="min-height:100vh;min-width:1440px;background:var(--c-0d0e10);color:var(--c-e9eaee);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:0.8438rem;line-height:1.5;-webkit-font-smoothing:antialiased">
 
@@ -408,7 +453,7 @@
             </div>
           </div>
           <div style="flex:1"></div>
-          <button style="height:28px;padding:0 11px;background:var(--c-22252b);border:1px solid var(--c-2f333a);border-radius:6px;color:var(--c-c7cad1);font-family:inherit;font-size:0.7813rem;cursor:pointer;white-space:nowrap">Copy command</button>
+          <button style="height:28px;padding:0 11px;background:var(--btn-bg);border:1px solid var(--btn-bd);border-radius:6px;color:var(--btn-fg);box-shadow:var(--btn-shadow);font-family:inherit;font-size:0.7813rem;cursor:pointer;white-space:nowrap">Copy command</button>
         </div>
       </sc-if>
 
@@ -418,7 +463,7 @@
             <span style="width:6px;height:6px;border-radius:50%;background:var(--c-e0736c);flex:none"></span>
             <div style="font-size:0.8125rem;color:var(--c-e8cfcd)">Generation failed on validation: 2 stops referenced <span style="font-family:'IBM Plex Mono',monospace">domain/order_state.py</span>, which is not in this diff.</div>
             <div style="flex:1"></div>
-            <button style="height:28px;padding:0 11px;background:var(--c-22252b);border:1px solid var(--c-2f333a);border-radius:6px;color:var(--c-c7cad1);font-family:inherit;font-size:0.7813rem;cursor:pointer">Retry</button>
+            <button style="height:28px;padding:0 11px;background:var(--btn-bg);border:1px solid var(--btn-bd);border-radius:6px;color:var(--btn-fg);box-shadow:var(--btn-shadow);font-family:inherit;font-size:0.7813rem;cursor:pointer">Retry</button>
             <button style="height:28px;padding:0 11px;background:transparent;border:1px solid var(--c-3d2a2c);border-radius:6px;color:var(--c-d99a95);font-family:inherit;font-size:0.7813rem;cursor:pointer">Open raw output</button>
           </div>
           <div style="margin-top:11px;padding:10px 12px;background:var(--c-0e0f11);border:1px solid var(--c-24272d);border-radius:7px;font-family:'IBM Plex Mono',monospace;font-size:0.7188rem;color:var(--c-8a8f98);white-space:pre-wrap">validator: fail-closed · dropped 2 of 9 stops · unresolved anchors:
@@ -463,13 +508,6 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                   </sc-for>
                 </div>
               </sc-if>
-            </div>
-            <div style="width:1px;height:18px;background:var(--c-26292f)"></div>
-            <span style="font-size:0.7813rem;color:var(--c-6b7078);white-space:nowrap">Comments from</span>
-            <div style="display:flex;align-items:center;gap:5px">
-              <button onClick="{{ toggleThread }}" data-t="people" title="Threads left by people in the code-review system" style="{{ thrPeople }}" style-hover="border-color:var(--c-2f333a);color:var(--c-c7cad1)">People 3</button>
-              <button onClick="{{ toggleThread }}" data-t="bots" title="Comments from ai-review-bot and other review bots" style="{{ thrBots }}" style-hover="border-color:var(--c-2f333a);color:var(--c-c7cad1)">Bots 2</button>
-              <button onClick="{{ toggleThread }}" data-t="resolved" title="Threads already marked resolved" style="{{ thrResolved }}" style-hover="border-color:var(--c-2f333a);color:var(--c-c7cad1)">Resolved 1</button>
             </div>
           </div>
         </div>
@@ -534,7 +572,7 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
 
               <h2 style="{{ stop.titleStyle }}">{{ stop.title }}</h2>
               <sc-if value="{{ stop.para }}" hint-placeholder-val="{{ true }}">
-                <p style="{{ stop.paraStyle }}">{{ stop.para }}</p>
+                <div style="{{ stop.paraStyle }}">{{ stop.para }}</div>
               </sc-if>
               <sc-if value="{{ stop.queued }}">
                 <p style="margin:9px 0 0 0;color:var(--c-5e636b);font-size:0.8125rem;line-height:1.6">Title is fixed by the plan. The agent has not filled this stop in yet — it will land here, in this slot.</p>
@@ -612,8 +650,8 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
               </sc-if>
 
               <sc-for list="{{ stop.hunks }}" as="h" hint-placeholder-count="1">
-                <div style="border:1px solid var(--c-24272d);border-radius:9px;overflow:hidden;background:var(--c-0f1012)">
-                  <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:var(--c-141518);border-bottom:1px solid var(--c-1e2126)">
+                <div style="border:1px solid var(--c-24272d);border-radius:9px;background:var(--c-0f1012);margin-left:14px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:var(--c-141518);border-bottom:1px solid var(--c-1e2126);border-radius:9px 9px 0 0">
                     <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--c-e9eaee)">{{ h.name }}</span>
                     <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-5e636b)">{{ h.path }}</span>
                     <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-6cc38f)">{{ h.plus }}</span>
@@ -645,16 +683,85 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                   <sc-if value="{{ h.unified }}" hint-placeholder-val="{{ true }}">
                     <sc-for list="{{ h.rows }}" as="r" hint-placeholder-count="8">
                       <div style="{{ r.rowStyle }}">
+                        <sc-if value="{{ r.mk }}">
+  <button onClick="{{ toggleThreadFold }}" data-k="{{ r.mk.key }}" title="{{ r.mk.title }}" aria-expanded="{{ r.mk.open }}" style="{{ r.mk.style }}" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><span style="{{ r.mk.av }}">{{ r.mk.ini }}</span><span style="{{ r.mk.nStyle }}">{{ r.mk.count }}</span></button>
+</sc-if>
                         <span style="{{ r.numStyle }}">{{ r.on }}</span>
                         <span style="{{ r.numStyle }}">{{ r.nn }}</span>
                         <span style="{{ r.markStyle }}">{{ r.mark }}</span>
                         <span style="{{ r.codeStyle }}">{{ r.tokens }}</span>
                       </div>
+                      <sc-if value="{{ r.th }}">
+  <div style="{{ r.th.wrap }}">
+  <sc-for list="{{ r.th.msgs }}" as="m" hint-placeholder-count="1">
+  <div style="{{ m.wrap }}">
+    <div style="display:flex;align-items:center;gap:9px;min-height:24px">
+      <div style="{{ m.av }}">{{ m.ini }}</div>
+      <span style="font-size:0.75rem;color:var(--c-c7cad1);font-weight:500;white-space:nowrap">{{ m.author }}</span>
+      <sc-if value="{{ m.source }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.625rem;color:var(--c-9ba1ab);border:1px solid var(--c-2f333a);border-radius:4px;padding:1px 5px;white-space:nowrap">{{ m.source }}</span></sc-if>
+      <sc-if value="{{ m.replyTo }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.625rem;color:var(--c-8a8f98);white-space:nowrap">↳ {{ m.replyTo }}</span></sc-if>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6563rem;color:var(--c-5e636b);white-space:nowrap">{{ m.meta }}</span>
+      <sc-if value="{{ m.draft }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.5938rem;color:var(--c-e2b878);background:var(--c-241f14);border:1px solid var(--c-4a4230);border-radius:4px;padding:1px 5px;white-space:nowrap">draft</span></sc-if>
+      <sc-if value="{{ m.issueChip }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.5938rem;color:var(--c-aeb6ff);background:var(--c-191c2b);border:1px solid var(--c-3c4560);border-radius:4px;padding:1px 5px;white-space:nowrap">issue</span></sc-if>
+      <div style="flex:1"></div>
+      <sc-if value="{{ m.status }}"><button onClick="{{ eToggle }}" data-k="{{ m.key }}" title="{{ m.statusTitle }}" aria-pressed="{{ m.resolved }}" style="{{ m.statusStyle }}" style-hover="{{ m.statusHover }}" style-active="{{ m.statusActive }}"><svg width="11" height="11" viewBox="0 0 16 16" style="display:block;flex:none;position:relative;top:0.5px;color:{{ m.dotColor }}"><use href="{{ m.statusIcon }}"></use></svg>{{ m.statusLabel }}</button></sc-if>
+    </div>
+    <div style="{{ m.bodyStyle }}">{{ m.body }}</div>
+    <sc-if value="{{ m.notConfirming }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:14px;margin-top:6px;padding-left:27px">
+        <a href="#reply" onClick="{{ eReply }}" data-k="{{ m.key }}" style="font-size:0.75rem;color:var(--c-8f9bff)" style-hover="color:var(--c-b3bcff)" style-active="color:var(--c-7f8cff)">Reply</a>
+        <sc-if value="{{ m.own }}">
+          <a href="#edit" style="font-size:0.75rem;color:var(--c-8a8f98)" style-hover="color:var(--c-8f9bff)" style-active="color:var(--c-b3bcff)">Edit</a>
+          <a href="#delete" onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="font-size:0.75rem;color:var(--c-8a8f98)" style-hover="color:var(--c-e0736c)" style-active="color:var(--c-e0736c)">Delete</a>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{ m.confirming }}">
+      <div style="display:flex;align-items:center;gap:9px;margin-top:6px;padding-left:27px;min-height:23px">
+        <span style="font-size:0.75rem;color:var(--c-c7cad1)">Delete this comment?</span>
+        <button onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="height:23px;padding:0 9px;border-radius:5px;border:1px solid var(--c-5c3230);background:var(--c-3a1f1e);color:var(--c-f2c4c0);font-family:inherit;font-size:0.7188rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-4a2725)" style-active="background:var(--c-5c3230)">Delete</button>
+        <button onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="height:23px;padding:0 9px;border-radius:5px;border:1px solid var(--c-2b2f36);background:transparent;color:var(--c-9ba1ab);font-family:inherit;font-size:0.7188rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Cancel</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ m.replying }}">
+      <div style="margin:8px 0 0 27px;max-width:733px">
+        <sc-if value="{{ issueCapable }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;min-height:22px">
+            <button onClick="{{ toggleIssue }}" role="switch" aria-checked="{{ issueOn }}" style="{{ swStyle }}" style-hover="{{ swHover }}" style-active="{{ swActive }}"><span style="{{ swKnob }}"></span></button>
+            <span style="{{ swLabelStyle }}">Open an issue</span>
+          </div>
+        </sc-if>
+        <div style="border:1px solid var(--c-7f8cff);border-radius:8px;background:var(--c-111214);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid var(--c-1e2126);background:var(--c-141518)">
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-bold"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-italic"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-link"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-code"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-codeblock"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-list"></use></svg></div>
+            <div style="flex:1"></div>
+            <div style="display:flex;align-items:center;gap:2px;padding:2px;background:var(--c-0f1012);border:1px solid var(--c-24272d);border-radius:6px">
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;background:var(--seg-bg);color:var(--seg-fg);box-shadow:var(--seg-shadow);font-size:0.6875rem;font-weight:500">Visual</div>
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;color:var(--c-8a8f98);font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Markdown</div>
+            </div>
+          </div>
+          <div style="padding:9px 10px;min-height:52px;font-size:0.7813rem;line-height:1.6;color:var(--c-5e636b)">Reply to {{ m.author }}…<span style="display:inline-block;width:1.5px;height:14px;background:var(--c-7f8cff);vertical-align:-2px;margin-left:1px"></span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+          <button style="height:27px;padding:0 11px;background:var(--btn-bg);border:1px solid var(--btn-bd);border-radius:6px;color:var(--btn-fg);box-shadow:var(--btn-shadow);font-family:inherit;font-size:0.75rem;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:var(--btn-bg-hover)" style-active="background:var(--btn-bg-active);box-shadow:none">Save draft</button>
+          <button onClick="{{ eReply }}" data-k="{{ m.key }}" style="height:27px;padding:0 10px;background:transparent;border:1px solid var(--c-2b2f36);border-radius:6px;color:var(--c-9ba1ab);font-family:inherit;font-size:0.75rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Cancel</button>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-5e636b);white-space:nowrap">⌘⏎ · Esc</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</sc-for>
+  </div>
+</sc-if>
                     </sc-for>
                   </sc-if>
                   <sc-if value="{{ h.split }}">
                     <sc-for list="{{ h.pairs }}" as="p" hint-placeholder-count="8">
-                      <div style="display:grid;grid-template-columns:46px 14px minmax(0,1fr) 46px 14px minmax(0,1fr)">
+                      <div style="position:relative;display:grid;grid-template-columns:46px 14px minmax(0,1fr) 46px 14px minmax(0,1fr)">
+                        <sc-if value="{{ p.mk }}">
+  <button onClick="{{ toggleThreadFold }}" data-k="{{ p.mk.key }}" title="{{ p.mk.title }}" aria-expanded="{{ p.mk.open }}" style="{{ p.mk.style }}" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><span style="{{ p.mk.av }}">{{ p.mk.ini }}</span><span style="{{ p.mk.nStyle }}">{{ p.mk.count }}</span></button>
+</sc-if>
                         <span style="{{ p.left.numStyle }}">{{ p.left.num }}</span>
                         <span style="{{ p.left.markStyle }}">{{ p.left.mark }}</span>
                         <span style="{{ p.left.codeStyle }}">{{ p.left.tokens }}</span>
@@ -662,6 +769,69 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                         <span style="{{ p.right.markStyle }}">{{ p.right.mark }}</span>
                         <span style="{{ p.right.codeStyle }}">{{ p.right.tokens }}</span>
                       </div>
+                      <sc-if value="{{ p.th }}">
+  <div style="{{ p.th.wrap }}">
+  <sc-for list="{{ p.th.msgs }}" as="m" hint-placeholder-count="1">
+  <div style="{{ m.wrap }}">
+    <div style="display:flex;align-items:center;gap:9px;min-height:24px">
+      <div style="{{ m.av }}">{{ m.ini }}</div>
+      <span style="font-size:0.75rem;color:var(--c-c7cad1);font-weight:500;white-space:nowrap">{{ m.author }}</span>
+      <sc-if value="{{ m.source }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.625rem;color:var(--c-9ba1ab);border:1px solid var(--c-2f333a);border-radius:4px;padding:1px 5px;white-space:nowrap">{{ m.source }}</span></sc-if>
+      <sc-if value="{{ m.replyTo }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.625rem;color:var(--c-8a8f98);white-space:nowrap">↳ {{ m.replyTo }}</span></sc-if>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6563rem;color:var(--c-5e636b);white-space:nowrap">{{ m.meta }}</span>
+      <sc-if value="{{ m.draft }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.5938rem;color:var(--c-e2b878);background:var(--c-241f14);border:1px solid var(--c-4a4230);border-radius:4px;padding:1px 5px;white-space:nowrap">draft</span></sc-if>
+      <sc-if value="{{ m.issueChip }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.5938rem;color:var(--c-aeb6ff);background:var(--c-191c2b);border:1px solid var(--c-3c4560);border-radius:4px;padding:1px 5px;white-space:nowrap">issue</span></sc-if>
+      <div style="flex:1"></div>
+      <sc-if value="{{ m.status }}"><button onClick="{{ eToggle }}" data-k="{{ m.key }}" title="{{ m.statusTitle }}" aria-pressed="{{ m.resolved }}" style="{{ m.statusStyle }}" style-hover="{{ m.statusHover }}" style-active="{{ m.statusActive }}"><svg width="11" height="11" viewBox="0 0 16 16" style="display:block;flex:none;position:relative;top:0.5px;color:{{ m.dotColor }}"><use href="{{ m.statusIcon }}"></use></svg>{{ m.statusLabel }}</button></sc-if>
+    </div>
+    <div style="{{ m.bodyStyle }}">{{ m.body }}</div>
+    <sc-if value="{{ m.notConfirming }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:14px;margin-top:6px;padding-left:27px">
+        <a href="#reply" onClick="{{ eReply }}" data-k="{{ m.key }}" style="font-size:0.75rem;color:var(--c-8f9bff)" style-hover="color:var(--c-b3bcff)" style-active="color:var(--c-7f8cff)">Reply</a>
+        <sc-if value="{{ m.own }}">
+          <a href="#edit" style="font-size:0.75rem;color:var(--c-8a8f98)" style-hover="color:var(--c-8f9bff)" style-active="color:var(--c-b3bcff)">Edit</a>
+          <a href="#delete" onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="font-size:0.75rem;color:var(--c-8a8f98)" style-hover="color:var(--c-e0736c)" style-active="color:var(--c-e0736c)">Delete</a>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{ m.confirming }}">
+      <div style="display:flex;align-items:center;gap:9px;margin-top:6px;padding-left:27px;min-height:23px">
+        <span style="font-size:0.75rem;color:var(--c-c7cad1)">Delete this comment?</span>
+        <button onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="height:23px;padding:0 9px;border-radius:5px;border:1px solid var(--c-5c3230);background:var(--c-3a1f1e);color:var(--c-f2c4c0);font-family:inherit;font-size:0.7188rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-4a2725)" style-active="background:var(--c-5c3230)">Delete</button>
+        <button onClick="{{ eAskDel }}" data-k="{{ m.key }}" style="height:23px;padding:0 9px;border-radius:5px;border:1px solid var(--c-2b2f36);background:transparent;color:var(--c-9ba1ab);font-family:inherit;font-size:0.7188rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Cancel</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ m.replying }}">
+      <div style="margin:8px 0 0 27px;max-width:733px">
+        <sc-if value="{{ issueCapable }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;min-height:22px">
+            <button onClick="{{ toggleIssue }}" role="switch" aria-checked="{{ issueOn }}" style="{{ swStyle }}" style-hover="{{ swHover }}" style-active="{{ swActive }}"><span style="{{ swKnob }}"></span></button>
+            <span style="{{ swLabelStyle }}">Open an issue</span>
+          </div>
+        </sc-if>
+        <div style="border:1px solid var(--c-7f8cff);border-radius:8px;background:var(--c-111214);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid var(--c-1e2126);background:var(--c-141518)">
+            <div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-bold"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-italic"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-link"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-code"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-codeblock"></use></svg></div><div style="width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--c-8a8f98);cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)"><svg width="14" height="14" viewBox="0 0 16 16" style="display:block"><use href="#ic-list"></use></svg></div>
+            <div style="flex:1"></div>
+            <div style="display:flex;align-items:center;gap:2px;padding:2px;background:var(--c-0f1012);border:1px solid var(--c-24272d);border-radius:6px">
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;background:var(--seg-bg);color:var(--seg-fg);box-shadow:var(--seg-shadow);font-size:0.6875rem;font-weight:500">Visual</div>
+              <div style="height:20px;padding:0 7px;display:flex;align-items:center;border-radius:4px;color:var(--c-8a8f98);font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Markdown</div>
+            </div>
+          </div>
+          <div style="padding:9px 10px;min-height:52px;font-size:0.7813rem;line-height:1.6;color:var(--c-5e636b)">Reply to {{ m.author }}…<span style="display:inline-block;width:1.5px;height:14px;background:var(--c-7f8cff);vertical-align:-2px;margin-left:1px"></span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+          <button style="height:27px;padding:0 11px;background:var(--btn-bg);border:1px solid var(--btn-bd);border-radius:6px;color:var(--btn-fg);box-shadow:var(--btn-shadow);font-family:inherit;font-size:0.75rem;font-weight:500;white-space:nowrap;cursor:pointer" style-hover="background:var(--btn-bg-hover)" style-active="background:var(--btn-bg-active);box-shadow:none">Save draft</button>
+          <button onClick="{{ eReply }}" data-k="{{ m.key }}" style="height:27px;padding:0 10px;background:transparent;border:1px solid var(--c-2b2f36);border-radius:6px;color:var(--c-9ba1ab);font-family:inherit;font-size:0.75rem;white-space:nowrap;cursor:pointer" style-hover="background:var(--c-1b1e24)" style-active="background:var(--c-22252b)">Cancel</button>
+          <div style="flex:1"></div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-5e636b);white-space:nowrap">⌘⏎ · Esc</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</sc-for>
+  </div>
+</sc-if>
                     </sc-for>
                   </sc-if>
                   <sc-if value="{{ h.selection }}">
@@ -688,55 +858,6 @@ hint: fix the anchors in the raw snapshot and re-validate without re-running the
                         </div>
                       </div>
                     </div>
-                  </sc-if>
-                  <sc-if value="{{ h.threads }}">
-                    <sc-for list="{{ h.threads }}" as="th" hint-placeholder-count="1">
-                      <div style="{{ th.wrapStyle }}">
-                        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
-                          <div style="{{ th.avatarStyle }}">{{ th.initials }}</div>
-                          <span style="font-size:0.7813rem;color:var(--c-c7cad1);font-weight:500">{{ th.author }}</span>
-                          <sc-if value="{{ th.source }}">
-                            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-9ba1ab);border:1px solid var(--c-2f333a);border-radius:4px;padding:1px 5px">{{ th.source }}</span>
-                          </sc-if>
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-5e636b)">{{ th.meta }}</span>
-                          <div style="flex:1"></div>
-                          <sc-if value="{{ th.status }}">
-                            <span style="{{ th.statusStyle }}">{{ th.status }}</span>
-                          </sc-if>
-                          <sc-if value="{{ th.toggleLabel }}">
-                            <button onClick="{{ toggleReplies }}" style="{{ th.toggleStyle }}">{{ th.toggleLabel }}</button>
-                          </sc-if>
-                        </div>
-                        <div style="font-size:0.8125rem;color:var(--c-b9bec7);line-height:1.6;text-wrap:pretty">{{ th.body }}</div>
-                        <sc-if value="{{ th.replies }}">
-                          <div style="margin-top:10px;padding-left:12px;border-left:1px solid var(--c-26292f)">
-                            <sc-for list="{{ th.replies }}" as="rp" hint-placeholder-count="2">
-                              <div style="{{ rp.wrapStyle }}">
-                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-                                  <div style="{{ rp.avatarStyle }}">{{ rp.initials }}</div>
-                                  <span style="font-size:0.75rem;color:var(--c-c7cad1);font-weight:500">{{ rp.author }}</span>
-                                  <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6875rem;color:var(--c-5e636b)">{{ rp.meta }}</span>
-                                  <sc-if value="{{ rp.bot }}">
-                                    <span style="{{ rp.botStyle }}">{{ rp.bot }}</span>
-                                  </sc-if>
-                                  <sc-if value="{{ rp.draft }}">
-                                    <span style="{{ rp.draftStyle }}">{{ rp.draft }}</span>
-                                  </sc-if>
-                                  <sc-if value="{{ rp.deep }}">
-                                    <span style="{{ rp.deepStyle }}">{{ rp.deep }}</span>
-                                  </sc-if>
-                                </div>
-                                <div style="font-size:0.8125rem;color:var(--c-b9bec7);line-height:1.6;text-wrap:pretty">{{ rp.body }}</div>
-                              </div>
-                            </sc-for>
-                          </div>
-                        </sc-if>
-                        <div style="display:flex;align-items:center;gap:14px;margin-top:8px">
-                          <a href="#reply" style="font-size:0.7813rem;color:var(--c-8f9bff)">{{ th.action }}</a>
-                          <span style="font-size:0.7813rem;color:var(--c-5e636b)">{{ th.hint }}</span>
-                        </div>
-                      </div>
-                    </sc-for>
                   </sc-if>
                 </div>
               </sc-for>
@@ -1172,7 +1293,7 @@ class Component extends DCLogic {
   state = {
     view: 'route', preset: 'triage', routeFilter: 'all', gen: 'ready', stale: false,
     chat: false, palette: false, dock: false, lowOpen: false, genPhase: 'filling', zone: 'mine',
-    diffMode: 'unified', showTestCode: false, fileViewed: {}, threadsShow: { people: true, bots: false, resolved: false }, dirClosed: {}, fileFilter: 'all', filterOpen: false,
+    diffMode: 'unified', showTestCode: false, fileViewed: {}, dirClosed: {}, fileFilter: 'all', filterOpen: false,
     scenario: 'f1', viewed: { s1: true, s2: false, s3: false, s4: false, s5: false, s6: true, s7: false },
     expanded: {}, folds: {}, tour: null, tourPos: null,
     theme: 'auto', lang: 'en', textSize: 'm', userMenu: false
@@ -1452,20 +1573,20 @@ class Component extends DCLogic {
   ];
 
   SCEN = [
-    { id: 'inbox', tag: '00', label: 'Review inbox (not in v1)', st: { view: 'inbox', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'overview', tag: '01', label: 'PR card · reading the diff', st: { view: 'overview', gen: 'generating', genPhase: 'reading', chat: false, preset: 'triage', stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'plan', tag: '01b', label: 'PR card · plan ready, filling', st: { view: 'overview', gen: 'generating', genPhase: 'filling', chat: false, preset: 'triage', stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'gen', tag: '02', label: 'Route · partially filled', st: { view: 'route', gen: 'generating', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'f1', tag: 'F1', label: 'Triage · main screen', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'inbox', tag: '00', label: 'Review inbox (not in v1)', st: { view: 'inbox', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all' } },
+    { id: 'overview', tag: '01', label: 'PR card · reading the diff', st: { view: 'overview', gen: 'generating', genPhase: 'reading', chat: false, preset: 'triage', stale: false, routeFilter: 'all' } },
+    { id: 'plan', tag: '01b', label: 'PR card · plan ready, filling', st: { view: 'overview', gen: 'generating', genPhase: 'filling', chat: false, preset: 'triage', stale: false, routeFilter: 'all' } },
+    { id: 'gen', tag: '02', label: 'Route · partially filled', st: { view: 'route', gen: 'generating', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'f1', tag: 'F1', label: 'Triage · main screen', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all' } },
     { id: 'f2', tag: 'F2', label: 'Full tour + chat', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'tour', chat: true, stale: false, routeFilter: 'all' } },
     { id: 'f3', tag: 'F3', label: 'Second pass · what\u2019s new', st: { view: 'route', gen: 'ready', genPhase: 'filling', stale: true, routeFilter: 'new', chat: false, preset: 'triage' } },
-    { id: 'f4', tag: 'F4', label: 'Threads + AI review', st: { view: 'route', gen: 'ready', genPhase: 'filling', threadsShow: { people: true, bots: true, resolved: false }, chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
-    { id: 'f5', tag: 'F5', label: 'Agent disconnected', st: { view: 'route', gen: 'offline', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'failed', tag: '03', label: 'Generation failed', st: { view: 'route', gen: 'failed', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage', threadsShow: { people: true, bots: false, resolved: false } } },
-    { id: 'diff', tag: '04', label: 'Full diff fallback', st: { view: 'diff', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } } },
+    { id: 'f4', tag: 'F4', label: 'Threads + AI review', st: { view: 'route', gen: 'ready', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'f5', tag: 'F5', label: 'Agent disconnected', st: { view: 'route', gen: 'offline', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'failed', tag: '03', label: 'Generation failed', st: { view: 'route', gen: 'failed', genPhase: 'filling', chat: false, stale: false, routeFilter: 'all', preset: 'triage' } },
+    { id: 'diff', tag: '04', label: 'Full diff fallback', st: { view: 'diff', gen: 'ready', genPhase: 'filling', chat: false, stale: false, preset: 'triage', routeFilter: 'all' } },
     { id: 'done', tag: '05', label: 'Review complete', st: { view: 'done', chat: false, gen: 'ready', stale: false, preset: 'triage', routeFilter: 'all' } },
     { id: 'palette', tag: '06', label: 'Command palette', st: { palette: true } },
-    { id: 'onboarding', tag: '07', label: 'First run \u00b7 onboarding tour', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all', threadsShow: { people: true, bots: false, resolved: false } }, tour: true }
+    { id: 'onboarding', tag: '07', label: 'First run \u00b7 onboarding tour', st: { view: 'route', gen: 'ready', genPhase: 'filling', preset: 'triage', chat: false, stale: false, routeFilter: 'all' }, tour: true }
   ];
 
   // ---------- diff helpers ----------
@@ -1548,27 +1669,106 @@ class Component extends DCLogic {
   ];
   outside(fl) { return /^(front|gen)/.test(fl.path || ''); }
 
-  countReplies(list) {
-    return (list || []).reduce((n, r) => n + 1 + this.countReplies(r.replies), 0);
-  }
 
-  flattenReplies(list, depth, parentAuthor) {
-    const out = [];
-    (list || []).forEach((r, i) => {
-      const indent = Math.min(depth - 1, 3) * 15;
-      out.push({
-        author: r.author, initials: r.initials, meta: r.meta, body: r.body, draft: r.draft, bot: r.bot,
-        deep: depth > 4 ? '\u21b3 replying to ' + parentAuthor : '',
-        wrapStyle: 'padding:9px 0 0 ' + (indent + (depth > 1 ? 12 : 0)) + 'px;margin-top:' + (i || depth > 1 ? '9px' : '0') + ';' + (depth > 1 ? 'border-left:1px solid var(--c-22252b);margin-left:' + indent + 'px;padding-left:12px;' : '') + (i && depth === 1 ? 'border-top:1px solid var(--c-1e2126);' : ''),
-        avatarStyle: 'width:16px;height:16px;border-radius:' + (r.bot ? '4px' : '50%') + ';background:' + (r.draft ? 'var(--c-2a2e4a)' : 'var(--c-2b2f36)') + ';color:var(--c-c7cad1);font-size:0.5rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none',
-        botStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-9ba1ab);border:1px solid var(--c-2f333a);border-radius:4px;padding:1px 5px;white-space:nowrap',
-        draftStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-e2b878);background:var(--c-241f14);border:1px solid var(--c-4a4230);border-radius:4px;padding:1px 5px;white-space:nowrap',
-        deepStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:var(--c-5e636b);white-space:nowrap'
-      });
-      if (r.replies && r.replies.length) out.push.apply(out, this.flattenReplies(r.replies, depth + 1, r.author));
-    });
+  // Stop description: paragraphs (blank line), `- ` / `1. ` lists, `code`, **bold**, [links](url). Length budget (≤840 chars) is enforced by the validator, not here.
+  mdInline(text, kb) {
+    const out = [], re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]*\))/g;
+    let last = 0, m, i = 0;
+    while ((m = re.exec(text))) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      const t = m[0], k = kb + '-' + (i++);
+      if (t[0] === '`') out.push(React.createElement('code', { key: k, style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', background: 'var(--c-191c20)', border: '1px solid var(--c-24272d)', borderRadius: '4px', padding: '1px 4px', color: 'var(--c-cfd3da)' } }, t.slice(1, -1)));
+      else if (t[0] === '[') out.push(React.createElement('a', { key: k, href: t.slice(t.indexOf('](') + 2, -1) || '#', style: { color: 'var(--c-8f9bff)', textDecoration: 'none' } }, t.slice(1, t.indexOf(']('))));
+      else out.push(React.createElement('b', { key: k, style: { fontWeight: 600, color: 'var(--c-e9eaee)' } }, t.slice(2, -2)));
+      last = m.index + t.length;
+    }
+    if (last < text.length) out.push(text.slice(last));
     return out;
   }
+  mdPara(src) {
+    if (!src) return '';
+    const lines = String(src).split('\n'), nodes = [];
+    let i = 0, k = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      const li = /^\s*(-|\d+\.)\s+/;
+      if (li.test(l)) {
+        const ordered = /^\s*\d+\./.test(l), items = [];
+        while (i < lines.length && li.test(lines[i])) { items.push(React.createElement('li', { key: 'i' + items.length, style: { margin: '0 0 2px' } }, this.mdInline(lines[i].replace(li, ''), 'l' + k))); i++; }
+        nodes.push(React.createElement(ordered ? 'ol' : 'ul', { key: 'k' + k++, style: { margin: '6px 0 0', paddingLeft: '17px' } }, items));
+        continue;
+      }
+      if (l.trim() === '') { i++; continue; }
+      nodes.push(React.createElement('p', { key: 'k' + k++, style: { margin: nodes.length ? '7px 0 0' : 0 } }, this.mdInline(l, 'p' + k)));
+      i++;
+    }
+    return nodes;
+  }
+
+  THREADS = [
+    { id: 't1', line: 148, ini: 'MP', author: 'morgan', meta: 'order_service.py:148 \u00b7 2h ago', kind: 'person', openByDefault: true,
+      body: 'If save() raises after the commit we never reach drop(), so the stale entry survives until TTL. Is that acceptable, or should the drop be a compensating action?', replies: [
+      { ini: 'AS', author: 'asha', meta: '1h ago', body: 'The drop moved inside the unit of work \u2014 if save() raises, nothing is committed, so there is no stale entry to invalidate.', replies: [
+        { ini: 'MP', author: 'morgan', meta: '52m ago', body: 'Then the TTL only matters for the retry path. Agreed on the ordering.', replies: [
+          { ini: '\u25c6', bot: true, author: 'ai-review-bot', meta: '40m ago', body: 'The retry path calls drop() outside the unit of work in retry_edit(), line 203.', replies: [
+            { ini: 'RS', author: 'you', meta: 'just now', draft: true, body: 'Good catch \u2014 please cover retry_edit() with the same test before this lands.' }
+          ] }
+        ] }
+      ] }
+    ] },
+    { id: 't2', line: 150, ini: '\u25c6', bot: true, author: 'ai-review-bot', source: 'AI review \u00b7 bot', meta: 'order_service.py:150 \u00b7 5h ago', kind: 'bot',
+      body: 'cache.drop is awaited inside the transaction scope; a slow cache now extends the lock window on the orders table.' },
+    { id: 't3', line: 145, ini: 'AO', author: 'ada', meta: 'order_service.py:145 \u00b7 yesterday', kind: 'resolved',
+      body: 'naming: drop() \u2192 invalidate() to match the repo convention.', replies: [{ ini: 'AS', author: 'asha', meta: 'yesterday', body: 'Renamed.' }] }
+  ];
+
+  marker(t, key, open, res, total) {
+    return {
+      key, open, title: (open ? 'Collapse: ' : 'Expand: ') + t.author + ' \u00b7 ' + String(t.body).slice(0, 60),
+      ini: t.ini, count: res ? '\u2713' : String(total),
+      style: 'position:absolute;left:-15px;top:1px;z-index:2;display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px 0 0;border-radius:9px;cursor:pointer;border:1px solid ' + (open ? 'var(--c-7f8cff)' : 'var(--c-24272d)') + ';background:' + (open ? 'var(--c-191c2b)' : 'var(--c-0d0e10)') + ';opacity:' + (res && !open ? .7 : 1),
+      av: 'width:16px;height:16px;flex:none;border-radius:' + (t.bot ? '4px' : '50%') + ";background:var(--c-2b2f36);color:var(--c-c7cad1);font-size:0.5rem;font-weight:600;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace",
+      nStyle: "font-family:'IBM Plex Mono',monospace;font-size:0.625rem;color:" + (open ? 'var(--c-aeb6ff)' : res ? 'var(--c-5e8a6d)' : 'var(--c-9ba1ab)')
+    };
+  }
+
+  flatMsgs(t, card) {
+    const out = [], st = this.state, ov = st.eRes || {}, del = st.eDel || {}, rep = st.eReply || {};
+    let idx = 0;
+    const av = (bot) => 'width:18px;height:18px;flex:none;border-radius:' + (bot ? '4px' : '50%') + ";background:var(--c-2b2f36);color:var(--c-c7cad1);font-size:0.5625rem;font-weight:600;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace";
+    const walk = (m, depth, parent) => {
+      const ind = Math.min(depth, 4) * 27;
+      const key = card + '-' + (idx++);
+      const canRes = depth === 0 && !m.draft;
+      const resolved = key in ov ? !!ov[key] : (m.kind === 'resolved');
+      out.push({
+        key, resolved, own: m.author === 'you',
+        ini: m.ini, author: m.author, meta: m.meta, source: m.source || '', draft: !!m.draft, issueChip: !!m.issue,
+        replyTo: depth > 4 ? parent : '',
+        status: canRes ? (resolved ? 'resolved' : 'open') : '',
+        statusLabel: resolved ? 'Resolved' : 'Resolve', statusTitle: resolved ? 'Reopen' : 'Resolve',
+        statusIcon: resolved ? '#ic-check' : '#ic-dot', dotColor: resolved ? 'inherit' : 'var(--c-e2954c)',
+        statusStyle: 'display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px 0 6px;border-radius:5px;font-family:inherit;font-size:0.75rem;line-height:20px;white-space:nowrap;cursor:pointer;' + (resolved ? 'border:1px solid var(--c-25422f);background:var(--c-16211a);color:var(--c-86d9a8)' : 'border:1px solid var(--c-2b2f36);background:transparent;color:var(--c-9ba1ab)'),
+        statusHover: resolved ? 'background:var(--c-1f3d2c)' : 'background:var(--c-1b1e24)',
+        statusActive: resolved ? 'background:var(--c-25422f)' : 'background:var(--c-22252b)',
+        confirming: !!del[key], notConfirming: !del[key], replying: !!rep[key],
+        av: av(m.bot),
+        wrap: depth === 0 ? '' : 'margin:12px 0 0 ' + ind + 'px',
+        bodyStyle: 'margin-top:6px;padding-left:27px;font-size:0.8125rem;line-height:1.6;color:var(--c-c3c8d1);text-wrap:pretty',
+        body: m.body
+      });
+      (m.replies || []).forEach((r) => walk(r, depth + 1, m.author));
+    };
+    walk(t, 0, '');
+    return out;
+  }
+
+  eToggle = (e) => { const k = e.currentTarget.getAttribute('data-k'); const cur = e.currentTarget.getAttribute('aria-pressed') === 'true'; this.setState((s) => ({ eRes: Object.assign({}, s.eRes || {}, { [k]: !cur }) })); };
+  eAskDel = (e) => { e.preventDefault(); const k = e.currentTarget.getAttribute('data-k'); this.setState((s) => ({ eDel: Object.assign({}, s.eDel || {}, { [k]: !(s.eDel || {})[k] }) })); };
+  eReply = (e) => { e.preventDefault(); const k = e.currentTarget.getAttribute('data-k'); this.setState((s) => ({ eReply: Object.assign({}, s.eReply || {}, { [k]: !(s.eReply || {})[k] }) })); };
+  toggleIssue = () => this.setState((s) => ({ issueOn: !s.issueOn }));
+
+
 
   chip(state) {
     const st = state === true ? 'full' : state || 'none';
@@ -1620,7 +1820,7 @@ class Component extends DCLogic {
       },
       {
         id: 's2', tier: 'high', title: 'The cache is dropped after the write, not before it',
-        para: 'The old flow invalidated the order cache before saving, leaving a window where a concurrent read repopulated stale state. The write commits first and the cache is dropped inside the same unit of work.',
+        para: 'The old flow invalidated the order cache before saving, leaving a window where a concurrent read repopulated stale state.\n\nNow the write commits first and `cache.drop` runs inside the same unit of work — **a failed save leaves nothing to invalidate**.',
         bridge: 'With reads consistent, the endpoint can reject bad edits before it ever loads the aggregate.',
         comments: 3,
         changeReason: 'The author reworked the transaction boundary in response to your comment about the failure path. Two lines moved into the unit of work.',
@@ -1644,7 +1844,7 @@ class Component extends DCLogic {
       },
       {
         id: 's3', tier: 'medium', title: 'PATCH validates before it touches the aggregate',
-        para: 'The update endpoint rejects immediate orders, locked scheduled orders, empty patches and invalid delivery slots up front, so a rejected edit costs one query instead of a transaction. The 409 body now carries the policy reason.',
+        para: 'The update endpoint rejects up front, so a rejected edit costs one query instead of a transaction:\n- immediate and locked scheduled orders\n- empty patches\n- invalid delivery slots\n\nThe 409 body now carries the policy reason — see [schemas.py · EditDeniedReason](#stop-s3).',
         comments: 1,
         files: [this.f('handlers.py', 'api/v3', '+58', '\u221211', 'partial'), this.f('schemas.py', 'api/v3', '+14', '', 'none')],
         hunks: [{
@@ -1739,7 +1939,7 @@ class Component extends DCLogic {
       const isNew = st.routeFilter === 'new' && s.id === 's3';
       return Object.assign({}, s, {
         no: planNo[s.id], of: '7', queued, domId: 'stop-' + s.id, flash: st.flash === 'stop-' + s.id,
-        para: queued ? '' : s.para, bridge: queued ? null : s.bridge,
+        para: queued ? '' : this.mdPara(s.para), bridge: queued ? null : s.bridge,
         tests: queued ? null : s.tests, unexplained: queued ? false : s.unexplained,
         comments: queued ? 0 : s.comments,
         tier, tierBadge: tier === 'high' && this.props.tierBadges !== false,
@@ -1815,31 +2015,22 @@ class Component extends DCLogic {
       out.foldUpStyle = "width:46px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;background:transparent;border:none;padding:0;font-family:'IBM Plex Mono',monospace;font-size:0.7813rem;line-height:1;color:var(--c-4a4f57);cursor:pointer";
     }
     if (h.threads) {
-      const base = [
-        { author: 'morgan', initials: 'MP', meta: 'order_service.py:148 \u00b7 2h ago', body: 'If save() raises after the commit we never reach drop(), so the stale entry survives until TTL. Is that acceptable, or should the drop be a compensating action?', action: 'Reply', hint: 'reply is saved as a draft and published on ship', status: '2 replies', kind: 'person', replies: [
-          { author: 'asha', initials: 'AS', meta: '1h ago', body: 'The drop moved inside the unit of work \u2014 if save() raises, nothing is committed, so there is no stale entry to invalidate.', replies: [
-            { author: 'morgan', initials: 'MP', meta: '52m ago', body: 'Then the TTL only matters for the retry path. Agreed on the ordering.', replies: [
-              { author: 'ai-review-bot', initials: '\u25c6', bot: 'bot', meta: '40m ago', body: 'The retry path calls drop() outside the unit of work in retry_edit(), line 203.', replies: [
-                { author: 'you', initials: 'RS', meta: 'just now', body: 'Good catch \u2014 please cover retry_edit() with the same test before this lands.', draft: 'draft \u00b7 publishes on ship' }
-              ] }
-            ] }
-          ] }
-        ] },
-        { author: 'ai-review-bot', initials: '\u25c6', source: 'AI review \u00b7 bot', meta: 'order_service.py:150 \u00b7 5h ago', body: 'cache.drop is awaited inside the transaction scope; a slow cache now extends the lock window on the orders table.', action: 'Reply', hint: 'from the review host, counted in this stop\u2019s 3 comments', status: 'open', kind: 'bot' },
-        { author: 'ada', initials: 'AO', meta: 'order_service.py:145 \u00b7 yesterday', body: 'naming: drop() \u2192 invalidate() to match the repo convention.', action: 'View', hint: '', status: 'resolved', kind: 'resolved' }
-      ];
-      const show = st.threadsShow;
-      const open = !!st.repliesOpen;
-      out.threads = base.filter((t) => show[t.kind === 'person' ? 'people' : t.kind === 'bot' ? 'bots' : 'resolved']).map((t) => ({
-        author: t.author, initials: t.initials, source: t.source, meta: t.meta, body: t.body, action: t.action, hint: t.hint,
-        status: t.replies ? '' : t.status,
-        toggleLabel: t.replies ? (this.countReplies(t.replies) + ' replies ' + (open ? '\u2304' : '\u203a')) : '',
-        toggleStyle: 'height:20px;padding:0 7px;background:transparent;border:1px solid var(--c-2b2f36);border-radius:4px;color:var(--c-9ba1ab);font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;cursor:pointer;white-space:nowrap',
-        replies: t.replies && open ? this.flattenReplies(t.replies, 1, t.author) : null,
-        wrapStyle: 'padding:12px 14px;border-top:1px solid var(--c-1e2126);background:' + (t.kind === 'resolved' ? 'var(--c-101113)' : t.kind === 'bot' ? 'var(--c-121316)' : 'var(--c-141518)') + ';opacity:' + (t.kind === 'person' ? '1' : '.72'),
-        avatarStyle: 'width:18px;height:18px;border-radius:' + (t.kind === 'bot' ? '4px' : '50%') + ';background:var(--c-2b2f36);color:var(--c-c7cad1);font-size:0.6875rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none',
-        statusStyle: 'font-family:\'IBM Plex Mono\',monospace;font-size:0.6875rem;color:' + (t.status === 'resolved' ? 'var(--c-5e636b)' : 'var(--c-8a8f98)') + ';border:1px solid var(--c-2b2f36);border-radius:4px;padding:1px 5px;white-space:nowrap'
-      }));
+      const byLine = {};
+      this.THREADS.forEach((t) => { byLine[t.line] = t; });
+      const attach = (row, num) => {
+        const t = byLine[num];
+        if (!t) return row;
+        const key = fid + ':' + t.id;
+        const openMap = st.threadOpen || {};
+        const msgsAll = this.flatMsgs(t, key);
+        const rootRes = msgsAll[0].resolved;
+        const open = key in openMap ? !!openMap[key] : (!rootRes && !!t.openByDefault);
+        const mk = this.marker(t, key, open, rootRes, msgsAll.length);
+        const th = open ? { msgs: msgsAll, wrap: 'padding:10px 14px 11px 108px;background:var(--c-141518);border-top:1px solid var(--c-1e2126);border-bottom:1px solid var(--c-1e2126);box-shadow:inset 2px 0 0 ' + (rootRes ? 'var(--c-33383f)' : 'var(--c-7f8cff)') } : null;
+        return Object.assign({}, row, { mk, th, rowStyle: 'position:relative;' + row.rowStyle });
+      };
+      out.rows = rows.map((r) => attach(r, parseInt(r.nn, 10)));
+      out.pairs = out.pairs.map((pp) => attach(pp, parseInt(pp.right && pp.right.num, 10)));
     }
     if (st.preset === 'tour' && stop.id === 's2') {
       out.selection = true;
@@ -1856,6 +2047,10 @@ class Component extends DCLogic {
   applyDiffMax = (mode) => { try { document.documentElement.style.setProperty('--diff-max', mode === 'split' ? '1920px' : '1280px'); } catch (err) {} };
   toggleDiffMode = () => this.setState((s) => ({ diffMode: s.diffMode === 'unified' ? 'split' : 'unified' }), () => { this.applyDiffMax(this.state.diffMode); if (this.state.tour != null) this._tp(); });
   toggleTestCode = () => this.setState((s) => ({ showTestCode: !s.showTestCode }));
+  toggleThreadFold = (e) => {
+    const k = e.currentTarget.dataset.k, was = e.currentTarget.getAttribute('aria-expanded') === 'true';
+    this.setState((s) => ({ threadOpen: Object.assign({}, s.threadOpen || {}, { [k]: !was }) }));
+  };
   toggleDir = (e) => {
     const p = e.currentTarget.dataset.p;
     if (!this.TREE.some((n) => n.path === p && n.kind === 'dir')) return;
@@ -1876,8 +2071,7 @@ class Component extends DCLogic {
     '    await audit.record(order_id, body.dict())'
   ];
   toggleFileViewed = (e) => { const id = e.currentTarget.dataset.f; this.setState((s) => ({ fileViewed: Object.assign({}, s.fileViewed, { [id]: !s.fileViewed[id] }) })); };
-  toggleThread = (e) => { const k = e.currentTarget.dataset.t; this.setState((s) => ({ threadsShow: Object.assign({}, s.threadsShow, { [k]: !s.threadsShow[k] }) })); };
-  toggleReplies = () => this.setState((s) => ({ repliesOpen: !s.repliesOpen }));
+
   togglePci = () => this.setState((s) => ({ fileFilter: s.fileFilter === 'pci' ? 'all' : 'pci', filterOpen: false }));
   toggleFilterMenu = () => this.setState((s) => ({ filterOpen: !s.filterOpen }));
   setFilter = (e) => this.setState({ fileFilter: e.currentTarget.dataset.f, filterOpen: false });
@@ -2111,9 +2305,15 @@ class Component extends DCLogic {
       presetTriage: this.seg(s.preset === 'triage'), presetTour: this.seg(s.preset === 'tour'),
       diffModeLabel: s.diffMode === 'unified' ? 'unified' : 'side by side',
       toggleDiffMode: this.toggleDiffMode, toggleTestCode: this.toggleTestCode, toggleFileViewed: this.toggleFileViewed, expandFold: this.expandFold,
-      toggleThread: this.toggleThread, toggleReplies: this.toggleReplies, jumpTo: this.jumpTo,
+      jumpTo: this.jumpTo,
+      eToggle: this.eToggle, eAskDel: this.eAskDel, eReply: this.eReply, toggleIssue: this.toggleIssue, toggleThreadFold: this.toggleThreadFold, issueOn: !!s.issueOn,
+      issueCapable: this.props.issueCapable !== false,
+      swStyle: 'position:relative;width:30px;height:17px;flex:none;border-radius:9px;padding:0;cursor:pointer;transition:background .15s;--sw-k:none;' + (s.issueOn ? 'border:1px solid transparent;background:var(--c-7f8cff)' : 'border:1px solid var(--c-343941);background:var(--c-1b1e24)'),
+      swHover: s.issueOn ? 'background:var(--c-8f9bff)' : 'background:var(--c-22252b)',
+      swActive: s.issueOn ? 'background:var(--c-6b78e6);--sw-k:scale(.85)' : 'background:var(--c-2b2f36);--sw-k:scale(.85)',
+      swKnob: 'position:absolute;top:2px;width:11px;height:11px;border-radius:50%;transition:left .15s;transform:var(--sw-k);' + (s.issueOn ? 'left:14px;background:var(--c-101223)' : 'left:2px;background:var(--c-8a8f98)'),
+      swLabelStyle: 'font-size:0.75rem;color:' + (s.issueOn ? 'var(--c-e9eaee)' : 'var(--c-9ba1ab)'),
       testCodeLabel: s.showTestCode ? 'Hide test code' : 'Show test code',
-      thrPeople: this.chipBtn(s.threadsShow.people), thrBots: this.chipBtn(s.threadsShow.bots), thrResolved: this.chipBtn(s.threadsShow.resolved),
       presetHint: s.preset === 'triage' ? 'Most important first — stop whenever you have seen enough.' : 'Reading order: entry point → definitions → consequences → verification.',
       go: this.go, setPreset: this.setPreset, toggleViewed: this.toggleViewed,
       toggleStop: this.toggleStop, toggleChat: this.toggleChat, toggleDock: this.toggleDock,

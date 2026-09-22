@@ -982,7 +982,7 @@ export const ru = {
     'ship.disabled.buffered': (drafts: number) =>
         `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ещё не сохранён', 'ещё не сохранены', 'ещё не сохранены')} в хост — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
     'ship.verdict.banner': (who: string, when: string) =>
-        `${who} отшипил(а) этот PR ${when} — ваши комментарии всё равно опубликуются.`,
+        `${who} шипнул(а) этот PR ${when} — ваши комментарии всё равно опубликуются.`,
     'ship.verdict.dismiss': 'Скрыть сообщение о чужом шипе',
     'ship.verdict.dismiss.title': 'Скрыть до следующего вердикта',
     'ship.error.failed': 'Не удалось завершить ревью',

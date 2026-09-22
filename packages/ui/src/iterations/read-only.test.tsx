@@ -66,6 +66,7 @@ const THREAD: Thread = {
         editedAt: null,
         draft: false,
         issue: false,
+        resolved: false,
         replies: [],
     },
 };

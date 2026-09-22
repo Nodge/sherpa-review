@@ -19,6 +19,7 @@ const DRAFT: Comment = {
     body: 'I will check one more edge case before Ship.',
     draft: true,
     issue: null,
+    resolved: null,
     createdAt: '2026-08-28T14:02:00.000Z',
     editedAt: null,
     replies: [],

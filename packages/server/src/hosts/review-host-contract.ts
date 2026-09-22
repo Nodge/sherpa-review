@@ -7,6 +7,7 @@ import {
     lensSchema,
     prDiffSchema,
     prMetaSchema,
+    reviewUserSchema,
     threadSchema,
 } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +31,8 @@ export interface ReviewHostContractOptions<H extends ReviewHost> {
      * tests: a host with one iteration has nothing to test them on.
      */
     readonly advance?: (host: H) => void | Promise<void>;
+    /** Expected login in `PrMeta.viewer`. If absent, check only the general field requirements. */
+    readonly viewer?: string | null;
 }
 
 interface ThreadFeed {
@@ -132,6 +135,19 @@ function countDrafts(threads: readonly Thread[]): number {
     return threads.reduce((total, thread) => total + countDraftsIn(thread.root), 0);
 }
 
+function commentsOf(comment: Comment): Comment[] {
+    return [comment, ...comment.replies.flatMap(commentsOf)];
+}
+
+/**
+ * Host rule with `commentResolve`: a thread is resolved if it has issues and all of them are resolved.
+ * Restated here instead of imported from the adapter: the contract checks the promise, not its code.
+ */
+function threadResolvedByRule(thread: Thread): boolean {
+    const issues = commentsOf(thread.root).filter((comment) => comment.issue === true);
+    return issues.length > 0 && issues.every((comment) => comment.resolved === true);
+}
+
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
 /** Patch context lines with their new-side line numbers. */
@@ -172,6 +188,23 @@ export function describeReviewHostContract<H extends ReviewHost>(
         it('getPr returns a valid PR header', async () => {
             const pr = await makeHost().getPr();
             expect(() => prMetaSchema.parse(pr)).not.toThrow();
+        });
+
+        it('viewer identifies the reviewer and is required for editPublished', async () => {
+            const pr = await makeHost().getPr();
+
+            if (pr.viewer !== null) {
+                expect(() => reviewUserSchema.parse(pr.viewer)).not.toThrow();
+                expect(pr.viewer.login.trim()).not.toBe('');
+                expect(pr.viewer.bot).toBe(false);
+            }
+            // Editing your own published comments requires an identity to check ownership against.
+            if (pr.capabilities.editPublished) {
+                expect(pr.viewer).not.toBeNull();
+            }
+            if (options.viewer !== undefined) {
+                expect(pr.viewer?.login ?? null).toBe(options.viewer);
+            }
         });
 
         it('getDiff returns a valid diff with unique fileId values', async () => {
@@ -474,6 +507,20 @@ export function describeReviewHostContract<H extends ReviewHost>(
             );
             expect(findInThreads(lastSnapshot(feed), created.id)?.issue).toBe(supportsIssues ? false : null);
 
+            // Issue status can also be edited on a reply, not just the thread root.
+            seen = feed.snapshots.length;
+            const reply = await host.saveDraft({ body: 'contract reply draft', parentId: created.id, anchor: null });
+            if (supportsIssues) {
+                await host.updateDraft(reply.id, 'contract reply draft, edited', true);
+                await waitFreshSnapshot(
+                    feed,
+                    seen,
+                    () => findInThreads(lastSnapshot(feed), reply.id)?.issue === true,
+                    'reply issue in the new snapshot',
+                );
+            }
+            await host.deleteDraft(reply.id);
+
             seen = feed.snapshots.length;
             await host.deleteDraft(created.id);
             await waitFreshSnapshot(
@@ -584,6 +631,146 @@ export function describeReviewHostContract<H extends ReviewHost>(
                 seen,
                 () => lastSnapshot(feed).find((thread) => thread.id === target.id)?.resolved === true,
                 'resolved in the new snapshot',
+            );
+
+            feed.stop();
+        });
+
+        it('setCommentResolved agrees with capabilities.commentResolve', async () => {
+            const host = makeHost();
+            const pr = await host.getPr();
+            const setResolved = host.setCommentResolved?.bind(host);
+
+            if (!pr.capabilities.commentResolve) {
+                expect(setResolved).toBeUndefined();
+            } else if (setResolved === undefined) {
+                throw new Error('host declared commentResolve but did not provide setCommentResolved');
+            }
+
+            for (const thread of await host.getThreads()) {
+                for (const comment of commentsOf(thread.root)) {
+                    // `null` is only for hosts without per-comment resolution. Where it exists,
+                    // "unknown" is not a valid state, just as with `issue`.
+                    expect(comment.resolved === null, `${comment.id}: resolved disagrees with capabilities`).toBe(
+                        !pr.capabilities.commentResolve,
+                    );
+                }
+                if (pr.capabilities.commentResolve) {
+                    expect(thread.resolved, `thread ${thread.id}: resolved disagrees with the rule`).toBe(
+                        threadResolvedByRule(thread),
+                    );
+                }
+            }
+        });
+
+        it('updateComment and deleteComment agree with capabilities.editPublished', async () => {
+            const host = makeHost();
+            const pr = await host.getPr();
+
+            const update = host.updateComment?.bind(host);
+            const remove = host.deleteComment?.bind(host);
+
+            if (pr.capabilities.editPublished) {
+                if (update === undefined || remove === undefined) {
+                    throw new Error('host declared editPublished but did not provide editing or deletion');
+                }
+                return;
+            }
+            expect(update).toBeUndefined();
+            expect(remove).toBeUndefined();
+        });
+
+        it.runIf(writes)('resolving a comment resolves both the comment and its thread', async () => {
+            const host = makeHost();
+            const setResolved = host.setCommentResolved?.bind(host);
+            if (setResolved === undefined || !(await host.getPr()).capabilities.commentIssues) {
+                return;
+            }
+
+            const feed = subscribe(host);
+            await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
+
+            const seen = feed.snapshots.length;
+            const created = await host.saveDraft({
+                body: 'contract issue',
+                parentId: null,
+                anchor: null,
+                issue: true,
+            });
+            await waitFreshSnapshot(
+                feed,
+                seen,
+                () => findInThreads(lastSnapshot(feed), created.id) !== null,
+                'issue comment in the new snapshot',
+            );
+            expect(findInThreads(lastSnapshot(feed), created.id)?.resolved).toBe(false);
+            expect(lastSnapshot(feed).find((thread) => thread.id === created.id)?.resolved).toBe(false);
+
+            const afterCreate = feed.snapshots.length;
+            await setResolved(created.id, true);
+            await waitFreshSnapshot(
+                feed,
+                afterCreate,
+                () => findInThreads(lastSnapshot(feed), created.id)?.resolved === true,
+                'resolved issue in the new snapshot',
+            );
+            expect(lastSnapshot(feed).find((thread) => thread.id === created.id)?.resolved).toBe(true);
+
+            feed.stop();
+        });
+
+        it.runIf(writes)('a reply can also open an issue', async () => {
+            const host = makeHost();
+            if (!(await host.getPr()).capabilities.commentIssues) {
+                return;
+            }
+
+            const root = await host.saveDraft({ body: 'contract issue root', parentId: null, anchor: null });
+            const reply = await host.saveDraft({
+                body: 'contract issue reply',
+                parentId: root.id,
+                anchor: null,
+                issue: true,
+            });
+            expect(reply.issue).toBe(true);
+            expect(findInThreads(await host.getThreads(), reply.id)?.issue).toBe(true);
+        });
+
+        it.runIf(writes)('a published comment can be edited and deleted', async () => {
+            const host = makeHost();
+            const updateComment = host.updateComment?.bind(host);
+            const deleteComment = host.deleteComment?.bind(host);
+            if (updateComment === undefined || deleteComment === undefined) {
+                return;
+            }
+
+            const feed = subscribe(host);
+            await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
+
+            const draft = await host.saveDraft({ body: 'contract published', parentId: null, anchor: null });
+            const published = await host.publishBatch('ship');
+            expect(published.failed).toEqual([]);
+            await waitUntil(
+                () => findInThreads(lastSnapshot(feed), draft.id)?.draft === false,
+                'published comment in the snapshot',
+            );
+
+            let seen = feed.snapshots.length;
+            await updateComment(draft.id, 'contract published, edited');
+            await waitFreshSnapshot(
+                feed,
+                seen,
+                () => findInThreads(lastSnapshot(feed), draft.id)?.body === 'contract published, edited',
+                'published comment edit in the new snapshot',
+            );
+
+            seen = feed.snapshots.length;
+            await deleteComment(draft.id);
+            await waitFreshSnapshot(
+                feed,
+                seen,
+                () => findInThreads(lastSnapshot(feed), draft.id) === null,
+                'published comment removal in the new snapshot',
             );
 
             feed.stop();

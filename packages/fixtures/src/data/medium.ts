@@ -5,7 +5,7 @@ import { lockLines } from '../content.js';
 import type { FileSpec } from '../patch.js';
 import { makeFileDiff, totalChanges } from '../patch.js';
 import { PNG_AFTER_BASE64, PNG_BEFORE_BASE64, PNG_DELETED_BASE64, SVG_BASE64, SVG_LINES } from './images.js';
-import type { FixtureData, FixtureInterdiff, FixtureIteration } from './types.js';
+import type { FixtureDataInput, FixtureInterdiff, FixtureIteration } from './types.js';
 
 /**
  * Main fixture: the PR from the design handoff, "Enforce the 30-minute edit window for scheduled
@@ -1894,7 +1894,7 @@ const PCI_FILES = [
     'services/orders/src/payments/generated/psp-schema.ts',
 ];
 
-export function makeMediumFixture(): FixtureData {
+export function makeMediumFixture(): FixtureDataInput {
     return {
         pr: {
             id: PR_ID,
@@ -1907,7 +1907,7 @@ export function makeMediumFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'passed',
             updatedAt: CREATED_AT_V1,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: true, blobs: true },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: true, blobs: true },
             verdicts: [],
         },
         iterations: iterations(),

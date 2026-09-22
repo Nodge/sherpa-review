@@ -8,6 +8,8 @@
 >
 > **2026-09-12 addition: light theme, settings menu, contrast, typography, responsive width.** The spec is `SPEC-theming-2026-09-12.md`: theme model and a full colour table for both themes, a rebuilt dark palette, settings menu replacing the avatar, a rem font scale with an 11px minimum, fluid width and code panel width limits by diff mode. Values in §0–16 and §Design tokens below follow it. The working implementation is `Sherpa.dc.html`.
 
+> **2026-09-20 addition: customer-requested changes and controls.** The spec is `SPEC-changes-2026-09-20.md`. It adds an "Open issue" switch above the composer editor. Stop descriptions support paragraphs, lists, links and inline code within the validator's budget. Code threads collapse entirely into a marker on the card's left edge, with a ○ Resolve / ✓ Resolved button and Reply/Edit/Delete below the text. The "Comments from" filter is removed. The PR comments modal has width `clamp(620px, 68vw, 1120px)` and contains threads. Basic controls share one state rule (hover = background up one step, pressed = another step). The combined page is `Sherpa Changes 2026-09-20.dc.html`. The reference for (2), (3) is `Sherpa.dc.html`, stop 02. Overrides §3 (threads), 1c/1d of the 08-26 spec and the SPEC-elements state matrix wherever they differ. Departures accepted during implementation are in `../decisions.md`, the "Threads, issues and composer" section.
+
 ## Overview
 
 Sherpa is an internal code-review UI. An AI agent running in the reviewer's own agent harness (Claude Code, Codex, …) prepares a **route** through a pull request — an ordered set of stops that covers the whole diff, from the heart of the change to its consequences and glue — while the UI itself is a full replacement for the current review tool: a diff reader with two-way comments and ship. The reviewer walks the route, reads only what matters, and decides faster without losing control over what they are signing off.
@@ -259,7 +261,10 @@ The dark theme is below. `theme.md` lists every colour token's value in both the
 
 ## Files
 
-- `SPEC-theming-2026-09-12.md` is the **delta spec for the current stage**: theme model and tokens, light palette, rebuilt dark palette, settings menu, language, typography in rem, responsive width, acceptance checklist and open questions.
+- `SPEC-changes-2026-09-20.md` covers the **current phase's spec changes**: issue switch, stop description markup, collapsing threads into markers, a wide PR modal with threads, shared control-state rules. Includes contracts, removals, an acceptance checklist and open questions.
+- `Sherpa Changes 2026-09-20.dc.html` is the 09-20 iteration overview page: a table of base control states in both themes and interactive mockups 2a–2e.
+- `Sherpa Additions.dc.html` is the interactive mockup for the 08-26 additions and 09-20 changes. Section `#t3` (3 thread marker positions, recommending 3a) is a rejected exploration. The marker on the card's left edge was accepted per SPEC-changes §3.
+- `SPEC-theming-2026-09-12.md` covers the theme phase's spec changes: theme model and tokens, light palette, revised dark palette, settings menu, language, typography in rem, responsive width, acceptance checklist and open questions.
 - `theme.md` contains the **colour token table for both themes**: each token's value in the dark and light palettes, its source and light-theme rules that cannot be inferred from the table. A test checks it against `tokens.css`.
 - `SPEC-elements.md` — **element-level spec**: state matrix for every control (hover, active, focus, disabled, loading, error), per-component behaviour, data edge cases, loading timings, keyboard map, accessibility and the acceptance checklist. Read it together with this document: the README defines *what* each screen is, SPEC-elements defines *how every part behaves*.
 - `Sherpa.dc.html` — the clickable prototype (all 13 states + the onboarding tour; `SCENARIOS` menu switches between them).

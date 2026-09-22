@@ -25,6 +25,9 @@ import {
     uiSetStopViewedRequestSchema,
     uiSetStopViewedResponseSchema,
     uiSetThreadResolvedRequestSchema,
+    uiSetCommentResolvedRequestSchema,
+    uiUpdateCommentRequestSchema,
+    uiDeleteCommentRequestSchema,
     uiViewedMirrorRequestSchema,
     uiUpdateDraftRequestSchema,
     uiUpdateDraftResponseSchema,
@@ -84,10 +87,11 @@ export interface ReviewRoutesOptions {
 
 export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
     const mirrorFileViewed = createViewedMirror(options.host);
-    const setThreadResolved = createKeyedWriteQueue((threadId: string, resolved: boolean) => {
-        const host = hostOf(options);
-        return call(() => host.setThreadResolved(threadId, resolved));
-    });
+    // One queue per ID: resolving a thread, resolving a comment and editing a published comment target the same
+    // host object (when a thread is its root), and must be applied in arrival order.
+    const queueWrite = createKeyedWriteQueue((_id: string, write: (host: ReviewHost) => Promise<void>) =>
+        call(() => write(hostOf(options))),
+    );
     return [
         {
             method: 'GET',
@@ -209,7 +213,58 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
             path: UI_ENDPOINTS.reviewThreadResolved,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(ctx, uiSetThreadResolvedRequestSchema, 'changing thread status');
-                await setThreadResolved(request.threadId, request.resolved);
+                await queueWrite(request.threadId, (host) =>
+                    host.setThreadResolved(request.threadId, request.resolved),
+                );
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewCommentResolved,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(
+                    ctx,
+                    uiSetCommentResolvedRequestSchema,
+                    'changing comment status',
+                );
+                await queueWrite(request.commentId, (host) =>
+                    hostMethod(
+                        host.setCommentResolved?.bind(host),
+                        'This host does not track resolved status on comments. The status applies to the whole thread.',
+                    )(request.commentId, request.resolved),
+                );
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewUpdateComment,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiUpdateCommentRequestSchema, 'editing a comment');
+                await queueWrite(request.commentId, (host) =>
+                    hostMethod(
+                        host.updateComment?.bind(host),
+                        'This host cannot edit published comments.',
+                    )(request.commentId, request.body, request.issue),
+                );
+                options.reviewFeed?.bumpLocalWrite();
+                return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
+            path: UI_ENDPOINTS.reviewDeleteComment,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(ctx, uiDeleteCommentRequestSchema, 'deleting a comment');
+                await queueWrite(request.commentId, (host) =>
+                    hostMethod(
+                        host.deleteComment?.bind(host),
+                        'This host cannot delete published comments.',
+                    )(request.commentId),
+                );
                 options.reviewFeed?.bumpLocalWrite();
                 return respond(uiReviewWriteAckSchema, { acknowledged: true }, 'local');
             }),
@@ -860,6 +915,17 @@ function createViewedMirror(host: ReviewHost | null): (fileId: string, viewed: b
             }
         });
     };
+}
+
+/**
+ * Optional host method. The UI does not call this with the capability flag off. A request here means
+ * the versions are out of sync, which needs a readable error message instead of a crash.
+ */
+function hostMethod<T extends (...args: never[]) => Promise<void>>(method: T | undefined, why: string): T {
+    if (method === undefined) {
+        throw new RpcFailure('bad_request', why);
+    }
+    return method;
 }
 
 function hostOf(options: ReviewRoutesOptions): ReviewHost {

@@ -107,6 +107,42 @@ function parsePatch(patch: string): HunkCounts {
     return { additions, deletions };
 }
 
+/**
+ * Lines the patch actually shows: `side:line` on both sides, including context.
+ * The UI keeps a thread anchor outside this set by attaching it to the nearest visible
+ * line, which would silently put the fixture state in the wrong place.
+ */
+function patchLines(patch: string): Set<string> {
+    const shown = new Set<string>();
+    let oldNo = 0;
+    let newNo = 0;
+    for (const line of patch.split('\n')) {
+        const header = HUNK_HEADER.exec(line);
+        if (header !== null) {
+            oldNo = Number(header[1]);
+            newNo = Number(header[3]);
+            continue;
+        }
+        if (oldNo === 0 && newNo === 0) {
+            continue;
+        }
+        const prefix = line.slice(0, 1);
+        if (prefix === '+') {
+            shown.add(`new:${String(newNo)}`);
+            newNo += 1;
+        } else if (prefix === '-') {
+            shown.add(`old:${String(oldNo)}`);
+            oldNo += 1;
+        } else if (prefix === ' ') {
+            shown.add(`old:${String(oldNo)}`);
+            shown.add(`new:${String(newNo)}`);
+            oldNo += 1;
+            newNo += 1;
+        }
+    }
+    return shown;
+}
+
 function depthOf(comment: Comment): number {
     return comment.replies.reduce((max, reply) => Math.max(max, depthOf(reply) + 1), 1);
 }
@@ -156,14 +192,23 @@ describe('fixtures: shared invariants', () => {
                 }
             });
 
-            it('anchors threads to files in this diff', () => {
+            it('anchors threads to files and lines in this diff', () => {
                 const data = fixtureIteration(name);
                 const byId = new Map(data.diff.files.map((file) => [file.fileId, file] as const));
                 for (const thread of data.threads) {
                     if (thread.anchor === null) {
                         continue;
                     }
-                    expect(byId.get(thread.anchor.fileId)?.path).toBe(thread.anchor.path);
+                    const file = byId.get(thread.anchor.fileId);
+                    expect(file?.path).toBe(thread.anchor.path);
+                    const position = thread.anchor.position;
+                    if (position === null || file?.patch === undefined || file.patch === null) {
+                        continue;
+                    }
+                    const line = `${position.side}:${String(position.line)}`;
+                    expect(patchLines(file.patch).has(line), `thread ${thread.id}: ${file.path} ${line}`).toBe(
+                        true,
+                    );
                 }
             });
 

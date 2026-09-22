@@ -14,9 +14,21 @@ import { makeHugeFixture } from './huge.js';
 import { makeLargeFixture } from './large.js';
 import { makeMediumFixture } from './medium.js';
 import { makeSmallFixture } from './small.js';
-import type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView } from './types.js';
+import type {
+    FixtureData,
+    FixtureDataInput,
+    FixtureInterdiff,
+    FixtureIteration,
+    FixtureIterationView,
+} from './types.js';
 
-export type { FixtureData, FixtureInterdiff, FixtureIteration, FixtureIterationView } from './types.js';
+export type {
+    FixtureData,
+    FixtureDataInput,
+    FixtureInterdiff,
+    FixtureIteration,
+    FixtureIterationView,
+} from './types.js';
 export {
     MEDIUM_DIFF_ID,
     MEDIUM_DIFF_ID_V2,
@@ -45,7 +57,7 @@ export type FixtureName = 'medium' | 'small' | 'large' | 'edge' | 'huge' | 'empt
 
 export const FIXTURE_NAMES: readonly FixtureName[] = ['medium', 'small', 'large', 'edge', 'huge', 'empty'];
 
-const BUILDERS: Record<FixtureName, () => FixtureData> = {
+const BUILDERS: Record<FixtureName, () => FixtureDataInput> = {
     medium: makeMediumFixture,
     small: makeSmallFixture,
     large: makeLargeFixture,
@@ -79,12 +91,13 @@ function validateInterdiff(interdiff: FixtureInterdiff): FixtureInterdiff {
  * while building the fixture, before a UI test three tasks later. Slices between iterations are also `PrDiff`,
  * so the same schema validates them.
  */
-function validate(data: FixtureData): FixtureData {
+function validate(data: FixtureDataInput): FixtureData {
     if (data.iterations.length === 0) {
         throw new Error('fixture has no iterations: the host has nothing to return');
     }
     return {
-        pr: prMetaSchema.parse(data.pr),
+        // The fixture has one current user: the person viewing the PR also writes its drafts.
+        pr: prMetaSchema.parse({ ...data.pr, viewer: data.currentUser }),
         iterations: data.iterations.map(validateIteration),
         interdiffs: data.interdiffs.map(validateInterdiff),
         ownership: data.ownership === null ? null : lensSchema.parse(data.ownership),

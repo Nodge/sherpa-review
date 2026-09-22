@@ -5,7 +5,7 @@ import { Icon } from '../icons/icon.tsx';
 import './ship-verdict-banner.css';
 
 /**
- * "Someone else ships first" (docs/design/SPEC-elements.md §4.5): someone else's ship does not cancel the review.
+ * "Someone shipped earlier" (docs/design/SPEC-elements.md §4.5): someone else's ship does not cancel the review.
  * Drafts will still be published, but the reviewer must know before pressing
  * their own button.
  *

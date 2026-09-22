@@ -38,6 +38,12 @@ export interface FixtureData {
 }
 
 /**
+ * The fixture as written by its builder. `PrMeta.viewer` is not set manually. Construction
+ * assigns `currentUser` so "me" stays the same across all parts of the fixture.
+ */
+export type FixtureDataInput = Omit<FixtureData, 'pr'> & { pr: Omit<PrMeta, 'viewer'> };
+
+/**
  * Flat fixture slice at one iteration, the shape `FixtureData` used before iterations.
  * Used by consumers that do not need iterations: UI tests, the gallery and e2e.
  */

@@ -1,9 +1,9 @@
 import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 
-import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
+import { anchor, bot, comment, human, lens, singleIteration, thread } from '../builders.js';
 import type { SyntheticParams } from './synthetic.js';
 import { modulePathOf, synthesizeFiles } from './synthetic.js';
-import type { FixtureData } from './types.js';
+import type { FixtureDataInput } from './types.js';
 
 /**
  * Large PR for virtualization (`docs/design/SPEC-elements.md §8`, item 8: 60+ files at 60fps) and the performance run.
@@ -82,6 +82,8 @@ function threads(): Thread[] {
                 author: reviewer,
                 body: 'This module still returns the old DTO shape.',
                 createdAt: '2026-08-19T10:40:00.000Z',
+                issue: true,
+                resolved: true,
             }),
         }),
         thread({
@@ -93,10 +95,106 @@ function threads(): Thread[] {
                 createdAt: '2026-08-19T11:02:00.000Z',
             }),
         }),
+        // Next are per-comment resolution states, used to build
+        // gallery cards and the Resolve button UI for each issue comment.
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(1)}/service.ts`, { side: 'new', line: 11 }),
+            root: comment({
+                id: '5300180',
+                author: reviewer,
+                body: 'The mapper swallows a null id here — is that intentional?',
+                createdAt: '2026-08-19T10:45:00.000Z',
+                issue: true,
+            }),
+        }),
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(2)}/mapper.ts`, { side: 'new', line: 18 }),
+            resolved: true,
+            resolvedBy: author.login,
+            root: comment({
+                id: '5300184',
+                author: reviewer,
+                body: 'Two mappers do the same thing now.',
+                createdAt: '2026-08-19T10:47:00.000Z',
+                issue: true,
+                resolved: true,
+                replies: [
+                    comment({
+                        id: '5300185',
+                        author,
+                        body: 'Merged them in the last push.',
+                        createdAt: '2026-08-19T10:52:00.000Z',
+                    }),
+                ],
+            }),
+        }),
+        // The root is resolved but the reply issue is open, so the thread stays open by the rule.
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(3)}/repository.ts`, { side: 'new', line: 21 }),
+            root: comment({
+                id: '5300190',
+                author: reviewer,
+                body: 'The retry loop has no ceiling.',
+                createdAt: '2026-08-19T10:50:00.000Z',
+                issue: true,
+                resolved: true,
+                replies: [
+                    comment({
+                        id: '5300191',
+                        author: reviewer,
+                        body: 'And the new ceiling is not covered by a test.',
+                        createdAt: '2026-08-19T10:58:00.000Z',
+                        issue: true,
+                    }),
+                ],
+            }),
+        }),
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(4)}/index.test.ts`, { side: 'new', line: 16 }),
+            root: comment({
+                id: '5300194',
+                author: reviewer,
+                body: 'Nice, this test reads well.',
+                createdAt: '2026-08-19T10:55:00.000Z',
+            }),
+        }),
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(5)}/service.ts`, { side: 'new', line: 13 }),
+            root: comment({
+                id: '5300198',
+                author: bot('ai-review-bot-canary', 'AI Review'),
+                body: 'The error branch of `loadOrder` is not covered by tests.',
+                createdAt: '2026-08-19T10:57:00.000Z',
+                issue: true,
+            }),
+        }),
+        // Resolved thread where I replied. The gallery mutates it to create a reply draft,
+        // since fixture source data never contains drafts (`fixtures.test.ts` invariant).
+        thread({
+            anchor: anchor(DIFF_ID, `${modulePath(6)}/mapper.ts`, { side: 'new', line: 17 }),
+            resolved: true,
+            resolvedBy: reviewer.login,
+            root: comment({
+                id: '5300202',
+                author,
+                body: 'Renamed the field to match the new contract.',
+                createdAt: '2026-08-19T10:59:00.000Z',
+                issue: true,
+                resolved: true,
+                replies: [
+                    comment({
+                        id: '5300203',
+                        author: reviewer,
+                        body: 'Then the changelog line about the old name is stale — fixed in the last push.',
+                        createdAt: '2026-08-19T11:01:00.000Z',
+                    }),
+                ],
+            }),
+        }),
     ];
 }
 
-export function makeLargeFixture(): FixtureData {
+export function makeLargeFixture(): FixtureDataInput {
     const files: FileDiff[] = synthesizeFiles(PARAMS).map((entry) => entry.file);
 
     const reviewer = human('alice', 'Alice Ingram');
@@ -124,7 +222,7 @@ export function makeLargeFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'failed',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false, blobs: false },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

@@ -33,6 +33,17 @@ export const hostCapabilitiesSchema = z.object({
     /** The host distinguishes "comment opens an issue / needs no reply" (`CommentDraft.issue`). Without it, the UI hides the control. */
     commentIssues: z.boolean(),
     /**
+     * The host tracks resolved state per comment rather than per thread (`setCommentResolved`, `Comment.resolved`):
+     * the adapter then computes `Thread.resolved` as "at least one issue exists and all issues are resolved".
+     * Without it, resolved state exists only on the thread (`setThreadResolved`), and `Comment.resolved` is always `null`.
+     */
+    commentResolve: z.boolean(),
+    /**
+     * The host allows editing and deleting your own published comments (`updateComment`, `deleteComment`).
+     * Enabled only when `PrMeta.viewer` is known: identity is needed to check ownership.
+     */
+    editPublished: z.boolean(),
+    /**
      * The host lists previous iterations and returns slices between them (`listIterations` has more than
      * one entry, `getDiff({base, head})`). Without this, `listIterations` contains only
      * the active iteration, slices are rejected, and the server cannot carry over progress or classify stops
@@ -85,6 +96,8 @@ export const prMetaSchema = z.object({
     updatedAt: z.iso.datetime(),
     capabilities: hostCapabilitiesSchema,
     verdicts: z.array(reviewerVerdictSchema),
+    /** Who is viewing the PR through Sherpa. null means the host does not know their identity. */
+    viewer: reviewUserSchema.nullable(),
 });
 export type PrMeta = z.infer<typeof prMetaSchema>;
 
@@ -268,6 +281,12 @@ export interface Comment {
      * instead of hiding it.
      */
     issue: boolean | null;
+    /**
+     * Whether this comment's issue is resolved. `null` only for hosts without `capabilities.commentResolve`.
+     * For comments without an issue, it is `false` because there is nothing to resolve. The UI shows a Resolve button on every
+     * comment with an `issue` if the host supports it.
+     */
+    resolved: boolean | null;
     createdAt: string;
     editedAt: string | null;
     replies: Comment[];
@@ -278,6 +297,7 @@ export const commentSchema: z.ZodType<Comment> = z.object({
     body: z.string(),
     draft: z.boolean(),
     issue: z.boolean().nullable(),
+    resolved: z.boolean().nullable(),
     createdAt: z.iso.datetime(),
     editedAt: z.iso.datetime().nullable(),
     get replies() {
@@ -299,6 +319,9 @@ export type ThreadPin = z.infer<typeof threadPinSchema>;
 
 /**
  * A thread contains the root comment and thread-level state.
+ * The adapter computes `resolved` for hosts with `capabilities.commentResolve`. A thread is resolved if it has
+ * at least one comment with an issue and all such issues are resolved. A thread without issues is always open. For other
+ * hosts, the thread status is used as is. The host contract suite checks the rule and invariant.
  * `anchor: null` means a PR discussion. The adapter computes `outdated`
  * (from the difference between iteration lists if the host has no such field). `pinnedTo: null` means
  * a PR discussion or that the host does not know the anchor's iteration.
@@ -324,9 +347,8 @@ export const commentDraftSchema = z.object({
     parentId: hostIdSchema.nullable(),
     anchor: fileAnchorSchema.nullable(),
     /**
-     * Whether the comment opens an issue (requires a reply). Passed only for new threads and
-     * PR-level comments. Omitted for replies and hosts without `commentIssues`,
-     * so the host uses its default.
+     * Whether the comment opens an issue (requires a response), for any comment, including replies.
+     * Omitted for hosts without `commentIssues`, so the host applies its default.
      */
     issue: z.boolean().optional(),
 });

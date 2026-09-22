@@ -157,13 +157,13 @@ The interface is in `packages/protocol/src/review-host.ts`. Required methods fal
 - Writes: `saveDraft`, `updateDraft`, `deleteDraft`, `setThreadResolved`, `publishBatch`.
 - lenses: `ownershipLens` (CODEOWNERS, `null` when the host has no ownership concept), `extraLenses`.
 
-Optional methods are `setFileViewed`, `getFileContent`, `getBlob`. Each has its own capability flag.
+Optional methods are `setFileViewed`, `getFileContent`, `getBlob`, `setCommentResolved`, `updateComment`, `deleteComment`. Each is tied to its capability flag.
 
 Subscriptions promise a full snapshot once immediately, then on every change. The adapter chooses the transport. Polling is the common denominator across hosts, so the promise is convergence, not reactivity.
 
 `getDiff` without arguments returns the active iteration. With a pair of iterations, it returns a slice between them (what changed from one to the other).
 
-The `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`) declares host capabilities with 6 flags:
+Host capabilities are declared by `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`), with 8 flags:
 
 | Flag | What it enables |
 |---|---|
@@ -171,8 +171,12 @@ The `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`) declares host c
 | `fileViewedSync` | synchronization of viewed marks with the host. Without it, `file.viewed` is always `null` and progress stays in Sherpa |
 | `fileContent` | "Expand context", expanding a file beyond the patch |
 | `commentIssues` | the "comment opens an issue / requires no reply" control |
+| `commentResolve` | resolved state on each comment with an issue (`setCommentResolved`). The adapter computes `Thread.resolved` as "there are issues and all are resolved". Without the flag, `Comment.resolved` is always `null` |
+| `editPublished` | editing and deleting your own published comments (`updateComment`, `deleteComment`) |
 | `iterations` | a list of past iterations and a slice between them. Without it, only "route is stale" is available, with no progress carryover or stop classification |
 | `blobs` | an image card in the diff. Without it, a binary file stays a "binary file not shown" line |
+
+The PR header also carries the identity of its reader. `PrMeta.viewer` is this session's reviewer (`null` means the host does not know the identity). The UI uses it to distinguish the reviewer's published comments from other people's, so hosts with `editPublished` must populate it.
 
 **Invariant: a method is implemented if and only if its corresponding flag is set.** The shared `describeReviewHostContract` suite (`packages/server/src/hosts/review-host-contract.ts`) enforces it with the same tests for every implementation. It also checks response shapes against protocol schemas, subscription promises, the two-stage draft model and consistency between `file.viewed` and `fileViewedSync`.
 
@@ -184,7 +188,7 @@ There are 2 implementations: **local checkout** (`packages/server/src/hosts/loca
 
 
 
-The local host reviews the working tree of a project directory in a Git checkout against a base commit, combining committed, staged, unstaged and untracked changes into one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter records previous iterations itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/`, and also supply the slice between 2 iterations. Of the 6 flags, `fileContent`, `blobs` and `iterations` are enabled. Without the last one, editing a single file would clear viewed marks across the whole diff. A tree has no head commit. An iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside the review state because they have no remote host. Publishing clears the draft flag, records the verdict and opens a round. The orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns that round into a `review.feedback` task. The agent edits code and replies in threads with bot comments. Its edits create a new iteration, making the route stale so the reviewer reads again.
+The local host reviews a project directory's working tree in a Git checkout against a base commit: committed, staged, unstaged and untracked changes in one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter keeps previous ones itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/` and also supply slices between 2 iterations. Four of the 8 flags are enabled: `fileContent`, `blobs`, `iterations` and `editPublished` (your own comments are edited and deleted directly in local storage). Without `iterations`, editing one file would clear viewed marks across the whole diff. There are no local issues, so resolution applies to the whole thread rather than each comment. The tree has no head commit. An iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside review state and have no remote host. Publishing clears the draft flag, records the verdict and opens a round. The orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns the round into a `review.feedback` task. The agent edits the code and replies in threads with bot comments. Its edits create a new iteration, the route becomes stale, and the reviewer reads again.
 
 Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`: `local-git-<directory>-<hash>` means a local checkout, `fixture-<name>` means a fixture. Any other key has no host, and review endpoints respond with `no_review_host`. The local host also needs the project directory, supplied by `sherpa up --local <path>` (server argument `--repo`) and saved in `~/.sherpa/prs/<key>/local-host.json`, so the daemon can restart without the flag. Reading progress remains available because it is local and needs no host.
 

@@ -10,6 +10,7 @@ const DRAFT: Comment = {
     body: 'my draft',
     draft: true,
     issue: null,
+    resolved: null,
     createdAt: '2026-08-24T10:00:00.000Z',
     editedAt: null,
     replies: [],

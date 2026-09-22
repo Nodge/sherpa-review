@@ -3,7 +3,7 @@ import type { FileDiff, LensZone, Thread } from '@sherpa/protocol';
 import { anchor, comment, human, lens, singleIteration, thread } from '../builders.js';
 import type { SyntheticFile, SyntheticParams } from './synthetic.js';
 import { modulePathOf, synthesizeFiles } from './synthetic.js';
-import type { FixtureData } from './types.js';
+import type { FixtureDataInput } from './types.js';
 
 /**
  * Performance fixture (`docs/testing.md §5`): 100 files and over 20 000 changed lines, the size used
@@ -155,7 +155,7 @@ function threads(files: readonly SyntheticFile[]): Thread[] {
     ];
 }
 
-export function makeHugeFixture(): FixtureData {
+export function makeHugeFixture(): FixtureDataInput {
     const synthesized = hugeFiles();
     const files: FileDiff[] = synthesized.map((entry) => entry.file);
 
@@ -184,7 +184,7 @@ export function makeHugeFixture(): FixtureData {
             statusLabel: 'review_in_progress',
             checks: 'pending',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false, blobs: false },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

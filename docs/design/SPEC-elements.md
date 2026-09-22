@@ -244,7 +244,7 @@ Every interactive element must implement all applicable states:
 - Rest / hover: hover lifts the row bg one step and reveals "Resolve", "Quote reply", "Copy link".
 - Reply composer: 13px input, "saved as a draft" hint under it, ⌘⏎ saves the draft, Esc discards
   with a confirm if non-empty. A draft is saved to the backend within 1s of the last keystroke and
-  shows "draft · publishes on ship".
+  shows a `draft` chip (text shortened on 2026-09-20; see SPEC-changes-2026-09-20 §4a).
 - **Edge cases:** a thread resolved by someone else while you were typing — the composer stays, with
   a notice "resolved by ada while you were writing · your reply will reopen it";
   a thread whose line no longer exists → "outdated" chip and the thread renders under the file header

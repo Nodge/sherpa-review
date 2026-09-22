@@ -1,7 +1,7 @@
 import type { PrDiff } from '@sherpa/protocol';
 
 import { human, lens, singleIteration } from '../builders.js';
-import type { FixtureData } from './types.js';
+import type { FixtureDataInput } from './types.js';
 
 /**
  * PR with no changes against the base (`docs/design/SPEC-elements.md §4.1`): the diff is empty because the entire commit is already in the base
@@ -16,7 +16,7 @@ const DIFF_ID = '204118';
 
 const UPDATED_AT = '2026-09-02T11:40:00.000Z';
 
-export function makeEmptyFixture(): FixtureData {
+export function makeEmptyFixture(): FixtureDataInput {
     const author = human('dana', 'Dana Stone');
     const reviewer = human('alice', 'Alice Ingram');
 
@@ -39,7 +39,7 @@ export function makeEmptyFixture(): FixtureData {
             statusLabel: 'waiting_for_review',
             checks: 'pending',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, iterations: false, blobs: false },
+            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(diff, [], UPDATED_AT),

@@ -90,12 +90,14 @@ function collectDrafts(comment: Comment, into: Comment[]): void {
 }
 
 /**
- * Contract invariant: `Comment.issue === null` occurs only for hosts without `commentIssues`.
- * Fixture constructors omit status by default. The host sets its own on input.
+ * Contract invariant: `Comment.issue`/`Comment.resolved` are `null` only for a host without
+ * the corresponding capability. Fixture builders usually leave status unset, so the host
+ * assigns its own on input.
  */
-function normalizeIssues(threads: readonly Thread[], fallback: boolean | null): void {
+function normalizeIssues(threads: readonly Thread[], issues: boolean, resolves: boolean): void {
     const walk = (comment: Comment): void => {
-        comment.issue = fallback === null ? null : (comment.issue ?? false);
+        comment.issue = issues ? (comment.issue ?? false) : null;
+        comment.resolved = resolves ? (comment.resolved ?? false) : null;
         for (const reply of comment.replies) {
             walk(reply);
         }
@@ -103,6 +105,53 @@ function normalizeIssues(threads: readonly Thread[], fallback: boolean | null): 
     for (const thread of threads) {
         walk(thread.root);
     }
+}
+
+function eachComment(comment: Comment, visit: (found: Comment) => void): void {
+    visit(comment);
+    for (const reply of comment.replies) {
+        eachComment(reply, visit);
+    }
+}
+
+/**
+ * Rule for a host with per-comment resolution: a thread is resolved if it has at least one issue
+ * comment and all issue comments are resolved. A thread without issues is always open, with nothing to resolve.
+ */
+function resolvedByRule(thread: Thread): boolean {
+    const issues: Comment[] = [];
+    eachComment(thread.root, (comment) => {
+        if (comment.issue === true) {
+            issues.push(comment);
+        }
+    });
+    return issues.length > 0 && issues.every((comment) => comment.resolved === true);
+}
+
+/**
+ * Recompute `Thread.resolved` by the rule. `by` names the last user to change status. null keeps
+ * the previous attribution (the fixture data supplies it).
+ */
+function applyResolveRule(thread: Thread, by: string | null): void {
+    thread.resolved = resolvedByRule(thread);
+    if (!thread.resolved) {
+        thread.resolvedBy = null;
+    } else if (by !== null) {
+        thread.resolvedBy = by;
+    }
+}
+
+/**
+ * Normalize a thread declared in data to the rule: a thread marked resolved but without any
+ * issue marks its root resolved. Otherwise the rule would reopen it, and the fixture would show
+ * a different state from the one it was written for.
+ */
+function normalizeThreadResolve(thread: Thread): void {
+    if (thread.resolved && !resolvedByRule(thread)) {
+        thread.root.issue = true;
+        thread.root.resolved = true;
+    }
+    applyResolveRule(thread, null);
 }
 
 /** Status label after an applied verdict, in the host's words as displayed by the review host. */
@@ -137,14 +186,28 @@ export class FixtureHost implements ReviewHost {
     /** Present only when the fixture host supports image bytes (`capabilities.blobs`). */
     getBlob?: (blobId: HostId) => Promise<Uint8Array | null>;
 
+    /** Present only when the fixture host supports per-comment resolution (`capabilities.commentResolve`). */
+    setCommentResolved?: (commentId: HostId, resolved: boolean) => Promise<void>;
+
+    /** Present only when the fixture host supports editing published comments (`capabilities.editPublished`). */
+    updateComment?: (commentId: HostId, body: string, issue?: boolean) => Promise<void>;
+
+    deleteComment?: (commentId: HostId) => Promise<void>;
+
     constructor(name: FixtureName, options: FixtureHostOptions = {}) {
         this.data = fixtureData(name);
         this.failPublishFor = new Set(options.failPublishFor ?? []);
         this.failDraftWrites = options.failDraftWrites ?? false;
         // Fixture data usually leaves issue status unset. The contract invariant is enforced here so
         // every comment in every data file does not need manual annotation.
+        const capabilities = this.data.pr.capabilities;
         for (const iteration of this.data.iterations) {
-            normalizeIssues(iteration.threads, this.issueOfNewComment());
+            normalizeIssues(iteration.threads, capabilities.commentIssues, capabilities.commentResolve);
+            if (capabilities.commentResolve) {
+                for (const thread of iteration.threads) {
+                    normalizeThreadResolve(thread);
+                }
+            }
         }
 
         if (this.data.pr.capabilities.fileViewedSync) {
@@ -156,10 +219,18 @@ export class FixtureHost implements ReviewHost {
         if (this.data.pr.capabilities.blobs) {
             this.getBlob = (blobId) => this.loadBlob(blobId);
         }
+        if (capabilities.commentResolve) {
+            this.setCommentResolved = (commentId, resolved) => this.applyCommentResolved(commentId, resolved);
+        }
+        if (capabilities.editPublished) {
+            this.updateComment = (commentId, body, issue) => this.applyUpdateComment(commentId, body, issue);
+            this.deleteComment = (commentId) => this.applyDeleteComment(commentId);
+        }
     }
 
     getPr(): Promise<PrMeta> {
-        return Promise.resolve(structuredClone(this.data.pr));
+        // "Me" in the fixture is both the draft author and the user viewing the PR.
+        return Promise.resolve({ ...structuredClone(this.data.pr), viewer: structuredClone(this.data.currentUser) });
     }
 
     /** Iterations up to and including the active one. Iterations rewritten by force-push are never listed. */
@@ -255,18 +326,19 @@ export class FixtureHost implements ReviewHost {
                 return Promise.reject(new Error(`parent comment ${parsed.parentId} not found`));
             }
             const reply = this.makeDraftComment(parsed.body, createdAt, found.thread.anchor === null);
+            this.applyIssueFlag(reply, parsed.issue);
             found.comment.replies.push(reply);
+            this.reapplyResolveRule(found.thread);
             this.emit();
             return Promise.resolve(structuredClone(reply));
         }
 
         const root = this.makeDraftComment(parsed.body, createdAt, parsed.anchor === null);
-        if (this.data.pr.capabilities.commentIssues && parsed.issue !== undefined) {
-            root.issue = parsed.issue;
-        }
+        this.applyIssueFlag(root, parsed.issue);
         this.activeData().threads.push({
             id: root.id,
             anchor: parsed.anchor,
+            // A new thread is open under both rules, since it cannot have resolved issues yet.
             resolved: false,
             resolvedBy: null,
             outdated: false,
@@ -295,10 +367,9 @@ export class FixtureHost implements ReviewHost {
             return Promise.reject(new Error(`comment ${commentId} is already published and cannot be edited`));
         }
         found.comment.body = body;
-        if (this.data.pr.capabilities.commentIssues && issue !== undefined) {
-            found.comment.issue = issue;
-        }
+        this.applyIssueFlag(found.comment, issue);
         found.comment.editedAt = this.nextTimestamp();
+        this.reapplyResolveRule(found.thread);
         this.emit();
         return Promise.resolve();
     }
@@ -322,18 +393,92 @@ export class FixtureHost implements ReviewHost {
             active.threads = active.threads.filter((thread) => thread !== found.thread);
         } else {
             found.parent.replies = found.parent.replies.filter((reply) => reply !== found.comment);
+            this.reapplyResolveRule(found.thread);
         }
         this.emit();
         return Promise.resolve();
     }
 
+    /**
+     * Thread-level resolution. A host with per-comment resolution updates the
+     * comment's status: it becomes an issue in the requested state, and the thread is recomputed
+     * by the rule. An open issue in a reply keeps the thread open.
+     */
     setThreadResolved(threadId: HostId, resolved: boolean): Promise<void> {
         const thread = this.activeData().threads.find((candidate) => candidate.id === threadId);
         if (thread === undefined) {
             return Promise.reject(new Error(`thread ${threadId} not found`));
         }
-        thread.resolved = resolved;
-        thread.resolvedBy = resolved ? this.data.currentUser.login : null;
+        if (this.data.pr.capabilities.commentResolve) {
+            thread.root.issue = true;
+            thread.root.resolved = resolved;
+            applyResolveRule(thread, this.data.currentUser.login);
+        } else {
+            thread.resolved = resolved;
+            thread.resolvedBy = resolved ? this.data.currentUser.login : null;
+        }
+        this.emit();
+        return Promise.resolve();
+    }
+
+    /** Resolve one issue comment. Reject comments without an issue, since there is nothing to resolve. */
+    private applyCommentResolved(commentId: HostId, resolved: boolean): Promise<void> {
+        const found = locate(this.activeData().threads, commentId);
+        if (found === null) {
+            return Promise.reject(new Error(`comment ${commentId} not found`));
+        }
+        if (found.comment.issue !== true) {
+            return Promise.reject(new Error(`comment ${commentId} does not open an issue: nothing to resolve`));
+        }
+        found.comment.resolved = resolved;
+        applyResolveRule(found.thread, this.data.currentUser.login);
+        this.emit();
+        return Promise.resolve();
+    }
+
+    /** Edit your own published comment. Drafts go through `updateDraft`. */
+    private applyUpdateComment(commentId: HostId, body: string, issue?: boolean): Promise<void> {
+        const found = locate(this.activeData().threads, commentId);
+        if (found === null) {
+            return Promise.reject(new Error(`comment ${commentId} not found`));
+        }
+        if (found.comment.draft) {
+            return Promise.reject(new Error(`comment ${commentId} is a draft: edit it through updateDraft`));
+        }
+        if (found.comment.author.login !== this.data.currentUser.login) {
+            return Promise.reject(new Error(`comment ${commentId} belongs to someone else and cannot be edited`));
+        }
+        found.comment.body = body;
+        this.applyIssueFlag(found.comment, issue);
+        found.comment.editedAt = this.nextTimestamp();
+        this.reapplyResolveRule(found.thread);
+        this.emit();
+        return Promise.resolve();
+    }
+
+    /** Delete your own published comment. The fixture physically removes it. */
+    private applyDeleteComment(commentId: HostId): Promise<void> {
+        const found = locate(this.activeData().threads, commentId);
+        if (found === null) {
+            return Promise.reject(new Error(`comment ${commentId} not found`));
+        }
+        if (found.comment.draft) {
+            return Promise.reject(new Error(`comment ${commentId} is a draft: delete it through deleteDraft`));
+        }
+        if (found.comment.author.login !== this.data.currentUser.login) {
+            return Promise.reject(new Error(`comment ${commentId} belongs to someone else and cannot be deleted`));
+        }
+        if (found.comment.replies.length > 0) {
+            return Promise.reject(new Error(`comment ${commentId} has replies: delete them first`));
+        }
+
+        if (found.parent === null) {
+            const active = this.activeData();
+            active.threads = active.threads.filter((thread) => thread !== found.thread);
+        } else {
+            found.parent.replies = found.parent.replies.filter((reply) => reply !== found.comment);
+            this.reapplyResolveRule(found.thread);
+        }
         this.emit();
         return Promise.resolve();
     }
@@ -469,10 +614,32 @@ export class FixtureHost implements ReviewHost {
             body,
             draft: true,
             issue: this.issueOfNewComment(),
+            resolved: this.data.pr.capabilities.commentResolve ? false : null,
             createdAt,
             editedAt: null,
             replies: [],
         };
+    }
+
+    /**
+     * Toggles a comment's issue flag. A host without `commentIssues` ignores it silently.
+     * Clearing issue also clears `resolved`: a comment without an issue has nothing to resolve.
+     */
+    private applyIssueFlag(comment: Comment, issue: boolean | undefined): void {
+        if (!this.data.pr.capabilities.commentIssues || issue === undefined) {
+            return;
+        }
+        comment.issue = issue;
+        if (!issue && comment.resolved !== null) {
+            comment.resolved = false;
+        }
+    }
+
+    /** Recalculates the thread by the rule, only for a host with comment-level resolution. */
+    private reapplyResolveRule(thread: Thread): void {
+        if (this.data.pr.capabilities.commentResolve) {
+            applyResolveRule(thread, null);
+        }
     }
 
     /** Initial comment issue status: `null` means the fixture host does not distinguish issues at all. */

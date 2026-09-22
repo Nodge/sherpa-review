@@ -22,6 +22,7 @@ function comment(id: string, draft: boolean, replies: Comment[] = []): Comment {
         body: `text ${id}`,
         draft,
         issue: null,
+        resolved: null,
         createdAt: '2026-08-25T10:00:00.000Z',
         editedAt: null,
         replies,

@@ -285,6 +285,9 @@ The EN / RU switch in the menu connects to the **existing full interface transla
 | language / textSize | Language / Text size | see `I18N.ru` |
 | replay / steps / commands | Replay onboarding / steps / Commands | see `I18N.ru` |
 | tourKicker / skip / back / next / start | HOW SHERPA WORKS / Skip tour / Back / Next / Start reviewing | see `I18N.ru` |
+| overview / route / fulldiff | Overview / Route / Full diff | see `I18N.ru` |
+| search / feedback | Search / Feedback | see `I18N.ru` |
+| agentOn / agentBusy / agentOff | Agent · claude-code / Agent working · 1 in queue / Agent disconnected | see `I18N.ru` |
 
 The Russian text for the eight tour steps is in `TOUR_RU` in the prototype (heading ≤2 lines, body ≤~220 characters. Russian is longer, and the 350px card was checked for every step). Changing language with the tour open recalculates the card position.
 
