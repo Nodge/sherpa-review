@@ -5,13 +5,14 @@ import { parseStop } from '@sherpa/protocol/markdown';
 /**
  * Stop description markup vocabulary (`docs/design/SPEC-changes-2026-09-20.md §2`), a third,
  * reduced markdown subset: paragraphs (separated by a blank line), `- `, `* ` or `1. ` lists
- * up to four items without nesting, inline code, bold text and links.
+ * of up to four items without nesting, inline code, bold and links. PR summaries use the same vocabulary,
+ * without the length budget.
  *
  * Parsing matches UI rendering (`@sherpa/protocol/markdown`, `stop` profile). Validation uses an
  * allowlist: anything outside the vocabulary is a violation. The budget counts visible text.
  *
- * A violation is a hard error. The entire section is regenerated, as with any other
- * invalid result. The UI does not truncate the description or add an ellipsis.
+ * A violation rejects the entire section (or skeleton for a summary) for regeneration,
+ * as with any other invalid result. The UI does not truncate text or add ellipses.
  */
 
 /** Maximum number of items in a description list. */
@@ -42,26 +43,33 @@ const ALLOWED = 'allowed: paragraphs, `- `/`* `/`1. ` lists up to 4 items, `code
  * and `planIndex` is the stop number used by the reviewer and the model.
  */
 export function paragraphMarkupErrors(at: string, planIndex: number, text: string): string[] {
+    return markupErrors(at, `paragraph of stop ${String(planIndex)}`, text, STOP_PARAGRAPH_MAX_CHARS);
+}
+
+/**
+ * Markup errors for text using the description vocabulary. `subject` names the text in the model message,
+ * and `maxChars` is the visible text budget. Length is not checked without it.
+ */
+export function markupErrors(at: string, subject: string, text: string, maxChars?: number): string[] {
     const errors: string[] = [];
-    const stop = `paragraph of stop ${String(planIndex)}`;
     const markup = parseStop(text);
 
     if (markup.visibleChars === 0) {
-        errors.push(`${at}: ${stop} has no visible text: the reviewer would see an empty description.`);
+        errors.push(`${at}: ${subject} has no visible text: the reviewer would see an empty description.`);
     }
-    if (markup.visibleChars > STOP_PARAGRAPH_MAX_CHARS) {
+    if (maxChars !== undefined && markup.visibleChars > maxChars) {
         errors.push(
-            `${at}: ${stop} is ${String(markup.visibleChars)} chars, limit is ${String(STOP_PARAGRAPH_MAX_CHARS)}. Cut it down, do not split it across stops.`,
+            `${at}: ${subject} is ${String(markup.visibleChars)} chars, limit is ${String(maxChars)}. Cut it down, do not split it across stops.`,
         );
     }
     for (const violation of Object.keys(VIOLATION_TEXT) as StopViolation[]) {
         if (markup.violations.has(violation)) {
-            errors.push(`${at}: ${stop} ${VIOLATION_TEXT[violation]}; ${ALLOWED}.`);
+            errors.push(`${at}: ${subject} ${VIOLATION_TEXT[violation]}; ${ALLOWED}.`);
         }
     }
     if (markup.longestList > MAX_LIST_ITEMS) {
         errors.push(
-            `${at}: ${stop} has a list of ${String(markup.longestList)} items, at most ${String(MAX_LIST_ITEMS)} are allowed. A list is for enumerating like things; move the rest into the prose.`,
+            `${at}: ${subject} has a list of ${String(markup.longestList)} items, at most ${String(MAX_LIST_ITEMS)} are allowed. A list is for enumerating like things; move the rest into the prose.`,
         );
     }
     return errors;

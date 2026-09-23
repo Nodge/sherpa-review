@@ -179,7 +179,10 @@ export const routeSnapshotSchema = z.object({
     previousSnapshotId: z.string().nullable(),
     /** Progress carryover result. null if there was no source to carry over from. */
     carried: routeCarriedSchema.nullable(),
-    /** PR summary. Arrives in full with the skeleton. The loop has no token streaming (`docs/protocol.md §6`). */
+    /**
+     * PR summary using stop description markup (`stop` profile, no length budget). Arrives in full
+     * with the skeleton, as the loop has no token streaming (`docs/protocol.md §6`).
+     */
     summary: z.string(),
     /** Triage order, with synthetic "Other" last. */
     stops: z.array(routeStopSchema),
@@ -196,7 +199,7 @@ export type RouteSnapshot = z.infer<typeof routeSnapshotSchema>;
  * Stops use triage order. The server assigns ids and "Other" after validation.
  */
 export const routeSkeletonResultSchema = z.object({
-    /** PR summary: markdown in the generation language, read by the reviewer. */
+    /** PR summary in the generation language, using stop description markup without a length budget. The server checks markup. */
     summary: z.string().min(1).max(20_000),
     stops: z
         .array(

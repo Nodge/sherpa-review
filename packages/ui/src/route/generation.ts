@@ -143,17 +143,6 @@ export function generationIsLong(tasks: readonly UiTask[], now: number): boolean
 }
 
 /**
- * Summary arrives as markdown. Here it splits into paragraphs at blank lines, and the
- * `route` profile renderer handles markup within each paragraph (inline code only).
- */
-export function summaryParagraphs(summary: string): readonly string[] {
-    return summary
-        .split(/\n\s*\n/)
-        .map((paragraph) => paragraph.trim())
-        .filter((paragraph) => paragraph !== '');
-}
-
-/**
  * The language used to build the route. Older snapshots have `null` in their provenance, which is read as English.
  */
 export function snapshotLocale(provenance: RouteProvenance): Locale {

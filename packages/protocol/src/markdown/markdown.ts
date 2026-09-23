@@ -9,8 +9,9 @@ import type { StateInline, Token } from 'markdown-it';
  *
  * Three profiles. `comment` supports the full syntax for comment bodies and diff markdown files. `stop` uses
  * the stop description syntax (`docs/design/SPEC-changes-2026-09-20.md §2`): paragraphs, flat
- * lists, code, bold text and links. The section validator checks it too. `route` allows only inline code,
- * for plain route text (transitions, validator notes and stop titles).
+ * lists, code, bold, links. PR summary uses it too, as do the section and
+ * skeleton validators. `route` supports only inline code for plain route text (transitions, validator notes,
+ * stop titles).
  */
 
 export type MarkdownProfile = 'comment' | 'route' | 'stop';

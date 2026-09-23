@@ -174,6 +174,32 @@ A result you keep to yourself leaves the reviewer waiting in front of an empty s
 
 Return JSON only: no prose around it, no markdown fence, no comments inside.`;
 
+/**
+ * Markup rules for text the reviewer reads in blocks: stop descriptions and the PR summary.
+ * `route/paragraph-markup.ts` checks these rules. Each guide has its own budget.
+ */
+const MARKUP_VOCABULARY = `You may use:
+
+- paragraphs, separated by a blank line;
+- one list per enumeration — \`- \` for a bullet, \`1. \` for a numbered one — **at most 4 items**,
+  never nested;
+- inline code in backticks for names from the code, like \`EditWindow\`;
+- \`**bold**\` only for what the reviewer must not miss, and sparingly;
+- \`[text](url)\` links.
+
+Never: headings, nested list items, several paragraphs in one list item, code blocks (fenced or
+indented), tables, images, block quotes, italics, strikethrough, horizontal rules, reference-style
+links (\`[label]: url\`).
+
+- A list is only for enumerating like things: conditions, files, flags. The narrative is prose.
+  After a list a closing paragraph is mandatory — the list says what, the paragraph says what
+  follows from it. A text that is only a list is a text that explains nothing.
+- Links when they help the review, not for decoration. Internal: \`#stop-<planIndex>\` jumps to
+  a stop of this route, \`#file-<path>\` to that file of the diff — \`path\` exactly as in the
+  file list. External (documentation, tickets, dashboards) open in a new tab. Only these addresses
+  are accepted: \`http(s)://\`, \`#stop-<planIndex>\`, \`#file-<path>\` — a relative path
+  like \`src/a.ts\` or \`#L42\` is rejected.`;
+
 /** Guide for a `route.skeleton` task covering the whole route plan. */
 export function skeletonGuide(locale: Locale): string {
     const text = promptLocale(locale);
@@ -183,10 +209,22 @@ ${commonGuide(locale)}
 
 ## What you produce
 
-- \`summary\` — an overview of the whole pull request, a short paragraph ${text.inLanguage}: what this
-  change does and why it exists. This is the first thing the reviewer reads.
+- \`summary\` — a short overview of the whole pull request ${text.inLanguage}: what this change does
+  and why it exists, usually one to three paragraphs. This is the first thing the reviewer reads.
+  Its markup is below.
 - \`stops\` — the plan, **in triage order** (most important first).
 - \`tourOrder\` — the same stops renumbered into narrative reading order.
+
+## The summary: markup
+
+The summary is read on the overview card before the route. It is written in the same small fixed
+markup subset as the stop descriptions; anything outside it is rejected by the server and the whole
+plan comes back for a rewrite. There is no hard length limit, but it stays an overview: the details
+belong to the stops.
+
+${MARKUP_VOCABULARY}
+- In the summary \`#stop-<planIndex>\` is a plan number of this very plan: \`#stop-1\` is the first
+  element of your \`stops\` array.
 
 ## A stop
 
@@ -286,31 +324,11 @@ For each target stop:
 The description is read in a narrow column beside the diff, so its markup is a small fixed subset.
 Anything outside it is rejected by the server and the whole section comes back for a rewrite.
 
-You may use:
-
-- paragraphs, separated by a blank line;
-- one list per enumeration — \`- \` for a bullet, \`1. \` for a numbered one — **at most 4 items**,
-  never nested;
-- inline code in backticks for names from the code, like \`EditWindow\`;
-- \`**bold**\` only for what the reviewer must not miss, and sparingly;
-- \`[text](url)\` links.
-
-Never: headings, nested list items, several paragraphs in one list item, code blocks (fenced or
-indented), tables, images, block quotes, italics, strikethrough, horizontal rules, reference-style
-links (\`[label]: url\`).
-
-- A list is only for enumerating like things: conditions, files, flags. The narrative is prose.
-  After a list a closing paragraph is mandatory — the list says what, the paragraph says what
-  follows from it. A description that is only a list is a description that explains nothing.
+${MARKUP_VOCABULARY}
+- Never link what the reviewer already has in front of them at this stop.
 - **Budget: ${String(STOP_PARAGRAPH_MAX_CHARS)} characters of visible text for the whole description**: what the reviewer
   reads on screen. Link addresses and markup (backticks, \`**\`, list markers) are not counted.
   Over it the section is rejected. The reviewer sees the text in full: it is never cut or folded.
-- Links when they help the review, not for decoration. Internal: \`#stop-<planIndex>\` jumps to
-  another stop of this route, \`#file-<path>\` to that file of the diff — \`path\` exactly as in the
-  file list. External (documentation, tickets, dashboards) open in a new tab. Only these addresses
-  are accepted: \`http(s)://\`, \`#stop-<planIndex>\`, \`#file-<path>\` — a relative path
-  like \`src/a.ts\` or \`#L42\` is rejected. Never link what the reviewer already has in front of them
-  at this stop.
 
 ## Anchors
 

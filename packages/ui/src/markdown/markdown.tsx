@@ -22,7 +22,7 @@ import './markdown.css';
  * The `comment` profile returns blocks (paragraphs, headings, blockquotes, tables, lists, code), so insert
  * it into a container. The `route` profile returns inline nodes only: the caller owns the line element (`h2`, `p`,
  * `li`), so route card layout stays unchanged.
- * `StopMarkdown` renders the stop description (`stop`), which also needs a navigation handler.
+ * `StopMarkdown` renders stop descriptions and the PR summary (`stop`). It also needs a navigation handler.
  */
 export function Markdown({ text, profile }: { text: string; profile: 'comment' | 'route' }) {
     if (profile === 'route') {
@@ -37,8 +37,8 @@ export type StopLink =
     | { readonly kind: 'file'; readonly path: string };
 
 /**
- * Stop description: the vocabulary blocks in §2 of the 09-20 spec are paragraphs and a flat list. Place it in a
- * container, just like the comment profile.
+ * Stop description and PR summary: blocks from §2 of the 09-20 spec, paragraphs and a flat list.
+ * Insert into an `.md-blocks` container.
  *
  * External links open a new tab. `onOpenLink` intercepts internal links (`#stop-N`, `#file-<path>`)
  * for the same navigation as stop file chips. Without a handler, an internal

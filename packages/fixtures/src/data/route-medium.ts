@@ -381,8 +381,15 @@ export const MODEL_STOPS: StopSpec[] = [
 /** Separate summary paragraphs. The second pass rebuilds only the one describing the contract. */
 export const SUMMARY_PARTS = [
     'The PR introduces a 30-minute edit window for scheduled delivery as a domain concept. It adds `EditWindow` and an injectable `Clock`. `EditPolicy` stops doing its own time calculations and returns a machine-readable rejection code, while the order model loses optional fields and the duplicate `editable` flag.',
-    'The external contract grew: `patchOrder` validates the body against a schema and returns 409 or 400 with the remaining time and a human-readable explanation, while `getEditWindow` returns the full decision. PCI audit records gained the remaining time and recording timestamp, PAN is masked in the `reauthorize` log, and the generated PSP schema moved from `pan` to `token`.',
-    'The rules are described in the new `docs/edit-window.md` along with the rollout order behind the `checkout_edit_window` flag. Window tests were written from scratch, and policy and endpoint tests were rewritten. The route leaves out the `CODEOWNERS` ownership rules, generated `ci.yml` and the tail of the generated PSP schema.',
+    [
+        'The external contract is broader, collected at the [API boundary](#stop-3):',
+        '- `patchOrder` validates the body against a schema and returns 409 or 400 with the remaining time and a human-readable explanation.',
+        '- `getEditWindow` returns the whole decision.',
+        '- PCI audit records gained the remaining time and write timestamp. The `reauthorize` log masks PAN.',
+        '',
+        'The generated PSP schema moved from `pan` to `token`: **the old field is no longer sent** in the request.',
+    ].join('\n'),
+    'The rules are described in the new [`docs/edit-window.md`](#file-services/orders/docs/edit-window.md), along with the rollout order behind the `checkout_edit_window` flag. The window tests are new, and the policy and endpoint tests have been rewritten. The ownership config `.github/CODEOWNERS`, generated `ci.yml` and the tail of the generated PSP schema remain outside the route.',
 ];
 
 export const SUMMARY = SUMMARY_PARTS.join('\n\n');

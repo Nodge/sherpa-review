@@ -15,7 +15,6 @@ import {
     routeViewKind,
     snapshotFilling,
     snapshotLocale,
-    summaryParagraphs,
 } from './generation.js';
 
 /** Generation state model. Phase selection and "N of M" counts all come from fixture data. */
@@ -188,12 +187,6 @@ describe('long generation', () => {
 });
 
 describe('summary and provenance', () => {
-    it('splits paragraphs on blank lines because the UI has no markdown renderer', () => {
-        expect(summaryParagraphs('first\n\n  \n second \n\nthird')).toEqual(['first', 'second', 'third']);
-        expect(summaryParagraphs('  ')).toEqual([]);
-        expect(summaryParagraphs(snapshotOf('ready').summary)).toHaveLength(3);
-    });
-
     it('provenance contains the harness, model and short commit', () => {
         expect(provenanceLine(snapshotOf('ready'), createT('en'), 'en')).toBe(
             `claude-code · claude-opus-5 · ${snapshotOf('ready').commit.slice(0, 7)}`,

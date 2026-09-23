@@ -15,8 +15,9 @@ import { createComposerTransport } from '../threads/transport.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { createThreadStore } from '../threads/store.js';
 import type { ThreadStore } from '../threads/store.js';
-import { Markdown } from '../markdown/markdown.tsx';
-import { provenanceLine, summaryParagraphs } from '../route/generation.js';
+import type { StopLink } from '../markdown/markdown.tsx';
+import { StopMarkdown } from '../markdown/markdown.tsx';
+import { provenanceLine } from '../route/generation.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
 import { ownershipSummary } from './overview-model.js';
@@ -69,6 +70,10 @@ export interface ViewFrameProps {
      * The argument restores focus to the button that opened it.
      */
     readonly onWritePrComment?: (returnFocus: () => void) => void;
+    /** Jump to a route stop from a `#stop-N` link in summary. */
+    readonly onJumpToStop?: (stopId: string) => void;
+    /** Jump to a file in Full diff from a `#file-<path>` link in summary. */
+    readonly onOpenFile?: (fileId: string) => void;
 }
 
 /**
@@ -229,6 +234,8 @@ export function OverviewView({
     picker,
     headerAside,
     onWritePrComment,
+    onJumpToStop,
+    onOpenFile,
 }: ViewFrameProps) {
     const t = useT();
     const [segment, setSegment] = useState<OwnershipSegment>('all');
@@ -275,6 +282,20 @@ export function OverviewView({
         session.setView('route');
     };
     const route = generation?.route ?? null;
+    /** A summary link: resolve the plan number and path to stop and file ids. A dead link does nothing. */
+    const openSummaryLink = (link: StopLink): void => {
+        if (link.kind === 'stop') {
+            const stop = route?.snapshot?.stops.find((candidate) => candidate.planIndex === link.planIndex);
+            if (stop !== undefined) {
+                onJumpToStop?.(stop.id);
+            }
+            return;
+        }
+        const file = diff?.files.find((candidate) => candidate.path === link.path);
+        if (file !== undefined) {
+            onOpenFile?.(file.fileId);
+        }
+    };
 
     // Empty PR (docs/design/SPEC-elements.md §4.1): Overview cards would be misleadingly empty, since there is nothing to compute zones, discussions and progress
     // from. The action panel lives one level above, so ship remains available.
@@ -304,7 +325,7 @@ export function OverviewView({
             )}
             <div className="overview__grid">
                 <div className="overview__main">
-                    <SummaryCard prKey={prKey} route={route} onReadDiff={openDiff} />
+                    <SummaryCard prKey={prKey} route={route} onReadDiff={openDiff} onOpenLink={openSummaryLink} />
                     <OwnershipCard
                         diff={diff}
                         ownership={lenses?.ownership ?? null}
@@ -359,15 +380,18 @@ export function OverviewView({
  * Summary card (docs/design/README.md §6–7). Summary arrives whole with the skeleton. There is no token streaming
  * in the loop, so the reading phase has no caret. Instead, skeleton bars have a fixed
  * height, so text arriving does not shift the layout (docs/design/SPEC-elements.md §3).
+ * Text uses the stop description format and renders the same way: paragraphs, lists, code and links.
  */
 function SummaryCard({
     prKey,
     route,
     onReadDiff,
+    onOpenLink,
 }: {
     prKey: string;
     route: UiRouteState | null;
     onReadDiff: () => void;
+    onOpenLink: (link: StopLink) => void;
 }) {
     const t = useT();
     const uiLocale = useLocale();
@@ -375,11 +399,9 @@ function SummaryCard({
     if (snapshot !== null) {
         return (
             <OverviewCard title={t('overview.summary')}>
-                {summaryParagraphs(snapshot.summary).map((paragraph) => (
-                    <p key={paragraph} className="overview-card__text">
-                        <Markdown text={paragraph} profile="route" />
-                    </p>
-                ))}
+                <div className="overview-card__text md-blocks">
+                    <StopMarkdown text={snapshot.summary} onOpenLink={onOpenLink} />
+                </div>
                 <p className="summary-card__provenance">{provenanceLine(snapshot, t, uiLocale)}</p>
             </OverviewCard>
         );

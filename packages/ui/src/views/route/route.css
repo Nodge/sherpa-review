@@ -375,9 +375,9 @@
 }
 
 /*
- * Stop description (docs/design/SPEC-changes-2026-09-20.md §2): a container of vocabulary blocks,
- * paragraphs and a flat list. Font size, line height and colour are set here and inherited by the blocks,
- * so dimming a viewed stop also dims its lists. The full text stays visible, with no clamping,
+ * Stop description (docs/design/SPEC-changes-2026-09-20.md §2), a container for vocabulary blocks
+ * (`.md-blocks`). Blocks inherit font size, line height and colour from here, so
+ * lists also get the muted tone of a viewed stop. Text is shown in full, without clamping
  * or an ellipsis. The validator's budget limits its length.
  */
 .route-stop__paragraph {
@@ -385,21 +385,8 @@
     font-size: var(--font-size-body);
     line-height: var(--line-height-body);
     color: var(--text-body);
+    /* Plain text in the Other card also uses this class without `.md-blocks`. */
     text-wrap: pretty;
-}
-
-.route-stop__paragraph .md-p {
-    margin: 0;
-}
-
-/* Every paragraph except the first gets spacing, including a conclusion after a list. */
-.route-stop__paragraph .md-p:not(:first-child) {
-    margin-top: 7px;
-}
-
-/* The gap before a list is smaller than between paragraphs: the list continues its paragraph (§2). */
-.route-stop__paragraph .md-list {
-    margin: 6px 0 0;
 }
 
 .route-stop__note {

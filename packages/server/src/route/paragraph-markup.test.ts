@@ -1,7 +1,9 @@
 import { STOP_PARAGRAPH_MAX_CHARS } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { asRawText, mediumRawResults } from './fixture-support.js';
 import { paragraphMarkupErrors } from './paragraph-markup.js';
+import { validateSkeleton } from './skeleton.js';
 
 /** The model reads the error, so tests check both rejection and its wording. */
 function errors(text: string): string[] {
@@ -148,6 +150,55 @@ describe('stop description markup vocabulary', () => {
         expect(errors(fits)).toEqual([]);
         expect(errors(`- ${prose}\n- ${'é'.repeat(21)}`)).toEqual([
             'section.stops[0].paragraph: paragraph of stop 3 is 841 chars, limit is 840. Cut it down, do not split it across stops.',
+        ]);
+    });
+});
+
+describe('PR summary uses the same vocabulary without a length budget', () => {
+    const ALLOWED = 'allowed: paragraphs, `- `/`* `/`1. ` lists up to 4 items, `code`, **bold**, [links](url)';
+
+    function summaryErrors(summary: string): readonly string[] {
+        const result = validateSkeleton(asRawText({ ...mediumRawResults().skeleton, summary }));
+        return result.ok ? [] : result.errors;
+    }
+
+    it('accepts paragraphs, a list, code, bold and links to a stop and a file', () => {
+        const summary = [
+            'The PR introduces `EditWindow`: orders can be edited for **30 minutes** after placement.',
+            '',
+            'The window is shorter for:',
+            '- fresh produce',
+            '- pharmacy',
+            '',
+            'Start with the [domain model](#stop-1), the rules are in the [README](#file-services/orders/README.md).',
+        ].join('\n');
+
+        expect(summaryErrors(summary)).toEqual([]);
+    });
+
+    it('accepts text longer than the stop description budget', () => {
+        expect(summaryErrors('a'.repeat(STOP_PARAGRAPH_MAX_CHARS * 3))).toEqual([]);
+    });
+
+    it('reports a heading or code block as a skeleton error', () => {
+        expect(summaryErrors('## Summary\n\nThe window became a domain concept.')).toEqual([
+            `skeleton.summary: summary uses a heading; ${ALLOWED}.`,
+        ]);
+        expect(summaryErrors('Example:\n\n```ts\nconst a = 1;\n```')).toEqual([
+            `skeleton.summary: summary uses a code block; ${ALLOWED}.`,
+        ]);
+    });
+
+    it('rejects a five-item list', () => {
+        const items = Array.from({ length: 5 }, (_, index) => `- item ${String(index + 1)}`).join('\n');
+        expect(summaryErrors(items)).toEqual([
+            'skeleton.summary: summary has a list of 5 items, at most 4 are allowed. A list is for enumerating like things; move the rest into the prose.',
+        ]);
+    });
+
+    it('rejects text without visible content', () => {
+        expect(summaryErrors('[](https://example.test)')).toEqual([
+            'skeleton.summary: summary has no visible text: the reviewer would see an empty description.',
         ]);
     });
 });

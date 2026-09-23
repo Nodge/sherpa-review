@@ -1,6 +1,7 @@
 import type { Locale, RouteStop } from '@sherpa/protocol';
 import { routeSkeletonResultSchema } from '@sherpa/protocol';
 
+import { markupErrors } from './paragraph-markup.js';
 import { parseResult } from './raw-result.js';
 import { routeStrings } from './strings.js';
 import type { AcceptedSkeleton, RouteValidation } from './types.js';
@@ -41,9 +42,11 @@ export function validateSkeleton(rawText: string, locale: Locale = 'en'): RouteV
     const result = parsed.value;
     const tourError = tourOrderError(result.tourOrder, result.stops.length);
     // Voice checks apply only to reviewer-facing text. `intent` goes to the section model.
+    // Summary uses the stop description vocabulary without the length budget.
     const errors = [
         ...(tourError === null ? [] : [tourError]),
         ...voiceErrors('skeleton.summary', result.summary, locale),
+        ...markupErrors('skeleton.summary', 'summary', result.summary),
         ...result.stops.flatMap((stop, index) =>
             voiceErrors(`skeleton.stops[${String(index)}].title`, stop.title, locale),
         ),

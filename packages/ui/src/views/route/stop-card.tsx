@@ -196,7 +196,7 @@ export function StopCard({
                         )}
                     </p>
                 ) : (
-                    <div className="route-stop__paragraph">
+                    <div className="route-stop__paragraph md-blocks">
                         <StopMarkdown
                             text={stop.paragraph}
                             {...(onOpenLink === undefined ? {} : { onOpenLink })}

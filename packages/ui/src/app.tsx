@@ -1036,6 +1036,10 @@ export function App({ store, session, token }: AppProps) {
                     {...(showReviewActionBar && reviewActionBarDataReady
                         ? { onWritePrComment: prComments.openModal }
                         : {})}
+                    onJumpToStop={jumpToStop}
+                    onOpenFile={(fileId) => {
+                        navigateFromPalette({ kind: 'file', fileId });
+                    }}
                     generation={{
                         route,
                         longRunning,

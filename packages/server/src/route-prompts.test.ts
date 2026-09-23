@@ -112,6 +112,21 @@ describe('route guides', () => {
         }
     });
 
+    it('summary uses the same markup rules as stop descriptions, without a length budget', () => {
+        for (const locale of LOCALES) {
+            const [skeleton] = guides(locale);
+            expect(skeleton).toContain('## The summary: markup');
+            expect(skeleton).toContain('`- ` for a bullet, `1. ` for a numbered one — **at most 4 items**');
+            expect(skeleton).toContain(
+                'Never: headings, nested list items, several paragraphs in one list item, code blocks (fenced or\nindented), tables, images, block quotes, italics, strikethrough, horizontal rules, reference-style\nlinks (`[label]: url`).',
+            );
+            expect(skeleton).toContain('Only these addresses\n  are accepted');
+            expect(skeleton).toContain('`#stop-<planIndex>` is a plan number of this very plan');
+            expect(skeleton).not.toContain('**Budget:');
+            expect(skeleton).not.toContain(String(STOP_PARAGRAPH_MAX_CHARS));
+        }
+    });
+
     it('voice rules name banned filler phrases and state that the server rejects them', () => {
         for (const guide of guides('ru')) {
             expect(guide).toContain(`«${String(bannedPhrases('ru')[0])}»`);
@@ -130,7 +145,7 @@ describe('generation language in prompts', () => {
     it('the Russian guide requires Russian in every result field', () => {
         const [skeleton, section] = guides('ru');
         expect(skeleton).toContain('**Write in Russian.**');
-        expect(skeleton).toContain('a short paragraph in Russian');
+        expect(skeleton).toContain('a short overview of the whole pull request in Russian');
         expect(skeleton).toContain('conceptual, in Russian');
         expect(skeleton).toContain('one or two sentences in Russian');
         expect(section).toContain('2 to 4 sentences in Russian');
@@ -142,7 +157,7 @@ describe('generation language in prompts', () => {
     it('the English guide requires English and does not mention Russian', () => {
         const [skeleton, section] = guides('en');
         expect(skeleton).toContain('**Write in English.**');
-        expect(skeleton).toContain('a short paragraph in English');
+        expect(skeleton).toContain('a short overview of the whole pull request in English');
         expect(section).toContain('2 to 4 sentences in English');
         expect(section).toContain('behaviour, in English');
         for (const guide of [skeleton, section]) {
