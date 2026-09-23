@@ -164,7 +164,7 @@ describe('second pass banner', () => {
             'There were viewed marks from the previous pass, but no stop stayed fully viewed.',
         );
         expect(secondPass({ kept: 0, total: 6, zeroReason: 'no_interdiff' })).toContain(
-            'Перенести отметки просмотра не вышло: хост не отдал разницу между итерациями.',
+            'The viewed marks could not be carried over: the difference between the iterations could not be computed.',
         );
         // A snapshot without a reason reports only the count.
         expect(secondPass({ kept: 0, total: 6, zeroReason: null })).toContain(

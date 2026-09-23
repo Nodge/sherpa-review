@@ -363,6 +363,7 @@ export function OverviewView({
                         now={now}
                         loading={reviewHostAvailable && threadsLoading}
                         error={threadsError}
+                        commentIssues={pr?.capabilities.commentIssues ?? false}
                         onWritePrComment={onWritePrComment}
                     />
                     {picker === undefined ? null : (

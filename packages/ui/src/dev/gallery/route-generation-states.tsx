@@ -29,7 +29,10 @@ import type { RouteGalleryState } from './route-states.tsx';
 const DATA = fixtureIteration('medium');
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
-function routeState(name: 'medium' | 'small', phase: 'reading' | 'filling' | 'failed' | 'none'): UiRouteState {
+function routeState(
+    name: 'medium' | 'small',
+    phase: 'reading' | 'filling' | 'failed' | 'none' | 'ready',
+): UiRouteState {
     const state = routeFixtures(name)?.states[phase] ?? null;
     if (state === null) {
         throw new Error(`fixture ${name} needs route state ${phase}`);
@@ -252,6 +255,11 @@ export const ROUTE_GENERATION_STATES: readonly RouteGalleryState[] = [
         id: 'overview-filling',
         title: 'Overview phase B: segment bar, plan list, counter from the snapshot',
         render: () => <OverviewState route={routeState('medium', 'filling')} />,
+    },
+    {
+        id: 'overview-ready',
+        title: 'Overview: route ready, stop list and "Open route"',
+        render: () => <OverviewState route={routeState('medium', 'ready')} />,
     },
     {
         id: 'overview-failed',

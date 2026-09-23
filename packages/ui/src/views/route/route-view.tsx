@@ -27,7 +27,7 @@ import type { ProgressWriter } from '../../progress/progress-writer.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import type { RouteSummary } from '../../route/route-summary.js';
 import type { SessionStore } from '../../session/session-store.js';
-import { createComposerTransport } from '../../threads/transport.js';
+import { createComposerTransport, createPublishedCommentTransport } from '../../threads/transport.js';
 import type { ThreadStore } from '../../threads/store.js';
 import {
     EMPTY_DELETE_NOTE,
@@ -147,6 +147,7 @@ export function RouteView({
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
     const threadTransport = useMemo(() => createComposerTransport(token), [token]);
+    const publishedTransport = useMemo(() => createPublishedCommentTransport(token), [token]);
     const resolveThread = useCallback(
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],
@@ -224,6 +225,7 @@ export function RouteView({
             parse={parse}
             loadContent={loadContent}
             threadTransport={threadTransport}
+            publishedTransport={publishedTransport}
             onResolveThread={resolveThread}
             navigation={target}
             initialSelectionTarget={requestedSelectionTarget}

@@ -32,6 +32,8 @@ export interface RouteShortcutsOptions {
     readonly focusedThreadId: string | null;
     readonly threads: readonly Thread[];
     readonly threadStore: ThreadStore;
+    /** The host's `capabilities.commentIssues`: a keyboard reply opens with the same switcher as a mouse reply. */
+    readonly commentIssues: boolean;
     readonly commentLine: (fileId: string, side: 'old' | 'new', line: number) => void;
     readonly session: SessionStore;
     readonly changeFilterOn: boolean;
@@ -60,6 +62,7 @@ export function useRouteShortcuts({
     focusedThreadId,
     threads,
     threadStore,
+    commentIssues,
     commentLine,
     session,
     changeFilterOn,
@@ -148,7 +151,7 @@ export function useRouteShortcuts({
         action: () => {
             const thread = threads.find((candidate) => candidate.id === focusedThreadId);
             if (thread !== undefined) {
-                openReply(threadStore, thread);
+                openReply(threadStore, thread, commentIssues);
             }
         },
     });

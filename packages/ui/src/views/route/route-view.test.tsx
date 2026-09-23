@@ -342,7 +342,7 @@ describe('route view', () => {
         const stop = section(html, 's01');
 
         expect(stop).toContain('route-conflicts');
-        expect(stop).toContain('в конфликте: разрешите их в хосте');
+        expect(stop).toContain('merge conflicts: resolve them outside Sherpa');
         expect(stop).not.toContain('no longer in the diff');
         // Name the anchor paths so the reviewer knows what needs resolving.
         expect(stop).toContain(target.anchors[0]?.path ?? '');

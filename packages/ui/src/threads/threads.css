@@ -4,6 +4,100 @@
     border-top: 1px solid var(--border-hairline-strong);
 }
 
+/*
+ * A collapsed thread beside code has a marker on the card border (docs/design/SPEC-changes-2026-09-20.md §3).
+ * It sits halfway outside the border and uses the page colour at rest to cover it.
+ * The row grid ignores it. The diff has no marker column.
+ */
+.thread-marker {
+    --ctl-surface: var(--surface-app);
+    --ctl-border: var(--border-control);
+
+    position: absolute;
+    left: -15px;
+    top: 1px;
+    /* Above the card corner overlay (`diff-view.css`, 3), because the marker sits on the border, not beneath it. */
+    z-index: 4;
+    gap: 3px;
+    height: 18px;
+    padding-right: 5px;
+    border-radius: 9px;
+}
+
+.thread-marker.is-open {
+    --ctl-surface: var(--accent-surface-alt);
+    --ctl-surface-hover: var(--accent-surface-alt);
+    --ctl-surface-pressed: var(--accent-surface-alt);
+    --ctl-border: var(--accent);
+}
+
+.thread-marker--resolved:not(.is-open) {
+    opacity: 0.7;
+}
+
+.thread-marker__avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--surface-pressed-deep);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-avatar-glyph);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.thread-marker__avatar--bot {
+    border-radius: var(--radius-key);
+}
+
+.thread-marker__count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-stop-mark);
+    color: var(--text-muted);
+}
+
+.thread-marker.is-open .thread-marker__count {
+    color: var(--accent-text);
+}
+
+.thread-marker--resolved:not(.is-open) .thread-marker__count {
+    color: var(--diff-add-text-strong);
+}
+
+/*
+ * Expanded thread below a line: full row width with an inset to the code column (108px in unified,
+ * 60px to the code in its half in split). The background does not depend on resolved status. The edge shows it.
+ */
+.thread-line {
+    padding-left: 108px;
+    border-top: 1px solid var(--border-hairline-strong);
+    border-bottom: 1px solid var(--border-hairline-strong);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.thread-line--resolved {
+    box-shadow: inset 2px 0 0 var(--border-standard);
+}
+
+.diff-row-extras--split .thread-line {
+    padding-left: 60px;
+}
+
+.thread-line .thread-list {
+    border-top: 0;
+}
+
+/* Expanded block background and opacity ignore resolved and bot state. The border shows status (§3). */
+.thread-line .thread--bot,
+.thread-line .thread--resolved {
+    opacity: 1;
+    background: var(--surface-card-header);
+}
+
 .thread {
     position: relative;
     background: var(--surface-card-header);
@@ -15,9 +109,12 @@
     border-top: 1px solid var(--border-hairline-strong);
 }
 
-.thread:hover,
-.thread:focus-within {
-    background: var(--surface-raised);
+/* Hover does not highlight the thread because it is not clickable. But it is a tab stop (focus highlights
+   its code lines), so the keyboard focus ring must be visible. `outline: none` above removes the shared outline
+   from base.css. The ring sits inside because the block has no margin of its own outside. */
+.thread:focus-visible {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: -2px;
 }
 
 .thread--bot {
@@ -30,12 +127,123 @@
     opacity: 0.72;
 }
 
+/*
+ * Card variant for PR-level threads in the modal (docs/design/SPEC-changes-2026-09-20.md §4):
+ * a list of separate cards instead of a strip under a code line. Everything else, including message
+ * structure, actions and Resolve, is the same as beside code.
+ */
+.thread-list--card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 0;
+}
+
+/* The card shares the list background (§4). Its border separates it from the list, without a colour change. */
+.thread--card {
+    border: 1px solid var(--border-hairline-strong);
+    border-radius: var(--radius-popover);
+    background: var(--surface-diff-card);
+}
+
+/* Cards are not dimmed. The header indicates bot and resolved state, without fading the background (§4). */
+.thread--card.thread--bot,
+.thread--card.thread--resolved {
+    opacity: 1;
+    background: var(--surface-diff-card);
+}
+
+/* Drafts have their own background and 2px left border, like the closed composer field (§4b). */
+.thread--card.thread--draft {
+    border-color: var(--pr-comments-draft-border);
+    border-left: 2px solid var(--attention-border-strong);
+    border-radius: 0 var(--radius-popover) var(--radius-popover) 0;
+    background: var(--pr-comments-draft-surface);
+}
+
+.thread--card .thread__row {
+    padding: 10px 12px;
+}
+
+/* The chevron precedes the root avatar and shifts its column by 29px (20 + gap 9).
+   The root body and actions sit directly under its name. */
+.thread--card .thread__row:first-child {
+    --thread-indent: 56px;
+}
+
+/* Replies in a card start at the same column as the root text (29px after the chevron). */
+.thread--card .thread__row--reply {
+    margin-left: calc(29px + var(--reply-indent));
+    /* The extra 2 brings the gap between messages to 12px. The previous message provides 10 at its bottom. */
+    padding-top: 2px;
+}
+
+/* A 13px text line wider than 760px is unreadable. Extra width goes to the header and spacing (§4). */
+.thread--card .thread__body {
+    max-width: 760px;
+}
+
+/* The reply composer expands directly under its message, in its text column (§3, §4). */
+.thread__row .thread-composer {
+    max-width: 733px;
+    margin-top: 8px;
+    padding: 0 0 0 var(--thread-indent);
+}
+
+/* Collapsed thread: one h22 row with a chevron, root header, first line, "N replies" and status. */
+.thread--card.is-collapsed .thread__row {
+    padding: 6px 12px;
+}
+
+.thread--card.is-collapsed .thread__author-line {
+    min-height: 22px;
+}
+
+.thread__chevron {
+    flex: none;
+}
+
+.thread__preview {
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted-dim);
+    font: inherit;
+    font-size: var(--font-size-secondary);
+    white-space: nowrap;
+    text-align: left;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.thread__reply-count {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+    color: var(--text-muted-dim);
+}
+
 .thread__row {
+    /* Message text column: avatar 18 + gap 9. A thread card in the modal shifts it
+       for the root because a chevron precedes the avatar there. */
+    --thread-indent: 27px;
+    /* Reply indentation by depth. No one sets the variable on the root. */
+    --reply-indent: 0px;
+
     padding: 10px 12px 11px;
 }
 
+/*
+ * Avatars, names and indentation identify replies without lines, left borders or separators (§3).
+ * The view sets `--reply-indent` from `FlatComment.indent`, 27px per level up to level 4.
+ * The extra 1 at the top brings the gap between messages to 12px. The previous message provides 11 at its bottom.
+ */
 .thread__row--reply {
-    border-left: 1px solid var(--border-standard);
+    margin-left: var(--reply-indent);
+    padding-top: 1px;
 }
 
 .thread__row.is-editing {
@@ -50,24 +258,21 @@
     padding: 0;
 }
 
-.thread__row.is-editing .thread-composer__context {
-    display: none;
-}
-
+/* Indentation stops growing after level 4, and the header label names the recipient.
+   Its colour matches the anchor and time beside it. The label is less prominent than the name, but matches the metadata. */
 .thread__reply-hint {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
+    flex: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-scope);
-    color: var(--text-dim-strong);
+    color: var(--text-dim);
+    white-space: nowrap;
 }
 
 .thread__author-line {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
+    min-height: 24px;
     min-width: 0;
 }
 
@@ -95,24 +300,10 @@
     color: var(--text-primary-soft);
 }
 
-.thread__meta,
-.thread__reply-count {
+.thread__meta {
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
     color: var(--text-dim);
-}
-
-.thread__reply-count {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.thread__reply-toggle {
-    padding: 0;
-    border: 0;
-    background: none;
-    cursor: pointer;
 }
 
 .thread__chip {
@@ -122,6 +313,12 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-badge);
     color: var(--text-muted);
+}
+
+.thread__chip--issue {
+    border-color: var(--accent-border);
+    background: var(--accent-surface-alt);
+    color: var(--accent-text);
 }
 
 .thread__chip--draft {
@@ -151,22 +348,13 @@
     flex: 1;
 }
 
-.thread__draft-actions {
-    display: inline-flex;
-    gap: 5px;
-}
-
-.thread__edit-draft:disabled,
-.thread__delete-draft:disabled {
-    cursor: default;
-    opacity: var(--disabled-opacity);
-}
-
 .thread__delete-confirm {
     display: flex;
     align-items: center;
     gap: 9px;
-    margin: 9px 0 0 25px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 6px 0 0 var(--thread-indent, 27px);
     padding: 7px 9px;
     border: 1px solid var(--pr-comments-delete-border);
     border-radius: 6px;
@@ -181,122 +369,48 @@
     opacity: var(--disabled-opacity);
 }
 
-/* Comment bodies render as markdown. Paragraphs and line breaks use elements, not `pre-wrap`. */
+/* Comment bodies render as Markdown. Elements handle paragraphs and line breaks, without `pre-wrap`.
+   Indentation 27px = avatar 18 + gap 9: reply text sits in the root text column (§3). */
 .thread__body {
-    margin: 6px 0 0 25px;
+    margin: 6px 0 0 var(--thread-indent, 27px);
     font-size: var(--font-size-ui);
-    line-height: 1.55;
+    line-height: 1.6;
     color: var(--text-secondary);
 }
 
-.thread__actions {
+/*
+ * Message actions are links below its text, visible at rest (§3). The row has the same geometry
+ * with and without Reply (for drafts). The mockup only shows it with Reply:
+ * 12px, 14px line height, 6px to the text.
+ */
+.thread__row-actions {
     display: flex;
-    justify-content: flex-end;
-    gap: var(--space-inner);
-    min-height: 24px;
-    padding: 0 12px 8px;
-    opacity: 0;
-    transition: opacity var(--motion-hover) var(--motion-hover-ease);
+    align-items: center;
+    gap: 14px;
+    margin: 6px 0 0 var(--thread-indent, 27px);
+    min-height: 18px;
+    font-size: var(--font-size-control);
 }
 
-.thread:hover .thread__actions,
-.thread:focus-within .thread__actions,
-.thread__actions--undo {
-    opacity: 1;
-}
-
-.thread__actions button,
-.thread__more,
-.thread__undo button,
-.thread-composer__status button,
-.thread-composer__confirm button {
+.thread-composer__status button {
     font-size: var(--font-size-meta);
 }
 
-.thread__undo {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--diff-add-text-strong);
-}
-
-.thread__more {
-    margin: 0 12px 8px 37px;
-    font-family: var(--font-mono);
-}
-
-.thread-composer-entry {
-    display: flex;
-    align-items: center;
-    gap: var(--space-inner-tight);
-    width: calc(100% - 49px);
-    height: 32px;
-    margin: 0 12px 10px 37px;
-    padding: 0 10px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-input);
-    background: var(--surface-diff-gap);
-    font: inherit;
-    font-size: var(--font-size-ui);
-    color: var(--text-dim);
-    cursor: text;
-}
-
-.thread-composer-entry:hover {
-    background: var(--surface-hover);
-}
-
-.thread-composer-entry > :first-child {
-    flex: 1;
-    text-align: left;
-}
-
-.thread-composer-entry > svg {
-    color: var(--text-muted-dim);
-}
-
-.thread-composer-draft-preview {
-    display: block;
-    width: calc(100% - 49px);
-    margin: 0 12px 10px 37px;
-    padding: 8px 10px;
-    border: 1px solid var(--attention-border);
-    border-radius: var(--radius-input);
-    background: var(--draft-field-surface);
-    font: inherit;
-    text-align: left;
-    color: var(--attention-text-soft);
-    cursor: text;
-}
-
-.thread-composer-draft-preview:hover {
-    background: var(--attention-surface-alt);
-}
-
-.thread-composer-draft-preview__meta {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-.thread-composer-draft-preview__body {
-    display: block;
-    font-size: var(--font-size-ui);
-    line-height: 1.55;
-    white-space: pre-wrap;
+/* Composer confirmation replaces the button row, at the left field edge. There is no text column here. */
+.thread-composer .thread__delete-confirm {
+    margin: var(--space-inner) 0 0;
 }
 
 .thread-composer {
-    padding: 0 12px 10px 37px;
+    padding: 0 12px 10px 39px;
 }
 
-.thread-composer__context {
+/* Issue switch row: first composer row, 8px to the border (§1). */
+.thread-composer__issue-row {
     display: flex;
     align-items: center;
-    gap: var(--space-inner-tight);
-    min-height: 25px;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-gutter);
-    color: var(--text-dim);
+    min-height: 22px;
+    margin-bottom: 8px;
 }
 
 .thread-composer__editor {
@@ -451,12 +565,16 @@
     opacity: var(--disabled-opacity);
 }
 
-.thread-composer__issue {
-    font-size: var(--font-size-meta);
+/* Autosave status sits below the field, outside the button row (§4b). */
+.thread-composer__status-line:empty {
+    display: none;
+}
+
+.thread-composer__status-line {
+    margin-top: 6px;
 }
 
 .thread-composer__status,
-.thread-composer__confirm,
 .thread-composer__notice {
     font-family: var(--font-mono);
     font-size: var(--font-size-control);
@@ -467,7 +585,6 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    text-align: right;
 }
 
 .thread-composer__status.is-saved > svg {
@@ -496,13 +613,6 @@
 .diff-line-composer .thread-composer {
     max-width: 620px;
     padding: 0;
-}
-
-.diff-line-composer .thread-composer__context {
-    min-height: 0;
-    margin-bottom: 8px;
-    color: var(--text-dim-strong);
-    font-size: var(--font-size-meta);
 }
 
 .diff-row__comment {
@@ -535,8 +645,10 @@
     opacity: 0;
 }
 
+/* Focusing the thread marker does not show the pencil. Focus stays in the row after clicking the marker,
+   so the pencil would stay visible in the expanded row. Keyboard focus on the row itself does show it. */
 .diff-row:not(.diff-row--pair):hover .diff-row__comment,
-.diff-row:not(.diff-row--pair):focus-within .diff-row__comment,
+.diff-row:not(.diff-row--pair):focus-within:not(:has(.thread-marker:focus)) .diff-row__comment,
 .diff-row--pair:has(> .diff-side[data-side='old']:hover) > .diff-row__gutter[data-side='old'] .diff-row__comment,
 .diff-row--pair:has(> .diff-side[data-side='new']:hover) > .diff-row__gutter[data-side='new'] .diff-row__comment,
 .diff-row--pair:has(> .diff-side[data-side='old']:focus-within) > .diff-row__gutter[data-side='old'] .diff-row__comment,

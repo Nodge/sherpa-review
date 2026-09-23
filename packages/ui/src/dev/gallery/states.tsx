@@ -28,6 +28,7 @@ import { FILTER_STATES } from './filters-states.tsx';
 import { COMMENT_COMPOSER_STATES } from './comment-composer-states.tsx';
 import { ROUTE_REBUILD_STATES } from './route-rebuild-states.tsx';
 import { PR_COMMENTS_STATES } from './pr-comments-states.tsx';
+import { CODE_THREAD_STATES } from './code-threads-states.tsx';
 import { LINE_COMMENT_STATES } from './line-comments-states.tsx';
 import { ROUTE_STOP_FAILURE_STATES } from './route-stop-failure-states.tsx';
 import { SELECTION_POPOVER_STATES } from './selection-popover-states.tsx';
@@ -206,6 +207,12 @@ export const GALLERY_STATES: readonly GalleryState[] = [
     ...LINE_COMMENT_STATES.map((state) => ({
         id: state.id,
         group: 'Line comments',
+        title: state.title,
+        render: state.render,
+    })),
+    ...CODE_THREAD_STATES.map((state) => ({
+        id: state.id,
+        group: 'Threads at code',
         title: state.title,
         render: state.render,
     })),

@@ -350,7 +350,7 @@ export const ru = {
     'iteration.secondPass.carried.noOverlap':
         'Отметки просмотра с прошлого захода были, но целиком просмотренной не осталась ни одна остановка. ',
     'iteration.secondPass.carried.noInterdiff':
-        'Перенести отметки просмотра не вышло: хост не отдал разницу между итерациями. ',
+        'Перенести отметки просмотра не вышло: разницу между итерациями посчитать не удалось. ',
     'iteration.secondPass.carried.none': (total: number) =>
         `Просмотренной не осталось ни одной остановки из ${num(total)}. `,
     'iteration.secondPass.changed': (changed: number) =>
@@ -380,8 +380,7 @@ export const ru = {
     'iteration.readOnly.sliceReason': 'в срезе между итерациями',
 
     'thread.chip.editing': 'правится',
-    'thread.chip.draft': 'черновик · уйдёт при шипе',
-    'thread.chip.draftShort': 'draft · publishes on ship',
+    'thread.chip.draft': 'draft',
     'thread.draft.editAria': (commentId: string) => `Править черновик ${commentId}`,
     'thread.draft.edit': 'Править черновик',
     'thread.draft.deleteAria': (commentId: string) => `Удалить черновик ${commentId}`,
@@ -391,17 +390,17 @@ export const ru = {
     'thread.draft.deleting': 'Удаляется…',
     'thread.draft.deleteAction': 'Удалить',
     'thread.draft.keep': 'Оставить',
-    'thread.draft.continue': 'Продолжить черновик',
-    'thread.draft.pinned': (commit: string) => `черновик · закреплён за ${commit}`,
     'thread.replies': (replies: number) =>
         `${num(replies)} ${form(replies, 'ответ', 'ответа', 'ответов')}`,
-    'thread.more': (hidden: number) => `ещё ${num(hidden)}`,
     'thread.reopen': 'Переоткрыть',
     'thread.resolve': 'Resolve',
-    'thread.copyLink': 'Копировать ссылку',
-    'thread.undo.resolved': 'resolved',
-    'thread.undo.reopened': 'переоткрыт',
-    'thread.undo.action': 'отменить',
+    'thread.resolved': 'Resolved',
+    'thread.comment.edit': 'Редактировать',
+    'thread.comment.editAria': (commentId: string) => `Редактировать комментарий ${commentId}`,
+    'thread.comment.delete': 'Удалить',
+    'thread.comment.deleteAria': (commentId: string) => `Удалить комментарий ${commentId}`,
+    'thread.comment.deleteConfirm': 'Удалить комментарий?',
+    'thread.comment.deleteFailed': 'Не удалось удалить комментарий. Повторить?',
     'thread.pin.chip': (commit: string) => `закреплён за ${commit}`,
     'thread.pin.open': 'Показать на старом коммите',
     'thread.outside.gone': (threads: number) =>
@@ -410,24 +409,18 @@ export const ru = {
         `${num(threads)} ${form(threads, 'тред', 'треда', 'тредов')} вне диффа`,
     'thread.meta': (path: string, when: string) => `${path} · ${when}`,
     'thread.meta.line': (path: string, lines: string, when: string) => `${path}:${lines} · ${when}`,
-    'thread.lineRange.one': (line: number) => `строка ${num(line)}`,
-    'thread.lineRange.many': (lines: string) => `строки ${lines}`,
-    'thread.reply.entry': 'Ответить…',
-    'thread.reply.context': (author: string) => `ответ для ${author}`,
+    'thread.reply.action': 'Ответить',
     'thread.reply.placeholder': 'Ответить в тред',
     'thread.reply.label': 'Ответ в тред',
     'thread.resolvedWhileTyping': (who: string) =>
         `resolved by ${who}, пока вы писали · ваш ответ переоткроет тред`,
     'thread.otherReviewer': 'другой ревьюер',
 
-    'thread.composer.editContext': 'правка черновика',
     'thread.composer.editLabel': 'Правка черновика',
+    'thread.composer.editPublishedLabel': 'Правка комментария',
     'thread.composer.linePlaceholder': 'Текст комментария к строке',
-    'thread.composer.prContext': 'комментарий к PR',
-    'thread.composer.newContext': (range: string) => `новый комментарий · ${range}`,
     'thread.composer.prPlaceholder': 'Общее замечание по PR — не привязано к строке',
     'thread.composer.codePlaceholder': 'Комментарий к строке кода',
-    'thread.composer.fileContext': (name: string) => `комментарий к файлу · ${name}`,
     'thread.composer.filePlaceholder': 'Замечание по файлу целиком — не привязано к строке',
     'thread.composer.newLabel': 'Новый комментарий',
     'thread.composer.saveDraft': 'Сохранить черновик',
@@ -439,16 +432,16 @@ export const ru = {
     'thread.composer.visual': 'Визуально',
     'thread.composer.cancel': 'Отмена',
     'thread.composer.openIssue': 'Открыть issue',
-    'thread.composer.discardAsk': 'Сбросить этот черновик?',
-    'thread.composer.discard': 'сбросить',
-    'thread.composer.keepEditing': 'продолжить',
+    'thread.composer.openIssue.on': 'Открыть issue, включено',
+    'thread.composer.openIssue.off': 'Открыть issue, выключено',
     'thread.composer.status.discarding': 'удаляется…',
     'thread.composer.status.buffered': 'сохраним, когда связь вернётся ·',
     'thread.composer.status.bufferedRetry': 'повторить',
-    'thread.composer.status.error': 'не сохранено — черновик остаётся в поле · ',
+    'thread.composer.status.error': 'Не удалось сохранить · ',
     'thread.composer.status.retry': 'повторить',
     'thread.composer.status.saving': 'сохраняю…',
     'thread.composer.status.saved': 'сохранено как черновик',
+    'thread.composer.status.savedPublished': 'изменения сохранены',
     'thread.composer.status.unsaved': 'не сохранено — ⌘⏎ или кнопка',
     'thread.tool.bold': 'Жирный · ⌘B',
     'thread.tool.italic': 'Курсив · ⌘I',
@@ -458,6 +451,12 @@ export const ru = {
     'thread.tool.list': 'Список',
     'thread.placeholder.text': 'текст',
     'thread.placeholder.code': 'код',
+    'thread.marker.expand': (author: string, preview: string) => `Раскрыть: ${author} · ${preview}`,
+    'thread.marker.collapse': (author: string, preview: string) => `Свернуть: ${author} · ${preview}`,
+    'thread.marker.aria': (messages: number) =>
+        `Тред у строки, ${num(messages)} ${form(messages, 'сообщение', 'сообщения', 'сообщений')}`,
+    'thread.collapseAll': 'свернуть все',
+    'thread.expandAll': 'развернуть все',
     'thread.note.lostDraft': 'якорь потерян — комментарий не к чему привязать',
     'thread.note.lostAnchor': 'якорь потерян — в коде этой итерации заметки нет',
 
@@ -479,7 +478,7 @@ export const ru = {
         `${num(changed)} ${form(changed, 'изменённая строка', 'изменённые строки', 'изменённых строк')} — в других остановках`,
     'diff.expand.loaded': (loaded: number) => `догружено ${num(loaded)} ${form(loaded, 'строка', 'строки', 'строк')}`,
     'diff.expand.hidden': (hidden: number) => `скрыто ${num(hidden)}`,
-    'diff.expand.noContent': 'хост не отдаёт содержимое файлов — расширять контекст нечем',
+    'diff.expand.noContent': 'содержимое файлов недоступно — расширять контекст нечем',
     'diff.expand.parsing': 'дифф ещё разбирается',
     'diff.expand.noFileContent': 'у этого файла нет содержимого',
     'diff.expand.allShownElsewhere': (elsewhere: string) => `весь контекст на экране; ${elsewhere}`,
@@ -541,11 +540,11 @@ export const ru = {
     'image.size.kilobytes': (value: number) => `${dec(value)} КБ`,
     'image.size.megabytes': (value: number) => `${dec(value)} МБ`,
     'image.loading': 'загружается…',
-    'image.missing': 'нет у хоста',
+    'image.missing': 'картинка недоступна',
     'image.failed': (reason: string) => `не загрузилось: ${reason}`,
     'image.retry': 'Повторить',
     'image.tooLarge': (size: string) => `слишком большая: ${size}`,
-    'image.openAtHost': 'Открыть у хоста',
+    'image.openAtHost': 'Открыть на сервере',
     'image.alt.before': (path: string) => `${path} — было`,
     'image.alt.after': (path: string) => `${path} — стало`,
     'image.swipe.aria': 'Разделитель сравнения',
@@ -569,7 +568,7 @@ export const ru = {
     'fullDiff.sliceEmpty': (base: string, head: string) =>
         `Между итерациями ${base} → ${head} изменений нет`,
     'fullDiff.skeleton.aria': 'Дифф загружается',
-    'fullDiff.slice.loading': 'срез между итерациями считает хост, это дольше обычного',
+    'fullDiff.slice.loading': 'срез между итерациями считается на сервере, это дольше обычного',
     'fullDiff.slice.noContent': 'в срезе содержимое файлов недоступно',
     'fullDiff.slice.noAsk': 'в срезе вопрос не привязать к файлу — спросите в активной итерации',
     'fullDiff.outline.binary': 'Бинарный файл — оглавлять нечего.',
@@ -658,21 +657,18 @@ export const ru = {
 
     'prComments.title': 'Комментарии к PR',
     'prComments.context': (prId: string) => `вне диффа · ${prId}`,
-    'prComments.drafts': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} · ${form(drafts, 'уйдёт', 'уйдут', 'уйдут')} при Ship`,
     'prComments.close': 'Закрыть комментарии к PR',
     'prComments.close.title': 'Закрыть · Esc',
     'prComments.empty': 'Комментариев к PR пока нет. Написанное здесь уйдёт вместе с ревью при Ship.',
-    'prComments.published': 'опубликован',
     'prComments.placeholder': 'Текст комментария к PR',
     'prComments.new': 'Написать комментарий к PR…',
     'prComments.footer': 'Черновики публикуются пакетом при Ship — вместе с комментариями к строкам',
     'prComments.hint.save': 'сохранить',
     'prComments.escape.cancel': 'отмена',
     'prComments.escape.close': 'закрыть',
-    'prComments.buffered.label': 'Черновики, не сохранённые в хост',
+    'prComments.buffered.label': 'Черновики, которые ещё не отправлены',
     'prComments.buffered.title': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ждёт', 'ждут', 'ждут')} связи с хостом — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ждёт', 'ждут', 'ждут')} связи с сервером — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
     'prComments.buffered.retry': 'Повторить',
     'prComments.buffered.discard': 'Удалить',
 
@@ -722,7 +718,7 @@ export const ru = {
         `${num(published)} (из них ${num(replies)} ${form(replies, 'ответ', 'ответа', 'ответов')})`,
     'complete.snapshot': 'Подписан снапшот',
     'complete.openThreads': (threads: number) =>
-        `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыто')} — это не блокирует шип, но остаётся в вашем списке`,
+        `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыто')} — шипу это не мешает`,
     'complete.openThread': 'Открыть тред',
     'complete.verdict.requestChanges': 'Запрошены изменения',
     'complete.verdict.shipped': 'Shipped',
@@ -759,16 +755,9 @@ export const ru = {
     'agent.uptime.minutes': (minutes: number) => `${num(minutes)} мин`,
     'agent.uptime.hours': (hours: number, minutes: number) => `${num(hours)} ч ${num(minutes)} мин`,
 
-    'toolbar.comments': 'Комментарии:',
     'toolbar.splitUnavailable': 'не хватает ширины для двух колонок',
     'toolbar.mode.unified': 'одной колонкой',
     'toolbar.mode.split': 'бок о бок',
-    'toolbar.commentsHidden': 'Комментарии скрыты ·',
-    'toolbar.undo': 'отменить',
-    'toolbar.chip.people': 'Люди',
-    'toolbar.chip.bots': 'Боты',
-    'toolbar.chips.aria': 'Источники комментариев',
-    'toolbar.chip.empty': (label: string) => `В этом PR нет тредов категории «${label}»`,
 
     'selection.clipboardUnavailable': 'Буфер обмена недоступен.',
     'selection.copyFailed': 'Не удалось скопировать ссылку.',
@@ -804,18 +793,18 @@ export const ru = {
     'file.menu.more': 'Действия с файлом',
     'file.menu.copyPath': 'Скопировать путь',
     'file.menu.copyLink': 'Скопировать ссылку на файл',
-    'file.menu.copyLinkUnavailable': 'у хоста нет веб-ссылки',
+    'file.menu.copyLinkUnavailable': 'у этого файла нет веб-ссылки',
     'file.menu.openWeb': 'Открыть в вебе',
     'file.menu.commentFile': 'Комментарий к файлу',
     'file.menu.markViewed': 'Просмотрено',
     'file.menu.unmarkViewed': 'Снять отметку',
     'route.stop.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'файл этой остановки', 'файла этой остановки', 'файлов этой остановки')} в конфликте: разрешите ${form(files, 'его', 'их', 'их')} в хосте. В покрытие маршрута конфликты не входят, поэтому карточек здесь нет.`,
+        `${num(files)} ${form(files, 'файл этой остановки', 'файла этой остановки', 'файлов этой остановки')} в конфликте: разрешить ${form(files, 'его', 'их', 'их')} можно только вне Шерпы. В покрытие маршрута конфликты не входят, поэтому карточек здесь нет.`,
     'route.other.none': 'Без остановки не осталось ни одной изменённой строки — весь дифф разобран маршрутом.',
     'route.other.conflictsOnly':
         'Этот слот держат только конфликты: маршрут их не объясняет и прочитать их здесь нельзя.',
     'route.other.conflicts': (files: number) =>
-        `${num(files)} ${form(files, 'файл с конфликтом', 'файла с конфликтами', 'файлов с конфликтами')} — ${form(files, 'разрешите его в хосте, в покрытие он не входит', 'разрешите их в хосте, в покрытие они не входят', 'разрешите их в хосте, в покрытие они не входят')}`,
+        `${num(files)} ${form(files, 'файл с конфликтом', 'файла с конфликтами', 'файлов с конфликтами')} — ${form(files, 'разрешить его можно только вне Шерпы, в покрытие он не входит', 'разрешить их можно только вне Шерпы, в покрытие они не входят', 'разрешить их можно только вне Шерпы, в покрытие они не входят')}`,
     'route.cap.note': (covered: number, total: number) =>
         `план покрывает ${num(covered)} ${form(covered, 'файл', 'файла', 'файлов')} из ${num(total)}`,
     'route.cap.note.machine': (covered: number, total: number, machine: number) =>
@@ -859,8 +848,8 @@ export const ru = {
     'overview.ownership.statsUnavailable': 'CODEOWNERS · зона ответственности недоступна',
     'overview.ownership.mine': (files: number) => `Моя зона ${num(files)}`,
     'overview.ownership.all': (files: number) => `Все ${num(files)}`,
-    'overview.ownership.noZone': 'Хост не отдал зону ответственности для этого PR.',
-    'overview.ownership.noHost': 'У этого PR нет ревью-хоста, поэтому зона ответственности недоступна.',
+    'overview.ownership.noZone': 'Зона ответственности для этого PR не пришла.',
+    'overview.ownership.noHost': 'Этот PR читается без сервиса ревью, поэтому зона ответственности недоступна.',
     'overview.ownership.loading': 'Зона ответственности загружается…',
     'overview.ownership.chip.mine': 'ваши',
     'overview.ownership.chip.mineOwner': (owner: string) => `ваши · ${owner}`,
@@ -956,10 +945,10 @@ export const ru = {
     'ship.drafts.pinned': (drafts: number) =>
         `· ${num(drafts)} ${form(drafts, 'закреплён', 'закреплены', 'закреплены')} за прошлыми коммитами`,
     'ship.publishing': 'Публикуется…',
+    // `issue` is the review host's term and stays unchanged in Russian, just like the `draft` chip.
+    'ship.drafts.issues': (drafts: number) => `· ${num(drafts)} ${form(drafts, 'issue', 'issues', 'issues')}`,
     'ship.drafts.buffered': (drafts: number) =>
-        `· ${num(drafts)} ${form(drafts, 'ещё не сохранён', 'ещё не сохранены', 'ещё не сохранены')} в хост`,
-    'ship.openThreads': (threads: number) =>
-        `${num(threads)} ${form(threads, 'нерешённый тред', 'нерешённых треда', 'нерешённых тредов')}`,
+        `· ${num(drafts)} ${form(drafts, 'ещё не отправлен', 'ещё не отправлены', 'ещё не отправлены')}`,
     'ship.guard.stops': (stops: number) =>
         `${num(stops)} ${form(stops, 'остановка не просмотрена', 'остановки не просмотрены', 'остановок не просмотрено')} — всё равно шипнуть?`,
     'ship.guard.files': (files: number) =>
@@ -968,7 +957,7 @@ export const ru = {
     'ship.mode.sticky': 'Sticky ship',
     'ship.mode.ship.description': 'Одобряет только этот снапшот. Новый пуш снимает одобрение и спросит снова.',
     'ship.mode.sticky.description': 'Одобрение переносится на следующие пуши — обычный sticky ship хоста.',
-    'ship.mode.sticky.unavailable': 'Этот хост не поддерживает Sticky ship.',
+    'ship.mode.sticky.unavailable': 'Здесь Sticky ship недоступен.',
     'ship.option.publishes': (drafts: number) =>
         `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')}.`,
     'ship.consequence.ship': (drafts: number) =>
@@ -980,7 +969,7 @@ export const ru = {
     'ship.disabled.pending': 'есть несохранённый текст',
     'ship.disabled.retry': 'сначала повторите предыдущую публикацию',
     'ship.disabled.buffered': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ещё не сохранён', 'ещё не сохранены', 'ещё не сохранены')} в хост — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'ещё не отправлен', 'ещё не отправлены', 'ещё не отправлены')} — ship недоступен, пока ${form(drafts, 'не сохранится', 'не сохранятся', 'не сохранятся')}`,
     'ship.verdict.banner': (who: string, when: string) =>
         `${who} шипнул(а) этот PR ${when} — ваши комментарии всё равно опубликуются.`,
     'ship.verdict.dismiss': 'Скрыть сообщение о чужом шипе',
@@ -990,7 +979,7 @@ export const ru = {
         `${num(count)} ${form(count, 'комментарий не опубликовался', 'комментария не опубликовались', 'комментариев не опубликовались')}`,
     'ship.error.retry': 'повторить',
     'ship.error.comment': (commentId: string) => `Комментарий ${commentId}`,
-    'ship.error.verdict': 'Хост не применил вердикт.',
+    'ship.error.verdict': 'Вердикт не применился.',
 
     'shortcut.view.overview': 'Вью «Обзор»',
     'shortcut.view.route': 'Вью «Маршрут»',

@@ -13,6 +13,7 @@ import type { FileReadState } from '../progress/read-state.js';
 import { readStateTooltip } from '../progress/read-state.js';
 import { useBlobLoader } from './blob-loader.tsx';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
+import type { LinePosition } from './diff-rows.tsx';
 import { DiffRows } from './diff-rows.tsx';
 import { MarkdownReview } from './markdown-review.tsx';
 import type { ImageBodyState } from './image-card.tsx';
@@ -40,6 +41,16 @@ import type { DiffMode, FileCollapseReason } from './store.js';
 
 /** Files above this threshold open collapsed (docs/design/SPEC-elements.md §2.13). */
 export const COLLAPSE_THRESHOLD = 2000;
+
+/**
+ * "Collapse all / expand all" file threads (docs/design/SPEC-changes-2026-09-20.md §3).
+ * The button appears with 2 or more threads. Markers replace the counter next to it.
+ */
+export interface ThreadsCollapse {
+    /** Something can be collapsed: at least one file thread is expanded with no reply being written. */
+    readonly canCollapse: boolean;
+    readonly onToggle: () => void;
+}
 
 /**
  * Inline hint below the header (docs/design/SPEC-elements.md §1.2: no modals). null means nothing to say.
@@ -133,6 +144,9 @@ export interface FileCardProps {
     readonly threadsUnderHeader?: ReactNode;
     readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
+    readonly renderLineMarker?: ((positions: readonly LinePosition[]) => ReactNode) | undefined;
+    /** "Collapse all / expand all" in the header appears only when the file has ≥ 2 threads. */
+    readonly threadsCollapse?: ThreadsCollapse | null;
     readonly actions: FileCardActions;
 }
 
@@ -195,6 +209,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         threadsUnderHeader = null,
         focusedThreadRange = null,
         renderAfterLine,
+        renderLineMarker,
+        threadsCollapse = null,
         actions,
     } = props;
     const t = useT();
@@ -299,6 +315,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             onSelectStart={onSelectStart}
             onSelectExtend={onSelectExtend}
             renderAfterLine={renderAfterLine}
+            renderLineMarker={renderLineMarker}
             onCommentLine={onCommentLine}
             onLineFocus={onLineFocus}
             onLineBlur={actions.onLineBlur}
@@ -314,205 +331,204 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             id={`file-${file.fileId}`}
             data-file={file.fileId}
         >
-            <header
-                className={`file-card__header${onToggleCollapse === undefined ? '' : ' file-card__header--collapsible'}`}
-                // Outside tab order but accepts focus: focus returns here when a menu
-                // opened by right-clicking the header is closed with the keyboard.
-                tabIndex={-1}
-                onClick={(event) => {
-                    const target = event.target;
-                    if (
-                        onToggleCollapse === undefined ||
-                        !(target instanceof Element) ||
-                        target.closest('button, a, .route-badge') !== null ||
-                        window.getSelection()?.isCollapsed === false
-                    ) {
-                        return;
-                    }
-                    onToggleCollapse();
-                }}
-                onContextMenu={menu.openAtPointer}
-            >
-                <FileName file={file} />
-                <ConflictBadge file={file} />
-                <span className="file-card__counts">
-                    <span className="file-card__add">
-                        +{count(counts?.additions ?? model?.additions ?? file.additions)}
+            {/* Border, background and rounding live on the inner wrapper. The outer box reserves the left
+                14px for thread markers floating on the card edge (§3). */}
+            <div className="file-card__frame">
+                <header
+                    className={`file-card__header${onToggleCollapse === undefined ? '' : ' file-card__header--collapsible'}`}
+                    // Outside the tab order but accepts focus. Focus returns here when the menu,
+                    // opened by right-clicking the header, is closed with the keyboard.
+                    tabIndex={-1}
+                    onClick={(event) => {
+                        const target = event.target;
+                        if (
+                            onToggleCollapse === undefined ||
+                            !(target instanceof Element) ||
+                            target.closest('button, a, .route-badge') !== null ||
+                            window.getSelection()?.isCollapsed === false
+                        ) {
+                            return;
+                        }
+                        onToggleCollapse();
+                    }}
+                    onContextMenu={menu.openAtPointer}
+                >
+                    <FileName file={file} />
+                    <ConflictBadge file={file} />
+                    <span className="file-card__counts">
+                        <span className="file-card__add">
+                            +{count(counts?.additions ?? model?.additions ?? file.additions)}
+                        </span>
+                        <span className="file-card__del">
+                            −{count(counts?.deletions ?? model?.deletions ?? file.deletions)}
+                        </span>
                     </span>
-                    <span className="file-card__del">
-                        −{count(counts?.deletions ?? model?.deletions ?? file.deletions)}
-                    </span>
-                </span>
-                <span className="file-card__entity">{entityText(shown, t)}</span>
+                    <span className="file-card__entity">{entityText(shown, t)}</span>
 
-                {routeBadge}
-                {markdownFile && shown?.content.kind === 'text' ? (
-                    <button
-                        type="button"
-                        className="ctl ctl--ghost ctl--compact file-card__header-action"
-                        aria-pressed={markdown}
-                        onClick={() => {
-                            actions.onToggleMarkdown(file.fileId);
+                    {routeBadge}
+                    {threadsCollapse === null ? null : (
+                        <button
+                            type="button"
+                            className="ctl ctl--quiet file-card__threads-collapse"
+                            onClick={threadsCollapse.onToggle}
+                        >
+                            {t(threadsCollapse.canCollapse ? 'thread.collapseAll' : 'thread.expandAll')}
+                        </button>
+                    )}
+                    {markdownFile && shown?.content.kind === 'text' ? (
+                        <button type="button" className="ctl ctl--ghost ctl--compact file-card__header-action" aria-pressed={markdown} onClick={() => { actions.onToggleMarkdown(file.fileId); }}>
+                            {t(markdown ? 'markdown.code' : 'markdown.preview')}
+                        </button>
+                    ) : null}
+
+                    {/* The blame link moved to the menu ("Open in the repository"). Only "⋯" remains in the header. */}
+                    <span className="file-card__actions">
+                        <button
+                            type="button"
+                            className="ctl ctl--ghost ctl--compact file-card__header-action"
+                            aria-haspopup="menu"
+                            aria-expanded={menu.open}
+                            aria-label={t('file.menu.more')}
+                            onClick={menu.openAtButton}
+                        >
+                            ⋯
+                        </button>
+                    </span>
+
+                    <ExpandButton
+                        model={shown}
+                        content={content}
+                        contentAvailable={contentAvailable}
+                        noContentReason={noContentReason}
+                        onExpand={(gapKeys) => {
+                            run(
+                                actions
+                                    .onExpand(file.fileId, { kind: 'file', gapKeys })
+                                    .then((result) => result.feedback),
+                            );
                         }}
-                    >
-                        {t(markdown ? 'markdown.code' : 'markdown.preview')}
-                    </button>
+                    />
+
+                    {/* The toggle tooltip always includes progress counts (docs/design/SPEC-elements.md §2.12). Partial progress appears
+                        in those counts and in tree and chip indicators, rather than in the button itself. */}
+                    <ViewedToggle
+                        className="file-card__viewed"
+                        viewed={read.state === 'read'}
+                        disabled={viewedDisabledReason !== null}
+                        title={viewedDisabledReason ?? readStateTooltip(t, read)}
+                        onToggle={(viewed) => {
+                            run(actions.onViewed(file.fileId, viewed));
+                        }}
+                    />
+                </header>
+
+                {menu.anchor === null ? null : (
+                    <FileContextMenu
+                        file={file}
+                        viewed={read.state === 'read'}
+                        viewedDisabledReason={viewedDisabledReason}
+                        onToggleViewed={() => {
+                            run(actions.onViewed(file.fileId, read.state !== 'read'));
+                        }}
+                        anchor={menu.anchor}
+                        onClose={menu.close}
+                        toggleRef={menu.toggleRef}
+                        {...(showImage && actions.onCommentFile !== undefined
+                            ? {
+                                  onCommentFile: () => {
+                                      actions.onCommentFile?.(file.fileId);
+                                  },
+                              }
+                            : {})}
+                    />
+                )}
+
+                {collapseReason === null ? routeStrips : null}
+
+                {threadsUnderHeader}
+
+                {keptInView ? (
+                    <p className="file-card__kept">{t('diff.file.kept')}</p>
                 ) : null}
 
-                {/* The blame link moved into the menu ("Open on the web"). "⋯" takes its place in the header. */}
-                <span className="file-card__actions">
+                {hint === null ? null : (
+                    <p className="file-card__hint" role="status">
+                        {typeof hint === 'string' ? hint : hint.text}
+                        {typeof hint !== 'string' && hint.retry !== undefined ? (
+                            <>
+                                {' · '}
+                                <button
+                                    type="button"
+                                    className="ctl ctl--link-muted file-card__action"
+                                    onClick={() => {
+                                        const retry = hint.retry;
+                                        if (retry !== undefined) {
+                                            setHint(null);
+                                            run(retry());
+                                        }
+                                    }}
+                                >
+                                    {t('diff.file.retry')}
+                                </button>
+                            </>
+                        ) : null}
+                    </p>
+                )}
+
+                {collapseReason === null ? <Notices model={shown} file={file} hideBinary={showImage} /> : null}
+
+                {collapseReason !== null ? (
+                    <CollapsedFileSummary
+                        file={file}
+                        counts={counts}
+                        reason={collapseReason}
+                        onExpand={() => {
+                            onToggleCollapse?.();
+                        }}
+                    />
+                ) : parseError !== null && model === null ? (
+                    <p className="file-card__notice">
+                        {t('diff.file.parseFailed', parseError)}
+                        <button
+                            type="button"
+                            className="ctl ctl--link-muted file-card__action"
+                            onClick={() => {
+                                actions.onRetryParse(file.fileId);
+                            }}
+                        >
+                            {t('diff.file.retryParse')}
+                        </button>
+                    </p>
+                ) : sizeCollapsed ? (
                     <button
                         type="button"
-                        className="ctl ctl--ghost ctl--compact file-card__header-action"
-                        aria-haspopup="menu"
-                        aria-expanded={menu.open}
-                        aria-label={t('file.menu.more')}
-                        onClick={menu.openAtButton}
-                    >
-                        ⋯
-                    </button>
-                </span>
-
-                <ExpandButton
-                    model={shown}
-                    content={content}
-                    contentAvailable={contentAvailable}
-                    noContentReason={noContentReason}
-                    onExpand={(gapKeys) => {
-                        run(
-                            actions
-                                .onExpand(file.fileId, { kind: 'file', gapKeys })
-                                .then((result) => result.feedback),
-                        );
-                    }}
-                />
-
-                {/* The toggle tooltip always includes progress counts (docs/design/SPEC-elements.md §2.12). Partial progress appears
-                    in those counts and the tree and chip indicators, not in the button itself. */}
-                <ViewedToggle
-                    className="file-card__viewed"
-                    viewed={read.state === 'read'}
-                    disabled={viewedDisabledReason !== null}
-                    title={viewedDisabledReason ?? readStateTooltip(t, read)}
-                    onToggle={(viewed) => {
-                        run(actions.onViewed(file.fileId, viewed));
-                    }}
-                />
-            </header>
-
-            {menu.anchor === null ? null : (
-                <FileContextMenu
-                    file={file}
-                    viewed={read.state === 'read'}
-                    viewedDisabledReason={viewedDisabledReason}
-                    onToggleViewed={() => {
-                        run(actions.onViewed(file.fileId, read.state !== 'read'));
-                    }}
-                    anchor={menu.anchor}
-                    onClose={menu.close}
-                    toggleRef={menu.toggleRef}
-                    {...(showImage && actions.onCommentFile !== undefined
-                        ? {
-                              onCommentFile: () => {
-                                  actions.onCommentFile?.(file.fileId);
-                              },
-                          }
-                        : {})}
-                />
-            )}
-
-            {collapseReason === null ? routeStrips : null}
-
-            {threadsUnderHeader}
-
-            {keptInView ? (
-                <p className="file-card__kept">{t('diff.file.kept')}</p>
-            ) : null}
-
-            {hint === null ? null : (
-                <p className="file-card__hint" role="status">
-                    {typeof hint === 'string' ? hint : hint.text}
-                    {typeof hint !== 'string' && hint.retry !== undefined ? (
-                        <>
-                            {' · '}
-                            <button
-                                type="button"
-                                className="ctl ctl--link-muted file-card__action"
-                                onClick={() => {
-                                    const retry = hint.retry;
-                                    if (retry !== undefined) {
-                                        setHint(null);
-                                        run(retry());
-                                    }
-                                }}
-                            >
-                                {t('diff.file.retry')}
-                            </button>
-                        </>
-                    ) : null}
-                </p>
-            )}
-
-            {collapseReason === null ? <Notices model={shown} file={file} hideBinary={showImage} /> : null}
-
-            {collapseReason !== null ? (
-                <CollapsedFileSummary
-                    file={file}
-                    counts={counts}
-                    reason={collapseReason}
-                    onExpand={() => {
-                        onToggleCollapse?.();
-                    }}
-                />
-            ) : parseError !== null && model === null ? (
-                <p className="file-card__notice">
-                    {t('diff.file.parseFailed', parseError)}
-                    <button
-                        type="button"
-                        className="ctl ctl--link-muted file-card__action"
+                        className="file-card__collapsed"
                         onClick={() => {
-                            actions.onRetryParse(file.fileId);
+                            actions.onOpenFile(file.fileId);
                         }}
                     >
-                        {t('diff.file.retryParse')}
+                        {t('diff.file.sizeCollapsed', changed)}
                     </button>
-                </p>
-            ) : sizeCollapsed ? (
-                <button
-                    type="button"
-                    className="file-card__collapsed"
-                    onClick={() => {
-                        actions.onOpenFile(file.fileId);
-                    }}
-                >
-                    {t('diff.file.sizeCollapsed', changed)}
-                </button>
-            ) : image !== null && loadBlob !== null ? (
-                // Key by file: mode and scale are card state, and must reset when the list
-                // moves to a different file.
-                <ImageBody
-                    key={file.fileId}
-                    file={file}
-                    image={image}
-                    loadBlob={loadBlob}
-                    textBody={file.patch === null ? null : body}
-                    initial={initialImage}
-                />
-            ) : markdown && shown?.content.kind === 'text' ? (
-                <MarkdownReview
-                    model={shown}
-                    selection={selection}
-                    focusedThreadRange={focusedThreadRange}
-                    onSelect={actions.onSelectText}
-                    onClearSelection={actions.onClearSelection}
-                    renderAfterLine={renderAfterLine}
-                />
-            ) : (
-                body
-            )}
-            <span className="visually-hidden" aria-live="polite">
-                {announcement}
-            </span>
+                ) : image !== null && loadBlob !== null ? (
+                    // Keyed by file because mode and scale are card state. When the list moves
+                    // to a different file, they must reset.
+                    <ImageBody
+                        key={file.fileId}
+                        file={file}
+                        image={image}
+                        loadBlob={loadBlob}
+                        textBody={file.patch === null ? null : body}
+                        initial={initialImage}
+                    />
+                ) : markdown && shown?.content.kind === 'text' ? (
+                    <MarkdownReview model={shown} selection={selection} focusedThreadRange={focusedThreadRange} onSelect={actions.onSelectText} onClearSelection={actions.onClearSelection} renderAfterLine={renderAfterLine} />
+                ) : (
+                    body
+                )}
+                <span className="visually-hidden" aria-live="polite">
+                    {announcement}
+                </span>
+            </div>
         </article>
     );
 });
@@ -745,6 +761,7 @@ interface BodyProps {
     readonly onSelectStart: (key: LineKey, side: 'old' | 'new', extend: boolean) => void;
     readonly onSelectExtend: (key: LineKey, side: 'old' | 'new') => void;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
+    readonly renderLineMarker?: ((positions: readonly LinePosition[]) => ReactNode) | undefined;
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
@@ -813,6 +830,7 @@ function Body(props: BodyProps) {
                 selection={selection}
                 focusedThreadRange={props.focusedThreadRange}
                 renderAfterLine={props.renderAfterLine}
+                renderLineMarker={props.renderLineMarker}
                 onCommentLine={props.onCommentLine}
                 onLineFocus={props.onLineFocus}
                 onLineBlur={props.onLineBlur}

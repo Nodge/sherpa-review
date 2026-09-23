@@ -62,7 +62,7 @@ describe('limits and reduced functionality gallery', () => {
         const html = markup('conflict-stop-notice');
 
         expect(html).toContain('route-conflicts');
-        expect(html).toContain('has a conflict: resolve it on the host');
+        expect(html).toContain('merge conflicts: resolve it outside Sherpa');
         expect(html).not.toContain('no longer in the diff');
     });
 

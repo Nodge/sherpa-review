@@ -43,20 +43,6 @@
     font-size: var(--font-size-secondary);
 }
 
-.discussion-card__filters {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 9px 13px;
-    border-bottom: 1px solid var(--border-hairline-strong);
-    background: var(--surface-app);
-}
-
-/* The column is narrow: source chips wrap instead of pushing the card out. */
-.discussion-card__filters .thread-chips {
-    flex-wrap: wrap;
-}
-
 .discussion-card__people {
     padding: 6px 0;
 }

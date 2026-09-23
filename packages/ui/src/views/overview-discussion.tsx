@@ -1,7 +1,6 @@
 import type { Thread } from '@sherpa/protocol';
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { CommentSourceChips } from '../components/toolbar-controls.tsx';
 import { relativeTime, useFormat, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { SessionStore } from '../session/session-store.js';
@@ -30,6 +29,8 @@ export interface OverviewDiscussionProps {
     readonly now: number;
     readonly loading: boolean;
     readonly error: string | null;
+    /** The host's `capabilities.commentIssues`. Without it, replies have no issue switch. */
+    readonly commentIssues?: boolean;
     /** Opens the PR comment modal and returns focus to the button on close. */
     readonly onWritePrComment?: ((returnFocus: () => void) => void) | undefined;
     /** Initial "outside the diff" fold state: collapsed in the application, sometimes expanded in the gallery. */
@@ -50,19 +51,16 @@ export function OverviewDiscussion({
     now,
     loading,
     error,
+    commentIssues = false,
     onWritePrComment,
     outsideOpenByDefault = false,
 }: OverviewDiscussionProps) {
     const t = useT();
     const format = useFormat();
-    const { threadsShow } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
     const [allParticipants, setAllParticipants] = useState(false);
     const [outsideOpen, setOutsideOpen] = useState(outsideOpenByDefault);
     const writeButtonRef = useRef<HTMLButtonElement | null>(null);
-    const summary = useMemo(
-        () => discussionSummary(threads ?? EMPTY_THREADS, fileIds, threadsShow),
-        [fileIds, threads, threadsShow],
-    );
+    const summary = useMemo(() => discussionSummary(threads ?? EMPTY_THREADS, fileIds), [fileIds, threads]);
 
     const openAuthorLens = (login: string): void => {
         session.setThreadAuthor(login);
@@ -131,9 +129,6 @@ export function OverviewDiscussion({
                 title={t('overview.discussion')}
                 counts={t('overview.discussion.summary', summary.total, summary.open)}
             />
-            <div className="discussion-card__filters">
-                <CommentSourceChips show={threadsShow} counts={summary.counts} onChange={session.setThreadsShow} />
-            </div>
             <div className="discussion-card__people">
                 {shown.map((participant) => (
                     <ParticipantRow
@@ -196,6 +191,7 @@ export function OverviewDiscussion({
                                 store={store}
                                 transport={transport}
                                 now={now}
+                                commentIssues={commentIssues}
                             />
                         ))}
                     </div>
@@ -275,11 +271,13 @@ function OutsideThreadCard({
     store,
     transport,
     now,
+    commentIssues,
 }: {
     thread: Thread;
     store: ThreadStore;
     transport: ComposerTransport;
     now: number;
+    commentIssues: boolean;
 }) {
     const t = useT();
     const locale = useLocale();
@@ -349,7 +347,7 @@ function OutsideThreadCard({
                             // The reply will go into this same list. Expand it now, or saving
                             // will close the composer and leave nowhere to see the new reply.
                             setRepliesOpen(true);
-                            openReply(store, thread);
+                            openReply(store, thread, commentIssues);
                         }}
                     >
                         {t('overview.discussion.reply')}
@@ -382,7 +380,6 @@ function OutsideThreadCard({
                     composer={composer}
                     store={store}
                     transport={transport}
-                    contextLabel={t('thread.reply.context', authorName(thread.root))}
                     placeholder={t('thread.reply.placeholder')}
                     inputLabel={t('thread.reply.label')}
                     closeOnSave

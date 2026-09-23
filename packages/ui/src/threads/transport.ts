@@ -42,3 +42,28 @@ export function createPublishedCommentTransport(token: string): PublishedComment
         delete: (commentId) => deleteReviewComment(token, commentId),
     };
 }
+
+const composerTransports = new WeakMap<PublishedCommentTransport, ComposerTransport>();
+
+/**
+ * Published comments use the same editor as drafts. The composer works through a transport,
+ * so replacing it is enough. There is no creation here. The editor always
+ * opens on an existing `commentId`. Published comments have no draft buffer, and the response is
+ * always `saved`. Failure throws an error, which is shown below the message.
+ */
+export function publishedCommentComposerTransport(published: PublishedCommentTransport): ComposerTransport {
+    const existing = composerTransports.get(published);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const created: ComposerTransport = {
+        save: () => Promise.reject(new Error('published comments are edited, not created')),
+        update: async (commentId, body, issue) => {
+            await published.update(commentId, body, issue);
+            return { outcome: 'saved' };
+        },
+        delete: (commentId) => published.delete(commentId),
+    };
+    composerTransports.set(published, created);
+    return created;
+}

@@ -1,8 +1,6 @@
 import type { Comment, FileDiff, Lens, LensZone, ReviewUser, Thread } from '@sherpa/protocol';
 
 import type { Translate } from '../i18n/index.js';
-import type { ThreadSourceCounts, ThreadVisibility } from '../threads/model.js';
-import { countThreadSources, threadIsVisible } from '../threads/model.js';
 
 export type OwnershipKind = 'mine' | 'other' | 'mixed' | 'generated';
 export type OwnershipSegment = 'mine' | 'all';
@@ -234,8 +232,6 @@ export interface DiscussionSummary {
     /** The card header counts all PR threads, unaffected by chips. */
     readonly total: number;
     readonly open: number;
-    /** Chip counters use the same categories as the diff toolbar. */
-    readonly counts: ThreadSourceCounts;
     readonly participants: readonly DiscussionParticipant[];
     /** Human threads absent from every line of the rendered diff. Bot threads never appear here. */
     readonly outside: readonly Thread[];
@@ -247,15 +243,10 @@ export interface DiscussionSummary {
  * wrote the root or any reply, so the row count matches its lens results. A bot
  * gets its own row with a counter, but its thread bodies never enter the card.
  */
-export function discussionSummary(
-    threads: readonly Thread[],
-    fileIds: ReadonlySet<string>,
-    show: ThreadVisibility,
-): DiscussionSummary {
-    const visible = threads.filter((thread) => threadIsVisible(thread, show));
+export function discussionSummary(threads: readonly Thread[], fileIds: ReadonlySet<string>): DiscussionSummary {
     const byLogin = new Map<string, { participant: DiscussionParticipant; lastMs: number }>();
 
-    for (const thread of visible) {
+    for (const thread of threads) {
         const lastMs = lastActivityMs(thread.root);
         for (const author of threadAuthors(thread)) {
             const entry = byLogin.get(author.login);
@@ -301,14 +292,13 @@ export function discussionSummary(
         })
         .map((entry) => entry.participant);
 
-    const outside = visible
+    const outside = threads
         .filter((thread) => !thread.root.author.bot && !atCode(thread, fileIds))
         .sort((left, right) => Date.parse(right.root.createdAt) - Date.parse(left.root.createdAt));
 
     return {
         total: threads.length,
         open: threads.filter((thread) => !thread.resolved).length,
-        counts: countThreadSources(threads),
         participants,
         outside,
     };

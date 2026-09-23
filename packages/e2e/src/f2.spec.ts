@@ -119,11 +119,12 @@ test('F2: selection → agent question → answer and note → draft → request
     });
 
     await test.step('"Turn into a comment draft": composer at the same lines with a quote and issue', async () => {
+        // The agent panel narrowed the column and rebuilt the layout. Scroll to the stop again.
+        await stop(page).scrollIntoViewIfNeeded();
         await card(page).getByRole('button', { name: 'Turn into a comment draft', exact: true }).click();
 
         const composer = card(page).locator('.thread-composer');
-        await expect(composer.locator('.thread-composer__context')).toContainText('new comment · lines 3–5');
-        await expect(composer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
+        await expect(composer.locator('.thread-composer__context')).toHaveCount(0);
 
         await expect(composer).toContainText('Quoted from the agent’s answer:');
         await expect(composer).toContainText('The editing window is built from the order settings');
@@ -137,14 +138,17 @@ test('F2: selection → agent question → answer and note → draft → request
         await input.fill(`${quoted}\n\n${DRAFT_TAIL}`);
 
         // The fixture host supports issue, so a new comment is blocking by default.
-        await expect(composer.getByRole('button', { name: 'Open an issue' })).toHaveAttribute('aria-pressed', 'true');
+        await expect(composer.getByRole('switch', { name: 'Open an issue, on' })).toHaveAttribute(
+            'aria-checked',
+            'true',
+        );
         await composer.getByRole('button', { name: 'Save draft', exact: true }).click();
         await expect(input).toHaveCount(0);
     });
 
     await test.step('draft saved as blocking, note still present', async () => {
         await expect(card(page).getByText(DRAFT_TAIL, { exact: true })).toBeVisible();
-        await expect(card(page).locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
+        await expect(card(page).locator('.thread__chip--draft')).toHaveText('draft');
         await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
         await expect(card(page).locator('.agent-note--expanded')).toHaveCount(1);
         await expect(page.locator('.chat-panel__notes')).toHaveText('Notes 1');

@@ -7,31 +7,7 @@
     gap: var(--space-control);
 }
 
-.toolbar-right-cluster__divider {
-    flex: none;
-    width: 1px;
-    height: 18px;
-    background: var(--border-divider);
-}
-
-.toolbar-right-cluster__label {
-    font-size: var(--font-size-secondary);
-    color: var(--text-dim);
-    white-space: nowrap;
-}
-
-.thread-chips {
-    display: inline-flex;
-    gap: 5px;
-}
-
+/* Author lens chip is the only thread filter left in the toolbar. */
 .thread-chip--author {
     gap: 5px;
-}
-
-.thread-chips-hidden {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
 }

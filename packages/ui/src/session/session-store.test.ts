@@ -4,7 +4,6 @@ import { VIEWING_CURRENT } from '../iterations/viewing.js';
 
 import {
     createSessionStore,
-    DEFAULT_THREADS_SHOW,
     EMPTY_NOTE_STACKS_EXPANDED,
     EMPTY_NOTES_EXPANDED,
     EMPTY_STOPS,
@@ -42,7 +41,6 @@ describe('session store', () => {
             preset: 'triage',
             routeFilter: 'all',
             viewing: VIEWING_CURRENT,
-            threadsShow: DEFAULT_THREADS_SHOW,
             threadAuthor: null,
             paletteOpen: false,
             chatOpen: false,
@@ -139,7 +137,6 @@ describe('session store', () => {
                     preset: 'triage',
                     routeFilter: 'all',
                     viewing: VIEWING_CURRENT,
-                    threadsShow: DEFAULT_THREADS_SHOW,
                     threadAuthor: null,
                     paletteOpen: false,
                     chatOpen: false,
@@ -163,7 +160,7 @@ describe('session store', () => {
 
     it('changes the filter independently of the view and persists it too', () => {
         const persist = vi.fn();
-        const store = createSessionStore({ initial: { view: 'diff', filter: 'all', threadsShow: DEFAULT_THREADS_SHOW }, persist });
+        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' }, persist });
 
         store.setFilter('pci');
 
@@ -173,7 +170,6 @@ describe('session store', () => {
             preset: 'triage',
             routeFilter: 'all',
             viewing: VIEWING_CURRENT,
-            threadsShow: DEFAULT_THREADS_SHOW,
             threadAuthor: null,
             paletteOpen: false,
             chatOpen: false,
@@ -282,14 +278,6 @@ describe('session store', () => {
 
         store.setStopCollapsed('s01', false);
         expect(store.getSnapshot().stops.collapsed).toEqual(new Set());
-    });
-
-    it('thread filters change in a single session write', () => {
-        const store = createSessionStore({ initial: { view: 'diff', filter: 'all' } });
-
-        store.setThreadsShow({ people: true, bots: true, resolved: false });
-
-        expect(store.getSnapshot().threadsShow).toEqual({ people: true, bots: true, resolved: false });
     });
 
     it('pins the URL view immediately and the default view only after the reviewer chooses', () => {

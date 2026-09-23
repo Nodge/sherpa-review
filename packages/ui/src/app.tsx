@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import './app.css';
-import { fetchDraftBuffer, sendFeedback } from './api.js';
+import { fetchDraftBuffer, sendFeedback, setReviewThreadResolved } from './api.js';
 import { buildBannerSources } from './app/banners.tsx';
 import {
     EMPTY_ITERATIONS,
@@ -81,7 +81,9 @@ import type { ShortcutScope } from './shortcuts/registry.js';
 import type { Store } from './store.js';
 import { attachComposerBeforeUnload } from './threads/before-unload.js';
 import { syncBufferedComposers } from './threads/draft-buffer.js';
-import { createComposerTransport } from './threads/transport.js';
+import { createThreadActions } from './threads/actions.js';
+import { createComposerTransport, createPublishedCommentTransport } from './threads/transport.js';
+import type { ThreadActions } from './threads/thread-list.tsx';
 import { persistentThreadStore } from './threads/persistent-store.js';
 import type { ThreadStore } from './threads/store.js';
 import { UI_VERSION } from './version.js';
@@ -366,8 +368,41 @@ export function App({ store, session, token }: AppProps) {
             threadStore.setServerThreads(currentReview.threads);
         }
     }, [currentReview.threads, threadStore]);
+    // Published comments belong to the reviewer if they match the identity in PR metadata.
+    const viewerLogin = state?.pr?.viewer?.login ?? null;
+    useEffect(() => {
+        threadStore?.setViewer(viewerLogin);
+    }, [threadStore, viewerLogin]);
     useEffect(() => (threadStore === null ? undefined : attachComposerBeforeUnload(threadStore)), [threadStore]);
     const composerTransport = useMemo(() => createComposerTransport(token), [token]);
+    const publishedTransport = useMemo(() => createPublishedCommentTransport(token), [token]);
+    const resolveThread = useCallback(
+        (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
+        [token],
+    );
+    /**
+     * Thread actions for the "PR comments" modal. It sits beside the action panel
+     * rather than in the diff view and has no resolve or edit wiring of its own. The write queue
+     * belongs to the store, so a second set of actions does not create another queue.
+     */
+    const prCapabilities = state?.pr?.capabilities ?? null;
+    const prThreadActions = useMemo<ThreadActions | null>(
+        () =>
+            threadStore === null || prCapabilities === null
+                ? null
+                : createThreadActions(
+                      threadStore,
+                      composerTransport,
+                      resolveThread,
+                      {
+                          transport: publishedTransport,
+                          commentResolve: prCapabilities.commentResolve,
+                          editPublished: prCapabilities.editPublished,
+                      },
+                      prCapabilities.commentIssues,
+                  ),
+        [composerTransport, prCapabilities, publishedTransport, resolveThread, threadStore],
+    );
 
     const { shipVerdict, shipVerdictNow, setShipVerdict, publishHere } = useShipVerdict(
         state?.pr?.verdicts ?? null,
@@ -399,8 +434,8 @@ export function App({ store, session, token }: AppProps) {
     }, [reviewHost, reviewReady, snapshot.threadsRevision, token]);
     // Buffered entries return to composers at their own anchors. After a tab reload,
     // the text must appear on the same line.
-    // Threads are dependencies for restoration, not rendering: a draft edit can only be restored together
-    // with its comment, which arrives separately.
+    // Threads are not a dependency for rendering. Both a draft edit and a reply are restored
+    // only with their own comment in the snapshot, which arrives in its own time.
     useEffect(() => {
         if (threadStore !== null) {
             syncBufferedComposers(threadStore, draftBuffer);
@@ -1165,6 +1200,7 @@ export function App({ store, session, token }: AppProps) {
                         reviewHost={reviewHost}
                         route={routeSummary === null ? null : { ...routeSummary, viewed: stopViewed }}
                         composerTransport={composerTransport}
+                        {...(prThreadActions === null ? {} : { threadActions: prThreadActions })}
                         draftBuffer={draftBuffer}
                         onPublish={publishHere}
                         onComplete={completeReview}

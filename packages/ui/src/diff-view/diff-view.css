@@ -57,12 +57,44 @@
 }
 
 .file-card {
+    /* Transparent strip for thread markers on the border edge (SPEC-changes-2026-09-20.md §3).
+       The strip comes from the outer view margin (`--space-page` ≥ 30px, plus the column gap in Route):
+       a negative margin moves the card left by the same 14px, so the border stays in place,
+       code width stays the same, and the `--diff-max` limits are not recalculated. */
+    margin-left: -14px;
+    padding-left: 14px;
+}
+
+.file-card__frame {
+    position: relative;
     border: 1px solid var(--border-control);
     border-radius: var(--radius-card);
     background: var(--surface-diff-card);
-    /* `clip` clips rounded corners like `hidden`, but does not make the card
-       a scroll container. Otherwise the sticky header would stick to the card instead of the screen. */
-    overflow: clip;
+    /* Clipping extends only to the left and only for the thread marker, which protrudes 15px past the border.
+       Top and bottom stay clipped to the border, or the sticky header background would escape too (in Route,
+       it fills the gap up to the toolbar, see `route.css`). Use `clip-path` instead of `overflow: clip`:
+       the latter shares the clip margin across all four sides. */
+    clip-path: inset(0 0 0 -15px);
+}
+
+/*
+ * The extended clip is rectangular and no longer rounds child corners. The sticky header background
+ * and row backgrounds fill the corners with squares. An overlay exactly on the border restores the corners:
+ * page colour outside the curve, border line along the curve. Together they cover
+ * the entire square excess, so children need no rounding. The header is sticky and would carry its
+ * rounded corners with it into the middle of the card.
+ * The overlay is above the sticky header (z-index 2) and below the thread markers (4), which are intended
+ * to sit on the border.
+ */
+.file-card__frame::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: 3;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-card);
+    box-shadow: 0 0 0 4px var(--surface-app);
+    pointer-events: none;
 }
 
 /* Generated files are dimmed (docs/design/README.md §10: generated → dim). */
@@ -444,6 +476,32 @@
     min-width: 0;
 }
 
+/*
+ * Thread markers in side-by-side mode sit on the card edge for the left half and on the
+ * divider for the right half. The slot has zero size, and all marker geometry is relative to it.
+ */
+.diff-row__marker-slot {
+    position: absolute;
+    top: 0;
+    /* Above the card corner overlay (3), because the marker is meant to sit on the border, not beneath it. */
+    z-index: 4;
+    width: 0;
+    height: 0;
+}
+
+.diff-row__marker-slot--old {
+    left: 0;
+}
+
+.diff-row__marker-slot--new {
+    left: 50%;
+}
+
+/* A row is highlighted while any thread below it is expanded. Its add/del backgrounds take precedence to show the diff. */
+.diff-row:where(:has(.thread-marker.is-open, .thread-marker.is-partly-open)) {
+    background: var(--surface-thread-line);
+}
+
 .diff-row:hover {
     background: var(--surface-card-header);
 }
@@ -530,7 +588,9 @@
     background: var(--accent-selection);
 }
 
-.diff-row.is-selected > :first-child,
+/* The selection edge sits on the first gutter of the row, rather than the first child. A row with a thread
+   has a marker as its first child, so the selection edge would appear on that marker. */
+.diff-row.is-selected > .diff-row__gutter:not(.diff-row__gutter--comment),
 .diff-row__gutter.diff-side.is-selected {
     box-shadow: inset 2px 0 0 var(--accent);
 }

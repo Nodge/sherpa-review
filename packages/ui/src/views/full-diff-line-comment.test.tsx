@@ -101,7 +101,7 @@ function mount(options: {
     store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
     const threadStore = createThreadStore([], new Set([file.fileId]));
     const session = createSessionStore({
-        initial: { view: 'diff', filter: 'all', threadsShow: { people: true, bots: true, resolved: false } },
+        initial: { view: 'diff', filter: 'all' },
     });
     const root = createRoot(host);
     let selectionNavigationRequest = 0;

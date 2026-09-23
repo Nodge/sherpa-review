@@ -68,6 +68,26 @@ export function closeCommentComposers(store: ThreadStore, commentIds: readonly s
     }
 }
 
+/**
+ * Closes reply composers in the named threads when they contain no text to lose.
+ * A composer with entered text stays open, since closing it would silently discard
+ * the reviewer's work. It keeps the publication guard active and waits in place for the next opening.
+ */
+export function closeEmptyReplyComposers(store: ThreadStore, threadIds: readonly string[]): void {
+    const ids = new Set(threadIds);
+    const keys = store
+        .listComposers()
+        .filter(
+            (composer) =>
+                composer.threadId !== null &&
+                ids.has(composer.threadId) &&
+                composer.commentId === null &&
+                composer.text.trim() === '',
+        )
+        .map((composer) => composer.key);
+    closeComposersByKey(store, keys);
+}
+
 /** Closes the named composers and forgets their controllers (buffer reconciliation). */
 export function closeComposersByKey(store: ThreadStore, keys: readonly string[]): void {
     const byKey = controllers.get(store);

@@ -135,7 +135,7 @@ function setupIssueComposer(kind: 'new' | 'reply') {
             true,
         );
     } else {
-        openReply(store, THREAD, null);
+        openReply(store, THREAD, true, null);
     }
     const save = vi.fn(() => Promise.resolve(saved(CREATED)));
     const update = vi.fn(() => Promise.resolve(SAVED));
@@ -227,13 +227,26 @@ describe('composer state machine', () => {
         expect(update.mock.calls.map((call) => call.slice(0, 2))).toEqual([['draft-1', 'second']]);
     });
 
-    it('a reply does not pass issue', async () => {
+    it('saves a reply with issue: true by default', async () => {
         const { controller, save } = setupIssueComposer('reply');
 
         controller.input('reply');
         await controller.saveNow();
 
-        expect(save).toHaveBeenCalledWith({ body: 'reply', parentId: 'root-1', anchor: null }, expect.any(String));
+        expect(save).toHaveBeenCalledWith(
+            { body: 'reply', parentId: 'root-1', anchor: null, issue: true },
+            expect.any(String),
+        );
+    });
+
+    it('passes a disabled reply issue to save', async () => {
+        const { controller, save } = setupIssueComposer('reply');
+
+        controller.setIssue(false);
+        controller.input('reply');
+        await controller.saveNow();
+
+        expect(save).toHaveBeenCalledWith(expect.objectContaining({ issue: false }), expect.any(String));
     });
 
     it('saves only on an explicit action: save first, then update', async () => {

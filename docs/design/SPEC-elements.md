@@ -11,7 +11,12 @@ only demonstrates rest states of most controls.
 
 ### 1.1 State matrix
 
-Every interactive element must implement all applicable states:
+Every interactive element must implement all applicable states.
+
+> **Superseded on 2026-09-20 for hover / active / focus-visible** by `SPEC-changes-2026-09-20.md` §5: hover changes the
+> surface only (one step up the grey ladder, no text or border change, no transition), press is one more step, the focus
+> ring is `2px solid` opaque accent with `outline-offset: 2px` (−2px inside segments). Links and the trash icon are the only
+> exceptions. The rows below stay for rest / selected / disabled / loading / error. Live matrix: gallery card "Controls".
 
 | State | Rule |
 |---|---|
@@ -128,12 +133,11 @@ Every interactive element must implement all applicable states:
   at may vanish under the cursor.
 - The URL carries the filter so a shared link reproduces the view.
 
-### 2.8 Comment source chips (People / Bots / Resolved)
+### 2.8 Comment source chips (People / Bots / Resolved) — removed
 
-- Additive multi-select; at least one must stay on — turning the last one off instead shows
-  "Comments hidden" state on the chip row with an "undo" affordance.
-- Counts update with the data; a source with 0 threads renders the chip disabled with count 0.
-- Turning a source on scrolls nothing; new threads appear in place with a 200ms fade.
+- Dropped on 2026-09-21 (SPEC-changes-2026-09-20 §6a): a thread at the code is a marker on the card
+  edge, and hiding a group of threads no longer pays for a filter of its own. The author lens
+  (click a participant — "only morgan's threads") stays.
 
 ### 2.9 Stop card
 
@@ -246,7 +250,10 @@ Every interactive element must implement all applicable states:
 
 ### 2.17 Threads and replies
 
-- Rest / hover: hover lifts the row bg one step and reveals "Resolve", "Quote reply", "Copy link".
+- Rest: the action row under a message is always there, nothing is hover-only — "Reply" on every
+  published comment, "Edit · Delete" on your own (published ones only with `capabilities.editPublished`),
+  "Copy link" under the root. Resolve is a toggle in the message header
+  (SPEC-changes-2026-09-20 §3, §5).
 - Reply composer: 13px input, "saved as a draft" hint under it, ⌘⏎ saves the draft, Esc discards
   with a confirm if non-empty. A draft is saved to the backend within 1s of the last keystroke and
   shows a `draft` chip (text shortened on 2026-09-20; see SPEC-changes-2026-09-20 §4a).
@@ -256,9 +263,12 @@ Every interactive element must implement all applicable states:
   instead of a row, with "view at the old commit";
   a thread on a file removed from the diff → collected into a "3 threads on files no longer in this
   PR" group at the bottom of the route;
-  a bot thread with 40 replies → collapse to the first + last two and "37 more".
-- Nesting is unbounded (see README §3): indent caps at depth 4 and switches to "↳ replying to X".
-- Resolve/unresolve is optimistic with an undo affordance for 5s.
+  a bot thread with 40 replies → at the code every reply is shown, the collapsed marker carries
+  the count and one click hides the whole thread (SPEC-changes-2026-09-20 §3).
+- Nesting is unbounded (see README §3): at the code replies deeper than one level render flat with
+  a "↳ replying to X" hint, so the code column never gets squeezed.
+- Resolve/unresolve is optimistic and rolls back on a host error. The way back is the toggle itself —
+  the 5s undo affordance is gone (SPEC-changes-2026-09-20 §6a).
 
 ### 2.18 Chat panel
 

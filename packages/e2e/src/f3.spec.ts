@@ -311,9 +311,7 @@ test('F3: push while reading → stale route → rebuild with progress and note 
     });
 
     await test.step('threads on files removed from the PR form a separate group', async () => {
-        // A review bot wrote the thread, and bots are disabled by default (docs/design/SPEC-elements.md §2.8).
-        await page.locator('.thread-chips button.thread-chip', { hasText: 'Bots' }).click();
-
+        // The source filter is gone (SPEC-changes-2026-09-20 §3): the bot thread is visible immediately.
         const outside = page.locator('.thread-outside__toggle');
         await expect(outside).toHaveText('1 thread on files no longer in this PR');
         await outside.click();

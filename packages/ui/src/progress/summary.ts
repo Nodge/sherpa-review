@@ -55,6 +55,17 @@ export function countDraftComments(threads: readonly Thread[]): number {
     return count;
 }
 
+/** Drafts that open an issue. Their count follows the draft counter before shipping. */
+export function countIssueDraftComments(threads: readonly Thread[]): number {
+    let count = 0;
+    visitComments(threads, (comment) => {
+        if (comment.draft && comment.issue === true) {
+            count += 1;
+        }
+    });
+    return count;
+}
+
 /**
  * Drafts in threads pinned outside the active iteration (docs/design/SPEC-elements.md §4.5) were written before a push.
  * They will be sent to a commit that is no longer at the PR head.

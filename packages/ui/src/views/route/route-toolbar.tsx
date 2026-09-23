@@ -8,12 +8,11 @@ import { useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import type { FileFilter } from '../../filters/lens-filters.js';
-import type { RoutePreset, ThreadsShow } from '../../session/session-store.js';
-import type { ThreadSourceCounts } from '../../threads/model.js';
+import type { RoutePreset } from '../../session/session-store.js';
 
 /**
  * Sticky route toolbar (docs/design/README.md §1): preset switch with a tooltip and a right-hand cluster shared with the full
- * diff. Mode, filter and comment sources must match between views.
+ * diff. The mode and file filter must match across views.
  *
  * The second row is the coverage bar with its own legend and viewed stop counter.
  * The view assembles it and passes it here ready to render.
@@ -42,9 +41,6 @@ export interface RouteToolbarProps {
     readonly filters: readonly FileFilter[];
     readonly filter: FileFilter;
     readonly onFilter: (id: string) => void;
-    readonly threadsShow: ThreadsShow;
-    readonly threadCounts: ThreadSourceCounts;
-    readonly onThreadsShow: (show: ThreadsShow) => void;
     /** The changes-since-last-pass filter is on (docs/design/README.md §9). Show a chip below the preset. */
     readonly changeFilterOn?: boolean;
     readonly onClearChangeFilter?: () => void;
@@ -70,9 +66,6 @@ export function RouteToolbar({
     filters,
     filter,
     onFilter,
-    threadsShow,
-    threadCounts,
-    onThreadsShow,
     changeFilterOn = false,
     onClearChangeFilter,
     strip,
@@ -130,9 +123,6 @@ export function RouteToolbar({
                     filters={filters}
                     filter={filter}
                     onFilter={onFilter}
-                    threadsShow={threadsShow}
-                    threadCounts={threadCounts}
-                    onThreadsShow={onThreadsShow}
                 />
             </div>
             {/* Give the filter chip its own row. It does not fit beside the preset at the minimum width of 1280. */}

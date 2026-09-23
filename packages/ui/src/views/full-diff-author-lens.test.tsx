@@ -99,7 +99,6 @@ function mount(threadAuthor: string | null) {
         initial: {
             view: 'diff',
             filter: 'all',
-            threadsShow: { people: true, bots: true, resolved: false },
             threadAuthor,
         },
     });

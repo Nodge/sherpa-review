@@ -133,11 +133,11 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
     });
 
     await test.step('r replies to the focused thread', async () => {
-        // An unpublished draft of your own cannot be replied to (`hideActions`), so use another reviewer's thread.
-        // Capture the id first: an open composer removes the "Reply…" button used to find the thread.
+        // An unpublished draft of our own cannot take replies, so use someone else's thread: Reply is
+        // a link below every published message (SPEC-changes-2026-09-20 §3).
         const repliable = page
             .locator('[data-stop] .thread')
-            .filter({ has: page.getByRole('button', { name: 'Reply…', exact: true }) })
+            .filter({ has: page.getByRole('button', { name: 'Reply', exact: true }) })
             .first();
         await repliable.scrollIntoViewIfNeeded();
         const threadId = await repliable.getAttribute('data-thread-id');
@@ -239,6 +239,28 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
 
         await page.keyboard.press('p');
         expect(await settledDiffScroll(page)).toBeLessThan(afterUnread);
+    });
+
+    await test.step('thread marker: tab stop, Enter and Space, collapsed thread leaves the DOM', async () => {
+        const marker = page.locator('.file-card .thread-marker').first();
+        await marker.scrollIntoViewIfNeeded();
+        await expect(marker).toBeVisible();
+        const lines = page.locator('.file-card .thread-line');
+        // All threads except resolved ones are expanded by default (docs/decisions.md, 2026-09-21).
+        await expect(marker).toHaveAttribute('aria-expanded', 'true');
+        const open = await lines.count();
+        expect(open).toBeGreaterThan(0);
+
+        await marker.focus();
+        await expect(marker).toBeFocused();
+
+        await page.keyboard.press('Enter');
+        await expect(marker).toHaveAttribute('aria-expanded', 'false');
+        await expect(lines).toHaveCount(open - 1);
+
+        await page.keyboard.press('Space');
+        await expect(marker).toHaveAttribute('aria-expanded', 'true');
+        await expect(lines).toHaveCount(open);
     });
 
     await test.step('Esc handling: palette above a selection, then the selection itself', async () => {

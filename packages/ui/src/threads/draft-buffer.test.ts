@@ -26,22 +26,41 @@ function entry(patch: Partial<DraftBufferEntry> & Pick<DraftBufferEntry, 'id'>):
 
 const LINE_ANCHOR = { fileId: 'f1', path: 'app.ts', position: { side: 'new' as const, line: 42, size: 3 } };
 
+const REPLY_THREAD = replyThread();
+
 describe('composer key for a buffered entry', () => {
     it('uses the first line as the key for a line comment', () => {
-        expect(composerKeyOfBufferEntry(entry({ id: 'ck-1', draft: { body: 'x', parentId: null, anchor: LINE_ANCHOR } }))).toBe(
-            'new:f1:new:42',
-        );
+        expect(
+            composerKeyOfBufferEntry(entry({ id: 'ck-1', draft: { body: 'x', parentId: null, anchor: LINE_ANCHOR } }), []),
+        ).toBe('new:f1:new:42');
     });
 
     it('uses the thread key for a reply and a separate key for a PR comment', () => {
         expect(
-            composerKeyOfBufferEntry(entry({ id: 'ck-2', draft: { body: 'x', parentId: 'root-1', anchor: null } })),
+            composerKeyOfBufferEntry(entry({ id: 'ck-2', draft: { body: 'x', parentId: 'root-1', anchor: null } }), [
+                REPLY_THREAD,
+            ]),
         ).toBe('reply:root-1');
-        expect(composerKeyOfBufferEntry(entry({ id: 'ck-3' }))).toBe('new:pr');
+        expect(composerKeyOfBufferEntry(entry({ id: 'ck-3' }), [])).toBe('new:pr');
+    });
+
+    // A reply can be nested: there is no composer with a nested message id, only one composer per thread.
+    it('uses the same thread key for a reply to a nested message', () => {
+        expect(
+            composerKeyOfBufferEntry(entry({ id: 'ck-2', draft: { body: 'x', parentId: 'reply-2', anchor: null } }), [
+                REPLY_THREAD,
+            ]),
+        ).toBe('reply:root-1');
+    });
+
+    it('has no composer location for a reply to a thread missing from the snapshot', () => {
+        expect(
+            composerKeyOfBufferEntry(entry({ id: 'ck-2', draft: { body: 'x', parentId: 'reply-2', anchor: null } }), []),
+        ).toBeNull();
     });
 
     it('uses the draft editor key when editing a draft owned by the reviewer', () => {
-        expect(composerKeyOfBufferEntry(entry({ id: 'ck-4', commentId: 'draft-9' }))).toBe('edit:draft-9');
+        expect(composerKeyOfBufferEntry(entry({ id: 'ck-4', commentId: 'draft-9' }), [])).toBe('edit:draft-9');
     });
 });
 
@@ -123,6 +142,39 @@ describe('restoring composers from the buffer', () => {
         });
     });
 
+    // The entry holds the issue flag that has not reached the host yet. The toggle must restore its state.
+    it('restores the issue toggle state in the composer', () => {
+        const store = createThreadStore([REPLY_THREAD], new Set(['f1']));
+        const record = entry({
+            id: 'ck-issue',
+            draft: { body: 'remark', parentId: 'root-1', anchor: null, issue: false },
+        });
+
+        restoreBufferedComposers(store, [record]);
+
+        expect(store.getComposer('reply:root-1')?.issue).toBe(false);
+    });
+
+    // A thread has one reply composer. A buffered reply to a nested message must return
+    // to that composer, or nothing on screen will render it.
+    it('restores a reply to a nested message in the thread composer under that message', () => {
+        const store = createThreadStore([REPLY_THREAD], new Set(['f1']));
+        const record = entry({
+            id: 'ck-nested',
+            draft: { body: 'reply to nested message', parentId: 'reply-2', anchor: null },
+        });
+
+        expect(restoreBufferedComposers(store, [record])).toEqual(['reply:root-1']);
+
+        expect(store.getComposer('reply:root-1')).toMatchObject({
+            text: 'reply to nested message',
+            threadId: 'root-1',
+            parentId: 'reply-2',
+            replyUnder: 'reply-2',
+            status: 'buffered',
+        });
+    });
+
     it('does not restore an edit when its comment is missing from threads', () => {
         const store = createThreadStore([], new Set(['f1']));
 
@@ -130,6 +182,17 @@ describe('restoring composers from the buffer', () => {
         expect(store.getComposer('edit:draft-9')).toBeNull();
     });
 });
+
+/** A thread with one reply. Its ID equals the root ID, as on a host where the root represents the thread. */
+function replyThread(): Thread {
+    const base = draftThread('root-1', 'thread root');
+    const root = { ...base.root, draft: false };
+    return {
+        ...base,
+        id: 'root-1',
+        root: { ...root, replies: [{ ...root, id: 'reply-2', body: 'thread reply' }] },
+    };
+}
 
 /** A thread with a single draft: the minimum needed to restore an edit. */
 function draftThread(commentId: string, body: string): Thread {

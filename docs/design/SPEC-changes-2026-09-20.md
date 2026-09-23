@@ -1,6 +1,6 @@
 # Sherpa spec changes, 2026-09-20
 
-> **Implementation departures (2026-09-21, `../decisions.md`, "Threads, issues and the composer").** The issue switch defaults to on, rather than off. Only a resolved thread without my draft starts collapsed. Everything else, including bot threads beside code and in the modal, starts expanded. There is no tracking of "new reply since the last pass" or amber dot. Thread expansion lives in tab memory and is not stored per-session. The review host adapter computes thread resolution, rather than the client. The capability is named `commentIssues`. The issue flag goes to the host when saving a draft, rather than when publishing. Each issue comment has a Resolve button (§5), rather than only the root as in the prototype. New tokens get semantic names.
+> **Implementation departures (2026-09-21, `../decisions.md`, "Threads, issues and composer").** The issue switch defaults to on, not off. Only a resolved thread without my draft is collapsed by default. Everything else, including bot threads beside the code and in the modal, is expanded. There is no tracking of "new replies since the last pass" or amber dot. Thread expansion lives in tab memory and is not stored per session. The host adapter determines whether a thread is resolved, not the client. The capability is called `commentIssues`. The issue flag goes to the host when a draft is saved, not when it is published. The Resolve button appears on every issue comment (§5), not only the root as in the prototype. New tokens get semantic names. The "· N issues" suffix is on the floating panel's draft counter, not inside the ship menu. Reviewer identity is passed in `PrMeta.viewer`. Without it, the host does not declare `editPublished`.
 
 Five changes on top of production (08-26 handoff + 09-02 onboarding + 09-12 theme): 4 changes requested by the customer (§1–4) and a redesign
 of base controls, with one rule for hover / pressed / disabled / focus across all buttons, links, switches, tabs, chips,
@@ -101,8 +101,11 @@ Remove the "N replies ›/⌄" button (collapse replies only, release 1) beside 
 - Expanded thread: header has avatar 18 · author · source chip · anchor/time · **Resolve button** (same pattern as Viewed toggle §5: open uses ghost h22 r5 "○ Resolve", border `2b2f36`, text `9ba1ab`. Resolved uses "✓ Resolved" bg `16211a`, border `25422f`, text `86d9a8`. Clicking toggles it, title is "Reopen" when resolved. Hover/press use the steps in §5. Drafts have no button). Header min-height 24, 6px to the body (same for all messages, with or without a button). Body 13px/1.6.
   Replies are visible immediately, with no separate reply collapsing (a thread has two states: marker and expanded).
   Replies have **no lines at all** (no vertical line on the left or dividers between messages): 12px of space between messages,
-  the avatar and name mark the start of a message. Text aligns with the root text column (`padding-left:27px` = avatar 18 + gap 9), with 18px avatars at every level.
-  Beyond 1 level, replies are flat, with "↳ replying to". Per-session state: `threadOpen: {threadId → bool}`.
+  with avatar and name marking each message's start. Each message's body and action row use `padding-left:27px` from its own avatar (18 + gap 9), avatars are 18 at every level.
+  Nesting uses `min(depth, 4) × 27px` left indentation, placing a reply's avatar under the parent's text column. The limit is the fourth level (108px).
+  Beyond that, indentation stops growing. A mono "↳ recipient" label names the recipient inline in the message header (after the author, before the metadata), with no separate line above the message.
+  Resolve appears only at the root if the host cannot resolve individual comments. If it can, the button appears on every comment with `issue`, as stated above.
+  Per-session state: `threadOpen: {threadId → bool}`.
 - Actions below the message text: "Reply" (accent) for everyone. Your own messages also have "Edit · Delete" (Link muted. "Delete" hover `e0736c`). Deleting replaces the action row with a confirmation in the same position: "Delete comment?" immediately followed (gap 9) by Danger solid "Delete" and Ghost "Cancel" (h23), with no hints. Esc = Cancel. No modal. "Edit" puts the editor in place of the text.
 - A new reply in a collapsed thread (reactively from the host) adds an `e2954c` dot to the marker. The thread does not expand itself.
 - **Remove the "Comments from · People / Bots / Resolved" filter** from the stop toolbar (SPEC-elements §Threads, per-session `threadsShow`).
@@ -121,8 +124,9 @@ Comment and reply body: `max-width: 760px`. Longer lines at 13px are unreadable.
 
 **Threads inside.** A PR comment is the thread root, rendered as the card variant in §3:
 card `#111214`, border `#1e2126`, radius 8, padding 10px 12px. Draft: `#131210`, 2px `#6b5b39` left edge.
-replies sit under a left line `#26292f` (padding-left 12), always visible when the thread is expanded (there is no "N replies" button,
-because threads outside the diff are short). Beyond 1 level, replies are flat with "↳ replying to".
+Replies use the same grid as beside code (§3): 27px per level up to the fourth, no lines. Always visible when the thread is expanded
+(no "N replies" button, threads outside the diff are short). Beyond the fourth level, "↳ recipient" appears in the header.
+The collapse chevron sits before the root avatar (20px + gap 9) and shifts the entire card column by 29px: the root body and actions sit directly under its name.
 "Reply" below any message opens the composer directly below it (in the message text column, max-width 733) with the issue switch (§1). "Cancel"/Esc collapses it. There is no "Reply…" row.
 Collapsed by default: drafts no, bots yes, people no, **resolved yes** (resolved thread definition in §3). The modal header has no "collapse all" or draft counter. The new comment composer has no heading or "draft empty" status.
 Order is newest first. Edit/delete your own messages with "Edit · Delete" links below the text (§3), with pencil/trash removed from the header.
@@ -219,6 +223,9 @@ New tokens: `--focus`, `--chip-bg-hover` (`#262c52` / `#dfe2fb`), `--chip-bg-act
   the "Reply…" row, pencil/trash in the draft header (§4).
 - Glow on the focused editor. The open/resolved status chip (replaced by the Resolve button, §5).
 - The vertical line to the left of replies and dividers between messages (§3).
+- The five-second undo for resolution ("resolved · undo" in place of the action row): Resolve is now
+  a toggle. Click the same button again to undo (§5).
+- The bot long-thread fold "first + last two + N more": replies beside code are visible immediately (§3).
 
 ## 7. Acceptance checklist
 

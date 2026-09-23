@@ -91,7 +91,7 @@ function mountReply() {
         },
     };
     const store = createThreadStore([thread], new Set());
-    openReply(store, thread);
+    openReply(store, thread, true);
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -129,32 +129,57 @@ afterEach(() => {
 });
 
 describe('comment composer', () => {
-    it('shows the enabled issue control in a PR-level composer', () => {
+    it('shows an enabled issue switch in the PR-level composer', () => {
         const { host, store } = mount('markdown');
         const issue = host.querySelector<HTMLButtonElement>('.thread-composer__issue');
 
         expect(issue?.textContent).toContain('Open an issue');
-        expect(issue?.getAttribute('aria-pressed')).toBe('true');
+        expect(issue?.getAttribute('role')).toBe('switch');
+        expect(issue?.getAttribute('aria-checked')).toBe('true');
+        expect(issue?.getAttribute('aria-label')).toBe('Open an issue, on');
 
         act(() => {
             issue?.click();
         });
         expect(store.getComposer('new:pr')?.issue).toBe(false);
-        expect(issue?.getAttribute('aria-pressed')).toBe('false');
+        expect(issue?.getAttribute('aria-checked')).toBe('false');
+        expect(issue?.getAttribute('aria-label')).toBe('Open an issue, off');
     });
 
-    it('shows the issue control for a new line comment', () => {
+    it('places the switch in the first composer row, directly above the editor border', () => {
+        const { host } = mount('markdown');
+        const composer = host.querySelector('.thread-composer');
+        const order = [...(composer?.children ?? [])].map((node) => node.className);
+
+        expect(order.slice(0, 2)).toEqual(['thread-composer__issue-row', 'thread-composer__editor']);
+        expect(host.querySelector('.thread-composer__context')).toBeNull();
+    });
+
+    it('shows the issue switch for a new line comment', () => {
         const { host } = mount('markdown', { kind: 'line' });
         expect(host.querySelector('.thread-composer__issue')).not.toBeNull();
     });
 
-    it('hides the issue control for a host without the capability', () => {
+    it('omits the issue row from the DOM when the host lacks the capability', () => {
         const { host } = mount('markdown', { commentIssues: false });
         expect(host.querySelector('.thread-composer__issue')).toBeNull();
+        expect(host.querySelector('.thread-composer__issue-row')).toBeNull();
     });
 
-    it('hides the issue control for replies', () => {
-        expect(mountReply().querySelector('.thread-composer__issue')).toBeNull();
+    it('shows the issue switch for a reply', () => {
+        const issue = mountReply().querySelector('.thread-composer__issue');
+        expect(issue?.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('keeps autosave status below the field, outside the button row', () => {
+        const { host, store } = mount('markdown');
+        act(() => {
+            store.updateComposer('new:pr', { text: 'text', status: 'error' });
+        });
+        const status = host.querySelector('.thread-composer__status-line .thread-composer__status');
+
+        expect(status?.className).toContain('is-error');
+        expect(host.querySelector('.thread-composer__actions .thread-composer__status')).toBeNull();
     });
 
     it('the Markdown toolbar wraps the selection and takes ⌘K from the global shortcut', () => {
@@ -231,7 +256,7 @@ describe('comment composer', () => {
         expect(host.querySelector('.thread-composer__status')?.textContent.trim()).toBe('saved as a draft');
     });
 
-    it('shows the line range in a new comment context', () => {
+    it('has no context heading above the switch in a new comment composer', () => {
         const store = createThreadStore([], new Set(['f1']));
         openNewComposer(
             store,
@@ -267,7 +292,9 @@ describe('comment composer', () => {
             host.remove();
         });
 
-        expect(host.querySelector('.thread-composer__context')?.textContent).toContain('new comment · lines 10–12');
+        expect(host.querySelector('.thread-composer__context')).toBeNull();
+        expect(host.querySelector('.thread-composer__issue-row')).not.toBeNull();
+        expect(host.textContent).not.toContain('New comment');
     });
 
     it('shows the actual unsaved status after input, until an explicit save', () => {
@@ -344,7 +371,7 @@ describe('comment composer', () => {
         expect(host.querySelector('.thread-composer')).toBeNull();
     });
 
-    it('Cancel asks for confirmation when the new text is nonempty', () => {
+    it('Cancel asks to confirm deletion when new text is nonempty', () => {
         const { host, store } = mount('markdown');
         act(() => {
             store.updateComposer('new:pr', { text: 'keep this', status: 'idle' });
@@ -357,7 +384,10 @@ describe('comment composer', () => {
             cancel?.click();
         });
 
-        expect(host.querySelector('.thread-composer__confirm')?.textContent).toContain('Discard this draft?');
+        expect(host.querySelector('.thread__delete-confirm')?.textContent).toContain('Delete the draft?');
+        // Confirmation replaces the buttons. There is no second "Cancel" or "Save draft" on screen.
+        expect(host.querySelector('.thread-composer__actions')).toBeNull();
+        expect(host.querySelector('.thread-composer__status')).toBeNull();
         expect(store.getComposer('new:pr')).not.toBeNull();
     });
 
@@ -382,14 +412,12 @@ describe('comment composer', () => {
             [...host.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Cancel')?.click();
         });
 
-        expect(host.querySelector('.thread-composer__confirm')?.textContent).toContain('Discard this draft?');
+        expect(host.querySelector('.thread__delete-confirm')?.textContent).toContain('Delete the draft?');
         expect(update).not.toHaveBeenCalled();
         expect(store.getComposer('new:pr')?.text).toBe('');
 
         await act(async () => {
-            [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__confirm button')]
-                .find((button) => button.textContent === 'discard')
-                ?.click();
+            host.querySelector<HTMLButtonElement>('.thread__delete-confirm-button')?.click();
             await vi.waitFor(() => {
                 expect(store.getComposer('new:pr')).toBeNull();
             });

@@ -113,11 +113,31 @@ describe('route generation card', () => {
         expect(html).toContain('>Cancel</button>');
     });
 
-    it('ready route: compact card with the stop count', () => {
-        const html = render(state('ready'));
+    it('a ready route shows the stop count, stop list and "Open the route"', () => {
+        const ready = state('ready');
+        const html = render(ready);
+        const titles = ready.snapshot?.stops.map((stop) => stop.title) ?? [];
 
         expect(html).toContain('Route ready · 7 stops');
         expect(html).toContain('Open the route');
+        expect(titles.length).toBe(7);
+        // Titles go through the route Markdown profile, so the checks use numbers and plain text.
+        expect([...html.matchAll(/gen-plan__number">(\d+)</gu)].map((match) => match[1])).toEqual([
+            '01',
+            '02',
+            '03',
+            '04',
+            '05',
+            '06',
+            '07',
+        ]);
+        expect(html).toContain(titles[0]);
+        expect(html).toContain('Other — lines the model did not place');
+        expect(html).toContain('gen-plan__item--ready');
+        // The bar, note and placeholder hint describe filling. They have nothing to say once the route is ready.
+        expect(html).not.toContain('gen-bar');
+        expect(html).not.toContain('gen-card__note');
+        expect(html).not.toContain('gen-card__hint');
     });
 
     it('shows failure as a compact red card without raw output or a footer', () => {

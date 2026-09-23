@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { createDiffViewStore } from '../diff-view/store.js';
 import { buildFileFilters } from '../filters/lens-filters.js';
 import { useT } from '../i18n/index.js';
-import { DEFAULT_THREADS_SHOW } from '../session/session-store.js';
 import type { RouteStopView } from '../route/route-model.js';
 import { CoverageStrip } from '../views/route/coverage-strip.tsx';
 import { RouteToolbar } from '../views/route/route-toolbar.tsx';
@@ -46,9 +45,6 @@ export function TourScaffold() {
                 filters={filters}
                 filter={filter}
                 onFilter={NOOP}
-                threadsShow={DEFAULT_THREADS_SHOW}
-                threadCounts={EMPTY_THREAD_COUNTS}
-                onThreadsShow={NOOP}
                 strip={<CoverageStrip model={null} loading={{ kind: 'plan', ready: 0, total: 0 }} />}
             />
 
@@ -70,7 +66,6 @@ export function TourScaffold() {
 }
 
 const NOOP = (): void => undefined;
-const EMPTY_THREAD_COUNTS = { people: 0, bots: 0, resolved: 0 };
 
 /**
  * Placeholder stop: `queued`, because there is nothing to say about it except that

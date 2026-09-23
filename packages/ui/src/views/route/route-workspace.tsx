@@ -59,7 +59,7 @@ import { cardReadState } from '../../route/stop-coverage.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { createThreadActions } from '../../threads/actions.js';
 import type { ComposerTransport } from '../../threads/composer.js';
-import { countThreadSources } from '../../threads/model.js';
+import type { PublishedCommentTransport } from '../../threads/transport.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { OutsideThreads } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
@@ -118,6 +118,8 @@ export interface RouteWorkspaceProps {
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
     readonly threadTransport?: ComposerTransport;
+    /** Writes for published comments. Without it, the UI has no resolve, edit or delete actions. */
+    readonly publishedTransport?: PublishedCommentTransport;
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     /** See the comment on `threadNow` in `views/full-diff.tsx`. */
     readonly threadNow?: number;
@@ -194,7 +196,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         filter: filterId,
         preset,
         routeFilter,
-        threadsShow,
         stops: stopState,
     } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 
@@ -204,10 +205,29 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
 
     const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
+    const publishedTransport = props.publishedTransport;
     const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
+    const { commentIssues, commentResolve, editPublished } = pr.capabilities;
     const threadActions = useMemo<ThreadActions>(
-        () => createThreadActions(threadStore, threadTransport, resolveThread),
-        [resolveThread, threadStore, threadTransport],
+        () =>
+            createThreadActions(
+                threadStore,
+                threadTransport,
+                resolveThread,
+                publishedTransport === undefined
+                    ? undefined
+                    : { transport: publishedTransport, commentResolve, editPublished },
+                commentIssues,
+            ),
+        [
+            commentIssues,
+            commentResolve,
+            editPublished,
+            publishedTransport,
+            resolveThread,
+            threadStore,
+            threadTransport,
+        ],
     );
     const turnNoteIntoDraft = useTurnNoteIntoDraft({
         threadStore,
@@ -656,7 +676,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         focusedLine,
         focusedThreadId,
         selectedShownModel,
-        threadVisible,
         visibleByFile,
         iterationLayout,
     } = useStopCards({
@@ -670,7 +689,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         diffSnapshot,
         threadSnapshot,
         composersSnapshot,
-        threadsShow,
         preset,
         noteActions,
         notesByFile,
@@ -701,6 +719,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         focusedThreadId,
         threads: threadSnapshot.threads,
         threadStore,
+        commentIssues,
         commentLine,
         session,
         changeFilterOn,
@@ -733,9 +752,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         [collapsedOf, filter.fileIds, keptStopId, shown, stopViewed],
     );
 
-    const outsideThreads = threadSnapshot.outside.filter(
-        (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
-    );
+    const outsideThreads = threadSnapshot.outside;
     const selectedFile =
         diffSnapshot.selection === null
             ? null
@@ -785,9 +802,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 filters={filters}
                 filter={filter}
                 onFilter={changeFilter}
-                threadsShow={threadsShow}
-                threadCounts={countThreadSources(threadSnapshot.threads)}
-                onThreadsShow={session.setThreadsShow}
                 changeFilterOn={changeFilterOn}
                 onClearChangeFilter={() => {
                     session.setRouteFilter('all');

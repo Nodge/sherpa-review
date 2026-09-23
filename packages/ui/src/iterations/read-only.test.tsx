@@ -121,11 +121,13 @@ describe('write controls in read-only mode', () => {
             />,
             true,
         );
-        const entry = host.querySelector<HTMLButtonElement>('.thread-composer-entry');
+        const reply = [...host.querySelectorAll<HTMLButtonElement>('.thread__row-actions button')].find(
+            (button) => button.textContent === 'Reply',
+        );
 
         expect(host.textContent).toContain('question about the line');
-        expect(entry?.disabled).toBe(true);
-        expect(entry?.title).toBe(t(READ_ONLY_REASON));
+        expect(reply?.disabled).toBe(true);
+        expect(reply?.title).toBe(t(READ_ONLY_REASON));
     });
 
     it('resolving and reopening a thread are unavailable', () => {
@@ -139,9 +141,7 @@ describe('write controls in read-only mode', () => {
             />,
             true,
         );
-        const resolve = [...host.querySelectorAll<HTMLButtonElement>('.thread__actions button')].find(
-            (button) => button.textContent === 'Resolve',
-        );
+        const resolve = host.querySelector<HTMLButtonElement>('.thread__resolve');
 
         expect(resolve?.disabled).toBe(true);
         expect(resolve?.title).toBe(t(READ_ONLY_REASON));

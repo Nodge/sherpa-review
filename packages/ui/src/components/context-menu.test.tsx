@@ -276,7 +276,7 @@ describe('file context menu', () => {
 
         const link = items()[1];
         expect(link?.getAttribute('aria-disabled')).toBe('true');
-        expect(link?.title).toBe('у хоста нет веб-ссылки');
+        expect(link?.title).toBe('this file has no web link');
 
         await act(async () => {
             link?.click();

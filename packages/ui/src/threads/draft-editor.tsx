@@ -11,21 +11,26 @@ export function draftEditComposerKey(commentId: string): string {
     return `edit:${commentId}`;
 }
 
-/** Opens an existing draft for editing independently of the bottom line composer. */
+/**
+ * Opens a comment editor in place of the text, for your own draft or your own already
+ * published comment (docs/design/SPEC-changes-2026-09-20.md §3). The editor is shared. The caller supplies
+ * the transport that decides where the text goes.
+ */
 export function openDraftEditor(store: ThreadStore, thread: Thread, comment: Comment): void {
     const key = draftEditComposerKey(comment.id);
     const replyComposer = store.getComposer(`reply:${thread.id}`);
     if (store.getComposer(key) !== null || replyComposer?.commentId === comment.id) {
         return;
     }
-    // Issue status belongs to the thread root: replies have nothing to toggle, and hosts without issues return null.
-    const issue = comment.id === thread.root.id ? comment.issue : null;
+    // Any comment can have issue status, including replies. Only hosts without `commentIssues` return `null`.
+    const issue = comment.issue;
     store.openComposer({
         key,
         threadId: thread.id,
         parentId: null,
         anchor: null,
         ...(issue === null ? {} : { issue }),
+        ...(comment.draft ? {} : { published: true }),
         text: comment.body,
         originalText: comment.body,
         commentId: comment.id,
@@ -62,7 +67,6 @@ export function DraftEditor({
     comment,
     store,
     transport,
-    contextLabel,
     placeholder,
     inputLabel,
     footerHint,
@@ -71,7 +75,6 @@ export function DraftEditor({
     comment: Comment;
     store: ThreadStore;
     transport: ComposerTransport;
-    contextLabel: string;
     placeholder: string;
     inputLabel: string;
     footerHint?: ReactNode;
@@ -87,7 +90,6 @@ export function DraftEditor({
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={contextLabel}
             placeholder={placeholder}
             inputLabel={inputLabel}
             saveLabel="thread.composer.saveChanges"

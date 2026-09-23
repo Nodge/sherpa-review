@@ -36,11 +36,11 @@ test('draft buffer: host failure → buffered text → reload → retry', async 
         await expect(page.locator('.thread-composer__status')).toContainText('we will save it once the connection is back');
         // The text stays in the field. The composer remains editable instead of being locked by the status.
         await expect(composer).toContainText(COMMENT);
-        await expect(page.locator('.review-action-bar')).toContainText('1 not yet saved to the host');
+        await expect(page.locator('.review-action-bar')).toContainText('1 not sent yet');
         await expect(page.locator('.review-action-bar__ship-primary')).toBeDisabled();
         await expect(page.locator('.review-action-bar__ship-primary')).toHaveAttribute(
             'title',
-            '1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится',
+            '1 draft is not sent yet — ship is blocked until it is',
         );
     });
 
@@ -60,7 +60,7 @@ test('draft buffer: host failure → buffered text → reload → retry', async 
 
         await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
         await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
-        await expect(page.locator('.review-action-bar')).not.toContainText('not yet saved to the host');
+        await expect(page.locator('.review-action-bar')).not.toContainText('not sent yet');
         await expect(page.locator('.review-action-bar__ship-primary')).toBeEnabled();
         expect(await draftBufferEntries(page, server)).toEqual([]);
     });

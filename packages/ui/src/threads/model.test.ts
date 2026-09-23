@@ -4,17 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import {
-    countThreadSources,
     flattenThread,
     groupThreads,
     isPrLevelThread,
     placeThreadsOnVisibleLines,
     positionLastLine,
-    prLevelHumanThreads,
+    prLevelThreads,
     threadAtLines,
     threadFileId,
+    threadCommentCount,
     threadHasAuthor,
+    threadHasDraft,
     threadIsVisible,
+    threadResolvedByIssues,
 } from './model.js';
 
 describe('thread model', () => {
@@ -27,7 +29,9 @@ describe('thread model', () => {
         const rows = flattenThread(deep.root);
 
         expect(rows[0]?.subtreeReplies).toBe(rows.length - 1);
-        expect(rows.some((row) => row.depth > 4 && row.indent === 45 && row.replyHintAuthor !== null)).toBe(true);
+        // Indentation is 27px per reply level, capped at the fourth (108px). Deeper replies show "↳ to" instead.
+        expect(rows.map((row) => row.indent).slice(0, 6)).toEqual([0, 27, 54, 81, 108, 108]);
+        expect(rows.every((row) => (row.depth > 5) === (row.replyHintAuthor !== null))).toBe(true);
         expect(rows.filter((row) => row.parent?.id === '4820158')).toHaveLength(2);
     });
 
@@ -71,11 +75,13 @@ describe('thread model', () => {
 
         expect(isPrLevelThread(published)).toBe(true);
         expect(isPrLevelThread(disappeared)).toBe(false);
-        expect(prLevelHumanThreads([published, draft, bot, disappeared]).map((thread) => thread.id)).toEqual([
+        // The PR modal also shows bot threads: they have Resolve and reply actions too (§4).
+        expect(prLevelThreads([published, draft, bot, disappeared]).map((thread) => thread.id)).toEqual([
             'pr-published',
             'pr-draft',
+            'pr-bot',
         ]);
-        expect(prLevelHumanThreads([draft])[0]?.root.draft).toBe(true);
+        expect(prLevelThreads([draft])[0]?.root.draft).toBe(true);
         expect(groupThreads([published, draft, bot, disappeared], new Set()).outside.map((thread) => thread.id)).toEqual([
             'pr-bot',
             'disappeared-file',
@@ -170,18 +176,8 @@ describe('thread model', () => {
         expect(placed.unplaced).toEqual([missingSide]);
     });
 
-    it('counts three non-overlapping sources and filters them', () => {
-        const threads = fixtureIteration('medium').threads;
-        const counts = countThreadSources(threads);
-
-        expect(counts).toEqual({ people: 4, bots: 2, resolved: 1 });
-        expect(threads.filter((thread) => threadIsVisible(thread, { people: true, bots: false, resolved: false })))
-            .toHaveLength(4);
-    });
-
     it('keeps threads where the login wrote the root or any reply under the author lens', () => {
         const threads = fixtureIteration('medium').threads;
-        const all = { people: true, bots: true, resolved: true };
         const root = threads[0];
         if (root === undefined) {
             throw new Error('fixture has no threads');
@@ -192,12 +188,43 @@ describe('thread model', () => {
         }
 
         expect(threadHasAuthor(root, replyAuthor)).toBe(true);
-        expect(threadIsVisible(root, all, replyAuthor)).toBe(true);
-        expect(threadIsVisible(root, all, 'nobody')).toBe(false);
-        // Source chips apply on top of the lens, rather than replacing it.
-        expect(threadIsVisible(root, { people: false, bots: false, resolved: false }, root.root.author.login)).toBe(
-            false,
-        );
+        expect(threadIsVisible(root, replyAuthor)).toBe(true);
+        expect(threadIsVisible(root, 'nobody')).toBe(false);
+        // With no lens, every thread is visible: the source filter no longer exists.
+        expect(threadIsVisible(root)).toBe(true);
+    });
+
+    it('counts all levels in the marker and shows a draft at any thread depth', () => {
+        const thread = fixtureIteration('medium').threads.find((candidate) => candidate.root.replies.length > 0);
+        if (thread === undefined) {
+            throw new Error('fixture has no thread with replies');
+        }
+
+        expect(threadCommentCount(thread)).toBe(flattenThread(thread.root).length);
+        expect(threadHasDraft(thread)).toBe(false);
+        expect(
+            threadHasDraft({
+                ...thread,
+                root: { ...thread.root, replies: [...thread.root.replies, { ...thread.root, id: 'd', draft: true }] },
+            }),
+        ).toBe(true);
+    });
+
+    it('marks a thread resolved by comments when it has issue comments and all are resolved', () => {
+        const base = fixtureIteration('large').threads;
+        const withIssues = base.find((thread) => thread.root.issue === true && thread.root.resolved !== null);
+        if (withIssues === undefined) {
+            throw new Error('large fixture has no thread with an issue and per-comment resolution');
+        }
+
+        expect(threadResolvedByIssues(withIssues)).toBe(withIssues.root.resolved === true);
+        // A host without per-comment resolution does not apply the rule: all have `resolved: null`.
+        expect(
+            threadResolvedByIssues({
+                ...withIssues,
+                root: { ...withIssues.root, resolved: null, replies: [] },
+            }),
+        ).toBeNull();
     });
 });
 

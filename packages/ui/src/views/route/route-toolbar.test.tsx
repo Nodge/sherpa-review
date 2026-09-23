@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../../filters/lens-filters.js';
 import type { RoutePreset } from '../../session/session-store.js';
-import { DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
 import { PRESET_DISABLED_TITLE, RouteToolbar, TOUR_HINT, TRIAGE_HINT } from './route-toolbar.tsx';
 import { createT } from '../../i18n/index.js';
 
@@ -30,9 +29,6 @@ function render(options: { preset?: RoutePreset; disabled?: boolean; cap?: UiGen
             filters={filters}
             filter={selectFilter(filters, 'all')}
             onFilter={() => undefined}
-            threadsShow={DEFAULT_THREADS_SHOW}
-            threadCounts={{ people: 0, bots: 0, resolved: 0 }}
-            onThreadsShow={() => undefined}
             strip={null}
             generationCap={options.cap ?? null}
         />,

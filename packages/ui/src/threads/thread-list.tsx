@@ -1,9 +1,7 @@
 import type { Comment, FileAnchor, Locale, Thread } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
-import { copyText } from '../components/clipboard.js';
-import { updateFragment } from '../fragment.js';
 import type { Translate } from '../i18n/index.js';
 import { relativeTime, shortCommit, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
@@ -11,19 +9,44 @@ import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only
 import { useThreadPin } from '../iterations/thread-pin.tsx';
 import type { ThreadPinState } from '../iterations/thread-pin.tsx';
 import { Markdown } from '../markdown/markdown.tsx';
-import { closeCommentComposers } from './composer.js';
+import { closeCommentComposers, composerControllerFor } from './composer.js';
 import type { ComposerTransport } from './composer.js';
 import { CommentComposer } from './comment-composer.tsx';
 import type { ComposerSaveLabel } from './comment-composer.tsx';
 import type { ComposerLayout } from './composer-markdown.js';
+import { DeleteConfirm } from './delete-confirm.tsx';
 import { draftEditComposerKey, DraftEditor, openDraftEditor, useActiveDraftEditor } from './draft-editor.tsx';
-import { authorName, flattenThread } from './model.js';
+import { authorName, commentFirstLine, flattenThread } from './model.js';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
+import type { PublishedCommentTransport } from './transport.js';
+import { publishedCommentComposerTransport } from './transport.js';
 import './threads.css';
 
 export interface ThreadActions {
     readonly transport: ComposerTransport;
+    /** The host's `capabilities.commentIssues`. Without it, replies have no issue switch. */
+    readonly commentIssues?: boolean;
     readonly resolve: (threadId: string, resolved: boolean) => Promise<boolean>;
+    /**
+     * Resolves a single issue comment. `null`/absent means the host lacks `capabilities.commentResolve`,
+     * so the only button stays at the thread root.
+     */
+    readonly resolveComment?: ((commentId: string, resolved: boolean) => Promise<boolean>) | null;
+    /** Editing and deleting your published comments. `null` means the host lacks `capabilities.editPublished`. */
+    readonly published?: PublishedCommentTransport | null;
+}
+
+/** Thread presentation: a strip under a code line or a card in the "PR comments" modal (§4). */
+export type ThreadVariant = 'line' | 'card';
+
+/**
+ * Collapsing a whole thread into a preview row is limited to the PR modal. Beside code,
+ * a marker on the card border plays the same role (docs/design/SPEC-changes-2026-09-20.md §3, §4).
+ * The thread store keeps one expansion state per thread, shared by both locations.
+ */
+export interface ThreadCollapse {
+    readonly openThreads: ReadonlySet<string>;
+    readonly onToggle: (threadId: string) => void;
 }
 
 export function ThreadList({
@@ -32,19 +55,21 @@ export function ThreadList({
     actions,
     now,
     onFocusThread,
-    inlineDraftEditing = false,
     initialLayout,
+    variant = 'line',
+    collapse,
 }: {
     threads: readonly Thread[];
     store: ThreadStore;
     actions: ThreadActions;
     now: number;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
-    inlineDraftEditing?: boolean;
     initialLayout?: ComposerLayout;
+    variant?: ThreadVariant;
+    collapse?: ThreadCollapse;
 }) {
     return (
-        <div className="thread-list">
+        <div className={`thread-list${variant === 'card' ? ' thread-list--card' : ''}`}>
             {threads.map((thread) => (
                 <ThreadBlock
                     key={thread.id}
@@ -53,7 +78,8 @@ export function ThreadList({
                     actions={actions}
                     now={now}
                     onFocusThread={onFocusThread}
-                    inlineDraftEditing={inlineDraftEditing}
+                    variant={variant}
+                    {...(collapse === undefined ? {} : { collapse })}
                     {...(initialLayout === undefined ? {} : { initialLayout })}
                 />
             ))}
@@ -67,16 +93,18 @@ function ThreadBlock({
     actions,
     now,
     onFocusThread,
-    inlineDraftEditing,
     initialLayout,
+    variant = 'line',
+    collapse,
 }: {
     thread: Thread;
     store: ThreadStore;
     actions: ThreadActions;
     now: number;
     onFocusThread?: ((threadId: string | null) => void) | undefined;
-    inlineDraftEditing: boolean;
     initialLayout?: ComposerLayout;
+    variant?: ThreadVariant;
+    collapse?: ThreadCollapse;
 }) {
     const t = useT();
     const locale = useLocale();
@@ -88,59 +116,106 @@ function ThreadBlock({
     const all = useMemo(() => flattenThread(thread.root), [thread.root]);
     const commentIds = useMemo(() => all.map((row) => row.comment.id), [all]);
     const editingId = useActiveDraftEditor(store, commentIds);
-    const [repliesOpen, setRepliesOpen] = useState(true);
-    const [expanded, setExpanded] = useState(false);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
-    const collapseBot = repliesOpen && thread.root.author.bot && all.length > 5 && !expanded;
-    const shown = !repliesOpen
-        ? all.slice(0, 1)
-        : collapseBot
-          ? [all[0], all[1], ...all.slice(-2)].filter((row) => row !== undefined)
-          : all;
-    const hidden = Math.max(all.length - shown.length, 0);
     const draftReply = replyDraft(thread);
-    const replyComposer = useComposerSnapshot(store, `reply:${thread.id}`);
-    // OutsideThreads also edits drafts inline: the row sets availability, not the list container.
-    const draftEditorAvailable =
-        draftReply !== null &&
-        (editingId === draftReply.id || shown.some((row) => row.comment.id === draftReply.id));
+    const replyComposer = useComposerSnapshot(store, replyComposerKey(thread.id));
+    // The composer expands under the message where the reviewer clicked Reply,
+    // instead of at the end of the thread (§3, §4). The thread has one composer key. Only its location changes.
+    const replyUnder = replyComposer?.replyUnder ?? null;
     // The third argument is the same snapshot. The store is isomorphic, and tests render the cards statically.
-    const undoEntry =
-        useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).undo.get(thread.id) ?? null;
-    const undo = undoEntry?.resolved ?? null;
-    const hideActions = thread.root.draft;
+    const viewerLogin = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot).viewerLogin;
+    const publishedTransport = actions.published ?? null;
+    const editorTransport = useMemo(
+        () => (publishedTransport === null ? null : publishedCommentComposerTransport(publishedTransport)),
+        [publishedTransport],
+    );
+    const hideReplyComposer = thread.root.draft;
+    const card = variant === 'card';
+    const editingComment = all.find((row) => row.comment.id === editingId)?.comment ?? null;
+    /**
+     * An open composer (reply or edit) and deletion confirmation keep the thread expanded.
+     * A collapsed row would hide the entered text, while the publishing guard would still
+     * count it. So collapsing goes through `toggleCollapsed`, instead of directly through `collapse.onToggle`.
+     */
+    const busy = replyComposer !== null || editingComment !== null || confirmingId !== null;
+    // A collapsed thread leaves one visible row: chevron, root header and first-line preview.
+    const collapsed = collapse !== undefined && !collapse.openThreads.has(thread.id) && !busy;
+    const rows = collapsed ? all.slice(0, 1) : all;
+    const replies = all.length - 1;
+    // The reply composer stays under its message only while it is open and the message is visible.
+    const inlineReplyId =
+        replyComposer !== null && replyUnder !== null && rows.some((row) => row.comment.id === replyUnder)
+            ? replyUnder
+            : null;
 
-    const setResolved = (resolved: boolean): void => {
-        const generation = store.startUndo(thread.id, resolved);
-        void actions.resolve(thread.id, resolved).then((saved) => {
-            if (!saved) {
-                store.clearUndo(thread.id, generation);
-            }
-        });
+    const setThreadResolved = (resolved: boolean): void => {
+        void actions.resolve(thread.id, resolved);
     };
 
-    const deleteDraft = async (commentId: string): Promise<void> => {
-        setDeletingId(commentId);
+    /**
+     * The chevron and preview collapse and expand the thread after clearing what keeps it
+     * expanded. An empty composer closes on its own. If it has text, it asks to discard it.
+     * Deletion confirmation is cancelled. The next click collapses the thread.
+     */
+    const toggleCollapsed = (): void => {
+        if (collapse === undefined) {
+            return;
+        }
+        if (!busy) {
+            collapse.onToggle(thread.id);
+            return;
+        }
         setDeleteErrorId(null);
-        store.beginDraftDeletion(commentId);
+        setConfirmingId(null);
+        if (replyComposer !== null) {
+            composerControllerFor({ store, key: replyComposer.key, transport: actions.transport }).escape();
+        }
+        if (editingComment !== null) {
+            composerControllerFor({
+                store,
+                key: draftEditComposerKey(editingComment.id),
+                transport: editingComment.draft ? actions.transport : (editorTransport ?? actions.transport),
+            }).escape();
+        }
+    };
+
+    const remove = async (comment: Comment): Promise<void> => {
+        setDeletingId(comment.id);
+        setDeleteErrorId(null);
+        store.beginDraftDeletion(comment.id);
         try {
-            await actions.transport.delete(commentId);
-            closeCommentComposers(store, [commentId]);
-            store.deleteDraft(commentId);
+            if (comment.draft) {
+                await actions.transport.delete(comment.id);
+            } else {
+                await publishedTransport?.delete(comment.id);
+            }
+            closeCommentComposers(store, [comment.id]);
+            // Remove the comment optimistically. The next host snapshot will confirm it.
+            store.deleteDraft(comment.id);
             setConfirmingId(null);
         } catch {
-            setDeleteErrorId(commentId);
+            setDeleteErrorId(comment.id);
         } finally {
-            store.endDraftDeletion(commentId);
+            store.endDraftDeletion(comment.id);
             setDeletingId(null);
         }
     };
 
+    const composer = hideReplyComposer ? null : (
+        <ComposerForThread
+            thread={thread}
+            store={store}
+            transport={actions.transport}
+            draft={draftReply}
+            composer={replyComposer}
+        />
+    );
+
     return (
         <section
-            className={`thread thread-fade${thread.root.author.bot ? ' thread--bot' : ''}${thread.resolved ? ' thread--resolved' : ''}`}
+            className={`thread thread-fade${thread.root.author.bot ? ' thread--bot' : ''}${thread.resolved ? ' thread--resolved' : ''}${card ? ' thread--card' : ''}${card && thread.root.draft ? ' thread--draft' : ''}${collapsed ? ' is-collapsed' : ''}`}
             id={`thread-${thread.id}`}
             data-thread-id={thread.id}
             tabIndex={0}
@@ -153,214 +228,241 @@ function ThreadBlock({
                 }
             }}
         >
-            {shown.map((row, index) => (
-                <div
-                    key={row.comment.id}
-                    className={`thread__row${index > 0 ? ' thread__row--reply' : ''}${editingId === row.comment.id ? ' is-editing' : ''}`}
-                    style={{ marginLeft: `${String(row.indent)}px` }}
-                >
-                    {row.replyHintAuthor === null ? null : (
-                        <div className="thread__reply-hint">
-                            <Icon name="reply" size={13} />
-                            {t('thread.reply.context', row.replyHintAuthor)}
-                        </div>
-                    )}
-                    <div className="thread__author-line">
-                        <span className={`thread__avatar${row.comment.author.bot ? ' thread__avatar--bot' : ''}`}>
-                            {initials(row.comment.author.displayName ?? row.comment.author.login)}
-                        </span>
-                        <strong className="thread__author">
-                            {row.comment.author.bot ? row.comment.author.login : authorName(row.comment)}
-                        </strong>
-                        <span className="thread__meta">
-                            {metaOf(thread, row.comment.createdAt, now, t, locale)}
-                        </span>
-                        {row.comment.author.bot ? (
-                            <span className="thread__chip">{row.comment.author.displayName ?? row.comment.author.login}</span>
-                        ) : null}
-                        {thread.resolved && index === 0 ? <span className="thread__chip">resolved</span> : null}
-                        {thread.outdated && index === 0 ? <span className="thread__chip">outdated</span> : null}
-                        {pinned === null || index !== 0 ? null : <ThreadPinChip pinned={pinned} />}
-                        {editingId === row.comment.id ? (
-                            <span className="thread__chip thread__chip--editing">{t('thread.chip.editing')}</span>
-                        ) : row.comment.draft ? (
-                            <span className="thread__chip thread__chip--draft">{t('thread.chip.draft')}</span>
-                        ) : null}
-                        <span className="thread__spacer" />
-                        {row.comment.draft &&
-                        editingId !== row.comment.id &&
-                        replyComposer?.commentId !== row.comment.id ? (
-                            <span className="thread__draft-actions">
+            {rows.map((row, index) => {
+                const comment = row.comment;
+                const editing = editingId === comment.id;
+                const mine = comment.draft || (viewerLogin !== null && comment.author.login === viewerLogin);
+                // A draft already open in the reply composer is edited there. No second pair of links is needed.
+                const editable =
+                    replyComposer?.commentId !== comment.id &&
+                    (comment.draft || (mine && editorTransport !== null));
+                // No host allows deleting a message with replies, because the replies would lose their
+                // parent. It has no Delete link at all, even a disabled one.
+                const deletable = editable && comment.replies.length === 0;
+                const resolve = resolveControl(thread, comment, index, actions);
+                return (
+                    <div
+                        key={comment.id}
+                        className={`thread__row${index > 0 ? ' thread__row--reply' : ''}${editing ? ' is-editing' : ''}`}
+                        data-comment-id={comment.id}
+                        style={replyIndentStyle(row.indent)}
+                    >
+                        <div className="thread__author-line">
+                            {collapse === undefined || index !== 0 ? null : (
                                 <button
                                     type="button"
-                                    className="ctl ctl--icon thread__edit-draft"
-                                    aria-label={t('thread.draft.editAria', row.comment.id)}
-                                    title={readOnly ? readOnlyReason : t('thread.draft.edit')}
-                                    disabled={readOnly || editingId !== null || deletingId !== null}
-                                    onClick={() => {
-                                        setConfirmingId(null);
-                                        openDraftEditor(store, thread, row.comment);
-                                    }}
+                                    className="ctl ctl--chevron thread__chevron"
+                                    aria-expanded={!collapsed}
+                                    aria-label={t(
+                                        collapsed ? 'thread.marker.expand' : 'thread.marker.collapse',
+                                        authorName(thread.root),
+                                        commentFirstLine(thread.root.body, 60),
+                                    )}
+                                    onClick={toggleCollapsed}
                                 >
-                                    <Icon name="pencil" size={14} />
+                                    <Icon name={collapsed ? 'chev-right' : 'chev-down'} size={13} />
                                 </button>
-                                <button
-                                    type="button"
-                                    className="ctl ctl--icon-danger thread__delete-draft"
-                                    aria-label={t('thread.draft.deleteAria', row.comment.id)}
-                                    title={readOnly ? readOnlyReason : t('thread.draft.delete')}
-                                    disabled={readOnly || editingId !== null || deletingId !== null}
-                                    onClick={() => {
-                                        setDeleteErrorId(null);
-                                        setConfirmingId(row.comment.id);
-                                    }}
-                                >
-                                    <Icon name="trash" size={14} />
-                                </button>
+                            )}
+                            <span className={`thread__avatar${comment.author.bot ? ' thread__avatar--bot' : ''}`}>
+                                {initials(comment.author.displayName ?? comment.author.login)}
                             </span>
-                        ) : null}
-                        {row.subtreeReplies > 0 ? (
-                            index === 0 ? (
-                                <button
-                                    type="button"
-                                    className="thread__reply-count thread__reply-toggle"
-                                    aria-expanded={repliesOpen}
-                                    onClick={() => {
-                                        setRepliesOpen((value) => !value);
-                                    }}
-                                >
-                                    {t('thread.replies', row.subtreeReplies)}
-                                    <Icon name={repliesOpen ? 'chev-down' : 'chev-right'} size={13} />
-                                </button>
-                            ) : (
-                                <span className="thread__reply-count">
-                                    {t('thread.replies', row.subtreeReplies)}
-                                    <Icon name="chev-right" size={13} />
+                            <strong className="thread__author">
+                                {comment.author.bot ? comment.author.login : authorName(comment)}
+                            </strong>
+                            {/* Indentation stops growing after level 4, and the label names the recipient. */}
+                            {row.replyHintAuthor === null ? null : (
+                                <span className="thread__reply-hint">↳ {row.replyHintAuthor}</span>
+                            )}
+                            {comment.issue === true ? (
+                                <span className="thread__chip thread__chip--issue">issue</span>
+                            ) : null}
+                            {comment.author.bot ? (
+                                <span className="thread__chip">
+                                    {comment.author.displayName ?? comment.author.login}
                                 </span>
-                            )
-                        ) : null}
-                    </div>
-                    {editingId === row.comment.id ? (
-                        <DraftEditor
-                            comment={row.comment}
-                            store={store}
-                            transport={actions.transport}
-                            contextLabel={t('thread.composer.editContext')}
-                            placeholder={t('thread.composer.linePlaceholder')}
-                            inputLabel={t('thread.composer.editLabel')}
-                            {...(initialLayout === undefined ? {} : { initialLayout })}
-                        />
-                    ) : (
-                        <div className="thread__body">
-                            <Markdown text={row.comment.body} profile="comment" />
+                            ) : null}
+                            {thread.outdated && index === 0 ? <span className="thread__chip">outdated</span> : null}
+                            {pinned === null || index !== 0 ? null : <ThreadPinChip pinned={pinned} />}
+                            {editing ? (
+                                <span className="thread__chip thread__chip--editing">{t('thread.chip.editing')}</span>
+                            ) : comment.draft ? (
+                                <span className="thread__chip thread__chip--draft">{t('thread.chip.draft')}</span>
+                            ) : null}
+                            <span className="thread__meta">{metaOf(thread, comment.createdAt, now, t, locale)}</span>
+                            {collapsed ? (
+                                <>
+                                    {/* The preview has the same click target as the chevron. The keyboard only needs the chevron. */}
+                                    <button
+                                        type="button"
+                                        className="thread__preview"
+                                        tabIndex={-1}
+                                        aria-hidden="true"
+                                        onClick={toggleCollapsed}
+                                    >
+                                        {commentFirstLine(comment.body)}
+                                    </button>
+                                    {replies === 0 ? null : (
+                                        <span className="thread__reply-count">{t('thread.replies', replies)}</span>
+                                    )}
+                                </>
+                            ) : (
+                                <span className="thread__spacer" />
+                            )}
+                            {resolve === null ? null : (
+                                <button
+                                    type="button"
+                                    className={`ctl ctl--toggle ctl--toggle-compact thread__resolve${resolve.on ? ' is-on' : ''}`}
+                                    aria-pressed={resolve.on}
+                                    disabled={readOnly}
+                                    title={readOnly ? readOnlyReason : resolve.on ? t('thread.reopen') : undefined}
+                                    onClick={() => {
+                                        if (resolve.kind === 'thread') {
+                                            setThreadResolved(!resolve.on);
+                                        } else {
+                                            void actions.resolveComment?.(comment.id, !resolve.on);
+                                        }
+                                    }}
+                                >
+                                    {resolve.on ? (
+                                        <Icon name="check" size={11} />
+                                    ) : (
+                                        <Icon name="dot" size={11} className="ctl__dot" />
+                                    )}
+                                    {resolve.on ? t('thread.resolved') : t('thread.resolve')}
+                                </button>
+                            )}
                         </div>
-                    )}
-                    {confirmingId === row.comment.id ? (
-                        <div className="thread__delete-confirm">
-                            <span>
-                                {deleteErrorId === row.comment.id
-                                    ? t('thread.draft.deleteFailed')
-                                    : t('thread.draft.deleteConfirm')}
-                            </span>
-                            <span className="thread__spacer" />
-                            <button
-                                type="button"
-                                className="ctl ctl--danger thread__delete-confirm-button"
-                                disabled={deletingId === row.comment.id}
-                                onClick={() => void deleteDraft(row.comment.id)}
-                            >
-                                {deletingId === row.comment.id
-                                    ? t('thread.draft.deleting')
-                                    : t('thread.draft.deleteAction')}
-                            </button>
-                            <button
-                                type="button"
-                                className="ctl ctl--ghost ctl--compact thread__keep-draft"
-                                disabled={deletingId === row.comment.id}
-                                onClick={() => {
+                        {collapsed ? null : editing ? (
+                            <DraftEditor
+                                comment={comment}
+                                store={store}
+                                transport={comment.draft ? actions.transport : (editorTransport ?? actions.transport)}
+                                placeholder={t('thread.composer.linePlaceholder')}
+                                inputLabel={t(comment.draft ? 'thread.composer.editLabel' : 'thread.composer.editPublishedLabel')}
+                                {...(initialLayout === undefined ? {} : { initialLayout })}
+                            />
+                        ) : (
+                            <div className="thread__body">
+                                <Markdown text={comment.body} profile="comment" />
+                            </div>
+                        )}
+                        {collapsed ? null : confirmingId === comment.id ? (
+                            <DeleteConfirm
+                                question={
+                                    deleteErrorId === comment.id
+                                        ? t(comment.draft ? 'thread.draft.deleteFailed' : 'thread.comment.deleteFailed')
+                                        : t(comment.draft ? 'thread.draft.deleteConfirm' : 'thread.comment.deleteConfirm')
+                                }
+                                confirmLabel={
+                                    deletingId === comment.id
+                                        ? t('thread.draft.deleting')
+                                        : t('thread.draft.deleteAction')
+                                }
+                                busy={deletingId === comment.id}
+                                onConfirm={() => void remove(comment)}
+                                onCancel={() => {
                                     setDeleteErrorId(null);
                                     setConfirmingId(null);
                                 }}
-                            >
-                                {t('thread.draft.keep')}
-                            </button>
-                        </div>
-                    ) : null}
-                </div>
-            ))}
-
-            {collapseBot ? (
-                <button
-                    type="button"
-                    className="ctl ctl--link-muted thread__more"
-                    onClick={() => {
-                        setExpanded(true);
-                    }}
-                >
-                    {t('thread.more', hidden)}
-                </button>
-            ) : null}
-
-            {hideActions ? null : (
-                <>
-                    <div className={`thread__actions${undo === null ? '' : ' thread__actions--undo'}`}>
-                        {undo === null ? (
-                            <>
-                                <button
-                                    type="button"
-                                    className="ctl ctl--link-muted"
-                                    disabled={readOnly}
-                                    {...(readOnly ? { title: readOnlyReason } : {})}
-                                    onClick={() => {
-                                        setResolved(!thread.resolved);
-                                    }}
-                                >
-                                    {thread.resolved ? t('thread.reopen') : t('thread.resolve')}
-                                </button>
-                                {inlineDraftEditing ? null : (
+                            />
+                        ) : editing ? null : (
+                            <div className="thread__row-actions">
+                                {comment.draft ? null : (
                                     <button
                                         type="button"
-                                        className="ctl ctl--link-muted"
+                                        className="ctl ctl--link thread__action"
+                                        disabled={readOnly}
+                                        title={readOnly ? readOnlyReason : undefined}
                                         onClick={() => {
-                                            void copyThreadLink(thread.id);
+                                            openReply(store, thread, actions.commentIssues === true, undefined, comment.id);
                                         }}
                                     >
-                                        {t('thread.copyLink')}
+                                        {t('thread.reply.action')}
                                     </button>
                                 )}
-                            </>
-                        ) : (
-                            <span className="thread__undo">
-                                {undo ? t('thread.undo.resolved') : t('thread.undo.reopened')} ·{' '}
-                                <button
-                                    type="button"
-                                    className="ctl ctl--link-muted"
-                                    disabled={readOnly}
-                                    {...(readOnly ? { title: readOnlyReason } : {})}
-                                    onClick={() => {
-                                        setResolved(!undo);
-                                    }}
-                                >
-                                    {t('thread.undo.action')}
-                                </button>
-                            </span>
+                                {editable ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="ctl ctl--link-muted thread__action"
+                                            aria-label={t(
+                                                comment.draft ? 'thread.draft.editAria' : 'thread.comment.editAria',
+                                                comment.id,
+                                            )}
+                                            disabled={readOnly || editingId !== null || deletingId !== null}
+                                            title={readOnly ? readOnlyReason : undefined}
+                                            onClick={() => {
+                                                setConfirmingId(null);
+                                                openDraftEditor(store, thread, comment);
+                                            }}
+                                        >
+                                            {t('thread.comment.edit')}
+                                        </button>
+                                        {deletable ? (
+                                            <button
+                                                type="button"
+                                                className="ctl ctl--link-danger thread__action thread__action--delete"
+                                                aria-label={t(
+                                                    comment.draft ? 'thread.draft.deleteAria' : 'thread.comment.deleteAria',
+                                                    comment.id,
+                                                )}
+                                                disabled={readOnly || editingId !== null || deletingId !== null}
+                                                title={readOnly ? readOnlyReason : undefined}
+                                                onClick={() => {
+                                                    setDeleteErrorId(null);
+                                                    setConfirmingId(comment.id);
+                                                }}
+                                            >
+                                                {t('thread.comment.delete')}
+                                            </button>
+                                        ) : null}
+                                    </>
+                                ) : null}
+                            </div>
                         )}
+                        {inlineReplyId === comment.id ? composer : null}
                     </div>
+                );
+            })}
 
-                    <ComposerForThread
-                        thread={thread}
-                        store={store}
-                        transport={actions.transport}
-                        draft={draftReply}
-                        draftEditorAvailable={draftEditorAvailable}
-                        composer={replyComposer}
-                        pinnedCommit={pinned?.pin.commit ?? null}
-                    />
-                </>
-            )}
+            {collapsed || inlineReplyId !== null ? null : composer}
         </section>
     );
 }
+
+/**
+ * Left reply indentation, 27px per level up to level 4 (`FlatComment.indent`). The reply avatar
+ * sits under the parent text column. The root has no indentation and needs no variable.
+ */
+function replyIndentStyle(indent: number): CSSProperties | undefined {
+    return indent === 0 ? undefined : ({ '--reply-indent': `${String(indent)}px` } as CSSProperties);
+}
+
+interface ResolveControl {
+    readonly kind: 'thread' | 'comment';
+    readonly on: boolean;
+}
+
+/**
+ * Resolve button location (docs/design/SPEC-changes-2026-09-20.md §3, §5). On hosts with comment-level
+ * resolution, every comment with an issue has a button. Without an issue, there is nothing to resolve. Other
+ * hosts have one button at the thread root. Drafts have no button because unpublished comments have nothing to resolve.
+ */
+function resolveControl(
+    thread: Thread,
+    comment: Comment,
+    index: number,
+    actions: ThreadActions,
+): ResolveControl | null {
+    if (comment.draft) {
+        return null;
+    }
+    if (actions.resolveComment != null) {
+        return comment.issue === true ? { kind: 'comment', on: comment.resolved === true } : null;
+    }
+    return index === 0 ? { kind: 'thread', on: thread.resolved } : null;
+}
+
 
 /** Pin chip and navigation: short commit in the label, full commit in the tooltip (docs/design/README.md §13). */
 export function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
@@ -437,24 +539,20 @@ export function NewCommentComposer({
     composerKey,
     store,
     transport,
-    contextLabel,
     placeholder,
     saveLabel,
     footerHint,
     initialLayout,
     onSaveComplete,
-    showDraftChip = false,
 }: {
     composerKey: string;
     store: ThreadStore;
     transport: ComposerTransport;
-    contextLabel?: string;
     placeholder?: string;
     saveLabel?: ComposerSaveLabel;
     footerHint?: ReactNode;
     initialLayout?: ComposerLayout;
     onSaveComplete?: (() => void) | undefined;
-    showDraftChip?: boolean;
 }) {
     const t = useT();
     const composer = useComposerSnapshot(store, composerKey);
@@ -470,14 +568,6 @@ export function NewCommentComposer({
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={
-                contextLabel ??
-                (anchor === null
-                    ? t('thread.composer.prContext')
-                    : position === null
-                      ? t('thread.composer.fileContext', fileNameOf(anchor.path))
-                      : t('thread.composer.newContext', lineRangeLabel(position, t)))
-            }
             placeholder={
                 placeholder ??
                 (anchor === null
@@ -492,7 +582,6 @@ export function NewCommentComposer({
                 (composer.commentId === null ? 'thread.composer.saveDraft' : 'thread.composer.saveChanges')
             }
             closeOnSave
-            showDraftChip={showDraftChip}
             {...(composer.commentId === null
                 ? {}
                 : { restoreOnCancel: composer.originalText ?? composer.text })}
@@ -508,67 +597,19 @@ function ComposerForThread({
     store,
     transport,
     draft,
-    draftEditorAvailable,
     composer,
-    pinnedCommit,
 }: {
     thread: Thread;
     store: ThreadStore;
     transport: ComposerTransport;
     draft: Comment | null;
-    draftEditorAvailable: boolean;
     composer: ComposerSnapshot | null;
-    /** Thread's pinned commit: its draft was written before the push (docs/design/SPEC-elements.md §4.5). */
-    pinnedCommit: string | null;
 }) {
     const t = useT();
-    // Replies are only allowed in the active iteration.
-    const readOnly = useReadOnlyIteration();
-    const readOnlyReason = useReadOnlyReason();
     if (composer === null) {
-        if (draft !== null && draftEditorAvailable) {
-            return null;
-        }
-        if (draft !== null) {
-            return (
-                <button
-                    type="button"
-                    className="thread-composer-draft-preview"
-                    aria-label={t('thread.draft.continue')}
-                    disabled={readOnly}
-                    title={readOnly ? readOnlyReason : undefined}
-                    onClick={() => {
-                        openReply(store, thread, draft);
-                    }}
-                >
-                    <span className="thread-composer-draft-preview__meta">
-                        <span
-                            className="thread__chip thread__chip--draft"
-                            {...(pinnedCommit === null ? {} : { title: pinnedCommit })}
-                        >
-                            {pinnedCommit === null
-                                ? t('thread.chip.draftShort')
-                                : t('thread.draft.pinned', shortCommit(pinnedCommit))}
-                        </span>
-                    </span>
-                    <span className="thread-composer-draft-preview__body">{draft.body}</span>
-                </button>
-            );
-        }
-        return (
-            <button
-                type="button"
-                className="thread-composer-entry"
-                disabled={readOnly}
-                title={readOnly ? readOnlyReason : undefined}
-                onClick={() => {
-                    openReply(store, thread, null);
-                }}
-            >
-                <span>{t('thread.reply.entry')}</span>
-                <Icon name="pencil" size={13} />
-            </button>
-        );
+        // Each message has a Reply link (§3), with no separate strip.
+        // A saved reply draft is a regular thread row, edited by `DraftEditor`.
+        return null;
     }
     const resolvedWhileTyping = !composer.resolvedAtOpen && thread.resolved;
     return (
@@ -576,12 +617,10 @@ function ComposerForThread({
             composer={composer}
             store={store}
             transport={transport}
-            contextLabel={t('thread.reply.context', authorName(thread.root))}
             placeholder={t('thread.reply.placeholder')}
             inputLabel={t('thread.reply.label')}
             saveLabel={composer.commentId === null ? 'thread.composer.saveDraft' : 'thread.composer.saveChanges'}
             closeOnSave
-            pinnedCommit={pinnedCommit}
             {...(composer.commentId === null
                 ? {}
                 : { restoreOnCancel: composer.originalText ?? draft?.body ?? composer.text })}
@@ -598,6 +637,14 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Parent of a saved reply draft. The composer opens under the same message. */
+function draftParentId(thread: Thread, draft: Comment | null): string | null {
+    if (draft === null) {
+        return null;
+    }
+    return flattenThread(thread.root).find((row) => row.comment.id === draft.id)?.parent?.id ?? null;
 }
 
 function replyDraft(thread: Thread): Comment | null {
@@ -668,12 +715,6 @@ export function openNewComposer(
     });
 }
 
-/** Filename in the composer label: the full path does not fit in the narrow header. */
-function fileNameOf(path: string): string {
-    const cut = path.lastIndexOf('/');
-    return cut === -1 ? path : path.slice(cut + 1);
-}
-
 /**
  * Composer for a file comment without a line. An anchor with `position: null` places it under
  * the card header, alongside threads that lost their line.
@@ -682,19 +723,49 @@ export function openFileComposer(store: ThreadStore, fileId: string, path: strin
     openNewComposer(store, `new:${fileId}:file`, { fileId, path, position: null }, commentIssues);
 }
 
-export function openReply(store: ThreadStore, thread: Thread, draft: Comment | null = replyDraft(thread)): void {
-    const key = `reply:${thread.id}`;
-    if (
-        store.getComposer(key) !== null ||
-        (draft !== null && store.getComposer(draftEditComposerKey(draft.id)) !== null)
-    ) {
+export function replyComposerKey(threadId: string): string {
+    return `reply:${threadId}`;
+}
+
+/**
+ * `replyUnder` is the message under which the composer expands and to which the draft will
+ * reply (§3, §4). It defaults to the thread root. An already open composer moves there
+ * with its entered text and changes parent. A thread has only one reply composer.
+ *
+ * A composer whose text has already been sent for saving cannot move. Its parent was either saved with the
+ * draft (`commentId !== null`) or is being saved now (`clientKey` exists from
+ * the first save until it succeeds). Changing it requires deleting the draft. For such a
+ * composer, Reply under another message simply returns to the draft location. For the same
+ * reason, the saved draft parent takes precedence over `replyUnder` when opening the composer too.
+ */
+export function openReply(
+    store: ThreadStore,
+    thread: Thread,
+    commentIssues: boolean,
+    draft: Comment | null = replyDraft(thread),
+    replyUnder: string | null = null,
+): void {
+    const key = replyComposerKey(thread.id);
+    const target = draftParentId(thread, draft) ?? replyUnder ?? thread.root.id;
+    const open = store.getComposer(key);
+    if (open !== null) {
+        const written = open.commentId !== null || open.clientKey !== undefined;
+        if (!written && open.replyUnder !== target) {
+            store.updateComposer(key, { replyUnder: target, parentId: target });
+        }
+        return;
+    }
+    if (draft !== null && store.getComposer(draftEditComposerKey(draft.id)) !== null) {
         return;
     }
     store.openComposer({
         key,
         threadId: thread.id,
-        parentId: thread.root.id,
+        parentId: target,
         anchor: null,
+        replyUnder: target,
+        // A reply can also raise an issue. It has its own issue, enabled by default as in a new thread.
+        ...(commentIssues ? { issue: draft?.issue ?? true } : {}),
         text: draft?.body ?? '',
         ...(draft === null ? {} : { originalText: draft.body }),
         commentId: draft?.id ?? null,
@@ -713,10 +784,6 @@ function metaOf(thread: Thread, createdAt: string, now: number, t: Translate, lo
     return position == null ? t('thread.meta', path, when) : t('thread.meta.line', path, lineRange(position), when);
 }
 
-function lineRangeLabel(position: { readonly line: number; readonly size: number }, t: Translate): string {
-    return position.size > 1 ? t('thread.lineRange.many', lineRange(position)) : t('thread.lineRange.one', position.line);
-}
-
 function lineRange(position: { readonly line: number; readonly size: number }): string {
     const last = position.line + Math.max(position.size, 1) - 1;
     return last === position.line ? String(position.line) : `${String(position.line)}–${String(last)}`;
@@ -731,8 +798,3 @@ function initials(name: string): string {
         .join('');
 }
 
-async function copyThreadLink(threadId: string): Promise<void> {
-    const url = new URL(window.location.href);
-    url.hash = updateFragment(window.location.hash, { thread: threadId, file: null });
-    await copyText(url.toString());
-}

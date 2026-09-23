@@ -119,6 +119,8 @@ html[data-textsize='l'] {
     --accent-border: #262a45;
     --accent-selection: rgba(127, 140, 255, 0.13);
     --accent-text-selection: rgba(127, 140, 255, 0.28);
+    /* docs/design/SPEC-changes-2026-09-20.md §3: code line with an expanded thread beneath it. */
+    --surface-thread-line: rgba(127, 140, 255, 0.07);
 
     /* --- Attention: high tier, stale route, drafts, audit --- */
     --attention: #e2954c;
@@ -434,6 +436,7 @@ html[data-textsize='l'] {
     --accent-border: #dfe2fa;
     --accent-selection: rgba(90, 104, 232, 0.12);
     --accent-text-selection: rgba(90, 104, 232, 0.22);
+    --surface-thread-line: rgba(90, 104, 232, 0.08);
     --attention: #d8791c;
     --attention-text: #9d6410;
     --attention-text-dim: #7f5612;

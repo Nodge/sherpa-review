@@ -3,7 +3,7 @@ import type { Comment, DraftBufferEntry, Thread } from '@sherpa/protocol';
 import { closeComposersByKey } from './composer.js';
 import { draftEditComposerKey } from './draft-editor.tsx';
 import type { ComposerSnapshot, ThreadStore } from './store.js';
-import { PR_COMPOSER_KEY } from './thread-list.tsx';
+import { PR_COMPOSER_KEY, replyComposerKey } from './thread-list.tsx';
 
 /**
  * Restores the draft buffer into composers. The server remembers text that the host has not
@@ -13,15 +13,20 @@ import { PR_COMPOSER_KEY } from './thread-list.tsx';
  * would become two separate windows on the same line.
  */
 
-/** Composer key for a buffer record. `null` means no composer location matches the record. */
-export function composerKeyOfBufferEntry(entry: DraftBufferEntry): string | null {
+/**
+ * Composer key for a buffered entry. `null` means the entry has no matching composer location
+ * (a reply whose thread has not arrived in the snapshot yet).
+ */
+export function composerKeyOfBufferEntry(entry: DraftBufferEntry, threads: readonly Thread[]): string | null {
     if (entry.commentId !== null) {
         return draftEditComposerKey(entry.commentId);
     }
     const { parentId, anchor } = entry.draft;
     if (parentId !== null) {
-        // The reply key uses its thread. A reply belongs to the root comment it is attached to.
-        return `reply:${parentId}`;
+        // A thread has one reply composer, keyed by the thread, not the parent: the parent can be
+        // any message in the tree, and no composer with that id exists beside the code or in the modal.
+        const parent = locate(threads, parentId);
+        return parent === null ? null : replyComposerKey(parent.thread.id);
     }
     if (anchor === null) {
         return PR_COMPOSER_KEY;
@@ -42,7 +47,7 @@ export function composerOfBufferEntry(
     entry: DraftBufferEntry,
     threads: readonly Thread[],
 ): ComposerSnapshot | null {
-    const key = composerKeyOfBufferEntry(entry);
+    const key = composerKeyOfBufferEntry(entry, threads);
     if (key === null) {
         return null;
     }
@@ -51,14 +56,15 @@ export function composerOfBufferEntry(
     if (entry.commentId !== null && edited === null) {
         return null;
     }
-    // Issue status lives on the thread root, just as it does in a normal draft edit.
-    const issue =
-        draft.issue ??
-        (edited !== null && edited.comment.id === edited.thread.root.id ? (edited.comment.issue ?? undefined) : undefined);
+    const parent = draft.parentId === null ? null : locate(threads, draft.parentId);
+    // Issue status comes from the entry, or from the comment itself for an edit, as in `openDraftEditor`.
+    const issue = draft.issue ?? edited?.comment.issue ?? undefined;
     return {
         key,
-        threadId: edited?.thread.id ?? draft.parentId,
+        threadId: edited?.thread.id ?? parent?.thread.id ?? null,
         parentId: draft.parentId,
+        // The reply returns beneath the same message it was written under (§3, §4).
+        ...(parent === null ? {} : { replyUnder: draft.parentId }),
         // The entry stores the full selection range: the composer key only knows the first line.
         anchor: draft.anchor,
         ...(issue === undefined ? {} : { issue }),

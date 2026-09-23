@@ -50,7 +50,7 @@ function PinnedState({ diff, readOnly = false, outsideOpen = false }: PinnedStat
     const session = useMemo(
         () =>
             createSessionStore({
-                initial: { view: 'diff', filter: 'all', threadsShow: { people: true, bots: true, resolved: true } },
+                initial: { view: 'diff', filter: 'all' },
             }),
         [],
     );

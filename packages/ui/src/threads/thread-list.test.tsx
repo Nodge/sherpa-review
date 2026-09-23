@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { Comment, Thread } from '@sherpa/protocol';
+import type { Comment, CommentDraft, Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -9,7 +9,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import { ThreadPinProvider } from '../iterations/thread-pin.tsx';
 import type { ThreadPinContextValue } from '../iterations/thread-pin.tsx';
+import { composerControllerFor } from './composer.js';
 import { openDraftEditor } from './draft-editor.tsx';
+import { flattenThread } from './model.js';
 import { createThreadStore } from './store.js';
 import type { ThreadStore } from './store.js';
 import { openReply, OutsideThreads, ThreadList } from './thread-list.tsx';
@@ -29,6 +31,12 @@ const TRANSPORT = {
     save: () => Promise.reject(new Error('this test does not save')),
     update: () => Promise.reject(new Error('this test does not save')),
     delete: () => Promise.reject(new Error('this test does not save')),
+};
+
+const PUBLISHED = {
+    setResolved: () => Promise.resolve(),
+    update: () => Promise.resolve(),
+    delete: () => Promise.resolve(),
 };
 
 function deferred<T>() {
@@ -57,14 +65,13 @@ function render(threads: readonly Thread[], store = createThreadStore(threads, F
     return renderWithStore(threads, store);
 }
 
-function renderWithStore(threads: readonly Thread[], store: ThreadStore, inlineDraftEditing = false): string {
+function renderWithStore(threads: readonly Thread[], store: ThreadStore): string {
     return renderToStaticMarkup(
         <ThreadList
             threads={threads}
             store={store}
             actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
             now={NOW}
-            inlineDraftEditing={inlineDraftEditing}
         />,
     );
 }
@@ -126,14 +133,121 @@ describe('range comment', () => {
 });
 
 describe('editing a line comment', () => {
-    it('does not show an edit pencil on a published comment by another author', () => {
+    it('offers no edit or delete action for a published comment by another author', () => {
         const thread = threadOf('kai');
-        const html = renderWithStore([thread], createThreadStore([thread], FILE_IDS), true);
+        const html = renderWithStore([thread], createThreadStore([thread], FILE_IDS));
 
-        expect(html).not.toContain('Edit the draft');
-        expect(html).toContain('Reply…');
+        expect(html).not.toContain('Edit');
+        expect(html).not.toContain('Delete');
+        expect(html).toContain('Reply');
         expect(html).toContain('Resolve');
-        expect(html).not.toContain('Copy link');
+    });
+
+    it('allows editing and deleting your published comment only with editPublished', () => {
+        const source = threadOf('kai');
+        // The reviewer identity in PR metadata identifies your comments. The thread has no drafts.
+        const mine: Thread = {
+            ...source,
+            root: { ...source.root, author: DRAFT.author, replies: [] },
+        };
+        const store = createThreadStore([mine], FILE_IDS);
+        store.setViewer(DRAFT.author.login);
+        const withEdit = renderToStaticMarkup(
+            <ThreadList
+                threads={[mine]}
+                store={store}
+                actions={{
+                    transport: TRANSPORT,
+                    resolve: () => Promise.resolve(true),
+                    published: PUBLISHED,
+                }}
+                now={NOW}
+            />,
+        );
+        expect(withEdit).toContain(`Edit comment ${mine.root.id}`);
+        expect(withEdit).toContain(`Delete comment ${mine.root.id}`);
+
+        expect(renderWithStore([mine], store)).not.toContain(`Edit comment ${mine.root.id}`);
+    });
+
+    it('keeps Edit but omits Delete for a message with replies', () => {
+        const source = threadOf('kai');
+        const reply = { ...source.root, id: 'reply-of-mine', author: source.root.author, replies: [] };
+        const mine: Thread = {
+            ...source,
+            root: { ...source.root, author: DRAFT.author, replies: [reply] },
+        };
+        const store = createThreadStore([mine], FILE_IDS);
+        store.setViewer(DRAFT.author.login);
+        const html = renderToStaticMarkup(
+            <ThreadList
+                threads={[mine]}
+                store={store}
+                actions={{
+                    transport: TRANSPORT,
+                    resolve: () => Promise.resolve(true),
+                    published: PUBLISHED,
+                }}
+                now={NOW}
+            />,
+        );
+        expect(html).toContain(`Edit comment ${mine.root.id}`);
+        expect(html).not.toContain(`Delete comment ${mine.root.id}`);
+    });
+
+    it('does not allow editing a published comment by another author', () => {
+        const foreign = threadOf('kai');
+        const store = createThreadStore([foreign], FILE_IDS);
+        store.setViewer(DRAFT.author.login);
+
+        const html = renderToStaticMarkup(
+            <ThreadList
+                threads={[foreign]}
+                store={store}
+                actions={{
+                    transport: TRANSPORT,
+                    resolve: () => Promise.resolve(true),
+                    published: PUBLISHED,
+                }}
+                now={NOW}
+            />,
+        );
+
+        expect(html).not.toContain(`Edit comment ${foreign.root.id}`);
+        expect(html).not.toContain(`Delete comment ${foreign.root.id}`);
+    });
+
+    it('shows Resolve on every issue comment when the host supports comment-level resolution', () => {
+        const source = threadOf('kai');
+        const withIssue: Thread = {
+            ...source,
+            root: {
+                ...source.root,
+                issue: true,
+                resolved: false,
+                replies: [{ ...DRAFT, id: 'reply-issue', draft: false, issue: true, resolved: true }],
+            },
+        };
+        const store = createThreadStore([withIssue], FILE_IDS);
+        const html = renderToStaticMarkup(
+            <ThreadList
+                threads={[withIssue]}
+                store={store}
+                actions={{
+                    transport: TRANSPORT,
+                    resolve: () => Promise.resolve(true),
+                    resolveComment: () => Promise.resolve(true),
+                    published: PUBLISHED,
+                }}
+                now={NOW}
+            />,
+        );
+
+        expect([...html.matchAll(/thread__resolve(?:"| is-on")/g)]).toHaveLength(2);
+        expect(html).toContain('Resolved');
+        // Without the capability, only the thread root has a button, which resolves the whole thread.
+        const single = renderWithStore([withIssue], store);
+        expect([...single.matchAll(/thread__resolve(?:"| is-on")/g)]).toHaveLength(1);
     });
 
     it('edits your draft in place with a blue border and chip', () => {
@@ -153,7 +267,6 @@ describe('editing a line comment', () => {
                     store={store}
                     actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
                     now={NOW}
-                    inlineDraftEditing
                     initialLayout="markdown"
                 />,
             );
@@ -163,7 +276,6 @@ describe('editing a line comment', () => {
         expect(host.querySelector('[aria-label="Delete draft line-draft"]')).not.toBeNull();
         expect(host.textContent).not.toContain('Resolve');
         expect(host.textContent).not.toContain('Copy link');
-        expect(host.querySelector('.thread-composer-entry')).toBeNull();
         act(() => {
             edit?.click();
         });
@@ -173,8 +285,6 @@ describe('editing a line comment', () => {
         expect(row?.querySelector('.thread__chip--editing')?.textContent).toBe('editing');
         expect(row?.querySelector('.thread-composer__markdown')).not.toBeNull();
         expect(host.querySelectorAll('.thread-composer')).toHaveLength(1);
-        expect(host.querySelector('.thread-composer-draft-preview')).toBeNull();
-        expect(host.querySelector('.thread-composer-entry')).toBeNull();
 
         act(() => {
             root.unmount();
@@ -189,7 +299,6 @@ describe('editing a line comment', () => {
                     store={store}
                     actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
                     now={NOW}
-                    inlineDraftEditing
                     initialLayout="markdown"
                 />,
             );
@@ -209,7 +318,7 @@ describe('editing a line comment', () => {
         host.remove();
     });
 
-    it('a draft outside the diff flow gets edit and delete buttons without published-comment actions', () => {
+    it('gives your draft edit and delete actions without published-comment actions', () => {
         const source = threadOf('kai');
         const draft: Thread = {
             ...source,
@@ -220,18 +329,15 @@ describe('editing a line comment', () => {
         expect(html).toContain('Edit draft outside-draft');
         expect(html).toContain('Delete draft outside-draft');
         expect(html).not.toContain('Resolve');
-        expect(html).not.toContain('Copy link');
-        expect(html).not.toContain('Reply…');
+        expect(html).not.toContain('Reply<');
     });
 
-    it('a published outside thread keeps resolve, link and reply actions', () => {
+    it('keeps resolve and reply actions for a published outside thread', () => {
         const thread = threadOf('kai');
         const html = renderWithStore([thread], createThreadStore([thread], FILE_IDS));
 
         expect(html).toContain('Resolve');
-        expect(html).toContain('Copy link');
-        expect(html).toContain('Reply…');
-        expect(html).not.toContain('Delete the draft');
+        expect(html).toContain('Reply');
     });
 
     it('deletes a draft through the trash button only after confirmation inside the card', async () => {
@@ -252,7 +358,6 @@ describe('editing a line comment', () => {
                     store={store}
                     actions={{ transport: { save: TRANSPORT.save, update: TRANSPORT.update, delete: remove }, resolve: () => Promise.resolve(true) }}
                     now={NOW}
-                    inlineDraftEditing
                 />,
             );
         });
@@ -273,6 +378,52 @@ describe('editing a line comment', () => {
             });
         });
         expect(remove).toHaveBeenCalledWith('line-draft');
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    it('treats Esc in the confirmation as Cancel, keeps the thread expanded and deletes nothing', () => {
+        const source = threadOf('kai');
+        const draft: Thread = {
+            ...source,
+            root: { ...source.root, id: 'esc-draft', body: DRAFT.body, draft: true, replies: [] },
+        };
+        const store = createThreadStore([draft], FILE_IDS);
+        const remove = vi.fn(() => Promise.resolve());
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        act(() => {
+            root.render(
+                <ThreadList
+                    threads={[draft]}
+                    store={store}
+                    actions={{
+                        transport: { ...TRANSPORT, delete: remove },
+                        resolve: () => Promise.resolve(true),
+                    }}
+                    now={NOW}
+                />,
+            );
+        });
+
+        act(() => {
+            host.querySelector<HTMLButtonElement>('[aria-label="Delete draft esc-draft"]')?.click();
+        });
+        expect(host.querySelector('.thread__delete-confirm')).not.toBeNull();
+
+        act(() => {
+            host.querySelector('.thread__delete-confirm')?.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+            );
+        });
+
+        expect(host.querySelector('.thread__delete-confirm')).toBeNull();
+        expect(host.querySelector('.thread')).not.toBeNull();
+        expect(remove).not.toHaveBeenCalled();
 
         act(() => {
             root.unmount();
@@ -350,7 +501,7 @@ describe('editing a line comment', () => {
 });
 
 describe('reply draft', () => {
-    it('shows a card with an edit button and no second preview in an outside context', () => {
+    it('shows a reply draft in the outside context as a regular row with a pencil', () => {
         const source = threadOf('kai');
         const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
         const html = render([thread]);
@@ -358,8 +509,6 @@ describe('reply draft', () => {
         expect(html).toContain(`Edit draft ${DRAFT.id}`);
         expect(html).toContain(`Delete draft ${DRAFT.id}`);
         expect(html).toContain(DRAFT.body);
-        expect(html).not.toContain('thread-composer-draft-preview');
-        expect(html).not.toContain('Continue the draft');
     });
 
     it('opens exactly one editor for an outside reply draft through its pencil', () => {
@@ -386,12 +535,11 @@ describe('reply draft', () => {
         });
 
         expect(host.querySelectorAll('.thread-composer')).toHaveLength(1);
-        expect(host.querySelector('.thread-composer-draft-preview')).toBeNull();
         expect(store.getComposer(`edit:${DRAFT.id}`)).not.toBeNull();
         expect(store.getComposer(`reply:${thread.id}`)).toBeNull();
 
         act(() => {
-            openReply(store, thread, DRAFT);
+            openReply(store, thread, false, DRAFT);
         });
         expect(host.querySelectorAll('.thread-composer')).toHaveLength(1);
         expect(store.getComposer(`reply:${thread.id}`)).toBeNull();
@@ -402,16 +550,139 @@ describe('reply draft', () => {
         host.remove();
     });
 
+    it('expands the composer under the message beside code and nests the reply when Reply is clicked', () => {
+        const thread = threadOf('kai');
+        const rows = flattenThread(thread.root);
+        const first = rows[0]?.comment.id;
+        const second = rows[1]?.comment.id;
+        if (first === undefined || second === undefined) {
+            throw new Error('the fixture thread needs a root and a reply');
+        }
+        const store = createThreadStore([thread], FILE_IDS);
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const draw = (): void => {
+            act(() => {
+                root.render(
+                    <ThreadList
+                        threads={[thread]}
+                        store={store}
+                        actions={{ transport: TRANSPORT, resolve: () => Promise.resolve(true) }}
+                        now={NOW}
+                        initialLayout="markdown"
+                    />,
+                );
+            });
+        };
+        draw();
+
+        const replyUnder = (commentId: string): void => {
+            act(() => {
+                const row = host.querySelector(`.thread__row[data-comment-id="${commentId}"]`);
+                [...(row?.querySelectorAll<HTMLButtonElement>('.thread__row-actions button') ?? [])]
+                    .find((button) => button.textContent === 'Reply')
+                    ?.click();
+            });
+            draw();
+        };
+        const composerRowId = (): string | null =>
+            host.querySelector('.thread-composer')?.closest('.thread__row')?.getAttribute('data-comment-id') ?? null;
+
+        replyUnder(first);
+        expect(store.getComposer(`reply:${thread.id}`)?.parentId).toBe(first);
+        expect(composerRowId()).toBe(first);
+
+        // The same composer moves under another message along with the reply parent.
+        replyUnder(second);
+        expect(store.getComposer(`reply:${thread.id}`)?.parentId).toBe(second);
+        expect(composerRowId()).toBe(second);
+        expect(host.querySelectorAll('.thread-composer')).toHaveLength(1);
+
+        act(() => {
+            root.unmount();
+        });
+        host.remove();
+    });
+
+    it('does not move a saved reply draft to another parent', () => {
+        const source = threadOf('kai');
+        const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
+        const store = createThreadStore([thread], FILE_IDS);
+
+        openReply(store, thread, false, DRAFT);
+        const before = store.getComposer(`reply:${thread.id}`);
+        expect(before?.commentId).toBe(DRAFT.id);
+        expect(before?.parentId).toBe(thread.root.id);
+
+        openReply(store, thread, false, DRAFT, 'other-comment');
+
+        expect(store.getComposer(`reply:${thread.id}`)?.parentId).toBe(thread.root.id);
+        expect(store.getComposer(`reply:${thread.id}`)?.replyUnder).toBe(thread.root.id);
+    });
+
+    // The closed composer behaves the same. Reply under another message returns the draft
+    // to its own location without attaching it to another parent.
+    it('opens the saved draft in its own location when Reply is clicked under another message', () => {
+        const source = threadOf('kai');
+        const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
+        const other = flattenThread(thread.root)[1]?.comment.id;
+        if (other === undefined || other === DRAFT.id) {
+            throw new Error('the fixture thread needs a reply besides the draft');
+        }
+        const store = createThreadStore([thread], FILE_IDS);
+
+        openReply(store, thread, false, undefined, other);
+
+        expect(store.getComposer(`reply:${thread.id}`)).toMatchObject({
+            commentId: DRAFT.id,
+            parentId: thread.root.id,
+            replyUnder: thread.root.id,
+        });
+    });
+
+    // The first save sends the parent to the host, and it cannot change later, so the composer
+    // stays where it was saved from that point on.
+    it('does not move the composer while the first reply save is in flight', async () => {
+        const thread = threadOf('kai');
+        const rows = flattenThread(thread.root);
+        const first = rows[0]?.comment.id;
+        const second = rows[1]?.comment.id;
+        if (first === undefined || second === undefined) {
+            throw new Error('the fixture thread needs a root and a reply');
+        }
+        const store = createThreadStore([thread], FILE_IDS);
+        const key = `reply:${thread.id}`;
+        const pending = deferred<{ outcome: 'saved'; comment: Comment }>();
+        const save = vi.fn((_draft: CommentDraft, _clientKey: string) => pending.promise);
+
+        openReply(store, thread, false, null, first);
+        store.updateComposer(key, { text: 'Reply to the root.' });
+        const saving = composerControllerFor({
+            store,
+            key,
+            transport: { save, update: TRANSPORT.update, delete: TRANSPORT.delete },
+        }).saveNow();
+
+        openReply(store, thread, false, null, second);
+
+        expect(store.getComposer(key)?.parentId).toBe(first);
+        expect(store.getComposer(key)?.replyUnder).toBe(first);
+        pending.resolve({ outcome: 'saved', comment: { ...DRAFT, id: 'saved-reply', body: 'Reply to the root.' } });
+        await saving;
+        expect(save.mock.calls[0]?.[0].parentId).toBe(first);
+        expect(store.getComposer(key)?.parentId).toBe(first);
+    });
+
     it('offers to save changes after opening', () => {
         const source = threadOf('kai');
         const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
         const store = createThreadStore([thread], FILE_IDS);
-        openReply(store, thread, DRAFT);
+        openReply(store, thread, false, DRAFT);
 
         const html = renderWithStore([thread], store);
 
         expect(html).toContain('Save changes');
-        expect(html).not.toContain('thread-composer-draft-preview');
         expect(html).not.toContain(`Edit draft ${DRAFT.id}`);
 
         openDraftEditor(store, thread, DRAFT);
@@ -422,7 +693,7 @@ describe('reply draft', () => {
     it('closes the field after the first reply save and leaves a single draft card', async () => {
         const thread = threadOf('kai');
         const store = createThreadStore([thread], FILE_IDS);
-        openReply(store, thread, null);
+        openReply(store, thread, false, null);
         store.updateComposer(`reply:${thread.id}`, { text: 'New reply.' });
         const save = vi.fn(() =>
             Promise.resolve({ outcome: 'saved' as const, comment: { ...DRAFT, id: 'new-draft-reply', body: 'New reply.' } }),
@@ -463,7 +734,6 @@ describe('reply draft', () => {
         });
         expect(host.querySelectorAll('.thread-composer')).toHaveLength(0);
         expect(host.querySelectorAll('[aria-label="Edit draft new-draft-reply"]')).toHaveLength(1);
-        expect(host.querySelector('.thread-composer-draft-preview')).toBeNull();
 
         act(() => {
             root.unmount();
@@ -475,7 +745,7 @@ describe('reply draft', () => {
         const source = threadOf('kai');
         const thread = { ...source, root: { ...source.root, replies: [...source.root.replies, DRAFT] } };
         const store = createThreadStore([thread], FILE_IDS);
-        openReply(store, thread, DRAFT);
+        openReply(store, thread, false, DRAFT);
         store.updateComposer(`reply:${thread.id}`, { text: 'broken', status: 'idle' });
         const update = vi.fn(() => Promise.resolve({ outcome: 'saved' as const }));
         const remove = vi.fn(() => Promise.resolve());
@@ -500,13 +770,11 @@ describe('reply draft', () => {
         act(() => {
             cancel?.click();
         });
-        expect(host.querySelector('.thread-composer__confirm')?.textContent).toContain('Discard this draft?');
+        expect(host.querySelector('.thread__delete-confirm')?.textContent).toContain('Delete the draft?');
         expect(update).not.toHaveBeenCalled();
 
         await act(async () => {
-            [...host.querySelectorAll<HTMLButtonElement>('.thread-composer__confirm button')]
-                .find((button) => button.textContent === 'discard')
-                ?.click();
+            host.querySelector<HTMLButtonElement>('.thread-composer .thread__delete-confirm-button')?.click();
             await vi.waitFor(() => {
                 expect(store.getComposer(`reply:${thread.id}`)).toBeNull();
             });
@@ -538,9 +806,9 @@ describe('read-only thread', () => {
         );
 
         expect(html).toContain('title="only in the active iteration"');
-        expect(/<button[^>]*disabled[^>]*>Resolve<\/button>/.exec(html)).not.toBeNull();
-        expect(html).toContain('thread__edit-draft" aria-label="Edit draft draft-reply" title="only in the active iteration" disabled=""');
-        expect(html).toContain('thread__delete-draft" aria-label="Delete draft draft-reply" title="only in the active iteration" disabled=""');
+        expect(/<button[^>]*thread__resolve[^>]*disabled/.exec(html)).not.toBeNull();
+        expect(html).toContain('aria-label="Edit draft draft-reply" disabled="" title="only in the active iteration"');
+        expect(html).toContain('aria-label="Delete draft draft-reply" disabled="" title="only in the active iteration"');
     });
 });
 
@@ -661,13 +929,13 @@ describe('thread pinned to a previous commit', () => {
         expect(html).toContain('View at the old commit');
     });
 
-    it('the draft composer in a pinned thread names its commit instead of showing the generic chip', () => {
+    it('shows the pinned commit in the thread chip because the composer no longer has its own header', () => {
         const withDraft = {
             ...PINNED,
             root: { ...PINNED.root, replies: [...PINNED.root.replies, DRAFT] },
         };
         const store = createThreadStore([withDraft], FILE_IDS);
-        openReply(store, withDraft, DRAFT);
+        openReply(store, withDraft, false, DRAFT);
 
         const html = renderToStaticMarkup(
             <ThreadPinProvider
@@ -682,8 +950,8 @@ describe('thread pinned to a previous commit', () => {
             </ThreadPinProvider>,
         );
 
-        expect(html).toContain(`draft · pinned to ${PIN_COMMIT.slice(0, 7)}`);
-        expect(html).not.toContain('draft · publishes on ship');
+        expect(html).toContain(`pinned to ${PIN_COMMIT.slice(0, 7)}`);
+        expect(html).not.toContain('thread-composer__context');
     });
 
     it('keeps the group heading about the diff when it includes a PR-level bot', () => {

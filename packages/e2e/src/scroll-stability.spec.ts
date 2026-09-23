@@ -215,6 +215,144 @@ test('the line composer in the middle of a large diff opens and closes without a
     expect(closedDrift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
 });
 
+test('a line thread expands and collapses without a jump', async ({ page, launchSherpa }) => {
+    const server = await launchSherpa('fixture-large');
+    await openFullDiff(page, server.url);
+
+    // Expanding changes a row's height in the middle of a long diff. The row itself must stay in place.
+    const anchor = await page.locator('.full-diff').evaluate(async (scroller) => {
+        const nextFrame = (): Promise<void> =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        const settle = async (): Promise<void> => {
+            for (let frame = 0; frame < 90 && document.querySelector('.file-card__loading') !== null; frame += 1) {
+                await nextFrame();
+            }
+            for (let frame = 0; frame < 12; frame += 1) {
+                await nextFrame();
+            }
+        };
+        const toolbarBottom = (): number =>
+            document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+        /** Clearance from the sticky card header. Under it, the marker is visible but not a fair click target. */
+        const HEADER_RESERVE = 80;
+        const visibleMarker = (): HTMLElement | null =>
+            [...document.querySelectorAll<HTMLElement>('.thread-marker')].find((candidate) => {
+                const rect = candidate.getBoundingClientRect();
+                return rect.top >= toolbarBottom() + HEADER_RESERVE && rect.bottom <= window.innerHeight - 1;
+            }) ?? null;
+
+        // Threads in fixture-large belong to specific files. Scroll down screen by screen until a marker appears.
+        let marker = visibleMarker();
+        for (let screen = 0; screen < 40 && marker === null; screen += 1) {
+            const bottom = scroller.scrollHeight - scroller.clientHeight;
+            if (scroller.scrollTop >= bottom) {
+                break;
+            }
+            scroller.scrollTop = Math.min(scroller.scrollTop + Math.round(scroller.clientHeight * 0.8), bottom);
+            await settle();
+            marker = visibleMarker();
+        }
+        const row = marker?.closest<HTMLElement>('.diff-row') ?? null;
+        const item = marker?.closest<HTMLElement>('.diff-list__item') ?? null;
+        if (row === null || item === null) {
+            throw new Error('No visible line with a thread marker found in the full diff of fixture-large');
+        }
+        return {
+            index: Number(item.dataset.index),
+            key: row.dataset.key ?? '',
+            offset: row.getBoundingClientRect().top - toolbarBottom(),
+        };
+    });
+
+    const marker = page.locator(`${rowSelector(anchor)} .thread-marker`);
+    const openBefore = (await marker.getAttribute('aria-expanded')) === 'true';
+
+    await marker.click();
+    await expect(marker).toHaveAttribute('aria-expanded', String(!openBefore));
+    const toggled = await observeRowDrift(page, anchor);
+
+    await marker.click();
+    await expect(marker).toHaveAttribute('aria-expanded', String(openBefore));
+    const restored = await observeRowDrift(page, anchor);
+
+    test.info().annotations.push({
+        type: 'scroll-stability',
+        description: `thread marker: toggle=${toggled.drift.toFixed(1)}px/${toggled.overlap.toFixed(1)}px, back=${restored.drift.toFixed(1)}px/${restored.overlap.toFixed(1)}px`,
+    });
+    // The row stays in place, and the virtualizer slot keeps up with the card's new height.
+    expect(toggled.drift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+    expect(restored.drift).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+    expect(toggled.overlap).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+    expect(restored.overlap).toBeLessThanOrEqual(JUMP_TOLERANCE_PX);
+});
+
+interface RowAnchor {
+    readonly index: number;
+    readonly key: string;
+    readonly offset: number;
+}
+
+/** A row is identified by "virtualizer slot + row key". Row keys are unique only within a card. */
+function rowSelector(anchor: RowAnchor): string {
+    return `.diff-list__item[data-index="${String(anchor.index)}"] .diff-row[data-key="${anchor.key}"]`;
+}
+
+/** Anchor row displacement and adjacent card overlap over 20 frames after toggling a thread. */
+async function observeRowDrift(page: Page, anchor: RowAnchor): Promise<{ drift: number; overlap: number }> {
+    return page.locator('.full-diff').evaluate(
+        async (_scroller, target: RowAnchor): Promise<{ drift: number; overlap: number }> => {
+            const nextFrame = (): Promise<void> =>
+                new Promise<void>((resolve) => {
+                    requestAnimationFrame(() => {
+                        resolve();
+                    });
+                });
+            const selector = `.diff-list__item[data-index="${String(target.index)}"] .diff-row[data-key="${target.key}"]`;
+            const overlap = (): number => {
+                const rendered = [...document.querySelectorAll<HTMLElement>('.diff-list__item')].sort(
+                    (a, b) => Number(a.dataset.index) - Number(b.dataset.index),
+                );
+                let worst = 0;
+                for (let i = 1; i < rendered.length; i += 1) {
+                    const previous = rendered[i - 1];
+                    const current = rendered[i];
+                    if (
+                        previous === undefined ||
+                        current === undefined ||
+                        Number(current.dataset.index) !== Number(previous.dataset.index) + 1
+                    ) {
+                        continue;
+                    }
+                    worst = Math.max(
+                        worst,
+                        previous.getBoundingClientRect().bottom - current.getBoundingClientRect().top,
+                    );
+                }
+                return worst;
+            };
+            let drift = 0;
+            let worstOverlap = 0;
+            for (let frame = 0; frame < 20; frame += 1) {
+                await nextFrame();
+                const toolbarBottom =
+                    document.querySelector<HTMLElement>('.full-diff__toolbar')?.getBoundingClientRect().bottom ?? 0;
+                const row = document.querySelector<HTMLElement>(selector);
+                if (row === null) {
+                    throw new Error('The anchor row left the DOM while remeasuring the thread');
+                }
+                drift = Math.max(drift, Math.abs(row.getBoundingClientRect().top - toolbarBottom - target.offset));
+                worstOverlap = Math.max(worstOverlap, overlap());
+            }
+            return { drift: Number(drift.toFixed(1)), overlap: Number(worstOverlap.toFixed(1)) };
+        },
+        anchor,
+    );
+}
+
 async function observeItemDrift(
     page: Page,
     anchor: { readonly index: number; readonly offset: number },

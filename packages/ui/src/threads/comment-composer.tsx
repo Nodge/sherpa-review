@@ -2,11 +2,12 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MessageKey } from '../i18n/index.js';
-import { shortCommit, useT } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import { composerControllerFor } from './composer.js';
+import { DeleteConfirm } from './delete-confirm.tsx';
 import type { ComposerTransport } from './composer.js';
 import { editMarkdown } from './composer-markdown.js';
 import type { ComposerLayout, ComposerTool, EditorPlaceholders } from './composer-markdown.js';
@@ -33,7 +34,6 @@ export interface CommentComposerProps {
     readonly composer: ComposerSnapshot;
     readonly store: ThreadStore;
     readonly transport: ComposerTransport;
-    readonly contextLabel: string;
     readonly placeholder: string;
     readonly inputLabel: string;
     readonly saveLabel?: ComposerSaveLabel;
@@ -42,19 +42,19 @@ export interface CommentComposerProps {
     readonly initialLayout?: ComposerLayout;
     readonly onSaveComplete?: (() => void) | undefined;
     readonly closeOnSave?: boolean;
-    readonly showDraftChip?: boolean;
-    /** Thread's pinned commit: the draft was written before the push and will target this commit (docs/design/SPEC-elements.md §4.5). */
-    readonly pinnedCommit?: string | null;
     readonly restoreOnCancel?: string;
     readonly onCancel?: (() => void) | undefined;
 }
 
-/** Shared composer for replies, PR comments and line comments. */
+/**
+ * Shared composer for replies, PR comments and line comments. The first row is the
+ * "Open issue" switch. There is no context heading above the field, since the composer is already in place,
+ * below a code line, below a thread message or in the modal footer.
+ */
 export function CommentComposer({
     composer,
     store,
     transport,
-    contextLabel,
     placeholder,
     inputLabel,
     saveLabel,
@@ -63,8 +63,6 @@ export function CommentComposer({
     initialLayout,
     onSaveComplete,
     closeOnSave = true,
-    showDraftChip = false,
-    pinnedCommit = null,
     restoreOnCancel,
     onCancel,
 }: CommentComposerProps) {
@@ -214,16 +212,26 @@ export function CommentComposer({
     return (
         <div className="thread-composer" data-composer-key={composer.key}>
             {resolvedWhileTyping ? <div className="thread-composer__notice">{notice}</div> : null}
-            <div className="thread-composer__context">
-                <span>{contextLabel}</span>
-                {showDraftChip || composer.commentId !== null ? (
-                    <span className="thread__chip thread__chip--draft" {...(pinnedCommit === null ? {} : { title: pinnedCommit })}>
-                        {pinnedCommit === null
-                            ? t('thread.chip.draftShort')
-                            : t('thread.draft.pinned', shortCommit(pinnedCommit))}
-                    </span>
-                ) : null}
-            </div>
+            {composer.issue === undefined ? null : (
+                <div className="thread-composer__issue-row">
+                    <button
+                        type="button"
+                        role="switch"
+                        className={`ctl-switch thread-composer__issue${composer.issue ? ' is-on' : ''}`}
+                        aria-checked={composer.issue}
+                        aria-label={t(composer.issue ? 'thread.composer.openIssue.on' : 'thread.composer.openIssue.off')}
+                        disabled={editingDisabled}
+                        onClick={() => {
+                            controller.setIssue(composer.issue !== true);
+                        }}
+                    >
+                        <span className="ctl-switch__track" aria-hidden="true">
+                            <span className="ctl-switch__knob" />
+                        </span>
+                        {t('thread.composer.openIssue')}
+                    </button>
+                </div>
+            )}
             <div className="thread-composer__editor">
                 <div className="thread-composer__toolbar" role="toolbar" aria-label={t('thread.composer.toolbarAria')}>
                     {TOOLS.map((item) => (
@@ -313,58 +321,10 @@ export function CommentComposer({
                     </div>
                 )}
             </div>
-            <div className="thread-composer__actions">
-                <button
-                    type="button"
-                    className="ctl ctl--secondary thread-composer__save"
-                    disabled={saveDisabledReason !== null}
-                    title={saveDisabledReason ?? undefined}
-                    onClick={() => void save()}
-                >
-                    {resolvedSaveLabel}
-                </button>
-                <button
-                    type="button"
-                    className="ctl ctl--ghost"
-                    disabled={disabled}
-                    title={disabled ? t('thread.composer.deleting') : undefined}
-                    onClick={cancel}
-                >
-                    {t('thread.composer.cancel')}
-                </button>
-                {composer.issue === undefined ? null : (
-                    <button
-                        type="button"
-                        className={`ctl-switch thread-composer__issue${composer.issue ? ' is-on' : ''}`}
-                        aria-pressed={composer.issue}
-                        disabled={editingDisabled}
-                        onClick={() => {
-                            controller.setIssue(!composer.issue);
-                        }}
-                    >
-                        <span className="ctl-switch__track" aria-hidden="true">
-                            <span className="ctl-switch__knob" />
-                        </span>
-                        {t('thread.composer.openIssue')}
-                    </button>
-                )}
-                <span className="thread-composer__actions-spacer" />
-                {footerHint}
-                {composer.confirmDiscard ? (
-                    <span className="thread-composer__confirm">
-                        {t('thread.composer.discardAsk')}{' '}
-                        <button
-                            type="button"
-                            className="ctl ctl--link-muted"
-                            onClick={() => void controller.confirmDiscard()}
-                        >
-                            {t('thread.composer.discard')}
-                        </button>{' '}
-                        <button type="button" className="ctl ctl--link-muted" onClick={controller.keepEditing}>
-                            {t('thread.composer.keepEditing')}
-                        </button>
-                    </span>
-                ) : (
+            {/* Autosave status sits below the field (docs/design/SPEC-changes-2026-09-20.md §4b). While
+                the composer asks about deletion, the "⌘⏎ or button" hint is unnecessary without buttons. */}
+            <div className="thread-composer__status-line">
+                {composer.confirmDiscard ? null : (
                     <ComposerStatus
                         composer={composer}
                         readOnly={readOnly}
@@ -374,6 +334,38 @@ export function CommentComposer({
                     />
                 )}
             </div>
+            {/* Delete confirmation replaces the buttons, just as it replaces the action row in a thread (§3). */}
+            {composer.confirmDiscard ? (
+                <DeleteConfirm
+                    question={t('thread.draft.deleteConfirm')}
+                    confirmLabel={t('thread.draft.deleteAction')}
+                    onConfirm={() => void controller.confirmDiscard()}
+                    onCancel={controller.keepEditing}
+                />
+            ) : (
+                <div className="thread-composer__actions">
+                    <button
+                        type="button"
+                        className="ctl ctl--secondary thread-composer__save"
+                        disabled={saveDisabledReason !== null}
+                        title={saveDisabledReason ?? undefined}
+                        onClick={() => void save()}
+                    >
+                        {resolvedSaveLabel}
+                    </button>
+                    <button
+                        type="button"
+                        className="ctl ctl--ghost"
+                        disabled={disabled}
+                        title={disabled ? t('thread.composer.deleting') : undefined}
+                        onClick={cancel}
+                    >
+                        {t('thread.composer.cancel')}
+                    </button>
+                    <span className="thread-composer__actions-spacer" />
+                    {footerHint}
+                </div>
+            )}
         </div>
     );
 }
@@ -433,7 +425,8 @@ function ComposerStatus({
     if (composer.status === 'saved') {
         return (
             <span className="thread-composer__status is-saved">
-                <Icon name="check" size={13} /> {t('thread.composer.status.saved')}
+                <Icon name="check" size={13} />{' '}
+                {t(composer.published === true ? 'thread.composer.status.savedPublished' : 'thread.composer.status.saved')}
                 {composer.savedAt == null ? null : <> · {formatTime(composer.savedAt)}</>}
             </span>
         );

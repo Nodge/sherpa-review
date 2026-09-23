@@ -63,14 +63,14 @@ import { createProgressWriter } from '../progress/progress-writer.js';
 import type { ProgressWriter, StopFileWriterHooks, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
-import type { SessionStore, ThreadsShow } from '../session/session-store.js';
+import type { SessionStore } from '../session/session-store.js';
 import { useUiSettingsStore } from '../settings/context.tsx';
 import { useShortcut } from '../shortcuts/context.tsx';
 import { neighbourId, unreadNeighbourId } from '../shortcuts/navigation.js';
 import type { ComposerTransport } from '../threads/composer.js';
-import { createComposerTransport } from '../threads/transport.js';
-import type { ThreadSourceCounts } from '../threads/model.js';
-import { authorDisplayName, countThreadSources, threadFileId, threadIsVisible } from '../threads/model.js';
+import { createComposerTransport, createPublishedCommentTransport } from '../threads/transport.js';
+import type { PublishedCommentTransport } from '../threads/transport.js';
+import { authorDisplayName, threadFileId, threadIsVisible } from '../threads/model.js';
 import { persistentThreadStore } from '../threads/persistent-store.js';
 import { createThreadActions } from '../threads/actions.js';
 import { openFileComposer, openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
@@ -197,6 +197,7 @@ export function FullDiffView({
     );
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
     const threadTransport = useMemo(() => createComposerTransport(token), [token]);
+    const publishedTransport = useMemo(() => createPublishedCommentTransport(token), [token]);
     const resolveThread = useCallback(
         (threadId: string, resolved: boolean) => setReviewThreadResolved(token, threadId, resolved),
         [token],
@@ -297,6 +298,7 @@ export function FullDiffView({
             loadContent={loadContent}
             progressWriter={progressWriter}
             threadTransport={threadTransport}
+            publishedTransport={publishedTransport}
             onResolveThread={resolveThread}
             initialFileId={requestedSelectionTarget?.fileId ?? fragmentTarget.fileId}
             initialThreadId={fragmentTarget.threadId}
@@ -448,6 +450,8 @@ export interface DiffWorkspaceProps {
     readonly reloadThreads?: () => Promise<readonly Thread[]>;
     readonly threadsRevision?: number | null;
     readonly threadTransport?: ComposerTransport;
+    /** Writes for published comments. Without it, the UI has no resolve, edit or delete actions. */
+    readonly publishedTransport?: PublishedCommentTransport;
     readonly onResolveThread?: (threadId: string, resolved: boolean) => Promise<void>;
     readonly initialFileId?: string | null;
     readonly initialThreadId?: string | null;
@@ -575,10 +579,29 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     }, [props.threads, threadStore]);
     const threadSnapshot = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
     const threadTransport = props.threadTransport ?? EMPTY_THREAD_TRANSPORT;
+    const publishedTransport = props.publishedTransport;
     const resolveThread = props.onResolveThread ?? EMPTY_RESOLVE;
+    const { commentIssues, commentResolve, editPublished } = pr.capabilities;
     const threadActions = useMemo<ThreadActions>(
-        () => createThreadActions(threadStore, threadTransport, resolveThread),
-        [resolveThread, threadStore, threadTransport],
+        () =>
+            createThreadActions(
+                threadStore,
+                threadTransport,
+                resolveThread,
+                publishedTransport === undefined
+                    ? undefined
+                    : { transport: publishedTransport, commentResolve, editPublished },
+                commentIssues,
+            ),
+        [
+            commentIssues,
+            commentResolve,
+            editPublished,
+            publishedTransport,
+            resolveThread,
+            threadStore,
+            threadTransport,
+        ],
     );
     const turnNoteIntoDraft = useTurnNoteIntoDraft({
         threadStore,
@@ -589,7 +612,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         () => ({ onOpenInChat: onOpenNoteInChat, onTurnIntoDraft: turnNoteIntoDraft, onDelete: onDeleteNote }),
         [onDeleteNote, onOpenNoteInChat, turnNoteIntoDraft],
     );
-    const { filter: filterId, threadsShow, threadAuthor } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+    const { filter: filterId, threadAuthor } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
         () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
         [diff.files, lenses, t],
@@ -1217,7 +1240,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         action: () => {
             const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
             if (thread !== undefined) {
-                openReply(threadStore, thread);
+                openReply(threadStore, thread, commentIssues);
             }
         },
     });
@@ -1337,10 +1360,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         },
     });
 
-    const threadCounts = countThreadSources(threadSnapshot.threads);
     const threadVisible = useCallback(
-        (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadsShow, threadAuthor),
-        [initialThreadId, threadAuthor, threadsShow],
+        (thread: Thread) => thread.id === initialThreadId || threadIsVisible(thread, threadAuthor),
+        [initialThreadId, threadAuthor],
     );
     const outsideThreads = threadSnapshot.outside.filter(
         (thread) => threadSnapshot.keptVisible.has(thread.id) || threadVisible(thread),
@@ -1389,9 +1411,6 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 filters={filters}
                 filter={filter}
                 onFilter={changeFilter}
-                threadsShow={threadsShow}
-                threadCounts={threadCounts}
-                onThreadsShow={session.setThreadsShow}
                 authorLens={
                     threadAuthor === null
                         ? null
@@ -1533,9 +1552,6 @@ export function FullDiffToolbar({
     filters,
     filter,
     onFilter,
-    threadsShow,
-    threadCounts,
-    onThreadsShow,
     authorLens = null,
     smallPr,
     onHeight,
@@ -1544,9 +1560,6 @@ export function FullDiffToolbar({
     filters: readonly FileFilter[];
     filter: FileFilter;
     onFilter: (id: string) => void;
-    threadsShow: ThreadsShow;
-    threadCounts: ThreadSourceCounts;
-    onThreadsShow: (show: ThreadsShow) => void;
     authorLens?: AuthorLens | null;
     smallPr: boolean;
     onHeight?: ((height: number) => void) | undefined;
@@ -1585,9 +1598,6 @@ export function FullDiffToolbar({
                 filters={filters}
                 filter={filter}
                 onFilter={onFilter}
-                threadsShow={threadsShow}
-                threadCounts={threadCounts}
-                onThreadsShow={onThreadsShow}
                 authorLens={authorLens}
             />
         </div>

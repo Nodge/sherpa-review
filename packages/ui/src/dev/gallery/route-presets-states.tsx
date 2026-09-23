@@ -8,9 +8,8 @@ import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../../filters/lens-filters.js';
 import type { RoutePreset } from '../../session/session-store.js';
-import { createSessionStore, DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
+import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
-import { countThreadSources } from '../../threads/model.js';
 import { CoverageStrip } from '../../views/route/coverage-strip.tsx';
 import { RouteToolbar } from '../../views/route/route-toolbar.tsx';
 import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
@@ -95,9 +94,6 @@ function DisabledPresetState() {
                 filters={filters}
                 filter={selectFilter(filters, 'all')}
                 onFilter={() => undefined}
-                threadsShow={DEFAULT_THREADS_SHOW}
-                threadCounts={countThreadSources(DATA.threads)}
-                onThreadsShow={() => undefined}
                 strip={<CoverageStrip model={null} loading={{ kind: 'plan', ready: 0, total: 7 }} />}
             />
         </div>

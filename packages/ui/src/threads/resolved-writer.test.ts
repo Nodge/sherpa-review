@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createThreadResolvedWriter } from './resolved-writer.js';
+import { createResolvedWriter } from './resolved-writer.js';
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -20,7 +20,7 @@ describe('thread resolve queue', () => {
             sent.push(resolved);
             return resolved ? firstRequest.promise : Promise.resolve();
         });
-        const writer = createThreadResolvedWriter({ read: () => false, apply: vi.fn(), send });
+        const writer = createResolvedWriter({ read: () => false, apply: vi.fn(), send });
 
         const first = writer.write('thread-1', true);
         const second = writer.write('thread-1', false);
@@ -36,7 +36,7 @@ describe('thread resolve queue', () => {
     it('does not roll back a newer action when an older write fails', async () => {
         const firstRequest = deferred<undefined>();
         const applied: boolean[] = [];
-        const writer = createThreadResolvedWriter({
+        const writer = createResolvedWriter({
             read: () => false,
             apply: (_threadId, resolved) => {
                 applied.push(resolved);
@@ -58,7 +58,7 @@ describe('thread resolve queue', () => {
         const firstRequest = deferred<undefined>();
         const applied: boolean[] = [];
         let serverResolved = false;
-        const writer = createThreadResolvedWriter({
+        const writer = createResolvedWriter({
             read: () => false,
             readConfirmed: () => serverResolved,
             apply: (_threadId, resolved) => {
@@ -83,7 +83,7 @@ describe('thread resolve queue', () => {
         const request = deferred<undefined>();
         const applied: boolean[] = [];
         let optimistic = true;
-        const writer = createThreadResolvedWriter({
+        const writer = createResolvedWriter({
             read: () => false,
             apply: (_threadId, resolved) => {
                 applied.push(resolved);
@@ -107,7 +107,7 @@ describe('thread resolve queue', () => {
         const send = vi.fn()
             .mockResolvedValueOnce(undefined)
             .mockRejectedValueOnce(new Error('network'));
-        const writer = createThreadResolvedWriter({
+        const writer = createResolvedWriter({
             read: () => current,
             apply: (_threadId, resolved) => {
                 current = resolved;

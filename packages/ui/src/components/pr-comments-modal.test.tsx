@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { DraftBufferEntry, Thread } from '@sherpa/protocol';
+import type { Comment, DraftBufferEntry, Thread } from '@sherpa/protocol';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,10 +10,16 @@ import { SettingsProvider } from '../settings/context.tsx';
 import { createUiSettingsStore } from '../settings/settings-store.js';
 import { ShortcutsProvider } from '../shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from '../shortcuts/registry.js';
-import { PR_COMPOSER_KEY } from '../threads/thread-list.tsx';
+import { PR_COMPOSER_KEY, replyComposerKey } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
+
+/**
+ * "PR comments" modal (docs/design/SPEC-changes-2026-09-20.md §4). PR threads
+ * as cards, a collapsed row with a preview, and inline replies. Message anatomy and actions
+ * are shared with code threads and tested in `threads/thread-list.test.tsx`.
+ */
 
 const DATA = fixtureIteration('medium');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
@@ -25,6 +31,15 @@ const PUBLISHED = thread({
     body: 'Published **PR-level** comment.',
     draft: false,
     createdAt: '2026-08-31T10:00:00.000Z',
+    replies: [
+        comment({
+            id: 'pr-published-reply',
+            author: HUMAN,
+            body: 'Reply in a published thread.',
+            draft: false,
+            createdAt: '2026-08-31T10:30:00.000Z',
+        }),
+    ],
 });
 const DRAFT = thread({
     id: 'pr-draft',
@@ -32,19 +47,6 @@ const DRAFT = thread({
     body: 'My PR draft.',
     draft: true,
     createdAt: '2026-08-31T11:00:00.000Z',
-    replies: [
-        {
-            id: 'pr-draft-reply',
-            author: HUMAN,
-            body: 'The reply must not appear in the modal.',
-            draft: true,
-            issue: null,
-            resolved: null,
-            createdAt: '2026-08-31T11:10:00.000Z',
-            editedAt: null,
-            replies: [],
-        },
-    ],
 });
 const BOT_PR = thread({
     id: 'pr-bot',
@@ -52,6 +54,23 @@ const BOT_PR = thread({
     body: 'PR-level bot thread.',
     draft: false,
     createdAt: '2026-08-31T09:00:00.000Z',
+});
+const RESOLVED = thread({
+    id: 'pr-resolved',
+    author: HUMAN,
+    body: 'Resolved PR remark.',
+    draft: false,
+    createdAt: '2026-08-31T08:30:00.000Z',
+    resolved: true,
+    replies: [
+        comment({
+            id: 'pr-resolved-reply',
+            author: HUMAN,
+            body: 'Fixed.',
+            draft: false,
+            createdAt: '2026-08-31T08:40:00.000Z',
+        }),
+    ],
 });
 const DISAPPEARED = thread({
     id: 'disappeared',
@@ -63,6 +82,10 @@ const DISAPPEARED = thread({
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom cannot scroll. The modal scrolls to the discard prompt, its only scrolling call.
+const scrollIntoView = vi.fn();
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
 
 const mounted: (() => void)[] = [];
 
@@ -85,153 +108,248 @@ const BUFFERED_PR: DraftBufferEntry = {
 };
 
 describe('PR comments modal', () => {
-    // Draft buffer and ship summary (docs/design/SPEC-elements.md §4.5) in the modal header.
-    it('counts PR-level buffer records as drafts and shows unresolved threads', () => {
-        mountModal([PUBLISHED, DRAFT], {}, () => undefined, [BUFFERED_PR]);
-
-        const header = document.querySelector('.pr-comments-modal__header')?.textContent ?? '';
-        expect(header).toContain('2 drafts · will be sent on Ship');
-        expect(header).toContain('1 not yet saved to the host');
-        expect(document.querySelector('.pr-comments-modal__open-threads')?.textContent).toContain('unresolved');
-    });
-
-    // A record may have no composer at all (the draft was edited at a line in a previous iteration),
-    // yet it blocks ship. This list is the only place to see and discard it.
-    it('shows buffered records with discard and retry actions, including edits', async () => {
-        const discardBuffered = vi.fn(() => Promise.resolve());
-        const retryBuffered = vi.fn(() => Promise.resolve());
-        mountModal([PUBLISHED, DRAFT], { discardBuffered, retryBuffered }, () => undefined, [
-            BUFFERED_PR,
-            { ...BUFFERED_PR, id: 'ck-edit', commentId: 'draft-9' },
-        ]);
-
-        const section = document.querySelector('.pr-comments-modal__buffered');
-        expect(section?.textContent).toContain('2 drafts wait for a host connection');
-        expect(section?.querySelectorAll('.pr-comments-modal__buffered-item')).toHaveLength(2);
-
-        await act(async () => {
-            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__delete-button')?.click();
-            await Promise.resolve();
-        });
-        expect(discardBuffered).toHaveBeenCalledWith('ck-pr');
-
-        await act(async () => {
-            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__keep-button')?.click();
-            await Promise.resolve();
-        });
-        expect(retryBuffered).toHaveBeenCalledWith('ck-pr');
-    });
-
-    it('shows only roots of human PR-level threads: drafts and published comments', () => {
+    it('shows all PR-level threads newest first, with replies and without file threads', () => {
         mountModal([PUBLISHED, DRAFT, BOT_PR, DISAPPEARED]);
 
-        const items = [...document.querySelectorAll<HTMLElement>('[data-comment-id]')];
-        expect(items.map((item) => item.dataset.commentId)).toEqual([DRAFT.root.id, PUBLISHED.root.id]);
+        expect(threadIds()).toEqual([DRAFT.id, PUBLISHED.id, BOT_PR.id]);
         expect(document.body.textContent).toContain('My PR draft.');
-        expect(document.body.textContent).toContain('Published PR-level comment.');
-        expect(document.body.textContent).not.toContain('PR-level bot thread.');
+        expect(document.body.textContent).toContain('PR-level bot thread.');
+        // Replies are visible without a click. Threads outside the diff are short (§4, checklist §7.9).
+        expect(document.body.textContent).toContain('Reply in a published thread.');
         expect(document.body.textContent).not.toContain('Thread for a missing file.');
-        expect(document.body.textContent).not.toContain('The reply must not appear in the modal.');
-        expect(items[0]?.querySelector('[data-icon="pencil"]')).not.toBeNull();
-        expect(items[1]?.querySelector('[data-icon="pencil"]')).toBeNull();
         expect(document.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull();
         expect(document.body.style.overflow).toBe('hidden');
     });
 
-    it('keeps text independent between item editing and the bottom composer', () => {
-        const { store } = mountModal([DRAFT, PUBLISHED]);
-        act(() => {
-            store.updateComposer(PR_COMPOSER_KEY, { text: 'A new separate comment.' });
-        });
-        const editButton = document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`);
-        act(() => {
-            editButton?.click();
-        });
+    // The header gives all its space to the title, with no draft counter or "collapse all" (§6a).
+    it('has no draft counter or unresolved summary in the header', () => {
+        mountModal([PUBLISHED, DRAFT], {}, () => undefined, [BUFFERED_PR]);
 
-        const item = document.querySelector<HTMLElement>(`[data-comment-id="${DRAFT.root.id}"]`);
-        const lowerInput = document.querySelector<HTMLTextAreaElement>('.pr-comments-modal__composer textarea');
-        const editInput = item?.querySelector<HTMLTextAreaElement>('textarea') ?? null;
-        expect(lowerInput?.value).toBe('A new separate comment.');
-        expect(editInput?.value).toBe('My PR draft.');
-
-        act(() => {
-            store.updateComposer(`edit:${DRAFT.root.id}`, { text: 'Updated draft text.' });
-        });
-        expect(editInput?.value).toBe('Updated draft text.');
-        expect(lowerInput?.value).toBe('A new separate comment.');
-
-        act(() => {
-            store.updateComposer(PR_COMPOSER_KEY, { text: 'Another new comment.' });
-        });
-        expect(lowerInput?.value).toBe('Another new comment.');
-        expect(editInput?.value).toBe('Updated draft text.');
+        const header = document.querySelector('.pr-comments-modal__header')?.textContent ?? '';
+        expect(header).toBe('Comments on the PRoutside the diff · 4821');
+        expect(document.querySelector('.pr-comments-modal__draft-count')).toBeNull();
+        expect(document.querySelector('.pr-comments-modal__open-threads')).toBeNull();
     });
 
-    it('closing the edit composer restores the body and clears the editing state', () => {
-        const { store } = mountModal([DRAFT]);
-        act(() => {
-            document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`)?.click();
-        });
-        const item = document.querySelector<HTMLElement>(`[data-comment-id="${DRAFT.root.id}"]`);
-        expect(item?.classList.contains('is-editing')).toBe(true);
+    it('expands drafts and bots and collapses resolved threads into a preview row', () => {
+        mountModal([PUBLISHED, DRAFT, BOT_PR, RESOLVED]);
 
-        act(() => {
-            store.closeComposer(`edit:${DRAFT.root.id}`);
-        });
-
-        expect(item?.classList.contains('is-editing')).toBe(false);
-        expect(item?.querySelector('.pr-comments-modal__chip')?.textContent).toBe('draft · publishes on ship');
-        expect(item?.querySelector('.pr-comments-modal__body')?.textContent).toContain(DRAFT.root.body);
+        expect(collapsedIds()).toEqual([RESOLVED.id]);
+        const row = threadNode(RESOLVED.id);
+        expect(row?.querySelector('.thread__preview')?.textContent).toBe('Resolved PR remark.');
+        expect(row?.querySelector('.thread__reply-count')?.textContent).toBe('1 reply');
+        expect(row?.textContent).not.toContain('Fixed.');
+        expect(row?.querySelector('.thread__chevron')?.getAttribute('aria-expanded')).toBe('false');
     });
 
-    it('deletes only after inline confirmation, and Keep cancels', async () => {
-        const deleteDraft = vi.fn(() => Promise.resolve());
-        mountModal([DRAFT, PUBLISHED], { delete: deleteDraft });
-        const trash = document.querySelector<HTMLButtonElement>(`[aria-label="Delete draft ${DRAFT.root.id}"]`);
+    it('expands and collapses threads through the chevron or preview click', () => {
+        mountModal([RESOLVED, PUBLISHED]);
 
         act(() => {
-            trash?.click();
+            threadNode(RESOLVED.id)?.querySelector<HTMLButtonElement>('.thread__preview')?.click();
         });
-        expect(document.body.textContent).toContain('Delete the draft? It will not be published');
-        const keep = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-            (button) => button.textContent === 'Keep',
-        );
-        act(() => {
-            keep?.click();
-        });
-        expect(document.body.textContent).not.toContain('Delete the draft? It will not be published');
-        expect(deleteDraft).not.toHaveBeenCalled();
+        expect(collapsedIds()).toEqual([]);
+        expect(threadNode(RESOLVED.id)?.textContent).toContain('Fixed.');
 
         act(() => {
-            trash?.click();
+            threadNode(RESOLVED.id)?.querySelector<HTMLButtonElement>('.thread__chevron')?.click();
         });
-        const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-            (button) => button.textContent === 'Delete',
+        expect(collapsedIds()).toEqual([RESOLVED.id]);
+    });
+
+    it('opens a reply composer with the issue switch below its message when "Reply" is clicked', () => {
+        mountModal([PUBLISHED]);
+
+        const rows = [...(threadNode(PUBLISHED.id)?.querySelectorAll('.thread__row') ?? [])];
+        act(() => {
+            action(rows[1], 'Reply')?.click();
+        });
+
+        const composer = rows[1]?.querySelector('.thread-composer');
+        expect(composer).not.toBeNull();
+        expect(rows[0]?.querySelector('.thread-composer')).toBeNull();
+        expect(composer?.querySelector('[role="switch"]')?.getAttribute('aria-label')).toBe(
+            'Open an issue, on',
         );
+        // An inline reply needs no context heading because the message above it is already visible.
+        expect(composer?.querySelector('.thread-composer__context')).toBeNull();
+    });
+
+    it('closes an empty reply composer on the first chevron click and collapses the thread on the next', async () => {
+        mountModal([PUBLISHED]);
+
+        act(() => {
+            action(threadNode(PUBLISHED.id)?.querySelector('.thread__row'), 'Reply')?.click();
+        });
         await act(async () => {
-            confirm?.click();
+            threadNode(PUBLISHED.id)?.querySelector<HTMLButtonElement>('.thread__chevron')?.click();
             await Promise.resolve();
         });
 
-        expect(deleteDraft).toHaveBeenCalledOnce();
-        expect(deleteDraft).toHaveBeenCalledWith(DRAFT.root.id);
-        expect(document.querySelector(`[data-comment-id="${DRAFT.root.id}"]`)).toBeNull();
-    });
-
-    it('hides the draft card while its draft is open in the bottom composer', () => {
-        const { store } = mountModal([DRAFT, PUBLISHED]);
+        expect(threadNode(PUBLISHED.id)?.querySelector('.thread-composer')).toBeNull();
+        expect(collapsedIds()).toEqual([]);
 
         act(() => {
-            store.updateComposer(PR_COMPOSER_KEY, {
-                text: DRAFT.root.body,
-                commentId: DRAFT.root.id,
-                status: 'saved',
-            });
+            threadNode(PUBLISHED.id)?.querySelector<HTMLButtonElement>('.thread__chevron')?.click();
+        });
+        expect(collapsedIds()).toEqual([PUBLISHED.id]);
+    });
+
+    it('asks to discard a typed reply instead of hiding it in a collapsed row on a chevron click', async () => {
+        const { store } = mountModal([PUBLISHED]);
+
+        const rows = [...(threadNode(PUBLISHED.id)?.querySelectorAll('.thread__row') ?? [])];
+        act(() => {
+            action(rows[1], 'Reply')?.click();
+        });
+        act(() => {
+            store.updateComposer(replyComposerKey(PUBLISHED.id), { text: 'Almost finished.' });
+        });
+        await act(async () => {
+            threadNode(PUBLISHED.id)?.querySelector<HTMLButtonElement>('.thread__chevron')?.click();
+            await Promise.resolve();
         });
 
-        expect(document.querySelector(`[data-comment-id="${DRAFT.root.id}"]`)).toBeNull();
-        expect(document.querySelector(`[data-comment-id="${PUBLISHED.root.id}"]`)).not.toBeNull();
-        expect(document.querySelector('.pr-comments-modal__draft-count')?.textContent).toContain('1 draft');
+        expect(collapsedIds()).toEqual([]);
+        expect(store.getComposer(replyComposerKey(PUBLISHED.id))?.text).toBe('Almost finished.');
+        expect(threadNode(PUBLISHED.id)?.textContent).toContain('Delete the draft?');
+    });
+
+    it('closes an empty reply composer on unmount', () => {
+        const { store } = mountModal([PUBLISHED]);
+
+        act(() => {
+            action(threadNode(PUBLISHED.id)?.querySelector('.thread__row'), 'Reply')?.click();
+        });
+        expect(store.getComposer(replyComposerKey(PUBLISHED.id))).not.toBeNull();
+
+        const unmount = mounted.pop();
+        unmount?.();
+
+        expect(store.getComposer(replyComposerKey(PUBLISHED.id))).toBeNull();
+    });
+
+    it('preserves a typed reply under its message after closing the modal', () => {
+        const { store } = mountModal([RESOLVED]);
+
+        act(() => {
+            threadNode(RESOLVED.id)?.querySelector<HTMLButtonElement>('.thread__preview')?.click();
+        });
+        const rows = [...(threadNode(RESOLVED.id)?.querySelectorAll('.thread__row') ?? [])];
+        act(() => {
+            action(rows[1], 'Reply')?.click();
+        });
+        act(() => {
+            store.updateComposer(replyComposerKey(RESOLVED.id), { text: 'More to write.' });
+        });
+        // The thread is marked collapsed (the code chevron), but the composer with text keeps it expanded.
+        act(() => {
+            store.setThreadsOpen([RESOLVED.id], false);
+        });
+        expect(collapsedIds()).toEqual([]);
+
+        const unmount = mounted.pop();
+        unmount?.();
+        expect(store.getComposer(replyComposerKey(RESOLVED.id))?.text).toBe('More to write.');
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+
+        mountModal([RESOLVED], {}, () => undefined, [], store);
+
+        const reopened = [...(threadNode(RESOLVED.id)?.querySelectorAll('.thread__row') ?? [])];
+        expect(collapsedIds()).toEqual([]);
+        expect(reopened[0]?.querySelector('.thread-composer')).toBeNull();
+        expect(reopened[1]?.querySelector<HTMLTextAreaElement>('.thread-composer textarea')?.value).toBe(
+            'More to write.',
+        );
+    });
+
+    it('closes the open composer on Esc and closes the modal only on the next Esc', async () => {
+        const onClose = vi.fn();
+        mountModal([PUBLISHED], {}, onClose);
+
+        act(() => {
+            action(threadNode(PUBLISHED.id)?.querySelector('.thread__row'), 'Reply')?.click();
+        });
+        const textarea = threadNode(PUBLISHED.id)?.querySelector<HTMLTextAreaElement>('textarea');
+        expect(textarea).not.toBeNull();
+
+        await act(async () => {
+            textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await Promise.resolve();
+        });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(threadNode(PUBLISHED.id)?.querySelector('textarea')).toBeNull();
+        // Esc does not collapse the thread. Only the chevron does.
+        expect(collapsedIds()).toEqual([]);
+
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('asks to discard a typed reply on ✕ instead of closing the modal silently', async () => {
+        const onClose = vi.fn();
+        const { store } = mountModal([PUBLISHED], {}, onClose);
+
+        act(() => {
+            action(threadNode(PUBLISHED.id)?.querySelector('.thread__row'), 'Reply')?.click();
+        });
+        act(() => {
+            store.updateComposer(replyComposerKey(PUBLISHED.id), { text: 'Still writing.' });
+        });
+
+        await act(async () => {
+            closeButton()?.click();
+            await Promise.resolve();
+        });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(threadNode(PUBLISHED.id)?.textContent).toContain('Delete the draft?');
+        expect(store.getComposer(replyComposerKey(PUBLISHED.id))?.text).toBe('Still writing.');
+        // The prompt may be below the visible list area, so the modal scrolls to it.
+        expect(scrollIntoView).toHaveBeenCalled();
+
+        await act(async () => {
+            confirmAction(threadNode(PUBLISHED.id), 'Delete')?.click();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            closeButton()?.click();
+            await Promise.resolve();
+        });
+        expect(onClose).toHaveBeenCalledOnce();
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
+    });
+
+    it('keeps typed text visible to the publication guard on Esc outside the editor or a backdrop click', async () => {
+        const onClose = vi.fn();
+        const { store } = mountModal([PUBLISHED], {}, onClose);
+        act(() => {
+            store.updateComposer(PR_COMPOSER_KEY, { text: 'New PR comment.' });
+        });
+
+        // Focus is on ✕, so Esc reaches the modal layer directly instead of passing through the editor.
+        await act(async () => {
+            document.body.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+            );
+            await Promise.resolve();
+        });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(document.querySelector('.pr-comments-modal__composer')?.textContent).toContain(
+            'Delete the draft?',
+        );
+
+        await act(async () => {
+            confirmAction(document.querySelector('.pr-comments-modal__composer'), 'Cancel')?.click();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            document
+                .querySelector<HTMLElement>('.pr-comments-modal__overlay')
+                ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            await Promise.resolve();
+        });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(store.getComposer(PR_COMPOSER_KEY)?.text).toBe('New PR comment.');
     });
 
     it('closes the modal on the second Esc after dismissing the empty bottom composer', async () => {
@@ -249,6 +367,100 @@ describe('PR comments modal', () => {
         expect(onClose).toHaveBeenCalledOnce();
     });
 
+    it('omits the context heading for a new comment composer', () => {
+        mountModal([]);
+
+        const composer = document.querySelector('.pr-comments-modal__composer .thread-composer');
+        expect(composer).not.toBeNull();
+        expect(composer?.querySelector('.thread-composer__context')).toBeNull();
+    });
+
+    it('edits and deletes drafts through links below the text without a pencil in the header', async () => {
+        const deleteDraft = vi.fn(() => Promise.resolve());
+        const { store } = mountModal([DRAFT, PUBLISHED], { delete: deleteDraft });
+
+        const draftRow = threadNode(DRAFT.id)?.querySelector('.thread__row');
+        expect(draftRow?.querySelector('[data-icon="pencil"]')).toBeNull();
+        expect(draftRow?.querySelector('[data-icon="trash"]')).toBeNull();
+
+        act(() => {
+            action(draftRow, 'Edit')?.click();
+        });
+        expect(store.getComposer(`edit:${DRAFT.root.id}`)).not.toBeNull();
+        act(() => {
+            store.closeComposer(`edit:${DRAFT.root.id}`);
+        });
+
+        act(() => {
+            action(draftRow, 'Delete')?.click();
+        });
+        expect(document.body.textContent).toContain('Delete the draft? It will not be published');
+        await act(async () => {
+            draftRow?.querySelector<HTMLButtonElement>('.thread__delete-confirm-button')?.click();
+            await Promise.resolve();
+        });
+
+        expect(deleteDraft).toHaveBeenCalledWith(DRAFT.root.id);
+        expect(threadNode(DRAFT.id)).toBeNull();
+    });
+
+    it('hides the draft card while its draft is open in the bottom composer', () => {
+        const { store } = mountModal([DRAFT, PUBLISHED]);
+
+        act(() => {
+            store.updateComposer(PR_COMPOSER_KEY, {
+                text: DRAFT.root.body,
+                commentId: DRAFT.root.id,
+                status: 'saved',
+            });
+        });
+
+        expect(threadNode(DRAFT.id)).toBeNull();
+        expect(threadNode(PUBLISHED.id)).not.toBeNull();
+    });
+
+    it('closes an invisible edit composer with an error on unmount', () => {
+        const { store } = mountModal([DRAFT]);
+        act(() => {
+            action(threadNode(DRAFT.id)?.querySelector('.thread__row'), 'Edit')?.click();
+            store.updateComposer(`edit:${DRAFT.root.id}`, { text: 'Unsaved.', status: 'error' });
+        });
+        expect(store.getComposerGuardSnapshot().pending).toBe(true);
+
+        const unmount = mounted.pop();
+        unmount?.();
+
+        expect(store.getComposer(`edit:${DRAFT.root.id}`)).toBeNull();
+        expect(store.getComposerGuardSnapshot().pending).toBe(false);
+    });
+
+    // A record may have no composer at all (the draft was edited at a line in a previous iteration),
+    // yet it blocks ship. This list is the only place to see and discard it.
+    it('shows buffered records with discard and retry actions, including edits', async () => {
+        const discardBuffered = vi.fn(() => Promise.resolve());
+        const retryBuffered = vi.fn(() => Promise.resolve());
+        mountModal([PUBLISHED, DRAFT], { discardBuffered, retryBuffered }, () => undefined, [
+            BUFFERED_PR,
+            { ...BUFFERED_PR, id: 'ck-edit', commentId: 'draft-9' },
+        ]);
+
+        const section = document.querySelector('.pr-comments-modal__buffered');
+        expect(section?.textContent).toContain('2 drafts are waiting for the connection');
+        expect(section?.querySelectorAll('.pr-comments-modal__buffered-item')).toHaveLength(2);
+
+        await act(async () => {
+            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__delete-button')?.click();
+            await Promise.resolve();
+        });
+        expect(discardBuffered).toHaveBeenCalledWith('ck-pr');
+
+        await act(async () => {
+            section?.querySelector<HTMLButtonElement>('.pr-comments-modal__keep-button')?.click();
+            await Promise.resolve();
+        });
+        expect(retryBuffered).toHaveBeenCalledWith('ck-pr');
+    });
+
     it('returns focus inside the modal on Tab when body is active', () => {
         mountModal([]);
         const close = document.querySelector<HTMLButtonElement>('[aria-label="Close the PR comments"]');
@@ -260,66 +472,59 @@ describe('PR comments modal', () => {
         expect(document.activeElement).toBe(close);
         document.body.removeAttribute('tabindex');
     });
-
-    it('restores the original text through transport.update when editing is cancelled', async () => {
-        const update = vi.fn(() => Promise.resolve({ outcome: 'saved' as const }));
-        const { store } = mountModal([DRAFT], { update });
-        act(() => {
-            document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`)?.click();
-            store.updateComposer(`edit:${DRAFT.root.id}`, { text: 'Corrupted text.' });
-        });
-        const item = document.querySelector<HTMLElement>(`[data-comment-id="${DRAFT.root.id}"]`);
-        const cancel = [...(item?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
-            (button) => button.textContent === 'Cancel',
-        );
-
-        act(() => {
-            cancel?.click();
-        });
-        const confirm = item?.querySelector('.thread-composer__confirm');
-        expect(confirm?.textContent).toContain('Discard this draft?');
-        expect(update).not.toHaveBeenCalled();
-
-        await act(async () => {
-            [...(confirm?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
-                .find((button) => button.textContent === 'discard')
-                ?.click();
-            await vi.waitFor(() => {
-                expect(update).toHaveBeenCalledWith(DRAFT.root.id, DRAFT.root.body, undefined, expect.any(String));
-            });
-        });
-
-        expect(store.getComposer(`edit:${DRAFT.root.id}`)).toBeNull();
-        expect(item?.textContent).toContain(DRAFT.root.body);
-    });
-
-    it('closes an invisible edit composer with an error on unmount', () => {
-        const { store } = mountModal([DRAFT]);
-        act(() => {
-            document.querySelector<HTMLButtonElement>(`[aria-label="Edit draft ${DRAFT.root.id}"]`)?.click();
-            store.updateComposer(`edit:${DRAFT.root.id}`, { text: 'Unsaved.', status: 'error' });
-        });
-        expect(store.getComposerGuardSnapshot().pending).toBe(true);
-
-        const unmount = mounted.pop();
-        unmount?.();
-
-        expect(store.getComposer(`edit:${DRAFT.root.id}`)).toBeNull();
-        expect(store.getComposerGuardSnapshot().pending).toBe(false);
-    });
 });
+
+function threadIds(): string[] {
+    return [...document.querySelectorAll<HTMLElement>('[data-thread-id]')].map(
+        (node) => node.dataset.threadId ?? '',
+    );
+}
+
+function collapsedIds(): string[] {
+    return [...document.querySelectorAll<HTMLElement>('[data-thread-id].is-collapsed')].map(
+        (node) => node.dataset.threadId ?? '',
+    );
+}
+
+function threadNode(threadId: string): HTMLElement | null {
+    return document.querySelector<HTMLElement>(`[data-thread-id="${threadId}"]`);
+}
+
+/** Action link below the message text, "Reply", "Edit", "Delete". */
+function action(row: Element | null | undefined, label: string): HTMLButtonElement | null {
+    return (
+        [...(row?.querySelectorAll<HTMLButtonElement>('.thread__row-actions button') ?? [])].find(
+            (button) => button.textContent === label,
+        ) ?? null
+    );
+}
+
+/** "Discard" / "Continue" button in the composer draft discard prompt. */
+function confirmAction(scope: Element | null | undefined, label: string): HTMLButtonElement | null {
+    return (
+        [...(scope?.querySelectorAll<HTMLButtonElement>('.thread-composer .thread__delete-confirm button') ?? [])].find(
+            (button) => button.textContent === label,
+        ) ?? null
+    );
+}
+
+function closeButton(): HTMLButtonElement | null {
+    return document.querySelector<HTMLButtonElement>('[aria-label="Close the PR comments"]');
+}
 
 function mountModal(
     threads: readonly Thread[],
     transportOverrides: Partial<ComposerTransport> = {},
     onClose: () => void = () => undefined,
     draftBuffer: readonly DraftBufferEntry[] = [],
+    /** Store from the previous opening. The modal closes and reopens while the store survives. */
+    reuse: ThreadStore | null = null,
 ): { readonly store: ThreadStore } {
     // Deterministic markdown layout, a plain textarea instead of ProseMirror.
     const settings = createUiSettingsStore({ initial: { composerLayout: 'markdown' } });
     const host = document.createElement('div');
     document.body.append(host);
-    const store = createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId)));
+    const store = reuse ?? createThreadStore(threads, new Set(DATA.diff.files.map((file) => file.fileId)));
     const transport: ComposerTransport = {
         save: () => Promise.reject(new Error('test does not save a new draft')),
         update: () => Promise.resolve({ outcome: 'saved' as const }),
@@ -356,6 +561,34 @@ function mountModal(
     return { store };
 }
 
+function comment({
+    id,
+    author,
+    body,
+    draft,
+    createdAt,
+    replies = [],
+}: {
+    id: string;
+    author: Comment['author'];
+    body: string;
+    draft: boolean;
+    createdAt: string;
+    replies?: Comment['replies'];
+}): Comment {
+    return {
+        id,
+        author,
+        body,
+        draft,
+        issue: null,
+        resolved: null,
+        createdAt,
+        editedAt: null,
+        replies,
+    };
+}
+
 function thread({
     id,
     author,
@@ -364,32 +597,24 @@ function thread({
     createdAt,
     replies = [],
     anchor = null,
+    resolved = false,
 }: {
     id: string;
-    author: Thread['root']['author'];
+    author: Comment['author'];
     body: string;
     draft: boolean;
     createdAt: string;
-    replies?: Thread['root']['replies'];
+    replies?: Comment['replies'];
     anchor?: Thread['anchor'];
+    resolved?: boolean;
 }): Thread {
     return {
         id,
         anchor,
-        resolved: false,
+        resolved,
         resolvedBy: null,
         outdated: false,
         pinnedTo: null,
-        root: {
-            id: `${id}-comment`,
-            author,
-            body,
-            draft,
-            issue: null,
-            resolved: null,
-            createdAt,
-            editedAt: null,
-            replies,
-        },
+        root: comment({ id: `${id}-comment`, author, body, draft, createdAt, replies }),
     };
 }

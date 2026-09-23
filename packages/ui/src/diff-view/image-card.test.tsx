@@ -201,13 +201,13 @@ describe('image card', () => {
         expect(host.textContent).toContain('too large: 11.4 MB');
     });
 
-    it('shows the missing-on-host message for a host 404, without a retry button', async () => {
+    it('shows image unavailable without a retry button for a host 404', async () => {
         const { host } = render(
             <ImageBody file={DELETED.file} image={DELETED.image} loadBlob={() => Promise.resolve(null)} />,
         );
         await settle();
 
-        expect(host.textContent).toContain('нет у хоста');
+        expect(host.textContent).toContain('the image is unavailable');
         expect(host.querySelector('.image-card__retry')).toBeNull();
     });
 

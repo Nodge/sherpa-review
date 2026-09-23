@@ -12,10 +12,11 @@ function markup(id: string): string {
 }
 
 describe('action bar gallery next to chat', () => {
-    it('registers both action-bar-and-chat frames', () => {
+    it('registers bar states', () => {
         expect(REVIEW_BAR_CHAT_DOCK_STATES.map((state) => state.id)).toEqual([
             'review-bar-chat-docked',
             'review-bar-chat-overlay',
+            'review-bar-issue-drafts',
         ]);
     });
 
@@ -25,6 +26,13 @@ describe('action bar gallery next to chat', () => {
         expect(html).toContain('review-action-bar');
         expect(html).toContain('gallery-dock-chat');
         expect(html).not.toContain('gallery-dock-scrim');
+    });
+
+    it('keeps the draft counter suffix and ship menu open in the issue counter state', () => {
+        const html = markup('review-bar-issue-drafts');
+
+        expect(html).toContain('· 2 issues');
+        expect(html).toContain('review-action-menu');
     });
 
     it('adds a scrim above the bar in the overlay state', () => {

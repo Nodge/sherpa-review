@@ -1,30 +1,23 @@
-import type { DraftBufferEntry, PrMeta, Thread } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { DraftBufferEntry, PrMeta } from '@sherpa/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { MessageKey } from '../i18n/index.js';
-import { relativeTime, useLocale, useT } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
-import { Markdown } from '../markdown/markdown.tsx';
 import { useEscapeLayer, useShortcutRegistry } from '../shortcuts/context.tsx';
-import { composerControllerFor } from '../threads/composer.js';
+import { closeCommentComposers, closeEmptyReplyComposers, composerControllerFor } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ComposerLayout } from '../threads/composer-markdown.js';
-import {
-    DraftEditor,
-    draftEditComposerKey,
-    openDraftEditor,
-    useActiveDraftEditor,
-} from '../threads/draft-editor.tsx';
-import { authorName, prLevelHumanThreads } from '../threads/model.js';
+import { flattenThread, prLevelThreads } from '../threads/model.js';
 import {
     NewCommentComposer,
     openPrComposer,
     PR_COMPOSER_KEY,
+    ThreadList,
 } from '../threads/thread-list.tsx';
+import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
-import { discussionStats } from '../views/overview-model.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import './pr-comments-modal.css';
 
@@ -34,52 +27,66 @@ export interface PrCommentsModalProps {
     readonly pr: PrMeta;
     readonly store: ThreadStore;
     readonly transport: ComposerTransport;
-    /** Draft buffer entries. Only PR-level entries count toward the modal counter. */
+    /**
+     * Thread actions, Resolve, editing and deleting published comments. Without them (gallery, component
+     * tests), only actions supported by the draft transport itself remain.
+     */
+    readonly actions?: ThreadActions;
+    /** Draft buffer records. All are shown, and this is the only place to discard them. */
     readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onClose: () => void;
     readonly now?: number;
     readonly initialLayout?: ComposerLayout;
 }
 
-/** Human PR-level comments: a list of written comments and a separate composer for a new draft. */
+/**
+ * PR comments, PR-level threads as cards (docs/design/SPEC-changes-2026-09-20.md §4)
+ * and a new comment composer at the bottom. Message anatomy, inline replies, Resolve and editing
+ * are shared with code threads. Only collapsing a thread into a preview row is specific to this modal.
+ */
 export function PrCommentsModal({
     pr,
     store,
     transport,
+    actions,
     draftBuffer = EMPTY_DRAFT_BUFFER,
     onClose,
     now,
     initialLayout,
 }: PrCommentsModalProps) {
     const t = useT();
-    const locale = useLocale();
     const shortcutRegistry = useShortcutRegistry();
     const commentIssues = pr.capabilities.commentIssues;
     const [openedAt] = useState(() => now ?? Date.now());
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const prComposer = useComposerSnapshot(store, PR_COMPOSER_KEY);
+    // Newest first, ordered by the thread root timestamp.
     const prThreads = useMemo(
         () =>
-            prLevelHumanThreads(snapshot.threads).sort(
+            prLevelThreads(snapshot.threads).sort(
                 (left, right) => Date.parse(right.root.createdAt) - Date.parse(left.root.createdAt),
             ),
         [snapshot.threads],
     );
-    const comments = useMemo(
+    const threads = useMemo(
         () => prThreads.filter((thread) => thread.root.id !== prComposer?.commentId),
         [prComposer?.commentId, prThreads],
     );
-    const commentIds = useMemo(() => comments.map((thread) => thread.root.id), [comments]);
-    const editingId = useActiveDraftEditor(store, commentIds);
-    // A buffered PR-level record is a draft in the batch, just one the host has not accepted yet.
-    const bufferedPrDrafts = draftBuffer.filter(
-        (entry) => entry.commentId === null && entry.draft.parentId === null && entry.draft.anchor === null,
-    ).length;
-    const drafts = prThreads.filter((thread) => thread.root.draft).length + bufferedPrDrafts;
-    const openThreads = discussionStats(snapshot.threads).open;
-    const [confirmingId, setConfirmingId] = useState<string | null>(null);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
+    const fallbackActions = useMemo<ThreadActions>(
+        () => ({
+            transport,
+            commentIssues,
+            resolve: () => Promise.resolve(false),
+            resolveComment: null,
+            published: null,
+        }),
+        [commentIssues, transport],
+    );
+    const threadActions = actions ?? fallbackActions;
+    const collapse = useMemo(
+        () => ({ openThreads: snapshot.openThreads, onToggle: store.toggleThreadOpen }),
+        [snapshot.openThreads, store],
+    );
     const modalRef = useRef<HTMLElement | null>(null);
     const closeRef = useRef<HTMLButtonElement | null>(null);
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -104,43 +111,64 @@ export function PrCommentsModal({
         };
     }, []);
 
+    /**
+     * Modal composers live only inside it. Closing it closes them too, otherwise an invisible edit
+     * would keep blocking publication. Close composers with nothing to lose, edits (their text
+     * lives in the draft and returns on the next opening) and empty reply composers. A typed
+     * reply stays open in its place below its message, and its thread
+     * cannot collapse. It cannot be left silently. Closing first asks to discard
+     * (`requestClose`), so the publication guard never becomes invisible.
+     */
+    const shownComments = useMemo(
+        () => threads.flatMap((thread) => flattenThread(thread.root).map((row) => row.comment.id)),
+        [threads],
+    );
+    const shownThreads = useMemo(() => threads.map((thread) => thread.id), [threads]);
+    const shownRef = useRef({ comments: shownComments, threads: shownThreads });
     useEffect(() => {
-        if (editingId === null) {
+        shownRef.current = { comments: shownComments, threads: shownThreads };
+    }, [shownComments, shownThreads]);
+    useEffect(
+        () => () => {
+            closeCommentComposers(store, shownRef.current.comments);
+            closeEmptyReplyComposers(store, shownRef.current.threads);
+        },
+        [store],
+    );
+
+    /**
+     * Closing the modal through ✕, a backdrop click or Esc. A composer with typed but unsaved text
+     * prevents silent closing, otherwise the publication guard would block on text that is no longer
+     * visible. Ask to discard where the text was entered (the same prompt as the thread
+     * chevron), and scroll the list to the prompt. An empty composer closes automatically without blocking.
+     */
+    const requestClose = useCallback((): void => {
+        const shownThreadIds = new Set(shownRef.current.threads);
+        const unsaved = store
+            .listComposers()
+            .filter(
+                (composer) =>
+                    composer.commentId === null &&
+                    composer.text.trim() !== '' &&
+                    (composer.key === PR_COMPOSER_KEY ||
+                        (composer.threadId !== null && shownThreadIds.has(composer.threadId))),
+            );
+        if (unsaved.length === 0) {
+            onClose();
             return;
         }
-        const key = draftEditComposerKey(editingId);
-        const controller = composerControllerFor({ store, key, transport });
-        return () => {
-            controller.close();
-            store.closeComposer(key);
-        };
-    }, [editingId, store, transport]);
+        for (const composer of unsaved) {
+            composerControllerFor({ store, key: composer.key, transport }).escape();
+        }
+        const threadId = unsaved.find((composer) => composer.threadId !== null)?.threadId ?? null;
+        if (threadId !== null) {
+            const nodes = [...(modalRef.current?.querySelectorAll<HTMLElement>('[data-thread-id]') ?? [])];
+            nodes.find((node) => node.dataset.threadId === threadId)?.scrollIntoView({ block: 'nearest' });
+        }
+    }, [onClose, store, transport]);
 
     useFocusTrap(modalRef);
-    useEscapeLayer('modal', onClose);
-
-    const startEditing = (thread: Thread): void => {
-        if (editingId !== null) {
-            return;
-        }
-        const comment = thread.root;
-        openDraftEditor(store, thread, comment);
-        setConfirmingId(null);
-    };
-
-    const deleteDraft = async (commentId: string): Promise<void> => {
-        setDeletingId(commentId);
-        setDeleteErrorId(null);
-        try {
-            await transport.delete(commentId);
-            store.deleteDraft(commentId);
-            setConfirmingId(null);
-        } catch {
-            setDeleteErrorId(commentId);
-        } finally {
-            setDeletingId(null);
-        }
-    };
+    useEscapeLayer('modal', requestClose);
 
     const savedNewComment = useCallback((): void => {
         openPrComposer(store, commentIssues);
@@ -156,7 +184,7 @@ export function PrCommentsModal({
             className="pr-comments-modal__overlay"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
-                    onClose();
+                    requestClose();
                 }
             }}
         >
@@ -172,24 +200,13 @@ export function PrCommentsModal({
                     <h2 id="pr-comments-modal-title">{t('prComments.title')}</h2>
                     <span className="pr-comments-modal__context">{t('prComments.context', pr.id)}</span>
                     <span className="pr-comments-modal__header-spacer" />
-                    {openThreads === 0 ? null : (
-                        <span className="pr-comments-modal__open-threads">
-                            {t('ship.openThreads', openThreads)}
-                        </span>
-                    )}
-                    {drafts === 0 ? null : (
-                        <span className="pr-comments-modal__draft-count">
-                            {t('prComments.drafts', drafts)}
-                            {bufferedPrDrafts === 0 ? null : ` ${t('ship.drafts.buffered', bufferedPrDrafts)}`}
-                        </span>
-                    )}
                     <button
                         ref={closeRef}
                         type="button"
                         className="ctl ctl--icon pr-comments-modal__icon-button"
                         aria-label={t('prComments.close')}
                         title={t('prComments.close.title')}
-                        onClick={onClose}
+                        onClick={requestClose}
                     >
                         <Icon name="cross" size={14} />
                     </button>
@@ -201,119 +218,20 @@ export function PrCommentsModal({
 
                 <div className="pr-comments-modal__list-shell">
                     <div ref={listRef} className="pr-comments-modal__list">
-                        {comments.length === 0 ? (
+                        {threads.length === 0 ? (
                             <div className="pr-comments-modal__empty">
                                 {t('prComments.empty')}
                             </div>
                         ) : (
-                            comments.map((thread) => {
-                                const comment = thread.root;
-                                const editing = editingId === comment.id;
-                                const confirming = confirmingId === comment.id;
-                                return (
-                                    <article
-                                        key={comment.id}
-                                        className={`pr-comments-modal__item${comment.draft ? ' is-draft' : ' is-published'}${editing ? ' is-editing' : ''}`}
-                                        data-comment-id={comment.id}
-                                    >
-                                        <div className="pr-comments-modal__item-header">
-                                            <span className="pr-comments-modal__avatar">
-                                                {initials(comment.author.displayName ?? comment.author.login)}
-                                            </span>
-                                            <strong>{authorName(comment)}</strong>
-                                            <span className={`pr-comments-modal__chip${editing ? ' is-editing' : comment.draft ? ' is-draft' : ''}`}>
-                                                {editing
-                                                    ? t('thread.chip.editing')
-                                                    : comment.draft
-                                                      ? t('thread.chip.draftShort')
-                                                      : t('prComments.published')}
-                                            </span>
-                                            <time dateTime={comment.createdAt}>
-                                                {relativeTime(comment.createdAt, openedAt, locale)}
-                                            </time>
-                                            <span className="pr-comments-modal__item-spacer" />
-                                            {comment.draft ? (
-                                                <span className="pr-comments-modal__item-actions">
-                                                    <button
-                                                        type="button"
-                                                        className="ctl ctl--icon pr-comments-modal__icon-button"
-                                                        aria-label={t('thread.draft.editAria', comment.id)}
-                                                        title={t('thread.draft.edit')}
-                                                        disabled={editingId !== null}
-                                                        onClick={() => {
-                                                            startEditing(thread);
-                                                        }}
-                                                    >
-                                                        <Icon name="pencil" size={14} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="ctl ctl--icon-danger pr-comments-modal__icon-button"
-                                                        aria-label={t('thread.draft.deleteAria', comment.id)}
-                                                        title={t('thread.draft.delete')}
-                                                        disabled={deletingId !== null || editingId !== null}
-                                                        onClick={() => {
-                                                            setDeleteErrorId(null);
-                                                            setConfirmingId(comment.id);
-                                                        }}
-                                                    >
-                                                        <Icon name="trash" size={14} />
-                                                    </button>
-                                                </span>
-                                            ) : null}
-                                        </div>
-
-                                        {editing ? (
-                                            <DraftEditor
-                                                comment={comment}
-                                                store={store}
-                                                transport={transport}
-                                                contextLabel={t('thread.composer.editContext')}
-                                                placeholder={t('prComments.placeholder')}
-                                                inputLabel={t('thread.composer.editLabel')}
-                                                footerHint={<ComposerShortcutHint escapeLabel="prComments.escape.cancel" />}
-                                                {...(initialLayout === undefined ? {} : { initialLayout })}
-                                            />
-                                        ) : (
-                                            <div className="pr-comments-modal__body">
-                                                <Markdown text={comment.body} profile="comment" />
-                                            </div>
-                                        )}
-
-                                        {confirming ? (
-                                            <div className="pr-comments-modal__delete-confirm">
-                                                <span>
-                                                    {deleteErrorId === comment.id
-                                                        ? t('thread.draft.deleteFailed')
-                                                        : t('thread.draft.deleteConfirm')}
-                                                </span>
-                                                <span className="pr-comments-modal__item-spacer" />
-                                                <button
-                                                    type="button"
-                                                    className="ctl ctl--danger pr-comments-modal__delete-button"
-                                                    disabled={deletingId === comment.id}
-                                                    onClick={() => void deleteDraft(comment.id)}
-                                                >
-                                                    {deletingId === comment.id
-                                                        ? t('thread.draft.deleting')
-                                                        : t('thread.draft.deleteAction')}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="ctl ctl--ghost ctl--compact pr-comments-modal__keep-button"
-                                                    disabled={deletingId === comment.id}
-                                                    onClick={() => {
-                                                        setDeleteErrorId(null);
-                                                        setConfirmingId(null);
-                                                    }}
-                                                >
-                                                    {t('thread.draft.keep')}
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </article>
-                                );
-                            })
+                            <ThreadList
+                                threads={threads}
+                                store={store}
+                                actions={threadActions}
+                                now={openedAt}
+                                variant="card"
+                                collapse={collapse}
+                                {...(initialLayout === undefined ? {} : { initialLayout })}
+                            />
                         )}
                     </div>
                     <div className="pr-comments-modal__list-fade" aria-hidden="true" />
@@ -428,13 +346,4 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function initials(name: string): ReactNode {
-    return name
-        .split(/[\s._-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('');
 }

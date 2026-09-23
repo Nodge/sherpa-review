@@ -39,11 +39,13 @@ describe('editing your own draft', () => {
         expect(store.getComposer(draftEditComposerKey(root.id))?.issue).toBeUndefined();
     });
 
-    it('a reply has no toggle even with issue status', () => {
-        const reply = comment('reply', true);
-        const root = { ...comment('root', true), replies: [reply] };
-        const store = createThreadStore([thread(root)], new Set());
-        openDraftEditor(store, thread(root), reply);
-        expect(store.getComposer(draftEditComposerKey(reply.id))?.issue).toBeUndefined();
+    it('opens the separate toggle for a reply in the comment state when editing', () => {
+        for (const issue of [true, false]) {
+            const reply = comment('reply', issue);
+            const root = { ...comment('root', true), replies: [reply] };
+            const store = createThreadStore([thread(root)], new Set());
+            openDraftEditor(store, thread(root), reply);
+            expect(store.getComposer(draftEditComposerKey(reply.id))?.issue).toBe(issue);
+        }
     });
 });

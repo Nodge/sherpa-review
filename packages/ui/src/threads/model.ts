@@ -6,12 +6,19 @@ import type { DiffFileModel } from '../diff/model.js';
 export interface FlatComment {
     readonly comment: Comment;
     readonly parent: Comment | null;
+    /** The root is 1, its replies are 2, and so on. */
     readonly depth: number;
+    /** Left reply indentation in pixels: 27 per level (the parent text column), capped at 108. */
     readonly indent: number;
-    /** Parent author beyond depth four. The view builds the "↳ reply to X" label. */
+    /** Parent author beyond the fourth reply level: the view builds the "↳ to" label. */
     readonly replyHintAuthor: string | null;
     readonly subtreeReplies: number;
 }
+
+/** Message text column: avatar 18 + gap 9. Also the reply indentation step. */
+const INDENT_STEP = 27;
+/** Indentation stops growing here. The header shows "↳ to" for deeper replies instead. */
+const INDENT_MAX_LEVEL = 4;
 
 export interface ThreadGroups {
     readonly byFile: ReadonlyMap<string, readonly Thread[]>;
@@ -50,26 +57,23 @@ export function threadFileId(thread: Thread, layout: IterationLayout | null): st
     return layout === null ? anchor.fileId : (layout.fileIdByPath.get(anchor.path) ?? null);
 }
 
-export interface ThreadSourceCounts {
-    readonly people: number;
-    readonly bots: number;
-    readonly resolved: number;
-}
-
-export interface ThreadVisibility {
-    readonly people: boolean;
-    readonly bots: boolean;
-    readonly resolved: boolean;
-}
-
 /** A PR-level thread is anchored to neither a file nor a line. */
 export function isPrLevelThread(thread: Thread): boolean {
     return thread.anchor === null;
 }
 
-/** Human root comments at PR level. Replies and bot threads stay in the regular reader. */
-export function prLevelHumanThreads(threads: readonly Thread[]): Thread[] {
-    return threads.filter((thread) => isPrLevelThread(thread) && !thread.root.author.bot);
+/**
+ * PR-level threads from people and bots are shown in full in the "Comments on the PR" modal
+ * (docs/design/SPEC-changes-2026-09-20.md §4). Bot threads also appear in the "outside the diff" group.
+ */
+export function prLevelThreads(threads: readonly Thread[]): Thread[] {
+    return threads.filter(isPrLevelThread);
+}
+
+/** First nonempty body line: collapsed thread preview in the code marker and the modal row. */
+export function commentFirstLine(body: string, limit = 0): string {
+    const trimmed = (body.split('\n').find((candidate) => candidate.trim() !== '') ?? '').trim();
+    return limit > 0 && trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
 }
 
 /** Flattens a branching tree into depth-first order and counts the full subtree of each reply. */
@@ -82,8 +86,8 @@ export function flattenThread(root: Comment): FlatComment[] {
             comment,
             parent,
             depth,
-            indent: Math.min(Math.max(depth - 1, 0), 3) * 15,
-            replyHintAuthor: depth > 4 && parent !== null ? authorName(parent) : null,
+            indent: Math.min(depth - 1, INDENT_MAX_LEVEL) * INDENT_STEP,
+            replyHintAuthor: depth - 1 > INDENT_MAX_LEVEL && parent !== null ? authorName(parent) : null,
             subtreeReplies: 0,
         });
 
@@ -134,35 +138,40 @@ export function groupThreads(
     return { byFile, outside };
 }
 
-/** Chip categories do not overlap. Resolved threads are not counted again as human or bot threads. */
-export function countThreadSources(threads: readonly Thread[]): ThreadSourceCounts {
-    let people = 0;
-    let bots = 0;
-    let resolved = 0;
-    for (const thread of threads) {
-        if (thread.resolved) {
-            resolved += 1;
-        } else if (thread.root.author.bot) {
-            bots += 1;
-        } else {
-            people += 1;
-        }
-    }
-    return { people, bots, resolved };
+/**
+ * The participant lens from the Discussion card is the only remaining thread filter:
+ * collapsing into a marker removes the noise of bots and resolved remarks (docs/design/SPEC-changes-2026-09-20.md §3).
+ * `author === null` means no lens, so every thread is visible.
+ */
+export function threadIsVisible(thread: Thread, author: string | null = null): boolean {
+    return author === null || threadHasAuthor(thread, author);
+}
+
+/** Message count across all thread levels, shown on the marker beside the line. */
+export function threadCommentCount(thread: Thread): number {
+    return flattenThread(thread.root).length;
+}
+
+/** The thread contains my unpublished draft as the root or a reply. */
+export function threadHasDraft(thread: Thread): boolean {
+    return flattenThread(thread.root).some((row) => row.comment.draft);
 }
 
 /**
- * `author` is the participant lens from the discussion card: a thread stays if this
- * login wrote the root or any reply. Source chips apply on top of the lens, rather than replacing it.
+ * Per-comment resolution rule: a thread is resolved if it has at least one comment
+ * with issue set and all such comments are resolved. `null` means the host does not track per-comment resolution (`Comment.resolved`
+ * is `null` for all comments), so only `Thread.resolved` from the adapter determines the thread state.
+ *
+ * On the server, the adapter applies the same rule (`docs/decisions.md`, "Threads, issue and composer").
+ * Here it is needed only for the optimistic frame between clicking Resolve and receiving the host response.
  */
-export function threadIsVisible(thread: Thread, show: ThreadVisibility, author: string | null = null): boolean {
-    if (author !== null && !threadHasAuthor(thread, author)) {
-        return false;
+export function threadResolvedByIssues(thread: Thread): boolean | null {
+    const rows = flattenThread(thread.root);
+    if (rows.every((row) => row.comment.resolved === null)) {
+        return null;
     }
-    if (thread.resolved) {
-        return show.resolved;
-    }
-    return thread.root.author.bot ? show.bots : show.people;
+    const issues = rows.filter((row) => row.comment.issue === true);
+    return issues.length > 0 && issues.every((row) => row.comment.resolved === true);
 }
 
 /** The login appears in the thread root or any reply at any depth. */

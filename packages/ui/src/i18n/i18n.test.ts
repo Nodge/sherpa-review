@@ -151,12 +151,11 @@ describe('agreement with the count', () => {
         expect(changedWords(t('diff.gap.hiddenCount', 1), t('diff.gap.hiddenCount', 2))).toBe(3);
         expect(changedWords(t('diff.gap.loadAll', 1, '…'), t('diff.gap.loadAll', 2, '…'))).toBe(2);
         expect(changedWords(t('audit.line', 1, 1, 2), t('audit.line', 2, 1, 2))).toBe(3);
-        expect(t('prComments.drafts', 1)).toBe('1 черновик · уйдёт при Ship');
         expect(changedWords(t('prComments.buffered.title', 1), t('prComments.buffered.title', 2))).toBe(4);
         expect(changedWords(t('ship.disabled.buffered', 1), t('ship.disabled.buffered', 2))).toBe(4);
         expect(changedWords(t('complete.outsideRoute.value', 1), t('complete.outsideRoute.value', 2))).toBe(3);
-        expect(t('route.stop.conflicts', 1)).toContain('разрешите его в хосте');
-        expect(t('route.other.conflicts', 1)).toContain('разрешите его в хосте, в покрытие он не входит');
+        expect(changedWords(t('route.stop.conflicts', 1), t('route.stop.conflicts', 2))).toBe(3);
+        expect(changedWords(t('route.other.conflicts', 1), t('route.other.conflicts', 2))).toBe(6);
         expect(changedWords(t('banner.generationCap', 1), t('banner.generationCap', 2))).toBe(4);
         expect(t('overview.ownership.stats', 1, 1, 5, 21)).toBe('CODEOWNERS · 1 of 1 file · 5 of 21 lines are yours');
         expect(changedWords(t('palette.truncated', 21), t('palette.truncated', 1))).toBe(1);
@@ -180,8 +179,8 @@ describe('agreement with the count', () => {
         expect(e('audit.line', 1, 1, 2)).toMatch(/^Showing only 1 audit-scope file/u);
         expect(e('prComments.buffered.title', 1)).toContain('until it is saved');
         expect(e('ship.disabled.buffered', 1)).toContain('until it is');
-        expect(e('route.stop.conflicts', 1)).toContain('resolve it in the host');
-        expect(e('route.other.conflicts', 1)).toContain('resolve it in the host; it is out of coverage');
+        expect(e('route.stop.conflicts', 1)).toContain('resolve it outside Sherpa');
+        expect(e('route.other.conflicts', 1)).toContain('resolve it outside Sherpa; it is out of coverage');
         expect(e('banner.generationCap', 1)).toContain('check it in the full diff');
         expect(e('palette.truncated', 1)).toBe('Showing the first 1 match');
     });

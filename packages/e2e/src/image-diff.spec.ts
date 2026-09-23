@@ -146,12 +146,12 @@ test('images in the diff: modes, pixel diff, downloads and marks', async ({ page
     });
 
     // Comment before marking: Viewed collapses the card along with its menu.
-    await test.step('"Comment on the file" opens a composer with a file label', async () => {
+    await test.step('Comment on file opens the composer below the card header', async () => {
         await banner.getByRole('button', { name: 'File actions', exact: true }).click();
         await page.getByRole('menu').getByRole('menuitem', { name: 'Comment on the file', exact: true }).click();
 
         await expect(banner.locator('.thread-composer')).toBeVisible();
-        await expect(banner).toContainText('file comment · edit-window-banner.png');
+        await expect(banner).toContainText('A remark on the whole file — not tied to a line');
     });
 
     await test.step('Viewed on an image marks the file', async () => {

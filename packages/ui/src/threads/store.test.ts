@@ -1,4 +1,4 @@
-import { fixtureIteration } from '@sherpa/fixtures';
+import { anchor, comment, fixtureIteration, human, thread } from '@sherpa/fixtures';
 import type { Comment } from '@sherpa/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -161,26 +161,117 @@ describe('thread store', () => {
         expect(store.hasResolvedOverride(thread.id)).toBe(false);
     });
 
-    it('the undo window survives without a React component and closes after 5s', () => {
-        vi.useFakeTimers();
-        try {
-            const data = fixtureIteration('medium');
-            const thread = data.threads.find((candidate) => candidate.anchor !== null);
-            if (thread === undefined) {
-                throw new Error('no file thread');
-            }
-            const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
-
-            store.startUndo(thread.id, true);
-            expect(store.getSnapshot().undo.get(thread.id)?.resolved).toBe(true);
-            expect(store.getSnapshot().keptVisible.has(thread.id)).toBe(true);
-
-            vi.advanceTimersByTime(5000);
-            expect(store.getSnapshot().undo.has(thread.id)).toBe(false);
-            expect(store.getSnapshot().keptVisible.has(thread.id)).toBe(false);
-        } finally {
-            vi.useRealTimers();
+    it('collapses only resolved threads without my draft by default', () => {
+        const data = fixtureIteration('large');
+        const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
+        const resolved = data.threads.find((candidate) => candidate.resolved);
+        const open = data.threads.find((candidate) => !candidate.resolved);
+        if (resolved === undefined || open === undefined) {
+            throw new Error('large fixture needs resolved and open threads');
         }
+
+        expect(store.getSnapshot().openThreads.has(open.id)).toBe(true);
+        expect(store.getSnapshot().openThreads.has(resolved.id)).toBe(false);
+
+        // A draft keeps a resolved thread expanded: the reviewer still has unfinished work there.
+        const withDraft = createThreadStore(
+            [{ ...resolved, root: { ...resolved.root, replies: [DRAFT] } }],
+            new Set(),
+        );
+        expect(withDraft.getSnapshot().openThreads.has(resolved.id)).toBe(true);
+    });
+
+    it('gets the reviewer login from PR metadata without needing drafts', () => {
+        const where = anchor('d1', 'src/a.ts', { side: 'new', line: 10 });
+        const root = comment({
+            id: 'c-1',
+            author: human('alice', 'Alice Ingram'),
+            body: 'my published comment',
+            createdAt: '2026-08-24T09:00:00.000Z',
+        });
+        const store = createThreadStore([thread({ anchor: where, root })], new Set([where.fileId]));
+        expect(store.getSnapshot().viewerLogin).toBeNull();
+
+        store.setViewer('alice');
+        expect(store.getSnapshot().viewerLogin).toBe('alice');
+
+        // A draft in the threads does not affect identity: only the host knows it.
+        store.setServerThreads([thread({ anchor: where, root: { ...root, replies: [DRAFT] } })]);
+        expect(store.getSnapshot().viewerLogin).toBe('alice');
+
+        // The host forgot the identity, so comments are no longer treated as mine.
+        store.setViewer(null);
+        expect(store.getSnapshot().viewerLogin).toBeNull();
+    });
+
+    it('lets only the reviewer change expansion: neither Resolve nor a new reply changes it', () => {
+        const data = fixtureIteration('medium');
+        const thread = data.threads.find((candidate) => !candidate.resolved && candidate.anchor !== null);
+        if (thread === undefined) {
+            throw new Error('no open anchored thread');
+        }
+        const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
+
+        store.toggleThreadOpen(thread.id);
+        expect(store.isThreadOpen(thread.id)).toBe(false);
+
+        // A new host reply and the reviewer clicking Resolve do not expand a collapsed thread.
+        store.setServerThreads(
+            data.threads.map((candidate) =>
+                candidate.id === thread.id
+                    ? { ...candidate, root: { ...candidate.root, replies: [...candidate.root.replies, DRAFT] } }
+                    : candidate,
+            ),
+        );
+        store.setResolved(thread.id, true);
+        expect(store.getSnapshot().openThreads.has(thread.id)).toBe(false);
+
+        store.toggleThreadOpen(thread.id);
+        expect(store.getSnapshot().openThreads.has(thread.id)).toBe(true);
+    });
+
+    it('collapses all and expands all in a single update', () => {
+        const data = fixtureIteration('medium');
+        const store = createThreadStore(data.threads, new Set(data.diff.files.map((file) => file.fileId)));
+        const ids = data.threads.map((thread) => thread.id);
+        const listener = vi.fn();
+        store.subscribe(listener);
+
+        store.setThreadsOpen(ids, false);
+        expect(listener).toHaveBeenCalledOnce();
+        expect(store.getSnapshot().openThreads.size).toBe(0);
+
+        store.setThreadsOpen(ids, true);
+        expect(listener).toHaveBeenCalledTimes(2);
+        expect(store.getSnapshot().openThreads.size).toBe(ids.length);
+
+        // Nothing to change, so the snapshot is not rebuilt.
+        store.setThreadsOpen(ids, true);
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it('recomputes the thread by the issue rule on per-comment resolve', () => {
+        const open = thread({
+            id: 't-issue',
+            anchor: anchor('d1', 'a.ts', { side: 'new', line: 1 }),
+            root: comment({
+                id: 'c-issue',
+                author: human('kai', 'Kai Kennedy'),
+                body: 'remark',
+                createdAt: '2026-08-24T10:00:00.000Z',
+                issue: true,
+                resolved: false,
+            }),
+        });
+        const store = createThreadStore([open], new Set([open.anchor?.fileId ?? '']));
+
+        store.setCommentResolved('c-issue', true);
+        expect(store.getSnapshot().threads[0]?.resolved).toBe(true);
+        expect(store.getCommentResolved('c-issue')).toBe(true);
+
+        store.restoreCommentResolved('c-issue', false);
+        expect(store.getSnapshot().threads[0]?.resolved).toBe(false);
+        expect(store.getServerCommentResolved('c-issue')).toBe(false);
     });
 
     it('stores kept-in-view separately by file', () => {

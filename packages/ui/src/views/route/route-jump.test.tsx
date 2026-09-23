@@ -231,6 +231,8 @@ interface Mounted {
     readonly applyProgress: (progress: readonly UiFileProgress[]) => void;
     /** Advance time so cards render and the jump completes across frames. */
     readonly settle: () => Promise<void>;
+    /** Stops that flashed as jump targets since mounting. */
+    readonly flashedStops: () => ReadonlySet<string>;
 }
 
 const mounted: (() => void)[] = [];
@@ -254,6 +256,7 @@ function mount(
 ): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
+    const flashedStops = watchStopFlashes(host);
     const store = createDiffViewStore({ files: DATA.diff.files, progress: options.progress ?? [] });
     for (const file of DATA.diff.files) {
         store.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
@@ -323,6 +326,33 @@ function mount(
             });
         },
         settle,
+        flashedStops,
+    };
+}
+
+/**
+ * Which stops flashed as jump targets. The class lasts `FLASH_MS`, but test waits are measured
+ * in renders. On a busy machine the flash can fade before the check, so checking whether it is still on
+ * would measure machine speed. The observer sees its appearance.
+ */
+function watchStopFlashes(host: HTMLElement): () => ReadonlySet<string> {
+    const seen = new Set<string>();
+    const scan = (): void => {
+        for (const flash of host.querySelectorAll<HTMLElement>('.route-stop__flash')) {
+            const stopId = flash.closest<HTMLElement>('[data-stop]')?.dataset.stop;
+            if (stopId !== undefined) {
+                seen.add(stopId);
+            }
+        }
+    };
+    const observer = new MutationObserver(scan);
+    observer.observe(host, { subtree: true, childList: true });
+    mounted.push(() => {
+        observer.disconnect();
+    });
+    return () => {
+        scan();
+        return seen;
     };
 }
 
@@ -427,7 +457,7 @@ describe('collapsing route file cards', () => {
             before,
         );
         const threads = card.querySelector<HTMLElement>('.thread-list');
-        expect(threads?.parentElement).toBe(card);
+        expect(threads?.parentElement).toBe(card.querySelector('.file-card__frame'));
         expect(threads?.previousElementSibling?.classList.contains('file-card__header')).toBe(true);
     });
 
@@ -548,7 +578,7 @@ describe('marking a stop viewed jumps to the next visible stop', () => {
         await view.settle();
 
         expect(view.session.getSnapshot().filter).toBe(PARTIAL_LENS.id);
-        expect(stopSection(view.host, 's05').querySelector('.route-stop__flash')).not.toBeNull();
+        expect([...view.flashedStops()]).toContain('s05');
         expect(stopSection(view.host, 's05').querySelector('.route-collapsed')).not.toBeNull();
     });
 
@@ -581,7 +611,7 @@ describe('marking a stop viewed jumps to the next visible stop', () => {
         await view.settle();
 
         expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).not.toBeNull();
-        expect(stopSection(view.host, 's02').querySelector('.route-stop__flash')).not.toBeNull();
+        expect([...view.flashedStops()]).toContain('s02');
     });
 
     it('marking the final Other stop viewed does not start a jump', async () => {
@@ -822,7 +852,7 @@ describe('internal links in the stop description', () => {
         click(link);
         await view.settle();
 
-        expect(stopSection(view.host, 's03').querySelector('.route-stop__flash')).not.toBeNull();
+        expect([...view.flashedStops()]).toContain('s03');
     });
 
     it('a link to a missing file does nothing because the route has no file at that path', async () => {

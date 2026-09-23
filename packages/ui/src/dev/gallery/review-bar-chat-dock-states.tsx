@@ -55,7 +55,38 @@ export const REVIEW_BAR_CHAT_DOCK_STATES: readonly ReviewBarChatDockGalleryState
         title: 'bar under the overlay chat scrim (<1280)',
         render: () => <DockState overlay />,
     },
+    {
+        id: 'review-bar-issue-drafts',
+        group: 'Finish review',
+        title: 'draft counter with a "· 2 issues" suffix, ship menu open',
+        render: () => <IssueDraftsState />,
+    },
 ];
+
+/** The "· N issues" suffix on the draft counter (SPEC-changes-2026-09-20 §1). */
+function IssueDraftsState() {
+    const diffStore = useMemo(() => createDiffViewStore({ files: DATA.diff.files }), []);
+    const threadStore = useMemo(
+        () => createThreadStore(withIssueDrafts(DATA.threads), new Set(DATA.diff.files.map((file) => file.fileId))),
+        [],
+    );
+
+    return (
+        <ReviewActionBar
+            pr={DATA.pr}
+            diff={DATA.diff}
+            diffStore={diffStore}
+            threadStore={threadStore}
+            connection="online"
+            hostName="FixtureHost"
+            reviewHost="fixture"
+            composerTransport={TRANSPORT}
+            onPublish={() => Promise.reject(new Error('gallery does not write to the host'))}
+            onComplete={() => undefined}
+            defaultMenuOpen
+        />
+    );
+}
 
 /**
  * The "bar + open chat" state. `overlay` draws the scrim for a narrow viewport. A media query
@@ -113,6 +144,19 @@ function DockState({ overlay }: { overlay: boolean }) {
             />
         </>
     );
+}
+
+/** Two drafts with the issue flag: the counter gets a suffix, and the other threads stay as in the fixture. */
+function withIssueDrafts(threads: readonly Thread[]): Thread[] {
+    const [first, second, ...rest] = threads;
+    if (first === undefined || second === undefined) {
+        throw new Error('the counter state needs two threads');
+    }
+    return [
+        { ...first, root: { ...first.root, draft: true, issue: true } },
+        { ...second, root: { ...second.root, draft: true, issue: true } },
+        ...rest,
+    ];
 }
 
 /** Draft in the thread set: the panel shows a counter instead of "no unpublished comments". */

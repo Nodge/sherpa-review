@@ -421,8 +421,11 @@ export function StopSkeleton() {
         <div className="route-skeleton-card" aria-hidden="true">
             <div className="route-skeleton-card__head" />
             <div className="route-skeleton-card__body">
-                {SKELETON_ROWS.map((row) => (
-                    <div key={row} className={`route-skeleton-card__row route-skeleton-card__row--${row}`} />
+                {SKELETON_ROWS.map((row, index) => (
+                    <div
+                        key={`${row}-${String(index)}`}
+                        className={`route-skeleton-card__row route-skeleton-card__row--${row}`}
+                    />
                 ))}
             </div>
         </div>

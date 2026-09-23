@@ -108,8 +108,14 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
 
         const composer = stop(page, 's01').locator('.diff-line-composer');
         await expect(composer).toBeVisible();
-        await expect(composer.locator('.thread-composer__context')).toContainText('new comment · line');
-        await expect(composer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
+        // The composer has no header. Its first row is the issue switch, enabled by default (§1).
+        await expect(composer.locator('.thread-composer__context')).toHaveCount(0);
+        await expect(composer.locator('.thread-composer > :first-child')).toHaveClass(
+            /thread-composer__issue-row/u,
+        );
+        const issue = composer.locator('.thread-composer__issue');
+        await expect(issue).toHaveAttribute('aria-checked', 'true');
+        await expect(composer.locator('.thread-composer__issue-row + .thread-composer__editor')).toHaveCount(1);
         await composer.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(composer).toHaveCount(0);
     });

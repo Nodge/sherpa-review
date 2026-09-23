@@ -23,7 +23,6 @@ import {
     createSessionStore,
     DEFAULT_PRESET,
     DEFAULT_ROUTE_FILTER,
-    DEFAULT_THREADS_SHOW,
     parsePreset,
     parseRouteFilter,
 } from './session/session-store.js';
@@ -114,7 +113,6 @@ if (token === null) {
                     parseRouteFilter(readFragmentParam(window.location.hash, 'routeFilter')) ??
                     DEFAULT_ROUTE_FILTER,
                 viewing: persistedViewing,
-                threadsShow: DEFAULT_THREADS_SHOW,
                 paletteOpen: false,
             },
             persist: (state: SessionState, fragment?: Readonly<Record<string, string | null>>) => {

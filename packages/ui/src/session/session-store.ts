@@ -11,13 +11,6 @@ import type { ViewId } from './views.js';
  * (panels, palette) can be added alongside them.
  */
 
-export interface ThreadsShow {
-    readonly people: boolean;
-    readonly bots: boolean;
-    readonly resolved: boolean;
-}
-
-export const DEFAULT_THREADS_SHOW: ThreadsShow = { people: true, bots: false, resolved: false };
 export const EMPTY_NOTES_EXPANDED: ReadonlySet<string> = new Set();
 export const EMPTY_NOTE_STACKS_EXPANDED: ReadonlySet<string> = new Set();
 
@@ -100,8 +93,6 @@ export interface SessionState {
     readonly filter: string;
     readonly preset: RoutePreset;
     readonly routeFilter: RouteFilter;
-    /** Additive thread sources. They live only in the current tab session. */
-    readonly threadsShow: ThreadsShow;
     /**
      * The "threads by one author" lens in Full diff holds the login of the participant selected
      * in the discussion card. Stored in the tab, never written to the URL. Survives PR and iteration
@@ -141,7 +132,6 @@ export interface SessionStore {
      * old commit" sets `thread`).
      */
     readonly setViewing: (viewing: Viewing, fragment?: Readonly<Record<string, string | null>>) => void;
-    readonly setThreadsShow: (threadsShow: ThreadsShow) => void;
     /** `null` clears the author lens. */
     readonly setThreadAuthor: (login: string | null) => void;
     readonly setPaletteOpen: (open: boolean) => void;
@@ -168,8 +158,7 @@ export interface SessionStore {
 }
 
 export interface SessionStoreOptions {
-    readonly initial: Omit<SessionState, 'threadsShow' | 'threadAuthor' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter' | 'viewing'> & {
-        readonly threadsShow?: ThreadsShow;
+    readonly initial: Omit<SessionState, 'threadAuthor' | 'paletteOpen' | 'chatOpen' | 'notesExpanded' | 'noteStacksExpanded' | 'stops' | 'preset' | 'routeFilter' | 'viewing'> & {
         readonly threadAuthor?: string | null;
         readonly routeFilter?: RouteFilter;
         readonly viewing?: Viewing;
@@ -196,7 +185,6 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     let viewPinned = options.viewPinned ?? false;
     let state: SessionState = {
         ...options.initial,
-        threadsShow: options.initial.threadsShow ?? DEFAULT_THREADS_SHOW,
         threadAuthor: options.initial.threadAuthor ?? null,
         paletteOpen: options.initial.paletteOpen ?? false,
         chatOpen: options.initial.chatOpen ?? false,
@@ -312,15 +300,6 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
                 update({ ...state, viewing }, fragment);
             } else if (fragment !== undefined) {
                 persist(state, fragment);
-            }
-        },
-        setThreadsShow: (threadsShow) => {
-            if (
-                threadsShow.people !== state.threadsShow.people ||
-                threadsShow.bots !== state.threadsShow.bots ||
-                threadsShow.resolved !== state.threadsShow.resolved
-            ) {
-                update({ ...state, threadsShow });
             }
         },
         setThreadAuthor: (threadAuthor) => {

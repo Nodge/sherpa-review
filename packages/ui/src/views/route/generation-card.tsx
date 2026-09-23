@@ -5,6 +5,7 @@ import type { MessageKey } from '../../i18n/index.js';
 import { useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { Markdown } from '../../markdown/markdown.tsx';
+import type { GenerationSlot } from '../../route/generation.js';
 import { generationCardKind, generationProgress } from '../../route/generation.js';
 import './generation.css';
 
@@ -30,6 +31,30 @@ export interface GenerationCardProps {
     readonly onOpenDiff: () => void;
     readonly onRetry: () => void;
     readonly onCancel: () => void;
+}
+
+/**
+ * Generation card plan list: the number, title and state of each stop. The same component
+ * serves both phases: filling and the ready route show the same list (docs/design/README.md §7).
+ */
+function GenerationPlan({ slots }: { slots: readonly GenerationSlot[] }) {
+    const t = useT();
+    return (
+        <ul className="gen-plan">
+            {slots.map((slot) => (
+                <li key={slot.id} className={`gen-plan__item gen-plan__item--${slot.status}`}>
+                    <span className="gen-plan__number">{slot.planLabel}</span>
+                    <span className="gen-plan__title">
+                        <Markdown text={slot.title} profile="route" />
+                    </span>
+                    <span className="gen-plan__state">
+                        {slot.status === 'ready' ? <Icon name="check" size={13} /> : null}
+                        {t(PLAN_STATE[slot.status])}
+                    </span>
+                </li>
+            ))}
+        </ul>
+    );
 }
 
 /** `null` means the generation card has nothing to say in this phase (generation has never started). */
@@ -69,6 +94,9 @@ export function GenerationCard({
                 <div className="gen-card__head">
                     <h2 className="gen-card__title">{t('route.gen.ready', stops)}</h2>
                 </div>
+
+                <GenerationPlan slots={generationProgress(snapshot).slots} />
+
                 <button type="button" className="ctl ctl--primary gen-card__cta" onClick={onOpenRoute}>
                     {t('route.gen.open')}
                 </button>
@@ -96,20 +124,7 @@ export function GenerationCard({
 
                 <p className="gen-card__note">{t('route.gen.filling.note')}</p>
 
-                <ul className="gen-plan">
-                    {progress.slots.map((slot) => (
-                        <li key={slot.id} className={`gen-plan__item gen-plan__item--${slot.status}`}>
-                            <span className="gen-plan__number">{slot.planLabel}</span>
-                            <span className="gen-plan__title">
-                                <Markdown text={slot.title} profile="route" />
-                            </span>
-                            <span className="gen-plan__state">
-                                {slot.status === 'ready' ? <Icon name="check" size={13} /> : null}
-                                {t(PLAN_STATE[slot.status])}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                <GenerationPlan slots={progress.slots} />
 
                 {longRunning ? (
                     <StillWorking

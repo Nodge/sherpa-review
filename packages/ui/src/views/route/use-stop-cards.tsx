@@ -13,8 +13,7 @@ import type { RouteFileGroup } from '../../route/route-model.js';
 import { composersForGroup, notesForGroup, threadsForGroup } from '../../route/route-model.js';
 import type { CardViewedMark } from '../../route/stop-coverage.js';
 import { cardViewedMark, groupReadState } from '../../route/stop-coverage.js';
-import type { RoutePreset, SessionStore, ThreadsShow } from '../../session/session-store.js';
-import { threadIsVisible } from '../../threads/model.js';
+import type { RoutePreset, SessionStore } from '../../session/session-store.js';
 import type { ComposerLayoutSnapshot, ThreadStore, ThreadStoreSnapshot } from '../../threads/store.js';
 import { openFileComposer, openNewComposer } from '../../threads/thread-list.tsx';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
@@ -36,7 +35,6 @@ export interface StopCardsOptions {
     readonly diffSnapshot: DiffViewSnapshot;
     readonly threadSnapshot: ThreadStoreSnapshot;
     readonly composersSnapshot: ComposerLayoutSnapshot;
-    readonly threadsShow: ThreadsShow;
     readonly preset: RoutePreset;
     readonly noteActions: CardNoteActions;
     readonly notesByFile: ReadonlyMap<string, readonly AgentNote[]>;
@@ -74,7 +72,7 @@ export interface StopCards {
     readonly focusedLine: { readonly fileId: string; readonly side: 'old' | 'new'; readonly line: number } | null;
     readonly focusedThreadId: string | null;
     readonly selectedShownModel: ReturnType<typeof stopFileShownModel>;
-    readonly threadVisible: (thread: Thread) => boolean;
+    /** Threads by file as the card renders them: the route does not apply an author lens. */
     readonly visibleByFile: ReadonlyMap<string, readonly Thread[]>;
     readonly iterationLayout: ThreadStoreSnapshot['iterationLayout'];
 }
@@ -94,7 +92,6 @@ export function useStopCards({
     diffSnapshot,
     threadSnapshot,
     composersSnapshot,
-    threadsShow,
     preset,
     noteActions,
     notesByFile,
@@ -112,29 +109,16 @@ export function useStopCards({
     markStopFile,
     requestJump,
 }: StopCardsOptions): StopCards {
-    const threadVisible = useCallback((thread: Thread) => threadIsVisible(thread, threadsShow), [threadsShow]);
     // The rendered diff's iteration: in an old iteration, a thread sits by its lines only at its pinned commit.
     const iterationLayout = threadSnapshot.iterationLayout;
+    // The source filter is gone (SPEC-changes-2026-09-20 §3), and the route does not apply an author
+    // lens: the card shows all threads for its lines. Collapsing them into a marker reduces noise.
     const visibleThreads = useCallback(
         (group: RouteFileGroup): readonly Thread[] =>
-            threadsForGroup(group, threadSnapshot.byFile, iterationLayout).filter(
-                (thread) =>
-                    (threadSnapshot.keptByFile.get(group.fileId)?.has(thread.id) ?? false) || threadVisible(thread),
-            ),
-        [iterationLayout, threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible],
+            threadsForGroup(group, threadSnapshot.byFile, iterationLayout),
+        [iterationLayout, threadSnapshot.byFile],
     );
-    const visibleByFile = useMemo(() => {
-        const map = new Map<string, readonly Thread[]>();
-        for (const [fileId, threads] of threadSnapshot.byFile) {
-            map.set(
-                fileId,
-                threads.filter(
-                    (thread) => (threadSnapshot.keptByFile.get(fileId)?.has(thread.id) ?? false) || threadVisible(thread),
-                ),
-            );
-        }
-        return map;
-    }, [threadSnapshot.byFile, threadSnapshot.keptByFile, threadVisible]);
+    const visibleByFile = threadSnapshot.byFile;
 
     const [focusedLine, setFocusedLine] = useState<{ fileId: string; side: 'old' | 'new'; line: number } | null>(null);
     const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
@@ -435,16 +419,17 @@ export function useStopCards({
      */
     const stopLayoutKey = useCallback(
         (stopId: string, files: readonly RouteFileGroup[]): string | null => {
-            const threads =
-                (threadsShow.people ? 'p' : '') +
-                (threadsShow.bots ? 'b' : '') +
-                (threadsShow.resolved ? 'r' : '');
-            const parts: string[] = [diffSnapshot.effectiveMode, preset, threads];
+            const parts: string[] = [diffSnapshot.effectiveMode, preset];
             for (const group of files) {
                 const model = diffSnapshot.models.get(group.fileId) ?? null;
                 if (model === null) {
                     return null;
                 }
+                // Expanded file threads enter the marker: collapsing them changes the card's height.
+                const openThreads = visibleThreads(group)
+                    .filter((thread) => threadSnapshot.openThreads.has(thread.id))
+                    .map((thread) => thread.id)
+                    .join(',');
                 const state =
                     (diffSnapshot.whitespaceShown.has(group.fileId) ? 'w' : '') +
                     (diffSnapshot.markdownShown.has(group.fileId) ? 'm' : '') +
@@ -458,6 +443,7 @@ export function useStopCards({
                     // Use patch size instead of the model itself: reparsing the same file yields
                     // the same lines, so there is no reason to reset the measured height.
                     `${String(model.additions)}+${String(model.deletions)}${state}`,
+                    openThreads,
                     expansionKey(diffSnapshot.expansion.get(group.fileId)),
                 );
             }
@@ -475,7 +461,8 @@ export function useStopCards({
             openedCollapsed,
             openedViewed,
             preset,
-            threadsShow,
+            threadSnapshot.openThreads,
+            visibleThreads,
         ],
     );
 
@@ -487,7 +474,6 @@ export function useStopCards({
         focusedLine,
         focusedThreadId,
         selectedShownModel,
-        threadVisible,
         visibleByFile,
         iterationLayout,
     };

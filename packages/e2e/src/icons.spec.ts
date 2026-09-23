@@ -199,6 +199,8 @@ for (const mode of ['unified', 'split'] as const) {
         // Dark-theme `--border-hairline-soft` (packages/ui/src/styles/tokens.css).
         await expect(lineComposer).toHaveCSS('border-top-color', 'rgb(35, 39, 45)');
         await expect(lineComposer.locator('.thread-composer')).toHaveCSS('max-width', '620px');
-        await expect(lineComposer.locator('.thread__chip--draft')).toHaveText('draft · publishes on ship');
+        // The composer has no header: the first row is the issue switcher (SPEC-changes-2026-09-20 §1).
+        await expect(lineComposer.locator('.thread-composer__context')).toHaveCount(0);
+        await expect(lineComposer.locator('.thread-composer__issue-row')).toHaveCount(1);
     });
 }

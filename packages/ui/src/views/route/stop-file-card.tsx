@@ -16,7 +16,7 @@ import type { FileReadState } from '../../progress/read-state.js';
 import { ANCHOR_CONTEXT, anchorSpans, clipModelToAnchors } from '../../route/anchor-clip.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
-import { useCardThreads } from '../../threads/card-threads.tsx';
+import { useCardThreads, useThreadsCollapse } from '../../threads/card-threads.tsx';
 import type { ComposerSnapshot, ThreadStore } from '../../threads/store.js';
 import type { ThreadActions } from '../../threads/thread-list.tsx';
 
@@ -123,7 +123,13 @@ export function StopFileCard({
         parseError === null &&
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace);
-    const { threadsUnderHeader, renderAfterLine: renderThreads, focusedThreadRange } = useCardThreads({
+    const {
+        threadsUnderHeader,
+        renderAfterLine: renderThreads,
+        renderLineMarker,
+        focusedThreadRange,
+        lineThreadIds,
+    } = useCardThreads({
         model: shownModel,
         rowsShown,
         placement: 'exact',
@@ -161,6 +167,7 @@ export function StopFileCard({
         },
         [renderNotes, renderThreads],
     );
+    const threadsCollapse = useThreadsCollapse(threadStore, lineThreadIds);
 
     const collapsedHidden = !collapsedOpen && group.collapsedLines > 0;
     return (
@@ -196,6 +203,8 @@ export function StopFileCard({
                 threadsUnderHeader={underHeader}
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
+                renderLineMarker={renderLineMarker}
+                threadsCollapse={threadsCollapse}
                 actions={actions}
             />
             {collapseReason === null && collapsedHidden ? (

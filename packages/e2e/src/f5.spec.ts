@@ -39,7 +39,6 @@ interface Strings {
     readonly diffSeen: RegExp;
     readonly publishedWithReplies: string;
     readonly toFullDiff: string;
-    readonly people: string;
     readonly noDrafts: string;
     /** Relative time in the thread metadata: `Intl` formats it in the UI language. */
     readonly relativeTime: RegExp;
@@ -62,7 +61,7 @@ const RU: Strings = {
     commentLine: /\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0442\u0440\u043e\u043a\u0443 \d+/,
     newComment: '\u041d\u043e\u0432\u044b\u0439 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439',
     saveDraft: '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a',
-    draftChip: 'черновик · уйдёт при шипе',
+    draftChip: 'draft',
     draftsCounter: '1 черновик уйдёт при шипе',
     progressBefore: '4 / 21 \u0444\u0430\u0439\u043b\u043e\u0432',
     progressAfter: '5 / 21 \u0444\u0430\u0439\u043b\u043e\u0432',
@@ -72,7 +71,6 @@ const RU: Strings = {
     diffSeen: /\d+% \u0438\u0437 868 \u0441\u0442\u0440\u043e\u043a/,
     publishedWithReplies: '1 (\u0438\u0437 \u043d\u0438\u0445 0 \u043e\u0442\u0432\u0435\u0442\u043e\u0432)',
     toFullDiff: '\u041a \u043f\u043e\u043b\u043d\u043e\u043c\u0443 \u0434\u0438\u0444\u0444\u0443',
-    people: 'Люди 5',
     noDrafts: '\u043d\u0435\u0442 \u043d\u0435\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u0445 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0435\u0432',
     relativeTime: /\u043d\u0430\u0437\u0430\u0434|\u0432\u0447\u0435\u0440\u0430|\u0442\u043e\u043b\u044c\u043a\u043e \u0447\u0442\u043e/u,
 };
@@ -94,7 +92,7 @@ const EN: Strings = {
     commentLine: /Comment on line \d+/,
     newComment: 'New comment',
     saveDraft: 'Save draft',
-    draftChip: 'draft · publishes on ship',
+    draftChip: 'draft',
     draftsCounter: '1 draft goes out on ship',
     progressBefore: '4 / 21 files',
     progressAfter: '5 / 21 files',
@@ -104,7 +102,6 @@ const EN: Strings = {
     diffSeen: /\d+% of 868 lines/,
     publishedWithReplies: '1 (0 of them replies)',
     toFullDiff: 'To the full diff',
-    people: 'People 5',
     noDrafts: 'no unpublished comments',
     relativeTime: /ago|yesterday|just now/u,
 };
@@ -233,7 +230,7 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
 
             await page.getByRole('button', { name: s.toFullDiff, exact: true }).click();
             await expect(page.locator('.full-diff')).toBeVisible();
-            await expect(page.getByRole('button', { name: s.people, exact: true })).toBeVisible();
+            await expect(page.locator('.toolbar-right-cluster')).toBeVisible();
             await expect(page.locator('.review-action-bar')).toContainText(s.noDrafts);
 
             await openPciAuditBySearch(page, s);

@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDiffViewStore } from '../diff-view/store.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
-import { DEFAULT_THREADS_SHOW } from '../session/session-store.js';
 import { FullDiffToolbar } from './full-diff.tsx';
 import { createT } from '../i18n/index.js';
 
@@ -72,9 +71,6 @@ function mount(onHeight: (value: number) => void): void {
                 filters={filters}
                 filter={selectFilter(filters, 'all')}
                 onFilter={() => undefined}
-                threadsShow={DEFAULT_THREADS_SHOW}
-                threadCounts={{ people: 0, bots: 0, resolved: 0 }}
-                onThreadsShow={() => undefined}
                 smallPr={false}
                 onHeight={onHeight}
             />,

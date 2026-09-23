@@ -1,6 +1,6 @@
 import type { Comment, CommentDraft, DraftBufferEntry, FileAnchor, Thread } from '@sherpa/protocol';
 
-import { groupThreads } from './model.js';
+import { groupThreads, threadHasDraft, threadResolvedByIssues } from './model.js';
 import type { IterationLayout } from './model.js';
 
 /**
@@ -20,6 +20,14 @@ export interface ComposerSnapshot {
     readonly text: string;
     /** Original text when editing an existing draft, needed for cancellation after remounting. */
     readonly originalText?: string;
+    /** The composer edits an already published comment, so it has no "draft" chip or buffer. */
+    readonly published?: boolean;
+    /**
+     * The message where the reviewer clicked "Reply": the composer stays there in the thread card
+     * (docs/design/SPEC-changes-2026-09-20.md §4). The position lives beside the text, outside the component:
+     * the modal can be closed and reopened, and the reply will stay beneath its message.
+     */
+    readonly replyUnder?: string | null;
     readonly commentId: string | null;
     readonly status: ComposerStatus;
     /** Time of the last confirmed save, for the status under the field. */
@@ -41,11 +49,6 @@ interface OptimisticDraft {
     readonly comment: Comment;
 }
 
-export interface ThreadUndo {
-    readonly resolved: boolean;
-    readonly generation: number;
-}
-
 export interface ThreadStoreSnapshot {
     readonly threads: readonly Thread[];
     readonly byFile: ReadonlyMap<string, readonly Thread[]>;
@@ -55,11 +58,22 @@ export interface ThreadStoreSnapshot {
      * uses it to find the thread file by `path` and decide whether the thread sits at its lines.
      */
     readonly iterationLayout: IterationLayout | null;
-    /** Threads with an active undo window stay visible despite the resolved filter. */
+    /** Threads kept visible despite the author lens. */
     readonly keptVisible: ReadonlySet<string>;
-    readonly undo: ReadonlyMap<string, ThreadUndo>;
     /** The same marks grouped by file, with stable sets for card memoization. */
     readonly keptByFile: ReadonlyMap<string, ReadonlySet<string>>;
+    /**
+     * Threads expanded beside the code. Stored in tab memory, never written to disk or the URL
+     * (`docs/decisions.md`, "Threads, issue and composer"). The decision is made once, when
+     * the thread first appears in the store. Only the reviewer changes it afterward, so neither a new
+     * host reply nor the reviewer clicking Resolve collapses the thread.
+     */
+    readonly openThreads: ReadonlySet<string>;
+    /**
+     * Reviewer login from `PrMeta.viewer` (set by `setViewer`): used to show edit and delete actions on their own published
+     * comments. `null` means the host does not know the identity.
+     */
+    readonly viewerLogin: string | null;
 }
 
 export interface ComposerLayoutSnapshot {
@@ -102,6 +116,8 @@ export interface ThreadStore {
     /** All open composers, used to reconcile the draft buffer. */
     readonly listComposers: () => readonly ComposerSnapshot[];
     readonly setServerThreads: (threads: readonly Thread[]) => void;
+    /** Reviewer identity from the UI snapshot. `null` means the host does not know it. */
+    readonly setViewer: (login: string | null) => void;
     readonly addDraft: (draft: CommentDraft, comment: Comment) => void;
     /** `issue` is set only if the edit changed it. Otherwise, the comment status stays as it is. */
     readonly updateDraft: (commentId: string, body: string, issue?: boolean) => void;
@@ -115,9 +131,16 @@ export interface ThreadStore {
     readonly clearResolved: (threadId: string) => void;
     readonly hasResolvedOverride: (threadId: string) => boolean;
     readonly getServerResolved: (threadId: string) => boolean | null;
-    /** Starts a five-second undo window and returns the action generation. */
-    readonly startUndo: (threadId: string, resolved: boolean) => number;
-    readonly clearUndo: (threadId: string, generation?: number) => void;
+    /** Resolves one issue comment on a host with `commentResolve`. The rule recomputes the thread. */
+    readonly setCommentResolved: (commentId: string, resolved: boolean) => void;
+    readonly restoreCommentResolved: (commentId: string, resolved: boolean) => void;
+    readonly hasCommentResolvedOverride: (commentId: string) => boolean;
+    readonly getCommentResolved: (commentId: string) => boolean;
+    readonly getServerCommentResolved: (commentId: string) => boolean | null;
+    /** Thread expansion beside the code. `setThreadsOpen` collapses or expands all in one update. */
+    readonly toggleThreadOpen: (threadId: string) => void;
+    readonly setThreadsOpen: (threadIds: readonly string[], open: boolean) => void;
+    readonly isThreadOpen: (threadId: string) => boolean;
     readonly keepVisible: (threadId: string) => void;
     readonly releaseVisible: (threadId: string) => void;
     readonly openComposer: (composer: ComposerSnapshot) => void;
@@ -141,28 +164,32 @@ export function createThreadStore(
     const drafts = new Map<string, OptimisticDraft>();
     const resolved = new Map<string, boolean>();
     const reconcileResolved = new Set<string>();
+    const commentResolved = new Map<string, boolean>();
+    const reconcileCommentResolved = new Set<string>();
+    const threadOpen = new Map<string, boolean>();
     const keptVisible = new Set<string>();
-    const undo = new Map<string, ThreadUndo>();
-    const undoTimers = new Map<string, ReturnType<typeof setTimeout>>();
-    let undoGeneration = 0;
     const composers = new Map<string, ComposerSnapshot>();
     const draftDeletions = new Map<string, number>();
+    let viewerLogin: string | null = null;
     let snapshot = buildSnapshot(null);
     let composersSnapshot: ComposerLayoutSnapshot = { byFile: new Map(), openThreadIds: new Set() };
     let composerGuardSnapshot: ComposerGuardSnapshot = { pending: false };
 
     function buildSnapshot(previous: ThreadStoreSnapshot | null): ThreadStoreSnapshot {
-        const threads = mergeThreads(serverThreads, drafts, resolved);
+        const threads = mergeThreads(serverThreads, drafts, resolved, commentResolved);
         const grouped = groupThreads(threads, fileIds, iterationLayout);
         const byFile = stableGroups(previous?.byFile ?? null, grouped.byFile);
+        const openThreads = reconcileOpenThreads(threadOpen, threads);
         return {
             threads,
             byFile,
             outside: sameItems(previous?.outside ?? null, grouped.outside) ? (previous?.outside ?? grouped.outside) : grouped.outside,
             iterationLayout,
             keptVisible: new Set(keptVisible),
-            undo: new Map(undo),
             keptByFile: stableKeptByFile(previous?.keptByFile ?? null, byFile, keptVisible),
+            openThreads:
+                previous !== null && sameSet(previous.openThreads, openThreads) ? previous.openThreads : openThreads,
+            viewerLogin,
         };
     }
 
@@ -304,6 +331,21 @@ export function createThreadStore(
                     resolved.delete(threadId);
                 }
             }
+            for (const [commentId, value] of commentResolved) {
+                if (
+                    reconcileCommentResolved.delete(commentId) ||
+                    findComment(serverThreads, commentId)?.resolved === value
+                ) {
+                    commentResolved.delete(commentId);
+                }
+            }
+            publish();
+        },
+        setViewer: (login) => {
+            if (login === viewerLogin) {
+                return;
+            }
+            viewerLogin = login;
             publish();
         },
         addDraft: (draft, comment) => {
@@ -359,41 +401,37 @@ export function createThreadStore(
         },
         hasResolvedOverride: (threadId) => resolved.has(threadId),
         getServerResolved: (threadId) => serverThreads.find((thread) => thread.id === threadId)?.resolved ?? null,
-        startUndo: (threadId, value) => {
-            const generation = (undoGeneration += 1);
-            const previousTimer = undoTimers.get(threadId);
-            if (previousTimer !== undefined) {
-                clearTimeout(previousTimer);
-            }
-            undo.set(threadId, { resolved: value, generation });
-            keptVisible.add(threadId);
-            const timer = setTimeout(() => {
-                const current = undo.get(threadId);
-                if (current?.generation === generation) {
-                    undo.delete(threadId);
-                    keptVisible.delete(threadId);
-                    undoTimers.delete(threadId);
-                    publish();
+        setCommentResolved: (commentId, value) => {
+            reconcileCommentResolved.delete(commentId);
+            commentResolved.set(commentId, value);
+            publish();
+        },
+        restoreCommentResolved: (commentId, value) => {
+            commentResolved.set(commentId, value);
+            reconcileCommentResolved.add(commentId);
+            publish();
+        },
+        hasCommentResolvedOverride: (commentId) => commentResolved.has(commentId),
+        getCommentResolved: (commentId) =>
+            commentResolved.get(commentId) ?? findComment(serverThreads, commentId)?.resolved ?? false,
+        getServerCommentResolved: (commentId) => findComment(serverThreads, commentId)?.resolved ?? null,
+        toggleThreadOpen: (threadId) => {
+            threadOpen.set(threadId, !(threadOpen.get(threadId) ?? false));
+            publish();
+        },
+        setThreadsOpen: (threadIds, open) => {
+            let changed = false;
+            for (const threadId of threadIds) {
+                if (threadOpen.get(threadId) !== open) {
+                    threadOpen.set(threadId, open);
+                    changed = true;
                 }
-            }, 5000);
-            undoTimers.set(threadId, timer);
-            publish();
-            return generation;
-        },
-        clearUndo: (threadId, generation) => {
-            const current = undo.get(threadId);
-            if (current === undefined || (generation !== undefined && current.generation !== generation)) {
-                return;
             }
-            const timer = undoTimers.get(threadId);
-            if (timer !== undefined) {
-                clearTimeout(timer);
-                undoTimers.delete(threadId);
+            if (changed) {
+                publish();
             }
-            undo.delete(threadId);
-            keptVisible.delete(threadId);
-            publish();
         },
+        isThreadOpen: (threadId) => threadOpen.get(threadId) ?? false,
         keepVisible: (threadId) => {
             if (!keptVisible.has(threadId)) {
                 keptVisible.add(threadId);
@@ -444,11 +482,26 @@ function mergeThreads(
     server: readonly Thread[],
     drafts: ReadonlyMap<string, OptimisticDraft>,
     resolved: ReadonlyMap<string, boolean>,
+    commentResolved: ReadonlyMap<string, boolean>,
 ): Thread[] {
     let threads = server.map((thread) => {
         const value = resolved.get(thread.id);
         return value === undefined || value === thread.resolved ? thread : { ...thread, resolved: value };
     });
+
+    // Optimistic per-comment resolve frame: recompute the thread too, or the edge and marker
+    // would show the old state until the host responds.
+    for (const [commentId, value] of commentResolved) {
+        threads = mapComments(threads, commentId, (comment) =>
+            comment.resolved === value ? comment : { ...comment, resolved: value },
+        );
+    }
+    if (commentResolved.size > 0) {
+        threads = threads.map((thread) => {
+            const byIssues = threadResolvedByIssues(thread);
+            return byIssues === null || byIssues === thread.resolved ? thread : { ...thread, resolved: byIssues };
+        });
+    }
 
     const known = commentIds(threads);
     for (const { draft, comment } of drafts.values()) {
@@ -506,6 +559,55 @@ function removeComment(threads: readonly Thread[], id: string): Thread[] {
             const root = visit(thread.root);
             return root === thread.root ? thread : { ...thread, root };
         });
+}
+
+function findComment(threads: readonly Thread[], id: string): Comment | null {
+    const visit = (comment: Comment): Comment | null => {
+        if (comment.id === id) {
+            return comment;
+        }
+        for (const reply of comment.replies) {
+            const found = visit(reply);
+            if (found !== null) {
+                return found;
+            }
+        }
+        return null;
+    };
+    for (const thread of threads) {
+        const found = visit(thread.root);
+        if (found !== null) {
+            return found;
+        }
+    }
+    return null;
+}
+
+/**
+ * Expansion state for threads beside code. A new thread gets its default once. Only
+ * resolved threads without my draft start collapsed (`docs/decisions.md`, "Threads, issues and the composer").
+ * Threads that leave the snapshot are forgotten.
+ */
+function reconcileOpenThreads(state: Map<string, boolean>, threads: readonly Thread[]): Set<string> {
+    const open = new Set<string>();
+    const alive = new Set<string>();
+    for (const thread of threads) {
+        alive.add(thread.id);
+        const known = state.get(thread.id);
+        const value = known ?? !(thread.resolved && !threadHasDraft(thread));
+        if (known === undefined) {
+            state.set(thread.id, value);
+        }
+        if (value) {
+            open.add(thread.id);
+        }
+    }
+    for (const id of state.keys()) {
+        if (!alive.has(id)) {
+            state.delete(id);
+        }
+    }
+    return open;
 }
 
 function commentIds(threads: readonly Thread[]): Set<string> {

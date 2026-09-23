@@ -127,7 +127,7 @@ function mount(options: { onWritePrComment?: (returnFocus: () => void) => void }
     const host = document.createElement('div');
     document.body.append(host);
     const session: SessionStore = createSessionStore({
-        initial: { view: 'overview', filter: 'all', threadsShow: { people: true, bots: true, resolved: false } },
+        initial: { view: 'overview', filter: 'all' },
     });
     const store = createThreadStore(THREADS, FILE_IDS);
     const root = createRoot(host);
@@ -164,15 +164,11 @@ function click(host: HTMLElement, selector: string, index = 0): void {
 }
 
 describe('discussion card in Overview', () => {
-    it('the header counts all threads and chips count by category', () => {
+    it('counts all PR threads in the header and has no source chips anymore', () => {
         const { host } = mount();
 
         expect(host.querySelector('.discussion-card__counts')?.textContent).toBe('10 threads · 10 open');
-        expect([...host.querySelectorAll('.thread-chip')].map((chip) => chip.textContent)).toEqual([
-            'Люди 9',
-            'Боты 1',
-            'Resolved 0',
-        ]);
+        expect(host.querySelector('.thread-chip')).toBeNull();
     });
 
     it('shows at most six rows and puts the rest behind "N more participants"', () => {

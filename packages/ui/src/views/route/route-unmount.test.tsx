@@ -304,7 +304,7 @@ describe('offscreen stop diff column', () => {
         }
         act(() => {
             // The reply has no anchor. The file is in use through the thread, not the line layout.
-            openReply(threadStore, thread);
+            openReply(threadStore, thread, false);
         });
 
         expect(placeholder(wide)).toBeNull();

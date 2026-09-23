@@ -10,6 +10,7 @@ import type { ReviewProgressSummary } from '../progress/summary.js';
 import {
     commentBodies,
     countDraftComments,
+    countIssueDraftComments,
     countPinnedDraftComments,
     countPublishedReplies,
     reviewProgressSummary,
@@ -21,6 +22,7 @@ import type { ConnectionState } from '../store.js';
 import { closePublishedComposers } from '../threads/composer.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import type { ThreadStore } from '../threads/store.js';
+import type { ThreadActions } from '../threads/thread-list.tsx';
 import { discussionStats } from '../views/overview-model.js';
 import { chatOverlaysContent } from './dock.js';
 import type { PrCommentsGate } from './pr-comments-gate.js';
@@ -91,6 +93,8 @@ export interface ReviewActionBarProps {
     readonly reviewHost: string;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
+    /** Thread actions for the comments modal: Resolve, edit and delete published comments. */
+    readonly threadActions?: ThreadActions;
     /** Drafts in the server buffer: count in the batch and block ship until sent. */
     readonly draftBuffer?: readonly DraftBufferEntry[];
     readonly onPublish: (verdict: Verdict) => Promise<PublishResult>;
@@ -212,6 +216,7 @@ export function ReviewActionBar({
     onComplete,
     defaultMenuOpen = false,
     prComments,
+    threadActions,
     initialFailure = null,
     chatOpen = false,
 }: ReviewActionBarProps) {
@@ -253,7 +258,10 @@ export function ReviewActionBar({
     const buffered = draftBuffer.length;
     const bufferedNew = draftBuffer.filter((entry) => entry.commentId === null).length;
     const drafts = countDraftComments(threadSnapshot.threads) + bufferedNew;
-    const openThreads = discussionStats(threadSnapshot.threads).open;
+    // The counter suffix "· N issue" shows how many of these drafts open an issue (§1).
+    const issueDrafts =
+        countIssueDraftComments(threadSnapshot.threads) +
+        draftBuffer.filter((entry) => entry.commentId === null && entry.draft.issue === true).length;
     // Drafts written before a push target a commit no longer at the PR head
     // (docs/design/SPEC-elements.md §4.5).
     const pinnedDrafts = countPinnedDraftComments(threadSnapshot.threads, threadPin.activeDiffId);
@@ -469,6 +477,7 @@ export function ReviewActionBar({
                 <span className="review-action-bar__drafts">
                     <span className="review-action-bar__draft-dot" aria-hidden="true" />
                     {t('ship.drafts', drafts)}
+                    {issueDrafts === 0 ? null : <> {t('ship.drafts.issues', issueDrafts)}</>}
                     {buffered === 0 ? null : (
                         <span className="review-action-bar__pinned-drafts">
                             {' '}
@@ -482,12 +491,6 @@ export function ReviewActionBar({
                         </span>
                     )}
                 </span>
-            )}
-            {openThreads === 0 ? null : (
-                <>
-                    <span className="review-action-bar__divider" aria-hidden="true" />
-                    <span className="review-action-bar__open-threads">{t('ship.openThreads', openThreads)}</span>
-                </>
             )}
             <span className="review-action-bar__divider" aria-hidden="true" />
             <button
@@ -615,6 +618,7 @@ export function ReviewActionBar({
                     pr={pr}
                     store={threadStore}
                     transport={composerTransport}
+                    {...(threadActions === undefined ? {} : { actions: threadActions })}
                     draftBuffer={draftBuffer}
                     onClose={prCommentsGate.close}
                 />

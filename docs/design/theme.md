@@ -189,6 +189,7 @@ The test recalculates them to keep the table in sync with CSS.
 | `--accent-border` | `#262a45` | `#dfe2fa` | `--c-262a45` |
 | `--accent-selection` | `rgba(127, 140, 255, 0.13)` | `rgba(90, 104, 232, 0.12)` | `--a-12714025513` |
 | `--accent-text-selection` | `rgba(127, 140, 255, 0.28)` | `rgba(90, 104, 232, 0.22)` | `--a-12714025528` |
+| `--surface-thread-line` | `rgba(127, 140, 255, 0.07)` | `rgba(90, 104, 232, 0.08)` | `SPEC-changes-2026-09-20.md §3` |
 | `--attention` | `#e2954c` | `#d8791c` | `--c-e2954c` |
 | `--attention-text` | `#e2b878` | `#9d6410` | `--c-e2b878` |
 | `--attention-text-dim` | `#c9a464` | `#7f5612` | `--c-c9a464` |

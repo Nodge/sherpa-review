@@ -417,6 +417,34 @@ describe('floating review bar', () => {
         expect(renderBar({ threads })).toContain('21 drafts go out on ship');
     });
 
+    // The draft counter suffix shows how many drafts open an issue (SPEC-changes-2026-09-20 §1).
+    it('appends the issue count to the draft counter', () => {
+        const source = DRAFT_THREADS[0];
+        if (source === undefined) {
+            throw new Error('the test needs a thread');
+        }
+        const threads = [0, 1].map((index) => ({
+            ...source,
+            id: `issue-thread-${String(index)}`,
+            root: { ...source.root, id: `issue-draft-${String(index)}`, draft: true, issue: true },
+        }));
+
+        expect(renderBar({ threads })).toContain('· 2 issues');
+    });
+
+    it('omits the suffix without issue drafts', () => {
+        expect(renderBar()).not.toContain('issue');
+    });
+
+    it('counts issues in buffered drafts too', () => {
+        const html = renderBar({
+            threads: [],
+            draftBuffer: [{ ...BUFFERED, draft: { ...BUFFERED.draft, issue: true } }],
+        });
+
+        expect(html).toContain('· 1 issue');
+    });
+
     // Buffered drafts count in the batch and block ship until they arrive.
     it('counts buffered drafts and blocks ship with a reason', () => {
         const drafts = countDraftComments(DRAFT_THREADS);
@@ -424,8 +452,8 @@ describe('floating review bar', () => {
         const html = renderBar({ draftBuffer: [BUFFERED] });
 
         expect(html).toContain(`${String(drafts + 1)} draft`);
-        expect(html).toContain('1 not yet saved to the host');
-        expect(html).toContain('1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится');
+        expect(html).toContain('1 not sent yet');
+        expect(html).toContain('1 draft is not sent yet — ship is blocked until it is');
         expect(html).toContain('class="ctl ctl--primary review-action-bar__ship-primary" disabled=""');
     });
 
@@ -437,18 +465,15 @@ describe('floating review bar', () => {
         const html = renderBar({ draftBuffer: [{ ...BUFFERED, commentId: 'draft-1' }] });
 
         expect(html).toContain(`${String(drafts)} draft`);
-        expect(html).toContain('1 not yet saved to the host');
+        expect(html).toContain('1 not sent yet');
         expect(html).toContain('ship is blocked until it is');
     });
 
-    // Ship summary (docs/design/SPEC-elements.md §4.5): informs without blocking publishing.
-    it('shows the unresolved thread count and nothing when it is zero', () => {
-        const open = DRAFT_THREADS.filter((thread) => !thread.resolved).length;
-        expect(open).toBeGreaterThan(0);
+    // The unresolved thread counter was removed from the bar: it asked for no action and did not block publishing.
+    it('omits unresolved thread text and does not disable ship for those threads', () => {
+        expect(DRAFT_THREADS.filter((thread) => !thread.resolved).length).toBeGreaterThan(0);
 
-        expect(renderBar()).toContain(`${String(open)} unresolved`);
-        expect(renderBar({ threads: [] })).not.toContain('unresolved');
-        // Unresolved threads do not disable ship. The guard only checks drafts and connectivity.
+        expect(renderBar()).not.toContain('unresolved');
         expect(renderBar()).not.toContain('review-action-bar__ship-primary" disabled');
     });
 
@@ -457,10 +482,10 @@ describe('floating review bar', () => {
 
         expect(html).toContain('ship anyway?');
         expect(html).toContain('Approves this snapshot only. A new push drops the approval and asks again.');
-        // The copy is honest: there is no ownership-zone revocation, and the host publishes its regular sticky ship (#36).
+        // The copy is accurate: there is no ownership-zone revocation, only the host's ordinary sticky ship (№36).
         expect(html).toContain('The approval carries over to later pushes — the host’s own sticky ship.');
         expect(html).not.toContain('CODEOWNERS zone');
-        expect(html).toContain('This host does not support Sticky ship.');
+        expect(html).toContain('Sticky ship is unavailable here.');
         expect(html).toContain('aria-disabled="true"');
     });
 

@@ -13,7 +13,7 @@ import { createThreadStore } from '../../threads/store.js';
 
 /**
  * Draft buffer and ship summary. Composer in the "will save when the connection returns" state,
- * bar with a ship guard and unresolved thread count, banner for another reviewer's ship.
+ * panel with a ship guard, banner for someone else's ship.
  */
 
 const DATA = fixtureIteration('medium');
@@ -52,7 +52,7 @@ export const DRAFT_BUFFER_STATES: readonly DraftBufferGalleryState[] = [
     {
         id: 'draft-buffer-action-bar',
         group: 'Draft buffer',
-        title: 'bar: ship waits for buffered drafts and counts unresolved threads',
+        title: 'panel: ship waits for undelivered drafts',
         render: () => <BufferedBarState />,
     },
     {

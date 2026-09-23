@@ -43,17 +43,26 @@ describe('gallery registry', () => {
 
     // Untranslated text renders in Russian and must not crash: the smoke test catches missing keys
     // and other failures in another language, rather than incomplete translations.
-    // Rendering every state twice in jsdom takes longer than the default five seconds.
-    it('renders every state in both locales', { timeout: 60_000 }, () => {
-        for (const locale of ['ru', 'en'] as const) {
-            for (const state of GALLERY_STATES) {
-                expect(() => {
-                    render(<LocaleProvider locale={locale}>{state.render()}</LocaleProvider>);
-                }, `${state.id} · ${locale}`).not.toThrow();
+    // The registry is tested in groups: rendering all states in jsdom takes tens of
+    // seconds, and on a busy machine (`pnpm -r test` runs all packages at once) the total budget
+    // hit the timeout. Each group has enough time, and a failing group is immediately visible.
+    for (const group of groups()) {
+        it(`renders states in group "${group}" in both locales`, { timeout: 60_000 }, () => {
+            for (const locale of ['ru', 'en'] as const) {
+                for (const state of GALLERY_STATES.filter((candidate) => candidate.group === group)) {
+                    expect(() => {
+                        render(<LocaleProvider locale={locale}>{state.render()}</LocaleProvider>);
+                    }, `${state.id} · ${locale}`).not.toThrow();
+                }
             }
-        }
-    });
+        });
+    }
 });
+
+/** Registry groups in order of appearance: this list defines one test per group. */
+function groups(): readonly string[] {
+    return [...new Set(GALLERY_STATES.map((state) => state.group))];
+}
 
 /** Mounts a state in its own container and immediately unmounts it: rendering is enough for the gallery. */
 function render(node: React.ReactNode): void {

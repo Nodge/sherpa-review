@@ -24,7 +24,7 @@ import type { RouteMarginFile, RouteMarginModel } from '../route/margin-model.js
 import type { SessionStore } from '../session/session-store.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
 import { RouteBadge, useMarginStrips } from '../route/route-margin.tsx';
-import { useCardThreads } from '../threads/card-threads.tsx';
+import { useCardThreads, useThreadsCollapse } from '../threads/card-threads.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import { createThreadStore } from '../threads/store.js';
 import type { ComposerSnapshot, ThreadStore } from '../threads/store.js';
@@ -718,7 +718,13 @@ const VirtualFileCard = memo(function VirtualFileCard({
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
         (opened || changed <= COLLAPSE_THRESHOLD);
-    const { threadsUnderHeader, renderAfterLine: renderThreads, focusedThreadRange } = useCardThreads({
+    const {
+        threadsUnderHeader,
+        renderAfterLine: renderThreads,
+        renderLineMarker,
+        focusedThreadRange,
+        lineThreadIds,
+    } = useCardThreads({
         model: shownModel,
         rowsShown: canRenderRows,
         threads: visibleThreads,
@@ -768,6 +774,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
         },
         [renderNotes, renderStrip, renderThreads],
     );
+    const threadsCollapse = useThreadsCollapse(threadStore, lineThreadIds);
 
     return (
         <div
@@ -815,6 +822,8 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 threadsUnderHeader={underHeader}
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
+                renderLineMarker={renderLineMarker}
+                threadsCollapse={threadsCollapse}
                 actions={actions}
             />
         </div>

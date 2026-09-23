@@ -41,6 +41,12 @@ type Row = { readonly hunk?: number } & (
     | { readonly kind: 'pair'; readonly left: LineCell | null; readonly right: LineCell | null }
 );
 
+/** A line on one diff side. Threads and notes address it by side and number. */
+export interface LinePosition {
+    readonly side: 'old' | 'new';
+    readonly line: number;
+}
+
 export interface DiffRowsProps {
     readonly model: DiffFileModel;
     readonly mode: DiffMode;
@@ -49,6 +55,11 @@ export interface DiffRowsProps {
     readonly selection: LineSelection | null;
     readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
+    /**
+     * Thread marker inside the row itself (docs/design/SPEC-changes-2026-09-20.md §3). Unified mode
+     * has one per row for both sides. Split mode has one for each half.
+     */
+    readonly renderLineMarker?: ((positions: readonly LinePosition[]) => ReactNode) | undefined;
     readonly onCommentLine?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineFocus?: ((side: 'old' | 'new', line: number) => void) | undefined;
     readonly onLineBlur?: (() => void) | undefined;
@@ -70,6 +81,7 @@ export function DiffRows({
     selection,
     focusedThreadRange = null,
     renderAfterLine,
+    renderLineMarker,
     onCommentLine,
     onLineFocus,
     onLineBlur,
@@ -128,6 +140,7 @@ export function DiffRows({
                                 threadFocused={isThreadFocused(row.cell, focusedThreadRange)}
                                 selectionStart={row.cell.key === selectionStart}
                                 hunk={row.hunk}
+                                marker={renderLineMarker?.(positions) ?? null}
                                 onCommentLine={onCommentLine}
                                 onLineFocus={onLineFocus}
                                 onLineBlur={onLineBlur}
@@ -155,6 +168,8 @@ export function DiffRows({
                             rightThreadFocused={isThreadFocused(row.right, focusedThreadRange, 'new')}
                             selectionStart={selectionStart}
                             hunk={row.hunk}
+                            leftMarker={oldLine === null ? null : (renderLineMarker?.([{ side: 'old', line: oldLine }]) ?? null)}
+                            rightMarker={newLine === null ? null : (renderLineMarker?.([{ side: 'new', line: newLine }]) ?? null)}
                             onCommentLine={onCommentLine}
                             onLineFocus={onLineFocus}
                             onLineBlur={onLineBlur}
@@ -481,6 +496,7 @@ const UnifiedRow = memo(function UnifiedRow({
     threadFocused,
     selectionStart,
     hunk,
+    marker,
     onCommentLine,
     onLineFocus,
     onLineBlur,
@@ -490,6 +506,7 @@ const UnifiedRow = memo(function UnifiedRow({
     threadFocused: boolean;
     selectionStart: boolean;
     hunk: number | undefined;
+    marker: ReactNode;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineBlur: (() => void) | undefined;
@@ -509,6 +526,7 @@ const UnifiedRow = memo(function UnifiedRow({
             }}
             onBlur={onLineBlur}
         >
+            {marker}
             <span className="diff-row__gutter">{line.oldLine ?? ''}</span>
             <span className="diff-row__gutter diff-row__gutter--comment">
                 {line.newLine ?? ''}
@@ -536,6 +554,8 @@ const SplitRow = memo(function SplitRow({
     rightThreadFocused,
     selectionStart,
     hunk,
+    leftMarker,
+    rightMarker,
     onCommentLine,
     onLineFocus,
     onLineBlur,
@@ -548,12 +568,21 @@ const SplitRow = memo(function SplitRow({
     rightThreadFocused: boolean;
     selectionStart: LineKey | null;
     hunk: number | undefined;
+    leftMarker: ReactNode;
+    rightMarker: ReactNode;
     onCommentLine: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineBlur: (() => void) | undefined;
 }) {
     return (
         <div className="diff-row diff-row--pair" data-hunk={hunk}>
+            {/* The left-half marker sits on the card edge, the right-half marker on the divider (§3). */}
+            {leftMarker === null ? null : (
+                <span className="diff-row__marker-slot diff-row__marker-slot--old">{leftMarker}</span>
+            )}
+            {rightMarker === null ? null : (
+                <span className="diff-row__marker-slot diff-row__marker-slot--new">{rightMarker}</span>
+            )}
             <Side
                 cell={left}
                 side="old"

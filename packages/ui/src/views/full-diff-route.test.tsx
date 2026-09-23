@@ -124,7 +124,6 @@ function mount(
         initial: {
             view: 'diff',
             filter: 'all',
-            threadsShow: { people: true, bots: true, resolved: options.resolvedThreads ?? false },
         },
     });
     const jumps: string[] = [];

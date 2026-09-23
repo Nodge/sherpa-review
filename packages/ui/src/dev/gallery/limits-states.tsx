@@ -139,9 +139,6 @@ function CappedToolbar() {
             filters={filters}
             filter={selectFilter(filters, 'all')}
             onFilter={() => undefined}
-            threadsShow={{ people: true, bots: false, resolved: false }}
-            threadCounts={{ people: 2, bots: 1, resolved: 0 }}
-            onThreadsShow={() => undefined}
             generationCap={CAP}
             strip={
                 <CoverageStrip

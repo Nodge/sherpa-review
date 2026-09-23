@@ -8,8 +8,7 @@ import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { changedLinesOf } from '../../progress/read-state.js';
-import type { ThreadsShow } from '../../session/session-store.js';
-import { createSessionStore, DEFAULT_THREADS_SHOW } from '../../session/session-store.js';
+import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
@@ -41,7 +40,6 @@ interface WorkspaceStateProps {
      */
     readonly renameTo?: Readonly<Record<string, string>>;
     readonly showThreads?: boolean;
-    readonly threadsShow?: ThreadsShow;
     readonly threads?: readonly Thread[];
     readonly prepareThreads?: (store: ThreadStore, threads: readonly Thread[]) => void;
 }
@@ -57,7 +55,6 @@ function WorkspaceState({
     paths,
     renameTo,
     showThreads = false,
-    threadsShow = DEFAULT_THREADS_SHOW,
     threads,
     prepareThreads,
 }: WorkspaceStateProps) {
@@ -76,10 +73,7 @@ function WorkspaceState({
                   };
         return renameTo === undefined ? narrowed : renamePaths(narrowed, renameTo);
     }, [fixture, onlyPath, paths, renameTo]);
-    const session = useMemo(
-        () => createSessionStore({ initial: { view: 'diff', filter, threadsShow } }),
-        [filter, threadsShow],
-    );
+    const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter } }), [filter]);
 
     const shownThreads = useMemo(
         () => (showThreads ? (threads ?? data.threads) : []),
@@ -228,8 +222,6 @@ function renamePaths(
         extraLenses: view.extraLenses.map(renameLens),
     };
 }
-
-const ALL_THREADS: ThreadsShow = { people: true, bots: true, resolved: true };
 
 function prepareDraftComposer(store: ThreadStore, threads: readonly Thread[]): void {
     const thread = threads.find((candidate) => !candidate.resolved && !candidate.root.author.bot);
@@ -484,14 +476,13 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'threads-sources',
-        title: 'human, bot and resolved threads with filters',
+        title: 'human, bot and resolved threads on the same line',
         render: () => (
             <WorkspaceState
                 fixture="medium"
                 showThreads
                 onlyPath="services/orders/src/api/handlers.ts"
                 threads={sourceThreadsOnHandlers()}
-                threadsShow={ALL_THREADS}
             />
         ),
     },
@@ -503,7 +494,6 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 fixture="medium"
                 showThreads
                 onlyPath="services/orders/src/domain/edit-window.ts"
-                threadsShow={ALL_THREADS}
             />
         ),
     },
@@ -533,14 +523,13 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'threads-bot-collapsed',
-        title: 'bot thread: first, last two and "37 more"',
+        title: 'bot thread with 40 replies: all visible at once',
         render: () => (
             <WorkspaceState
                 fixture="medium"
                 showThreads
                 onlyPath="services/orders/src/payments/card-token.ts"
                 threads={botThreadWithFortyReplies()}
-                threadsShow={ALL_THREADS}
             />
         ),
     },
@@ -553,7 +542,6 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 showThreads
                 onlyPath="services/orders/src/api/handlers.ts"
                 threads={markdownShowcaseThread()}
-                threadsShow={ALL_THREADS}
             />
         ),
     },

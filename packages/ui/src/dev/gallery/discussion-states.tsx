@@ -135,13 +135,11 @@ const TRANSPORT: ComposerTransport = {
 function Card({
     threads,
     fileIds,
-    bots = false,
     outsideOpen = false,
     replyTo,
 }: {
     threads: readonly Thread[];
     fileIds: ReadonlySet<string>;
-    bots?: boolean;
     outsideOpen?: boolean;
     /** Thread with the reply composer open from the start: the state is rendered without clicking. */
     replyTo?: string;
@@ -152,16 +150,16 @@ function Card({
                 initial: {
                     view: 'overview',
                     filter: 'all',
-                    threadsShow: { people: true, bots, resolved: false },
                 },
             }),
-        [bots],
+        [],
     );
     const store = useMemo(() => {
         const created = createThreadStore(threads, fileIds);
+        created.setViewer(MEDIUM.pr.viewer?.login ?? null);
         const target = threads.find((candidate) => candidate.id === replyTo);
         if (target !== undefined) {
-            openReply(created, target);
+            openReply(created, target, true);
         }
         return created;
     }, [fileIds, replyTo, threads]);
@@ -201,7 +199,7 @@ export const DISCUSSION_STATES: readonly {
     {
         id: 'discussion-scale',
         title: 'discussion: 86 threads, people and bots',
-        render: () => <Card threads={SCALE_THREADS} fileIds={SCALE_FILE_IDS} bots />,
+        render: () => <Card threads={SCALE_THREADS} fileIds={SCALE_FILE_IDS} />,
     },
     {
         id: 'discussion-outside-open',
@@ -210,7 +208,6 @@ export const DISCUSSION_STATES: readonly {
             <Card
                 threads={SCALE_THREADS}
                 fileIds={SCALE_FILE_IDS}
-                bots
                 outsideOpen
                 replyTo="human-pr-level"
             />

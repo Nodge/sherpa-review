@@ -102,7 +102,7 @@ function mount() {
     store.setModel(FILE.fileId, parseFileDiff(toParseRequest(FILE)));
     const threadStore = createThreadStore([], new Set([FILE.fileId]));
     const session = createSessionStore({
-        initial: { view: 'diff', filter: 'all', threadsShow: { people: true, bots: true, resolved: false } },
+        initial: { view: 'diff', filter: 'all' },
     });
     const root = createRoot(host);
     act(() => {

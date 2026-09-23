@@ -15,9 +15,6 @@ const GONE = 'services/orders/src/gone.ts';
 const ALIVE = 'services/orders/src/alive.ts';
 const FILE_IDS = new Set([anchor(DIFF_ID, ALIVE).fileId]);
 
-const ALL_ON = { people: true, bots: true, resolved: true };
-const PEOPLE_ONLY = { people: true, bots: false, resolved: false };
-
 function at(path: string, line: number) {
     return anchor(DIFF_ID, path, { side: 'new', line });
 }
@@ -43,29 +40,14 @@ describe('discussion card model', () => {
             }),
         ];
 
-        const summary = discussionSummary(threads, FILE_IDS, PEOPLE_ONLY);
+        const summary = discussionSummary(threads, FILE_IDS);
 
+        // There is no source filter anymore: rows include all PR threads, including bots and resolved ones.
         expect({ total: summary.total, open: summary.open }).toEqual({ total: 3, open: 2 });
-        expect(summary.counts).toEqual({ people: 1, bots: 1, resolved: 1 });
         expect(summary.participants.map((row) => [row.login, row.threads, row.open])).toEqual([
-            ['ada', 1, 1],
+            ['ada', 2, 1],
+            ['ai-review-bot', 1, 1],
         ]);
-    });
-
-    it('disabling Resolved removes resolved threads from both participant rows and counters', () => {
-        const threads = [
-            lineThread('ada', 'Ada Ortiz', 1, '2026-08-24T10:00:00.000Z'),
-            lineThread('ada', 'Ada Ortiz', 2, '2026-08-24T09:00:00.000Z', true),
-        ];
-
-        expect(discussionSummary(threads, FILE_IDS, PEOPLE_ONLY).participants[0]).toMatchObject({
-            threads: 1,
-            open: 1,
-        });
-        expect(discussionSummary(threads, FILE_IDS, ALL_ON).participants[0]).toMatchObject({
-            threads: 2,
-            open: 1,
-        });
     });
 
     it('sorts by open threads, then recency on ties, with bots always after people', () => {
@@ -86,7 +68,7 @@ describe('discussion card model', () => {
             }),
         ];
 
-        const summary = discussionSummary(threads, FILE_IDS, ALL_ON);
+        const summary = discussionSummary(threads, FILE_IDS);
 
         expect(summary.participants.map((row) => row.login)).toEqual([
             'two-open',
@@ -116,7 +98,7 @@ describe('discussion card model', () => {
             }),
         });
 
-        const summary = discussionSummary([withReply], FILE_IDS, ALL_ON);
+        const summary = discussionSummary([withReply], FILE_IDS);
 
         expect(summary.participants[0]?.lastActivity).toBe('2026-08-24T18:00:00.000Z');
     });
@@ -143,7 +125,7 @@ describe('discussion card model', () => {
         const own = lineThread('ada', 'Ada Ortiz', 2, '2026-08-24T09:00:00.000Z');
         const threads = [answered, own];
 
-        const summary = discussionSummary(threads, FILE_IDS, ALL_ON);
+        const summary = discussionSummary(threads, FILE_IDS);
 
         // riley has no threads of their own, but their lens shows something, so they get a row too.
         expect(summary.participants.map((row) => [row.login, row.threads, row.open])).toEqual([
@@ -151,7 +133,7 @@ describe('discussion card model', () => {
             ['riley', 1, 1],
         ]);
         for (const row of summary.participants) {
-            const lens = threads.filter((item) => threadIsVisible(item, ALL_ON, row.login));
+            const lens = threads.filter((item) => threadIsVisible(item, row.login));
             expect(lens).toHaveLength(row.threads);
         }
     });
@@ -174,23 +156,24 @@ describe('discussion card model', () => {
         });
         const atCode = lineThread('kai', 'Kai Kennedy', 1, '2026-08-24T09:00:00.000Z');
 
-        const summary = discussionSummary([prLevel, gone, botPrLevel, atCode], FILE_IDS, ALL_ON);
+        const summary = discussionSummary([prLevel, gone, botPrLevel, atCode], FILE_IDS);
 
         // The newest thread comes first. A PR-level bot only gets a row with a counter.
         expect(summary.outside.map((item) => item.id)).toEqual(['gone-human', 'pr-human']);
         expect(summary.participants.map((row) => row.login)).toContain('ai-review-bot');
     });
 
-    it('disabling bots removes both the bot row and its threads from results', () => {
+    it('gives a PR-level bot a counter row but never expands its body outside the diff', () => {
         const botThread = thread({
             id: 'pr-bot',
             anchor: null,
             root: comment({ id: 'pr-bot-root', author: bot('ai-review-bot', 'AI Review'), body: 'y', createdAt: '2026-08-24T12:00:00.000Z' }),
         });
 
-        const summary = discussionSummary([botThread], FILE_IDS, PEOPLE_ONLY);
+        const summary = discussionSummary([botThread], FILE_IDS);
 
-        expect(summary.participants).toEqual([]);
+        expect(summary.participants.map((row) => row.login)).toEqual(['ai-review-bot']);
+        expect(summary.outside).toEqual([]);
         expect(summary.total).toBe(1);
     });
 });
