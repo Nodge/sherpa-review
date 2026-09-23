@@ -40,12 +40,12 @@ A thin client distributed with the skill as one self-contained `.mjs` beside the
 |---|---|
 | `sherpa up` | Bootstrap a session: start the review server (or find a running one through its manifest), register as a worker, print the UI link and the next loop step. `--local <path>` instead of `--pr` starts a working-tree review for the project directory. `--base <ref>` sets the comparison base. The server starts as a background daemon and survives CLI exit (`packages/cli/src/up.ts`). On a cold start it opens the browser unless `--no-open` is passed. |
 | `sherpa worker register` | Only registers the session as a PR worker, for reconnecting to an existing server. |
-| `sherpa worker next` | Long-poll: waits until a task arrives. The harness sets the wait with `--wait-seconds` (1…`LONG_POLL_CEILING_SECONDS` = 3600, or the server's `LONG_POLL_DEFAULT_SECONDS` = 240 without the flag). When the window expires, the response says "no tasks, call again". Every return is a sign of life. While the call is pending, the open connection itself is that sign (§7). Leases a task. |
+| `sherpa worker next` | Waits indefinitely for a task and returns only with a task, `done` or an error. Internally it loops over ordinary long-poll requests with a server window of `LONG_POLL_DEFAULT_SECONDS` = 240 s. The CLI consumes `idle` responses and immediately sends the next request. The request doesn't specify the window. Each request is a sign of life. While it is pending, the open connection itself is the sign (§7). Leases a task. |
 | `sherpa task complete <id> --file <path>` | Submits the result. The server validates it on receipt and fails closed. It prints validation errors as a list in prompt format: "fix and call complete again". Repeating complete on a closed task is a no-op. |
 | `sherpa task progress <id> --text "<msg>"` | A lightweight status update. The UI shows "agent working: …". It doesn't extend the lease. |
 | `sherpa task fail <id> --reason "<msg>"` | Explicit failure (no access, insufficient context). The task enters an error state with a reason visible in the UI. |
 
-Flags: `--pr <key>` on every command (otherwise `SHERPA_PR`, otherwise the PR for the current Git checkout branch, `packages/cli/src/pr-discovery.ts`). `--local <path>` and `--base <ref>` only on `up` (`--local` conflicts with `--pr`, the path is required, `--base` requires `--local`, `packages/cli/src/local.ts`). `--harness`, `--model`, `--lang <ru|en>` on `up` and `worker register` (session labels for worker status and a UI language hint). `--no-open` only on `up`. `--wait-seconds` only on `worker next`. Full parsing is in `parseArgs` in `packages/cli/src/args.ts`, help in `helpText` in `format.ts`.
+Flags: `--pr <key>` for all commands (otherwise `SHERPA_PR`, otherwise the PR of the current Git checkout branch, `packages/cli/src/pr-discovery.ts`). `--local <path>` and `--base <ref>` only for `up` (`--local` cannot be combined with `--pr`, the path is required, and `--base` requires `--local`, `packages/cli/src/local.ts`). `--harness`, `--model`, `--lang <ru|en>` for `up` and `worker register` (session labels for worker status and a UI language hint). `--no-open` only for `up`. Full parsing is in `parseArgs` in `packages/cli/src/args.ts`, and help is in `helpText` in `format.ts`.
 
 **What the model reads.** Output is an instruction rather than data: a task in prompt format with context paths and complete submission commands (`formatTask`), a UI link and the next step (`formatUpReady`), server responses unchanged, and `DONE` on a separate line at the end of the work (`formatDone`). Server errors are human-readable. The CLI adds the next step where the message doesn't make it clear (`NEXT_STEP_BY_CODE`).
 
@@ -53,7 +53,7 @@ Flags: `--pr <key>` on every command (otherwise `SHERPA_PR`, otherwise the PR fo
 
 **CLI result limit.** `task complete` checks the file size before sending (`readResultFile`, `RESULT_MAX_BYTES` = 256 KB) and rejects oversized files locally. The task stays leased, and the model has a chance to shorten the file. If the same result reached the server, it would close the task with an error (§5).
 
-**Session instructions** in `packages/skill/SKILL.md`: derive the PR key from the invocation argument, run `up`, show the link to the reviewer, then keep calling `worker next` and following its output until `DONE` arrives. The loop rules live there too. "No tasks" is no reason to stop, stop only on `DONE` or an explicit "stop the loop". Every task ends with either `complete` or `fail --reason`. Files in `shared/` do not change between tasks and are read once per session.
+**Session instructions** are in `packages/skill/SKILL.md`: derive the PR key from the invocation argument, run `up`, show the link to the reviewer, then run `worker next` repeatedly and follow its output until `DONE` arrives. The loop rules are there too: run `worker next` in the background if the harness supports it, otherwise in the foreground. If the harness times out and kills the call, just run it again. Stop only on `DONE` or an explicit "stop the loop". Every task ends with either `complete` or `fail --reason`. Files in `shared/` do not change between tasks and are read once per session.
 
 ## 4. Task format
 
@@ -109,7 +109,7 @@ Streaming tokens from another session through shell commands is impractical. Ins
 
 Every CLI call is a sign of life, but the server doesn't judge liveness by silence alone. A broken connection is a strong signal, silence is a weak one. A worker is alive as long as at least one condition holds (`packages/server/src/worker-registry.ts`):
 
-1. **its worker connection is open**. An idle worker waits in a long-poll `next` (even for an hour, the requested `waitSeconds` does not limit liveness). The OS immediately reports a killed session by closing the socket.
+1. **Its worker connection is open**. An idle worker can stay in `worker next` indefinitely (the CLI repeats long-poll requests itself), and the OS reveals a killed session by closing its socket immediately.
 2. **It holds a task lease** and has been silent for less than `WORKER_DEAD_AFTER_SECONDS` = 360 s (and no longer than the lease itself). The model can legitimately stay silent for minutes while executing a task.
 3. Without a connection or a lease, it has been silent for less than `WORKER_GAP_GRACE_SECONDS` = 60 s. This covers the gap between one `next` returning and the next call.
 

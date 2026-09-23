@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from '@sherpa/protocol';
@@ -371,6 +372,7 @@ describe('CLI against server', () => {
         expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
 
         // Subsequent commands use the saved id, so the server sees the same worker.
+        enqueueEcho(running);
         await sherpa('worker', 'next');
         expect(running.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId });
     });
@@ -409,6 +411,7 @@ describe('CLI against server', () => {
         expect(await readWorkerIdFile()).toBe(status.kind === 'never' ? null : status.workerId);
 
         // The slot owner continues the loop. Its next command reads the id from the file without a conflict.
+        enqueueEcho(running);
         const next = await sherpa('worker', 'next');
         expect(next.code).toBe(0);
         expect(next.stderr).toBe('');
@@ -427,54 +430,23 @@ describe('CLI against server', () => {
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
     });
 
-    it('empty queue: next returns on timeout and asks to be called again', async () => {
-        await start();
+    it('empty queue: next silently handles consecutive idle responses and returns on the first task', async () => {
+        // The server window is 0.1 s, so it returns idle several times while the test waits.
+        const running = await start(0.1);
+        let settled = false;
+        const pending = sherpa('worker', 'next').finally(() => {
+            settled = true;
+        });
 
-        const result = await sherpa('worker', 'next');
-
-        expect(result.code).toBe(0);
-        expect(result.stdout).toContain('worker next');
-        expect(result.stdout).not.toContain('TASK');
-    });
-
-    it('--wait-seconds reaches the server: the call window overrides the server option', async () => {
-        // The server window is long. Falling back to it would make the test wait half a minute.
-        await start(30);
-
-        const started = Date.now();
-        const result = await sherpa('worker', 'next', '--wait-seconds', '1');
-        const elapsed = Date.now() - started;
-
-        expect(result.code).toBe(0);
-        expect(result.stdout).toContain('worker next');
-        expect(result.stdout).not.toContain('TASK');
-        expect(elapsed).toBeGreaterThanOrEqual(900);
-        expect(elapsed).toBeLessThan(20_000);
-    }, 30_000);
-
-    it('loop with --wait-seconds: a task enqueued during the wait reaches the session', async () => {
-        const running = await start(30);
-        // The call sets the flag, not the server. The wait survives a task being enqueued midway through the window.
-        const pending = sherpa('worker', 'next', '--wait-seconds=30');
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        const taskId = enqueueEcho(running, 'The task arrived midway through the wait.');
+        await delay(600);
+        expect(settled).toBe(false);
+        const taskId = enqueueEcho(running, 'The task arrived after several empty windows.');
 
         const issued = await pending;
-
         expect(issued.code).toBe(0);
         expect(issued.stdout).toContain(`TASK sherpa/${String(taskId)} (echo), attempt 1`);
-    }, 40_000);
-
-    it('rejects invalid --wait-seconds before reaching the server', async () => {
-        const running = await start();
-        const taskId = enqueueEcho(running);
-
-        const result = await sherpa('worker', 'next', '--wait-seconds', '99999');
-
-        expect(result.code).toBe(1);
-        expect(result.stderr).toContain('--wait-seconds');
-        // The server never saw the call. The task is still queued, with no lease.
-        expect(running.queue.getTask(taskId)).toMatchObject({ status: 'queued', workerId: null });
+        expect(issued.stdout).not.toContain('No tasks');
+        expect(issued.stderr).toBe('');
     });
 
     it('loop: task → work → submission → next `next`', async () => {
@@ -499,8 +471,10 @@ describe('CLI against server', () => {
         expect(completed.stdout).toContain('sherpa worker next');
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'done', result: 'Finished answer.' });
 
+        // A submitted task is never issued again. The next `next` call takes a new one.
+        const nextTaskId = enqueueEcho(running, 'Second task.');
         const again = await sherpa('worker', 'next');
-        expect(again.stdout).not.toContain('TASK');
+        expect(again.stdout).toContain(`TASK sherpa/${String(nextTaskId)} (echo), attempt 1`);
     });
 
     it('server rejects an empty result with a list of errors, and the task stays leased', async () => {

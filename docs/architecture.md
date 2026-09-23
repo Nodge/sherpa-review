@@ -44,7 +44,7 @@ CLI commands and their roles:
 |---|---|
 | `up` | starts the PR server (or finds a live one) and prints a UI link |
 | `worker register` | declares the agent session: harness, model, language used with the reviewer |
-| `worker next` | long-polls for a task, returns a leased task or "No tasks" |
+| `worker next` | waits for a task without a timeout. Returns a leased task, `done` or an error |
 | `task complete` \| `progress` \| `fail` | submits a result file, sends a status line, reports a failure |
 
 The server is one process per PR. It owns all state for that PR and all writes to its database.

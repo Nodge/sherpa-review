@@ -16,7 +16,7 @@ export interface WorkerRun {
 
 /** `worker next` output plus the parsed header of the assigned task, if present. */
 export interface NextRun extends WorkerRun {
-    /** null means no task was issued (idle, error or server refusal). */
+    /** null means no task was assigned (`done`, error or server rejection). */
     readonly taskId: number | null;
     /** Task type from the header (`route.skeleton`, `route.section`, `echo`, …). null means no task was assigned. */
     readonly type: string | null;
@@ -77,13 +77,9 @@ export class FakeWorker {
         );
     }
 
-    /** `waitSeconds` is the same as the `--wait-seconds` flag. Without it, the server sets the window. */
-    async next(waitSeconds?: number): Promise<NextRun> {
-        const argv =
-            waitSeconds === undefined
-                ? (['worker', 'next'] as const)
-                : (['worker', 'next', '--wait-seconds', String(waitSeconds)] as const);
-        const run = await this.run(...argv);
+    /** Waits for a task indefinitely. Call only when a task is guaranteed to arrive. */
+    async next(): Promise<NextRun> {
+        const run = await this.run('worker', 'next');
         return { ...run, ...parseTaskHead(run.stdout), planIndexes: parsePlanIndexes(run.stdout) };
     }
 

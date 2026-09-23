@@ -33,7 +33,7 @@ export interface WorkerRoutesOptions {
     readonly registry: WorkerRegistry;
     /** UI presence: its departure stops the worker once no open tasks remain. */
     readonly presence: UiPresence;
-    /** Long-poll window for `next` calls without `waitSeconds`. Shortened in tests. */
+    /** Long-poll `next` window. Shortened in tests. */
     readonly longPollSeconds: number;
     /** Server shutdown: aborts pending long-polls so close() does not wait for them. */
     readonly shutdownSignal: AbortSignal;
@@ -120,7 +120,7 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
                     subscribeSlotChange,
                     ctx.req,
                     request.workerId,
-                    request.waitSeconds ?? options.longPollSeconds,
+                    options.longPollSeconds,
                 );
                 return { status: 200, body };
             }),
@@ -193,18 +193,17 @@ async function readWorkerRequest<T extends { protocolVersion: string }>(
 
 /**
  * Long-poll `next`: returns a task as soon as one appears. UI departure stops the worker
- * when there are no open tasks. When the window expires, it returns `idle` ("call again"). The window length comes from the
- * harness (`waitSeconds`). Only it knows its tool timeout and whether it can wait
- * in the background. Liveness is independent of it. While the call waits, the open connection keeps the worker alive.
+ * when no tasks are open. Window expiry returns `idle`, and the CLI retries itself. Liveness does not
+ * depend on the window. While the call is pending, its open connection keeps the worker alive.
  */
 async function pollForTask(
     options: WorkerRoutesOptions,
     subscribeSlotChange: SubscribeSlotChange,
     req: IncomingMessage,
     workerId: string,
-    waitSeconds: number,
+    windowSeconds: number,
 ): Promise<WorkerNextResponse> {
-    const deadline = Date.now() + waitSeconds * 1000;
+    const deadline = Date.now() + windowSeconds * 1000;
     const abort = abortOnDisconnect(req, options.shutdownSignal);
 
     try {
@@ -247,7 +246,7 @@ async function pollForTask(
         abort.dispose();
     }
 
-    // "No tasks" is a marker from SKILL.md: it says this is not an error and `next` must be called again.
+    // The CLI consumes `idle` and retries itself. The model never sees this text.
     return { kind: 'idle', message: 'No tasks yet. Call `sherpa worker next` again.' };
 }
 

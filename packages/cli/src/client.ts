@@ -40,13 +40,8 @@ import { CLI_VERSION } from './version.js';
 /** Margin beyond the server long-poll window. Don't abort before the server, as the response is already in flight. */
 const LONG_POLL_SLACK_SECONDS = 30;
 
-/**
- * Client timeout for `next`: based on the requested wait, rather than a shared constant.
- * Without the flag, the harness relies on the server default, so we wait for that too.
- */
-export function nextTimeoutMs(waitSeconds: number | undefined): number {
-    return ((waitSeconds ?? LONG_POLL_DEFAULT_SECONDS) + LONG_POLL_SLACK_SECONDS) * 1000;
-}
+/** Client timeout for one `next` request. The request doesn't carry the window, the server sets it. */
+export const NEXT_TIMEOUT_MS = (LONG_POLL_DEFAULT_SECONDS + LONG_POLL_SLACK_SECONDS) * 1000;
 
 /** Other endpoints respond immediately, so there is no need for a long wait. */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -79,19 +74,16 @@ export async function requestRegister(
 }
 
 /**
- * Long-poll for the next task. The caller sets the wait (`--wait-seconds`). Without it,
- * the server decides. Uses `node:http`, not `fetch`: see `sendViaHttp`.
+ * One long-poll for the next task using the server's window. Uses `node:http`, not `fetch`:
+ * see `sendViaHttp`.
  */
-export async function requestNext(
-    connection: ServerConnection,
-    waitSeconds?: number,
-): Promise<WorkerNextResponse> {
+export async function requestNext(connection: ServerConnection): Promise<WorkerNextResponse> {
     return callWorker<WorkerNextRequest, WorkerNextResponse>(connection, {
         endpoint: WORKER_ENDPOINTS.next,
-        payload: waitSeconds === undefined ? {} : { waitSeconds },
+        payload: {},
         requestSchema: workerNextRequestSchema,
         responseSchema: workerNextResponseSchema,
-        timeoutMs: nextTimeoutMs(waitSeconds),
+        timeoutMs: NEXT_TIMEOUT_MS,
         role: 'worker',
         send: sendViaHttp,
     });
@@ -235,8 +227,8 @@ const sendViaFetch: Transport = async (connection, endpoint, body, timeoutMs) =>
 /**
  * `next` transport using `node:http`. Node's `fetch` uses undici with a 5-minute `headersTimeout`:
  * a response whose headers haven't arrived within that time fails with `UND_ERR_HEADERS_TIMEOUT` regardless
- * of `AbortSignal.timeout` (verified: a 400 s wait breaks at 301 s), so an hour-long poll
- * cannot survive it. Our own timer controls the whole wait here, with nothing else interfering with the socket.
+ * of `AbortSignal.timeout` (verified: a 400 s wait aborts at 301 s). The current window is shorter, but
+ * leaves little room below that hidden external limit. Here, our own timer sets the deadline.
  */
 const sendViaHttp: Transport = (connection, endpoint, body, timeoutMs) =>
     new Promise<RawResponse>((resolve, reject) => {
@@ -252,8 +244,7 @@ const sendViaHttp: Transport = (connection, endpoint, body, timeoutMs) =>
                     'content-length': Buffer.byteLength(body),
                     authorization: `Bearer ${connection.token}`,
                 },
-                // No connection pool: the session makes one call per process, and an idle agent socket
-                // would keep the process alive afterward.
+                // No connection pool. An idle agent socket would keep the process alive after leaving the loop.
                 agent: false,
             });
         } catch {

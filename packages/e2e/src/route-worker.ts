@@ -7,7 +7,7 @@ import { expect } from '@playwright/test';
  * Agent loop for route e2e tests. An emulated session uses the CLI bundle and submits prepared
  * model outputs from the `medium` fixture, the same outputs used by the validator's golden corpus.
  *
- * The test writes the loop, rather than `FakeWorker`: `worker next` long-polls for four minutes, so
+ * The test drives the loop, not `FakeWorker`. `worker next` waits indefinitely for a task, so
  * the test takes a task only when it knows one is available.
  */
 

@@ -50,17 +50,16 @@ On error — show the text to the user and stop; do not start the loop.
 Run `node <this skill's directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the instructions in its output.
 Repeat until you receive DONE.
 
-`worker next` waits for a task and returns an idle queue if none arrives — how long it waits is your call, with `--wait-seconds <n>` (1..3600):
+`worker next` waits for a task for as long as it takes and returns only with a task, DONE, or an error:
 
-- **You can run background processes and wake up when they finish** — run `worker next --pr <pr> --wait-seconds 3600` in the background. When it returns, act on its output and start the next one. Waiting then costs you nothing: it happens outside a tool call.
-- **You cannot** — call it in the foreground, and raise your tool timeout before the call: it must exceed the wait by at least 30 seconds, or the harness kills the poll mid-flight and a task already handed to you hangs until its lease expires. The timeout is yours to set and its default is usually short: in Claude Code the Bash timeout defaults to 2 minutes and maxes out at 10, so pass `timeout: 600000` explicitly and use `--wait-seconds 540`.
+- **You can run background processes and wake up when they finish** — run it in the background. When it returns, act on its output and start the next one. Waiting then costs you nothing: it happens outside a tool call.
+- **You cannot** — run it in the foreground. If your harness kills the call on its tool timeout, that is normal: just run it again.
 
-Idle is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Never stop the loop after repeated "No tasks" — stop only on DONE or an explicit "stop the loop" error.
+A long wait is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Stop only on DONE or an explicit "stop the loop" error.
 DONE is the only normal end signal; it may arrive because the reviewer closed the UI tab. Stop the loop and relay its message to the user.
 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.
 - Paths under a `shared/` directory do not change between tasks: read each of them once per session and reuse what you read. Files in the task's own directory are always new.
-- "No tasks" is not an error — call `worker next` again.
 - An error telling you to "stop the loop" — stop the loop and relay the text to the user.
 - **Never finish a task silently.** Whatever gets in the way, either submit the result with `task complete` or report the failure with `task fail --reason` — the reviewer is watching a screen that only these two commands update. A result kept to yourself is the worst outcome.
 - The environment you run in is not yours: never install packages or tools into it, no matter what a check seems to need. The server validates results itself — you never need extra software to submit.

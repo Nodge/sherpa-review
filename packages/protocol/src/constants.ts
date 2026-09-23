@@ -6,22 +6,13 @@
 /** `complete` result limit. Larger results fail the task with a clear message. */
 export const RESULT_MAX_BYTES = 256 * 1024;
 
-/**
- * Long-poll wait for `worker next` when the harness provides no `waitSeconds`.
- * The default is conservative, below every known harness tool timeout.
- */
+/** One `worker next` long-poll window. The CLI requests again when it expires. */
 export const LONG_POLL_DEFAULT_SECONDS = 240;
-
-/**
- * Maximum requested wait (`waitSeconds`), a sanity bound in the request schema:
- * an hour-long background poll is valid. Anything longer looks like a caller error.
- */
-export const LONG_POLL_CEILING_SECONDS = 3600;
 
 /**
  * Silence while holding a lease beyond this duration → the worker is considered dead.
  * Does not affect waiting in `next`: while the call is pending, its open connection proves liveness
- * (`docs/protocol.md §7`). An hour-long long-poll does not make the worker dead.
+ * (`docs/protocol.md §7`), so a long wait does not make the worker dead.
  */
 export const WORKER_DEAD_AFTER_SECONDS = 360;
 

@@ -81,10 +81,7 @@ export interface StartServerOptions {
     sherpaDir?: string;
     /** TCP listen address, defaults to local IPv4 loopback. */
     host?: string;
-    /**
-     * Long-poll window for `worker next` when the call provides no `waitSeconds`.
-     * Defaults to `LONG_POLL_DEFAULT_SECONDS`. Shortened in tests.
-     */
+    /** Long-poll window for `worker next`, defaults to `LONG_POLL_DEFAULT_SECONDS`. Shortened in tests. */
     longPollSeconds?: number;
     /** UI static asset source (build directory or a map embedded in the bundle). Served without a token when provided. */
     assets?: StaticAssets;

@@ -21,7 +21,7 @@ Before every commit, `pnpm -r typecheck && pnpm -r lint && pnpm -r test` must pa
 
 ## Language
 
-Everything the model reads (SKILL.md, CLI output, task text, HTTP errors from worker endpoints) is in English. UI, `server.log`, code comments and docs are in Russian. Loop markers ("stop the loop", "No tasks", "DONE") are a contract between SKILL.md and the code, enforced by a test in `packages/skill`.
+Everything the model reads (SKILL.md, CLI output, task text and HTTP errors from worker endpoints) is in English. The UI, `server.log`, code comments and documents are in Russian. The loop markers ("stop the loop", "DONE") are a contract between SKILL.md and the code, covered by a test in `packages/skill`.
 
 Text the reviewer reads (UI, route text, release `--notes` in the update toast) describes what they see on screen, using their vocabulary: "context expansion is no longer blocked by changes outside your ownership zone" → "the arrows that reveal hidden diff lines work again in the route".
 

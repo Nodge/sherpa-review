@@ -79,9 +79,9 @@ describe('skill package build', () => {
     });
 
     /**
-     * The SKILL.md loop identifies situations by exact output phrases: "No tasks" is not an error,
-     * "stop the loop" ends the loop, DONE ends the work. If the wording drifts, the model
-     * silently stops recognizing these situations, so the build checks the agreement.
+     * The SKILL.md loop recognizes situations by exact output phrases: "stop the loop" ends the loop,
+     * DONE ends the work. If the wording diverges, the model silently stops recognizing these situations,
+     * so the build tests the agreement.
      */
     it('uses the exact loop marker phrases from SKILL.md in CLI and server output', () => {
         const skill = readFileSync(join(packageRoot, 'SKILL.md'), 'utf8');
@@ -92,7 +92,7 @@ describe('skill package build', () => {
         // Frontmatter does not count. Its quotes are required by the YAML validator.
         const body = skill.replace(/^---\n[\s\S]*?\n---\n/u, '');
         const markers = [...body.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
-        expect(markers).toEqual(expect.arrayContaining(['No tasks', 'stop the loop']));
+        expect(markers).toEqual(expect.arrayContaining(['stop the loop']));
 
         for (const marker of [...markers, 'DONE']) {
             expect(`${cli}\n${server}`, marker).toContain(marker);

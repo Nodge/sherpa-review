@@ -73,34 +73,15 @@ describe('argument parsing', () => {
         expect(parseArgs(['worker', 'next'])).toEqual({
             kind: 'worker-next',
             prKey: undefined,
-            waitSeconds: undefined,
         });
         expect(parseArgs(['worker', 'next', '--pr', 'github-quillmart--quillmart--1'])).toEqual({
             kind: 'worker-next',
             prKey: 'github-quillmart--quillmart--1',
-            waitSeconds: undefined,
         });
         expect(parseArgs(['--pr=github-quillmart--quillmart--1', 'worker', 'next'])).toEqual({
             kind: 'worker-next',
             prKey: 'github-quillmart--quillmart--1',
-            waitSeconds: undefined,
         });
-    });
-
-    it('worker next --wait-seconds: both forms and contract bounds', () => {
-        expect(parseArgs(['worker', 'next', '--wait-seconds', '540'])).toEqual({
-            kind: 'worker-next',
-            prKey: undefined,
-            waitSeconds: 540,
-        });
-        expect(parseArgs(['worker', 'next', '--wait-seconds=3600']).kind).toBe('worker-next');
-        expect(parseArgs(['worker', 'next', '--wait-seconds=1'])).toMatchObject({ waitSeconds: 1 });
-
-        // The bounds come from the contract (`LONG_POLL_CEILING_SECONDS`), and the text explains the expected value.
-        for (const value of ['0', '3601', '2.5', 'forever', '', '-5']) {
-            expect(() => parseArgs(['worker', 'next', `--wait-seconds=${value}`])).toThrow(CliError);
-            expect(() => parseArgs(['worker', 'next', `--wait-seconds=${value}`])).toThrow('--wait-seconds');
-        }
     });
 
     it('worker register, harness and model are optional', () => {

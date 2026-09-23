@@ -11,7 +11,7 @@ import { expect, test } from './sherpa-fixture.js';
  * from the `medium` fixture, so the numbers on screen are known in advance and must agree
  * (docs/design/SPEC-elements.md §8 items 3–4).
  *
- * The worker loop lives in the test: `worker next` long-polls for four minutes, and a task is claimed
+ * The test runs the worker loop: `worker next` waits indefinitely for a task, so call it
  * only when the server is known to have enqueued one.
  */
 

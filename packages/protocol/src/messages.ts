@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { localeSchema } from './locale.js';
 
-import { LONG_POLL_CEILING_SECONDS, PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from './constants.js';
+import { PROGRESS_TEXT_MAX_CHARS, RESULT_MAX_BYTES } from './constants.js';
 import { leaseSchema, taskIdSchema, taskSchema } from './task.js';
 import { semverSchema } from './version.js';
 
@@ -77,14 +77,10 @@ export const workerStatusSchema = z.discriminatedUnion('kind', [
 export type WorkerStatus = z.infer<typeof workerStatusSchema>;
 
 /**
- * `sherpa worker next` long-polls for the next task.
- * The harness decides how long to wait. `waitSeconds` is the requested wait,
- * and the server holds the call no longer than that. Without the field, the server default applies
- * (`LONG_POLL_DEFAULT_SECONDS`). Schema validation rejects values above the limit.
+ * `sherpa worker next` long-polls for the next task. The server sets the window
+ * (`LONG_POLL_DEFAULT_SECONDS`). The CLI can wait longer by repeating the request.
  */
-export const workerNextRequestSchema = workerRequestBase.extend({
-    waitSeconds: z.number().int().min(1).max(LONG_POLL_CEILING_SECONDS).optional(),
-});
+export const workerNextRequestSchema = workerRequestBase;
 export type WorkerNextRequest = z.infer<typeof workerNextRequestSchema>;
 
 export const workerNextResponseSchema = z.discriminatedUnion('kind', [

@@ -2,7 +2,6 @@ import fs from 'node:fs/promises';
 
 import type { WorkerStatus } from '@sherpa/protocol';
 import {
-    LONG_POLL_CEILING_SECONDS,
     PROTOCOL_VERSION,
     RESULT_MAX_BYTES,
     rpcErrorSchema,
@@ -594,25 +593,7 @@ describe('worker endpoints', () => {
             expect(elapsed).toBeLessThan(5000);
         });
 
-        it('the call\'s waitSeconds overrides the server window: waits exactly as long as requested', async () => {
-            // The server window is long. If it applied, the call would hang for half a minute.
-            const server = await start(30);
-
-            const started = Date.now();
-            const response = await postJson(
-                server.port,
-                WORKER_ENDPOINTS.next,
-                { ...BASE, waitSeconds: 1 },
-                server.token,
-            );
-            const elapsed = Date.now() - started;
-
-            expect(workerNextResponseSchema.parse(await response.json()).kind).toBe('idle');
-            expect(elapsed).toBeGreaterThanOrEqual(900);
-            expect(elapsed).toBeLessThan(10_000);
-        });
-
-        it('takes the window from the server option without waitSeconds', async () => {
+        it('uses the window from the server option', async () => {
             const server = await start(0.3);
 
             const started = Date.now();
@@ -624,43 +605,19 @@ describe('worker endpoints', () => {
             expect(elapsed).toBeLessThan(10_000);
         });
 
-        it('waitSeconds outside contract bounds returns bad_request with a field list', async () => {
-            const server = await start();
-
-            for (const waitSeconds of [0, LONG_POLL_CEILING_SECONDS + 1, 1.5]) {
-                const response = await postJson(
-                    server.port,
-                    WORKER_ENDPOINTS.next,
-                    { ...BASE, waitSeconds },
-                    server.token,
-                );
-
-                expect(response.status).toBe(400);
-                const body = rpcErrorSchema.parse(await response.json());
-                expect(body.error.code).toBe('bad_request');
-                expect(body.error.details?.some((detail) => detail.startsWith('waitSeconds:'))).toBe(true);
-            }
-        });
-
         /**
          * Regression #35: the death timeout measures silence, and a pending `next` is not silence.
          * Otherwise a worker waiting for an hour would appear dead, and the UI would show "Agent disconnected".
          */
         it('keeps the worker connected throughout a long wait', async () => {
-            const server = await start(0.3);
-            const pending = postJson(
-                server.port,
-                WORKER_ENDPOINTS.next,
-                { ...BASE, waitSeconds: 30 },
-                server.token,
-            );
+            const server = await start(30);
+            const pending = postJson(server.port, WORKER_ENDPOINTS.next, BASE, server.token);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // The clock is far past the death timeout. The call's connection keeps the session alive.
             advanceServerClock(WORKER_DEAD_AFTER_SECONDS + 1);
             expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
 
-            // The server window (0.3 s) would have expired long ago too. The call still waits for its own waitSeconds.
             await new Promise((resolve) => setTimeout(resolve, 500));
             expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected', workerId: WORKER });
 

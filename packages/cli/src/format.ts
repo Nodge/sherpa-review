@@ -1,10 +1,5 @@
 import type { RpcError, RpcErrorCode, Task, TaskAckResponse, TaskCompleteResponse } from '@sherpa/protocol';
-import {
-    LONG_POLL_CEILING_SECONDS,
-    LONG_POLL_DEFAULT_SECONDS,
-    PROTOCOL_VERSION,
-    RESULT_MAX_BYTES,
-} from '@sherpa/protocol';
+import { PROTOCOL_VERSION, RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import { CLI_VERSION } from './version.js';
 
@@ -161,10 +156,7 @@ export function helpText(): string {
             'sherpa worker register [--harness <name>] [--model <name>] [--lang <ru|en>]',
             'register this session as the PR worker',
         ],
-        [
-            'sherpa worker next [--wait-seconds <n>]',
-            'take the next task; waits out --wait-seconds, then reports an idle queue',
-        ],
+        ['sherpa worker next', 'take the next task; waits for one as long as it takes'],
         ['sherpa task complete <id> --file <path>', 'submit the result of a task'],
         ['sherpa task progress <id> --text "<text>"', 'interim status for the reviewer'],
         ['sherpa task fail <id> --reason "<text>"', 'refuse a task with a reason'],
@@ -183,11 +175,6 @@ export function helpText(): string {
             'the language you speak with the reviewer in; hints the UI language, omit if unsure',
         ],
         ['--no-open', 'do not open the browser after `up` starts a new server'],
-        [
-            '--wait-seconds <n>',
-            `how long \`worker next\` may block, 1..${String(LONG_POLL_CEILING_SECONDS)}; ` +
-                `default ${String(LONG_POLL_DEFAULT_SECONDS)}`,
-        ],
         ['--version', 'CLI version'],
     ];
 

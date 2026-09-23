@@ -16,7 +16,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa.mjs');
 
 const PR_KEY = 'github-quillmart--quillmart--909';
-/** Long-poll window: scenarios need a fast `idle`, without waiting the contracted four minutes. */
+/** Short long-poll window. The bundle loops `next` through frequent `idle` responses, as a real server does every four minutes. */
 const LONG_POLL_SECONDS = 0.2;
 /** Time shift guaranteed to outlast an interactive task lease (and the worker death timeout too). */
 const PAST_LEASE_SECONDS = LEASE_TTL_SECONDS.interactive + 1;
@@ -172,9 +172,10 @@ describe('worker session scenarios', () => {
         expect(completed.stdout).toContain('has been cancelled');
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'cancelled', result: null });
 
-        const empty = await worker.next();
-        expect(empty.taskId).toBe(null);
-        expect(empty.stdout).toContain('No tasks');
+        // The cancelled task is not issued again. The next next takes only the new task.
+        const fresh = enqueue('Task after cancellation.');
+        const next = await worker.next();
+        expect(next.taskId).toBe(fresh);
     });
 
     it('reconnection gives the task to the new session immediately and tells the old one to stop the loop', async () => {
@@ -214,8 +215,10 @@ describe('worker session scenarios', () => {
             advance(PAST_LEASE_SECONDS);
         }
 
-        const empty = await worker.next();
-        expect(empty.taskId).toBe(null);
+        // The exhausted task is not issued a fourth time. next takes the next one.
+        const fresh = enqueue('Next task.');
+        const next = await worker.next();
+        expect(next.taskId).toBe(fresh);
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'failed', workerId: null });
         expect(server.queue.getTask(taskId)?.failReason).toContain('attempts exhausted');
     });

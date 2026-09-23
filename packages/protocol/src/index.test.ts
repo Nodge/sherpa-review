@@ -13,7 +13,6 @@ import {
     imageMimeOf,
     iterationSchema,
     lensZoneSchema,
-    LONG_POLL_CEILING_SECONDS,
     prMetaSchema,
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
@@ -35,7 +34,6 @@ import {
     uiSettingsSchema,
     uiSnapshotSummarySchema,
     uiUpdateSchema,
-    workerNextRequestSchema,
     workerNextResponseSchema,
 } from './index.js';
 
@@ -81,23 +79,6 @@ describe('task and lease', () => {
         expect(taskSchema.safeParse({ ...validTask, type: 'route.skeleton' }).success).toBe(true);
         expect(taskSchema.safeParse({ ...validTask, type: 'route.section' }).success).toBe(true);
         expect(taskSchema.safeParse({ ...validTask, type: 'chat' }).success).toBe(true);
-    });
-
-    it('waitSeconds in next: optional, integer, within sane bounds', () => {
-        const base = { protocolVersion: '0.1.0', cliVersion: '0.1.0', workerId: 'w-1' };
-
-        // Without the field, the server decides how long to wait (`LONG_POLL_DEFAULT_SECONDS`).
-        expect(workerNextRequestSchema.safeParse(base).success).toBe(true);
-        expect(workerNextRequestSchema.safeParse({ ...base, waitSeconds: 1 }).success).toBe(true);
-        expect(
-            workerNextRequestSchema.safeParse({ ...base, waitSeconds: LONG_POLL_CEILING_SECONDS }).success,
-        ).toBe(true);
-
-        expect(workerNextRequestSchema.safeParse({ ...base, waitSeconds: 0 }).success).toBe(false);
-        expect(
-            workerNextRequestSchema.safeParse({ ...base, waitSeconds: LONG_POLL_CEILING_SECONDS + 1 }).success,
-        ).toBe(false);
-        expect(workerNextRequestSchema.safeParse({ ...base, waitSeconds: 1.5 }).success).toBe(false);
     });
 
     it('distinguishes task/idle/done in the next response by kind', () => {

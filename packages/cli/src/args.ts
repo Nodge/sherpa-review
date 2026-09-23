@@ -1,5 +1,5 @@
 import type { Locale } from '@sherpa/protocol';
-import { LONG_POLL_CEILING_SECONDS, localeSchema } from '@sherpa/protocol';
+import { localeSchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
 
@@ -26,8 +26,6 @@ export type Command =
     | {
           readonly kind: 'worker-next';
           readonly prKey: string | undefined;
-          /** How long the harness can wait for a task. undefined lets the server decide. */
-          readonly waitSeconds: number | undefined;
       }
     | {
           readonly kind: 'worker-register';
@@ -68,7 +66,6 @@ const OPTIONS = [
     '--harness',
     '--model',
     '--lang',
-    '--wait-seconds',
 ] as const;
 const FLAGS = ['--no-open'] as const;
 type OptionName = (typeof OPTIONS)[number];
@@ -214,7 +211,7 @@ function parseWorkerCommand(
             lang: parseLang(options.get('--lang')),
         };
     }
-    return { kind: 'worker-next', prKey, waitSeconds: parseWaitSeconds(options.get('--wait-seconds')) };
+    return { kind: 'worker-next', prKey };
 }
 
 /**
@@ -236,27 +233,6 @@ function parseLang(raw: string | undefined): Locale | undefined {
         );
     }
     return parsed.data;
-}
-
-/**
- * Requested `worker next` wait: how long the harness is willing to keep the call open.
- * The bounds come from the contract (`LONG_POLL_CEILING_SECONDS`). Without the flag, the server decides.
- */
-function parseWaitSeconds(raw: string | undefined): number | undefined {
-    if (raw === undefined) {
-        return undefined;
-    }
-
-    const seconds = Number(raw.trim());
-    if (!Number.isInteger(seconds) || seconds < 1 || seconds > LONG_POLL_CEILING_SECONDS) {
-        throw new CliError(
-            `sherpa: --wait-seconds must be a whole number of seconds from 1 to ` +
-                `${String(LONG_POLL_CEILING_SECONDS)}, got ${JSON.stringify(raw)}.\n` +
-                'Pass how long you are ready to wait for a task: slightly less than your tool timeout ' +
-                'in the foreground, or up to an hour when you poll in the background.',
-        );
-    }
-    return seconds;
 }
 
 function parseTaskCommand(

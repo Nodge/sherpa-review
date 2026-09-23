@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 
-import type { WorkerRegisterResponse } from '@sherpa/protocol';
+import type { WorkerNextResponse, WorkerRegisterResponse } from '@sherpa/protocol';
 import { RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import type { Command } from './args.js';
@@ -9,6 +9,7 @@ import type { OpenBrowserOptions } from './browser.js';
 import { openBrowser } from './browser.js';
 import type { WorkerLabels } from './client.js';
 import { requestComplete, requestFail, requestNext, requestProgress, requestRegister } from './client.js';
+import type { ServerConnection } from './discovery.js';
 import { connect, connectAs, freshWorkerId, resolvePrKey } from './discovery.js';
 import { CliError, userMessage } from './errors.js';
 import {
@@ -143,18 +144,28 @@ function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>)
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
     const connection = await connect(command.prKey, io.env, io.runCommand);
-    const response = await requestNext(connection, command.waitSeconds);
+    const response = await awaitTask(connection);
 
     switch (response.kind) {
         case 'task':
             io.out(formatTask(response.task));
             return 0;
-        case 'idle':
-            io.out(response.message);
-            return 0;
         case 'done':
             io.out(formatDone(response.message));
             return 0;
+    }
+}
+
+/**
+ * Waits for a task indefinitely. Swallows the server's `idle` and sends another `next` immediately. Returns
+ * only a task, `done` or an error.
+ */
+async function awaitTask(connection: ServerConnection): Promise<Exclude<WorkerNextResponse, { kind: 'idle' }>> {
+    for (;;) {
+        const response = await requestNext(connection);
+        if (response.kind !== 'idle') {
+            return response;
+        }
     }
 }
 
