@@ -39,6 +39,7 @@ const DESCRIPTIONS = {
         reviewProgress: 'reading progress by iteration',
         reviewFileViewed: 'mark a file as read',
         reviewStopViewed: 'mark read ranges in a stop',
+        reviewStopFileViewed: 'mark read file lines in one stop',
         reviewViewedMirror: 'mirror the file read mark to the host',
         reviewSaveDraft: 'save a comment draft',
         reviewUpdateDraft: 'edit a comment draft',

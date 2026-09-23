@@ -9,6 +9,7 @@ import type {
     UiChatAskAnchor,
     UiGenerationCap,
     UiReviewLensesResponse,
+    UiSeenRange,
     UiStopSeenRange,
 } from '@sherpa/protocol';
 import type { CSSProperties, ReactNode } from 'react';
@@ -19,6 +20,7 @@ import { chatAnchorFromSelection, SelectionPopover } from '../../components/sele
 import type { DiffFileModel } from '../../diff/model.js';
 import type { Feedback } from '../../diff-view/file-card.tsx';
 import type { DiffViewStore } from '../../diff-view/store.js';
+import { viewedCollapsible } from '../../diff-view/store.js';
 import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { useT } from '../../i18n/index.js';
@@ -48,10 +50,12 @@ import {
     buildRouteModel,
     changeFilterAvailable,
     countStopComments,
+    entryGroups,
     entryMatchesChangeFilter,
     otherMatchesFilter,
     stopMatchesFilter,
 } from '../../route/route-model.js';
+import { cardReadState } from '../../route/stop-coverage.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { createThreadActions } from '../../threads/actions.js';
 import type { ComposerTransport } from '../../threads/composer.js';
@@ -63,7 +67,7 @@ import { CoverageStrip } from './coverage-strip.tsx';
 import { OtherSection } from './other-section.tsx';
 import { RouteToolbar } from './route-toolbar.tsx';
 import { stopChangeThreads } from './stop-card.tsx';
-import { entryId } from './stop-lookup.js';
+import { collapsedKey, entryId } from './stop-lookup.js';
 import { collapsedStopShown, StopSection } from './stop-section.tsx';
 import { useRouteJump } from './use-route-jump.js';
 import { useRouteParse } from './use-route-parse.js';
@@ -104,6 +108,12 @@ export interface RouteWorkspaceProps {
         stopId: string,
         viewed: boolean,
         ranges: readonly UiStopSeenRange[],
+    ) => Promise<number>;
+    readonly onSetStopFileViewed?: (
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
     ) => Promise<number>;
     readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
     readonly loadContent: (fileId: string) => Promise<FileContent | null>;
@@ -151,6 +161,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         loadContent,
         onSetViewed = EMPTY_SET_VIEWED,
         onSetStopViewed = EMPTY_SET_STOP_VIEWED,
+        onSetStopFileViewed = EMPTY_SET_STOP_FILE_VIEWED,
         progressLoaded = true,
         navigation = null,
         initialSelectionTarget = null,
@@ -249,10 +260,11 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                     restore: stopProgress.restore,
                     send: onSetStopViewed,
                 },
+                stopFiles: { apply: store.applySeenRanges, send: onSetStopFileViewed },
                 // App handles progress refreshes over SSE. A standalone workspace (gallery) does not.
                 onSettled: () => undefined,
             }),
-        [onSetStopViewed, onSetViewed, stopProgress, store],
+        [onSetStopFileViewed, onSetStopViewed, onSetViewed, stopProgress, store],
     );
     const writer = props.progressWriter ?? createdWriter;
     const markViewed = useCallback(
@@ -261,6 +273,20 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 return null;
             }
             return { text: t('route.stop.notSaved'), retry: () => mark(fileId, viewed) };
+        },
+        [t, writer],
+    );
+    const markStopFile = useCallback(
+        async function mark(
+            stopId: string,
+            fileId: string,
+            viewed: boolean,
+            ranges: readonly UiSeenRange[],
+        ): Promise<Feedback> {
+            if (await writer.writeStopFile(stopId, fileId, viewed, ranges)) {
+                return null;
+            }
+            return { text: t('route.stop.notSaved'), retry: () => mark(stopId, fileId, viewed, ranges) };
         },
         [t, writer],
     );
@@ -352,6 +378,27 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
      */
     const [viewportHeight, setViewportHeight] = useState<number | null>(null);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
+    /** Temporarily expanded viewed file cards, keyed by both stop and file. */
+    const [openedViewed, setOpenedViewed] = useState<ReadonlySet<string>>(new Set());
+    // Expansion lasts while the card is viewed. Marking it again collapses it.
+    useEffect(() => {
+        const snapshot = { progress: diffSnapshot.progress, readState: diffSnapshot.readState };
+        setOpenedViewed((previous) => {
+            if (previous.size === 0) {
+                return previous;
+            }
+            const kept = new Set<string>();
+            for (const entry of model.entries) {
+                for (const group of entryGroups(entry)) {
+                    const key = collapsedKey(entryId(entry), group.fileId);
+                    if (previous.has(key) && viewedCollapsible(cardReadState(group, snapshot))) {
+                        kept.add(key);
+                    }
+                }
+            }
+            return kept.size === previous.size ? previous : kept;
+        });
+    }, [diffSnapshot.progress, diffSnapshot.readState, model.entries]);
 
     useEffect(() => {
         const element = containerRef.current;
@@ -423,6 +470,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         setOtherOpen,
         openedCollapsed,
         setOpenedCollapsed,
+        setOpenedViewed,
         expand,
         requestJump,
         initialSelectionTarget,
@@ -629,12 +677,15 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
         parseErrors,
         openedCollapsed,
         setOpenedCollapsed,
+        openedViewed,
+        setOpenedViewed,
         containerRef,
         selectionCard,
         setSelectionCard,
         expand,
         retryParse,
         markViewed,
+        markStopFile,
         requestJump,
     });
 
@@ -935,3 +986,5 @@ const NO_SELECTION_PENDING = (): boolean => false;
 const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 const EMPTY_SET_STOP_VIEWED = (): Promise<number> =>
     Promise.reject(new Error('marking a stop viewed is unavailable in this state'));
+const EMPTY_SET_STOP_FILE_VIEWED = (): Promise<number> =>
+    Promise.reject(new Error('marking a stop file viewed is unavailable in this state'));

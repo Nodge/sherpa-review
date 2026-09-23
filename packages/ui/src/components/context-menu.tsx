@@ -308,6 +308,8 @@ export interface FileMenuTarget {
 export interface FileContextMenuProps {
     readonly file: FileMenuTarget;
     readonly viewed: boolean;
+    /** Why the viewed-mark item is disabled. `null` means enabled. */
+    readonly viewedDisabledReason?: string | null;
     readonly onToggleViewed: () => void;
     /**
      * File comment without a line. Image cards have no lines but still need a place for comments.
@@ -327,6 +329,7 @@ export interface FileContextMenuProps {
 export function FileContextMenu({
     file,
     viewed,
+    viewedDisabledReason = null,
     onToggleViewed,
     onCommentFile,
     anchor,
@@ -389,8 +392,8 @@ export function FileContextMenu({
     items.push({
         id: 'viewed',
         label: viewed ? t('file.menu.unmarkViewed') : t('file.menu.markViewed'),
-        disabled: readOnly,
-        title: readOnly ? readOnlyReason : undefined,
+        disabled: readOnly || viewedDisabledReason !== null,
+        title: readOnly ? readOnlyReason : (viewedDisabledReason ?? undefined),
         separatorBefore: onCommentFile === undefined,
         onSelect: () => {
             onToggleViewed();

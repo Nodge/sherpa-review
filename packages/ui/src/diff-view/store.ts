@@ -1,8 +1,8 @@
-import type { FileContent, FileDiff, UiFileProgress } from '@sherpa/protocol';
+import type { FileContent, FileDiff, UiFileProgress, UiSeenRange } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
-import { changedLinesOf, readStateOf } from '../progress/read-state.js';
+import { changedLinesOf, changeSeenRanges, readStateOf } from '../progress/read-state.js';
 import type { ExpandDirection, FileExpansion, GapKey } from './expand.js';
 import { expandAllGaps, expandGap } from './expand.js';
 import type { LineKey, LineSelection } from './selection.js';
@@ -71,6 +71,11 @@ export interface DiffViewStore {
     readonly markViewed: (fileId: string, viewed: boolean) => void;
     /** Roll back an optimistic mark: `null` means no record existed before it. */
     readonly restoreProgress: (fileId: string, record: UiFileProgress | null) => void;
+    /**
+     * Optimistic file mark within a stop: adds the card's ranges to the file record
+     * or subtracts them from it, without changing the `viewed` flag.
+     */
+    readonly applySeenRanges: (fileId: string, change: 'add' | 'remove', ranges: readonly UiSeenRange[]) => void;
     /** Toggles manual collapse with the same layer formula as route stops (docs/design/SPEC-elements.md §2.9). */
     readonly toggleFileCollapse: (fileId: string) => void;
     /**
@@ -117,9 +122,21 @@ type FileCollapseSnapshot = Pick<
 /** Final collapse reason from docs/design/SPEC-elements.md §2.9. Collapse for >2000 lines is calculated separately. */
 export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDiff): FileCollapseReason | null {
     const read = snapshot.readState.get(file.fileId) ?? readStateOf({ file, record: null });
-    // The generated default works like the low tier, not a viewed mark. An explicit expansion must survive un-pin.
-    if (read.state === 'read' && !read.generatedDefault) {
-        return snapshot.collapseExpandedViewed.has(file.fileId) ? null : 'viewed';
+    return collapseReasonOf(snapshot, file, read, snapshot.collapseExpandedViewed.has(file.fileId));
+}
+
+/**
+ * The same formula for a given read-state: a file card in a stop collapses as
+ * viewed based on its own lines, not the whole file. `viewedOpen` temporarily expands a viewed card.
+ */
+export function collapseReasonOf(
+    snapshot: Pick<DiffViewSnapshot, 'collapseExpanded' | 'collapseCollapsed'>,
+    file: FileDiff,
+    read: FileReadState,
+    viewedOpen: boolean,
+): FileCollapseReason | null {
+    if (viewedCollapsible(read)) {
+        return viewedOpen ? null : 'viewed';
     }
     if (snapshot.collapseCollapsed.has(file.fileId)) {
         return 'manual';
@@ -128,6 +145,14 @@ export function fileCollapseReason(snapshot: FileCollapseSnapshot, file: FileDif
         return 'generated';
     }
     return null;
+}
+
+/**
+ * The file collapses as viewed. The generated default works like the low tier, not the viewed mark:
+ * explicit expansion must survive un-pin.
+ */
+export function viewedCollapsible(read: FileReadState): boolean {
+    return read.state === 'read' && !read.generatedDefault;
 }
 
 /**
@@ -364,6 +389,25 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             update({ progress, readState: recomputeOne(fileId, progress) });
         },
 
+        applySeenRanges: (fileId, change, ranges) => {
+            const record = snapshot.progress.get(fileId) ?? { fileId, viewed: null, seenRanges: [] };
+            const progress = new Map(snapshot.progress).set(fileId, {
+                ...record,
+                seenRanges: changeSeenRanges(record.seenRanges, change, ranges),
+            });
+            if (change === 'add') {
+                update({ progress, readState: recomputeOne(fileId, progress) });
+                return;
+            }
+            const expandedViewed = new Set(snapshot.collapseExpandedViewed);
+            expandedViewed.delete(fileId);
+            update({
+                progress,
+                readState: recomputeOne(fileId, progress),
+                collapseExpandedViewed: expandedViewed,
+            });
+        },
+
         toggleFileCollapse: (fileId) => {
             const file = filesById.get(fileId);
             if (file === undefined) {
@@ -375,7 +419,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             }
 
             const read = snapshot.readState.get(fileId) ?? readStateOf({ file, record: null });
-            if (read.state === 'read' && !read.generatedDefault) {
+            if (viewedCollapsible(read)) {
                 const expandedViewed = new Set(snapshot.collapseExpandedViewed);
                 if (expandedViewed.delete(fileId)) {
                     update({ collapseExpandedViewed: expandedViewed });

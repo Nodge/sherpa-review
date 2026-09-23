@@ -70,6 +70,7 @@ function RebuildState({ banner }: { banner: ReactNode }) {
                 }}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={() => Promise.resolve(0)}
+                onSetStopFileViewed={() => Promise.resolve(0)}
                 onFillStop={() => undefined}
             />
         </div>

@@ -39,6 +39,8 @@ export interface StopFileCardProps {
     readonly expansion: FileExpansion;
     readonly shownModel: DiffFileModel | null;
     readonly read: FileReadState;
+    /** Why the card cannot be marked: the file has no model yet. `null` means marking is allowed. */
+    readonly viewedBlocked: 'pending' | 'parseFailed' | null;
     readonly collapseReason: FileCollapseReason | null;
     readonly onToggleCollapse: () => void;
     readonly showWhitespace: boolean;
@@ -85,6 +87,7 @@ export function StopFileCard({
     expansion,
     shownModel,
     read,
+    viewedBlocked,
     collapseReason,
     onToggleCollapse,
     showWhitespace,
@@ -172,6 +175,16 @@ export function StopFileCard({
                 shownModel={shownModel}
                 counts={{ additions: group.additions, deletions: group.deletions }}
                 read={read}
+                viewedDisabledReason={
+                    // Clearing the pin needs no model because it requires no ranges.
+                    viewedBlocked === null || read.state === 'read'
+                        ? null
+                        : t(
+                              viewedBlocked === 'pending'
+                                  ? 'route.stopFile.viewed.pending'
+                                  : 'route.stopFile.viewed.parseFailed',
+                          )
+                }
                 collapseReason={collapseReason}
                 onToggleCollapse={onToggleCollapse}
                 opened

@@ -60,7 +60,7 @@ import { usePrStateStore } from '../pr-state/context.tsx';
 import { collapsedFromMap, collapsedToMap } from '../pr-state/pr-state-store.js';
 import { readSelectionLink } from '../selection-link.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
-import type { ProgressWriter, StopWriterHooks } from '../progress/progress-writer.js';
+import type { ProgressWriter, StopFileWriterHooks, StopWriterHooks } from '../progress/progress-writer.js';
 import { buildRouteMargin } from '../route/margin-model.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore, ThreadsShow } from '../session/session-store.js';
@@ -627,6 +627,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 send: onSetViewed,
                 // Full diff has no stop marks: the route has its own view.
                 stops: NO_STOP_WRITES,
+                stopFiles: NO_STOP_FILE_WRITES,
                 // In-flight writes defer the reread. The decision is reconsidered after the response.
                 onSettled: () => {
                     setWritesSettled((settled) => settled + 1);
@@ -1617,12 +1618,16 @@ const EMPTY_ASK_SELECTION = (): void => undefined;
 const NO_SELECTION_PENDING = (): boolean => false;
 const fileIdOf = (file: { readonly fileId: string }): string => file.fileId;
 const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
-/** The full diff does not mark stops: it has no controls for that. */
+/** Full diff does not mark stops or their cards: it has no controls for that. */
 const NO_STOP_WRITES: StopWriterHooks = {
     read: () => null,
     apply: () => undefined,
     restore: () => undefined,
     send: () => Promise.reject(new Error('marking a stop viewed is unavailable on the full diff')),
+};
+const NO_STOP_FILE_WRITES: StopFileWriterHooks = {
+    apply: () => undefined,
+    send: () => Promise.reject(new Error('marking a stop file viewed is unavailable on the full diff')),
 };
 
 /**

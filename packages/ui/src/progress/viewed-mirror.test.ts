@@ -50,6 +50,35 @@ describe('mirroring read state from coverage', () => {
         expect(update.state.get('A')).toBe(true);
     });
 
+    it('mirrors the transition to read when file cards in different stops cover the whole file', () => {
+        const nullRecord = (seenRanges: readonly UiSeenRange[]): UiFileProgress => ({
+            fileId: 'A',
+            viewed: null,
+            seenRanges: [...seenRanges],
+        });
+        const baseline = viewedMirrorUpdate(null, source([{ fileId: 'A' }]));
+        const firstCard = viewedMirrorUpdate(
+            baseline.state,
+            source([{ fileId: 'A', record: nullRecord([{ side: 'new', start: 1, end: 1 }]) }]),
+        );
+        const bothCards = viewedMirrorUpdate(
+            firstCard.state,
+            source([
+                {
+                    fileId: 'A',
+                    record: nullRecord([
+                        { side: 'new', start: 1, end: 1 },
+                        { side: 'new', start: 2, end: 3 },
+                    ]),
+                },
+            ]),
+        );
+
+        // Partial coverage is not reported to the host because its status is binary.
+        expect(firstCard.entries).toEqual([]);
+        expect(bothCards.entries).toEqual([{ fileId: 'A', viewed: true }]);
+    });
+
     it('produces symmetric deltas for full coverage and clearing a stop', () => {
         const baseline = viewedMirrorUpdate(null, source([{ fileId: 'A', record: record('A', false, PARTIAL) }]));
         const covered = viewedMirrorUpdate(

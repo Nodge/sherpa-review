@@ -571,8 +571,8 @@ export type UiPrStatePatch = z.infer<typeof uiPrStatePatchSchema>;
  * seen ranges. The UI applies defaults as if there were no record
  * (generated → `read`). A file without a record has the default state.
  *
- * Seen ranges are line ranges covered by manually marked stops
- * (written by `reviewStopViewed`). The UI derives tri-state (`unread`/`partial`/`read`) and
+ * Seen ranges are line ranges covered by manually marked stops and the file cards
+ * within them (written by `reviewStopViewed` and `reviewStopFileViewed`). The UI calculates the tri-state (`unread`/`partial`/`read`) and
  * "N of M lines seen" tooltips from these data and its own diff model.
  * The server does not interpret patches.
  */
@@ -665,6 +665,28 @@ export const uiSetStopViewedResponseSchema = z.object({
     progressRevision: z.number().int().min(0),
 });
 export type UiSetStopViewedResponse = z.infer<typeof uiSetStopViewedResponseSchema>;
+
+/**
+ * Viewed mark for a file within a stop (`docs/design/SPEC-elements.md §2.10`): writes
+ * the card's seen ranges bound to the stop and file, without pinning the file or changing the stop
+ * mark. The UI marks the stop when all its cards are covered. Clearing the mark removes this
+ * stop's ranges for this file and clears the stop mark, since it is no longer covered. Snapshot and host mirroring
+ * work as in `reviewStopViewed`.
+ */
+export const uiSetStopFileViewedRequestSchema = z.object({
+    stopId: z.string().min(1),
+    fileId: hostIdSchema,
+    viewed: z.boolean(),
+    snapshotId: z.string().min(1).optional(),
+    /** Ignored when `viewed: false`. */
+    ranges: z.array(uiSeenRangeSchema),
+});
+export type UiSetStopFileViewedRequest = z.infer<typeof uiSetStopFileViewedRequestSchema>;
+
+export const uiSetStopFileViewedResponseSchema = z.object({
+    progressRevision: z.number().int().min(0),
+});
+export type UiSetStopFileViewedResponse = z.infer<typeof uiSetStopFileViewedResponseSchema>;
 
 /**
  * Mirrors viewed marks to the host without a local write. The UI reports
@@ -860,6 +882,8 @@ export const UI_ENDPOINTS = {
     reviewFileViewed: '/api/ui/review/file-viewed',
     /** POST `uiSetStopViewedRequestSchema` → `uiSetStopViewedResponseSchema`. Available without a review host too. */
     reviewStopViewed: '/api/ui/review/stop-viewed',
+    /** POST `uiSetStopFileViewedRequestSchema` → `uiSetStopFileViewedResponseSchema`. Available without a review host too. */
+    reviewStopFileViewed: '/api/ui/review/stop-file-viewed',
     /** POST `uiViewedMirrorRequestSchema` → `uiReviewWriteAckSchema`. */
     reviewViewedMirror: '/api/ui/review/viewed-mirror',
     /** POST `uiSaveDraftRequestSchema` → `uiSaveDraftResponseSchema`. */

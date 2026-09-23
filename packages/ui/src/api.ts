@@ -27,7 +27,9 @@ import type {
     UiRouteGenerateResponse,
     UiReviewRouteResponse,
     UiSaveDraftResponse,
+    UiSeenRange,
     UiSetFileViewedResponse,
+    UiSetStopFileViewedResponse,
     UiSetStopViewedResponse,
     UiSettings,
     UiSettingsPatch,
@@ -64,6 +66,7 @@ import {
     uiRouteGenerateResponseSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
     uiSettingsResponseSchema,
     uiUpdateCheckResponseSchema,
@@ -276,6 +279,23 @@ export async function setStopViewed(
         token,
         { snapshotId, stopId, viewed, ranges },
         uiSetStopViewedResponseSchema,
+    );
+}
+
+/** Marks a file within a stop as "viewed". Semantics are defined by `uiSetStopFileViewedRequestSchema`. */
+export async function setStopFileViewed(
+    token: string,
+    snapshotId: string,
+    stopId: string,
+    fileId: string,
+    viewed: boolean,
+    ranges: readonly UiSeenRange[],
+): Promise<UiSetStopFileViewedResponse> {
+    return post(
+        UI_ENDPOINTS.reviewStopFileViewed,
+        token,
+        { snapshotId, stopId, fileId, viewed, ranges },
+        uiSetStopFileViewedResponseSchema,
     );
 }
 

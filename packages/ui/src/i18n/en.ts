@@ -155,6 +155,8 @@ export const en: Dictionary = {
     'route.stop.viewed.unfilled': 'This stop is not filled yet',
     'route.stop.viewed.parseFailed': 'Some files of this stop failed to parse — retry the parse',
     'route.stop.viewed.pending': 'The ranges of this stop are still being counted',
+    'route.stopFile.viewed.pending': 'The diff of this file is still being parsed',
+    'route.stopFile.viewed.parseFailed': 'The diff of this file failed to parse — retry the parse',
     'route.stop.changeLabel': 'why this stop changed',
     'route.stop.unfilled.failed':
         'Not filled — the agent stopped early. The title and the number are fixed by the plan.',

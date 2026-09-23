@@ -655,9 +655,7 @@ export function composersForGroup(
  * these are uncovered ranges. The UI computes them because the server has no diff model.
  */
 export function stopSeenRanges(entry: RouteEntry): readonly UiStopSeenRange[] {
-    const groups: readonly RouteFileGroup[] =
-        entry.kind === 'stop' ? entry.view.files : entry.view.files.map((file) => uncoveredAsGroup(file));
-    return groups.flatMap((group) =>
+    return entryGroups(entry).flatMap((group) =>
         group.seenRanges.map((span) => ({
             fileId: group.fileId,
             side: span.side,
@@ -674,6 +672,11 @@ export function countStopComments(
     iteration: IterationLayout | null = null,
 ): number {
     return view.files.reduce((total, group) => total + threadsForGroup(group, byFile, iteration).length, 0);
+}
+
+/** File cards of a route entry. For "Other", these are its uncovered files. */
+export function entryGroups(entry: RouteEntry): readonly RouteFileGroup[] {
+    return entry.kind === 'stop' ? entry.view.files : entry.view.files.map((file) => uncoveredAsGroup(file));
 }
 
 /** An "Other" file as a regular stop file group, with the same cards and threads. */

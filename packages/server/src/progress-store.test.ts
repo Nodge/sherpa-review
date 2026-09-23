@@ -261,6 +261,95 @@ describe('reading progress store', () => {
         ]);
     });
 
+    describe('marking a file within a stop', () => {
+        it('writes card ranges without a file pin or stop mark', () => {
+            const store = new ProgressStore({ db: open() });
+
+            expect(
+                store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, [
+                    { side: 'new', start: 10, end: 14 },
+                    { side: 'old', start: 2, end: 3 },
+                ]),
+            ).toBe(1);
+
+            expect(store.read(V1)).toEqual([
+                {
+                    fileId: 'file-1',
+                    viewed: null,
+                    seenRanges: expect.arrayContaining([
+                        { side: 'new', start: 10, end: 14 },
+                        { side: 'old', start: 2, end: 3 },
+                    ]) as unknown,
+                },
+            ]);
+            expect(store.readStops('snap-1')).toEqual([]);
+        });
+
+        it('keeps the revision unchanged for the same set of ranges', () => {
+            const store = new ProgressStore({ db: open() });
+            const ranges = [
+                { side: 'new' as const, start: 10, end: 14 },
+                { side: 'old' as const, start: 2, end: 3 },
+            ];
+
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, ranges)).toBe(1);
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, [...ranges].reverse())).toBe(1);
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, [...ranges, ...ranges])).toBe(1);
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, ranges.slice(0, 1))).toBe(2);
+            expect(store.read(V1)).toEqual([
+                { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 10, end: 14 }] },
+            ]);
+        });
+
+        it('clears only this stop\'s ranges for this file and clears the stop mark', () => {
+            const store = new ProgressStore({ db: open() });
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+                { fileId: 'file-2', side: 'new', start: 1, end: 2 },
+            ]);
+            store.setStopFileViewed('snap-1', V1, 's02', 'file-1', true, [{ side: 'new', start: 40, end: 41 }]);
+            const before = store.revision;
+
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', false, [])).toBe(before + 1);
+
+            expect(store.readStops('snap-1')).toEqual([{ stopId: 's01', viewed: false }]);
+            expect(store.read(V1)).toEqual([
+                { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
+                { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+            ]);
+            // Nothing else to clear.
+            expect(store.setStopFileViewed('snap-1', V1, 's01', 'file-1', false, [])).toBe(before + 1);
+        });
+
+        it('does not create a missing stop record or change the file mark when clearing', () => {
+            const store = new ProgressStore({ db: open() });
+            store.setFileViewed(V1, 'file-2', true, 'snap-1');
+            store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, [{ side: 'new', start: 10, end: 14 }]);
+
+            store.setStopFileViewed('snap-1', V1, 's01', 'file-1', false, []);
+
+            expect(store.readStops('snap-1')).toEqual([]);
+            expect(store.read(V1)).toEqual([{ fileId: 'file-2', viewed: true, seenRanges: [] }]);
+        });
+
+        it('deletes per-file ranges too when clearing the entire stop mark', () => {
+            const store = new ProgressStore({ db: open() });
+            store.setStopFileViewed('snap-1', V1, 's01', 'file-1', true, [{ side: 'new', start: 10, end: 14 }]);
+            store.setStopFileViewed('snap-1', V1, 's01', 'file-2', true, [{ side: 'old', start: 3, end: 3 }]);
+            store.setStopViewed('snap-1', V1, 's01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+                { fileId: 'file-2', side: 'old', start: 3, end: 3 },
+            ]);
+            store.setStopFileViewed('snap-1', V1, 's02', 'file-1', true, [{ side: 'new', start: 40, end: 41 }]);
+
+            store.setStopViewed('snap-1', V1, 's01', false, []);
+
+            expect(store.read(V1)).toEqual([
+                { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+            ]);
+        });
+    });
+
     it('clears affected stops and all their ranges in one revision when clearing a file', () => {
         const store = new ProgressStore({ db: open() });
         store.setStopViewed('snap-1', V1, 's01', true, [

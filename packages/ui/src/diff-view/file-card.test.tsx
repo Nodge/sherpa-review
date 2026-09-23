@@ -138,6 +138,32 @@ describe('file card', () => {
         expect(html).toContain('class="file-card__action">retry</button>');
     });
 
+    it('disabled viewed mark explains the reason instead of showing progress counts', () => {
+        const file = DATA.diff.files.find((candidate) => candidate.changeType === 'modify' && !candidate.binary);
+        if (file === undefined) {
+            throw new Error('edge fixture needs a regular file');
+        }
+        const html = renderToStaticMarkup(
+            <FileCard
+                file={file}
+                model={null}
+                mode="unified"
+                content={null}
+                contentAvailable={false}
+                expansion={new Map()}
+                read={readStateOf({ file, record: null })}
+                viewedDisabledReason="The diff of this file is still being parsed"
+                opened={false}
+                showWhitespace={false}
+                selection={null}
+                actions={ACTIONS}
+            />,
+        );
+
+        expect(html).toMatch(/<button[^>]*class="viewed-toggle file-card__viewed"[^>]*disabled=""[^>]*title="дифф файла ещё разбирается"/);
+        expect(render(file)).not.toMatch(/class="viewed-toggle file-card__viewed"[^>]*disabled=""/);
+    });
+
     it('leaves the binary file notice without an action', () => {
         const file = DATA.diff.files.find((candidate) => candidate.binary);
         if (file === undefined) {

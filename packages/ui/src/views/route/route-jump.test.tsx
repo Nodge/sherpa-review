@@ -288,6 +288,7 @@ function mount(
                     stopWrites.push(stopId);
                     return Promise.resolve(0);
                 }}
+                onSetStopFileViewed={() => Promise.resolve(0)}
             />,
         );
     };

@@ -89,6 +89,8 @@ export interface FileCardProps {
     readonly expansion: FileExpansion;
     /** File reading progress (docs/design/SPEC-elements.md §2.12): checkbox state and tooltip with counts. */
     readonly read: FileReadState;
+    /** Reason the viewed mark is currently unavailable. `null` means it is available. */
+    readonly viewedDisabledReason?: string | null;
     /** Collapse reason per docs/design/SPEC-elements.md §2.9. null means the manual/read/generated layer is expanded. */
     readonly collapseReason?: FileCollapseReason | null;
     /** Toggle manual/read/generated collapse. Without it the header ignores clicks. */
@@ -171,6 +173,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         noContentReason,
         expansion,
         read,
+        viewedDisabledReason = null,
         collapseReason = null,
         onToggleCollapse,
         opened,
@@ -380,7 +383,8 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 <ViewedToggle
                     className="file-card__viewed"
                     viewed={read.state === 'read'}
-                    title={readStateTooltip(t, read)}
+                    disabled={viewedDisabledReason !== null}
+                    title={viewedDisabledReason ?? readStateTooltip(t, read)}
                     onToggle={(viewed) => {
                         run(actions.onViewed(file.fileId, viewed));
                     }}
@@ -391,6 +395,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 <FileContextMenu
                     file={file}
                     viewed={read.state === 'read'}
+                    viewedDisabledReason={viewedDisabledReason}
                     onToggleViewed={() => {
                         run(actions.onViewed(file.fileId, read.state !== 'read'));
                     }}

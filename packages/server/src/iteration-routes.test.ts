@@ -416,6 +416,43 @@ describe('iterations in UI endpoints', () => {
         }
     });
 
+    it('repeats a file mark in a stop made while the route is stale on the active iteration and clears it from both', async () => {
+        const server = await start();
+        await completeRoute(server);
+        const snapshotId = (await readRoute(server)).route.snapshot?.snapshotId ?? '';
+        const stream = await openState(server);
+        await nextState(stream);
+        await advance(server);
+        await nextState(stream);
+
+        const { carried, carriedInV2 } = await untouchedFile(server);
+        const seenRanges = [{ side: 'new' as const, start: 3, end: 7 }];
+        const written = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopFileViewed,
+            { snapshotId, stopId: 's01', fileId: carried, viewed: true, ranges: seenRanges },
+            server.token,
+        );
+        expect(written.status).toBe(200);
+
+        const past = await readProgress(server, `?diffId=${V1.diffId}`);
+        expect(past.files).toContainEqual({ fileId: carried, viewed: null, seenRanges });
+        const active = await readProgress(server, `?diffId=${V2.diffId}`);
+        expect(active.files).toContainEqual({ fileId: carriedInV2, viewed: null, seenRanges });
+
+        const cleared = await postJson(
+            server.port,
+            UI_ENDPOINTS.reviewStopFileViewed,
+            { snapshotId, stopId: 's01', fileId: carried, viewed: false, ranges: [] },
+            server.token,
+        );
+        expect(cleared.status).toBe(200);
+        for (const diffId of [V1.diffId, V2.diffId]) {
+            const after = await readProgress(server, `?diffId=${diffId}`);
+            expect(after.files.filter((file) => file.seenRanges.length > 0)).toEqual([]);
+        }
+    });
+
     it('host returned no iteration list: does not substitute active progress for the requested previous iteration', async () => {
         const server = await start();
         await completeRoute(server);

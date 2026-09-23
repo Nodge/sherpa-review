@@ -22,6 +22,7 @@ import {
     uiReviewWriteAckSchema,
     uiSaveDraftResponseSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopFileViewedResponseSchema,
     uiSetStopViewedResponseSchema,
     uiReviewThreadsResponseSchema,
     uiStateSchema,
@@ -886,6 +887,24 @@ describe('server review endpoints', () => {
             return postJson(server.port, UI_ENDPOINTS.reviewStopViewed, { stopId, viewed, ranges }, server.token);
         }
 
+        async function setStopFileViewed(
+            server: SherpaServer,
+            body: {
+                stopId: string;
+                fileId: string;
+                viewed: boolean;
+                snapshotId?: string;
+                ranges?: { side: 'old' | 'new'; start: number; end: number }[];
+            },
+        ): Promise<Response> {
+            return postJson(
+                server.port,
+                UI_ENDPOINTS.reviewStopFileViewed,
+                { ranges: [], ...body },
+                server.token,
+            );
+        }
+
         /**
          * Completed fixture route. Stop marks are keyed by snapshot,
          * so there is nowhere to write them without a route.
@@ -1003,6 +1022,61 @@ describe('server review endpoints', () => {
 
             await setStopViewed(server, 's01', true, [...ranges].reverse());
             await expect(nextProgress(stream, 300)).rejects.toThrow(/timed out waiting for an SSE event/);
+        });
+
+        it('marking a file in a stop writes card ranges without pinning the file, clearing it clears the stop', async () => {
+            const server = await start(FIXTURE_PR);
+            await completeRoute(server);
+            await setStopViewed(server, 's01', true, [
+                { fileId: 'file-1', side: 'new', start: 10, end: 14 },
+                { fileId: 'file-2', side: 'new', start: 1, end: 2 },
+            ]);
+
+            const marked = await setStopFileViewed(server, {
+                stopId: 's02',
+                fileId: 'file-1',
+                viewed: true,
+                ranges: [{ side: 'new', start: 40, end: 41 }],
+            });
+            expect(marked.status).toBe(200);
+            expect(uiSetStopFileViewedResponseSchema.parse(await marked.json()).progressRevision).toBe(2);
+
+            expect((await setStopFileViewed(server, { stopId: 's01', fileId: 'file-1', viewed: false })).status).toBe(200);
+
+            const progress = await readProgress(server);
+            expect(progress.stops).toEqual([{ stopId: 's01', viewed: false }]);
+            expect(progress.files).toEqual(
+                expect.arrayContaining([
+                    { fileId: 'file-1', viewed: null, seenRanges: [{ side: 'new', start: 40, end: 41 }] },
+                    { fileId: 'file-2', viewed: null, seenRanges: [{ side: 'new', start: 1, end: 2 }] },
+                ]),
+            );
+        });
+
+        it('a file mark in a stop writes nothing for an old snapshot or without a route', async () => {
+            const unrouted = await start(UNKNOWN_PR);
+            const orphan = await setStopFileViewed(unrouted, {
+                stopId: 's01',
+                fileId: 'file-1',
+                viewed: true,
+                ranges: [{ side: 'new', start: 10, end: 14 }],
+            });
+            expect(orphan.status).toBe(200);
+            expect(uiSetStopFileViewedResponseSchema.parse(await orphan.json()).progressRevision).toBe(0);
+
+            const server = await start(FIXTURE_PR);
+            await completeRoute(server);
+            const stale = await setStopFileViewed(server, {
+                stopId: 's01',
+                fileId: 'file-1',
+                viewed: true,
+                snapshotId: 'previous-snapshot',
+                ranges: [{ side: 'new', start: 10, end: 14 }],
+            });
+
+            expect(stale.status).toBe(200);
+            expect(uiSetStopFileViewedResponseSchema.parse(await stale.json()).progressRevision).toBe(0);
+            expect(await readProgress(server)).toMatchObject({ files: [], stops: [], progressRevision: 0 });
         });
 
         it('progress works without a review host', async () => {

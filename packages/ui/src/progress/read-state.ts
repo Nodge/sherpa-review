@@ -118,7 +118,11 @@ function fromCoverage(
     total: number,
     generatedDefault: boolean,
 ): FileReadState {
-    const seen = Math.min(countSeen(ranges, changed), total);
+    return coverageState(countSeen(ranges, changed), total, generatedDefault);
+}
+
+function coverageState(counted: number, total: number, generatedDefault: boolean): FileReadState {
+    const seen = Math.min(counted, total);
     const state: ReadState = seen === 0 ? 'unread' : seen >= total ? 'read' : 'partial';
     return {
         state,
@@ -148,12 +152,59 @@ function countSeen(ranges: readonly UiSeenRange[], changed: ChangedLines | undef
 
 type Span = readonly [start: number, end: number];
 
-/** Whether the union of viewed ranges fully covers every required range. */
-export function rangesCover(covered: readonly UiSeenRange[], required: readonly UiSeenRange[]): boolean {
-    const merged = { old: mergeSide(covered, 'old'), new: mergeSide(covered, 'new') };
-    return required.every((range) =>
-        merged[range.side].some(([start, end]) => start <= range.start && end >= range.end),
-    );
+/**
+ * Coverage of required ranges by seen ranges, read-state without a pin: `total` counts lines
+ * in required ranges, and `seen` counts how many are covered.
+ */
+export function rangesCoverage(required: readonly UiSeenRange[], covered: readonly UiSeenRange[]): FileReadState {
+    let total = 0;
+    let seen = 0;
+    for (const side of ['old', 'new'] as const) {
+        const need = mergeSide(required, side);
+        const have = mergeSide(covered, side);
+        total += length(need);
+        for (const [start, end] of need) {
+            for (const [from, to] of have) {
+                seen += Math.max(0, Math.min(end, to) - Math.max(start, from) + 1);
+            }
+        }
+    }
+    return coverageState(seen, total, false);
+}
+
+/** Ranges after adding or subtracting others, merged by side. */
+export function changeSeenRanges(
+    ranges: readonly UiSeenRange[],
+    change: 'add' | 'remove',
+    delta: readonly UiSeenRange[],
+): UiSeenRange[] {
+    return (['old', 'new'] as const).flatMap((side) => {
+        const spans =
+            change === 'add'
+                ? mergeSide([...ranges, ...delta], side)
+                : subtractSpans(mergeSide(ranges, side), mergeSide(delta, side));
+        return spans.map(([start, end]): UiSeenRange => ({ side, start, end }));
+    });
+}
+
+function subtractSpans(spans: readonly Span[], removed: readonly Span[]): Span[] {
+    let rest: Span[] = [...spans];
+    for (const [from, to] of removed) {
+        rest = rest.flatMap(([start, end]): Span[] => {
+            if (to < start || from > end) {
+                return [[start, end]];
+            }
+            const pieces: Span[] = [];
+            if (start < from) {
+                pieces.push([start, from - 1]);
+            }
+            if (end > to) {
+                pieces.push([to + 1, end]);
+            }
+            return pieces;
+        });
+    }
+    return rest;
 }
 
 function mergeSide(ranges: readonly UiSeenRange[], side: UiSeenRange['side']): Span[] {

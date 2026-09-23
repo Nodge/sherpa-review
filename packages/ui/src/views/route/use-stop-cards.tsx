@@ -1,15 +1,18 @@
-import type { AgentNote, FileDiff, PrMeta, Thread } from '@sherpa/protocol';
+import type { AgentNote, FileDiff, PrMeta, Thread, UiSeenRange } from '@sherpa/protocol';
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
 import type { ContextExpandRequest, ContextExpandResult } from '../../diff-view/context-expansion.js';
 import type { Feedback, FileCardActions } from '../../diff-view/file-card.tsx';
 import type { DiffViewSnapshot, DiffViewStore } from '../../diff-view/store.js';
-import { fileCollapseReason } from '../../diff-view/store.js';
+import { collapseReasonOf, viewedCollapsible } from '../../diff-view/store.js';
 import type { CardNoteActions } from '../../notes/card-notes.tsx';
+import type { FileReadState } from '../../progress/read-state.js';
 import { readStateOf } from '../../progress/read-state.js';
 import type { RouteFileGroup } from '../../route/route-model.js';
 import { composersForGroup, notesForGroup, threadsForGroup } from '../../route/route-model.js';
+import type { CardViewedMark } from '../../route/stop-coverage.js';
+import { cardViewedMark, groupReadState } from '../../route/stop-coverage.js';
 import type { RoutePreset, SessionStore, ThreadsShow } from '../../session/session-store.js';
 import { threadIsVisible } from '../../threads/model.js';
 import type { ComposerLayoutSnapshot, ThreadStore, ThreadStoreSnapshot } from '../../threads/store.js';
@@ -41,6 +44,9 @@ export interface StopCardsOptions {
     /** Collapsed cards expanded by hand: keyed by stop and file together. */
     readonly openedCollapsed: ReadonlySet<string>;
     readonly setOpenedCollapsed: Dispatch<SetStateAction<ReadonlySet<string>>>;
+    /** Temporarily expanded viewed cards: keyed by stop and file together. */
+    readonly openedViewed: ReadonlySet<string>;
+    readonly setOpenedViewed: Dispatch<SetStateAction<ReadonlySet<string>>>;
     readonly containerRef: RefObject<HTMLElement | null>;
     /** The card where the reviewer started selecting: its displayed model determines the selection. */
     readonly selectionCard: { readonly stopId: string; readonly group: RouteFileGroup } | null;
@@ -50,6 +56,12 @@ export interface StopCardsOptions {
     readonly expand: (fileId: string, request: ContextExpandRequest) => Promise<ContextExpandResult>;
     readonly retryParse: (fileIds: readonly string[]) => void;
     readonly markViewed: (fileId: string, viewed: boolean) => Promise<Feedback>;
+    readonly markStopFile: (
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
+    ) => Promise<Feedback>;
     readonly requestJump: RequestJump;
 }
 
@@ -89,12 +101,15 @@ export function useStopCards({
     parseErrors,
     openedCollapsed,
     setOpenedCollapsed,
+    openedViewed,
+    setOpenedViewed,
     containerRef,
     selectionCard,
     setSelectionCard,
     expand,
     retryParse,
     markViewed,
+    markStopFile,
     requestJump,
 }: StopCardsOptions): StopCards {
     const threadVisible = useCallback((thread: Thread) => threadIsVisible(thread, threadsShow), [threadsShow]);
@@ -176,31 +191,63 @@ export function useStopCards({
     );
 
     /**
-     * Mark a file within a stop. After the file the reviewer is reading collapses,
-     * the view moves to the next card in the same stop. The same "scrolling follows
-     * collapse" behaviour as stops. The last file in a stop
-     * does not request scrolling: the covered stop marks itself and moves to the next one.
+     * Marking a file inside a stop (docs/design/SPEC-elements.md §2.10) writes only the card's
+     * lines without pinning the file (except for a non-text file, `cardViewedMark`). A file pin
+     * (manual, from the host, generated) keeps `read` in all cards, so it can only be cleared
+     * for the whole file, through the file mark.
+     *
+     * Collapsing the card the reviewer is currently reading scrolls to the next card
+     * in the same stop, the same "scroll follows collapse" behaviour as stops. The last
+     * card does not request scrolling: the covered stop marks itself and moves to the next stop.
      */
-    const markFileViewed = useCallback(
-        (fileId: string, viewed: boolean): Promise<Feedback> => {
+    const markCardViewed = useCallback(
+        (
+            stopId: string,
+            group: RouteFileGroup,
+            fileRead: FileReadState,
+            mark: CardViewedMark,
+            viewed: boolean,
+        ): Promise<Feedback> => {
+            const pin = mark === 'pin' || (!viewed && fileRead.state === 'read' && fileRead.pinned);
+            if (!pin && mark !== 'ranges') {
+                return Promise.resolve(null);
+            }
             const container = containerRef.current;
             // Capture the geometry before writing: the mark collapses the card in the same frame.
             const top = viewed && container !== null ? topFileCard(container) : null;
-            const stopId = top?.fileId === fileId ? top.stopId : null;
             const advance =
-                container === null || stopId === null ? null : nextCardInStop(container, stopId, fileId);
-            const written = markViewed(fileId, viewed);
-            if (stopId !== null && advance !== null) {
+                container !== null && top?.stopId === stopId && top.fileId === group.fileId
+                    ? nextCardInStop(container, stopId, group.fileId)
+                    : null;
+            const key = collapsedKey(stopId, group.fileId);
+            setOpenedViewed((previous) => {
+                if (!previous.has(key)) {
+                    return previous;
+                }
+                const next = new Set(previous);
+                next.delete(key);
+                return next;
+            });
+            const written = pin
+                ? markViewed(group.fileId, viewed)
+                : markStopFile(
+                      stopId,
+                      group.fileId,
+                      viewed,
+                      group.seenRanges.map(({ side, start, end }) => ({ side, start, end })),
+                  );
+            if (advance !== null) {
                 requestJump(stopId, advance, null, null, false);
             }
             return written;
         },
-        [containerRef, markViewed, requestJump],
+        [containerRef, markStopFile, markViewed, requestJump, setOpenedViewed],
     );
 
     const actions = useMemo<FileCardActions>(
         () => ({
-            onViewed: markFileViewed,
+            // A stop's card substitutes its own mark (`cardFor`).
+            onViewed: markViewed,
             onExpand: expand,
             onRetryParse: (fileId: string) => {
                 retryParse([fileId]);
@@ -227,16 +274,23 @@ export function useStopCards({
                 setFocusedLine(null);
             },
         }),
-        [commentFile, commentLine, expand, markFileViewed, retryParse, store],
+        [commentFile, commentLine, expand, markViewed, retryParse, store],
     );
 
     const cardFor = useCallback(
         (stopId: string, group: RouteFileGroup) => {
             const key = collapsedKey(stopId, group.fileId);
-            const collapseReason = fileCollapseReason(diffSnapshot, group.file);
+            const record = diffSnapshot.progress.get(group.fileId) ?? null;
+            const fileRead = diffSnapshot.readState.get(group.fileId) ?? readStateOf({ file: group.file, record });
+            // The card's toggle, checkbox and fold describe its lines, not the whole file.
+            const read = groupReadState(group, fileRead, record);
+            const collapseReason = collapseReasonOf(diffSnapshot, group.file, read, openedViewed.has(key));
+            const model = diffSnapshot.models.get(group.fileId) ?? null;
+            const parseError = parseErrors.get(group.fileId) ?? null;
+            const mark = cardViewedMark(group, model, parseError !== null);
             const shownModel = stopFileShownModel(
                 group,
-                diffSnapshot.models.get(group.fileId) ?? null,
+                model,
                 diffSnapshot.content.get(group.fileId) ?? null,
                 diffSnapshot.expansion.get(group.fileId) ?? EMPTY_EXPANSION,
                 openedCollapsed.has(key),
@@ -248,6 +302,7 @@ export function useStopCards({
                 // that is invisible everywhere, so hide it. A comment on such a file can be added
                 // in Full diff.
                 onCommentFile: group.whole ? actions.onCommentFile : undefined,
+                onViewed: (_fileId, viewed) => markCardViewed(stopId, group, fileRead, mark, viewed),
                 onSelectText: (selection) => {
                     setSelectionCard({ stopId, group });
                     store.selectText(selection);
@@ -261,20 +316,30 @@ export function useStopCards({
                 <StopFileCard
                     key={group.fileId}
                     group={group}
-                    model={diffSnapshot.models.get(group.fileId) ?? null}
-                    parseError={parseErrors.get(group.fileId) ?? null}
+                    model={model}
+                    parseError={parseError}
                     mode={diffSnapshot.effectiveMode}
                     content={diffSnapshot.content.get(group.fileId)}
                     contentAvailable={capabilities.fileContent}
                     expansion={diffSnapshot.expansion.get(group.fileId) ?? EMPTY_EXPANSION}
                     shownModel={shownModel}
-                    read={
-                        diffSnapshot.readState.get(group.fileId) ??
-                        readStateOf({ file: group.file, record: null })
-                    }
+                    read={read}
+                    viewedBlocked={mark === 'pending' || mark === 'parseFailed' ? mark : null}
                     collapseReason={collapseReason}
                     onToggleCollapse={() => {
                         actions.onLineBlur?.();
+                        // A viewed card expands and collapses independently.
+                        // Manual and generated folds are shared across the file.
+                        if (collapseReason === 'viewed' || (collapseReason === null && viewedCollapsible(read))) {
+                            setOpenedViewed((previous) => {
+                                const next = new Set(previous);
+                                if (!next.delete(key)) {
+                                    next.add(key);
+                                }
+                                return next;
+                            });
+                            return;
+                        }
                         store.toggleFileCollapse(group.fileId);
                     }}
                     showWhitespace={diffSnapshot.whitespaceShown.has(group.fileId)}
@@ -309,12 +374,15 @@ export function useStopCards({
             capabilities.fileContent,
             composersSnapshot.byFile,
             diffSnapshot,
+            markCardViewed,
             noteActions,
             notesByFile,
             openedCollapsed,
+            openedViewed,
             parseErrors,
             session,
             setOpenedCollapsed,
+            setOpenedViewed,
             setSelectionCard,
             store,
             threadActions,
@@ -378,7 +446,7 @@ export function useStopCards({
                 const state =
                     (diffSnapshot.whitespaceShown.has(group.fileId) ? 'w' : '') +
                     (diffSnapshot.collapseExpanded.has(group.fileId) ? 'e' : '') +
-                    (diffSnapshot.collapseExpandedViewed.has(group.fileId) ? 'v' : '') +
+                    (openedViewed.has(collapsedKey(stopId, group.fileId)) ? 'v' : '') +
                     (diffSnapshot.collapseCollapsed.has(group.fileId) ? 'c' : '') +
                     (diffSnapshot.opened.has(group.fileId) ? 'o' : '') +
                     (openedCollapsed.has(collapsedKey(stopId, group.fileId)) ? 'k' : '');
@@ -395,13 +463,13 @@ export function useStopCards({
         [
             diffSnapshot.collapseCollapsed,
             diffSnapshot.collapseExpanded,
-            diffSnapshot.collapseExpandedViewed,
             diffSnapshot.effectiveMode,
             diffSnapshot.expansion,
             diffSnapshot.models,
             diffSnapshot.opened,
             diffSnapshot.whitespaceShown,
             openedCollapsed,
+            openedViewed,
             preset,
             threadsShow,
         ],

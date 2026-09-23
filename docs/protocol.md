@@ -166,6 +166,7 @@ All endpoints require a bearer token, except SSE (§8). Review endpoints return 
 | `reviewProgress` | `GET /api/ui/review/progress` | reading progress for an iteration |
 | `reviewFileViewed` | `POST /api/ui/review/file-viewed` | mark a file as read |
 | `reviewStopViewed` | `POST /api/ui/review/stop-viewed` | mark a stop's ranges as read |
+| `reviewStopFileViewed` | `POST /api/ui/review/stop-file-viewed` | mark a file's lines as read within one stop |
 | `reviewViewedMirror` | `POST /api/ui/review/viewed-mirror` | mirror the "file read" mark to the host |
 | `reviewSaveDraft` | `POST /api/ui/review/draft` | save a comment draft |
 | `reviewUpdateDraft` | `POST /api/ui/review/draft/update` | edit a comment draft |

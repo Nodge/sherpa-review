@@ -111,6 +111,7 @@ function RouteFillingState({ agentStopped = false }: { agentStopped?: boolean })
                 }}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={() => Promise.resolve(0)}
+                onSetStopFileViewed={() => Promise.resolve(0)}
             />
         </div>
     );

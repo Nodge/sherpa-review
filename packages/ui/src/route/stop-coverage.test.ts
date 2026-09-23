@@ -1,10 +1,11 @@
 import type { FileDiff, RouteStop, UiFileProgress, UiSeenRange } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import type { DiffFileModel } from '../diff/model.js';
 import type { FileReadState } from '../progress/read-state.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import type { RouteEntry, RouteFileGroup } from './route-model.js';
-import { stopCoveredByProgress } from './stop-coverage.js';
+import { cardViewedMark, groupReadState, stopCoveredByProgress } from './stop-coverage.js';
 
 function file(fileId: string): FileDiff {
     return {
@@ -208,5 +209,80 @@ describe('stop coverage by file progress', () => {
 
         expect(stopCoveredByProgress(first, afterFirst)).toBe(true);
         expect(stopCoveredByProgress(second, afterFirst)).toBe(false);
+    });
+});
+
+describe('read-state of a file card in a stop', () => {
+    const unread: FileReadState = { state: 'unread', seen: 0, total: 40, pinned: false, generatedDefault: false };
+    const card = group('shared', [
+        { side: 'new', start: 1, end: 5 },
+        { side: 'old', start: 3, end: 7 },
+    ]);
+
+    it('keeps read in any card with a file pin', () => {
+        const pinned: FileReadState = { state: 'read', seen: 40, total: 40, pinned: true, generatedDefault: false };
+        const generated: FileReadState = { ...pinned, generatedDefault: true };
+
+        expect(groupReadState(card, pinned, null)).toBe(pinned);
+        expect(groupReadState(card, generated, null)).toBe(generated);
+    });
+
+    it('counts coverage of the card\'s own lines without a pin', () => {
+        expect(groupReadState(card, unread, null)).toEqual({ ...unread, total: 10 });
+        expect(groupReadState(card, unread, progress('shared', [{ side: 'new', start: 1, end: 5 }]))).toMatchObject({
+            state: 'partial',
+            seen: 5,
+            total: 10,
+            pinned: false,
+        });
+        expect(
+            groupReadState(
+                card,
+                unread,
+                progress('shared', [
+                    { side: 'new', start: 1, end: 5 },
+                    { side: 'old', start: 3, end: 7 },
+                    // Lines in another card of the same file do not affect this card's counts.
+                    { side: 'new', start: 30, end: 39 },
+                ]),
+            ),
+        ).toMatchObject({ state: 'read', seen: 10, total: 10 });
+    });
+
+    it('counts ranges from another stop that overlap the card', () => {
+        const other = progress('shared', [
+            { side: 'new', start: 1, end: 2 },
+            { side: 'new', start: 3, end: 20 },
+            { side: 'old', start: 1, end: 7 },
+        ]);
+
+        expect(groupReadState(card, unread, other)).toMatchObject({ state: 'read', seen: 10, total: 10 });
+    });
+
+    it('does not mark the card read when the file has been partially read globally', () => {
+        const partial: FileReadState = { state: 'partial', seen: 10, total: 40, pinned: false, generatedDefault: false };
+
+        expect(groupReadState(card, partial, progress('shared', [{ side: 'new', start: 30, end: 39 }]))).toMatchObject({
+            state: 'unread',
+            seen: 0,
+        });
+    });
+});
+
+describe('how a file card in a stop is marked', () => {
+    // The rule only checks whether a model exists. It does not read its contents.
+    const model = {} as DiffFileModel;
+
+    it('uses the card\'s lines when present', () => {
+        expect(cardViewedMark(group('a', [{ side: 'new', start: 1, end: 3 }]), model, false)).toBe('ranges');
+    });
+
+    it('uses a file pin when a parsed file has no lines because it is non-text and shown in full', () => {
+        expect(cardViewedMark(group('a', []), model, false)).toBe('pin');
+    });
+
+    it('does nothing without a model while parsing is in progress or has failed', () => {
+        expect(cardViewedMark(group('a', []), null, false)).toBe('pending');
+        expect(cardViewedMark(group('a', []), null, true)).toBe('parseFailed');
     });
 });

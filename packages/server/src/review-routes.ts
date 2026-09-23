@@ -22,6 +22,8 @@ import {
     uiSaveDraftResponseSchema,
     uiSetFileViewedRequestSchema,
     uiSetFileViewedResponseSchema,
+    uiSetStopFileViewedRequestSchema,
+    uiSetStopFileViewedResponseSchema,
     uiSetStopViewedRequestSchema,
     uiSetStopViewedResponseSchema,
     uiSetThreadResolvedRequestSchema,
@@ -420,6 +422,43 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
         },
         {
             method: 'POST',
+            path: UI_ENDPOINTS.reviewStopFileViewed,
+            handle: handlingRpcFailures(async (ctx) => {
+                const request = await readRequest(
+                    ctx,
+                    uiSetStopFileViewedRequestSchema,
+                    'setting a viewed mark on a file in a stop',
+                );
+                const activeSnapshotId = options.route.read().snapshot?.snapshotId ?? null;
+                const stale = request.snapshotId !== undefined && request.snapshotId !== activeSnapshotId;
+                if (stale || activeSnapshotId === null) {
+                    return respond(
+                        uiSetStopFileViewedResponseSchema,
+                        { progressRevision: options.progress.revision },
+                        'local',
+                    );
+                }
+                const active = await activeDiffId(options);
+                let progressRevision = options.progress.revision;
+                for (const target of writeTargets(options, active, [request.fileId])) {
+                    const fileId = target.fileIdOf(request.fileId);
+                    if (fileId === undefined) {
+                        continue;
+                    }
+                    progressRevision = options.progress.setStopFileViewed(
+                        activeSnapshotId,
+                        target.diffId,
+                        request.stopId,
+                        fileId,
+                        request.viewed,
+                        request.ranges,
+                    );
+                }
+                return respond(uiSetStopFileViewedResponseSchema, { progressRevision }, 'local');
+            }),
+        },
+        {
+            method: 'POST',
             path: UI_ENDPOINTS.reviewViewedMirror,
             handle: handlingRpcFailures(async (ctx) => {
                 const request = await readRequest(
@@ -695,11 +734,37 @@ interface StopWrite {
     readonly ranges: readonly UiStopSeenRange[];
 }
 
+/** The iteration a mark goes under, and its `fileId` translation. `undefined` means the file cannot be translated. */
+interface WriteTarget {
+    readonly diffId: string;
+    readonly fileIdOf: (fileId: string) => string | undefined;
+}
+
 /**
- * Records for one stop mark. Normally there is one, under the active iteration.
- * During the stale window there are 2: under the iteration rendered by the tab and under the active one.
+ * Iterations for one mark with ranges. Normally there is one, the active iteration.
+ * During the stale window there are two: the iteration the tab rendered and the active one.
  * Carryover for the pair runs once and has already happened by this point. Without the second write, the ranges
- * would disappear on route rebuild along with the stop's viewed state.
+ * would disappear when the route is rebuilt. Only files untouched by the slice are translated to the active iteration.
+ */
+function writeTargets(options: ReviewRoutesOptions, active: string, fileIds: readonly string[]): readonly WriteTarget[] {
+    const drawn = writtenIteration(options, active, fileIds);
+    if (drawn === active) {
+        return [{ diffId: active, fileIdOf: sameFileId }];
+    }
+    const carried = carriedFileIds(options, drawn, active);
+    return [
+        { diffId: drawn, fileIdOf: sameFileId },
+        { diffId: active, fileIdOf: (fileId) => carried?.get(fileId) },
+    ];
+}
+
+function sameFileId(fileId: string): string {
+    return fileId;
+}
+
+/**
+ * Writes for one stop mark by `writeTargets`: a stop without translatable files still
+ * gets written to the active iteration with an empty set.
  *
  * Clearing a mark sends no ranges, so they cannot tell us which iteration the tab rendered:
  * both iterations it could have shown are cleared.
@@ -714,26 +779,18 @@ function stopWrites(
         const wiped = drawn === null ? [active] : [drawn, active];
         return wiped.map((diffId) => ({ diffId, ranges: [] }));
     }
-    const drawn = writtenIteration(
+    const targets = writeTargets(
         options,
         active,
         request.ranges.map((range) => range.fileId),
     );
-    if (drawn === active) {
-        return [{ diffId: active, ranges: request.ranges }];
-    }
-    const carried = carriedFileIds(options, drawn, active);
-    const ranges =
-        carried === null
-            ? []
-            : request.ranges.flatMap((range) => {
-                  const fileId = carried.get(range.fileId);
-                  return fileId === undefined ? [] : [{ ...range, fileId }];
-              });
-    return [
-        { diffId: drawn, ranges: request.ranges },
-        { diffId: active, ranges },
-    ];
+    return targets.map((target) => ({
+        diffId: target.diffId,
+        ranges: request.ranges.flatMap((range) => {
+            const fileId = target.fileIdOf(range.fileId);
+            return fileId === undefined ? [] : [{ ...range, fileId }];
+        }),
+    }));
 }
 
 /**

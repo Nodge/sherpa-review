@@ -4,6 +4,7 @@ import type {
     RouteSnapshot,
     UiFileProgress,
     UiPrStatePatch,
+    UiSeenRange,
     UiStopProgress,
     UiStopSeenRange,
 } from '@sherpa/protocol';
@@ -48,13 +49,23 @@ const SNAPSHOT: RouteSnapshot = (() => {
 interface FakeProgress {
     readonly revision: number;
     readonly stopWrites: readonly { stopId: string; viewed: boolean }[];
+    readonly fileWrites: readonly { fileId: string; viewed: boolean }[];
+    readonly stopFileWrites: readonly StopFileWrite[];
     readonly read: () => UiFileProgress[];
     readonly readStops: () => UiStopProgress[];
     readonly rangesForStop: (stopId: string) => readonly UiStopSeenRange[];
     readonly setStopViewed: (stopId: string, viewed: boolean, ranges: readonly UiStopSeenRange[]) => number;
     readonly setFileViewed: (fileId: string, viewed: boolean) => number;
+    readonly setStopFileViewed: (write: StopFileWrite) => number;
     /** Server restart: database data survives, but the revision counter starts over. */
     readonly restart: () => void;
+}
+
+interface StopFileWrite {
+    readonly stopId: string;
+    readonly fileId: string;
+    readonly viewed: boolean;
+    readonly ranges: readonly UiSeenRange[];
 }
 
 /** In-memory PR progress with the same reading rules as the server's `ProgressStore`. */
@@ -63,12 +74,16 @@ function fakeProgress(): FakeProgress {
     const stops = new Map<string, boolean>();
     const ranges = new Map<string, readonly UiStopSeenRange[]>();
     const stopWrites: { stopId: string; viewed: boolean }[] = [];
+    const fileWrites: { fileId: string; viewed: boolean }[] = [];
+    const stopFileWrites: StopFileWrite[] = [];
     let revision = 0;
     return {
         get revision() {
             return revision;
         },
         stopWrites,
+        fileWrites,
+        stopFileWrites,
         read: () => {
             const byFile = new Map<string, UiFileProgress>();
             for (const [fileId, viewed] of files) {
@@ -99,6 +114,7 @@ function fakeProgress(): FakeProgress {
             return revision;
         },
         setFileViewed: (fileId, viewed) => {
+            fileWrites.push({ fileId, viewed });
             files.set(fileId, viewed);
             if (!viewed) {
                 const affected = [...ranges]
@@ -108,6 +124,19 @@ function fakeProgress(): FakeProgress {
                     stops.set(stopId, false);
                     ranges.set(stopId, []);
                 }
+            }
+            revision += 1;
+            return revision;
+        },
+        setStopFileViewed: (write) => {
+            stopFileWrites.push(write);
+            const kept = (ranges.get(write.stopId) ?? []).filter((range) => range.fileId !== write.fileId);
+            ranges.set(
+                write.stopId,
+                write.viewed ? [...kept, ...write.ranges.map((range) => ({ ...range, fileId: write.fileId }))] : kept,
+            );
+            if (!write.viewed && stops.get(write.stopId) === true) {
+                stops.set(write.stopId, false);
             }
             revision += 1;
             return revision;
@@ -225,6 +254,16 @@ function mount(options: MountOptions = {}): Mounted {
                     body.viewed as boolean,
                     body.ranges as readonly UiStopSeenRange[],
                 );
+                pushProgressEvent(revision);
+                return Promise.resolve(json({ progressRevision: revision }));
+            }
+            case UI_ENDPOINTS.reviewStopFileViewed: {
+                const revision = progress.setStopFileViewed({
+                    stopId: body.stopId as string,
+                    fileId: body.fileId as string,
+                    viewed: body.viewed as boolean,
+                    ranges: body.ranges as readonly UiSeenRange[],
+                });
                 pushProgressEvent(revision);
                 return Promise.resolve(json({ progressRevision: revision }));
             }
@@ -568,6 +607,8 @@ describe('marking a stop updates its file read-state boxes', () => {
         expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: true });
         expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).not.toBeNull();
         expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+        // Cards write their own lines, not the file pin.
+        expect(view.progress.fileWrites).toEqual([]);
         await view.settle();
         expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
 
@@ -577,7 +618,8 @@ describe('marking a stop updates its file read-state boxes', () => {
                 ?.click();
         });
         const firstFile = fileViewedToggles(stopSection(view.host, 's01'))[0];
-        if (firstFile === undefined) {
+        const firstFileId = firstFile?.closest<HTMLElement>('article[data-file]')?.dataset.file;
+        if (firstFile === undefined || firstFileId === undefined) {
             throw new Error('expanding a viewed stop must restore the file card');
         }
         act(() => {
@@ -585,52 +627,48 @@ describe('marking a stop updates its file read-state boxes', () => {
         });
         await view.settle();
 
+        // Clearing the card clears the stop and removes only its lines from this file.
         expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
-        expect(view.progress.rangesForStop('s01')).toEqual([]);
+        const left = view.progress.rangesForStop('s01');
+        expect(left.some((range) => range.fileId === firstFileId)).toBe(false);
+        expect(left.length).toBeGreaterThan(0);
         expect(stopSection(view.host, 's01').querySelector('.route-collapsed--viewed')).toBeNull();
         expect(fileViewedToggles(stopSection(view.host, 's01')).length).toBeGreaterThan(0);
     });
 
-    it('does not undo manual unmarking until coverage is lost and regained', async () => {
+    it('keeps a manual clear until coverage is rebuilt', async () => {
         const view = mount();
         await view.settle();
-        const toggles = fileViewedToggles(stopSection(view.host, 's01'));
-        expect(toggles.length).toBeGreaterThan(0);
+        const markAllCards = (): void => {
+            act(() => {
+                for (const toggle of fileViewedToggles(stopSection(view.host, 's01'))) {
+                    toggle.click();
+                }
+            });
+        };
+        const viewedWrites = (): number =>
+            view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed).length;
 
-        act(() => {
-            for (const toggle of toggles) {
-                toggle.click();
-            }
-        });
+        markAllCards();
         await view.settle();
-        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+        expect(viewedWrites()).toBe(1);
 
         act(() => {
             viewedToggle(stopSection(view.host, 's01')).click();
         });
         await view.settle();
+        await view.settle();
 
+        // Clearing the stop also removes its cards' lines, so automatic marking has nothing to restore.
         expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
         expect(view.progress.rangesForStop('s01')).toEqual([]);
-        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(1);
+        expect(viewedWrites()).toBe(1);
 
-        const firstFile = fileViewedToggles(stopSection(view.host, 's01'))[0];
-        if (firstFile === undefined) {
-            throw new Error('the files of a stop must be visible after it is unmarked');
-        }
-        act(() => {
-            firstFile.click();
-        });
-        await view.settle();
-        expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: false });
-
-        act(() => {
-            fileViewedToggles(stopSection(view.host, 's01'))[0]?.click();
-        });
+        markAllCards();
         await view.settle();
 
         expect(view.progress.readStops()).toContainEqual({ stopId: 's01', viewed: true });
-        expect(view.progress.stopWrites.filter((write) => write.stopId === 's01' && write.viewed)).toHaveLength(2);
+        expect(viewedWrites()).toBe(2);
     });
 
     it('a direct file write, as in Full diff, clears the stop mark', async () => {
@@ -673,5 +711,95 @@ describe('marking a stop updates its file read-state boxes', () => {
         // No mark or partial set of s01 ranges. Writing either would misrepresent the state.
         expect(view.progress.stopWrites.some((write) => write.stopId === 's01')).toBe(false);
         expect(view.progress.rangesForStop('s01')).toEqual([]);
+    });
+});
+
+describe('file marks within a stop', () => {
+    const SHARED = 'services/orders/docs/edit-window.md';
+    const sharedId = (): string => {
+        const fileId = DATA.diff.files.find((file) => file.path === SHARED)?.fileId;
+        if (fileId === undefined) {
+            throw new Error(`medium fixture has no file ${SHARED}`);
+        }
+        return fileId;
+    };
+    const pressed = (toggle: HTMLButtonElement): string | null => toggle.getAttribute('aria-pressed');
+
+    it('marks only its card lines, leaving the file unread in another stop and in the diff', async () => {
+        const view = mount();
+        await view.settle();
+        // The file is in s03 (lines 1–52) and the low-tier stop s05 (53–115), which we expand.
+        act(() => {
+            view.session.setStopExpanded('s05', true);
+        });
+        await view.settle();
+        const fileId = sharedId();
+
+        act(() => {
+            fileViewedToggle(stopSection(view.host, 's03'), fileId).click();
+        });
+        await view.settle();
+
+        expect(view.progress.fileWrites).toEqual([]);
+        expect(view.progress.stopFileWrites).toEqual([
+            { stopId: 's03', fileId, viewed: true, ranges: [{ side: 'new', start: 1, end: 52 }] },
+        ]);
+        expect(pressed(fileViewedToggle(stopSection(view.host, 's03'), fileId))).toBe('true');
+        expect(fileViewedToggle(stopSection(view.host, 's03'), fileId).title).toBe(
+            '52 of 52 changed lines seen',
+        );
+        expect(pressed(fileViewedToggle(stopSection(view.host, 's05'), fileId))).toBe('false');
+        // The file is partially read overall, so the read file count has not increased.
+        expect(filesRead(view.host)).toBe('4 / 21 files');
+        expect(view.progress.read().find((record) => record.fileId === fileId)).toEqual({
+            fileId,
+            viewed: null,
+            seenRanges: [{ side: 'new', start: 1, end: 52 }],
+        });
+
+        act(() => {
+            fileViewedToggle(stopSection(view.host, 's05'), fileId).click();
+        });
+        await view.settle();
+
+        expect(pressed(fileViewedToggle(stopSection(view.host, 's05'), fileId))).toBe('true');
+        expect(filesRead(view.host)).toBe('5 / 21 files');
+
+        act(() => {
+            fileViewedToggle(stopSection(view.host, 's03'), fileId).click();
+        });
+        await view.settle();
+
+        expect(view.progress.stopFileWrites.at(-1)).toEqual({ stopId: 's03', fileId, viewed: false, ranges: [] });
+        expect(pressed(fileViewedToggle(stopSection(view.host, 's03'), fileId))).toBe('false');
+        expect(pressed(fileViewedToggle(stopSection(view.host, 's05'), fileId))).toBe('true');
+        expect(filesRead(view.host)).toBe('4 / 21 files');
+        expect(view.progress.fileWrites).toEqual([]);
+    });
+
+    it('clearing a pinned file in its card removes the whole pin', async () => {
+        const pinned = DATA.diff.files.find((file) => file.viewed === true);
+        const stopId = SNAPSHOT.stops.find((stop) =>
+            stop.anchors.some((anchor) => anchor.fileId === pinned?.fileId),
+        )?.id;
+        if (pinned === undefined || stopId === undefined) {
+            throw new Error('medium fixture needs a host-marked file in the route');
+        }
+        const view = mount();
+        await view.settle();
+        act(() => {
+            view.session.setStopExpanded(stopId, true);
+        });
+        await view.settle();
+        expect(pressed(fileViewedToggle(stopSection(view.host, stopId), pinned.fileId))).toBe('true');
+
+        act(() => {
+            fileViewedToggle(stopSection(view.host, stopId), pinned.fileId).click();
+        });
+        await view.settle();
+
+        expect(view.progress.fileWrites).toEqual([{ fileId: pinned.fileId, viewed: false }]);
+        expect(view.progress.stopFileWrites).toEqual([]);
+        expect(pressed(fileViewedToggle(stopSection(view.host, stopId), pinned.fileId))).toBe('false');
     });
 });

@@ -163,6 +163,9 @@ Every interactive element must implement all applicable states:
 - Marking a stop viewed marks its files viewed **only if the stop covers every changed line of those
   files**; otherwise those files go to `partial`. Unmarking a stop never unmarks a file that was
   marked from elsewhere.
+- Inside a stop, a file card's toggle marks only the lines that card shows — the file goes to
+  `partial` everywhere else until every changed line is covered. The card's toggle, read box and
+  collapse follow the coverage of its own lines. Marking every card of a stop marks the stop.
 - Keyboard: `v` toggles the focused stop or file.
 - `aria-pressed` on the toggle, and the change is announced ("Stop 02 marked viewed, 3 of 7").
 

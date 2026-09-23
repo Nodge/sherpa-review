@@ -224,7 +224,7 @@ Reviewer departure is separate from idleness. The agent receives the loop-comple
 
 ## 7. Invariants
 
-**7.1. A "viewed line" derives only from manual marks.** There is no viewport tracking. A file's viewed ranges are the union of ranges from stops the reviewer marked by hand, plus files marked by hand. These determine 3 file states (`read` covers all changed lines, `partial` covers some, `unread` covers none). The UI uses `IntersectionObserver` only to decide what to render: which cards to request parsing for and which to keep in the DOM. It writes no progress. Stops can be marked automatically, but the input is those same manual file marks: a stop gets marked when they already cover its ranges.
+**7.1. A "viewed line" derives only from manual marks.** There is no viewport tracking. A file's viewed ranges are the union of ranges from stops the reviewer has marked by hand, either as a whole or one file card at a time, plus files marked by hand in the full diff. These produce the file's 3 states (`read` when all changed lines are covered, `partial` when some are, and `unread` when none are). The UI uses `IntersectionObserver` only for rendering decisions: which cards to send for parsing and which to keep in the DOM. It does not write progress. Stops can be marked automatically, but this uses the same manual file marks. A stop is marked when those marks already cover its ranges.
 
 **7.2. Filters hide stops with no matching files, and numbers stay as planned.** A stop with no files under the current filter disappears from view. A card held on screen remains visible. The skeleton fixes the stop number (`planIndex`), and filling does not change it. Filters and moving "Other" to the top reorder rendering, but not numbering.
 

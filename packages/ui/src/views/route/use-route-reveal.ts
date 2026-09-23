@@ -3,10 +3,13 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import type { ContextExpandRequest, ContextExpandResult } from '../../diff-view/context-expansion.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
+import { viewedCollapsible } from '../../diff-view/store.js';
 import { ALL_FILTER_ID } from '../../filters/lens-filters.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildDigest, resolveAnchor } from '../../route/digest.js';
 import type { RouteEntry, RouteModel } from '../../route/route-model.js';
+import { entryGroups } from '../../route/route-model.js';
+import { cardReadState } from '../../route/stop-coverage.js';
 import type { SessionStore } from '../../session/session-store.js';
 import { collapsedKey, entryId, routeEntryForLine, routeEntryForShownLine } from './stop-lookup.js';
 import type { RequestJump } from './use-route-jump.js';
@@ -22,6 +25,7 @@ export interface RouteRevealOptions {
     readonly setOtherOpen: Dispatch<SetStateAction<boolean>>;
     readonly openedCollapsed: ReadonlySet<string>;
     readonly setOpenedCollapsed: Dispatch<SetStateAction<ReadonlySet<string>>>;
+    readonly setOpenedViewed: Dispatch<SetStateAction<ReadonlySet<string>>>;
     readonly expand: (fileId: string, request: ContextExpandRequest) => Promise<ContextExpandResult>;
     readonly requestJump: RequestJump;
     readonly initialSelectionTarget: { readonly fileId: string; readonly side: 'old' | 'new'; readonly start: number } | null;
@@ -50,6 +54,7 @@ export function useRouteReveal({
     setOtherOpen,
     openedCollapsed,
     setOpenedCollapsed,
+    setOpenedViewed,
     expand,
     requestJump,
     initialSelectionTarget,
@@ -84,6 +89,12 @@ export function useRouteReveal({
             }
             if (fileId !== null) {
                 store.revealFile(fileId);
+                // A viewed card collapses based on its own lines and uses its own expansion state.
+                const group = entryGroups(entry).find((candidate) => candidate.fileId === fileId);
+                if (group !== undefined && viewedCollapsible(cardReadState(group, store.getSnapshot()))) {
+                    const key = collapsedKey(entryId(entry), fileId);
+                    setOpenedViewed((previous) => (previous.has(key) ? previous : new Set(previous).add(key)));
+                }
             }
             if (entry.kind === 'other') {
                 setOtherOpen(true);
@@ -96,7 +107,7 @@ export function useRouteReveal({
                 session.setStopTestCode(entry.view.stop.id, true);
             }
         },
-        [expandStop, fileIds, matches, session, setOtherOpen, store],
+        [expandStop, fileIds, matches, session, setOpenedViewed, setOtherOpen, store],
     );
 
     const openFile = useCallback(

@@ -163,6 +163,8 @@ export const ru = {
     'route.stop.viewed.unfilled': 'Остановка ещё не заполнена',
     'route.stop.viewed.parseFailed': 'Часть файлов остановки не разобралась — повторите разбор',
     'route.stop.viewed.pending': 'Диапазоны остановки ещё считаются',
+    'route.stopFile.viewed.pending': 'Дифф файла ещё разбирается',
+    'route.stopFile.viewed.parseFailed': 'Дифф файла не разобрался — повторите разбор',
     'route.stop.changeLabel': 'почему изменилась остановка',
     'route.stop.unfilled.failed':
         'Не заполнена — агент остановился раньше. Заголовок и номер зафиксированы планом.',

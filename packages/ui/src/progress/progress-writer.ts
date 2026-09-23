@@ -1,7 +1,15 @@
-import type { UiFileProgress, UiReviewProgressResponse, UiStopProgress, UiStopSeenRange } from '@sherpa/protocol';
+import type {
+    UiFileProgress,
+    UiReviewProgressResponse,
+    UiSeenRange,
+    UiStopProgress,
+    UiStopSeenRange,
+} from '@sherpa/protocol';
+
+import { changeSeenRanges } from './read-state.js';
 
 /**
- * Coordinate viewed marks: optimistic writes, a write queue per key,
+ * Viewed-mark coordination: optimistic writes, one write queue,
  * rollback on failure, and merging refetched snapshots with writes the endpoint may have missed.
  * Pure module: store and network operations come through callbacks, with no React dependency.
  *
@@ -25,9 +33,18 @@ export interface StopWriterHooks {
     readonly send: (stopId: string, viewed: boolean, ranges: readonly UiStopSeenRange[]) => Promise<number>;
 }
 
+/**
+ * File mark within a stop: card ranges instead of a file pin. Rollback uses
+ * `ProgressWriterOptions.restore` and `StopWriterHooks.restore`.
+ */
+export interface StopFileWriterHooks {
+    readonly apply: (fileId: string, change: 'add' | 'remove', ranges: readonly UiSeenRange[]) => void;
+    readonly send: (stopId: string, fileId: string, viewed: boolean, ranges: readonly UiSeenRange[]) => Promise<number>;
+}
+
 export interface ProgressWriterOptions {
     readonly initialRevision: number;
-    /** Current file record in the store. Rollback of the first write starts from here. */
+    /** Current file record in the store: writes replay on top of it during rollback. */
     readonly read: (fileId: string) => UiFileProgress | null;
     /** Optimistic mark in the store: the control responds without waiting for the network (docs/design/SPEC-elements.md §1.2). */
     readonly apply: (fileId: string, viewed: boolean) => void;
@@ -35,6 +52,7 @@ export interface ProgressWriterOptions {
     /** Writes to the endpoint. Returns the progress revision after the write. */
     readonly send: (fileId: string, viewed: boolean) => Promise<number>;
     readonly stops: StopWriterHooks;
+    readonly stopFiles: StopFileWriterHooks;
     /** Write completed: the view reconsiders its deferred refetch decision. */
     readonly onSettled: () => void;
 }
@@ -46,13 +64,23 @@ export interface MergedProgress {
 }
 
 export interface ProgressWriter {
-    /** File mark: update the store immediately, queue the endpoint write per file. `false` means the write failed. */
+    /** File mark: immediate in the store, queued for the endpoint by the writer. `false` means the write failed. */
     readonly write: (fileId: string, viewed: boolean) => Promise<boolean>;
     /** Stop mark with its seen ranges. `false` means the write failed. */
     readonly writeStop: (
         stopId: string,
         viewed: boolean,
         ranges: readonly UiStopSeenRange[],
+    ) => Promise<boolean>;
+    /**
+     * File mark within a stop: card lines in `ranges` are immediately added to the file record
+     * or subtracted from it. Unmarking also clears the stop mark in the store. `false` means the write failed.
+     */
+    readonly writeStopFile: (
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
     ) => Promise<boolean>;
     /**
      * Whether to refetch the endpoint after an event with this revision. `null` means no channel revision
@@ -71,97 +99,111 @@ export interface ProgressWriter {
     ) => MergedProgress;
 }
 
-/** Last server-confirmed state for a key, restored on rollback. */
-type Confirmed =
-    | { readonly scope: 'file'; readonly record: UiFileProgress | null }
-    | { readonly scope: 'stop'; readonly viewed: boolean | null };
-
-/** Optimistic mark on its way to the server. */
-interface PendingWrite {
-    readonly scope: Confirmed['scope'];
-    readonly id: string;
-    readonly viewed: boolean;
-    /** Write sequence number, used to tell which of two writes is newer. */
+/**
+ * A mark the server snapshot may have missed: in flight or already accepted by the endpoint.
+ * One write can affect both a file and a stop: unmarking a card clears the stop mark.
+ */
+interface Write {
     readonly seq: number;
-    inFlight: boolean;
-    confirmed: Confirmed;
-    /** Tail of this key's write queue. Each write waits for the previous one. */
-    chain: Promise<void>;
+    /** The endpoint reported success. */
+    done: boolean;
+    readonly file: { readonly id: string; readonly change: (record: UiFileProgress | null) => UiFileProgress } | null;
+    readonly stop: { readonly id: string; readonly viewed: boolean } | null;
 }
 
-const RESOLVED: Promise<void> = Promise.resolve();
+const noop = (): void => undefined;
 
 export function createProgressWriter(options: ProgressWriterOptions): ProgressWriter {
-    const writes = new Map<string, PendingWrite>();
+    /**
+     * Writes overlaid on the last known server state in queue order. On screen,
+     * a file or stop shows the base with its relevant writes replayed. A failed
+     * write drops out, and the screen replays without it. Rolling back to the snapshot taken when the write was queued
+     * does not work here: if another write for the same file failed later, it would restore another write's
+     * unacknowledged ranges.
+     */
+    let writes: Write[] = [];
+    /** Server state beneath the writes, captured when the first write touches the id. */
+    const fileBases = new Map<string, UiFileProgress | null>();
+    const stopBases = new Map<string, boolean | null>();
+    /**
+     * Queue tail: a write reaches the server only after the previous response, whatever its outcome. The file,
+     * stop, and card endpoints overlap in their server-side ranges, and manual clicks are rare. A shared
+     * order costs less than resolving overlaps.
+     */
+    let queue: Promise<void> = Promise.resolve();
     let applied = options.initialRevision;
     let inFlight = 0;
     let seq = 0;
     /**
-     * The server changed seen ranges: marking a stop adds them, clearing a file removes the ranges
-     * of its linked stops. The local store cannot know this and must reread the snapshot.
+     * The server changed seen ranges (marking a stop or card, unmarking a file) in a way the store
+     * cannot calculate itself, so the snapshot needs to be refetched.
      */
     let rangesPending = false;
 
-    const restore = (pending: PendingWrite): void => {
-        if (pending.confirmed.scope === 'file') {
-            options.restore(pending.id, pending.confirmed.record);
-        } else {
-            options.stops.restore(pending.id, pending.confirmed.viewed);
+    const replayFile = (fileId: string): UiFileProgress | null =>
+        writes.reduce(
+            (record, write) => (write.file?.id === fileId ? write.file.change(record) : record),
+            fileBases.get(fileId) ?? null,
+        );
+    const replayStop = (stopId: string): boolean | null =>
+        writes.reduce(
+            (viewed, write) => (write.stop?.id === stopId ? write.stop.viewed : viewed),
+            stopBases.get(stopId) ?? null,
+        );
+
+    /** Remove the base when no writes overlay it: the store for this id is server state again. */
+    const prune = (): void => {
+        for (const fileId of fileBases.keys()) {
+            if (!writes.some((write) => write.file?.id === fileId)) {
+                fileBases.delete(fileId);
+            }
+        }
+        for (const stopId of stopBases.keys()) {
+            if (!writes.some((write) => write.stop?.id === stopId)) {
+                stopBases.delete(stopId);
+            }
         }
     };
 
     const enqueue = async (
-        scope: Confirmed['scope'],
-        id: string,
-        viewed: boolean,
-        initial: () => Confirmed,
+        target: Pick<Write, 'file' | 'stop'>,
         apply: () => void,
         send: () => Promise<number>,
-        confirm: (previous: Confirmed) => Confirmed,
     ): Promise<boolean> => {
-        const key = `${scope}\u0000${id}`;
-        const previous = writes.get(key);
-        const pending: PendingWrite = {
-            scope,
-            id,
-            viewed,
-            seq: (seq += 1),
-            inFlight: true,
-            confirmed: previous?.confirmed ?? initial(),
-            chain: RESOLVED,
-        };
-        writes.set(key, pending);
+        const write: Write = { seq: (seq += 1), done: false, ...target };
+        if (write.file !== null && !fileBases.has(write.file.id)) {
+            fileBases.set(write.file.id, options.read(write.file.id));
+        }
+        if (write.stop !== null && !stopBases.has(write.stop.id)) {
+            stopBases.set(write.stop.id, options.stops.read(write.stop.id));
+        }
+        writes.push(write);
         apply();
         inFlight += 1;
 
-        // Writes for one key go to the server in strict order. Otherwise two quick toggles
-        // could arrive in reverse order, leaving the first value in the database.
-        const request = (previous?.chain ?? RESOLVED).then(async () => {
+        const request = queue.then(async () => {
             const revision = await send();
             if (revision === applied + 1) {
                 applied = revision;
             }
-            pending.confirmed = confirm(pending.confirmed);
+            write.done = true;
         });
-        pending.chain = request.then(
-            () => undefined,
-            () => undefined,
-        );
+        queue = request.then(noop, noop);
 
         try {
             await request;
             return true;
         } catch {
-            // The optimistic write failed. The control returns to the last confirmed
-            // state, but only if the reviewer has not marked it again. Otherwise rollback would erase
-            // a mark already saved on the server.
-            if (writes.get(key) === pending) {
-                writes.delete(key);
-                restore(pending);
+            writes = writes.filter((candidate) => candidate !== write);
+            if (write.file !== null) {
+                options.restore(write.file.id, replayFile(write.file.id));
             }
+            if (write.stop !== null) {
+                options.stops.restore(write.stop.id, replayStop(write.stop.id));
+            }
+            prune();
             return false;
         } finally {
-            pending.inFlight = false;
             inFlight -= 1;
             options.onSettled();
         }
@@ -170,22 +212,14 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
     return {
         write: async (fileId, viewed) => {
             const written = await enqueue(
-                'file',
-                fileId,
-                viewed,
-                () => ({ scope: 'file', record: options.read(fileId) }),
+                {
+                    file: { id: fileId, change: (record) => ({ ...(record ?? { fileId, seenRanges: [] }), viewed }) },
+                    stop: null,
+                },
                 () => {
                     options.apply(fileId, viewed);
                 },
                 () => options.send(fileId, viewed),
-                (previous) => ({
-                    scope: 'file',
-                    record: {
-                        fileId,
-                        viewed,
-                        seenRanges: previous.scope === 'file' ? (previous.record?.seenRanges ?? []) : [],
-                    },
-                }),
             );
             if (written && !viewed) {
                 rangesPending = true;
@@ -195,15 +229,39 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
 
         writeStop: async (stopId, viewed, ranges) => {
             const written = await enqueue(
-                'stop',
-                stopId,
-                viewed,
-                () => ({ scope: 'stop', viewed: options.stops.read(stopId) }),
+                { file: null, stop: { id: stopId, viewed } },
                 () => {
                     options.stops.apply(stopId, viewed);
                 },
                 () => options.stops.send(stopId, viewed, ranges),
-                () => ({ scope: 'stop', viewed }),
+            );
+            if (written) {
+                rangesPending = true;
+            }
+            return written;
+        },
+
+        writeStopFile: async (stopId, fileId, viewed, ranges) => {
+            const unmarksStop = !viewed && options.stops.read(stopId) === true;
+            const change = viewed ? 'add' : 'remove';
+            const written = await enqueue(
+                {
+                    file: {
+                        id: fileId,
+                        change: (record) => {
+                            const base = record ?? { fileId, viewed: null, seenRanges: [] };
+                            return { ...base, seenRanges: changeSeenRanges(base.seenRanges, change, ranges) };
+                        },
+                    },
+                    stop: unmarksStop ? { id: stopId, viewed: false } : null,
+                },
+                () => {
+                    options.stopFiles.apply(fileId, change, ranges);
+                    if (unmarksStop) {
+                        options.stops.apply(stopId, false);
+                    }
+                },
+                () => options.stopFiles.send(stopId, fileId, viewed, viewed ? ranges : []),
             );
             if (written) {
                 rangesPending = true;
@@ -234,27 +292,24 @@ export function createProgressWriter(options: ProgressWriterOptions): ProgressWr
 
             const files = new Map(response.files.map((record) => [record.fileId, record]));
             const stops = new Map(response.stops.map((record) => [record.stopId, record]));
-            for (const [key, pending] of [...writes]) {
-                if (!pending.inFlight && pending.seq < mark) {
-                    // The response fully reflects the write. The snapshot itself now represents its state.
-                    writes.delete(key);
-                    continue;
+            // A write accepted before refetching began is fully reflected in the response, so the snapshot
+            // now represents its state. Other writes go on top: otherwise a fresh mark would visually
+            // roll back even though it exists on the server, while a failed write rolls back to this snapshot.
+            writes = writes.filter((write) => !(write.done && write.seq < mark));
+            prune();
+            for (const fileId of fileBases.keys()) {
+                fileBases.set(fileId, files.get(fileId) ?? null);
+                const record = replayFile(fileId);
+                if (record !== null) {
+                    files.set(fileId, record);
                 }
-                if (pending.scope === 'file') {
-                    const server = files.get(pending.id) ?? null;
-                    if (pending.inFlight) {
-                        // The write is not confirmed yet. If it fails, roll back to this snapshot.
-                        pending.confirmed = { scope: 'file', record: server };
-                    }
-                    // Otherwise a fresh mark would appear to roll back even though the server has it.
-                    files.set(pending.id, { ...(server ?? { fileId: pending.id, seenRanges: [] }), viewed: pending.viewed });
-                    continue;
+            }
+            for (const stopId of stopBases.keys()) {
+                stopBases.set(stopId, stops.get(stopId)?.viewed ?? null);
+                const viewed = replayStop(stopId);
+                if (viewed !== null) {
+                    stops.set(stopId, { stopId, viewed });
                 }
-                const server = stops.get(pending.id) ?? null;
-                if (pending.inFlight) {
-                    pending.confirmed = { scope: 'stop', viewed: server?.viewed ?? null };
-                }
-                stops.set(pending.id, { stopId: pending.id, viewed: pending.viewed });
             }
             return { files: [...files.values()], stops: [...stops.values()] };
         },

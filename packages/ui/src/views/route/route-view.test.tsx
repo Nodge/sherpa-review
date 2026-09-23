@@ -106,6 +106,7 @@ function render(
             loadContent={() => Promise.resolve(null)}
             onSetViewed={() => Promise.resolve(0)}
             onSetStopViewed={options.onSetStopViewed ?? (() => Promise.resolve(0))}
+            onSetStopFileViewed={() => Promise.resolve(0)}
             {...(options.onFillStop === undefined ? {} : { onFillStop: options.onFillStop })}
         />
         </ReadOnlyIterationProvider>,

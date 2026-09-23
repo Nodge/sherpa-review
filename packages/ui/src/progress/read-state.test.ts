@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parseFileDiff } from '../diff/parse.js';
 import { createT, ru as ruDictionary } from '../i18n/index.js';
 import type { ReadStateFile } from './read-state.js';
-import { changedLinesOf, readStateOf, readStateTooltip } from './read-state.js';
+import { changedLinesOf, changeSeenRanges, readStateOf, readStateTooltip } from './read-state.js';
 
 const ru = createT('ru');
 const en = createT('en');
@@ -154,5 +154,36 @@ describe('file read-state', () => {
 
         expect(changedLinesOf(model)).toEqual({ old: new Set([11]), new: new Set([11]) });
         expect(changedLinesOf(null)).toBeUndefined();
+    });
+});
+
+describe('editing seen ranges', () => {
+    const base: UiSeenRange[] = [
+        { side: 'new', start: 1, end: 10 },
+        { side: 'old', start: 5, end: 6 },
+    ];
+
+    it('merges overlapping and adjacent ranges on the same side when adding', () => {
+        expect(
+            changeSeenRanges(base, 'add', [
+                { side: 'new', start: 11, end: 15 },
+                { side: 'old', start: 20, end: 21 },
+            ]),
+        ).toEqual([
+            { side: 'old', start: 5, end: 6 },
+            { side: 'old', start: 20, end: 21 },
+            { side: 'new', start: 1, end: 15 },
+        ]);
+    });
+
+    it('splits overlapping ranges when subtracting and leaves the other side intact', () => {
+        expect(changeSeenRanges(base, 'remove', [{ side: 'new', start: 4, end: 6 }])).toEqual([
+            { side: 'old', start: 5, end: 6 },
+            { side: 'new', start: 1, end: 3 },
+            { side: 'new', start: 7, end: 10 },
+        ]);
+        expect(changeSeenRanges(base, 'remove', [{ side: 'old', start: 1, end: 9 }])).toEqual([
+            { side: 'new', start: 1, end: 10 },
+        ]);
     });
 });

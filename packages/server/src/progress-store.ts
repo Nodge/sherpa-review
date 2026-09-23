@@ -151,8 +151,8 @@ interface SeenRange {
  *
  * A file record exists only after an explicit reviewer action (`viewed: true` pins
  * `read` permanently, `viewed: false` unpins it). The UI interprets missing records. Seen ranges
- * carry stop marks, computed by the UI from its diff model. The server stores them
- * bound to the stop without interpreting them.
+ * come from marks on stops and their file cards: the UI computes them from its diff model,
+ * and the server stores them linked to the stop without interpreting them.
  *
  * Everything is scoped to an iteration: files and ranges are keyed by `diffId`, stop marks
  * by snapshot. Endpoints know which iteration is active. The store receives it as an argument.
@@ -181,6 +181,14 @@ export class ProgressStore {
         stopId: string,
         viewed: boolean,
         ranges: readonly UiStopSeenRange[],
+    ) => boolean;
+    private readonly txSetStopFileViewed: (
+        snapshotId: string,
+        diffId: HostId,
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
     ) => boolean;
     private readonly txAdoptLegacy: (diffId: HostId) => boolean;
     private readonly txCarryRanges: (from: HostId, to: HostId, map: IterationMap) => CarryResult;
@@ -213,6 +221,17 @@ export class ProgressStore {
                 viewed: boolean,
                 ranges: readonly UiStopSeenRange[],
             ) => this.setStopViewedInTransaction(snapshotId, diffId, stopId, viewed, ranges),
+        );
+        this.txSetStopFileViewed = transaction(
+            this.db,
+            (
+                snapshotId: string,
+                diffId: HostId,
+                stopId: string,
+                fileId: string,
+                viewed: boolean,
+                ranges: readonly UiSeenRange[],
+            ) => this.setStopFileViewedInTransaction(snapshotId, diffId, stopId, fileId, viewed, ranges),
         );
         this.txAdoptLegacy = transaction(this.db, (diffId: HostId) => this.adoptLegacyInTransaction(diffId));
         this.txCarryRanges = transaction(this.db, (from: HostId, to: HostId, map: IterationMap) =>
@@ -291,6 +310,22 @@ export class ProgressStore {
         ranges: readonly UiStopSeenRange[],
     ): number {
         return this.bumped(this.txSetStopViewed(snapshotId, diffId, stopId, viewed, ranges));
+    }
+
+    /**
+     * A file mark within a stop: card ranges linked to the stop, without a file pin.
+     * Clearing deletes this stop's ranges for the file and clears its stop mark if present.
+     * It does not create a missing stop record, which carryover would treat as a reviewer decision.
+     */
+    setStopFileViewed(
+        snapshotId: string,
+        diffId: HostId,
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
+    ): number {
+        return this.bumped(this.txSetStopFileViewed(snapshotId, diffId, stopId, fileId, viewed, ranges));
     }
 
     /**
@@ -600,6 +635,62 @@ export class ProgressStore {
                     viewed = excluded.viewed, updated_at = excluded.updated_at`,
             )
             .run(snapshotId, stopId, viewed ? 1 : 0, this.now().toISOString());
+        return true;
+    }
+
+    /** `false` means the same ranges or nothing to clear, so no tabs need notifying. */
+    private setStopFileViewedInTransaction(
+        snapshotId: string,
+        diffId: HostId,
+        stopId: string,
+        fileId: string,
+        viewed: boolean,
+        ranges: readonly UiSeenRange[],
+    ): boolean {
+        const currentRows = this.db
+            .prepare(
+                `SELECT file_id, side, start_line, end_line FROM file_seen_ranges
+                  WHERE diff_id = ? AND file_id = ? AND source_stop_id = ?`,
+            )
+            .all(diffId, fileId, stopId) as RangeRow[];
+        const current = canonicalRanges(
+            currentRows.map((row) => ({
+                fileId,
+                side: sideOf(row.side),
+                start: row.start_line,
+                end: row.end_line,
+            })),
+        );
+
+        if (!viewed) {
+            this.db
+                .prepare('DELETE FROM file_seen_ranges WHERE diff_id = ? AND file_id = ? AND source_stop_id = ?')
+                .run(diffId, fileId, stopId);
+            const unmarked = this.db
+                .prepare(
+                    `UPDATE stop_progress SET viewed = 0, updated_at = ?
+                      WHERE snapshot_id = ? AND stop_id = ? AND viewed = 1`,
+                )
+                .run(this.now().toISOString(), snapshotId, stopId);
+            return current.length > 0 || unmarked.changes > 0;
+        }
+
+        const next = canonicalRanges(ranges.map((range) => ({ ...range, fileId })));
+        if (sameRanges(current, next)) {
+            return false;
+        }
+        this.db
+            .prepare('DELETE FROM file_seen_ranges WHERE diff_id = ? AND file_id = ? AND source_stop_id = ?')
+            .run(diffId, fileId, stopId);
+        const insert = this.db.prepare(
+            `INSERT INTO file_seen_ranges (
+                diff_id, file_id, side, start_line, end_line, source_stop_id, path
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        );
+        const path = this.pathsOf(diffId).get(fileId) ?? null;
+        for (const range of next) {
+            insert.run(diffId, fileId, range.side, range.start, range.end, stopId, path);
+        }
         return true;
     }
 

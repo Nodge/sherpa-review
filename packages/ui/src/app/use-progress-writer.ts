@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { useMemo, useRef, useState } from 'react';
 
-import { setFileViewed, setStopViewed } from '../api.js';
+import { setFileViewed, setStopFileViewed, setStopViewed } from '../api.js';
 import type { DiffViewStore } from '../diff-view/store.js';
 import type { ProgressWriter } from '../progress/progress-writer.js';
 import { createProgressWriter } from '../progress/progress-writer.js';
@@ -84,6 +84,16 @@ export function useProgressWriter({
                                   .progressRevision;
                           },
                       },
+                      stopFiles: {
+                          apply: diffStore.applySeenRanges,
+                          send: async (stopId, fileId, viewed, ranges) => {
+                              if (routeSnapshotId === null) {
+                                  throw new Error('Sherpa UI: cannot mark a stop file without a route snapshot');
+                              }
+                              return (await setStopFileViewed(token, routeSnapshotId, stopId, fileId, viewed, ranges))
+                                  .progressRevision;
+                          },
+                      },
                       onSettled: () => {
                           setProgressWritesSettled((settled) => settled + 1);
                       },
@@ -99,7 +109,12 @@ export function useProgressWriter({
         () =>
             writingProgress === null || !readOnly
                 ? writingProgress
-                : { ...writingProgress, write: () => Promise.resolve(false), writeStop: () => Promise.resolve(false) },
+                : {
+                      ...writingProgress,
+                      write: () => Promise.resolve(false),
+                      writeStop: () => Promise.resolve(false),
+                      writeStopFile: () => Promise.resolve(false),
+                  },
         [readOnly, writingProgress],
     );
 

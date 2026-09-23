@@ -69,6 +69,7 @@ function PresetRouteState({ preset }: { preset: RoutePreset }) {
                 }}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={() => Promise.resolve(0)}
+                onSetStopFileViewed={() => Promise.resolve(0)}
             />
         </div>
     );

@@ -1,5 +1,5 @@
 import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot } from '@sherpa/protocol';
+import type { RouteSnapshot, UiFileProgress } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -38,6 +38,8 @@ interface RouteStateProps {
     /** Stop marks: the server supplies them in the app, a prop supplies them in the gallery. */
     readonly stopViewed?: readonly string[];
     readonly keptStopId?: string | null;
+    /** Initial file progress: supplied by the server in the app. */
+    readonly progress?: readonly UiFileProgress[];
 }
 
 function RouteState({
@@ -46,18 +48,19 @@ function RouteState({
     stops = EMPTY_STOPS,
     stopViewed = [],
     keptStopId = null,
+    progress = NO_PROGRESS,
 }: RouteStateProps) {
     const session = useMemo(
         () => createSessionStore({ initial: { view: 'route', filter, stops } }),
         [filter, stops],
     );
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: DATA.diff.files });
+        const created = createDiffViewStore({ files: DATA.diff.files, progress });
         for (const file of DATA.diff.files) {
             created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
         }
         return created;
-    }, []);
+    }, [progress]);
     const threadStore = useMemo(
         () => createThreadStore(DATA.threads, new Set(DATA.diff.files.map((file) => file.fileId))),
         [],
@@ -97,6 +100,7 @@ function RouteState({
                 }}
                 onSetViewed={() => Promise.resolve(0)}
                 onSetStopViewed={() => Promise.resolve(0)}
+                onSetStopFileViewed={() => Promise.resolve(0)}
             />
         </div>
     );
@@ -186,6 +190,20 @@ function emptyStopSnapshot(): RouteSnapshot {
     };
 }
 
+const NO_PROGRESS: readonly UiFileProgress[] = [];
+
+/** A file split between s03 (lines 1–52) and s05 (53–115): only the s03 card is marked. */
+function sharedFileProgress(): readonly UiFileProgress[] {
+    const fileId = DATA.diff.files.find((file) => file.path === 'services/orders/docs/edit-window.md')?.fileId;
+    if (fileId === undefined) {
+        throw new Error('the medium fixture has no services/orders/docs/edit-window.md');
+    }
+    return [{ fileId, viewed: null, seenRanges: [{ side: 'new', start: 1, end: 52 }] }];
+}
+
+// One reference for all renders: the diff store is recreated when progress changes.
+const SHARED_FILE_PROGRESS = sharedFileProgress();
+
 function stopsState(patch: Partial<StopsState>): StopsState {
     return { ...EMPTY_STOPS, ...patch };
 }
@@ -211,6 +229,13 @@ export const ROUTE_STATES: readonly RouteGalleryState[] = [
         id: 'route-low-expanded',
         title: 'low stop expanded by hand (the adjacent stop stays collapsed)',
         render: () => <RouteState stops={stopsState({ expanded: new Set(['s05']) })} />,
+    },
+    {
+        id: 'route-stop-file-viewed',
+        title: 'file in two stops: card in 03 marked and collapsed, card in 05 is not',
+        render: () => (
+            <RouteState progress={SHARED_FILE_PROGRESS} stops={stopsState({ expanded: new Set(['s05']) })} />
+        ),
     },
     {
         id: 'route-other-promoted',
