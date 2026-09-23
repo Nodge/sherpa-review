@@ -1,0 +1,529 @@
+/*
+ * Base controls share one state rule across the interface:
+ * docs/design/SPEC-changes-2026-09-20.md §5 (the live table is the `ctl` section
+ * in `docs/design/Sherpa Changes 2026-09-20.dc.html`).
+ *
+ * Hover changes only the surface: the background appears or moves up one step, pressing moves it to
+ * the second. Text and borders stay unchanged. Exceptions are links (no surface, colour follows the
+ * accent scale) and the trash button (the icon turns red along with the background). No shifts, shadows or transitions
+ * on hover. The only movement is the switch track and thumb.
+ *
+ * Each variant defines its three tones in `--ctl-surface*`. Shared rules below switch between them.
+ * Component styles keep only layout: they no longer have their own state colours.
+ * States can be forced with the `data-state` attribute, which drives the gallery matrix.
+ */
+
+.ctl {
+    --ctl-surface: transparent;
+    --ctl-surface-hover: var(--surface-hover);
+    --ctl-surface-pressed: var(--surface-pressed);
+    --ctl-border: transparent;
+    --ctl-ink: inherit;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    gap: 6px;
+    padding: 0;
+    border: 1px solid var(--ctl-border);
+    background: var(--ctl-surface);
+    color: var(--ctl-ink);
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ctl:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    background: var(--ctl-surface-hover);
+}
+
+.ctl:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    background: var(--ctl-surface-pressed);
+}
+
+/* Keyboard-only focus ring. The 2px gap shows the real background under the ring (see base.css). */
+.ctl:is(:focus-visible, [data-state='focus']) {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 2px;
+}
+
+/* --- Filled buttons: a scale of three tones of their own colour --- */
+
+.ctl--primary,
+.ctl--attention,
+.ctl--secondary {
+    height: 29px;
+    padding: 0 12px;
+    border-radius: var(--radius-input);
+    font-size: var(--font-size-secondary);
+    font-weight: 500;
+}
+
+.ctl--primary {
+    --ctl-surface: var(--accent);
+    --ctl-surface-hover: var(--accent-hover);
+    --ctl-surface-pressed: var(--accent-pressed);
+    --ctl-ink: var(--accent-ink);
+}
+
+.ctl--attention {
+    --ctl-surface: var(--attention-button);
+    --ctl-surface-hover: var(--attention-button-hover);
+    --ctl-surface-pressed: var(--attention-button-pressed);
+    --ctl-ink: var(--attention-button-ink);
+}
+
+.ctl--secondary {
+    --ctl-surface: var(--surface-button);
+    --ctl-surface-hover: var(--surface-button-hover);
+    --ctl-surface-pressed: var(--surface-button-pressed);
+    --ctl-border: var(--border-button);
+    --ctl-ink: var(--text-button);
+
+    box-shadow: var(--shadow-button);
+}
+
+/* A pressed button is no longer raised. In the light theme this is its only shadow. */
+.ctl--secondary:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    box-shadow: none;
+}
+
+/* Destructive action: "Delete". */
+.ctl--danger {
+    --ctl-surface: var(--surface-danger-button);
+    --ctl-surface-hover: var(--surface-danger-button-hover);
+    --ctl-surface-pressed: var(--surface-danger-button-pressed);
+    --ctl-border: var(--border-danger-button);
+    --ctl-ink: var(--text-danger-button);
+
+    height: 23px;
+    padding: 0 9px;
+    border-radius: var(--radius-badge);
+    font-size: var(--font-size-meta);
+}
+
+/* --- Outlined buttons --- */
+
+.ctl--ghost,
+.ctl--danger-ghost {
+    height: 29px;
+    padding: 0 11px;
+    border-radius: var(--radius-input);
+    font-size: var(--font-size-secondary);
+}
+
+.ctl--ghost {
+    --ctl-border: var(--border-strong);
+    --ctl-ink: var(--text-muted);
+}
+
+.ctl--danger-ghost {
+    --ctl-surface-hover: var(--error-surface);
+    --ctl-surface-pressed: var(--error-border);
+    --ctl-border: var(--error-border);
+    --ctl-ink: var(--error-text);
+}
+
+/* Top-panel ghost buttons are shorter than composer buttons: 28px versus 29 (height table §5). */
+.ctl--topbar {
+    height: 28px;
+    padding: 0 var(--space-inner);
+    gap: 7px;
+}
+
+/* Compact row: card header actions and confirmations use 23px from the same table. */
+.ctl--compact {
+    height: 23px;
+    padding: 0 var(--space-inner-tight);
+    border-radius: var(--radius-badge);
+    font-size: var(--font-size-meta);
+}
+
+/*
+ * Action toggle: Mark viewed on a stop and Resolve on a comment share one pattern in two
+ * colours. Off looks like Ghost, on is filled with green.
+ */
+.ctl--toggle {
+    --ctl-border: var(--border-strong);
+    --ctl-ink: var(--text-muted);
+
+    height: 23px;
+    padding: 0 var(--space-inner-tight);
+    border-radius: var(--radius-badge);
+    font-size: var(--font-size-control);
+}
+
+.ctl--toggle.is-on {
+    --ctl-surface: var(--viewed-surface);
+    --ctl-surface-hover: var(--success-surface);
+    --ctl-surface-pressed: var(--viewed-hover-surface);
+    --ctl-border: var(--viewed-border);
+    --ctl-ink: var(--diff-add-text-strong);
+}
+
+/* The comment header toggle sits in a compact row and is one pixel shorter. */
+.ctl--toggle-compact {
+    height: 22px;
+    padding: 0 var(--space-inner-tight) 0 6px;
+    gap: 5px;
+}
+
+/*
+ * Open-issue circle in the Resolve button: its colour never changes. An open issue needs
+ * attention, not alarm (§5). Half a pixel down optically aligns it with the lowercase label letters.
+ */
+.ctl__dot {
+    position: relative;
+    top: 0.5px;
+    color: var(--attention);
+}
+
+/* Subdued mono button: "⇄ unified", "collapse all". */
+.ctl--quiet {
+    --ctl-ink: var(--text-dim-strong);
+
+    height: 22px;
+    padding: 0 6px;
+    border-radius: var(--radius-key);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-gutter);
+}
+
+/* --- Links: no surface, colour follows the accent scale, no underline anywhere --- */
+
+.ctl--link,
+.ctl--link-muted,
+.ctl--link-danger {
+    --ctl-surface-hover: transparent;
+    --ctl-surface-pressed: transparent;
+
+    display: inline;
+    /* No border at all: a transparent one would add two extra pixels to the height of an inline link. */
+    border: 0;
+    border-radius: var(--radius-mark);
+    /* A link lives inside text and wraps with it, unlike buttons. */
+    white-space: normal;
+    text-decoration: none;
+}
+
+.ctl--link {
+    --ctl-ink: var(--accent-hover);
+}
+
+/* A tone more subdued than the body, otherwise the action row under a comment looks like the comment itself. */
+.ctl--link-muted {
+    --ctl-ink: var(--text-link-muted);
+}
+
+.ctl--link:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    color: var(--accent-hover-strong);
+}
+
+.ctl--link:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    color: var(--accent);
+}
+
+.ctl--link-muted:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    color: var(--accent-hover);
+}
+
+.ctl--link-muted:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    color: var(--accent-hover-strong);
+}
+
+/*
+ * "Delete" in the action row: Link muted at rest, red on hover (§3).
+ * The second exception to "hover does not affect text", alongside the trash button: a destructive
+ * action must differ from neighbouring links before the click.
+ */
+.ctl--link-danger {
+    --ctl-ink: var(--text-link-muted);
+}
+
+.ctl--link-danger:is(:hover, :active, [data-state='hover'], [data-state='active']):not(
+        :disabled,
+        [aria-disabled='true']
+    ) {
+    color: var(--error);
+}
+
+/* --- Tabs and segments: single selection within a group, a white item in a container --- */
+
+.ctl-tabs {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-popover);
+    background: var(--surface-control);
+    white-space: nowrap;
+}
+
+.ctl--tab {
+    --ctl-ink: var(--text-muted-dim);
+
+    height: 24px;
+    padding: 0 var(--space-inner);
+    border-radius: var(--radius-button);
+    font-size: var(--font-size-secondary);
+}
+
+/* The selected item does not react to hover: it is already selected, so there is nothing to highlight. */
+.ctl--tab.is-active {
+    --ctl-surface: var(--surface-segment-active);
+    --ctl-surface-hover: var(--surface-segment-active);
+    --ctl-surface-pressed: var(--surface-segment-active);
+    --ctl-ink: var(--text-on-segment-active);
+
+    box-shadow: var(--shadow-segment-active);
+    font-weight: 500;
+}
+
+/* Ring on the inside: the container border would hide it on the outside. */
+.ctl-tabs .ctl:is(:focus-visible, [data-state='focus']) {
+    outline-offset: -2px;
+}
+
+/* Small segment: "Visual / Markdown" editor mode and settings in the header menu. */
+.ctl-tabs--small {
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-button);
+    background: var(--surface-diff-card);
+}
+
+.ctl-tabs--small .ctl--tab {
+    height: 20px;
+    padding: 0 7px;
+    border-radius: var(--radius-key);
+    font-size: var(--font-size-gutter);
+}
+
+/* --- Filter chip: multiple chips can be "on" at once --- */
+
+.ctl--chip {
+    --ctl-border: var(--border-standard);
+    --ctl-ink: var(--text-dim);
+
+    height: 24px;
+    padding: 0 9px;
+    border-radius: var(--radius-button);
+    font-size: var(--font-size-meta);
+}
+
+.ctl--chip.is-on {
+    --ctl-surface: var(--surface-chip-active);
+    --ctl-surface-hover: var(--surface-chip-active-hover);
+    --ctl-surface-pressed: var(--surface-chip-active-pressed);
+    --ctl-border: var(--border-chip-active);
+    --ctl-ink: var(--text-chip-active);
+
+    font-weight: 500;
+}
+
+/* --- Icon buttons --- */
+
+.ctl--icon,
+.ctl--icon-danger {
+    --ctl-border: var(--border-strong);
+    --ctl-ink: var(--text-muted-dim);
+
+    width: 25px;
+    height: 25px;
+    border-radius: var(--radius-button);
+}
+
+/* The only exception to "hover does not affect text": delete must turn red. */
+.ctl--icon-danger {
+    --ctl-surface-hover: var(--error-surface);
+    --ctl-surface-pressed: var(--error-border);
+}
+
+.ctl--icon-danger:is(:hover, :active, [data-state='hover'], [data-state='active']):not(
+        :disabled,
+        [aria-disabled='true']
+    ) {
+    color: var(--error);
+}
+
+/* Composer toolbar icon: no border, "on" uses the second step of the scale. */
+.ctl--toolbar-icon {
+    --ctl-ink: var(--text-muted-dim);
+
+    width: 26px;
+    height: 24px;
+    border-radius: var(--radius-badge);
+}
+
+.ctl--toolbar-icon.is-on {
+    --ctl-surface: var(--surface-pressed);
+}
+
+.ctl--chevron {
+    --ctl-ink: var(--text-dim);
+
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-badge);
+}
+
+/* --- Switch: the label is part of the control, clicking the text toggles the track --- */
+
+.ctl-switch {
+    --sw-track: var(--surface-hover);
+    --sw-track-border: var(--border-switch-track);
+    --sw-knob: var(--text-muted-dim);
+    --sw-knob-shift: 0;
+    --sw-knob-scale: 1;
+
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: 9px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--font-size-control);
+    cursor: pointer;
+}
+
+.ctl-switch:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    --sw-track: var(--surface-pressed);
+}
+
+.ctl-switch:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    --sw-track: var(--surface-pressed-deep);
+    --sw-knob-scale: 0.85;
+}
+
+.ctl-switch.is-on {
+    --sw-track: var(--accent);
+    --sw-track-border: transparent;
+    --sw-knob: var(--accent-ink);
+    --sw-knob-shift: 12px;
+
+    color: var(--text-secondary);
+}
+
+.ctl-switch.is-on:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    --sw-track: var(--accent-hover);
+}
+
+.ctl-switch.is-on:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    --sw-track: var(--accent-pressed);
+    --sw-knob-scale: 0.85;
+}
+
+.ctl-switch:is(:focus-visible, [data-state='focus']) {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 2px;
+}
+
+.ctl-switch__track {
+    position: relative;
+    flex: none;
+    width: 30px;
+    height: 17px;
+    border: 1px solid var(--sw-track-border);
+    border-radius: 9px;
+    background: var(--sw-track);
+    /* The only movement in the control system (§5): 150ms comes from the design. */
+    transition: background 150ms var(--motion-hover-ease);
+}
+
+.ctl-switch__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--sw-knob);
+    transform: translateX(var(--sw-knob-shift)) scale(var(--sw-knob-scale));
+    transition: transform 150ms var(--motion-hover-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ctl-switch__track,
+    .ctl-switch__knob {
+        transition: none;
+    }
+}
+
+/* --- 12px checkbox: the label is also part of the control --- */
+
+.ctl-checkbox {
+    --cb-surface: transparent;
+    --cb-border: var(--checkbox-border);
+
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: 7px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--font-size-control);
+    cursor: pointer;
+}
+
+.ctl-checkbox:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    --cb-surface: var(--surface-hover);
+}
+
+.ctl-checkbox:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    --cb-surface: var(--surface-pressed);
+}
+
+.ctl-checkbox.is-on {
+    --cb-surface: var(--read-fill);
+    --cb-border: var(--read-border);
+}
+
+.ctl-checkbox.is-on:is(:hover, [data-state='hover']):not(:disabled, [aria-disabled='true']) {
+    --cb-surface: var(--read-border);
+}
+
+.ctl-checkbox.is-on:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true']) {
+    --cb-surface: var(--viewed-hover-surface);
+}
+
+.ctl-checkbox:is(:focus-visible, [data-state='focus']) {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 2px;
+}
+
+.ctl-checkbox__box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--cb-border);
+    border-radius: var(--radius-mark);
+    background: var(--cb-surface);
+    /* The checkmark is always in the markup but only visible inside a filled box. */
+    color: transparent;
+}
+
+.ctl-checkbox.is-on .ctl-checkbox__box {
+    color: var(--surface-app);
+}
+
+/*
+ * The pressed box uses the third green step (§5, `25422f`), where a page-coloured checkmark
+ * disappears: black on dark green in the dark theme, almost white on light green in the light theme.
+ * So when pressed, the checkmark inverts with the box and stays visible in both themes.
+ */
+.ctl-checkbox.is-on:is(:active, [data-state='active']):not(:disabled, [aria-disabled='true'])
+    .ctl-checkbox__box {
+    color: var(--text-primary);
+}

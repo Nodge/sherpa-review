@@ -123,7 +123,7 @@ function NoteGroupView({
             {summarized ? (
                 <button
                     type="button"
-                    className="agent-note-stack__collapse"
+                    className="ctl ctl--link agent-note-stack__collapse"
                     aria-expanded="true"
                     onClick={() => {
                         session.collapseNoteStack(stackKey, group.notes.map((note) => note.id));
@@ -201,6 +201,7 @@ function AgentNoteView({
             <div className="agent-note__actions">
                 <button
                     type="button"
+                    className="ctl ctl--link"
                     onClick={() => {
                         actions.onOpenInChat(note);
                     }}
@@ -209,6 +210,7 @@ function AgentNoteView({
                 </button>
                 <button
                     type="button"
+                    className="ctl ctl--link"
                     disabled={readOnly || note.lostAnchor}
                     title={draftReason(note, readOnly, readOnlyReason, t)}
                     onClick={() => {
@@ -219,6 +221,7 @@ function AgentNoteView({
                 </button>
                 <button
                     type="button"
+                    className="ctl ctl--link"
                     onClick={() => {
                         session.toggleNoteExpanded(note.id);
                     }}
@@ -227,6 +230,7 @@ function AgentNoteView({
                 </button>
                 <button
                     type="button"
+                    className="ctl ctl--link-danger"
                     disabled={deleting}
                     onClick={() => {
                         setDeleting(true);

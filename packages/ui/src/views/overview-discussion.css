@@ -154,12 +154,7 @@
 
 .discussion-card__more {
     padding: 5px 13px 3px;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: var(--font-size-secondary);
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 .discussion-card__outside {
@@ -324,13 +319,7 @@
 
 .discussion-thread__expand {
     margin-top: 4px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: var(--font-size-meta);
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 .discussion-thread__foot {
@@ -350,15 +339,8 @@
 }
 
 .discussion-thread__replies-toggle {
-    flex: none;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-family: var(--font-mono);
     font-size: var(--font-size-gutter);
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 /* Replies outside the diff use a flat list without a tree, keeping the card a summary. */
@@ -410,20 +392,7 @@
 }
 
 .discussion-thread__reply {
-    flex: none;
     height: 22px;
-    padding: 0 8px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-badge);
-    background: transparent;
-    font: inherit;
-    font-size: var(--font-size-meta);
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.discussion-thread__reply:hover {
-    background: var(--surface-popover);
 }
 
 .discussion-card__footer {
@@ -434,34 +403,17 @@
     border-top: 1px solid var(--border-hairline-strong);
 }
 
+/* Label with an arrow: a link with its own row layout. */
 .discussion-card__all {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: var(--font-size-secondary);
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 .discussion-card__write {
-    flex: none;
-    height: 24px;
     padding: 0 9px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-button);
-    background: transparent;
-    font: inherit;
     font-size: var(--font-size-control);
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.discussion-card__write:hover:not(:disabled) {
-    background: var(--surface-popover);
 }
 
 .discussion-card__write:disabled {

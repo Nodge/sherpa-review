@@ -64,7 +64,7 @@ export function UpdateToast({ update, onDismissVersion, onLater, howToOpen = fal
                 <span className="update-toast__kicker">{t('update.kicker')}</span>
                 <button
                     type="button"
-                    className="update-toast__close"
+                    className="ctl ctl--chevron update-toast__close"
                     aria-label={t('update.later')}
                     onClick={onLater}
                 >
@@ -82,7 +82,7 @@ export function UpdateToast({ update, onDismissVersion, onLater, howToOpen = fal
             <div className="update-toast__footer">
                 <button
                     type="button"
-                    className="ghost-button update-toast__how"
+                    className="ctl ctl--ghost ctl--topbar update-toast__how"
                     aria-expanded={how}
                     onClick={() => {
                         setHow((open) => !open);
@@ -90,7 +90,7 @@ export function UpdateToast({ update, onDismissVersion, onLater, howToOpen = fal
                 >
                     {t('update.how')}
                 </button>
-                <button type="button" className="update-toast__dismiss" onClick={onDismissVersion}>
+                <button type="button" className="ctl ctl--link-muted update-toast__dismiss" onClick={onDismissVersion}>
                     {t('update.dismiss', update.latest)}
                 </button>
             </div>

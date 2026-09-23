@@ -126,7 +126,7 @@ describe('file card', () => {
 
         // The header accepts focus so the menu can return focus here after a right click.
         expect(html).toContain('class="file-card__header" tabindex="-1"');
-        expect(html).toContain('class="file-card__header-action"');
+        expect(html).toContain('file-card__header-action"');
         expect(html).toContain('aria-label="File actions"');
         expect(html).toContain('>Expand the file</button>');
         // The blame link now lives in the menu instead of a separate header control.
@@ -135,7 +135,7 @@ describe('file card', () => {
         expect(html).not.toContain('Open in editor');
         // The menu is closed, so its items are absent from the markup.
         expect(html).not.toContain('Copy file link');
-        expect(html).toContain('class="file-card__action">retry</button>');
+        expect(html).toContain('file-card__action">retry</button>');
     });
 
     it('disabled viewed mark explains the reason instead of showing progress counts', () => {

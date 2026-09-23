@@ -127,7 +127,7 @@ export function CoverageStrip({
                             {' · '}
                             <button
                                 type="button"
-                                className="coverage__link"
+                                className="ctl ctl--link-muted coverage__link"
                                 disabled={model.otherStopId === null}
                                 onClick={() => {
                                     if (model.otherStopId !== null) {

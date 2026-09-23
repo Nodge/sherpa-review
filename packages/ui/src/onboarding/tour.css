@@ -125,53 +125,22 @@
     flex: 1;
 }
 
+/* Dotted underline for "Skip tour", docs/design/README.md §16. Its color follows the link states. */
 .tour-card__skip {
-    padding: 0;
-    border: none;
     border-bottom: 1px dashed var(--tour-skip-underline);
-    background: transparent;
-    font-family: inherit;
+    border-radius: 0;
     font-size: var(--font-size-secondary);
-    color: var(--text-dim);
-    cursor: pointer;
 }
 
-.tour-card__skip:hover {
-    border-color: var(--text-dim-strong);
-    color: var(--text-muted);
-}
-
-.tour-card__back {
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--border-strong-lifted);
-    border-radius: var(--radius-input);
-    background: transparent;
-    font-family: inherit;
+.tour-card__back,
+.tour-card__next {
     font-size: var(--font-size-ui);
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.tour-card__back:hover {
-    background: var(--surface-popover);
 }
 
 .tour-card__next {
     height: 28px;
     padding: 0 13px;
-    border: none;
-    border-radius: var(--radius-input);
-    background: var(--accent);
-    font-family: inherit;
-    font-size: var(--font-size-ui);
     font-weight: 600;
-    color: var(--accent-ink);
-    cursor: pointer;
-}
-
-.tour-card__next:hover {
-    background: var(--accent-hover);
 }
 
 /* Card and ring movement is the only tour animation. Disabled under reduced motion (§7). */

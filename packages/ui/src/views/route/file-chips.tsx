@@ -38,7 +38,7 @@ export function FileChips({ files, readStateOf, onOpen }: FileChipsProps) {
             {hidden === 0 ? null : (
                 <button
                     type="button"
-                    className="route-chips__more"
+                    className="ctl ctl--link route-chips__more"
                     onClick={() => {
                         setExpanded(true);
                     }}

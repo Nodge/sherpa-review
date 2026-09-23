@@ -17,6 +17,11 @@ const PROTOTYPE = readFileSync(
     fileURLToPath(new URL('../../../../docs/design/Sherpa.dc.html', import.meta.url)),
     'utf8',
 );
+/** Additions has no open-issue dot either. It came with iteration 09-20. */
+const CHANGES = readFileSync(
+    fileURLToPath(new URL('../../../../docs/design/Sherpa Changes 2026-09-20.dc.html', import.meta.url)),
+    'utf8',
+);
 
 const ICON_IDS = [
     'ic-search',
@@ -41,7 +46,7 @@ const ICON_IDS = [
 ] as const;
 
 describe('SVG icons', () => {
-    it('19 symbols come verbatim from Sherpa Additions, the twentieth is the prototype sliders icon', () => {
+    it('19 symbols come verbatim from Sherpa Additions, followed by sliders and a dot from the prototypes', () => {
         const designSprite = /<svg width="0" height="0" style="position:absolute" aria-hidden="true">[\s\S]*?<\/svg>/u.exec(
             DESIGN,
         )?.[0];
@@ -53,7 +58,13 @@ describe('SVG icons', () => {
         for (const [, markup] of design) {
             expect(SPRITE).toContain(markup);
         }
-        expect(symbols(SPRITE).map(([id]) => id)).toEqual([...ICON_IDS, 'ic-sliders']);
+        expect(symbols(SPRITE).map(([id]) => id)).toEqual([...ICON_IDS, 'ic-sliders', 'ic-dot']);
+    });
+
+    it('the open-issue dot comes verbatim from the iteration 09-20 prototype', () => {
+        const dot = symbols(SPRITE).find(([id]) => id === 'ic-dot')?.[1] ?? '';
+
+        expect(CHANGES).toContain(dot);
     });
 
     it('the sliders drawing matches the settings menu trigger in the prototype', () => {

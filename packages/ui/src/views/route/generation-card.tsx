@@ -69,7 +69,7 @@ export function GenerationCard({
                 <div className="gen-card__head">
                     <h2 className="gen-card__title">{t('route.gen.ready', stops)}</h2>
                 </div>
-                <button type="button" className="gen-card__cta" onClick={onOpenRoute}>
+                <button type="button" className="ctl ctl--primary gen-card__cta" onClick={onOpenRoute}>
                     {t('route.gen.open')}
                 </button>
             </section>
@@ -119,7 +119,7 @@ export function GenerationCard({
                     />
                 ) : null}
 
-                <button type="button" className="gen-card__cta" onClick={onOpenRoute}>
+                <button type="button" className="ctl ctl--primary gen-card__cta" onClick={onOpenRoute}>
                     {t('route.gen.open')}
                 </button>
                 <p className="gen-card__hint">{t('route.gen.filling.hint', progress.ready, rest)}</p>
@@ -160,7 +160,7 @@ export function GenerationCard({
 
             {longRunning ? <StillWorking counter={null} cancelling={cancelling} onCancel={onCancel} /> : null}
 
-            <button type="button" className="gen-card__cta" onClick={onOpenRoute}>
+            <button type="button" className="ctl ctl--primary gen-card__cta" onClick={onOpenRoute}>
                 {snapshot === null ? t('route.gen.open.skeleton') : t('route.gen.open.previous')}
             </button>
             <p className="gen-card__hint">
@@ -190,7 +190,7 @@ function StillWorking({
         <p className="gen-card__still" role="status">
             {t('route.gen.still')}
             {counter === null ? '' : ` · ${counter}`}
-            <button type="button" className="gen-card__cancel" disabled={cancelling} onClick={onCancel}>
+            <button type="button" className="ctl ctl--link gen-card__cancel" disabled={cancelling} onClick={onCancel}>
                 {cancelling ? t('route.gen.cancelling') : t('route.gen.cancel')}
             </button>
         </p>
@@ -246,7 +246,7 @@ export function RouteFailedCard({
                 {compact || raw === null ? null : (
                     <button
                         type="button"
-                        className="gen-failed__secondary"
+                        className="ctl ctl--ghost gen-failed__secondary"
                         aria-expanded={rawShown}
                         onClick={() => {
                             setRawShown(!rawShown);
@@ -268,7 +268,7 @@ export function RouteFailedCard({
             {compact ? null : (
                 <p className="gen-failed__footer">
                     {t('route.failed.footer')}
-                    <button type="button" className="gen-failed__link" onClick={onOpenDiff}>
+                    <button type="button" className="ctl ctl--link gen-failed__link" onClick={onOpenDiff}>
                         {t('route.readFullDiff')}
                     </button>
                 </p>
@@ -294,7 +294,7 @@ export function RouteFillingBanner({
         <div className="gen-filling" role="status">
             <span className="gen-filling__dot" aria-hidden="true" />
             <span className="gen-filling__text">{t('route.filling.banner', progress.ready, progress.total)}</span>
-            <button type="button" className="gen-filling__link" onClick={onReadDiff}>
+            <button type="button" className="ctl ctl--link gen-filling__link" onClick={onReadDiff}>
                 {t('route.filling.readDiff')}
             </button>
         </div>
@@ -314,7 +314,7 @@ export function RouteRegeneratingBanner({
         <div className="gen-filling" role="status">
             <span className="gen-filling__dot" aria-hidden="true" />
             <span className="gen-filling__text">{t('route.regenerating.text')}</span>
-            <button type="button" className="gen-filling__link" disabled={cancelling} onClick={onCancel}>
+            <button type="button" className="ctl ctl--link gen-filling__link" disabled={cancelling} onClick={onCancel}>
                 {cancelling ? t('route.gen.cancelling') : t('route.gen.cancel')}
             </button>
         </div>
@@ -373,7 +373,7 @@ export function RouteActionErrorBanner({ message }: { message: string }) {
 function RetryButton({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
     const t = useT();
     return (
-        <button type="button" className="gen-retry" disabled={retrying} onClick={onRetry}>
+        <button type="button" className="ctl ctl--secondary gen-retry" disabled={retrying} onClick={onRetry}>
             <span className={`gen-retry__glyph${retrying ? ' is-spinning' : ''}`} aria-hidden="true" />
             {t('route.gen.retry')}
         </button>

@@ -147,7 +147,7 @@ export function OtherCard({
                         <div className="route-other__actions">
                             <button
                                 type="button"
-                                className="route-other__action"
+                                className="ctl ctl--secondary route-other__action"
                                 disabled={pending || filling}
                                 onClick={onOpen}
                             >
@@ -162,7 +162,7 @@ export function OtherCard({
                             {onAskToPlace === undefined ? null : (
                                 <button
                                     type="button"
-                                    className="route-other__action route-other__action--secondary"
+                                    className="ctl ctl--ghost ctl--topbar route-other__action route-other__action--secondary"
                                     disabled={pending || filling || !agentConnected}
                                     title={askToPlaceTitle(t, { pending, filling, agentConnected })}
                                     onClick={onAskToPlace}
@@ -186,7 +186,7 @@ export function OtherCard({
                         <p className="route-other__failed" role="status">
                             {t('route.other.failedFiles', failedFiles)}
                             {onRetryFailed === undefined ? null : (
-                                <button type="button" className="route-other__retry" onClick={onRetryFailed}>
+                                <button type="button" className="ctl ctl--link-muted" onClick={onRetryFailed}>
                                     {t('route.other.retryParse')}
                                 </button>
                             )}
@@ -232,7 +232,7 @@ export function RegenerateBanner({ onGenerate }: { readonly onGenerate?: () => v
             <span className="route-regenerate__dot" aria-hidden="true" />
             <span className="route-regenerate__text">{t('route.regenerate.hint')}</span>
             {onGenerate === undefined ? null : (
-                <button type="button" className="route-regenerate__action" onClick={onGenerate}>
+                <button type="button" className="ctl ctl--secondary route-regenerate__action" onClick={onGenerate}>
                     {t('route.regenerate.action')}
                 </button>
             )}

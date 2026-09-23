@@ -63,8 +63,8 @@ describe('top bar', () => {
     it('renders the Feedback button after search', () => {
         const html = topBar(PR);
 
-        expect(html).toContain('class="ghost-button search-button"');
-        expect(html).toContain('class="ghost-button feedback-button"');
+        expect(html).toContain('class="ctl ctl--ghost ctl--topbar search-button"');
+        expect(html).toContain('class="ctl ctl--ghost ctl--topbar feedback-button"');
         expect(html.indexOf('search-button')).toBeLessThan(html.indexOf('feedback-button'));
     });
 });

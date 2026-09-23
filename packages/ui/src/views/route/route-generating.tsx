@@ -47,7 +47,7 @@ export function RouteReadingView({ onOpenDiff }: { onOpenDiff: () => void }) {
 
                 <p className="route-skeleton__note">
                     {t('route.gen.planning.note')}
-                    <button type="button" className="route-skeleton__link" onClick={onOpenDiff}>
+                    <button type="button" className="ctl ctl--link route-skeleton__link" onClick={onOpenDiff}>
                         {t('route.readFullDiff')}
                     </button>
                 </p>

@@ -309,7 +309,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 <span className="selection-popover__count">{countLabel}</span>
                 <button
                     type="button"
-                    className="selection-popover__button selection-popover__button--primary"
+                    className="ctl ctl--primary selection-popover__button"
                     disabled={askDisabled}
                     title={askTitle}
                     onClick={() => {
@@ -321,7 +321,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 </button>
                 <button
                     type="button"
-                    className="selection-popover__button"
+                    className="ctl ctl--ghost selection-popover__button"
                     disabled={readOnly}
                     title={readOnly ? readOnlyReason : undefined}
                     onClick={() => {
@@ -330,7 +330,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 >
                     {t('selection.comment')}
                 </button>
-                <button type="button" className="selection-popover__button" onClick={copyLink}>
+                <button type="button" className="ctl ctl--ghost selection-popover__button" onClick={copyLink}>
                     {t('selection.copyLink')}
                 </button>
             </div>

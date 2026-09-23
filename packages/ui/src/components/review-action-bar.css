@@ -151,67 +151,27 @@
     color: var(--text-muted);
 }
 
-.review-action-bar__button {
-    height: 29px;
-    padding: 0 11px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-input);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.review-action-bar__button:hover:not(:disabled) {
-    border-color: var(--border-strong-lifted);
-    background: var(--surface-popover);
-}
-
-.review-action-bar__request {
-    border-color: var(--border-strong-lifted);
-    color: var(--error-text);
-}
-
 .review-action-bar button:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
 }
 
+/* Ship is a primary split button: the label and caret form a single button. */
 .review-action-bar__ship {
     position: relative;
     display: flex;
 }
 
-.review-action-bar__ship-primary,
-.review-action-bar__ship-caret {
-    height: 29px;
-    border: 0;
-    background: var(--accent);
-    color: var(--accent-ink);
-    cursor: pointer;
-}
-
-.review-action-bar__ship-primary {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.review-action-bar__ship .review-action-bar__ship-primary {
     padding: 0 11px;
     border-radius: var(--radius-input) 0 0 var(--radius-input);
     font-weight: 600;
 }
 
-.review-action-bar__ship-caret {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.review-action-bar__ship .review-action-bar__ship-caret {
     width: 28px;
-    padding: 0;
-    border-left: 1px solid var(--accent-hover);
+    border-left-color: var(--accent-hover);
     border-radius: 0 var(--radius-input) var(--radius-input) 0;
-}
-
-.review-action-bar__ship-primary:hover:not(:disabled),
-.review-action-bar__ship-caret:hover:not(:disabled) {
-    background: var(--accent-hover);
 }
 
 .review-action-menu {
@@ -297,16 +257,6 @@
     color: var(--error-text);
     font-size: var(--font-size-ui);
     font-weight: 500;
-}
-
-.review-action-error__summary button {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
 }
 
 .review-action-error__message {

@@ -76,6 +76,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                         <span>{t('complete.openThreads', completion.openThreads)}</span>
                         <button
                             type="button"
+                            className="ctl ctl--ghost"
                             onClick={() => {
                                 if (completion.firstOpenThreadId !== null) {
                                     onOpenThread(completion.firstOpenThreadId);
@@ -88,7 +89,7 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                 ) : null}
 
                 <div className="review-complete__actions">
-                    <button type="button" onClick={onOpenFullDiff}>
+                    <button type="button" className="ctl ctl--ghost" onClick={onOpenFullDiff}>
                         {t('route.toFullDiff')}
                     </button>
                 </div>

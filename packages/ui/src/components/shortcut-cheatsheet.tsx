@@ -66,7 +66,7 @@ export function ShortcutCheatsheet({ onClose }: ShortcutCheatsheetProps) {
                     <button
                         ref={closeRef}
                         type="button"
-                        className="shortcut-cheatsheet__icon-button"
+                        className="ctl ctl--icon shortcut-cheatsheet__icon-button"
                         aria-label={t('help.cheatsheet.close')}
                         title={t('help.cheatsheet.close.title')}
                         onClick={onClose}

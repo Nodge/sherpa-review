@@ -73,7 +73,7 @@ export function OverviewDiscussion({
         <div className="discussion-card__footer">
             <button
                 type="button"
-                className="discussion-card__all"
+                className="ctl ctl--link discussion-card__all"
                 onClick={() => {
                     // The label promises all threads, so clear the participant lens set by the row above.
                     session.setThreadAuthor(null);
@@ -87,7 +87,7 @@ export function OverviewDiscussion({
             <button
                 ref={writeButtonRef}
                 type="button"
-                className="discussion-card__write"
+                className="ctl ctl--ghost ctl--compact discussion-card__write"
                 disabled={onWritePrComment === undefined}
                 onClick={() => {
                     onWritePrComment?.(() => {
@@ -146,7 +146,7 @@ export function OverviewDiscussion({
                 {rest === 0 ? null : (
                     <button
                         type="button"
-                        className="discussion-card__more"
+                        className="ctl ctl--link discussion-card__more"
                         onClick={() => {
                             setAllParticipants(true);
                         }}
@@ -315,7 +315,7 @@ function OutsideThreadCard({
             {clampable ? (
                 <button
                     type="button"
-                    className="discussion-thread__expand"
+                    className="ctl ctl--link discussion-thread__expand"
                     aria-expanded={expanded}
                     onClick={() => {
                         setExpanded(!expanded);
@@ -331,7 +331,7 @@ function OutsideThreadCard({
                 {replies.length === 0 ? null : (
                     <button
                         type="button"
-                        className="discussion-thread__replies-toggle"
+                        className="ctl ctl--link discussion-thread__replies-toggle"
                         aria-expanded={repliesShown}
                         onClick={() => {
                             setRepliesOpen(!repliesShown);
@@ -344,7 +344,7 @@ function OutsideThreadCard({
                 {composer === null ? (
                     <button
                         type="button"
-                        className="discussion-thread__reply"
+                        className="ctl ctl--ghost ctl--compact discussion-thread__reply"
                         onClick={() => {
                             // The reply will go into this same list. Expand it now, or saving
                             // will close the composer and leave nowhere to see the new reply.

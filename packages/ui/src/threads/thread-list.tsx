@@ -193,7 +193,7 @@ function ThreadBlock({
                             <span className="thread__draft-actions">
                                 <button
                                     type="button"
-                                    className="thread__edit-draft"
+                                    className="ctl ctl--icon thread__edit-draft"
                                     aria-label={t('thread.draft.editAria', row.comment.id)}
                                     title={readOnly ? readOnlyReason : t('thread.draft.edit')}
                                     disabled={readOnly || editingId !== null || deletingId !== null}
@@ -206,7 +206,7 @@ function ThreadBlock({
                                 </button>
                                 <button
                                     type="button"
-                                    className="thread__delete-draft"
+                                    className="ctl ctl--icon-danger thread__delete-draft"
                                     aria-label={t('thread.draft.deleteAria', row.comment.id)}
                                     title={readOnly ? readOnlyReason : t('thread.draft.delete')}
                                     disabled={readOnly || editingId !== null || deletingId !== null}
@@ -265,7 +265,7 @@ function ThreadBlock({
                             <span className="thread__spacer" />
                             <button
                                 type="button"
-                                className="thread__delete-confirm-button"
+                                className="ctl ctl--danger thread__delete-confirm-button"
                                 disabled={deletingId === row.comment.id}
                                 onClick={() => void deleteDraft(row.comment.id)}
                             >
@@ -275,7 +275,7 @@ function ThreadBlock({
                             </button>
                             <button
                                 type="button"
-                                className="thread__keep-draft"
+                                className="ctl ctl--ghost ctl--compact thread__keep-draft"
                                 disabled={deletingId === row.comment.id}
                                 onClick={() => {
                                     setDeleteErrorId(null);
@@ -292,7 +292,7 @@ function ThreadBlock({
             {collapseBot ? (
                 <button
                     type="button"
-                    className="thread__more"
+                    className="ctl ctl--link-muted thread__more"
                     onClick={() => {
                         setExpanded(true);
                     }}
@@ -308,6 +308,7 @@ function ThreadBlock({
                             <>
                                 <button
                                     type="button"
+                                    className="ctl ctl--link-muted"
                                     disabled={readOnly}
                                     {...(readOnly ? { title: readOnlyReason } : {})}
                                     onClick={() => {
@@ -319,6 +320,7 @@ function ThreadBlock({
                                 {inlineDraftEditing ? null : (
                                     <button
                                         type="button"
+                                        className="ctl ctl--link-muted"
                                         onClick={() => {
                                             void copyThreadLink(thread.id);
                                         }}
@@ -332,6 +334,7 @@ function ThreadBlock({
                                 {undo ? t('thread.undo.resolved') : t('thread.undo.reopened')} ·{' '}
                                 <button
                                     type="button"
+                                    className="ctl ctl--link-muted"
                                     disabled={readOnly}
                                     {...(readOnly ? { title: readOnlyReason } : {})}
                                     onClick={() => {
@@ -368,7 +371,7 @@ export function ThreadPinChip({ pinned }: { pinned: ThreadPinState }) {
                 {t('thread.pin.chip', shortCommit(pinned.pin.commit))}
             </span>
             {pinned.open === null ? null : (
-                <button type="button" className="thread__pin-action" onClick={pinned.open}>
+                <button type="button" className="ctl ctl--link-muted thread__pin-action" onClick={pinned.open}>
                     {t('thread.pin.open')}
                 </button>
             )}

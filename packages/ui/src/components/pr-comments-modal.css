@@ -84,31 +84,6 @@
     font-size: var(--font-size-badge);
 }
 
-.pr-comments-modal__icon-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 25px;
-    height: 25px;
-    padding: 0;
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted-dim);
-    cursor: pointer;
-}
-
-.pr-comments-modal__icon-button:hover:not(:disabled) {
-    border-color: var(--checkbox-border);
-    color: var(--text-secondary);
-}
-
-.pr-comments-modal__icon-button.is-delete:hover:not(:disabled) {
-    border-color: var(--pr-comments-delete-border);
-    color: var(--error);
-}
-
 .pr-comments-modal__icon-button:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
@@ -269,37 +244,6 @@
     background: var(--pr-comments-delete-surface);
     color: var(--diff-del-text-strong);
     font-size: var(--font-size-secondary);
-}
-
-.pr-comments-modal__delete-button,
-.pr-comments-modal__keep-button {
-    height: 23px;
-    padding: 0 9px;
-    border-radius: 5px;
-    font: inherit;
-    font-size: var(--font-size-control);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.pr-comments-modal__delete-button {
-    border: 1px solid var(--pr-comments-delete-button-border);
-    background: var(--pr-comments-delete-button-surface);
-    color: var(--pr-comments-delete-button-text);
-}
-
-.pr-comments-modal__delete-button:hover:not(:disabled) {
-    background: var(--pr-comments-delete-button-hover);
-}
-
-.pr-comments-modal__keep-button {
-    border: 1px solid var(--border-strong);
-    background: transparent;
-    color: var(--text-muted);
-}
-
-.pr-comments-modal__keep-button:hover:not(:disabled) {
-    color: var(--text-on-selected);
 }
 
 .pr-comments-modal__delete-button:disabled,

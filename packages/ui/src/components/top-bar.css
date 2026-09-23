@@ -64,10 +64,6 @@
     cursor: pointer;
 }
 
-.top-bar__version--update:hover {
-    color: var(--text-secondary);
-}
-
 .top-bar__version-dot {
     width: 5px;
     height: 5px;
@@ -102,102 +98,17 @@
 }
 
 /* Last segment links to the PR on the host. The prototype gives it the same `--text-secondary`
-   uses the same style as a text segment. The global link's accent colour and underline are unnecessary here. */
+   colour as a text segment. The global link accent colour is unnecessary here. */
 a.top-bar__breadcrumb-item,
-a.top-bar__breadcrumb-item:visited,
-a.top-bar__breadcrumb-item:hover {
+a.top-bar__breadcrumb-item:visited {
     color: var(--text-secondary);
-    text-decoration: none;
 }
 
 .top-bar__breadcrumb-separator {
     color: var(--text-separator);
 }
 
-/* --- View segmented control --- */
-
-.view-tabs {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex: none;
-    padding: 3px;
-    background: var(--surface-control);
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-popover);
-    white-space: nowrap;
-}
-
-.view-tabs__tab {
-    height: 24px;
-    padding: 0 var(--space-inner);
-    border: none;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--text-muted-dim);
-    font-size: var(--font-size-secondary);
-    font-weight: 400;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color var(--motion-hover) var(--motion-hover-ease),
-        color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.view-tabs__tab:hover {
-    background: var(--surface-raised);
-    color: var(--text-secondary);
-}
-
-.view-tabs__tab:active {
-    background: var(--surface-control);
-    transition: none;
-}
-
-/* The selected tab differs in both colour and weight (docs/design/SPEC-elements.md §1.1). */
-.view-tabs__tab[aria-selected='true'] {
-    background: var(--surface-segment-active);
-    box-shadow: var(--shadow-segment-active);
-    color: var(--text-on-segment-active);
-    font-weight: 500;
-}
-
-/* --- Ghost buttons: agent indicator and search --- */
-
-.ghost-button {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    flex: none;
-    height: 28px;
-    padding: 0 var(--space-inner);
-    background: transparent;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-input);
-    color: var(--text-muted);
-    font-size: var(--font-size-secondary);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease), color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.ghost-button:hover {
-    background: var(--surface-raised);
-    border-color: var(--border-strong-lifted);
-    color: var(--text-secondary);
-}
-
-/* Pressed is one shade darker than idle, with no transition (docs/design/SPEC-elements.md §1.1). */
-.ghost-button:active {
-    background: var(--surface-control);
-    transition: none;
-}
-
-.ghost-button:disabled:hover {
-    background: transparent;
-    border-color: var(--border-control);
-    color: var(--text-muted);
-}
+/* --- View segmented control: own layout, states from `styles/controls.css` --- */
 
 /* --- Agent indicator (docs/design/SPEC-elements.md §2.2) --- */
 
@@ -283,7 +194,6 @@ a.top-bar__breadcrumb-item:hover {
 .search-button {
     padding: 0 9px 0 var(--space-inner);
     gap: var(--space-inner-tight);
-    color: var(--text-dim);
 }
 
 .search-button__hint {
@@ -300,10 +210,6 @@ a.top-bar__breadcrumb-item:hover {
 .feedback-wrap {
     position: relative;
     flex: none;
-}
-
-.feedback-button {
-    color: var(--text-dim);
 }
 
 .feedback-popover {
@@ -347,11 +253,6 @@ a.top-bar__breadcrumb-item:hover {
     font-size: var(--font-size-ui);
     line-height: 1.5;
 }
-
-.feedback-popover__textarea:hover:not(:disabled) {
-    border-color: var(--border-strong-lifted);
-}
-
 .feedback-popover__textarea[aria-invalid='true'] {
     border-color: var(--error-border);
 }
@@ -424,45 +325,9 @@ a.top-bar__breadcrumb-item:hover {
     line-height: 1.45;
 }
 
-.feedback-popover__primary,
-.feedback-popover__secondary {
-    height: 29px;
-    padding: 0 11px;
-    border-radius: var(--radius-input);
-    cursor: pointer;
-    font-size: var(--font-size-secondary);
-}
-
+/* Width keeps the "Sending…" label from shrinking the button. Everything else uses the shared Primary style. */
 .feedback-popover__primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
     min-width: 105px;
-    border: 0;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 600;
-}
-
-.feedback-popover__primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-}
-
-.feedback-popover__primary:active:not(:disabled) {
-    background: var(--accent);
-}
-
-.feedback-popover__secondary {
-    border: 1px solid var(--border-control);
-    background: transparent;
-    color: var(--text-muted);
-}
-
-.feedback-popover__secondary:hover {
-    border-color: var(--border-strong-lifted);
-    background: var(--surface-raised);
-    color: var(--text-secondary);
 }
 
 .feedback-popover__primary:disabled,

@@ -2,6 +2,7 @@
 
 @import './tokens.css';
 @import './fonts.css';
+@import './controls.css';
 
 * {
     box-sizing: border-box;
@@ -41,6 +42,11 @@ a:hover {
     color: var(--accent-hover-strong);
 }
 
+/* Third step of the accent scale (§5): it must also appear on `<a>` without the `ctl--link` class. */
+a:active {
+    color: var(--accent);
+}
+
 button {
     font: inherit;
     color: inherit;
@@ -48,13 +54,14 @@ button {
 
 /*
  * Show a focus ring only for keyboard input (docs/design/SPEC-elements.md §1.1), never for a mouse click.
- * The ring is 2px with a 1px gap from the element edge. `outline-offset` provides the gap, unlike
+ * The ring is 2px with a 2px gap from the element edge (docs/design/SPEC-changes-2026-09-20.md §5, inside
+ * a segment the gap is negative, see `controls.css`). `outline-offset` provides the gap: unlike
  * box-shadow, outline does not paint the gap in its own colour (the real background shows under the ring)
  * and does not conflict with the element's own shadows.
  */
 :focus-visible {
     outline: 2px solid var(--focus-ring-color);
-    outline-offset: 1px;
+    outline-offset: 2px;
 }
 
 /* Screen-reader-only text: removed from layout flow but still in the accessibility tree. */

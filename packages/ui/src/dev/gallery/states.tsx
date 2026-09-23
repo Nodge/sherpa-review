@@ -51,6 +51,7 @@ import { FILE_MENU_STATES } from './file-menu-states.tsx';
 import { REVIEW_BAR_CHAT_DOCK_STATES } from './review-bar-chat-dock-states.tsx';
 import { IMAGE_VIEWER_STATES } from './image-viewer-states.tsx';
 import { PALETTE_STATES } from './palette-states.tsx';
+import { CONTROL_STATES } from './control-states.tsx';
 import { LayoutWidths, TokenSwatches, TypographyScale } from './tokens-showcase.tsx';
 
 /**
@@ -321,6 +322,7 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         title: state.title,
         render: state.render,
     })),
+    ...CONTROL_STATES,
     {
         id: 'tokens-swatches',
         group: 'Tokens',

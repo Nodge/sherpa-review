@@ -44,7 +44,7 @@ describe('route toolbar', () => {
         const triage = render();
         const tour = render({ preset: 'tour' });
 
-        expect(triage).toContain('class="route-preset__option is-active" aria-pressed="true"');
+        expect(triage).toContain('route-preset__option is-active" aria-pressed="true"');
         expect(triage).toContain(t(TRIAGE_HINT));
         expect(tour).toContain(t(TOUR_HINT));
         expect(tour).toContain('aria-pressed="true">Full tour</button>');
@@ -77,7 +77,7 @@ describe('route toolbar', () => {
         expect(html).toContain(`disabled="" title="${t(PRESET_DISABLED_TITLE)}"`);
         expect(count(html, t(PRESET_DISABLED_TITLE))).toBe(2);
         // The active option stays visible. The switch is disabled, the state remains.
-        expect(html).toContain('class="route-preset__option is-active" aria-pressed="true" disabled=""');
+        expect(html).toContain('route-preset__option is-active" aria-pressed="true" disabled=""');
         expect(render()).not.toContain(t(PRESET_DISABLED_TITLE));
     });
 });

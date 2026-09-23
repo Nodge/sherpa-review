@@ -26,15 +26,15 @@ describe('viewed mark', () => {
 
         expect(html).toContain('aria-pressed="false"');
         expect(html).toContain('Mark viewed');
-        expect(html).toContain('viewed-toggle__box');
-        expect(html).not.toContain('is-viewed');
+        expect(html).toContain('ctl-checkbox__box');
+        expect(html).not.toContain('is-on');
     });
 
     it('viewed: filled box, label without a glyph in the text', () => {
         const html = render({ viewed: true });
 
         expect(html).toContain('aria-pressed="true"');
-        expect(html).toContain('is-viewed');
+        expect(html).toContain('is-on');
         expect(html).toContain('data-icon="check"');
         expect(html).toContain('width="9"');
         expect(html).toContain('</span>Viewed</button>');

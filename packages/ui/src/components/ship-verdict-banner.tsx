@@ -95,7 +95,7 @@ export function ShipVerdictBanner({
             </div>
             <button
                 type="button"
-                className="ship-verdict-banner__dismiss"
+                className="ctl ctl--toolbar-icon ship-verdict-banner__dismiss"
                 aria-label={t('ship.verdict.dismiss')}
                 title={t('ship.verdict.dismiss.title')}
                 onClick={onDismiss}

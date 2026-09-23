@@ -196,7 +196,7 @@ export function StopFileCard({
                 actions={actions}
             />
             {collapseReason === null && collapsedHidden ? (
-                <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
+                <button type="button" className="ctl ctl--quiet route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="updown" size={13} />
                     </span>
@@ -206,7 +206,7 @@ export function StopFileCard({
                 </button>
             ) : null}
             {collapseReason === null && collapsedOpen && group.collapsedLines > 0 ? (
-                <button type="button" className="route-stop__collapsed-lines" onClick={onToggleCollapsed}>
+                <button type="button" className="ctl ctl--quiet route-stop__collapsed-lines" onClick={onToggleCollapsed}>
                     <span className="route-stop__collapsed-mark" aria-hidden="true">
                         <Icon name="chev-down" size={13} className="route-stop__collapsed-icon--up" />
                     </span>

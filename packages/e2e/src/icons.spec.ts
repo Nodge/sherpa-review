@@ -21,9 +21,10 @@ const ICON_IDS = [
     'ic-list',
     'ic-trash',
     'ic-sliders',
+    'ic-dot',
 ];
 
-const ICON_SIZES = [9, 13, 14, 15];
+const ICON_SIZES = [9, 11, 13, 14, 15];
 
 test('production UI has one sprite, SVGs that do not shrink and a comment button in the gutter', async ({
     page,

@@ -72,16 +72,16 @@ export function TourCard({ step, index, total, placement, cardRef, onSkip, onBac
                 {t(step.body)}
             </div>
             <div className="tour-card__footer">
-                <button type="button" className="tour-card__skip" onClick={onSkip}>
+                <button type="button" className="ctl ctl--link-muted tour-card__skip" onClick={onSkip}>
                     {t('tour.skip')}
                 </button>
                 <span className="tour-card__spacer" />
                 {index === 0 ? null : (
-                    <button type="button" className="tour-card__back" onClick={onBack}>
+                    <button type="button" className="ctl ctl--ghost ctl--topbar tour-card__back" onClick={onBack}>
                         {t('tour.back')}
                     </button>
                 )}
-                <button type="button" className="tour-card__next" onClick={onNext}>
+                <button type="button" className="ctl ctl--primary tour-card__next" onClick={onNext}>
                     {t(last ? 'tour.start' : 'tour.next')}
                 </button>
             </div>

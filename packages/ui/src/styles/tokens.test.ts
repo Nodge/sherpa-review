@@ -367,8 +367,19 @@ const TEXT_PAIRS: readonly TextPair[] = [
     { text: '--pr-comments-published-chip-text', on: ['--pr-comments-published-chip-surface'] },
     { text: '--comment-edit-chip-text', on: ['--comment-edit-chip-surface'], low: ['light'] },
     { text: '--diff-del-text-strong', on: ['--pr-comments-delete-surface'], low: ['light'] },
-    { text: '--pr-comments-delete-button-text', on: ['--pr-comments-delete-button-surface'] },
-    { text: '--pr-comments-delete-button-text', on: ['--pr-comments-delete-button-hover'] },
+    // Solid button shades in §5: text must be readable on all three shades of its colour.
+    { text: '--text-danger-button', on: ['--surface-danger-button'] },
+    { text: '--text-danger-button', on: ['--surface-danger-button-hover'] },
+    { text: '--text-danger-button', on: ['--surface-danger-button-pressed'] },
+    { text: '--text-button', on: ['--surface-button'] },
+    { text: '--text-button', on: ['--surface-button-hover'] },
+    { text: '--text-button', on: ['--surface-button-pressed'] },
+    { text: '--accent-ink', on: ['--accent-hover'] },
+    { text: '--accent-ink', on: ['--accent-pressed'] },
+    { text: '--attention-button-ink', on: ['--attention-button-hover'], low: ['light'] },
+    { text: '--attention-button-ink', on: ['--attention-button-pressed'] },
+    { text: '--text-chip-active', on: ['--surface-chip-active-hover'] },
+    { text: '--text-chip-active', on: ['--surface-chip-active-pressed'] },
     { text: '--pr-comments-note-icon', on: ['--surface-app'] },
     // Draft: field with unsaved text and the "saved" mark, which appears both on the thread
     // card and in the modal composer.

@@ -70,14 +70,14 @@ export function RouteLocaleBanner({
             </span>
             <button
                 type="button"
-                className="route-locale-banner__action"
+                className="ctl ctl--attention route-locale-banner__action"
                 disabled={disabled}
                 {...(disabled ? { title: rebuildDisabledReason } : {})}
                 onClick={onRebuild}
             >
                 {t('route.locale.rebuild', t(localeOnKey(uiLocale)))}
             </button>
-            <button type="button" className="route-locale-banner__secondary" onClick={onKeep}>
+            <button type="button" className="ctl ctl--ghost ctl--topbar route-locale-banner__secondary" onClick={onKeep}>
                 {t('route.locale.keep')}
             </button>
         </div>

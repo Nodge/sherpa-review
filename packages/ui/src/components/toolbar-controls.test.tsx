@@ -38,7 +38,7 @@ describe('right-hand toolbar controls', () => {
         }
 
         expect([...cluster.children].map((element) => element.className)).toEqual([
-            'diff-mode-toggle',
+            'ctl ctl--quiet diff-mode-toggle',
             'filter-select',
             'toolbar-right-cluster__divider',
             'toolbar-right-cluster__label',

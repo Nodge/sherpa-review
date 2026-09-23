@@ -77,7 +77,7 @@ export function CommandBox({ command, hint, actionLabel, inputLabel }: CommandBo
                         event.currentTarget.select();
                     }}
                 />
-                <button type="button" className="command-box__action" onClick={copy}>
+                <button type="button" className="ctl ctl--secondary command-box__action" onClick={copy}>
                     {/* Both labels share one grid cell. The button uses the wider label and does not resize on a change. */}
                     <span className={labelClass(copied)}>{t('command.copied')}</span>
                     <span className={labelClass(!copied)}>{label}</span>

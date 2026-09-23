@@ -186,7 +186,7 @@ export function PrCommentsModal({
                     <button
                         ref={closeRef}
                         type="button"
-                        className="pr-comments-modal__icon-button"
+                        className="ctl ctl--icon pr-comments-modal__icon-button"
                         aria-label={t('prComments.close')}
                         title={t('prComments.close.title')}
                         onClick={onClose}
@@ -236,7 +236,7 @@ export function PrCommentsModal({
                                                 <span className="pr-comments-modal__item-actions">
                                                     <button
                                                         type="button"
-                                                        className="pr-comments-modal__icon-button"
+                                                        className="ctl ctl--icon pr-comments-modal__icon-button"
                                                         aria-label={t('thread.draft.editAria', comment.id)}
                                                         title={t('thread.draft.edit')}
                                                         disabled={editingId !== null}
@@ -248,7 +248,7 @@ export function PrCommentsModal({
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        className="pr-comments-modal__icon-button is-delete"
+                                                        className="ctl ctl--icon-danger pr-comments-modal__icon-button"
                                                         aria-label={t('thread.draft.deleteAria', comment.id)}
                                                         title={t('thread.draft.delete')}
                                                         disabled={deletingId !== null || editingId !== null}
@@ -290,7 +290,7 @@ export function PrCommentsModal({
                                                 <span className="pr-comments-modal__item-spacer" />
                                                 <button
                                                     type="button"
-                                                    className="pr-comments-modal__delete-button"
+                                                    className="ctl ctl--danger pr-comments-modal__delete-button"
                                                     disabled={deletingId === comment.id}
                                                     onClick={() => void deleteDraft(comment.id)}
                                                 >
@@ -300,7 +300,7 @@ export function PrCommentsModal({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className="pr-comments-modal__keep-button"
+                                                    className="ctl ctl--ghost ctl--compact pr-comments-modal__keep-button"
                                                     disabled={deletingId === comment.id}
                                                     onClick={() => {
                                                         setDeleteErrorId(null);
@@ -391,7 +391,7 @@ function BufferedDrafts({
                     <span className="pr-comments-modal__item-spacer" />
                     <button
                         type="button"
-                        className="pr-comments-modal__keep-button"
+                        className="ctl ctl--ghost ctl--compact pr-comments-modal__keep-button"
                         disabled={busyId !== null}
                         onClick={() => {
                             act(entry.id, transport.retryBuffered);
@@ -401,7 +401,7 @@ function BufferedDrafts({
                     </button>
                     <button
                         type="button"
-                        className="pr-comments-modal__delete-button"
+                        className="ctl ctl--danger pr-comments-modal__delete-button"
                         disabled={busyId !== null}
                         onClick={() => {
                             act(entry.id, transport.discardBuffered);

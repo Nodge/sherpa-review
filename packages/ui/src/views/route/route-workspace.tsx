@@ -819,7 +819,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                         <p className="route__zero-text">{zeroResultText(filter, t)}</p>
                         <button
                             type="button"
-                            className="route__zero-action"
+                            className="ctl ctl--secondary route__zero-action"
                             onClick={() => {
                                 changeFilter(ALL_FILTER_ID);
                             }}

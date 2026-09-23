@@ -104,12 +104,12 @@ export function RouteToolbar({
         <div className="route-toolbar" ref={ref}>
             <div className="route-toolbar__row">
                 {/* `data-tour="presets"` is the target of onboarding tour step 05. */}
-                <div className="route-preset" role="group" aria-label={t('route.preset.aria')} data-tour="presets">
+                <div className="route-preset ctl-tabs" role="group" aria-label={t('route.preset.aria')} data-tour="presets">
                     {PRESETS.map((option) => (
                         <button
                             key={option.id}
                             type="button"
-                            className={`route-preset__option${option.id === preset ? ' is-active' : ''}`}
+                            className={`ctl ctl--tab route-preset__option${option.id === preset ? ' is-active' : ''}`}
                             aria-pressed={option.id === preset}
                             disabled={presetDisabled}
                             {...(presetDisabled ? { title: t(PRESET_DISABLED_TITLE) } : {})}
@@ -140,7 +140,7 @@ export function RouteToolbar({
                 <div className="route-toolbar__filters">
                     <button
                         type="button"
-                        className="route-change-chip"
+                        className="ctl ctl--chip route-change-chip"
                         title={t('route.showWhole')}
                         onClick={onClearChangeFilter}
                     >

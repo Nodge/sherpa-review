@@ -345,7 +345,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
                 {routeBadge}
                 {markdownFile && shown?.content.kind === 'text' ? (
-                    <button type="button" className="file-card__header-action" aria-pressed={markdown} onClick={() => { actions.onClearSelection?.(); setMarkdown(!markdown); }}>
+                    <button type="button" className="ctl ctl--ghost ctl--compact file-card__header-action" aria-pressed={markdown} onClick={() => { actions.onClearSelection?.(); setMarkdown(!markdown); }}>
                         {t(markdown ? 'markdown.code' : 'markdown.preview')}
                     </button>
                 ) : null}
@@ -354,7 +354,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 <span className="file-card__actions">
                     <button
                         type="button"
-                        className="file-card__header-action"
+                        className="ctl ctl--ghost ctl--compact file-card__header-action"
                         aria-haspopup="menu"
                         aria-expanded={menu.open}
                         aria-label={t('file.menu.more')}
@@ -428,7 +428,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                             {' · '}
                             <button
                                 type="button"
-                                className="file-card__action"
+                                className="ctl ctl--link-muted file-card__action"
                                 onClick={() => {
                                     const retry = hint.retry;
                                     if (retry !== undefined) {
@@ -460,7 +460,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     {t('diff.file.parseFailed', parseError)}
                     <button
                         type="button"
-                        className="file-card__action"
+                        className="ctl ctl--link-muted file-card__action"
                         onClick={() => {
                             actions.onRetryParse(file.fileId);
                         }}
@@ -674,7 +674,7 @@ function ExpandButton({
         <span className="file-card__expand">
             <button
                 type="button"
-                className="file-card__header-action"
+                className="ctl ctl--ghost ctl--compact file-card__header-action"
                 disabled={disabledReason !== null}
                 title={disabledReason ?? t('diff.expand.showWholeFile')}
                 onClick={() => {

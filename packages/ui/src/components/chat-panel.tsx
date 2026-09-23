@@ -324,7 +324,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     {notes.length === 0 ? null : (
                         <span className="chat-panel__notes">{t('chat.notes', notes.length)}</span>
                     )}
-                    <button type="button" className="chat-panel__close" aria-label={t('app.closeChat')} onClick={onClose}>
+                    <button type="button" className="ctl ctl--toolbar-icon chat-panel__close" aria-label={t('app.closeChat')} onClick={onClose}>
                         ×
                     </button>
                 </div>
@@ -416,7 +416,12 @@ export function ChatPanel(props: ChatPanelProps) {
                 />
                 <div className="chat-panel__composer-footer">
                     <span>{t('chat.composer.hint')}</span>
-                    <button type="button" disabled={!connected || sending || text.trim() === ''} onClick={submit}>
+                    <button
+                        type="button"
+                        className="ctl ctl--primary"
+                        disabled={!connected || sending || text.trim() === ''}
+                        onClick={submit}
+                    >
                         {t('chat.composer.send')}
                     </button>
                 </div>
@@ -545,7 +550,7 @@ function ChatExchangeView({
                     )}
                     <button
                         type="button"
-                        className="chat-message__action"
+                        className="ctl ctl--ghost chat-message__action"
                         disabled={actionPending}
                         onClick={() => {
                             run(onCancel);
@@ -564,7 +569,7 @@ function ChatExchangeView({
                     </div>
                     <button
                         type="button"
-                        className="chat-message__action"
+                        className="ctl ctl--ghost chat-message__action"
                         disabled={actionPending}
                         onClick={() => {
                             run(onRetry);
@@ -603,7 +608,7 @@ function EmptyChat({ onPick }: { readonly onPick: (question: string) => void }) 
                     <li key={key}>
                         <button
                             type="button"
-                            className="chat-panel__example"
+                            className="ctl ctl--link-muted chat-panel__example"
                             onClick={() => {
                                 onPick(t(key));
                             }}

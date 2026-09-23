@@ -55,8 +55,6 @@ html[data-textsize='l'] {
     --pr-comments-published-chip-surface: #23252f;
     --comment-edit-chip-surface: #262e4a;
     --pr-comments-delete-surface: #1f100e;
-    --pr-comments-delete-button-surface: #3a1f1e;
-    --pr-comments-delete-button-hover: #4a2725;
     /* docs/design/SPEC-additions-2026-08-26.md §1e: code block inside an "outside the diff" thread card. */
     --surface-code-inset: #090a0c;
     /* docs/design/SPEC-changes-2026-09-20.md §2: inline code background in text, both in a stop
@@ -81,7 +79,6 @@ html[data-textsize='l'] {
     --pr-comments-draft-border: #33301f;
     --comment-edit-border: #3c4560;
     --pr-comments-delete-border: #4a2f2d;
-    --pr-comments-delete-button-border: #5c3230;
     --pr-comments-editor-border: #535b68;
 
     /* --- Text --- */
@@ -92,6 +89,10 @@ html[data-textsize='l'] {
     --text-body: #ffffff;
     --text-muted: #ffffff;
     --text-muted-dim: #ffffff;
+    /* Subdued action link ("Edit · Delete"): SPEC-changes-2026-09-20.md §5 gives Link muted
+       its own `8a8f98` tone, more subdued than body text. The 09-12 contrast pass merged it with the body. Here the distinction
+       returns at ~9:1, as SPEC-theming §3 requires, instead of the design's 5.3:1. */
+    --text-link-muted: #b6bcc6;
     --text-dim: #e7f1ff;
     --text-dim-strong: #dae4f3;
     --text-gutter: #6e7580;
@@ -99,13 +100,14 @@ html[data-textsize='l'] {
     --comment-edit-chip-text: #9ea8ff;
     --pr-comments-body-text: #ffffff;
     --chat-body-text: #ffffff;
-    --pr-comments-delete-button-text: #f2c4c0;
     --pr-comments-note-icon: #9c8760;
 
     /* --- Accent: "you can act here" and the AI layer (docs/design/SPEC-elements.md §1.2) --- */
     --accent: #7f8cff;
     --accent-hover: #8f9bff;
     --accent-hover-strong: #b3bcff;
+    /* §5: third step of the accent scale, pressed primary and enabled switch track. */
+    --accent-pressed: #6b78e6;
     --accent-ink: #101223;
     --accent-text: #aeb6ff;
     --accent-text-soft: #c9cdf0;
@@ -132,6 +134,8 @@ html[data-textsize='l'] {
        fill is darker than the shared `--attention` (orange with black text on cream looked muddy). */
     --attention-button: #e2954c;
     --attention-button-ink: #1b1508;
+    --attention-button-hover: #eaa15c;
+    --attention-button-pressed: #d1873f;
     /* docs/design/README.md §1 item 4: "why the stop changed" block, label and body. */
     --attention-label: #9c8760;
     --attention-body: #d8c9ad;
@@ -213,6 +217,29 @@ html[data-textsize='l'] {
     /* These are absent from the handoff token table, but every control must have a state matrix:
        the highlight step, focus ring and disabled opacity live here too. */
     --hover-selected: #3e444f;
+    /* docs/design/SPEC-changes-2026-09-20.md §5: grey surface steps. Hover moves the background
+       one step, pressing moves it two. The shades match the surfaces and borders above, but serve
+       another role. Control states cannot be recoloured without affecting popovers and borders. */
+    --surface-hover: #262b34;
+    --surface-pressed: #333741;
+    --surface-pressed-deep: #434954;
+    /* Solid secondary button (§4b): "Save…", Retry, Regenerate. In the light theme it is a white
+       button with a dark border and shadow. A grey fill looked disabled. */
+    --surface-button: #333741;
+    --border-button: #4a515c;
+    --text-button: #ffffff;
+    --surface-button-hover: #434954;
+    --surface-button-pressed: #4a515c;
+    --shadow-button: none;
+    /* Destructive action (§5, "Delete"): its own set of three shades. */
+    --surface-danger-button: #3a1f1e;
+    --surface-danger-button-hover: #4a2725;
+    --surface-danger-button-pressed: #5c3230;
+    --border-danger-button: #5c3230;
+    --text-danger-button: #f2c4c0;
+    /* Border of the switch track when off (§5): darker than control borders, otherwise the track
+       blends into the background at rest. */
+    --border-switch-track: #343941;
     /* Active tab-control segment (docs/design/README.md §0, docs/design/SPEC-theming-2026-09-12.md §1):
        in the light theme it is a raised white pill, so it has both text and a shadow. */
     --surface-segment-active: #434954;
@@ -222,7 +249,10 @@ html[data-textsize='l'] {
     --surface-chip-active: #1e2240;
     --border-chip-active: #3f4880;
     --text-chip-active: #c3caff;
-    --focus-ring-color: rgba(127, 140, 255, 0.55);
+    --surface-chip-active-hover: #262c52;
+    --surface-chip-active-pressed: #2e3566;
+    /* §5: the focus ring is opaque. A translucent ring blended into a filled button's colour. */
+    --focus-ring-color: #7f8cff;
     --text-on-selected: #ffffff;
     --disabled-opacity: 0.45;
     /* Breadcrumb separator (docs/design/README.md §0). */
@@ -355,8 +385,6 @@ html[data-textsize='l'] {
     --pr-comments-published-chip-surface: #e8eaef;
     --comment-edit-chip-surface: #dfe2fa;
     --pr-comments-delete-surface: #feecea;
-    --pr-comments-delete-button-surface: #f0d2d0;
-    --pr-comments-delete-button-hover: #e6c0bd;
     --surface-code-inset: #f3f4f6;
     --surface-code-inline: #e8eaee;
     --border-hairline: #e4e6eb;
@@ -375,7 +403,6 @@ html[data-textsize='l'] {
     --pr-comments-draft-border: #ecdfc4;
     --comment-edit-border: #c3c7e6;
     --pr-comments-delete-border: #f0d2d0;
-    --pr-comments-delete-button-border: #d9a9a5;
     --pr-comments-editor-border: #b1b8c2;
     --text-primary: #000000;
     --text-primary-soft: #000000;
@@ -384,6 +411,7 @@ html[data-textsize='l'] {
     --text-body: #00000a;
     --text-muted: #000813;
     --text-muted-dim: #0c1420;
+    --text-link-muted: #3c424c;
     --text-dim: #19212d;
     --text-dim-strong: #28303b;
     --text-gutter: #9198a2;
@@ -391,11 +419,11 @@ html[data-textsize='l'] {
     --comment-edit-chip-text: #4c5ae0;
     --pr-comments-body-text: #000000;
     --chat-body-text: #000000;
-    --pr-comments-delete-button-text: #7a2622;
     --pr-comments-note-icon: #7f6c3e;
     --accent: #5a68e8;
     --accent-hover: #4c5ae0;
     --accent-hover-strong: #3a47bd;
+    --accent-pressed: #4353cf;
     --accent-ink: #ffffff;
     --accent-text: #4350cc;
     --accent-text-soft: #3a4390;
@@ -417,6 +445,8 @@ html[data-textsize='l'] {
     --attention-border-strong: #bba777;
     --attention-button: #b8641c;
     --attention-button-ink: #ffffff;
+    --attention-button-hover: #c56d1f;
+    --attention-button-pressed: #a85a14;
     --attention-label: #7f6c3e;
     --attention-body: #5a4a24;
     --draft-field-surface: #fffaec;
@@ -471,13 +501,30 @@ html[data-textsize='l'] {
     --hatch-sidebar: repeating-linear-gradient(115deg, #c5cad2 0 3px, #e9ecef 3px 6px);
     --hatch-footer: repeating-linear-gradient(115deg, #e8eaee 0 3px, #f2f3f6 3px 6px);
     --hover-selected: #dadee4;
+    --surface-hover: #e2e5ea;
+    --surface-pressed: #dadee4;
+    --surface-pressed-deep: #c8cdd5;
+    --surface-button: #ffffff;
+    --border-button: #8b94a3;
+    --text-button: #0c1420;
+    --surface-button-hover: #eef0f4;
+    --surface-button-pressed: #e2e5ea;
+    --shadow-button: 0 1px 2px rgba(20, 24, 32, 0.12);
+    --surface-danger-button: #f8d9d7;
+    --surface-danger-button-hover: #f2c9c6;
+    --surface-danger-button-pressed: #e0a39f;
+    --border-danger-button: #e0a39f;
+    --text-danger-button: #7a2622;
+    --border-switch-track: #c8cdd5;
     --surface-segment-active: #ffffff;
     --text-on-segment-active: #000000;
     --shadow-segment-active: 0 1px 2px rgba(20, 24, 32, 0.18), 0 0 0 1px rgba(20, 24, 32, 0.08);
     --surface-chip-active: #e8eaff;
     --border-chip-active: #b9c0f4;
     --text-chip-active: #2b3690;
-    --focus-ring-color: rgba(90, 104, 232, 0.55);
+    --surface-chip-active-hover: #dfe2fb;
+    --surface-chip-active-pressed: #d3d8f8;
+    --focus-ring-color: #5a68e8;
     --text-on-selected: #000000;
     --text-separator: #828894;
     --shadow-line-comment: 0 1px 4px rgba(20, 24, 32, 0.1);

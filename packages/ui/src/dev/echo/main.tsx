@@ -1,9 +1,12 @@
+/* Base layer goes first: control state rules must come in the cascade
+   before component styles, which add their layout on top. */
+import '../../styles/base.css';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { readToken } from '../../fragment.js';
 import { createStore } from '../../store.js';
-import '../../styles/base.css';
 import { EchoApp } from './echo-app.tsx';
 import './echo.css';
 

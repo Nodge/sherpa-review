@@ -127,7 +127,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
         <div ref={wrapperRef} className="feedback-wrap">
             <button
                 type="button"
-                className="ghost-button feedback-button"
+                className="ctl ctl--ghost ctl--topbar feedback-button"
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 onClick={() => {
@@ -197,7 +197,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                 {unavailableReason === null ? (
                                     <button
                                         type="submit"
-                                        className="feedback-popover__primary"
+                                        className="ctl ctl--primary feedback-popover__primary"
                                         disabled={submitting || text.trim() === ''}
                                         title={text.trim() === '' ? t('feedback.send.disabled') : undefined}
                                     >
@@ -207,7 +207,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                 ) : (
                                     <button
                                         type="button"
-                                        className="feedback-popover__primary"
+                                        className="ctl ctl--primary feedback-popover__primary"
                                         disabled={text.trim() === ''}
                                         title={text.trim() === '' ? t('feedback.copy.disabled') : undefined}
                                         onClick={() => {
@@ -217,7 +217,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                         {t('feedback.copy')}
                                     </button>
                                 )}
-                                <button type="button" className="feedback-popover__secondary" onClick={close}>
+                                <button type="button" className="ctl ctl--ghost" onClick={close}>
                                     {t('feedback.cancel')}
                                 </button>
                             </div>
@@ -238,7 +238,7 @@ export function FeedbackButton({ availability, context, onSend }: FeedbackButton
                                 </a>
                                 .
                             </p>
-                            <button type="button" className="feedback-popover__primary" onClick={close}>
+                            <button type="button" className="ctl ctl--primary feedback-popover__primary" onClick={close}>
                                 {t('feedback.close')}
                             </button>
                         </div>

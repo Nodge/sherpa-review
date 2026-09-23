@@ -1,9 +1,12 @@
+/* Base layer goes first: control state rules must come in the cascade
+   before component styles, which add their layout on top. */
+import '../../styles/base.css';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { readFragmentParam } from '../../fragment.js';
 import { IconSprite } from '../../icons/icon.tsx';
-import '../../styles/base.css';
 import { Gallery, parseGalleryLocale, parseGalleryTextSize, parseGalleryTheme } from './gallery.tsx';
 
 const container = document.getElementById('root');

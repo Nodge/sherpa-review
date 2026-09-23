@@ -22,9 +22,11 @@ export type IconName =
     | 'list'
     | 'trash'
     /** Settings menu trigger. Additions has no such icon, so the geometry comes from the prototype. */
-    | 'sliders';
+    | 'sliders'
+    /** Open-issue dot in the Resolve button. Its drawing comes from the iteration 09-20 prototype. */
+    | 'dot';
 
-export type IconSize = 9 | 13 | 14 | 15;
+export type IconSize = 9 | 11 | 13 | 14 | 15;
 
 export interface IconProps {
     readonly name: IconName;
@@ -51,7 +53,7 @@ export function Icon({ name, size, className }: IconProps) {
 
 /**
  * One embedded sprite per document. Nineteen symbols come verbatim from Sherpa Additions,
- * The twentieth (`ic-sliders`) comes from the Sherpa.dc.html prototype.
+ * `ic-sliders` comes from the Sherpa.dc.html prototype, `ic-dot` from the iteration 09-20 prototype.
  */
 export function IconSprite() {
     return <div className="icon-sprite" aria-hidden="true" dangerouslySetInnerHTML={{ __html: sprite }} />;

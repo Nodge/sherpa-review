@@ -71,7 +71,7 @@ export function TopBar({
                 ) : (
                     <button
                         type="button"
-                        className="top-bar__version top-bar__version--update"
+                        className="ctl ctl--link-muted top-bar__version top-bar__version--update"
                         aria-label={t('topbar.update', update.latest)}
                         onClick={onOpenUpdate}
                     >
@@ -184,7 +184,7 @@ export function AgentPill({
         <div ref={wrapperRef} className="agent-pill-wrap">
             <button
                 type="button"
-                className={`ghost-button agent-pill agent-pill--${view.tone}`}
+                className={`ctl ctl--ghost ctl--topbar agent-pill agent-pill--${view.tone}`}
                 title={view.title}
                 aria-haspopup={view.tone === 'disconnected' ? 'dialog' : undefined}
                 aria-expanded={view.tone === 'disconnected' ? open : chatOpen}
@@ -220,7 +220,7 @@ const NOOP_TOGGLE_CHAT = (): void => undefined;
 function SearchButton({ onClick }: { onClick: () => void }) {
     const t = useT();
     return (
-        <button type="button" className="ghost-button search-button" onClick={onClick}>
+        <button type="button" className="ctl ctl--ghost ctl--topbar search-button" onClick={onClick}>
             {t('topbar.search')}
             <span className="search-button__hint">⌘K</span>
         </button>

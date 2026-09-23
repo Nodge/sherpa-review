@@ -9,7 +9,6 @@
     background: var(--surface-card-header);
     color: var(--text-body);
     outline: none;
-    transition: background var(--motion-hover) var(--motion-hover-ease);
 }
 
 .thread + .thread {
@@ -139,19 +138,7 @@
 
 /* The action sits in the author row beside the chip, outside the thread actions shown on hover. */
 .thread__pin-action {
-    flex: none;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
     font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.thread__pin-action:hover {
-    color: var(--text-muted);
 }
 
 .thread__chip--editing {
@@ -167,32 +154,6 @@
 .thread__draft-actions {
     display: inline-flex;
     gap: 5px;
-}
-
-.thread__edit-draft,
-.thread__delete-draft {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 25px;
-    height: 25px;
-    padding: 0;
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted-dim);
-    cursor: pointer;
-}
-
-.thread__edit-draft:hover:not(:disabled),
-.thread__delete-draft:hover:not(:disabled) {
-    border-color: var(--checkbox-border);
-    color: var(--text-secondary);
-}
-
-.thread__delete-draft:hover:not(:disabled) {
-    color: var(--diff-del-text-strong);
 }
 
 .thread__edit-draft:disabled,
@@ -212,29 +173,6 @@
     background: var(--pr-comments-delete-surface);
     color: var(--diff-del-text-strong);
     font-size: var(--font-size-secondary);
-}
-
-.thread__delete-confirm-button,
-.thread__keep-draft {
-    height: 23px;
-    padding: 0 9px;
-    border-radius: 5px;
-    font: inherit;
-    font-size: var(--font-size-control);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.thread__delete-confirm-button {
-    border: 1px solid var(--pr-comments-delete-button-border);
-    background: var(--pr-comments-delete-button-surface);
-    color: var(--pr-comments-delete-button-text);
-}
-
-.thread__keep-draft {
-    border: 1px solid var(--border-strong);
-    background: transparent;
-    color: var(--text-muted);
 }
 
 .thread__delete-confirm-button:disabled,
@@ -272,20 +210,7 @@
 .thread__undo button,
 .thread-composer__status button,
 .thread-composer__confirm button {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
     font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    cursor: pointer;
-}
-
-.thread__actions button:hover,
-.thread__more:hover,
-.thread-composer__status button:hover,
-.thread-composer__confirm button:hover {
-    color: var(--text-muted);
 }
 
 .thread__undo {
@@ -316,15 +241,8 @@
     cursor: text;
 }
 
-.thread-composer-entry:hover,
-.thread-composer-entry:focus-visible {
-    border-color: var(--border-strong);
-    color: var(--text-muted);
-}
-
-.thread-composer-entry:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring-color);
+.thread-composer-entry:hover {
+    background: var(--surface-hover);
 }
 
 .thread-composer-entry > :first-child {
@@ -350,14 +268,8 @@
     cursor: text;
 }
 
-.thread-composer-draft-preview:hover,
-.thread-composer-draft-preview:focus-visible {
-    border-color: var(--attention-border-strong);
-}
-
-.thread-composer-draft-preview:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring-color);
+.thread-composer-draft-preview:hover {
+    background: var(--attention-surface-alt);
 }
 
 .thread-composer-draft-preview__meta {
@@ -395,7 +307,7 @@
 }
 
 .thread-composer__editor:focus-within {
-    box-shadow: 0 0 0 2px var(--focus-ring-color);
+    border-color: var(--accent);
 }
 
 .thread-composer__toolbar {
@@ -408,30 +320,6 @@
     background: var(--surface-card-header);
 }
 
-.thread-composer__tool {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 26px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-badge);
-    background: transparent;
-    color: var(--text-muted-dim);
-    cursor: pointer;
-}
-
-.thread-composer__tool:hover {
-    background: var(--border-standard);
-    color: var(--text-on-selected);
-}
-
-.thread-composer__tool:active {
-    background: var(--hover-selected);
-}
-
 .thread-composer__tool:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
@@ -442,40 +330,9 @@
     flex: 1;
 }
 
-.thread-composer__layout {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex: none;
-    padding: 2px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-button);
-    background: var(--surface-diff-card);
-}
-
-.thread-composer__layout button {
-    display: flex;
-    align-items: center;
-    height: 20px;
-    padding: 0 7px;
-    border: 0;
-    border-radius: var(--radius-key);
-    background: transparent;
-    font: inherit;
-    font-size: var(--font-size-meta);
-    color: var(--text-muted-dim);
-    cursor: pointer;
-}
-
-.thread-composer__layout button:last-child {
+/* "Markdown" is a technical label, so it uses monospace. */
+.thread-composer__layout-markdown {
     font-family: var(--font-mono);
-}
-
-.thread-composer__layout button.is-active {
-    background: var(--surface-segment-active);
-    box-shadow: var(--shadow-segment-active);
-    font-weight: 500;
-    color: var(--text-on-segment-active);
 }
 
 .thread-composer__markdown,
@@ -589,79 +446,13 @@
     margin-top: var(--space-inner);
 }
 
-.thread-composer__actions .ghost-button {
-    height: 29px;
-    padding-inline: 11px;
-    border-color: var(--border-strong);
-    border-radius: var(--radius-input);
-    font-size: var(--font-size-ui);
-    white-space: nowrap;
-}
-
-.thread-composer__actions .thread-composer__save {
-    border-color: var(--border-raised-dialog);
-    background: var(--border-standard);
-    color: var(--text-primary-soft);
-    font-weight: 500;
-}
-
-.thread-composer__actions .thread-composer__save:hover {
-    background: var(--hover-selected);
-}
-
-.thread-composer__actions .ghost-button:disabled {
+.thread-composer__actions button:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
 }
 
 .thread-composer__issue {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: none;
-    height: 24px;
-    padding: 0 7px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-button);
-    background: var(--surface-diff-card);
-    color: var(--text-muted-dim);
-    font: inherit;
     font-size: var(--font-size-meta);
-    cursor: pointer;
-}
-
-.thread-composer__issue:hover,
-.thread-composer__issue.is-active {
-    border-color: var(--border-strong);
-    background: var(--hover-selected);
-    color: var(--text-primary-soft);
-}
-
-.thread-composer__issue:disabled {
-    cursor: default;
-    opacity: var(--disabled-opacity);
-}
-
-.thread-composer__issue-box {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 11px;
-    height: 11px;
-    border: 1px solid var(--checkbox-border);
-    border-radius: var(--radius-mark);
-}
-
-.thread-composer__issue.is-active .thread-composer__issue-box {
-    border-color: var(--read-border);
-    background: var(--read-fill);
-    color: var(--surface-app);
-}
-
-.thread-composer__issue:focus-visible {
-    outline: 2px solid var(--focus-ring-color);
-    outline-offset: 1px;
 }
 
 .thread-composer__status,

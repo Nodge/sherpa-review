@@ -1,3 +1,7 @@
+/* Base layer goes first: control state rules must come in the cascade
+   before component styles, which add their layout on top. */
+import './styles/base.css';
+
 import type { Locale } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { StrictMode, useSyncExternalStore } from 'react';
@@ -32,7 +36,6 @@ import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import type { Store } from './store.js';
 import { createStore } from './store.js';
-import './styles/base.css';
 
 /** Second key of a view navigation chord: `g o` for Overview, `g r` for Route, `g d` for Full diff. */
 const VIEW_CHORD: Readonly<Record<ViewId, string>> = { overview: 'o', route: 'r', diff: 'd' };

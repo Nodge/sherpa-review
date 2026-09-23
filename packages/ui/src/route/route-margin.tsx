@@ -181,7 +181,7 @@ function RouteStrip({
             ) : (
                 <button
                     type="button"
-                    className="route-strip__action"
+                    className="ctl ctl--link route-strip__action"
                     disabled={!actions.agentConnected}
                     title={t(actions.agentConnected ? ASK_ANSWER_IN_CHAT_NOTE : ASK_RANGES_DISABLED_TITLE)}
                     onClick={() => {

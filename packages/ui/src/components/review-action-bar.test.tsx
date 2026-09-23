@@ -426,7 +426,7 @@ describe('floating review bar', () => {
         expect(html).toContain(`${String(drafts + 1)} draft`);
         expect(html).toContain('1 not yet saved to the host');
         expect(html).toContain('1 черновик ещё не сохранён в хост — ship недоступен, пока не сохранится');
-        expect(html).toContain('<button type="button" class="review-action-bar__ship-primary" disabled=""');
+        expect(html).toContain('class="ctl ctl--primary review-action-bar__ship-primary" disabled=""');
     });
 
     // The edit belongs to a draft already counted in the threads, so it adds no second draft
@@ -547,7 +547,7 @@ describe('floating review bar', () => {
         expect(html).toContain('1 comment failed to publish');
         expect(html).toContain('Fix the boundary check');
         expect(html).toContain('host refused');
-        expect(html).toContain('<button type="button">retry</button>');
+        expect(html).toContain('<button type="button" class="ctl ctl--link-muted">retry</button>');
         expect(html).not.toContain('Request changes');
     });
 });

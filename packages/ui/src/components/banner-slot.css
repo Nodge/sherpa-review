@@ -19,17 +19,8 @@
 
 .banner-slot__more {
     align-self: flex-start;
-    padding: 0;
-    border: 0;
-    background: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    cursor: pointer;
-}
-
-.banner-slot__more:hover {
-    color: var(--text-muted);
 }
 
 /*

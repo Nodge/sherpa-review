@@ -206,21 +206,9 @@
 }
 
 .gen-card__cta {
-    display: block;
     width: 100%;
-    height: 30px;
     margin-top: var(--space-control);
-    border: 0;
-    border-radius: var(--radius-input);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-size: var(--font-size-secondary);
     font-weight: 600;
-    cursor: pointer;
-}
-
-.gen-card__cta:hover {
-    background: var(--accent-hover);
 }
 
 .gen-card__hint,
@@ -246,14 +234,8 @@
 }
 
 .gen-card__cancel {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent-text);
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
-    text-decoration: underline;
-    cursor: pointer;
 }
 
 .gen-card__cancel:disabled {
@@ -301,23 +283,8 @@
 }
 
 .gen-retry {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     height: 28px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: var(--radius-input);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-size: var(--font-size-secondary);
     font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.gen-retry:hover:not(:disabled) {
-    background: var(--accent-hover);
 }
 
 .gen-retry:disabled {
@@ -344,17 +311,6 @@
 .gen-failed__secondary {
     height: 28px;
     padding: 0 12px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-input);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--font-size-secondary);
-    cursor: pointer;
-}
-
-.gen-failed__secondary:hover {
-    border-color: var(--border-strong-lifted);
-    color: var(--text-primary);
 }
 
 .gen-failed__raw {
@@ -382,12 +338,7 @@
 }
 
 .gen-failed__link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent-text);
     font-size: var(--font-size-secondary);
-    cursor: pointer;
 }
 
 .gen-failed__error {
@@ -425,13 +376,7 @@
 }
 
 .gen-filling__link {
-    flex: none;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent-text-bright);
     font-size: var(--font-size-secondary);
-    cursor: pointer;
 }
 
 .gen-filling__link:disabled {

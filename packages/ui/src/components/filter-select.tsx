@@ -88,7 +88,7 @@ export function FilterSelect({ filters, active, onSelect }: FilterSelectProps) {
             <button
                 type="button"
                 ref={buttonRef}
-                className={`filter-select__button${active.fileIds === null ? '' : ' is-active'}`}
+                className={`ctl ctl--chip filter-select__button${active.fileIds === null ? '' : ' is-on'}`}
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 onClick={() => {

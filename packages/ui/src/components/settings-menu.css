@@ -12,34 +12,16 @@
 
 /* --- Trigger: sliders icon instead of an avatar (§7) --- */
 
+/* The top-bar icon button is larger than the shared 25×25 size because it sits in a row of 28px controls. */
 .settings-menu__trigger {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     width: 28px;
     height: 28px;
-    flex: none;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--border-control);
     border-radius: var(--radius-input);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background-color var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease), color var(--motion-hover) var(--motion-hover-ease);
 }
 
-.settings-menu__trigger:hover {
-    background: var(--surface-raised);
-    border-color: var(--border-strong-lifted);
-    color: var(--text-secondary);
-}
-
-/* The trigger also indicates an open menu. It stays highlighted while the panel is on screen. */
+/* The trigger also indicates an open menu: it keeps its fill while the panel is visible. */
 .settings-menu__trigger[aria-expanded='true'] {
-    background: var(--surface-popover);
-    border-color: var(--border-strong-lifted);
-    color: var(--text-primary-soft);
+    --ctl-surface: var(--surface-hover);
 }
 
 /* --- Panel --- */
@@ -96,41 +78,16 @@
 }
 
 .settings-menu__segments {
-    display: flex;
-    align-items: center;
-    flex: none;
-    gap: 2px;
     margin-left: auto;
-    padding: 2px;
-    background: var(--surface-control);
-    border: 1px solid var(--border-control);
     border-radius: var(--radius-input);
 }
 
+/* The menu row is 34px (§7). Its segment is 2 pixels taller than the small one and has a larger label. */
 .settings-menu__segment {
     height: 22px;
     padding: 0 9px;
-    border: none;
     border-radius: var(--radius-badge);
-    background: transparent;
-    color: var(--text-muted-dim);
     font-size: var(--font-size-control);
-    cursor: pointer;
-    transition: background-color var(--motion-hover) var(--motion-hover-ease),
-        color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.settings-menu__segment:hover[aria-pressed='false'] {
-    background: var(--surface-raised);
-    color: var(--text-secondary);
-}
-
-/* The selected value uses the same pill as view tabs, white with a shadow in the light theme. */
-.settings-menu__segment[aria-pressed='true'] {
-    background: var(--surface-segment-active);
-    box-shadow: var(--shadow-segment-active);
-    color: var(--text-on-segment-active);
-    font-weight: 500;
 }
 
 /* --- Actions below the divider --- */
@@ -156,11 +113,10 @@
     font-size: var(--font-size-ui);
     text-align: left;
     cursor: pointer;
-    transition: background-color var(--motion-hover) var(--motion-hover-ease);
 }
 
 .settings-menu__action:hover {
-    background: var(--surface-raised);
+    background: var(--surface-hover);
 }
 
 .settings-menu__action-label {

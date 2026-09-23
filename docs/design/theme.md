@@ -21,6 +21,12 @@ palette was rebuilt there. Neutrals were stretched +80 % from the page backgroun
 the grey hierarchy, making muted labels almost white. This was a deliberate design choice in response to complaints
 about contrast, not a migration error.
 
+One level was restored in a single place, as §3 of the same spec allows ("restore 2–3 levels
+without lowering the overall level"). `--text-link-muted` is the tone for subdued action links ("Edit ·
+Delete"). Without it, the action row below a comment had exactly the same colour as the body.
+The value comes from the 09-12 pass, not the mockup (`8a8f98`, which is 5.3:1). It gives ≈9:1 on
+the card surface against ≈17:1 for the body, preserving the prototype's ratio between levels.
+
 Tokens whose production colour isn't in the §2 table (screens from `SPEC-additions-2026-08-26.md`, control
 states) are marked "derived". The dark value uses the §3 formula,
 `new = bg + (old − bg) × 1.8`, applied component by component from `#0d0e10` with clamping. Accent shades are
@@ -39,6 +45,17 @@ fills combine migrated components.
   so the button has its own pair.
 - A viewed stop and a read file chip aren't dimmed with opacity. The former uses
   muted heading and paragraph tokens, and the latter uses only a green checkmark.
+
+## Control states
+
+The source is `SPEC-changes-2026-09-20.md` §5. Hover changes only the surface, pressing moves
+it to the second level, and text and borders stay unchanged. The grey surface scale is `--surface-hover`
+→ `--surface-pressed` → `--surface-pressed-deep`. Filled buttons have 3 tones of their own colour
+(`--surface-button-*`, `--surface-danger-button-*`, `--accent-hover` / `--accent-pressed`,
+`--attention-button-hover` / `--attention-button-pressed`, `--surface-chip-active-*`).
+The exceptions are links (their colour follows the accent scale) and the trash button (the icon turns red
+along with the background). The variants live in `packages/ui/src/styles/controls.css`. Component
+styles handle only layout. The "Controls" gallery card shows the state matrix in both themes.
 
 ## Typography
 
@@ -109,8 +126,15 @@ The test recalculates them to keep the table in sync with CSS.
 | `--pr-comments-published-chip-surface` | `#23252f` | `#e8eaef` | derived: §3 + neighbour `--c-161819` |
 | `--comment-edit-chip-surface` | `#262e4a` | `#dfe2fa` | derived: §3 + neighbour `--c-262a45` |
 | `--pr-comments-delete-surface` | `#1f100e` | `#feecea` | derived: §3 + neighbour `--c-171315` |
-| `--pr-comments-delete-button-surface` | `#3a1f1e` | `#f0d2d0` | derived: accent unchanged, adjacent to `--c-3d2a2c` |
-| `--pr-comments-delete-button-hover` | `#4a2725` | `#e6c0bd` | derived: accent unchanged, adjacent to `--c-3d2a2c` |
+| `--surface-hover` | `#262b34` | `#e2e5ea` | §5 level 1, `--c-1b1e24` |
+| `--surface-pressed` | `#333741` | `#dadee4` | §5 level 2, `--c-22252b` |
+| `--surface-pressed-deep` | `#434954` | `#c8cdd5` | §5 level 3, `--c-2b2f36` |
+| `--surface-button` | `#333741` | `#ffffff` | §4b `--btn-bg` |
+| `--surface-button-hover` | `#434954` | `#eef0f4` | §4b `--btn-bg-hover` |
+| `--surface-button-pressed` | `#4a515c` | `#e2e5ea` | §5 `--btn-bg-active` |
+| `--surface-danger-button` | `#3a1f1e` | `#f8d9d7` | §5 `--c-3a1f1e` |
+| `--surface-danger-button-hover` | `#4a2725` | `#f2c9c6` | §5 `--c-4a2725` |
+| `--surface-danger-button-pressed` | `#5c3230` | `#e0a39f` | §5 `--c-5c3230` |
 | `--surface-code-inset` | `#090a0c` | `#f3f4f6` | derived: §3 + neighbour `--c-0c0d0f` |
 | `--surface-code-inline` | `#23272d` | `#e8eaee` | `--c-191c20` |
 | `--border-hairline` | `#24292f` | `#e4e6eb` | `--c-1a1d21` |
@@ -129,7 +153,9 @@ The test recalculates them to keep the table in sync with CSS.
 | `--pr-comments-draft-border` | `#33301f` | `#ecdfc4` | derived: accent unchanged, neighbour `--c-3d3524` |
 | `--comment-edit-border` | `#3c4560` | `#c3c7e6` | derived: accent unchanged, neighbour `--c-3a3f60` |
 | `--pr-comments-delete-border` | `#4a2f2d` | `#f0d2d0` | derived: accent unchanged, neighbour `--c-3d2a2c` |
-| `--pr-comments-delete-button-border` | `#5c3230` | `#d9a9a5` | derived: accent unchanged, adjacent to `--c-7f5a56` |
+| `--border-danger-button` | `#5c3230` | `#e0a39f` | §5 `--c-5c3230` |
+| `--border-button` | `#4a515c` | `#8b94a3` | §4b `--btn-bd` |
+| `--border-switch-track` | `#343941` | `#c8cdd5` | §5 `--c-343941` |
 | `--pr-comments-editor-border` | `#535b68` | `#b1b8c2` | derived: §3 + neighbour `--c-33373e` |
 | `--text-primary` | `#ffffff` | `#000000` | `--c-f0f1f4` |
 | `--text-primary-soft` | `#ffffff` | `#000000` | `--c-e9eaee` |
@@ -138,6 +164,7 @@ The test recalculates them to keep the table in sync with CSS.
 | `--text-body` | `#ffffff` | `#00000a` | `--c-a9aeb7` |
 | `--text-muted` | `#ffffff` | `#000813` | `--c-9ba1ab` |
 | `--text-muted-dim` | `#ffffff` | `#0c1420` | `--c-8a8f98` |
+| `--text-link-muted` | `#b6bcc6` | `#3c424c` | `SPEC-changes-2026-09-20.md §5` (`8a8f98`), level restored per §3 |
 | `--text-dim` | `#e7f1ff` | `#19212d` | `--c-6b7078` |
 | `--text-dim-strong` | `#dae4f3` | `#28303b` | `--c-5e636b` |
 | `--text-gutter` | `#6e7580` | `#9198a2` | `--c-43474e` |
@@ -145,11 +172,13 @@ The test recalculates them to keep the table in sync with CSS.
 | `--comment-edit-chip-text` | `#9ea8ff` | `#4c5ae0` | derived: accent unchanged, neighbour `--c-9aa6ff` |
 | `--pr-comments-body-text` | `#ffffff` | `#000000` | derived: §3 + neighbour `--c-c2c7d0` |
 | `--chat-body-text` | `#ffffff` | `#000000` | `--c-c2c7d0` |
-| `--pr-comments-delete-button-text` | `#f2c4c0` | `#7a2622` | derived: accent unchanged, adjacent to `--c-e8cfcd` |
+| `--text-danger-button` | `#f2c4c0` | `#7a2622` | §5 `--c-f2c4c0` |
+| `--text-button` | `#ffffff` | `#0c1420` | §4b `--btn-fg` |
 | `--pr-comments-note-icon` | `#9c8760` | `#7f6c3e` | `--c-8a7550` |
 | `--accent` | `#7f8cff` | `#5a68e8` | `--c-7f8cff` |
 | `--accent-hover` | `#8f9bff` | `#4c5ae0` | `--c-8f9bff` |
 | `--accent-hover-strong` | `#b3bcff` | `#3a47bd` | `--c-b3bcff` |
+| `--accent-pressed` | `#6b78e6` | `#4353cf` | §5 `--c-6b78e6` |
 | `--accent-ink` | `#101223` | `#ffffff` | `--c-101223` |
 | `--accent-text` | `#aeb6ff` | `#4350cc` | `--c-aeb6ff` |
 | `--accent-text-soft` | `#c9cdf0` | `#3a4390` | `--c-c9cdf0` |
@@ -171,6 +200,8 @@ The test recalculates them to keep the table in sync with CSS.
 | `--attention-border-strong` | `#6b5b39` | `#bba777` | `--c-6b5b39` |
 | `--attention-button` | `#e2954c` | `#b8641c` | §1 `--amber-btn` |
 | `--attention-button-ink` | `#1b1508` | `#ffffff` | §1 `--amber-btn-fg` |
+| `--attention-button-hover` | `#eaa15c` | `#c56d1f` | §5 `--amber-btn-hover` |
+| `--attention-button-pressed` | `#d1873f` | `#a85a14` | §5 `--amber-btn-active` |
 | `--attention-label` | `#9c8760` | `#7f6c3e` | `--c-8a7550` |
 | `--attention-body` | `#d8c9ad` | `#5a4a24` | `--c-d8c9ad` |
 | `--draft-field-surface` | `#1a1510` | `#fffaec` | derived: §3 + neighbour `--c-191712` |
@@ -226,10 +257,13 @@ The test recalculates them to keep the table in sync with CSS.
 | `--surface-segment-active` | `#434954` | `#ffffff` | §1 `--seg-bg` |
 | `--text-on-segment-active` | `#ffffff` | `#000000` | §1 `--seg-fg` |
 | `--shadow-segment-active` | `none` | `0 1px 2px rgba(20, 24, 32, 0.18), 0 0 0 1px rgba(20, 24, 32, 0.08)` | §1 `--seg-shadow` |
+| `--shadow-button` | `none` | `0 1px 2px rgba(20, 24, 32, 0.12)` | §4b `--btn-shadow` |
 | `--surface-chip-active` | `#1e2240` | `#e8eaff` | §1 `--chip-bg` |
 | `--border-chip-active` | `#3f4880` | `#b9c0f4` | §1 `--chip-bd` |
 | `--text-chip-active` | `#c3caff` | `#2b3690` | §1 `--chip-fg` |
-| `--focus-ring-color` | `rgba(127, 140, 255, 0.55)` | `rgba(90, 104, 232, 0.55)` | derived from `--a-12714025528` |
+| `--surface-chip-active-hover` | `#262c52` | `#dfe2fb` | §5 `--chip-bg-hover` |
+| `--surface-chip-active-pressed` | `#2e3566` | `#d3d8f8` | §5 `--chip-bg-active` |
+| `--focus-ring-color` | `#7f8cff` | `#5a68e8` | §5 `--focus` |
 | `--text-on-selected` | `#ffffff` | `#000000` | `--c-e0e2e7` |
 | `--text-separator` | `#7b8390` | `#828894` | `--c-4a4f57` |
 | `--shadow-line-comment` | `0 1px 4px rgba(0, 0, 0, 0.45)` | `0 1px 4px rgba(20, 24, 32, 0.1)` | derived: neighbour `--a-0005` |

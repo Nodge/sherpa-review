@@ -20,11 +20,10 @@
 
 button.route-badge {
     cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
 }
 
 button.route-badge:hover {
-    color: var(--text-primary-soft);
+    background: var(--surface-hover);
 }
 
 /*
@@ -95,20 +94,8 @@ button.route-badge:hover {
     white-space: nowrap;
 }
 
-.route-strip__action {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent-hover);
-    cursor: pointer;
-}
-
-.route-strip__action:hover:not(:disabled) {
-    color: var(--accent-hover-strong);
-}
-
 .route-strip__action:disabled {
-    cursor: not-allowed;
+    cursor: default;
     opacity: var(--disabled-opacity);
 }
 

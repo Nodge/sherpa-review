@@ -61,12 +61,12 @@ export function AuditScopeBanner({ filter, stats, paths, onShowAll, onDismiss }:
                 </div>
                 {filter.note === null ? null : <div className="audit-banner__note">{filter.note}</div>}
             </div>
-            <button type="button" className="audit-banner__action" onClick={onShowAll}>
+            <button type="button" className="ctl ctl--ghost ctl--topbar audit-banner__action" onClick={onShowAll}>
                 {t('lens.showAll')}
             </button>
             <button
                 type="button"
-                className="audit-banner__dismiss"
+                className="ctl ctl--toolbar-icon audit-banner__dismiss"
                 aria-label={t('audit.dismiss')}
                 title={t('audit.dismiss.title')}
                 onClick={onDismiss}

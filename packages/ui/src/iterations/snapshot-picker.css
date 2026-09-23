@@ -20,15 +20,6 @@
     white-space: nowrap;
 }
 
-.snapshot-pill--button {
-    cursor: pointer;
-    transition: border-color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.snapshot-pill--button:hover {
-    border-color: var(--border-strong-lifted);
-}
-
 .snapshot-pill__caret {
     display: flex;
     align-items: center;

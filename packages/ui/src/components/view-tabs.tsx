@@ -32,7 +32,7 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
     };
 
     return (
-        <div className="view-tabs" role="tablist" aria-label={t('view.tabs')}>
+        <div className="view-tabs ctl-tabs" role="tablist" aria-label={t('view.tabs')}>
             {VIEWS.map((item) => (
                 <button
                     key={item.id}
@@ -45,7 +45,7 @@ export function ViewTabs({ view, onSelect }: ViewTabsProps) {
                     }}
                     type="button"
                     role="tab"
-                    className="view-tabs__tab"
+                    className={`view-tabs__tab ctl ctl--tab${item.id === view ? ' is-active' : ''}`}
                     aria-selected={item.id === view}
                     // Target of step 07 of the onboarding tour.
                     {...(item.id === 'diff' ? { 'data-tour': 'fulldiff' } : {})}

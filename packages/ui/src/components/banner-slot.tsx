@@ -85,7 +85,7 @@ export function BannerSlot({ sources }: { sources: readonly BannerSource[] }) {
                 <>
                     <button
                         type="button"
-                        className="banner-slot__more"
+                        className="ctl ctl--link-muted banner-slot__more"
                         aria-expanded={expanded}
                         onClick={() => {
                             setExpandedKey(expanded ? null : activeKey);

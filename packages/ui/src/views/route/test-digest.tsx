@@ -56,7 +56,7 @@ export function TestDigest({
                     location === null ? null : (
                         <button
                             type="button"
-                            className="digest__anchor digest__location"
+                            className="ctl ctl--link-muted digest__anchor digest__location"
                             title={`${location.anchor.path}:${String(location.anchor.line)}`}
                             onClick={() => {
                                 onOpenAnchor(location.anchor);
@@ -71,7 +71,7 @@ export function TestDigest({
                         <span className="digest__spacer" />
                         <button
                             type="button"
-                            className="digest__toggle"
+                            className="ctl ctl--ghost ctl--compact digest__toggle"
                             aria-expanded={shown}
                             title={shown ? t('digest.hide.title') : t('digest.show.title', hiddenFiles)}
                             onClick={onToggle}
@@ -132,7 +132,7 @@ function ClaimRow({
             {anchor === null ? null : anchorReachable(anchor) ? (
                 <button
                     type="button"
-                    className="digest__anchor"
+                    className="ctl ctl--link-muted digest__anchor"
                     title={`${anchor.path}:${String(anchor.line)}`}
                     onClick={() => {
                         onOpenAnchor(anchor);

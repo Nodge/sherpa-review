@@ -184,7 +184,7 @@ export function StopCard({
                         {stop.status !== 'failed' || onFillStop === undefined ? null : (
                             <button
                                 type="button"
-                                className="route-stop__regenerate"
+                                className="ctl ctl--link-muted route-stop__regenerate"
                                 disabled={readOnly}
                                 {...(readOnly ? { title: readOnlyReason } : {})}
                                 onClick={() => {
@@ -294,6 +294,7 @@ export function StopViewedToggle({
             )}
             <ViewedToggle
                 className="route-stop__viewed"
+                variant="toggle"
                 viewed={viewed}
                 disabled={disabled}
                 title={disabled ? reason : undefined}
@@ -330,7 +331,7 @@ function StopChangeReason({
                         <button
                             key={thread.id}
                             type="button"
-                            className="route-stop__change-thread"
+                            className="ctl ctl--link-muted route-stop__change-thread"
                             onClick={() => {
                                 onOpenThread(thread.id);
                             }}

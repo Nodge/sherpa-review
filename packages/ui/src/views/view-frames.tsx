@@ -114,7 +114,7 @@ export function RouteInvitation({ prKey, onReadDiff }: { prKey: string; onReadDi
                     hint={t('command.hint')}
                     actionLabel={t('command.copy')}
                 />
-                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                <button type="button" className="ctl ctl--primary invitation-card__primary" onClick={onReadDiff}>
                     {t('route.readFullDiff')}
                 </button>
             </section>
@@ -151,7 +151,7 @@ export function IterationWithoutRoute({
                           ? t('route.iteration.text')
                           : t('route.iteration.textCommit', shortCommit(commit))}
                 </p>
-                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                <button type="button" className="ctl ctl--primary invitation-card__primary" onClick={onReadDiff}>
                     {slice === null ? t('route.readFullDiff') : t('route.toFullDiff')}
                 </button>
             </section>
@@ -180,7 +180,7 @@ export function SliceWithoutOverview({
                 <p className="invitation-card__text">
                     {t('overview.slice.text', shortCommit(slice.baseCommit), shortCommit(slice.headCommit))}
                 </p>
-                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                <button type="button" className="ctl ctl--primary invitation-card__primary" onClick={onReadDiff}>
                     {t('route.toFullDiff')}
                 </button>
             </section>
@@ -200,7 +200,7 @@ export function SmallPrRoute({ onReadDiff }: { onReadDiff: () => void }) {
                 <div className="invitation-card__eyebrow">{t('view.route')}</div>
                 <h1 className="invitation-card__title">{t('route.smallPr.title')}</h1>
                 <p className="invitation-card__text">{t('route.smallPr.text')}</p>
-                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                <button type="button" className="ctl ctl--primary invitation-card__primary" onClick={onReadDiff}>
                     {t('route.readFullDiff')}
                 </button>
             </section>
@@ -411,7 +411,7 @@ function SummaryCard({
             <OverviewCard title={t('overview.summary')}>
                 <p className="overview-card__lead">{t('overview.summary.smallPr.lead')}</p>
                 <p className="overview-card__text">{t('overview.summary.smallPr.text')}</p>
-                <button type="button" className="invitation-card__primary" onClick={onReadDiff}>
+                <button type="button" className="ctl ctl--primary invitation-card__primary" onClick={onReadDiff}>
                     {t('route.readFullDiff')}
                 </button>
             </OverviewCard>
@@ -479,9 +479,10 @@ function OwnershipCard({
                             : t('overview.ownership.statsUnavailable')}
                     </div>
                     <div className="ownership-card__toolbar-spacer" />
-                    <div className="ownership-segments" aria-label={t('overview.ownership.segments')}>
+                    <div className="ownership-segments ctl-tabs" aria-label={t('overview.ownership.segments')}>
                         <button
                             type="button"
+                            className={`ctl ctl--tab${segment === 'mine' ? ' is-active' : ''}`}
                             aria-pressed={segment === 'mine'}
                             disabled={!summary.available}
                             title={summary.available ? undefined : (summary.note ?? undefined)}
@@ -493,6 +494,7 @@ function OwnershipCard({
                         </button>
                         <button
                             type="button"
+                            className={`ctl ctl--tab${segment === 'all' ? ' is-active' : ''}`}
                             aria-pressed={segment === 'all'}
                             onClick={() => {
                                 onSegment('all');

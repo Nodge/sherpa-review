@@ -54,7 +54,7 @@ function AuthorLensChip({ lens }: { lens: AuthorLens }) {
     return (
         <button
             type="button"
-            className="thread-chip thread-chip--author is-on"
+            className="ctl ctl--chip thread-chip thread-chip--author is-on"
             title={t('overview.discussion.lens.clear', lens.name)}
             onClick={lens.onClear}
         >
@@ -81,7 +81,7 @@ export function DiffModeToggle({ store }: { store: DiffViewStore }) {
     return (
         <button
             type="button"
-            className="diff-mode-toggle"
+            className="ctl ctl--quiet diff-mode-toggle"
             disabled={!splitAvailable}
             title={splitAvailable ? undefined : t('toolbar.splitUnavailable')}
             onClick={() => {
@@ -164,7 +164,7 @@ export function CommentSourceChips({
                     <button
                         key={chip.id}
                         type="button"
-                        className={`thread-chip${show[chip.id] ? ' is-on' : ''}`}
+                        className={`ctl ctl--chip thread-chip${show[chip.id] ? ' is-on' : ''}`}
                         aria-pressed={show[chip.id]}
                         disabled={count === 0}
                         title={count === 0 ? t('toolbar.chip.empty', chip.label) : undefined}

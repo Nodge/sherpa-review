@@ -71,7 +71,7 @@ export function SettingsMenu({ agentConnected, onOpenCommands, onReplayTour, def
             <button
                 type="button"
                 ref={triggerRef}
-                className="settings-menu__trigger"
+                className="ctl ctl--icon settings-menu__trigger"
                 title={t('settings.title')}
                 aria-label={t('settings.title')}
                 aria-haspopup="dialog"
@@ -191,12 +191,12 @@ function Segments<T extends string>({
     onSelect: (value: T) => void;
 }) {
     return (
-        <div className="settings-menu__segments" role="group" aria-label={label}>
+        <div className="settings-menu__segments ctl-tabs ctl-tabs--small" role="group" aria-label={label}>
             {options.map((option) => (
                 <button
                     key={option.value}
                     type="button"
-                    className="settings-menu__segment"
+                    className={`settings-menu__segment ctl ctl--tab${option.value === value ? ' is-active' : ''}`}
                     aria-pressed={option.value === value}
                     onClick={() => {
                         onSelect(option.value);

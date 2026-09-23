@@ -68,28 +68,11 @@
     margin: 0 0 var(--space-control);
 }
 
+/* The tree filter row is denser than the toolbar. Its chip is two pixels shorter than the standard chip. */
 .file-panel__chip {
-    display: flex;
-    align-items: center;
     gap: 4px;
     height: 22px;
     padding: 0 7px;
-    border: 1px solid var(--border-standard);
-    border-radius: var(--radius-button);
-    background: transparent;
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-        background var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease),
-        color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.file-panel__chip:hover:not([disabled]) {
-    border-color: var(--border-strong-lifted);
-    color: var(--text-secondary);
 }
 
 /* The active chip is indigo in both themes (docs/design/SPEC-theming-2026-09-12.md §1). */
@@ -134,12 +117,6 @@
 
 .file-panel__link {
     margin-left: 6px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent-hover);
-    cursor: pointer;
 }
 
 /* --- Tree --- */
@@ -172,7 +149,6 @@
     padding-right: 6px;
     border-radius: var(--radius-button);
     cursor: pointer;
-    transition: background var(--motion-hover) var(--motion-hover-ease);
 }
 
 .file-tree__row:hover {
@@ -215,10 +191,6 @@
 
 .file-tree__row--file .file-tree__read {
     cursor: pointer;
-}
-
-.file-tree__row--file .file-tree__read:hover {
-    border-color: var(--read-border);
 }
 
 .file-tree__read--partial {
@@ -290,21 +262,9 @@
  * and focus, so the row layout does not jump under the pointer.
  */
 .file-tree__more {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-mark);
-    background: none;
     font-size: var(--font-size-control);
     line-height: 1;
-    color: var(--text-dim-strong);
     opacity: 0;
-    cursor: pointer;
 }
 
 .file-tree__row:hover .file-tree__more,
@@ -314,10 +274,8 @@
     opacity: 1;
 }
 
-.file-tree__more:hover,
 .file-tree__more.is-open {
-    background: var(--surface-selected);
-    color: var(--text-secondary);
+    background: var(--surface-hover);
 }
 
 .file-tree__tag {

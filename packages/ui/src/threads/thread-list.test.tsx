@@ -539,8 +539,8 @@ describe('read-only thread', () => {
 
         expect(html).toContain('title="only in the active iteration"');
         expect(/<button[^>]*disabled[^>]*>Resolve<\/button>/.exec(html)).not.toBeNull();
-        expect(html).toContain('class="thread__edit-draft" aria-label="Edit draft draft-reply" title="only in the active iteration" disabled=""');
-        expect(html).toContain('class="thread__delete-draft" aria-label="Delete draft draft-reply" title="only in the active iteration" disabled=""');
+        expect(html).toContain('thread__edit-draft" aria-label="Edit draft draft-reply" title="only in the active iteration" disabled=""');
+        expect(html).toContain('thread__delete-draft" aria-label="Delete draft draft-reply" title="only in the active iteration" disabled=""');
     });
 });
 

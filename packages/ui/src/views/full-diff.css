@@ -231,15 +231,4 @@
 .full-diff__zero-action {
     height: 28px;
     padding: 0 11px;
-    border: 1px solid var(--border-strong-lifted);
-    border-radius: var(--radius-button);
-    background: var(--border-standard);
-    font-size: var(--font-size-secondary);
-    color: var(--text-secondary);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.full-diff__zero-action:hover {
-    background: var(--hover-selected);
 }

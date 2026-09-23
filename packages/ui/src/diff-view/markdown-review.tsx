@@ -89,9 +89,9 @@ export function MarkdownReview({ model, selection, focusedThreadRange, onSelect,
     };
     const switchSide = (next: 'old' | 'new') => { onClearSelection?.(); setSide(next); setTooLong(false); };
     return <div className="markdown-review" ref={root} onMouseUp={capture} onKeyUp={(event) => { if (event.shiftKey) capture(); }}>
-        <div className="markdown-review__toolbar" role="group" aria-label={t('markdown.preview')}>
-            {model.changeType === 'add' ? null : <button type="button" aria-pressed={side === 'old'} onClick={() => { switchSide('old'); }}>{t('markdown.before')}</button>}
-            {model.changeType === 'delete' ? null : <button type="button" aria-pressed={side === 'new'} onClick={() => { switchSide('new'); }}>{t('markdown.after')}</button>}
+        <div className="markdown-review__toolbar ctl-tabs" role="group" aria-label={t('markdown.preview')}>
+            {model.changeType === 'add' ? null : <button type="button" className={`ctl ctl--tab${side === 'old' ? ' is-active' : ''}`} aria-pressed={side === 'old'} onClick={() => { switchSide('old'); }}>{t('markdown.before')}</button>}
+            {model.changeType === 'delete' ? null : <button type="button" className={`ctl ctl--tab${side === 'new' ? ' is-active' : ''}`} aria-pressed={side === 'new'} onClick={() => { switchSide('new'); }}>{t('markdown.after')}</button>}
         </div>
         {partial ? <p className="file-card__notice">{t('markdown.fragment')}</p> : null}
         {tooLong ? <p role="status" className="file-card__notice">{t('markdown.tooLong')}</p> : null}

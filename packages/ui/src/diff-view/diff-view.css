@@ -222,85 +222,13 @@
     gap: 6px;
 }
 
-.file-card__header-action {
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    height: 23px;
-    padding: 0 7px;
-    border: 1px solid var(--border-strong);
-    border-radius: 5px;
-    background: none;
-    font-family: var(--font-sans);
-    font-size: var(--font-size-meta);
-    line-height: 1;
-    color: var(--text-dim-strong);
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-        color var(--motion-hover) var(--motion-hover-ease),
-        background var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.file-card__header-action:hover:not([disabled]) {
-    border-color: var(--checkbox-border);
-    background: var(--surface-popover);
-    color: var(--text-muted);
-}
-
-.file-card__header-action:active {
-    color: var(--text-dim);
-}
-
-.file-card__header-action[disabled] {
-    opacity: 0.45;
-    cursor: default;
-}
-
+/* Header actions use compact Ghost from `styles/controls.css`. Text "retry" actions are links. */
 .file-card__action {
-    padding: 0;
-    border: 0;
-    background: none;
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
 }
 
-.file-card__action:hover {
-    color: var(--text-muted);
-}
-
-.file-card__action:active {
-    color: var(--text-dim);
-}
-
-.file-card__action[disabled]:hover {
-    color: var(--text-dim-strong);
-}
-
-/* Viewed toggle in the file header (docs/design/README.md §1): a row without its own border. The box and its
-   states are shared by files and stops, in `components/viewed-toggle.css`. */
-.file-card__viewed {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.file-card__viewed.is-viewed {
-    color: var(--diff-add-text-strong);
-}
+/* The viewed toggle in the file header (docs/design/README.md §1) uses the checkbox from `styles/controls.css`. */
 
 /* --- Notices and system states --- */
 
@@ -356,7 +284,7 @@
 
 .file-card__collapsed:hover,
 .file-card__notice--button:hover {
-    color: var(--text-muted);
+    background: var(--surface-hover);
 }
 
 .file-card__collapsed--file {
@@ -373,10 +301,6 @@
 
 .file-card__collapsed-hint {
     color: var(--text-dim-strong);
-}
-
-.file-card__collapsed--file:hover .file-card__collapsed-hint {
-    color: var(--text-muted);
 }
 
 /* --- Diff rows --- */
@@ -411,10 +335,14 @@
 }
 
 .diff-gap__slot,
-.diff-gap__empty,
-.diff-gap__target {
+.diff-gap__empty {
     width: 46px;
     height: 24px;
+}
+
+/* The expansion target uses the toolbar icon from `styles/controls.css`, but is wider because it is a strip, not a button. */
+.diff-gap .diff-gap__target {
+    width: 46px;
 }
 
 /* The row is a single line. In split mode the counter sits in the column left of the "down" target, and forward-only
@@ -441,32 +369,14 @@
     display: block;
 }
 
-.diff-gap__target {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    color: var(--text-separator);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-}
-
 /* The selected arrow is visible only while the group has keyboard focus.
    Both targets are transparent at rest (state table §1a). */
-.diff-gap:focus-visible .diff-gap__target.is-active,
-.diff-gap__target:hover {
-    color: var(--text-muted);
-    background: var(--surface-raised);
-}
-
-.diff-gap:has(.diff-gap__target:hover) .diff-gap__counter {
-    color: var(--text-muted);
+.diff-gap:focus-visible .diff-gap__target.is-active {
+    background: var(--surface-hover);
 }
 
 .diff-gap.is-loading .diff-gap__target.is-active {
-    color: var(--text-secondary);
-    background: var(--border-hairline-strong);
+    background: var(--surface-pressed);
 }
 
 .diff-gap__target:disabled {
@@ -498,8 +408,7 @@
 }
 
 .diff-gap--error:hover {
-    color: var(--text-muted);
-    background: var(--surface-raised);
+    background: var(--surface-hover);
 }
 
 .diff-gap--unified .diff-gap__error-label {

@@ -111,12 +111,12 @@ export function NotesLostBanner({ count, onShow, onDismiss }: NotesLostBannerPro
             <div className="iteration-banner__body">
                 <div className="iteration-banner__line">{t('iteration.notesLost.text', count)}</div>
             </div>
-            <button type="button" className="iteration-banner__action" onClick={onShow}>
+            <button type="button" className="ctl ctl--attention iteration-banner__action" onClick={onShow}>
                 {t('iteration.notesLost.show')}
             </button>
             <button
                 type="button"
-                className="iteration-banner__dismiss"
+                className="ctl ctl--toolbar-icon iteration-banner__dismiss"
                 aria-label={t('iteration.notesLost.dismiss')}
                 onClick={onDismiss}
             >
@@ -169,13 +169,13 @@ export function RouteStaleBanner({
                     {affected.length === 0 ? '' : t('iteration.stale.affected', enumerate(affected, t))}
                 </div>
             </div>
-            <button type="button" className="iteration-banner__action" onClick={onRegenerate}>
+            <button type="button" className="ctl ctl--secondary iteration-banner__action" onClick={onRegenerate}>
                 {t('iteration.stale.regenerate')}
             </button>
             {onOpenDiffWithoutRoute === undefined ? null : (
                 <button
                     type="button"
-                    className="iteration-banner__secondary"
+                    className="ctl ctl--ghost ctl--topbar iteration-banner__secondary"
                     onClick={() => {
                         onOpenDiffWithoutRoute(stale.prDiffId);
                     }}
@@ -229,7 +229,7 @@ export function ReadOnlyIterationBanner({
                         {t('iteration.readOnly.tail')}
                     </div>
                 </div>
-                <button type="button" className="iteration-banner__action" onClick={onCurrent}>
+                <button type="button" className="ctl ctl--attention iteration-banner__action" onClick={onCurrent}>
                     {t('iteration.toActive')}
                 </button>
             </div>
@@ -249,7 +249,7 @@ export function ReadOnlyIterationBanner({
                     {gone ? t(localHost ? 'iteration.goneLocal.tail' : 'iteration.gone.tail') : ''}
                 </div>
             </div>
-            <button type="button" className="iteration-banner__action" onClick={onCurrent}>
+            <button type="button" className="ctl ctl--attention iteration-banner__action" onClick={onCurrent}>
                 {t('iteration.toCurrent')}
             </button>
         </div>
@@ -314,13 +314,13 @@ export function RouteSecondPassBanner({
                 </div>
             </div>
             {hasChanges ? (
-                <button type="button" className="iteration-banner__action" onClick={onShowNew}>
+                <button type="button" className="ctl ctl--attention iteration-banner__action" onClick={onShowNew}>
                     {t('iteration.secondPass.showNew')}
                 </button>
             ) : null}
             <button
                 type="button"
-                className="iteration-banner__dismiss"
+                className="ctl ctl--toolbar-icon iteration-banner__dismiss"
                 aria-label={t('iteration.secondPass.dismiss')}
                 onClick={onDismiss}
             >

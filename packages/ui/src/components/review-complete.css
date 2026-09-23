@@ -102,24 +102,6 @@
     font-size: var(--font-size-secondary);
 }
 
-.review-complete__open-threads button,
-.review-complete__actions button {
-    flex: none;
-    height: 29px;
-    padding: 0 11px;
-    border: 1px solid var(--border-strong-lifted);
-    border-radius: var(--radius-input);
-    background: transparent;
-    color: var(--text-secondary);
-    font: inherit;
-    cursor: pointer;
-}
-
-.review-complete__open-threads button:hover,
-.review-complete__actions button:hover {
-    background: var(--surface-popover);
-}
-
 .review-complete__actions {
     display: flex;
     justify-content: flex-end;

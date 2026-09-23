@@ -295,7 +295,7 @@ function SnapshotPillMenu({
             <button
                 type="button"
                 ref={buttonRef}
-                className="snapshot-pill snapshot-pill--button"
+                className="ctl snapshot-pill snapshot-pill--button"
                 aria-haspopup="menu"
                 aria-expanded={open}
                 title={title}

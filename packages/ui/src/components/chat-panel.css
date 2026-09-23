@@ -51,27 +51,12 @@
     font-size: var(--font-size-meta);
 }
 
+/* Fixed 28×28 button: the cross glyph must not stretch the row. */
 .chat-panel__close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 28px;
     height: 28px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
     font-size: var(--font-size-close-glyph);
-    /* The 28×28 button is fixed-size. The close glyph must not stretch the row. */
     line-height: 1;
-}
-
-.chat-panel__close:hover {
-    border-color: var(--border-control);
-    background: var(--surface-raised);
-    color: var(--text-primary);
 }
 
 .chat-panel__queue {
@@ -146,17 +131,7 @@
 
 /* A sample question is a button styled as a list item. Clicking prefills the text without sending it. */
 .chat-panel__example {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
     text-align: left;
-    cursor: pointer;
-}
-
-.chat-panel__example:hover {
-    color: var(--text-secondary);
 }
 
 .chat-message-pair {
@@ -252,8 +227,7 @@
 
 .chat-message__anchor:hover,
 .chat-message__note:not(:disabled):hover {
-    color: var(--accent-hover-strong);
-    border-color: var(--border-strong-lifted);
+    background: var(--accent-surface-alt);
 }
 
 .chat-message--failed {
@@ -304,21 +278,7 @@
 }
 
 .chat-message__action {
-    min-height: 27px;
     margin-top: 9px;
-    padding: 4px 9px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: var(--font-size-control);
-}
-
-.chat-message__action:hover:not(:disabled) {
-    border-color: var(--border-strong-lifted);
-    background: var(--surface-raised);
-    color: var(--text-primary);
 }
 
 .chat-message__action:disabled {
@@ -431,10 +391,6 @@
     line-height: 1.5;
 }
 
-.chat-panel__textarea:hover:not(:disabled) {
-    border-color: var(--border-strong-lifted);
-}
-
 .chat-panel__textarea:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
@@ -451,30 +407,12 @@
 }
 
 .chat-panel__composer-footer button {
-    min-height: 27px;
-    padding: 4px 9px;
-    border: 0;
-    border-radius: var(--radius-button);
-    background: var(--accent);
-    color: var(--accent-ink);
-    cursor: pointer;
-    font-family: var(--font-sans);
-    font-size: var(--font-size-control);
     font-weight: 600;
-}
-
-.chat-panel__composer-footer button:hover:not(:disabled) {
-    background: var(--accent-hover);
 }
 
 .chat-panel__composer-footer button:disabled {
     cursor: default;
     opacity: var(--disabled-opacity);
-}
-
-.chat-panel button:focus-visible,
-.chat-panel textarea:focus-visible {
-    box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 @keyframes chat-typing {

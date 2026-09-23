@@ -47,10 +47,6 @@
     color: var(--attention-text-dim);
     white-space: nowrap;
     cursor: pointer;
-    transition:
-        background var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease),
-        color var(--motion-hover) var(--motion-hover-ease);
 }
 
 .pr-header__pci.is-active {

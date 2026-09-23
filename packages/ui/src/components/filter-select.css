@@ -5,33 +5,9 @@
     flex: none;
 }
 
+/* A filled chip marks the active filter (docs/design/SPEC-changes-2026-09-20.md §5). */
 .filter-select__button {
-    display: flex;
-    align-items: center;
     gap: 7px;
-    height: 27px;
-    padding: 0 9px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-button);
-    background: transparent;
-    font-size: var(--font-size-secondary);
-    color: var(--text-secondary);
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-        background var(--motion-hover) var(--motion-hover-ease),
-        border-color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.filter-select__button:hover {
-    border-color: var(--border-strong-lifted);
-    background: var(--surface-popover);
-}
-
-/* The active filter is visible without colour through its filled button (docs/design/SPEC-elements.md §1.1). */
-.filter-select__button.is-active {
-    border-color: var(--border-strong-lifted);
-    background: var(--border-standard);
 }
 
 .filter-select__count {

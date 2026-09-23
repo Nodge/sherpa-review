@@ -247,7 +247,7 @@ export function FullDiffView({
                         {t('fullDiff.sliceEmpty', shortCommit(slice.baseCommit), shortCommit(slice.headCommit))}
                     </p>
                     {onActiveIteration === undefined ? null : (
-                        <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
+                        <button type="button" className="ctl ctl--secondary full-diff__zero-action" onClick={onActiveIteration}>
                             {t('iteration.toActive')}
                         </button>
                     )}
@@ -386,7 +386,7 @@ function ActiveIterationAction({ onActiveIteration }: { onActiveIteration: () =>
     const t = useT();
     return (
         <div className="full-diff__status-actions">
-            <button type="button" className="full-diff__zero-action" onClick={onActiveIteration}>
+            <button type="button" className="ctl ctl--secondary full-diff__zero-action" onClick={onActiveIteration}>
                 {t('iteration.toActive')}
             </button>
         </div>
@@ -1443,7 +1443,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                             <p className="full-diff__zero-text">{zeroResultText(filter, t)}</p>
                             <button
                                 type="button"
-                                className="full-diff__zero-action"
+                                className="ctl ctl--secondary full-diff__zero-action"
                                 onClick={() => {
                                     changeFilter(ALL_FILTER_ID);
                                 }}

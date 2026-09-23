@@ -48,7 +48,6 @@
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
-    transition: background var(--motion-hover) var(--motion-hover-ease);
 }
 
 .agent-note--collapsed:hover,
@@ -59,14 +58,6 @@
 .agent-note--collapsed:active,
 .agent-note-stack-summary:active {
     background: var(--surface-diff-card);
-}
-
-.agent-note:focus-visible,
-.agent-note-stack-summary:focus-visible,
-.agent-note__actions button:focus-visible,
-.agent-note-stack__collapse:focus-visible {
-    outline: 0;
-    box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 .agent-note__diamond {
@@ -128,24 +119,7 @@
 
 .agent-note__actions button,
 .agent-note-stack__collapse {
-    padding: 0;
-    border: 0;
-    background: none;
-    font-family: var(--font-sans);
     font-size: var(--font-size-control);
-    color: var(--accent-text);
-    cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.agent-note__actions button:hover:not(:disabled),
-.agent-note-stack__collapse:hover {
-    color: var(--accent-hover-strong);
-}
-
-.agent-note__actions button:active:not(:disabled),
-.agent-note-stack__collapse:active {
-    color: var(--accent-hover);
 }
 
 .agent-note__actions button:disabled {

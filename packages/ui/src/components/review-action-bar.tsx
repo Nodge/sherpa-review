@@ -166,25 +166,25 @@ export function ReviewActionBarLoading({ diffError }: { readonly diffError: stri
             <span className="review-action-bar__divider" aria-hidden="true" />
             <span className="review-action-bar__no-drafts">{t('ship.loading.comments')}</span>
             <span className="review-action-bar__divider" aria-hidden="true" />
-            <button type="button" className="review-action-bar__button" disabled title={disabledReason}>
+            <button type="button" className="ctl ctl--ghost review-action-bar__button" disabled title={disabledReason}>
                 {t('ship.prComment')}
             </button>
             <button
                 type="button"
-                className="review-action-bar__button review-action-bar__request"
+                className="ctl ctl--danger-ghost review-action-bar__button"
                 disabled
                 title={disabledReason}
             >
                 Request changes
             </button>
             <div className="review-action-bar__ship">
-                <button type="button" className="review-action-bar__ship-primary" disabled title={disabledReason}>
+                <button type="button" className="ctl ctl--primary review-action-bar__ship-primary" disabled title={disabledReason}>
                     <Icon name="thumb" size={15} className="review-action-bar__thumb" />
                     {t('ship.mode.ship')}
                 </button>
                 <button
                     type="button"
-                    className="review-action-bar__ship-caret"
+                    className="ctl ctl--primary review-action-bar__ship-caret"
                     disabled
                     title={disabledReason}
                     aria-label={t('ship.chooseMode')}
@@ -434,6 +434,7 @@ export function ReviewActionBar({
                     {' · '}
                     <button
                         type="button"
+                        className="ctl ctl--link-muted"
                         onClick={() => void publish(failure.verdict, { retry: true })}
                         disabled={retryDisabledReason !== null}
                         title={retryDisabledReason ?? undefined}
@@ -492,7 +493,7 @@ export function ReviewActionBar({
             <button
                 ref={commentButtonRef}
                 type="button"
-                className="review-action-bar__button"
+                className="ctl ctl--ghost review-action-bar__button"
                 aria-expanded={prCommentsOpen}
                 aria-haspopup="dialog"
                 onClick={() => {
@@ -506,7 +507,7 @@ export function ReviewActionBar({
             </button>
             <button
                 type="button"
-                className="review-action-bar__button review-action-bar__request"
+                className="ctl ctl--danger-ghost review-action-bar__button"
                 disabled={disabled}
                 title={disabledReason ?? t('ship.consequence.requestChanges', drafts)}
                 onClick={() => void publish('request_changes')}
@@ -518,7 +519,7 @@ export function ReviewActionBar({
                 <button
                     ref={shipButtonRef}
                     type="button"
-                    className="review-action-bar__ship-primary"
+                    className="ctl ctl--primary review-action-bar__ship-primary"
                     disabled={disabled}
                     title={disabledReason ?? t(publishConsequenceKey(effectiveShipMode), drafts)}
                     onClick={() => void publish(effectiveShipMode)}
@@ -530,7 +531,7 @@ export function ReviewActionBar({
                 </button>
                 <button
                     type="button"
-                    className="review-action-bar__ship-caret"
+                    className="ctl ctl--primary review-action-bar__ship-caret"
                     aria-haspopup="listbox"
                     aria-expanded={menuOpen}
                     disabled={disabled}

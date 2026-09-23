@@ -20,60 +20,13 @@
     white-space: nowrap;
 }
 
-.diff-mode-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-meta);
-    color: var(--text-dim-strong);
-    white-space: nowrap;
-    cursor: pointer;
-    transition: color var(--motion-hover) var(--motion-hover-ease);
-}
-
-.diff-mode-toggle:hover {
-    color: var(--text-muted);
-}
-
 .thread-chips {
     display: inline-flex;
     gap: 5px;
 }
 
-.thread-chip {
-    display: inline-flex;
-    align-items: center;
-    flex: none;
-    height: 24px;
-    padding: 0 8px;
-    border: 1px solid var(--border-standard);
-    border-radius: var(--radius-button);
-    background: transparent;
-    font-size: var(--font-size-meta);
-    color: var(--text-dim);
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-/* The active chip is indigo in both themes (docs/design/SPEC-theming-2026-09-12.md §1). */
-.thread-chip.is-on {
-    border-color: var(--border-chip-active);
-    background: var(--surface-chip-active);
-    color: var(--text-chip-active);
-    font-weight: 500;
-}
-
 .thread-chip--author {
     gap: 5px;
-}
-
-.thread-chip:disabled {
-    opacity: var(--disabled-opacity);
-    cursor: default;
 }
 
 .thread-chips-hidden {
@@ -81,13 +34,4 @@
     font-size: var(--font-size-meta);
     color: var(--text-dim);
     white-space: nowrap;
-}
-
-.thread-chips-hidden button {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent-hover);
-    cursor: pointer;
 }

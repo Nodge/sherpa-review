@@ -106,12 +106,12 @@ export function ImageBody({ file, image, loadBlob, textBody = null, initial }: I
     return (
         <div className="image-card">
             <div className="image-card__controls">
-                <div className="image-card__modes" role="group" aria-label={t('image.mode.aria')}>
+                <div className="image-card__modes ctl-tabs" role="group" aria-label={t('image.mode.aria')}>
                     {options.map((option) => (
                         <button
                             key={option.id}
                             type="button"
-                            className={`image-card__mode${option.id === mode ? ' is-active' : ''}`}
+                            className={`ctl ctl--tab image-card__mode${option.id === mode ? ' is-active' : ''}`}
                             aria-pressed={option.id === mode}
                             disabled={option.reason !== null}
                             title={option.reason ?? undefined}
@@ -127,7 +127,7 @@ export function ImageBody({ file, image, loadBlob, textBody = null, initial }: I
                 {mode === 'text' ? null : (
                     <button
                         type="button"
-                        className={`image-card__mode image-card__mode--single${fit === 'actual' ? ' is-active' : ''}`}
+                        className={`ctl ctl--tab image-card__mode image-card__mode--single${fit === 'actual' ? ' is-active' : ''}`}
                         aria-pressed={fit === 'actual'}
                         title={t(fit === 'actual' ? 'image.fit.toFitTitle' : 'image.fit.toActualTitle')}
                         onClick={() => {
@@ -373,7 +373,7 @@ function SideStatus({ file, model, view }: { file: FileDiff; model: ImageSide; v
         return (
             <p className="image-card__status" role="status">
                 {t('image.failed', view.error ?? '')}
-                <button type="button" className="image-card__retry" onClick={view.retry}>
+                <button type="button" className="ctl ctl--link image-card__retry" onClick={view.retry}>
                     {t('image.retry')}
                 </button>
             </p>
@@ -739,7 +739,7 @@ function PixelDiff({
                 ) : current.state === 'error' ? (
                     <>
                         <span>{t('image.diff.failed', current.error)}</span>
-                        <button type="button" className="image-card__retry" onClick={retry}>
+                        <button type="button" className="ctl ctl--link image-card__retry" onClick={retry}>
                             {t('image.retry')}
                         </button>
                     </>

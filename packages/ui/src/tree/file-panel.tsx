@@ -132,7 +132,7 @@ export function FilePanel(props: FilePanelProps) {
                     <button
                         key={filter.id}
                         type="button"
-                        className={`file-panel__chip${filter.id === activeFilter.id ? ' is-on' : ''}`}
+                        className={`ctl ctl--chip file-panel__chip${filter.id === activeFilter.id ? ' is-on' : ''}`}
                         disabled={!filter.available}
                         aria-pressed={filter.id === activeFilter.id}
                         title={filter.available ? filter.label : (filter.note ?? t('tree.filter.unavailable'))}
@@ -148,7 +148,7 @@ export function FilePanel(props: FilePanelProps) {
             {writeError === null ? null : (
                 <p className="file-panel__notice" role="status">
                     {writeError.text}
-                    <button type="button" className="file-panel__link" onClick={writeError.onRetry}>
+                    <button type="button" className="ctl ctl--link file-panel__link" onClick={writeError.onRetry}>
                         {t('tree.retry')}
                     </button>
                 </p>
@@ -296,7 +296,7 @@ function FileTreeView({
         return (
             <p className="file-panel__empty">
                 {t('tree.empty.query')}
-                <button type="button" className="file-panel__link" onClick={onClearQuery}>
+                <button type="button" className="ctl ctl--link file-panel__link" onClick={onClearQuery}>
                     {t('tree.empty.clear')}
                 </button>
             </p>
@@ -482,7 +482,7 @@ function FileRow({
             {/* The menu button stays out of the tab order, like the read-state checkbox. Arrow keys navigate the tree. */}
             <button
                 type="button"
-                className={`file-tree__more${menuOpen ? ' is-open' : ''}`}
+                className={`ctl ctl--chevron file-tree__more${menuOpen ? ' is-open' : ''}`}
                 tabIndex={-1}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}

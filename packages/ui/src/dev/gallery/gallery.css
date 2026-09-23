@@ -53,8 +53,7 @@
 }
 
 .gallery__item:hover {
-    background: var(--surface-raised);
-    color: var(--text-secondary);
+    background: var(--surface-hover);
 }
 
 .gallery__item[aria-current='true'] {

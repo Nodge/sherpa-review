@@ -385,7 +385,7 @@ function GapRow({
             <button
                 type="button"
                 id={targetId(direction)}
-                className={`diff-gap__target${active === direction ? ' is-active' : ''}`}
+                className={`ctl ctl--toolbar-icon diff-gap__target${active === direction ? ' is-active' : ''}`}
                 data-direction={direction}
                 role="radio"
                 tabIndex={-1}

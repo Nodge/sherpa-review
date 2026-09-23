@@ -230,7 +230,7 @@ export function CommentComposer({
                         <button
                             key={item.tool}
                             type="button"
-                            className="thread-composer__tool"
+                            className="ctl ctl--toolbar-icon thread-composer__tool"
                             title={t(item.title)}
                             aria-label={t(item.title)}
                             disabled={editingDisabled || (layout === 'visual' && !visualReady)}
@@ -245,10 +245,10 @@ export function CommentComposer({
                         </button>
                     ))}
                     <span className="thread-composer__toolbar-spacer" />
-                    <div className="thread-composer__layout" aria-label={t('thread.composer.layoutAria')}>
+                    <div className="thread-composer__layout ctl-tabs ctl-tabs--small" aria-label={t('thread.composer.layoutAria')}>
                         <button
                             type="button"
-                            className={layout === 'visual' ? 'is-active' : ''}
+                            className={`ctl ctl--tab${layout === 'visual' ? ' is-active' : ''}`}
                             aria-pressed={layout === 'visual'}
                             onClick={() => {
                                 selectLayout('visual');
@@ -258,7 +258,7 @@ export function CommentComposer({
                         </button>
                         <button
                             type="button"
-                            className={layout === 'markdown' ? 'is-active' : ''}
+                            className={`ctl ctl--tab thread-composer__layout-markdown${layout === 'markdown' ? ' is-active' : ''}`}
                             aria-pressed={layout === 'markdown'}
                             onClick={() => {
                                 selectLayout('markdown');
@@ -316,7 +316,7 @@ export function CommentComposer({
             <div className="thread-composer__actions">
                 <button
                     type="button"
-                    className="ghost-button thread-composer__save"
+                    className="ctl ctl--secondary thread-composer__save"
                     disabled={saveDisabledReason !== null}
                     title={saveDisabledReason ?? undefined}
                     onClick={() => void save()}
@@ -325,7 +325,7 @@ export function CommentComposer({
                 </button>
                 <button
                     type="button"
-                    className="ghost-button"
+                    className="ctl ctl--ghost"
                     disabled={disabled}
                     title={disabled ? t('thread.composer.deleting') : undefined}
                     onClick={cancel}
@@ -335,15 +335,15 @@ export function CommentComposer({
                 {composer.issue === undefined ? null : (
                     <button
                         type="button"
-                        className={`thread-composer__issue${composer.issue ? ' is-active' : ''}`}
+                        className={`ctl-switch thread-composer__issue${composer.issue ? ' is-on' : ''}`}
                         aria-pressed={composer.issue}
                         disabled={editingDisabled}
                         onClick={() => {
                             controller.setIssue(!composer.issue);
                         }}
                     >
-                        <span className="thread-composer__issue-box" aria-hidden="true">
-                            {composer.issue ? <Icon name="check" size={9} /> : null}
+                        <span className="ctl-switch__track" aria-hidden="true">
+                            <span className="ctl-switch__knob" />
                         </span>
                         {t('thread.composer.openIssue')}
                     </button>
@@ -353,10 +353,14 @@ export function CommentComposer({
                 {composer.confirmDiscard ? (
                     <span className="thread-composer__confirm">
                         {t('thread.composer.discardAsk')}{' '}
-                        <button type="button" onClick={() => void controller.confirmDiscard()}>
+                        <button
+                            type="button"
+                            className="ctl ctl--link-muted"
+                            onClick={() => void controller.confirmDiscard()}
+                        >
                             {t('thread.composer.discard')}
                         </button>{' '}
-                        <button type="button" onClick={controller.keepEditing}>
+                        <button type="button" className="ctl ctl--link-muted" onClick={controller.keepEditing}>
                             {t('thread.composer.keepEditing')}
                         </button>
                     </span>
@@ -397,6 +401,7 @@ function ComposerStatus({
                 {t('thread.composer.status.buffered')}{' '}
                 <button
                     type="button"
+                    className="ctl ctl--link-muted"
                     disabled={readOnly}
                     {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
@@ -412,6 +417,7 @@ function ComposerStatus({
                 {t('thread.composer.status.error')}
                 <button
                     type="button"
+                    className="ctl ctl--link-muted"
                     disabled={readOnly}
                     {...(readOnly ? { title: readOnlyReason } : {})}
                     onClick={() => void onRetry()}
