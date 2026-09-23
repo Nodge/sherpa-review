@@ -87,7 +87,19 @@ const ITERATIONS: readonly Iteration[] = [
     },
 ];
 
-const ROWS = pickerRows({ snapshots: SNAPSHOTS, iterations: ITERATIONS, activeIteration: null });
+/** The latest snapshot predates the push, so it is stale in the menu as well as the indicator. */
+const ROWS = pickerRows({
+    snapshots: SNAPSHOTS,
+    iterations: ITERATIONS,
+    activeIteration: { diffId: PR_DIFF_ID, commit: PR_COMMIT },
+});
+
+/** The route uses the active iteration: the latest snapshot is current. */
+const FRESH_ROWS = pickerRows({
+    snapshots: SNAPSHOTS,
+    iterations: [],
+    activeIteration: { diffId: CURRENT.diffId, commit: CURRENT.commit },
+});
 
 /**
  * Local review: iterations have suffixes on the same working tree commit,
@@ -252,7 +264,7 @@ function OverviewSnapshotsState() {
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}
                 reviewHostAvailable
-                picker={{ rows: ROWS, viewing: VIEWING_CURRENT, now: GALLERY_NOW, onSelect: () => undefined }}
+                picker={{ rows: FRESH_ROWS, viewing: VIEWING_CURRENT, now: GALLERY_NOW, onSelect: () => undefined }}
             />
         </div>
     );
@@ -260,12 +272,13 @@ function OverviewSnapshotsState() {
 
 const OLD_LABEL: ViewingLabel = { kind: 'snapshot', commit: OLD_COMMIT, status: 'stale' };
 const GONE_LABEL: ViewingLabel = { kind: 'snapshot', commit: GONE_COMMIT, status: 'gone' };
-const CURRENT_LABEL: ViewingLabel = { kind: 'snapshot', commit: CURRENT.commit, status: 'current' };
+/** Current snapshot left behind by the active iteration. The indicator derives this from `route.stale`. */
+const CURRENT_LABEL: ViewingLabel = { kind: 'snapshot', commit: CURRENT.commit, status: 'stale' };
 
 export const ITERATION_SNAPSHOT_STATES: readonly RouteGalleryState[] = [
     {
         id: 'iterations-snapshot-picker',
-        title: 'picker menu: active iteration without a route first, followed by previous snapshots',
+        title: 'picker menu: active iteration without a route first, followed by stale snapshots of previous iterations',
         render: () => (
             <ReadingState
                 label={CURRENT_LABEL}

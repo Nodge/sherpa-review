@@ -369,6 +369,29 @@ describe('picker rows', () => {
         expect(rows.iterations[1]?.status).toBe('stale');
     });
 
+    it('the current snapshot of a previous iteration is stale in both the menu and the indicator', () => {
+        const current = summary({ status: 'current' });
+        const onPrevious = pickerRows({
+            snapshots: [current],
+            iterations: [],
+            activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+        });
+        const onActive = pickerRows({
+            snapshots: [current],
+            iterations: [],
+            activeIteration: { diffId: current.diffId, commit: current.commit },
+        });
+        const unknownActive = pickerRows({ snapshots: [current], iterations: [], activeIteration: null });
+
+        // The label changes, but selection without parameters still marks this row.
+        expect(onPrevious.iterations.find((row) => row.kind === 'snapshot')).toMatchObject({
+            status: 'stale',
+            latest: true,
+        });
+        expect(onActive.iterations[0]?.status).toBe('current');
+        expect(unknownActive.iterations[0]?.status).toBe('current');
+    });
+
     it('the active iteration without a route is the first row, above snapshots of previous iterations', () => {
         const rows = pickerRows({
             snapshots: [summary()],

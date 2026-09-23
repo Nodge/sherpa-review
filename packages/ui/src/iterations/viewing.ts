@@ -354,6 +354,8 @@ export interface PickerRow {
     /** Snapshot generation language. null means an iteration without a route or a snapshot saved before language was recorded. */
     readonly locale: Locale | null;
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
+    /** Current PR snapshot (`current` on the server): selected without parameters, even when labelled "stale". */
+    readonly latest: boolean;
     /** Slice head (active iteration commit). Null for other rows. */
     readonly toCommit: string | null;
     /** Short slice head identifier. Null for other rows. */
@@ -395,6 +397,7 @@ type RawRow = Omit<PickerRow, 'short' | 'toShort' | 'ambiguous'>;
  * `iterations: []`).
  */
 export function pickerRows(input: PickerRowsInput): PickerRows {
+    const active = input.activeIteration;
     const snapshots = [...input.snapshots].reverse().map(
         (summary): RawRow => ({
             kind: 'snapshot',
@@ -405,8 +408,13 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             model: summary.provenance.model,
             harness: summary.provenance.harness,
             locale: summary.provenance.locale,
-            status: summary.status,
+            // The current snapshot of a previous iteration is stale, as in the indicator: the PR has moved ahead.
+            status:
+                summary.status === 'current' && active !== null && summary.diffId !== active.diffId
+                    ? 'stale'
+                    : summary.status,
             toCommit: null,
+            latest: summary.status === 'current',
             viewing: { kind: 'snapshot', snapshotId: summary.snapshotId },
         }),
     );
@@ -431,12 +439,12 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
                           ? 'gone'
                           : 'previousIteration',
                 toCommit: null,
+                latest: false,
                 viewing: { kind: 'diff', diffId: iteration.diffId },
             }),
         )
         .reverse();
 
-    const active = input.activeIteration;
     if (routeless.length === 0 && active !== null && !withSnapshot.has(active.diffId)) {
         routeless.push({
             kind: 'diff',
@@ -449,6 +457,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             locale: null,
             status: 'activeIteration',
             toCommit: null,
+            latest: false,
             viewing: { kind: 'diff', diffId: active.diffId },
         });
     }
@@ -593,6 +602,7 @@ function sliceRows(input: PickerRowsInput): readonly RawRow[] {
                 locale: null,
                 status: 'slice',
                 toCommit: active.commit,
+                latest: false,
                 viewing: { kind: 'slice', base: iteration.diffId, head: active.diffId },
             }),
         )

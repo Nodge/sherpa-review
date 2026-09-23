@@ -138,7 +138,7 @@ function join(parts: readonly (string | null)[]): string {
  */
 export function isRowSelected(row: PickerRow, viewing: Viewing): boolean {
     return viewing.kind === 'current'
-        ? row.kind === 'snapshot' && row.status === 'current'
+        ? row.kind === 'snapshot' && row.latest
         : sameViewing(row.viewing, viewing);
 }
 

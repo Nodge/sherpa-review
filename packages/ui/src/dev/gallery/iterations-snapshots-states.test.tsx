@@ -38,6 +38,10 @@ describe('iteration snapshots gallery', () => {
         expect(html).toContain('claude-code · opus-5 · 5c1d0aa8b7e6f4302d9c8b7a6f5e4d3c2b1a0999');
         // The current snapshot is marked even without a URL parameter.
         expect(html).toContain('data-snapshot="route-medium-9f3c1ab" class="snapshot-picker__row is-cursor"');
+        // The latest snapshot predates the push, so the menu row says the same thing as the indicator.
+        expect(html).toContain('snapshot 9f3c1ab · stale');
+        expect(html).toContain('9f3c1ab · 1 hr. ago · claude-opus-5 · stale');
+        expect(html).not.toContain('· current');
         expect(html).not.toContain('read-only');
     });
 
