@@ -2,7 +2,7 @@ import type { FileDiff, RouteSnapshot } from '@sherpa/protocol';
 
 import type { DiffFileModel } from '../diff/model.js';
 import type { Translate } from '../i18n/index.js';
-import { stripInlineCode } from '../markdown/markdown.js';
+import { stripInlineCode } from '@sherpa/protocol/markdown';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import { droppedWhitespaceLines, spanLines, uncoveredRanges } from './anchor-clip.js';

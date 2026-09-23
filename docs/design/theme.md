@@ -112,6 +112,7 @@ The test recalculates them to keep the table in sync with CSS.
 | `--pr-comments-delete-button-surface` | `#3a1f1e` | `#f0d2d0` | derived: accent unchanged, adjacent to `--c-3d2a2c` |
 | `--pr-comments-delete-button-hover` | `#4a2725` | `#e6c0bd` | derived: accent unchanged, adjacent to `--c-3d2a2c` |
 | `--surface-code-inset` | `#090a0c` | `#f3f4f6` | derived: §3 + neighbour `--c-0c0d0f` |
+| `--surface-code-inline` | `#23272d` | `#e8eaee` | `--c-191c20` |
 | `--border-hairline` | `#24292f` | `#e4e6eb` | `--c-1a1d21` |
 | `--border-hairline-strong` | `#2c3038` | `#e0e2e7` | `--c-1e2126` |
 | `--border-hairline-soft` | `#23272d` | `#e8eaee` | `--c-191c20` |

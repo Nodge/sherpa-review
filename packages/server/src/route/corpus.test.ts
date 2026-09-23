@@ -317,6 +317,42 @@ const CASES: readonly Case[] = [
         ],
     },
     {
+        name: 'section: heading in stop description',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        paragraph: '## What changed\n\nThe edit window became a domain concept.',
+                    }),
+                ]),
+                plan(),
+                [1],
+                mediumDiff(),
+            ),
+        errors: [
+            'section.stops[0].paragraph: paragraph of stop 1 uses a heading; allowed: paragraphs, `- `/`* `/`1. ` lists up to 4 items, `code`, **bold**, [links](url).',
+        ],
+    },
+    {
+        // The schema limit exceeds the budget so the validator catches it and the model gets
+        // guidance instead of a zod rejection.
+        name: 'section: stop description exceeds the budget',
+        run: () =>
+            validateSection(
+                section([
+                    anchoredStop(1, [{ path: WINDOW, side: 'new', start: 1, end: 40 }], {
+                        paragraph: 'a'.repeat(900),
+                    }),
+                ]),
+                plan(),
+                [1],
+                mediumDiff(),
+            ),
+        errors: [
+            'section.stops[0].paragraph: paragraph of stop 1 is 900 chars, limit is 840. Cut it down, do not split it across stops.',
+        ],
+    },
+    {
         // The change reason is reviewer-facing text just like the paragraph. Voice checks reject it
         // before stop classification so rejection does not depend on a previous snapshot being available.
         name: 'section: filler phrase in change reason',

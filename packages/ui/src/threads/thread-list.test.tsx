@@ -84,7 +84,7 @@ describe('comment body', () => {
 
         expect(body).toContain('<h5 class="md-heading md-h5">PCI: unmasked PAN in retained logs</h5>');
         expect(body).toContain('<ul class="md-list">');
-        expect(body).toContain('<strong>Severity:</strong>');
+        expect(body).toContain('<strong class="md-strong">Severity:</strong>');
         expect(body).toContain('<code class="md-code">logs/checkout-*.jsonl</code>');
         expect(body).toContain('<pre class="md-pre" data-lang="ts">');
         // A bare URL opens a link in a new tab without a referrer.

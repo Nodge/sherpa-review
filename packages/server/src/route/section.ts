@@ -14,6 +14,7 @@ import type { IterationMap } from '../iterations/index.js';
 import { classifyStop } from '../iterations/index.js';
 import type { ChangedFile, DiffIndex } from './diff-index.js';
 import { indexDiff, touchesChangedLines } from './diff-index.js';
+import { paragraphMarkupErrors } from './paragraph-markup.js';
 import { parseResult } from './raw-result.js';
 import type { LineRange } from './ranges.js';
 import { rangesOverlap, subtractRanges } from './ranges.js';
@@ -138,6 +139,14 @@ export function validateSection(
         ];
         if (voice.length > 0) {
             errors.push(...voice);
+            return;
+        }
+
+        // Description markup violations reject the result just like voice violations. The vocabulary is narrow,
+        // so unsupported markup cannot be silently trimmed. The whole section must be rewritten.
+        const markup = paragraphMarkupErrors(`${at}.paragraph`, stop.planIndex, stop.paragraph);
+        if (markup.length > 0) {
+            errors.push(...markup);
             return;
         }
 

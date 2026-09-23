@@ -3,7 +3,7 @@ import { Fragment, useMemo, useRef, useState } from 'react';
 
 import type { DiffFileModel, DiffLine } from '../diff/model.js';
 import { useT } from '../i18n/index.js';
-import { parseBlocks } from '../markdown/markdown.js';
+import { parseBlocks } from '@sherpa/protocol/markdown';
 import { renderBlock } from '../markdown/markdown.tsx';
 import type { LineRange, LineSelection } from './selection.js';
 import { lineKey } from './selection.js';

@@ -773,3 +773,69 @@ describe('test digest live clicks', () => {
         expect(flashed(view.host)).not.toBeNull();
     });
 });
+
+/** Snapshot with both internal link forms from glossary §2 in the first stop description. */
+function linkedParagraphSnapshot(path: string): RouteSnapshot {
+    return {
+        ...SNAPSHOT,
+        stops: SNAPSHOT.stops.map((stop) =>
+            stop.id === 's01'
+                ? { ...stop, paragraph: `Details in [stop 3](#stop-3) and the [file](#file-${path}).` }
+                : stop,
+        ),
+    };
+}
+
+describe('internal links in the stop description', () => {
+    it('a file link goes to the same place as its chip, expanding the collapsed card first', async () => {
+        const path = SNAPSHOT.stops.find((stop) => stop.id === 's01')?.anchors[0]?.path;
+        if (path === undefined) {
+            throw new Error('stop s01 needs an anchor with a path');
+        }
+        const view = mount({ snapshot: linkedParagraphSnapshot(path) });
+        const stop = stopSection(view.host, 's01');
+        const card = stop.querySelector<HTMLElement>('.file-card');
+        const name = card?.querySelector<HTMLElement>('.file-card__name');
+        const link = stop.querySelector<HTMLElement>(`.route-stop__paragraph a[href="#file-${path}"]`);
+        if (card === null || name === null || name === undefined || link === null) {
+            throw new Error('the first stop needs a file card and a link to it');
+        }
+
+        click(name);
+        expect(card.querySelector('.file-card__collapsed--file')).not.toBeNull();
+        click(link);
+        await view.settle();
+
+        expect(card.querySelector('.file-card__collapsed--file')).toBeNull();
+    });
+
+    it('a plan stop link jumps to that stop and flashes it', async () => {
+        const view = mount({ snapshot: linkedParagraphSnapshot('no/such/file.ts') });
+        const link = stopSection(view.host, 's01').querySelector<HTMLElement>(
+            '.route-stop__paragraph a[href="#stop-3"]',
+        );
+        if (link === null) {
+            throw new Error('the first stop description needs a link to stop 3');
+        }
+
+        click(link);
+        await view.settle();
+
+        expect(stopSection(view.host, 's03').querySelector('.route-stop__flash')).not.toBeNull();
+    });
+
+    it('a link to a missing file does nothing because the route has no file at that path', async () => {
+        const view = mount({ snapshot: linkedParagraphSnapshot('no/such/file.ts') });
+        const link = stopSection(view.host, 's01').querySelector<HTMLElement>(
+            '.route-stop__paragraph a[href="#file-no/such/file.ts"]',
+        );
+        if (link === null) {
+            throw new Error('the first stop description needs a link to a missing file');
+        }
+
+        click(link);
+        await view.settle();
+
+        expect(view.host.querySelector('.route-stop__flash')).toBeNull();
+    });
+});

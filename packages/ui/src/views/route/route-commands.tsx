@@ -1,7 +1,7 @@
 import type { RouteSnapshot, UiRoutePhase } from '@sherpa/protocol';
 
 import type { MessageKey } from '../../i18n/index.js';
-import { stripInlineCode } from '../../markdown/markdown.js';
+import { stripInlineCode } from '@sherpa/protocol/markdown';
 import { routeGenerationAvailable } from '../../route/generation.js';
 import { planLabel } from '../../route/route-model.js';
 import type { RoutePreset } from '../../session/session-store.js';

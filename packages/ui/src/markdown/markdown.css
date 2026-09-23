@@ -53,12 +53,13 @@
     font-size: var(--font-size-ui);
 }
 
+/* The 17px indentation and 2px item spacing are list metrics from the mockup (SPEC-changes-2026-09-20.md §2). */
 .md-list {
-    padding-left: 18px;
+    padding-left: 17px;
 }
 
 .md-item {
-    margin: 2px 0;
+    margin: 0 0 2px;
     overflow-wrap: anywhere;
 }
 
@@ -86,7 +87,7 @@
     width: 12px;
     height: 12px;
     margin-right: 6px;
-    margin-left: -18px;
+    margin-left: -17px;
     border: 1px solid var(--border-strong-lifted);
     border-radius: var(--radius-rule);
     vertical-align: -1px;
@@ -137,14 +138,27 @@
 }
 
 /*
- * Inline code: only font family, size and colour, following `EditPolicy` in the prototype
- * (docs/design/README.md §Design tokens, "mono for code, paths, numbers"). No background, border or padding: in a line of text
- * break the line's rhythm.
+ * Inline code uses the mockup style (docs/design/SPEC-changes-2026-09-20.md §2, "block → spec" table):
+ * mono 0.75rem on its own background with a border. The same style in stop descriptions and comment bodies.
  */
 .md-code {
+    padding: 1px 4px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-key);
+    background: var(--surface-code-inline);
     font-family: var(--font-mono);
     font-size: var(--font-size-code);
-    color: var(--text-secondary);
+    color: var(--code-text);
+}
+
+/*
+ * Bold changes weight only (SPEC-changes-2026-09-20.md §2: after the 09-12 contrast pass, its tone
+ * matches body text). Inherit colour so bold follows its container context:
+ * lavender in an agent note, red in a failed chat message, muted
+ * in a viewed stop.
+ */
+.md-strong {
+    font-weight: 700;
 }
 
 .md-pre {

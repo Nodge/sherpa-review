@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { Translate } from '../../i18n/index.js';
 import { useT } from '../../i18n/index.js';
-import { stripInlineCode } from '../../markdown/markdown.js';
+import { stripInlineCode } from '@sherpa/protocol/markdown';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { RouteOtherView } from '../../route/route-model.js';
 import { StopViewedToggle } from './stop-card.tsx';

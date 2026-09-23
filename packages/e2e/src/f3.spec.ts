@@ -193,8 +193,12 @@ test('F3: push while reading → stale route → rebuild with progress and note 
 
     await test.step('"What is new since the last pass" leaves 3 stops on screen', async () => {
         // The top visible stop survives the filter with a label (docs/design/SPEC-elements.md §2.7). To make that
-        // 01, scroll the route to the start, since automatic marks moved it to their next stop.
-        await page.locator('[data-stop="s01"]').scrollIntoViewIfNeeded();
+        // stop 01, scroll the route to the very top. Automatic marking moved it to the next stop.
+        // Scroll exactly to zero instead of "show 01". Scrolling into view depends on the stop column
+        // height, and a long description left 02 at the top instead.
+        await page.locator('#view-route').evaluate((element) => {
+            element.scrollTop = 0;
+        });
         await page
             .locator('.iteration-banner[aria-label="Route rebuilt"] button.iteration-banner__action')
             .click();

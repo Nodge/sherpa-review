@@ -47,14 +47,13 @@ at least one flag is set.
 ## 2. Stop description typography (2b)
 
 **Supported markup** (`route.section` validator): paragraphs (blank line separator), lists, either bulleted
-`- ` or numbered `1. `, up to 4 items, inline `` `code` ``, `**bold**`, links `[text](url)`.
-**Not allowed:** headings, nested lists, code blocks, tables, images, quotes.
+with `- ` or `* `, or numbered with `1. `, up to 4 items, inline `` `code` ``, `**bold**`, links `[text](url)`.
+**Forbidden:** everything else, including headings, nested lists, code blocks, tables, images, blockquotes, italics, strikethrough, horizontal rules.
 Any links are allowed if they help with the review context: internal (file, stop, diff anchor: `#stop-s3`, `#file-…`)
 and external (documentation, issues, dashboards). External links open in a new tab.
 
-**Budget:** total source length only, **≤ 840 characters** (working hypothesis: ~20 lines at 368px. Test on real
-routes and adjust if needed. This is a config constant). Counted in source characters, independent
-of both text size (M/L) and window width.
+**Budget:** total visible text length only, **≤ 840 characters** (constant `STOP_PARAGRAPH_MAX_CHARS`). Counts visible text characters, including text, code and link text.
+Link URLs and markup markers do not count. The limit depends on neither text size (M/L) nor window width.
 Paragraph and list item counts are unlimited. Exceeding the budget → the section fails validation and goes
 for regeneration with a reduced limit (like any invalid section). The UI neither truncates nor adds an ellipsis.
 
@@ -69,7 +68,7 @@ items of the same kind (conditions, files, flags). A concluding paragraph is req
 | `<ul>` / `<ol>` | margin `6px 0 0`, padding-left 17px. `<li>` margin-bottom 2px, bullet/number in the text colour |
 | `<a>` | token `8f9bff` (`#8f9bff` / `#4c5ae0`), no underline, hover `b3bcff` (`#b3bcff` / `#3a47bd`), the product's shared link style. Internal links use the same jump as file chips (without `scrollIntoView`) |
 | `<code>` | mono 0.75rem, radius 4, padding 1px 4px. Tokens bg `191c20` (`#23272d` / `#e8eaee`), border `24272d` (`#363b44` / `#d2d5dd`), text `cfd3da` (`#ffffff` / `#000000`), the same as inline code in comments |
-| `<b>` | 600, token `e9eaee` (dark `#ffffff`, light `#000000`). Since the 09-12 contrast pass, this matches body text in both themes. Bold differs by weight. Tone is an open question in §7.4 |
+| `<b>` | 700, token `e9eaee` (dark `#ffffff`, light `#000000`). After the 09-12 contrast pass it matches body colour in both themes, so bold differs by weight. Tone is an open question in §7.4 |
 
 The bridge phrase and "why this stop changed" are plain text, without markup. Size L (×1.125) uses rem throughout.
 Reference: `Sherpa.dc.html` → `mdPara()` / `mdInline()`. Stops 02 and 03 were rewritten for the new supported markup.
@@ -244,5 +243,4 @@ New tokens: `--focus`, `--chip-bg-hover` (`#262c52` / `#dfe2fb`), `--chip-bg-act
 
 1. Is a separate issue-thread filter needed after removing "Comments from", or are the `issue` chip in the thread header and amber dot in the Resolve button enough.
 2. The "new reply in a collapsed thread" dot: count as viewed on expansion or on scroll (see the decision in the requirements §3.1: manual actions only → on expansion).
-4. Bold text in the description: keep the distinction in weight alone (as it is after the contrast pass) or make the body one shade quieter again in both themes.
-3. The 840-character budget was a guess. Check it visually on 20 real routes after a week of generation and fix the value.
+3. Bold in descriptions: keep the distinction in weight only (as now after the contrast pass) or make body text one tone quieter again in both themes.

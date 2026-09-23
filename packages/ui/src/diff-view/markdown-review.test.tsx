@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { parseFileDiff } from '../diff/parse.js';
-import { parseBlocks } from '../markdown/markdown.js';
+import { parseBlocks } from '@sherpa/protocol/markdown';
 import { MarkdownReview, markdownSegments, markdownTextSelection } from './markdown-review.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,6 +39,13 @@ describe('Markdown view with source lines', () => {
         }
         expect(select(root, 3, 4)).toMatchObject({ start: 3, end: 4 });
     });
+    it('indented code and inline code spanning lines do not shift source lines', () => {
+        const root = html('Text\n\n    const a = 1;\n    const b = 2;\n\nonce `code\ncontinuation` twice\nthree', 10);
+        expect(select(root, 12)).toEqual({ start: 12, end: 12, text: 'const a = 1;' });
+        expect(select(root, 13)).toEqual({ start: 13, end: 13, text: 'const b = 2;' });
+        expect(select(root, 17)).toEqual({ start: 17, end: 17, text: 'three' });
+        expect(select(root, 15, 16)).toMatchObject({ start: 15, end: 16 });
+    });
     it('passes selected words without markup, including backward selection', () => {
         const root = html();
         const node = root.querySelector('strong')?.firstChild;
@@ -70,7 +77,7 @@ describe('Markdown view with source lines', () => {
     it('does not duplicate comments between nested and outer lists', () => {
         const text = '  - First\n    1. Nested\n1. Second\n- Third';
         expect(parseBlocks(text, 11).map((block) => block.source)).toEqual([
-            { start: 11, end: 12 }, { start: 13, end: 14 },
+            { start: 11, end: 12 }, { start: 13, end: 13 }, { start: 14, end: 14 },
         ]);
         const after = vi.fn(() => null);
         renderToStaticMarkup(<MarkdownReview model={model(text, 11)} selection={null} focusedThreadRange={null} renderAfterLine={after} />);

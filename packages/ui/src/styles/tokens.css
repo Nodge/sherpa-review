@@ -59,6 +59,9 @@ html[data-textsize='l'] {
     --pr-comments-delete-button-hover: #4a2725;
     /* docs/design/SPEC-additions-2026-08-26.md §1e: code block inside an "outside the diff" thread card. */
     --surface-code-inset: #090a0c;
+    /* docs/design/SPEC-changes-2026-09-20.md §2: inline code background in text, both in a stop
+       description and in a comment body. `--border-control` provides its border. */
+    --surface-code-inline: #23272d;
 
     /* --- Borders --- */
     --border-hairline: #24292f;
@@ -355,6 +358,7 @@ html[data-textsize='l'] {
     --pr-comments-delete-button-surface: #f0d2d0;
     --pr-comments-delete-button-hover: #e6c0bd;
     --surface-code-inset: #f3f4f6;
+    --surface-code-inline: #e8eaee;
     --border-hairline: #e4e6eb;
     --border-hairline-strong: #e0e2e7;
     --border-hairline-soft: #e8eaee;

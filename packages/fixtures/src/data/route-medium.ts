@@ -217,8 +217,16 @@ export const MODEL_STOPS: StopSpec[] = [
         tier: 'high',
         title: 'The edit window becomes a domain concept',
         intent: 'The new EditWindow class and injectable Clock: where the 30-minute rule lives and why it is testable.',
-        paragraph:
-            'The new `EditWindow` class and injectable `Clock` time source open the window when the order is placed and close it after `EDIT_WINDOW_MS`, while dispatch to a courier closes it early. Categories shorten the window to 10 minutes for fresh food and 5 for pharmacy items, and the shortest window wins for the basket. As a consequence, whether an order can still be edited is computed in exactly one place and depends on a clock replaced by `FrozenClock` in tests.',
+        paragraph: [
+            'The new `EditWindow` class uses an injectable time source, `Clock`. The window opens when the order is placed and closes after `EDIT_WINDOW_MS`. Courier dispatch closes it early.',
+            '',
+            'Categories shorten the window:',
+            '- fresh food: 10 minutes',
+            '- pharmacy: 5 minutes',
+            '- everything else: the default 30 minutes',
+            '',
+            'The **shortest** window wins in the cart. As a consequence, whether an order can still be edited is calculated in exactly one place and depends on the clock, which tests replace with [`FrozenClock`](#file-services/orders/src/infra/clock.ts). The rollout order is in [#2281](https://github.com/quillmart/quillmart/issues/2281).',
+        ].join('\n'),
         bridge: 'Next, how the edit policy stopped doing its own time calculations.',
         anchors: [at(P.window, 'new', 1, 94), at(P.clock, 'new', 1, 33)],
         digest: [],
@@ -260,8 +268,15 @@ export const MODEL_STOPS: StopSpec[] = [
         tier: 'medium',
         title: 'API boundary: rejection codes, audit records and documented rules',
         intent: 'Endpoint HTTP contracts, request and response schemas, PCI audit records, PAN masking and a new rules document.',
-        paragraph:
-            'The `patchOrder` and `getEditWindow` endpoints now validate the body against a schema, map rejection codes to HTTP statuses (409 for a closed window or dispatched order, 400 for express delivery) and return the remaining time with a human-readable explanation. PCI audit records gained `remainingMs` and `recordedAt`, the `reauthorize` log masks PAN, and the move to PSP v4 replaced `pan` with `token` in the request. As a consequence, the response contract grew and is fully described in the new `docs/edit-window.md`, while the client countdown is officially advisory: the server recalculates the window itself.',
+        paragraph: [
+            'The `patchOrder` and `getEditWindow` endpoints now validate the body against a schema and return the remaining time with a human-readable explanation. The rejection code maps to an HTTP status:',
+            '',
+            '1. `edit-window-closed` — 409',
+            '2. `already-dispatched` — 409',
+            '3. `not-scheduled` — 400',
+            '',
+            'PCI audit records gained `remainingMs` and `recordedAt`, the `reauthorize` log masks PAN, and the move to PSP v4 replaced `pan` with `token` in the request. As a result, the response contract is broader and fully described in the new `docs/edit-window.md`. The client countdown is officially informational, since the server recalculates the window itself.',
+        ].join('\n'),
         bridge: 'The model collected checks for all this in the digest at the next stop.',
         anchors: [
             at(P.handlers, 'old', 2, 2),

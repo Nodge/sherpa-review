@@ -9,6 +9,7 @@
  *
  * Exactly the variants required by the handoff: Sans 400/450/500/600 (+ italic 400/450),
  * Mono 400/500 (+ italic 400). IBM Plex "Text" is weight 450.
+ * Sans 700 (+ italic) is bold in markdown (`.md-strong`), otherwise the browser synthesizes it.
  */
 
 @font-face {
@@ -57,6 +58,22 @@
     font-weight: 600;
     font-display: block;
     src: url('@ibm/plex-sans/fonts/complete/woff2/IBMPlexSans-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+    src: url('@ibm/plex-sans/fonts/complete/woff2/IBMPlexSans-Bold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: italic;
+    font-weight: 700;
+    font-display: block;
+    src: url('@ibm/plex-sans/fonts/complete/woff2/IBMPlexSans-BoldItalic.woff2') format('woff2');
 }
 
 @font-face {

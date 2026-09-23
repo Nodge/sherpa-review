@@ -1,15 +1,14 @@
 import type { RouteStopChange, Thread } from '@sherpa/protocol';
 import type { ReactNode, RefObject } from 'react';
-import { useState } from 'react';
 
 import { ViewedToggle } from '../../components/viewed-toggle.tsx';
 import type { MessageKey, Translate } from '../../i18n/index.js';
 import { useFormat, useT } from '../../i18n/index.js';
 import { Icon } from '../../icons/icon.tsx';
 import { useReadOnlyIteration, useReadOnlyReason } from '../../iterations/read-only.tsx';
-import { stripInlineCode } from '../../markdown/markdown.js';
-import { Markdown } from '../../markdown/markdown.tsx';
-import { clampParagraph } from '../../route/paragraph.js';
+import { stripInlineCode } from '@sherpa/protocol/markdown';
+import type { StopLink } from '../../markdown/markdown.tsx';
+import { Markdown, StopMarkdown } from '../../markdown/markdown.tsx';
 import type { RouteStopView } from '../../route/route-model.js';
 
 /**
@@ -41,6 +40,8 @@ export interface StopCardProps {
     readonly keptInView?: boolean;
     /** Fill the individual slot where the agent previously stopped (docs/design/SPEC-elements.md §4.3). */
     readonly onFillStop?: (planIndex: number) => void;
+    /** Follow an internal description link to another stop or a diff file. */
+    readonly onOpenLink?: (link: StopLink) => void;
     readonly chips: ReactNode;
     readonly diff: ReactNode;
     /** Expose the diff column so the view can measure its height and reserve space when it leaves the DOM. */
@@ -108,6 +109,7 @@ export function StopCard({
     marked = false,
     keptInView = false,
     onFillStop,
+    onOpenLink,
     chips,
     diff,
     diffRef,
@@ -194,7 +196,12 @@ export function StopCard({
                         )}
                     </p>
                 ) : (
-                    <Paragraph text={stop.paragraph} />
+                    <div className="route-stop__paragraph">
+                        <StopMarkdown
+                            text={stop.paragraph}
+                            {...(onOpenLink === undefined ? {} : { onOpenLink })}
+                        />
+                    </div>
                 )}
 
                 {stop.change?.reason == null ? null : (
@@ -334,39 +341,6 @@ function StopChangeReason({
                 </div>
             )}
         </div>
-    );
-}
-
-/**
- * Paragraph clamped to four sentences (docs/design/SPEC-elements.md §2.9). Clamping cuts plain text before rendering,
- * so the truncated start can split a pair of backticks. That backtick
- * stays visible as a literal until the paragraph is expanded.
- */
-function Paragraph({ text }: { text: string }) {
-    const t = useT();
-    const [full, setFull] = useState(false);
-    const { head, rest } = clampParagraph(text);
-
-    if (rest === '' || full) {
-        return (
-            <p className="route-stop__paragraph">
-                <Markdown text={text} profile="route" />
-            </p>
-        );
-    }
-    return (
-        <p className="route-stop__paragraph">
-            <Markdown text={head} profile="route" />{' '}
-            <button
-                type="button"
-                className="route-stop__more"
-                onClick={() => {
-                    setFull(true);
-                }}
-            >
-                {t('route.stop.more')}
-            </button>
-        </p>
     );
 }
 

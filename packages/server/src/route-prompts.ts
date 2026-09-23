@@ -1,4 +1,5 @@
 import type { Locale } from '@sherpa/protocol';
+import { STOP_PARAGRAPH_MAX_CHARS } from '@sherpa/protocol';
 
 import { bannedPhrases, quoted } from './route/voice.js';
 
@@ -271,13 +272,45 @@ For each target stop:
 - \`planIndex\` — the stop number from the attached plan, as a plain JSON number: stop 3 is
   \`"planIndex": 3\`. Never a string, never zero-padded, never a number of your own. The \`file #\`
   column of the changed files list is a different numbering — do not take stop numbers from it.
-- \`paragraph\` — 2 to 4 sentences ${text.inLanguage}, in the shape **"what changed → what follows from
-  it"**: what the change actually does, its motivation and the non-obvious decisions, and the
-  consequences for behaviour, contracts, performance or operations.
+- \`paragraph\` — the stop description, 2 to 4 sentences ${text.inLanguage}, in the shape **"what changed
+  → what follows from it"**: what the change actually does, its motivation and the non-obvious
+  decisions, and the consequences for behaviour, contracts, performance or operations. Its markup
+  and its budget are below.
 - \`bridge\` — optional, one sentence ${text.inLanguage}: the link to the next stop in triage order
-  ${text.bridgeExample}.
+  ${text.bridgeExample}. Plain text, no markup.
 - \`anchors\` — the line ranges this stop covers.
 - \`tests\` — the behavioural digest, when this stop changes tested behaviour.
+
+## The stop description: markup and budget
+
+The description is read in a narrow column beside the diff, so its markup is a small fixed subset.
+Anything outside it is rejected by the server and the whole section comes back for a rewrite.
+
+You may use:
+
+- paragraphs, separated by a blank line;
+- one list per enumeration — \`- \` for a bullet, \`1. \` for a numbered one — **at most 4 items**,
+  never nested;
+- inline code in backticks for names from the code, like \`EditWindow\`;
+- \`**bold**\` only for what the reviewer must not miss, and sparingly;
+- \`[text](url)\` links.
+
+Never: headings, nested list items, several paragraphs in one list item, code blocks (fenced or
+indented), tables, images, block quotes, italics, strikethrough, horizontal rules, reference-style
+links (\`[label]: url\`).
+
+- A list is only for enumerating like things: conditions, files, flags. The narrative is prose.
+  After a list a closing paragraph is mandatory — the list says what, the paragraph says what
+  follows from it. A description that is only a list is a description that explains nothing.
+- **Budget: ${String(STOP_PARAGRAPH_MAX_CHARS)} characters of visible text for the whole description**: what the reviewer
+  reads on screen. Link addresses and markup (backticks, \`**\`, list markers) are not counted.
+  Over it the section is rejected. The reviewer sees the text in full: it is never cut or folded.
+- Links when they help the review, not for decoration. Internal: \`#stop-<planIndex>\` jumps to
+  another stop of this route, \`#file-<path>\` to that file of the diff — \`path\` exactly as in the
+  file list. External (documentation, tickets, dashboards) open in a new tab. Only these addresses
+  are accepted: \`http(s)://\`, \`#stop-<planIndex>\`, \`#file-<path>\` — a relative path
+  like \`src/a.ts\` or \`#L42\` is rejected. Never link what the reviewer already has in front of them
+  at this stop.
 
 ## Anchors
 

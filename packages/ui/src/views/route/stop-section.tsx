@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '../../i18n/index.js';
+import type { StopLink } from '../../markdown/markdown.tsx';
 import type { readStateOf } from '../../progress/read-state.js';
 import { buildDigest, buildDigestTestCode } from '../../route/digest.js';
 import type { RouteEntry, RouteFileGroup, RouteStopView } from '../../route/route-model.js';
@@ -67,6 +68,8 @@ export interface StopSectionProps {
     readonly onFillStop?: (planIndex: number) => void;
     readonly onExpand: () => void;
     readonly onOpenFile: (stopId: string, fileId: string) => void;
+    /** Follow an internal description link. `stopId` is the stop whose description contained the clicked link. */
+    readonly onOpenLink?: (stopId: string, link: StopLink) => void;
     readonly onVisible: (fileIds: readonly string[]) => void;
     readonly renderCard: (stopId: string, group: RouteFileGroup) => ReactNode;
     /** Digest stop with test code expanded below the digest card (docs/design/README.md §2). */
@@ -117,6 +120,7 @@ export function StopSection({
     onFillStop,
     onExpand,
     onOpenFile,
+    onOpenLink,
     onVisible,
     renderCard,
     testCodeShown,
@@ -330,6 +334,13 @@ export function StopSection({
                 filledBeforeStop={filledBeforeStop}
                 onViewed={onViewed}
                 {...(onFillStop === undefined ? {} : { onFillStop })}
+                {...(onOpenLink === undefined
+                    ? {}
+                    : {
+                          onOpenLink: (link: StopLink) => {
+                              onOpenLink(view.stop.id, link);
+                          },
+                      })}
                 failedViewed={failedViewed}
                 marked={marked}
                 keptInView={keptInView}

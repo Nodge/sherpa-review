@@ -23,6 +23,7 @@ import { useSelectionLifecycle } from '../../diff-view/use-selection.js';
 import '../../diff-view/diff-view.css';
 import { useT } from '../../i18n/index.js';
 import { useReadOnlyIteration } from '../../iterations/read-only.tsx';
+import type { StopLink } from '../../markdown/markdown.tsx';
 import { SnapshotPill } from '../../iterations/snapshot-picker.tsx';
 import type { ViewingLabel } from '../../iterations/viewing.js';
 import {
@@ -345,7 +346,29 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     const [otherOpen, setOtherOpen] = useState(false);
     /** Toolbar measurement. Until the first measurement, the sticky column uses the fallback offset from `route.css`. */
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
+    /**
+     * Visible view height determines the pinned stop column's limit. Read it from the
+     * scrollport, not the window, because the top panel and banners sit above the view.
+     */
+    const [viewportHeight, setViewportHeight] = useState<number | null>(null);
     const [openedCollapsed, setOpenedCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+    useEffect(() => {
+        const element = containerRef.current;
+        if (element === null || typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        const report = (): void => {
+            setViewportHeight(element.clientHeight);
+        };
+        // Read the initial value manually because ResizeObserver stays silent in background tabs.
+        report();
+        const observer = new ResizeObserver(report);
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+        };
+    }, [containerRef]);
 
     const matches = useCallback(
         (entry: RouteEntry, ids: ReadonlySet<string> | null): boolean =>
@@ -473,6 +496,35 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             requestJump(stopId, null);
         },
         [filter.fileIds, matches, model.entries, requestJump, session],
+    );
+
+    /**
+     * Follow an internal link in the stop description: `#stop-N` leads to a planned stop,
+     * `#file-<path>` to a file through the same jump as a file chip. Search the stop's own
+     * files first, so the same path in different stops leads to each stop's card.
+     * A dead link (no such stop or file) does nothing.
+     */
+    const openStopLink = useCallback(
+        (stopId: string, link: StopLink) => {
+            if (link.kind === 'stop') {
+                const entry =
+                    model.entries.find((candidate) => candidate.view.stop.planIndex === link.planIndex) ?? null;
+                if (entry !== null) {
+                    jumpToStop(entryId(entry));
+                }
+                return;
+            }
+            const own = model.entries.find((candidate) => entryId(candidate) === stopId) ?? null;
+            const target =
+                own !== null && fileIdByPath(own, link.path) !== null
+                    ? own
+                    : (model.entries.find((candidate) => fileIdByPath(candidate, link.path) !== null) ?? null);
+            const fileId = target === null ? null : fileIdByPath(target, link.path);
+            if (target !== null && fileId !== null) {
+                openFile(entryId(target), fileId);
+            }
+        },
+        [jumpToStop, model.entries, openFile],
     );
 
     const { markStop, stopFailures, announcement, unfilledEntry, viewedStops } = useStopViewed({
@@ -651,9 +703,16 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             /* The code panel limit (`--diff-max`) uses the actual mode, not the setting. */
             data-diff-mode={diffSnapshot.effectiveMode}
             style={
-                toolbarHeight === null
+                toolbarHeight === null && viewportHeight === null
                     ? undefined
-                    : ({ '--route-toolbar-height': `${String(toolbarHeight)}px` } as CSSProperties)
+                    : ({
+                          ...(toolbarHeight === null
+                              ? {}
+                              : { '--route-toolbar-height': `${String(toolbarHeight)}px` }),
+                          ...(viewportHeight === null
+                              ? {}
+                              : { '--route-viewport-height': `${String(viewportHeight)}px` }),
+                      } as CSSProperties)
             }
         >
             <PrHeader
@@ -760,6 +819,7 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                                 expandStop(entry.view.stop.id);
                             }}
                             onOpenFile={openFile}
+                            onOpenLink={openStopLink}
                             onVisible={requestParse}
                             renderCard={cardFor}
                             testCodeShown={stopState.testCode.has(entry.view.stop.id)}
@@ -837,6 +897,12 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
             </span>
         </main>
     );
+}
+
+/** File in a route entry matching the link path. `null` means the file does not belong to this entry. */
+function fileIdByPath(entry: RouteEntry, path: string): string | null {
+    const files: readonly { readonly path: string; readonly fileId: string }[] = entry.view.files;
+    return files.find((file) => file.path === path)?.fileId ?? null;
 }
 
 /** Indicator without a picker. The displayed snapshot is current (gallery, standalone workspace). */

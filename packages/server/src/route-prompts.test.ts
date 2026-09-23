@@ -1,4 +1,5 @@
 import type { Locale } from '@sherpa/protocol';
+import { STOP_PARAGRAPH_MAX_CHARS } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { promptLocale, sectionGuide, sectionInstructions, skeletonGuide, skeletonInstructions } from './route-prompts.js';
@@ -91,6 +92,23 @@ describe('route guides', () => {
             expect(section).toContain('changeReason');
             expect(section).toContain('[thread:<id>]');
             expect(section).toContain('you never declare the kind, only the reason');
+        }
+    });
+
+    it('description markup rules name allowed forms, bans and the validator\'s numeric budget', () => {
+        for (const locale of LOCALES) {
+            const [, section] = guides(locale);
+            expect(section).toContain('## The stop description: markup and budget');
+            expect(section).toContain('`- ` for a bullet, `1. ` for a numbered one — **at most 4 items**');
+            expect(section).toContain(
+                'Never: headings, nested list items, several paragraphs in one list item, code blocks (fenced or\nindented), tables, images, block quotes, italics, strikethrough, horizontal rules, reference-style\nlinks (`[label]: url`).',
+            );
+            expect(section).toContain('After a list a closing paragraph is mandatory');
+            expect(section).toContain(`**Budget: ${String(STOP_PARAGRAPH_MAX_CHARS)} characters of visible text`);
+            expect(section).toContain('Link addresses and markup');
+            expect(section).toContain('`#stop-<planIndex>`');
+            expect(section).toContain('`#file-<path>`');
+            expect(section).toContain('Only these addresses\n  are accepted');
         }
     });
 

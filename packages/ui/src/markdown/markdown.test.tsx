@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { Markdown } from './markdown.tsx';
-import { stripInlineCode } from './markdown.js';
+import { Markdown, StopMarkdown } from './markdown.tsx';
+import { stripInlineCode } from '@sherpa/protocol/markdown';
 
 /**
- * Markdown renderer: two profiles and safety properties. Checks the finished markup,
+ * Markdown renderer: three profiles and safety properties. Check the final markup,
  * exactly what the browser sees: all raw HTML must arrive as escaped text.
  */
 
@@ -15,6 +15,10 @@ function comment(text: string): string {
 
 function route(text: string): string {
     return renderToStaticMarkup(<Markdown text={text} profile="route" />);
+}
+
+function stop(text: string): string {
+    return renderToStaticMarkup(<StopMarkdown text={text} />);
 }
 
 describe('markdown, comment profile', () => {
@@ -84,7 +88,7 @@ describe('markdown, comment profile', () => {
 
     it('renders bold and italic and treats an unmatched asterisk as a literal', () => {
         expect(comment('**bold** and *italic*')).toBe(
-            '<p class="md-p"><strong>bold</strong> and <em>italic</em></p>',
+            '<p class="md-p"><strong class="md-strong">bold</strong> and <em>italic</em></p>',
         );
         expect(comment('2 * 3 = 6')).toBe('<p class="md-p">2 * 3 = 6</p>');
     });
@@ -268,8 +272,67 @@ describe('markdown, route profile', () => {
         expect(route('a solution with code `edit-window')).toContain('`edit-window');
     });
 
-    it('closes double backticks with matching backticks', () => {
-        expect(route('`` a`b ``')).toBe('<code class="md-code"> a`b </code>');
+    it('closes double backticks with a matching pair and trims one space at each edge', () => {
+        expect(route('`` a`b ``')).toBe('<code class="md-code">a`b</code>');
+    });
+});
+
+describe('markdown, stop description profile', () => {
+    it('separates paragraphs with a blank line and keeps adjacent lines in one paragraph', () => {
+        expect(stop('First paragraph.\n\nSecond paragraph.')).toBe('<p class="md-p">First paragraph.</p><p class="md-p">Second paragraph.</p>');
+        expect(stop('Line.\nContinuation.')).toBe('<p class="md-p">Line.<br/>Continuation.</p>');
+    });
+
+    it('renders flat `- ` and `1. ` lists and removes the marker from the text', () => {
+        expect(stop('- fresh groceries\n- pharmacy')).toBe(
+            '<ul class="md-list"><li class="md-item">fresh groceries</li><li class="md-item">pharmacy</li></ul>',
+        );
+        expect(stop('1. first\n2. second')).toContain('<ol class="md-list">');
+    });
+
+    it('renders a paragraph after a list as a separate block', () => {
+        expect(stop('- item\n\nConclusion.')).toBe(
+            '<ul class="md-list"><li class="md-item">item</li></ul><p class="md-p">Conclusion.</p>',
+        );
+    });
+
+    it('uses the same inline code as comments and renders bold as strong', () => {
+        expect(stop('`EditWindow` and **important**')).toBe(
+            '<p class="md-p"><code class="md-code">EditWindow</code> and <strong class="md-strong">important</strong></p>',
+        );
+    });
+
+    it('keeps italic, strikethrough and bare URLs literal because the vocabulary excludes them', () => {
+        expect(stop('*italic* ~~struck through~~ https://example.com')).toBe(
+            '<p class="md-p">*italic* ~~struck through~~ https://example.com</p>',
+        );
+    });
+
+    it('opens an external link in a new tab without a referrer', () => {
+        expect(stop('[issue](https://example.com/t)')).toBe(
+            '<p class="md-p"><a class="md-link" href="https://example.com/t" target="_blank" rel="noopener noreferrer">issue</a></p>',
+        );
+    });
+
+    it('keeps internal links in the same tab and lets the view handle navigation', () => {
+        expect(stop('[stop](#stop-3)')).toBe(
+            '<p class="md-p"><a class="md-link" href="#stop-3">stop</a></p>',
+        );
+        expect(stop('[file](#file-src/a.ts)')).toContain('href="#file-src/a.ts"');
+    });
+
+    it('does not turn an unsupported scheme into a link', () => {
+        expect(stop('[click](javascript:alert(1))')).toBe('<p class="md-p">[click](javascript:alert(1))</p>');
+    });
+
+    it('escapes raw HTML', () => {
+        expect(stop('<b>bold</b>')).toBe('<p class="md-p">&lt;b&gt;bold&lt;/b&gt;</p>');
+    });
+
+    it('keeps nested items and other unsupported syntax as paragraph text', () => {
+        // The validator rejects this section. If it reaches the UI, it must render neither a list nor a heading.
+        expect(stop('  - nested')).toBe('<p class="md-p">  - nested</p>');
+        expect(stop('# Heading')).toBe('<p class="md-p"># Heading</p>');
     });
 });
 

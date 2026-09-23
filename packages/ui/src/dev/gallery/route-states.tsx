@@ -147,6 +147,36 @@ function partialDriftSnapshot(): RouteSnapshot {
     };
 }
 
+/**
+ * A stop taller than the viewport: a long description and all route files in one stop. The pinned
+ * column must scroll independently without scrolling the page.
+ */
+function tallStopSnapshot(): RouteSnapshot {
+    const snapshot = readySnapshot();
+    const anchors = snapshot.stops.flatMap((stop) => stop.anchors);
+    return {
+        ...snapshot,
+        stops: snapshot.stops.map((stop) =>
+            stop.id === 's01' ? { ...stop, paragraph: TALL_PARAGRAPH, anchors } : stop,
+        ),
+    };
+}
+
+/** A description near the validator budget limit: the reviewer sees this much text in full. */
+const TALL_PARAGRAPH = [
+    'The `EditWindow` class and injectable `Clock` time source were added: the window opens when an order is placed, closes after `EDIT_WINDOW_MS`, and closes early when the courier dispatches it.',
+    '',
+    'Categories shorten the window:',
+    '- fresh food: 10 minutes',
+    '- pharmacy: 5 minutes',
+    '- alcohol: no window at all',
+    '- everything else: the standard 30 minutes',
+    '',
+    'The **shortest** window wins in the cart, and whether an order can still be edited is calculated in exactly one place: tests replace the clock with [`FrozenClock`](#file-services/orders/src/infra/clock.ts), while production uses the system clock.',
+    '',
+    'As a consequence, [stop 02](#stop-2) explains the rejection codes, [#2281](https://github.com/quillmart/quillmart/issues/2281) describes the rollout order, and nothing reads the old `checkout.edit_window_hours` config anymore.',
+].join('\n');
+
 /** A stop without any anchors: the right column must show a dashed card instead of empty space. */
 function emptyStopSnapshot(): RouteSnapshot {
     const snapshot = readySnapshot();
@@ -201,6 +231,16 @@ export const ROUTE_STATES: readonly RouteGalleryState[] = [
         id: 'route-empty-stop',
         title: 'stop without hunks: dashed card instead of empty space',
         render: () => <RouteState snapshot={emptyStopSnapshot()} />,
+    },
+    {
+        id: 'route-stop-markup',
+        title: 'stop description with markup: paragraphs, list, code, links (03 viewed)',
+        render: () => <RouteState stopViewed={['s03']} />,
+    },
+    {
+        id: 'route-stop-tall-side',
+        title: 'stop with a long description and 12+ files: column scrolls independently',
+        render: () => <RouteState snapshot={tallStopSnapshot()} />,
     },
     {
         id: 'route-filter-kept',

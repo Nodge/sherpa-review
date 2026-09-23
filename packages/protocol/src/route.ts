@@ -16,6 +16,13 @@ import { hostIdSchema } from './review.js';
  */
 
 /**
+ * Visible stop description text budget (`docs/design/SPEC-changes-2026-09-20.md §2`), in characters:
+ * independent of text size and window width.
+ * The section validator enforces it, not the schema, so the model gets advice on what to do.
+ */
+export const STOP_PARAGRAPH_MAX_CHARS = 840;
+
+/**
  * Importance tier. The model assigns `high`/`medium`/`low`. `other` is the synthetic
  * "Other" stop that the validator creates (the model knows nothing about it).
  */
@@ -112,7 +119,11 @@ export const routeStopSchema = z.object({
     tier: routeTierSchema,
     title: z.string().min(1).max(300),
     status: routeStopStatusSchema,
-    /** Filling fields, null until the section is ready. Paragraph formula: "what changed → consequences". */
+    /**
+     * Fill fields, null until the section is ready. Paragraph formula: "what changed → what follows".
+     * Markup is a restricted markdown subset (`docs/design/SPEC-changes-2026-09-20.md §2`): paragraphs,
+     * lists of up to 4 items without nesting, inline code, bold, links. The validator rejects everything else.
+     */
     paragraph: z.string().nullable(),
     /** Transition to the next stop, separate from the paragraph. May be absent even in a ready stop. */
     bridge: z.string().nullable(),
@@ -221,6 +232,10 @@ export const routeSectionResultSchema = z.object({
         .array(
             z.object({
                 planIndex: z.number().int().positive(),
+                /**
+                 * The schema limit is a sanity check. The section validator checks the `STOP_PARAGRAPH_MAX_CHARS`
+                 * budget so the model gets advice instead of a zod rejection.
+                 */
                 paragraph: z.string().min(1).max(4000),
                 bridge: z.string().min(1).max(1000).optional(),
                 changeReason: z.string().min(1).max(1000).optional(),

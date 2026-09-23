@@ -1,18 +1,17 @@
+import type {
+    HeadingLevel,
+    InlineNode,
+    MarkdownBlock,
+    MarkdownList,
+    TableAlign,
+} from '@sherpa/protocol/markdown';
+import { parseBlocks, parseInline, parseStopBlocks } from '@sherpa/protocol/markdown';
 import type { CSSProperties, ReactNode } from 'react';
 import { Fragment } from 'react';
 
 import type { LanguageId, SyntaxToken } from '../diff/model.js';
 import { highlightText, languageByName } from '../diff/syntax.js';
 
-import type {
-    HeadingLevel,
-    InlineNode,
-    MarkdownBlock,
-    MarkdownList,
-    MarkdownProfile,
-    TableAlign,
-} from './markdown.js';
-import { parseBlocks, parseInline } from './markdown.js';
 import './markdown.css';
 
 /**
@@ -22,17 +21,72 @@ import './markdown.css';
  * The `comment` profile returns blocks (paragraphs, headings, blockquotes, tables, lists, code), so insert
  * it into a container. The `route` profile returns inline nodes only: the caller owns the line element (`h2`, `p`,
  * `li`), so route card layout stays unchanged.
+ * `StopMarkdown` renders the stop description (`stop`), which also needs a navigation handler.
  */
-export function Markdown({ text, profile }: { text: string; profile: MarkdownProfile }) {
+export function Markdown({ text, profile }: { text: string; profile: 'comment' | 'route' }) {
     if (profile === 'route') {
         return <>{inlineNodes(parseInline(text, 'route'))}</>;
     }
-    return <>{parseBlocks(text).map(renderBlock)}</>;
+    return <>{parseBlocks(text).map((block, index) => renderBlock(block, index))}</>;
+}
+
+/** Internal navigation from a stop description to a plan stop or diff file. */
+export type StopLink =
+    | { readonly kind: 'stop'; readonly planIndex: number }
+    | { readonly kind: 'file'; readonly path: string };
+
+/**
+ * Stop description: the vocabulary blocks in §2 of the 09-20 spec are paragraphs and a flat list. Place it in a
+ * container, just like the comment profile.
+ *
+ * External links open a new tab. `onOpenLink` intercepts internal links (`#stop-N`, `#file-<path>`)
+ * for the same navigation as stop file chips. Without a handler, an internal
+ * link goes nowhere: the view cannot navigate by URL.
+ */
+export function StopMarkdown({ text, onOpenLink }: { text: string; onOpenLink?: (link: StopLink) => void }) {
+    const link: LinkRenderer = (node, key) => {
+        const target = stopLinkOf(node.href);
+        if (target === null) {
+            // External links leave the reader, so open a new tab without a referrer.
+            return (
+                <a key={key} className="md-link" href={node.href} target="_blank" rel="noopener noreferrer">
+                    {inlineNodes(node.children)}
+                </a>
+            );
+        }
+        return (
+            <a
+                key={key}
+                className="md-link"
+                href={node.href}
+                onClick={(event) => {
+                    event.preventDefault();
+                    onOpenLink?.(target);
+                }}
+            >
+                {inlineNodes(node.children)}
+            </a>
+        );
+    };
+    return <>{parseStopBlocks(text).map((block, index) => renderBlock(block, index, link))}</>;
+}
+
+/** Internal navigation target. `null` means the link is external. */
+export function stopLinkOf(href: string): StopLink | null {
+    const stop = /^#stop-(\d+)$/.exec(href);
+    if (stop !== null) {
+        return { kind: 'stop', planIndex: Number(stop[1]) };
+    }
+    const file = /^#file-(\S+)$/.exec(href);
+    return file === null ? null : { kind: 'file', path: file[1] ?? '' };
 }
 
 const HEADING_TAGS = { 1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4', 5: 'h5', 6: 'h6' } as const;
 
-export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
+/** Link rendering: the view intercepts internal targets in a stop description. */
+type LinkRenderer = (node: Extract<InlineNode, { kind: 'link' }>, key: number) => ReactNode;
+
+export function renderBlock(block: MarkdownBlock, index: number, link?: LinkRenderer): ReactNode {
     switch (block.kind) {
         case 'heading': {
             // Real h1–h6: the level carries structure, while font size uses the three steps
@@ -40,7 +94,7 @@ export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
             const Tag = HEADING_TAGS[block.level];
             return (
                 <Tag key={index} data-source-line={block.source?.start} className={`md-heading ${headingClass(block.level)}`}>
-                    {inlineNodes(block.children)}
+                    {inlineNodes(block.children, link)}
                 </Tag>
             );
         }
@@ -49,16 +103,16 @@ export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
             const language = block.lang === null ? null : languageByName(block.lang);
             return (
                 <pre key={index} className="md-pre" data-lang={block.lang ?? undefined}>
-                    <code>{block.source === undefined ? (language === null ? block.text : highlighted(block.text, language)) : block.text.split('\n').map((line, i) => <Fragment key={i}>{i === 0 ? null : '\n'}<span data-source-line={block.source === undefined ? undefined : block.source.start + i + 1}>{language === null ? line : highlighted(line, language)}</span></Fragment>)}</code>
+                    <code>{block.source === undefined ? (language === null ? block.text : highlighted(block.text, language)) : block.text.split('\n').map((line, i) => <Fragment key={i}>{i === 0 ? null : '\n'}<span data-source-line={block.source === undefined ? undefined : block.source.start + i + (block.fenced ? 1 : 0)}>{language === null ? line : highlighted(line, language)}</span></Fragment>)}</code>
                 </pre>
             );
         }
         case 'list':
-            return <ListBlock key={index} list={block.list} />;
+            return <ListBlock key={index} list={block.list} link={link} />;
         case 'quote':
             return (
                 <blockquote key={index} className="md-quote">
-                    {block.children.map(renderBlock)}
+                    {block.children.map((child, childIndex) => renderBlock(child, childIndex, link))}
                 </blockquote>
             );
         case 'table':
@@ -69,7 +123,7 @@ export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                             <tr data-source-line={block.source?.start}>
                                 {block.head.map((cell, cellIndex) => (
                                     <th key={cellIndex} style={alignStyle(block.align[cellIndex] ?? null)}>
-                                        {inlineNodes(cell)}
+                                        {inlineNodes(cell, link)}
                                     </th>
                                 ))}
                             </tr>
@@ -80,7 +134,7 @@ export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                                     <tr key={rowIndex} data-source-line={block.source === undefined ? undefined : block.source.start + rowIndex + 2}>
                                         {row.map((cell, cellIndex) => (
                                             <td key={cellIndex} style={alignStyle(block.align[cellIndex] ?? null)}>
-                                                {inlineNodes(cell)}
+                                                {inlineNodes(cell, link)}
                                             </td>
                                         ))}
                                     </tr>
@@ -96,7 +150,7 @@ export function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                     {block.lines.map((line, lineIndex) => (
                         <Fragment key={lineIndex}>
                             {lineIndex === 0 ? null : <br />}
-                            {block.source === undefined ? inlineNodes(line) : <span data-source-line={block.source.start + lineIndex}>{inlineNodes(line)}</span>}
+                            {block.source === undefined ? inlineNodes(line, link) : <span data-source-line={block.source.start + lineIndex}>{inlineNodes(line, link)}</span>}
                         </Fragment>
                     ))}
                 </p>
@@ -148,20 +202,20 @@ function lineTokens(line: string, tokens: readonly SyntaxToken[]): ReactNode[] {
     return nodes;
 }
 
-function ListBlock({ list }: { list: MarkdownList }) {
+function ListBlock({ list, link }: { list: MarkdownList; link: LinkRenderer | undefined }) {
     const items = list.items.map((item, index) => (
         <li key={index} className={item.check === null ? 'md-item' : 'md-item md-item--task'}>
             {item.check === null ? null : (
                 <span className={item.check ? 'md-check md-check--on' : 'md-check'} aria-hidden="true" />
             )}
-            {item.sourceLine === undefined ? inlineNodes(item.children) : <span data-source-line={item.sourceLine}>{inlineNodes(item.children)}</span>}
-            {item.list === null ? null : <ListBlock list={item.list} />}
+            {item.sourceLine === undefined ? inlineNodes(item.children, link) : <span data-source-line={item.sourceLine}>{inlineNodes(item.children, link)}</span>}
+            {item.list === null ? null : <ListBlock list={item.list} link={link} />}
         </li>
     ));
     return list.ordered ? <ol className="md-list">{items}</ol> : <ul className="md-list">{items}</ul>;
 }
 
-function inlineNodes(nodes: readonly InlineNode[]): ReactNode[] {
+function inlineNodes(nodes: readonly InlineNode[], link?: LinkRenderer): ReactNode[] {
     return nodes.map((node, index) => {
         switch (node.kind) {
             case 'text':
@@ -173,12 +227,19 @@ function inlineNodes(nodes: readonly InlineNode[]): ReactNode[] {
                     </code>
                 );
             case 'strong':
-                return <strong key={index}>{inlineNodes(node.children)}</strong>;
+                return (
+                    <strong key={index} className="md-strong">
+                        {inlineNodes(node.children, link)}
+                    </strong>
+                );
             case 'em':
-                return <em key={index}>{inlineNodes(node.children)}</em>;
+                return <em key={index}>{inlineNodes(node.children, link)}</em>;
             case 'strike':
-                return <del key={index}>{inlineNodes(node.children)}</del>;
+                return <del key={index}>{inlineNodes(node.children, link)}</del>;
             case 'link':
+                if (link !== undefined) {
+                    return link(node, index);
+                }
                 // External links leave the reader, so open a new tab without a referrer.
                 return (
                     <a key={index} className="md-link" href={node.href} target="_blank" rel="noreferrer">
