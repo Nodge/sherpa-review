@@ -3,6 +3,7 @@ import type {
     InlineNode,
     MarkdownBlock,
     MarkdownList,
+    MarkdownSource,
     TableAlign,
 } from '@sherpa/protocol/markdown';
 import { parseBlocks, parseInline, parseStopBlocks } from '@sherpa/protocol/markdown';
@@ -93,7 +94,11 @@ export function renderBlock(block: MarkdownBlock, index: number, link?: LinkRend
             // of the handoff scale. Separate typography inside external text breaks the card rhythm.
             const Tag = HEADING_TAGS[block.level];
             return (
-                <Tag key={index} data-source-line={block.source?.start} className={`md-heading ${headingClass(block.level)}`}>
+                <Tag
+                    key={index}
+                    data-source-line={block.source?.start}
+                    className={`md-heading ${headingClass(block.level)}`}
+                >
                     {inlineNodes(block.children, link)}
                 </Tag>
             );
@@ -103,7 +108,7 @@ export function renderBlock(block: MarkdownBlock, index: number, link?: LinkRend
             const language = block.lang === null ? null : languageByName(block.lang);
             return (
                 <pre key={index} className="md-pre" data-lang={block.lang ?? undefined}>
-                    <code>{block.source === undefined ? (language === null ? block.text : highlighted(block.text, language)) : block.text.split('\n').map((line, i) => <Fragment key={i}>{i === 0 ? null : '\n'}<span data-source-line={block.source === undefined ? undefined : block.source.start + i + (block.fenced ? 1 : 0)}>{language === null ? line : highlighted(line, language)}</span></Fragment>)}</code>
+                    <code>{codeLines(block, language)}</code>
                 </pre>
             );
         }
@@ -131,7 +136,7 @@ export function renderBlock(block: MarkdownBlock, index: number, link?: LinkRend
                         {block.rows.length === 0 ? null : (
                             <tbody>
                                 {block.rows.map((row, rowIndex) => (
-                                    <tr key={rowIndex} data-source-line={block.source === undefined ? undefined : block.source.start + rowIndex + 2}>
+                                    <tr key={rowIndex} data-source-line={sourceLine(block.source, rowIndex + 2)}>
                                         {row.map((cell, cellIndex) => (
                                             <td key={cellIndex} style={alignStyle(block.align[cellIndex] ?? null)}>
                                                 {inlineNodes(cell, link)}
@@ -150,12 +155,43 @@ export function renderBlock(block: MarkdownBlock, index: number, link?: LinkRend
                     {block.lines.map((line, lineIndex) => (
                         <Fragment key={lineIndex}>
                             {lineIndex === 0 ? null : <br />}
-                            {block.source === undefined ? inlineNodes(line, link) : <span data-source-line={block.source.start + lineIndex}>{inlineNodes(line, link)}</span>}
+                            {withSourceLine(sourceLine(block.source, lineIndex), inlineNodes(line, link))}
                         </Fragment>
                     ))}
                 </p>
             );
     }
+}
+
+/** Source line number offset from the block start. A block without a range is outside the diff document. */
+function sourceLine(source: MarkdownSource | undefined, offset: number): number | undefined {
+    return source === undefined ? undefined : source.start + offset;
+}
+
+/** Wrapper with a line number used to find the diff line from a document selection. */
+function withSourceLine(line: number | undefined, children: ReactNode): ReactNode {
+    return line === undefined ? children : <span data-source-line={line}>{children}</span>;
+}
+
+/**
+ * Mark up a fence with a source range line by line: each line needs its own number, so
+ * highlight each line separately too. Without a range, highlight the whole body.
+ */
+function codeLines(block: Extract<MarkdownBlock, { kind: 'code' }>, language: LanguageId | null): ReactNode {
+    if (block.source === undefined) {
+        return language === null ? block.text : highlighted(block.text, language);
+    }
+    // The opening fence takes the line before the body.
+    const first = block.fenced ? 1 : 0;
+    return block.text.split('\n').map((line, index) => (
+        <Fragment key={index}>
+            {index === 0 ? null : '\n'}
+            {withSourceLine(
+                sourceLine(block.source, index + first),
+                language === null ? line : highlighted(line, language),
+            )}
+        </Fragment>
+    ));
 }
 
 function headingClass(level: HeadingLevel): string {
@@ -208,7 +244,7 @@ function ListBlock({ list, link }: { list: MarkdownList; link: LinkRenderer | un
             {item.check === null ? null : (
                 <span className={item.check ? 'md-check md-check--on' : 'md-check'} aria-hidden="true" />
             )}
-            {item.sourceLine === undefined ? inlineNodes(item.children, link) : <span data-source-line={item.sourceLine}>{inlineNodes(item.children, link)}</span>}
+            {withSourceLine(item.sourceLine, inlineNodes(item.children, link))}
             {item.list === null ? null : <ListBlock list={item.list} link={link} />}
         </li>
     ));

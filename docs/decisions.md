@@ -79,6 +79,9 @@ To maintain the log, add each new decision as a dated entry in its section. When
 - **2026-08-27 · The ±20 step belongs in gaps between hunks, and the file card header button expands the entire file.** Supersedes `docs/design/SPEC-elements.md §2.13` for the ±20 button.
 - **2026-08-28 · Loaded context is not persisted.** Expanded gaps live in tab memory. Context provides a view around changes rather than review progress, and does not change file read status.
 
+- **2026-09-18 · A Markdown file renders as a document in segments of consecutive lines, without joining across gaps.** Joining adjacent fragments would change the meaning of the markup. Full context can be expanded in code mode. It uses the same parser as comments (the `comment` profile), raw HTML stays text, and YFM extensions are not supported.
+- **2026-09-18 · A document anchor refers to lines and is shared with code mode.** A comment, note or question from the document attaches to source lines on the same side. Switching views does not create copies. The exact quote lives only in the question anchor (`selectedText`, up to 4000 characters). It is not included in the link or the comment.
+- **2026-09-23 · Markdown/Code mode is stored per file in the diff store instead of the card state.** Full diff virtualization and the stop column unmount cards, so local state used to reset to "Code" on return. The mode does not survive a page reload, just like expanded context.
 
 ## Route
 
@@ -144,6 +147,7 @@ To maintain the log, add each new decision as a dated entry in its section. When
 - **2026-09-01 · Cancellation works for both queued and leased tasks.** The worker learns about it on its next CLI call. Retry queues a new task for the same exchange.
 - **2026-09-01 · "Ask the agent to place them" puts a question in the composer for the reviewer to send.** All entry points only prefill text. A question has one anchor. "Other" goes without an anchor and lists ranges in the text (the first 20 and "and N more"). A hatched bar sends an anchor for its own range. The button does not change the route: "the answer will arrive in chat, and the route will not change".
 - **2026-09-01 · Generation, regeneration and filling remain available when the agent is disconnected:** the queue is durable, and tasks will wait for the worker. Only chat entry points lose functionality. The reader is always available.
+- **2026-09-23 · Selecting text in a document does not prefill a question in the composer.** The template "What does the selected fragment mean?" existed only for Markdown and got in the way of asking a different question. The quote is already visible in the panel and sent to the agent. Every "Ask the agent" action opens an empty composer with an anchor, for code and documents alike.
 
 ## Iterations
 
@@ -236,11 +240,3 @@ Decisions on the delta spec `docs/design/SPEC-changes-2026-09-20.md`. Difference
 - **2026-09-22 · Inline code in text gets a background, border and padding from the mockup.** The previous "mono without a background" referred to a phrase that does not exist in the README. Stop descriptions, comments, chat and notes render `.md-code` the same way, using `--surface-code-inline` and a `--border-control` border.
 - **2026-09-22 · Muted links below messages have their own tone, `--text-link-muted`. "Delete" turns red on hover.** After the 09-12 contrast pass, the comment body and Link muted had the same colour, so the action row blended into the text. The mockup gives them distinct tones. `ctl--link-danger` is the third exception to the rule that hover does not change text, alongside links and the trash button, as required by spec §3.
 - **2026-09-22 · The checkbox checkmark switches to the text colour when pressed.** The §5 value for pressed on (`25422f`) beneath a page-coloured glyph gives 1.65:1 in the dark theme and 1.05:1 in the light theme. The defect exists in the prototype too. Rest and hover stay as in the mockup.
-
-## Markdown in review (2026-09-18)
-
-Markdown files have a switch between the source diff and rendered document, with a choice of the old or new side. Fragments separated by hidden lines are not joined. Full context is expanded through the diff controls.
-
-Selecting document text preserves the exact quote and source line range in the question anchor. Comments and notes keep their existing discussion identifiers and line numbers. Switching views does not create copies or change publication.
-
-Markdown renders in React through the existing safe parser. Raw HTML does not execute. Supported markup matches comments: headings, lists, quotes, tables and code blocks.

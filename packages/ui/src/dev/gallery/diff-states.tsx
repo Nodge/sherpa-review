@@ -167,6 +167,7 @@ function CardState({
             }}
             opened={snapshot.opened.has(file.fileId)}
             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
+            markdown={snapshot.markdownShown.has(file.fileId)}
             keptInView={keptInView}
             initialHint={hint ?? null}
             initialGapError={gapError}
@@ -267,6 +268,7 @@ export function galleryActions(store: DiffViewStore): FileCardActions {
         },
         onOpenFile: store.openFile,
         onShowWhitespace: store.showWhitespace,
+        onToggleMarkdown: store.toggleMarkdown,
         onSelectText: store.selectText,
         onClearSelection: store.clearSelection,
         onSelectStart: (fileId, key, side, extend) => {

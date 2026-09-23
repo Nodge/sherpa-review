@@ -533,6 +533,7 @@ export function DiffFileList({
             onToggleCollapse: store.toggleFileCollapse,
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
+            onToggleMarkdown: store.toggleMarkdown,
             onSelectText: store.selectText,
             onClearSelection: store.clearSelection,
             onSelectStart: (fileId, key, side, extend) => {
@@ -588,6 +589,7 @@ export function DiffFileList({
                             read={readStateOf(snapshot, file)}
                             opened={snapshot.opened.has(file.fileId)}
                             showWhitespace={snapshot.whitespaceShown.has(file.fileId)}
+                            markdown={snapshot.markdownShown.has(file.fileId)}
                             keptInView={file.fileId === keptFileId}
                             selection={snapshot.selection?.fileId === file.fileId ? snapshot.selection : null}
                             session={session}
@@ -644,6 +646,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     read,
     opened,
     showWhitespace,
+    markdown,
     keptInView,
     selection,
     session,
@@ -680,6 +683,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
     read: FileReadState;
     opened: boolean;
     showWhitespace: boolean;
+    markdown: boolean;
     keptInView: boolean;
     selection: LineSelection | null;
     session: SessionStore;
@@ -793,6 +797,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 }}
                 opened={opened}
                 showWhitespace={showWhitespace}
+                markdown={markdown}
                 keptInView={keptInView}
                 loadingMinHeight={estimatedBody}
                 selection={selection}

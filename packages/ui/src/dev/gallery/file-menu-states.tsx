@@ -42,6 +42,7 @@ const ACTIONS: FileCardActions = {
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
+    onToggleMarkdown: () => undefined,
     onSelectStart: () => undefined,
     onSelectExtend: () => undefined,
 };
@@ -60,6 +61,7 @@ function CardMenu() {
                 read={readStateOf({ file: { ...FILE, viewed: true }, record: null })}
                 opened
                 showWhitespace={false}
+                markdown={false}
                 selection={null}
                 actions={ACTIONS}
             />

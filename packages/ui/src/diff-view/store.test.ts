@@ -348,6 +348,22 @@ describe('diff view store', () => {
         expect(store.getSnapshot().whitespaceShown).toEqual(new Set(['a']));
     });
 
+    it('toggles the Markdown document view and clears selection only for that file', () => {
+        const store = createDiffViewStore({ files: [file('a'), file('b')] });
+
+        store.startSelection('b', 'a3');
+        store.toggleMarkdown('a');
+        expect(store.getSnapshot().markdownShown).toEqual(new Set(['a']));
+        expect(store.getSnapshot().selection).toMatchObject({ fileId: 'b' });
+
+        store.startSelection('a', 'a3');
+        store.beginSelection();
+        store.toggleMarkdown('a');
+        expect(store.getSnapshot().markdownShown).toEqual(new Set());
+        expect(store.getSnapshot().selection).toBeNull();
+        expect(store.getSnapshot().selectionDragging).toBe(false);
+    });
+
     it('notifies subscribers on every change and only on a change', () => {
         const store = createDiffViewStore({ files: [file('a')] });
         let calls = 0;

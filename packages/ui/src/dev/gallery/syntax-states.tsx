@@ -300,6 +300,7 @@ function SampleCard({ file }: { file: FileDiff }) {
             }}
             opened={snapshot.opened.has(file.fileId)}
             showWhitespace={false}
+            markdown={false}
             keptInView={false}
             initialHint={null}
             initialGapError={false}

@@ -766,7 +766,6 @@ export const en: Dictionary = {
     'markdown.after': 'After change',
     'markdown.fragment': 'Showing available fragments. Expand the full context in code view.',
     'markdown.empty': 'No lines on this side in the displayed fragment.',
-    'markdown.explain': 'What does the selected passage mean?',
     'markdown.tooLong': 'Select up to 4000 characters.',
     'selection.ask': 'Ask the agent',
     'selection.comment': 'Comment',

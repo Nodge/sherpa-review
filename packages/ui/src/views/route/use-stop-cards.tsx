@@ -254,6 +254,7 @@ export function useStopCards({
             },
             onOpenFile: store.openFile,
             onShowWhitespace: store.showWhitespace,
+            onToggleMarkdown: store.toggleMarkdown,
             onSelectText: store.selectText,
             onClearSelection: store.clearSelection,
             onSelectStart: (fileId, key, side, extend) => {
@@ -343,6 +344,7 @@ export function useStopCards({
                         store.toggleFileCollapse(group.fileId);
                     }}
                     showWhitespace={diffSnapshot.whitespaceShown.has(group.fileId)}
+                    markdown={diffSnapshot.markdownShown.has(group.fileId)}
                     selection={diffSnapshot.selection?.fileId === group.fileId ? diffSnapshot.selection : null}
                     session={session}
                     notes={notesForGroup(group, notesByFile)}
@@ -445,6 +447,7 @@ export function useStopCards({
                 }
                 const state =
                     (diffSnapshot.whitespaceShown.has(group.fileId) ? 'w' : '') +
+                    (diffSnapshot.markdownShown.has(group.fileId) ? 'm' : '') +
                     (diffSnapshot.collapseExpanded.has(group.fileId) ? 'e' : '') +
                     (openedViewed.has(collapsedKey(stopId, group.fileId)) ? 'v' : '') +
                     (diffSnapshot.collapseCollapsed.has(group.fileId) ? 'c' : '') +
@@ -465,6 +468,7 @@ export function useStopCards({
             diffSnapshot.collapseExpanded,
             diffSnapshot.effectiveMode,
             diffSnapshot.expansion,
+            diffSnapshot.markdownShown,
             diffSnapshot.models,
             diffSnapshot.opened,
             diffSnapshot.whitespaceShown,

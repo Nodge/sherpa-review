@@ -73,6 +73,7 @@ const ACTIONS: FileCardActions = {
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
+    onToggleMarkdown: () => undefined,
     onSelectStart: () => undefined,
     onSelectExtend: () => undefined,
 };
@@ -167,6 +168,7 @@ function NoteDraftState() {
                     read={readStateOf({ file: FILE, record: null })}
                     opened
                     showWhitespace={false}
+                    markdown={false}
                     selection={null}
                     threadsUnderHeader={
                         threadsUnderHeader === null && notesUnderHeader === null ? null : (

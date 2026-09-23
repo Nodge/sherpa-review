@@ -62,6 +62,7 @@ export interface FileCardActions {
     readonly onToggleCollapse?: ((fileId: string) => void) | undefined;
     readonly onOpenFile: (fileId: string) => void;
     readonly onShowWhitespace: (fileId: string) => void;
+    readonly onToggleMarkdown: (fileId: string) => void;
     readonly onSelectStart: (fileId: string, key: LineKey, side: 'old' | 'new', extend: boolean) => void;
     readonly onSelectText?: ((selection: LineSelection) => void) | undefined;
     readonly onClearSelection?: (() => void) | undefined;
@@ -98,6 +99,8 @@ export interface FileCardProps {
     /** The reviewer opened the file by hand despite size-based collapse. */
     readonly opened: boolean;
     readonly showWhitespace: boolean;
+    /** Markdown file shown as a document instead of code. */
+    readonly markdown: boolean;
     /** The card stays on screen despite the filter (docs/design/SPEC-elements.md §2.7). */
     readonly keptInView?: boolean;
     /**
@@ -112,7 +115,6 @@ export interface FileCardProps {
     readonly initialGapError?: boolean;
     /** Gallery only: initial image card mode. */
     readonly initialImage?: ImageBodyState | undefined;
-    readonly initialMarkdown?: boolean;
     /**
      * Post-process the model before rendering, after context expansion. Route uses this
      * to clip the model to stop anchors, so "Expand context" keeps working. Expansion
@@ -178,6 +180,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         onToggleCollapse,
         opened,
         showWhitespace,
+        markdown,
         keptInView = false,
         loadingMinHeight,
         initialHint = null,
@@ -204,7 +207,6 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
     const [announcement, setAnnouncement] = useState('');
     const menu = useContextMenu();
     const markdownFile = /\.(?:md|markdown|mdown)$/i.test(file.path);
-    const [markdown, setMarkdown] = useState(props.initialMarkdown ?? false);
 
     // Model with context already expanded. Expansion is a pure function of the original model.
     const shown = useMemo(
@@ -345,7 +347,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
 
                 {routeBadge}
                 {markdownFile && shown?.content.kind === 'text' ? (
-                    <button type="button" className="ctl ctl--ghost ctl--compact file-card__header-action" aria-pressed={markdown} onClick={() => { actions.onClearSelection?.(); setMarkdown(!markdown); }}>
+                    <button
+                        type="button"
+                        className="ctl ctl--ghost ctl--compact file-card__header-action"
+                        aria-pressed={markdown}
+                        onClick={() => {
+                            actions.onToggleMarkdown(file.fileId);
+                        }}
+                    >
                         {t(markdown ? 'markdown.code' : 'markdown.preview')}
                     </button>
                 ) : null}
@@ -490,7 +499,14 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                     initial={initialImage}
                 />
             ) : markdown && shown?.content.kind === 'text' ? (
-                <MarkdownReview model={shown} selection={selection} focusedThreadRange={focusedThreadRange} onSelect={actions.onSelectText} onClearSelection={actions.onClearSelection} renderAfterLine={renderAfterLine} />
+                <MarkdownReview
+                    model={shown}
+                    selection={selection}
+                    focusedThreadRange={focusedThreadRange}
+                    onSelect={actions.onSelectText}
+                    onClearSelection={actions.onClearSelection}
+                    renderAfterLine={renderAfterLine}
+                />
             ) : (
                 body
             )}

@@ -31,6 +31,7 @@ const ACTIONS: FileCardActions = {
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
+    onToggleMarkdown: () => undefined,
     onSelectStart: () => undefined,
     onSelectExtend: () => undefined,
 };
@@ -105,6 +106,7 @@ function LineCommentState({ mode, editing = false }: { mode: DiffMode; editing?:
                     read={readStateOf({ file: FILE, record: null })}
                     opened
                     showWhitespace={false}
+                    markdown={false}
                     selection={null}
                     threadsUnderHeader={threadsUnderHeader}
                     renderAfterLine={renderAfterLine}

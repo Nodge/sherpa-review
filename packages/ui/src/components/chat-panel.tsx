@@ -396,7 +396,9 @@ export function ChatPanel(props: ChatPanelProps) {
                         </span>
                     )}
                 </div>
-                {anchor?.selectedText === undefined ? null : <blockquote className="chat-panel__selection-quote">{anchor.selectedText}</blockquote>}
+                {anchor?.selectedText === undefined ? null : (
+                    <blockquote className="chat-panel__selection-quote">{anchor.selectedText}</blockquote>
+                )}
                 <textarea
                     ref={textareaRef}
                     className="chat-panel__textarea"

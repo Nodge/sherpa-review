@@ -49,6 +49,8 @@ export interface DiffViewSnapshot {
     readonly opened: ReadonlySet<string>;
     /** Whitespace-only lines the reviewer explicitly expanded. */
     readonly whitespaceShown: ReadonlySet<string>;
+    /** Markdown files the reviewer reads as documents instead of code. */
+    readonly markdownShown: ReadonlySet<string>;
     readonly selection: LineSelection | null;
     /** Between the actual start of a drag and mouse button release. */
     readonly selectionDragging: boolean;
@@ -87,6 +89,8 @@ export interface DiffViewStore {
     readonly revealFile: (fileId: string) => void;
     readonly openFile: (fileId: string) => void;
     readonly showWhitespace: (fileId: string) => void;
+    /** Toggle document/code. Clears selection in this file, since the previous mode rendered its lines. */
+    readonly toggleMarkdown: (fileId: string) => void;
     readonly beginSelection: () => void;
     readonly startSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
     readonly extendSelection: (fileId: string, key: LineKey, side?: 'old' | 'new') => void;
@@ -243,6 +247,7 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
         collapsePreferences,
         opened: new Set(),
         whitespaceShown: new Set(),
+        markdownShown: new Set(),
         selection: null,
         selectionDragging: false,
     };
@@ -466,6 +471,18 @@ export function createDiffViewStore(options: DiffViewStoreOptions): DiffViewStor
             if (!snapshot.whitespaceShown.has(fileId)) {
                 update({ whitespaceShown: new Set(snapshot.whitespaceShown).add(fileId) });
             }
+        },
+
+        toggleMarkdown: (fileId) => {
+            const markdownShown = new Set(snapshot.markdownShown);
+            if (!markdownShown.delete(fileId)) {
+                markdownShown.add(fileId);
+            }
+            const ownSelection = snapshot.selection?.fileId === fileId;
+            update({
+                markdownShown,
+                ...(ownSelection ? { selection: null, selectionDragging: false } : {}),
+            });
         },
 
         beginSelection: () => {

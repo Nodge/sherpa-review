@@ -55,6 +55,7 @@ const ACTIONS: FileCardActions = {
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
+    onToggleMarkdown: () => undefined,
     onSelectStart: () => undefined,
     onSelectExtend: () => undefined,
 };
@@ -71,6 +72,7 @@ function ConflictCard() {
             read={readStateOf({ file: CONFLICT, record: null })}
             opened
             showWhitespace={false}
+            markdown={false}
             selection={null}
             actions={ACTIONS}
         />

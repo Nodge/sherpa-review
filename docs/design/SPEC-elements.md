@@ -230,6 +230,8 @@ Every interactive element must implement all applicable states:
 - "Ask the agent" is disabled when the agent is disconnected, with `title` "reconnect the agent to
   ask about a selection" — "Comment" and "Copy link" stay enabled (the reader never degrades).
 - While a question is in flight, the popover collapses into a chip "asked · answer will land here".
+- In Markdown document view (§2.22) the popover anchors to the block that covers the selected source
+  lines; the actions are the same.
 
 ### 2.16 Agent note (at the code)
 
@@ -306,6 +308,27 @@ Every interactive element must implement all applicable states:
 - Each banner states the condition, its consequence, and exactly one primary action.
 
 ---
+
+### 2.22 Markdown document view
+
+- Files `.md`, `.markdown`, `.mdown` get a header toggle next to the entity label. The button names the
+  destination ("Markdown" in code view, "Code" in document view); `aria-pressed` reflects document view.
+- The mode is per file, kept in the diff store for the session: it survives card unmount (full-diff
+  virtualization, route column placeholder) and is not persisted across reloads.
+- The document is rendered per contiguous run of source lines; runs separated by a collapsed gap are
+  never joined. A partial file shows the notice "Showing available fragments. Expand the full context
+  in code view." — context expansion lives in code view only.
+- Modified files offer **Before / After**; added files render only "after", deleted only "before".
+  Switching the side clears the selection.
+- Native mouse selection of up to 4000 characters becomes the same line selection as in code view
+  (side + first..last source line) and opens the selection popover (§2.15). Longer selections show a
+  status notice and select nothing. Keyboard selection is not supported.
+- Threads, agent notes and the composer render once, after the block containing their source line, with
+  the same ids as in code view; a block with a selection or a focused thread gets the accent left rule.
+- "Ask the agent" shows the quotation as a blockquote above the composer (§2.18) and sends it to the
+  agent as `selectedText` together with the line range. The composer itself is not prefilled.
+- Same markdown subset as comments (`comment` profile): raw HTML is shown as text, unsafe links are
+  plain text.
 
 ## 3. Loading, skeletons, timings
 

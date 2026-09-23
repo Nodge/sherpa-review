@@ -23,6 +23,7 @@ const ACTIONS: FileCardActions = {
     onRetryParse: () => undefined,
     onOpenFile: () => undefined,
     onShowWhitespace: () => undefined,
+    onToggleMarkdown: () => undefined,
     onSelectStart: () => undefined,
     onSelectExtend: () => undefined,
 };
@@ -39,6 +40,7 @@ function render(file: FileDiff, hint = false): string {
             read={readStateOf({ file, record: null })}
             opened={false}
             showWhitespace={false}
+            markdown={false}
             initialHint={
                 hint
                     ? {
@@ -104,6 +106,7 @@ describe('file card', () => {
                 onToggleCollapse={() => undefined}
                 opened
                 showWhitespace={false}
+                markdown={false}
                 counts={{ additions: 3, deletions: 2 }}
                 selection={null}
                 actions={ACTIONS}
@@ -155,13 +158,14 @@ describe('file card', () => {
                 viewedDisabledReason="The diff of this file is still being parsed"
                 opened={false}
                 showWhitespace={false}
+                markdown={false}
                 selection={null}
                 actions={ACTIONS}
             />,
         );
 
-        expect(html).toMatch(/<button[^>]*class="viewed-toggle file-card__viewed"[^>]*disabled=""[^>]*title="дифф файла ещё разбирается"/);
-        expect(render(file)).not.toMatch(/class="viewed-toggle file-card__viewed"[^>]*disabled=""/);
+        expect(html).toMatch(/<button[^>]*class="viewed-toggle[^"]*file-card__viewed"[^>]*disabled=""[^>]*title="The diff of this file is still being parsed"/);
+        expect(render(file)).not.toMatch(/class="viewed-toggle[^"]*file-card__viewed"[^>]*disabled=""/);
     });
 
     it('leaves the binary file notice without an action', () => {
@@ -198,6 +202,7 @@ describe('file card', () => {
                     read={readStateOf({ file, record: null })}
                     opened={false}
                     showWhitespace={false}
+                    markdown={false}
                     selection={null}
                     actions={ACTIONS}
                 />
@@ -229,6 +234,7 @@ describe('file card', () => {
                     read={readStateOf({ file: withMode, record: null })}
                     opened={false}
                     showWhitespace={false}
+                    markdown={false}
                     selection={null}
                     actions={ACTIONS}
                 />
@@ -275,6 +281,7 @@ describe('"Expand file" in a route slice', () => {
                 read={readStateOf({ file: CLIP_SOURCE, record: null })}
                 opened={false}
                 showWhitespace={false}
+                markdown={false}
                 selection={null}
                 actions={ACTIONS}
             />,

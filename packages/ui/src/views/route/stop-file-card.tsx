@@ -44,6 +44,7 @@ export interface StopFileCardProps {
     readonly collapseReason: FileCollapseReason | null;
     readonly onToggleCollapse: () => void;
     readonly showWhitespace: boolean;
+    readonly markdown: boolean;
     readonly session: SessionStore;
     readonly notes: readonly AgentNote[];
     readonly noteActions: CardNoteActions;
@@ -91,6 +92,7 @@ export function StopFileCard({
     collapseReason,
     onToggleCollapse,
     showWhitespace,
+    markdown,
     session,
     notes,
     noteActions,
@@ -189,6 +191,7 @@ export function StopFileCard({
                 onToggleCollapse={onToggleCollapse}
                 opened
                 showWhitespace={showWhitespace}
+                markdown={markdown}
                 selection={selection}
                 threadsUnderHeader={underHeader}
                 focusedThreadRange={focusedThreadRange}

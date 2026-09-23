@@ -35,7 +35,8 @@ test('Markdown: the agent gets the exact quote and one comment appears in both d
     await page.getByRole('button', { name: 'Ask the agent', exact: true }).click();
     await expect(page.locator('.chat-panel__selection-quote')).toHaveText(QUOTE);
     const question = page.getByRole('textbox', { name: 'Question to the agent' });
-    await expect(question).toHaveValue('What does the selected passage mean?');
+    await expect(question).toHaveValue('');
+    await question.fill('What does domain concept mean here?');
     await question.press('Enter');
     const task = await takeTask(server.worker, 'chat');
     const contextFiles = task.stdout.match(/\/[^\n]*question\.md/g) ?? [];
