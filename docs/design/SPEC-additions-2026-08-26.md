@@ -23,10 +23,10 @@ The row remains a diff row: height **24px**, background `#111214`, top/bottom bo
 The interactive elements sit in the diff's 2 gutter columns. The grid stays the same:
 
 ```
-[ ↑ 46px ][ ↓ 46px ][ 16px ][ counter — code column ]
+[ ↑ gutter ][ ↓ gutter ][ 16px ][ counter, code column ]
 ```
 
-- arrow target: **46×24**, `background:transparent`, no border.
+- the arrow target spans the full line-number column width × 24px (column width depends on the number of digits, `docs/design/README.md` §1), `background:transparent`, no border.
 - glyph 13px (`ic-arrow-up` / `ic-arrow-down`), resting colour `#4a4f57`.
 - the counter text is **not clickable** because the expansion direction would be unclear.
 
@@ -39,7 +39,7 @@ The interactive elements sit in the diff's 2 gutter columns. The grid stays the 
 | Bottom of file ("to the end of the file") | only `↓` |
 | Remainder < increment (20) | one `↕` target in the first column, label "N unchanged lines, expand" |
 
-A missing direction gets an **empty gutter cell** (`width:46px;height:24px`), not a grey placeholder. Empty space doesn't look like a broken button, and the grid stays aligned.
+A missing direction is an **empty gutter cell** (full line-number column width, `height:24px`), not a grey placeholder. Empty space does not look like a broken button, and the grid stays in place.
 
 Semantics: arrow = direction in which visible context grows. `↑` adds 20 lines to the **top** edge of the hidden block (adjacent to the hunk above, rendered above the gap row), `↓` to the **bottom** edge (rendered below the gap row, adjacent to the hunk below). Repeated clicks reduce the counter by 20 per click.
 
@@ -64,7 +64,7 @@ Hover highlights **only its own half** and replaces the counter with the action 
 - Loading error: replace the counter with `could not load more · retry`, make the entire row a single retry target. Previously loaded lines remain visible.
 - Loaded lines are ordinary diff context rows (`ctx` numbers `#43474e`, code `#cfd3da`). They participate in file search and range selection.
 - Context expansion **does not change** file reading progress (partial/full), because context is not a change.
-- Side-by-side mode uses the same gap row, with targets in the first and fourth grid columns (`46px 14px 1fr 46px 14px 1fr`), one per side. There is one counter, in the left code column.
+- In side-by-side mode the gap row stays the same, with targets in the first and fourth grid columns (`<gutter> 14px 1fr <gutter> 14px 1fr`), one per side. There is one counter, in the left code column.
 
 ### Accessibility
 

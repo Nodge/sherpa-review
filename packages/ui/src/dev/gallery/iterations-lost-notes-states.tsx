@@ -13,6 +13,7 @@ import { createThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
 import { NotesLostBanner } from '../../views/route/iteration-banners.tsx';
 import type { RouteGalleryState } from './route-states.tsx';
+import { asFetched } from './fetched.js';
 
 /**
  * Notes after a push (docs/design/SPEC-elements.md §2.16): active iteration v2 with a "1 note lost its
@@ -20,7 +21,7 @@ import type { RouteGalleryState } from './route-states.tsx';
  * Data comes from `chatFixtures('medium').notesAfterPush`, the same set the server tests.
  */
 
-const V2 = fixtureIteration('medium', 1);
+const V2 = asFetched(fixtureIteration('medium', 1));
 const CHAT = chatFixtures('medium');
 const NOTES: readonly AgentNote[] = CHAT?.notesAfterPush ?? [];
 const EXCHANGES: readonly ChatExchange[] = CHAT?.exchanges ?? [];
@@ -88,7 +89,6 @@ function NotesLostState() {
                 </div>
                 <div className="gallery-chat-panel">
                     <ChatPanel
-                        prKey="fixture-medium"
                         worker={WORKER}
                         tasks={[]}
                         exchanges={EXCHANGES}

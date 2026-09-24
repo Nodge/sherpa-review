@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { generationIsLong, LONG_GENERATION_MS } from '../../route/generation.js';
+import type { OtherStopFacts } from '../../route/other-stop.js';
 import {
     GenerationCard,
     GenerationFailedBanner,
@@ -26,10 +27,14 @@ function state(phase: 'none' | 'reading' | 'filling' | 'ready' | 'failed'): UiRo
 
 const NOOP = (): void => undefined;
 
-function render(route: UiRouteState, extra: { diffFiles?: number; longRunning?: boolean } = {}): string {
+function render(
+    route: UiRouteState,
+    extra: { diffFiles?: number; longRunning?: boolean; other?: OtherStopFacts } = {},
+): string {
     return renderToStaticMarkup(
         <GenerationCard
             route={route}
+            {...(extra.other === undefined ? {} : { other: extra.other })}
             diffFiles={extra.diffFiles ?? null}
             longRunning={extra.longRunning ?? false}
             onOpenRoute={NOOP}
@@ -65,22 +70,23 @@ describe('route generation card', () => {
         expect(html).toContain('the new plan replaces it whole only once accepted');
     });
 
-    it('phase B: "4 of 7 ready", a segment per slot and the full plan list with statuses', () => {
-        const html = render(state('filling'));
+    it('phase B shows "3 of 6 ready", one segment per slot and a plan list with statuses, without Other', () => {
+        const html = render(state('filling'), { other: { uncovered: 300, conflictFiles: 0 } });
 
         expect(html).toContain('Filling the route');
-        expect(html).toContain('4 of 7 ready');
-        expect(count(html, 'class="gen-bar__segment')).toBe(7);
-        expect(count(html, 'gen-bar__segment--ready')).toBe(4);
+        expect(html).toContain('3 of 6 ready');
+        expect(count(html, 'class="gen-bar__segment')).toBe(6);
+        expect(count(html, 'gen-bar__segment--ready')).toBe(3);
         expect(count(html, 'gen-bar__segment--filling')).toBe(1);
         expect(count(html, 'gen-bar__segment--queued')).toBe(2);
-        expect(count(html, 'class="gen-plan__item')).toBe(7);
+        expect(count(html, 'class="gen-plan__item')).toBe(6);
+        expect(html).not.toContain('Other — lines');
         expect(html).toContain('The plan is fixed — stops are validated independently');
-        expect(html).toContain('4 stops are ready to read, 3 are placeholders');
+        expect(html).toContain('3 stops are already readable, 3 are placeholders');
     });
 
     it('shows "still working" with the phase count and cancellation after a minute (docs/design/SPEC-elements.md §3)', () => {
-        expect(render(state('filling'), { longRunning: true })).toContain('still working · 4 of 7');
+        expect(render(state('filling'), { longRunning: true })).toContain('still working · 3 of 6');
         // The reading phase has no count to show, so the line stays without one.
         expect(render(state('reading'), { longRunning: true })).toContain('still working<');
         expect(render(state('reading'), { longRunning: true })).toContain('Cancel');
@@ -109,13 +115,13 @@ describe('route generation card', () => {
         expect(generationIsLong(tasks, created + LONG_GENERATION_MS)).toBe(true);
         // This flag turns on the line with cancellation. App calculates it from the ticking clock.
         const html = render(state('filling'), { longRunning: generationIsLong(tasks, created + LONG_GENERATION_MS) });
-        expect(html).toContain('still working · 4 of 7');
+        expect(html).toContain('still working · 3 of 6');
         expect(html).toContain('>Cancel</button>');
     });
 
     it('a ready route shows the stop count, stop list and "Open the route"', () => {
         const ready = state('ready');
-        const html = render(ready);
+        const html = render(ready, { other: { uncovered: 38, conflictFiles: 0 } });
         const titles = ready.snapshot?.stops.map((stop) => stop.title) ?? [];
 
         expect(html).toContain('Route ready · 7 stops');
@@ -138,6 +144,24 @@ describe('route generation card', () => {
         expect(html).not.toContain('gen-bar');
         expect(html).not.toContain('gen-card__note');
         expect(html).not.toContain('gen-card__hint');
+    });
+
+    it('a ready route where the model placed everything has no Other in the count or plan', () => {
+        const html = render(state('ready'), { other: { uncovered: 0, conflictFiles: 0 } });
+
+        expect(html).toContain('Route ready · 6 stops');
+        expect(count(html, 'class="gen-plan__item')).toBe(6);
+        expect(html).not.toContain('Other — lines');
+    });
+
+    it('omits the stop count until uncovered ranges are counted, since Other may add a stop', () => {
+        for (const other of [{ uncovered: null, conflictFiles: 0 }, undefined]) {
+            const html = render(state('ready'), other === undefined ? {} : { other });
+
+            expect(html).toContain('<h2 class="gen-card__title">Route ready</h2>');
+            expect(html).not.toContain('Route ready ·');
+            expect(html).not.toContain('Other — lines');
+        }
     });
 
     it('shows failure as a compact red card without raw output or a footer', () => {
@@ -178,7 +202,7 @@ describe('phase B plan list', () => {
         const html = render(state('filling'));
 
         expect(count(html, 'gen-plan__item--queued')).toBe(2);
-        expect(count(html, 'gen-plan__item--ready')).toBe(4);
+        expect(count(html, 'gen-plan__item--ready')).toBe(3);
         expect(html).toContain('queued');
     });
 });
@@ -200,7 +224,7 @@ describe('generation banners', () => {
         }
         const html = renderToStaticMarkup(<RouteFillingBanner snapshot={snapshot} onReadDiff={NOOP} />);
 
-        expect(html).toContain('Filling the route · 4 of 7 stops ready');
+        expect(html).toContain('Filling the route · 3 of 6 stops ready');
         expect(html).toContain('stops appear out of order');
         expect(html).toContain('Meanwhile you can read the full diff');
     });

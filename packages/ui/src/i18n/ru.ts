@@ -100,6 +100,7 @@ export const ru = {
     'route.gen.aria': 'Генерация маршрута',
     'route.gen.ready': (stops: number) =>
         `Маршрут готов · ${num(stops)} ${form(stops, 'остановка', 'остановки', 'остановок')}`,
+    'route.gen.readyCounting': 'Маршрут готов',
     'route.gen.open': 'Открыть маршрут',
     'route.gen.filling.title': 'Заполняю маршрут',
     'route.gen.filling.counter': (ready: number, total: number) => `${num(ready)} из ${num(total)} ${form(ready, 'готова', 'готовы', 'готовы')}`,
@@ -279,7 +280,8 @@ export const ru = {
     'chat.anchor.remove': 'Убрать диапазон из контекста',
     'chat.composer.aria': 'Вопрос агенту',
     'chat.composer.placeholder': 'Спросить агента',
-    'chat.composer.hint': 'Enter — отправить · Shift+Enter — новая строка',
+    'chat.composer.hint.send': 'Enter — отправить',
+    'chat.composer.hint.newline': 'Shift+Enter — новая строка',
     'chat.composer.send': 'Отправить',
     'chat.queue.route': 'Генерирую маршрут · ваш вопрос следующий',
     'chat.queue.busy': 'Агент занят · ваш вопрос следующий',
@@ -491,9 +493,6 @@ export const ru = {
     'diff.notice.malformed': 'часть патча не разобралась — показана как есть',
     'diff.body.parsing': 'дифф разбирается…',
     'diff.body.whitespaceOnly': 'только пробелы — показать',
-    'diff.entity.newFile': (label: string) => `новый файл · ${label}`,
-    'diff.entity.newFileRange': (label: string, from: number, to: number) =>
-        `новый файл · ${label} · ${num(from)}–${num(to)}`,
     'diff.oneSided': (kind: string) => `во всю ширину — в этом файле только ${kind}`,
     'diff.oneSided.additions': 'добавления',
     'diff.oneSided.deletions': 'удаления',

@@ -7,6 +7,8 @@ import { Icon } from '../../icons/icon.tsx';
 import { Markdown } from '../../markdown/markdown.tsx';
 import type { GenerationSlot } from '../../route/generation.js';
 import { generationCardKind, generationProgress } from '../../route/generation.js';
+import type { OtherStopFacts } from '../../route/other-stop.js';
+import { otherStopPending, UNKNOWN_OTHER } from '../../route/other-stop.js';
 import './generation.css';
 
 /**
@@ -19,6 +21,11 @@ import './generation.css';
 
 export interface GenerationCardProps {
     readonly route: UiRouteState;
+    /**
+     * What is known about Other in a ready snapshot. Until uncovered ranges are counted, Other is absent
+     * from the plan and no stop count is shown.
+     */
+    readonly other?: OtherStopFacts;
     /** Files in the diff for the phase A progress line. `null` until the diff arrives. */
     readonly diffFiles?: number | null;
     /** Generation has run for over a minute: the "still working" line with cancellation (docs/design/SPEC-elements.md §3). */
@@ -60,6 +67,7 @@ function GenerationPlan({ slots }: { slots: readonly GenerationSlot[] }) {
 /** `null` means the generation card has nothing to say in this phase (generation has never started). */
 export function GenerationCard({
     route,
+    other = UNKNOWN_OTHER,
     diffFiles = null,
     longRunning = false,
     cancelling = false,
@@ -88,14 +96,18 @@ export function GenerationCard({
 
     const snapshot = route.snapshot;
     if (kind === 'ready' && snapshot !== null) {
-        const stops = snapshot.stops.length;
+        const { slots } = generationProgress(snapshot, other);
         return (
             <section className="gen-card" aria-label={t('route.gen.aria')}>
                 <div className="gen-card__head">
-                    <h2 className="gen-card__title">{t('route.gen.ready', stops)}</h2>
+                    <h2 className="gen-card__title">
+                        {otherStopPending(snapshot, other)
+                            ? t('route.gen.readyCounting')
+                            : t('route.gen.ready', slots.length)}
+                    </h2>
                 </div>
 
-                <GenerationPlan slots={generationProgress(snapshot).slots} />
+                <GenerationPlan slots={slots} />
 
                 <button type="button" className="ctl ctl--primary gen-card__cta" onClick={onOpenRoute}>
                     {t('route.gen.open')}

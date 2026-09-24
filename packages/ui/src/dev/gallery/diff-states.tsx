@@ -48,6 +48,8 @@ interface CardStateProps {
     readonly gapError?: boolean;
     /** Replace fixture file paths: long paths for the card header, which do not exist in the fixtures themselves. */
     readonly override?: Partial<Pick<FileDiff, 'path' | 'oldPath'>>;
+    /** File built by the gallery rather than taken from a fixture. The fixture then supplies only host capabilities. */
+    readonly synthetic?: FileDiff;
 }
 
 const EMPTY_EXPANSION: FileExpansion = new Map();
@@ -98,9 +100,13 @@ function CardState({
     hint,
     gapError = false,
     override,
+    synthetic,
 }: CardStateProps) {
     const data = useMemo(() => fixtureIteration(fixture), [fixture]);
-    const file = useMemo(() => ({ ...fileOf(fixture, path), ...override }), [fixture, path, override]);
+    const file = useMemo(
+        () => synthetic ?? { ...fileOf(fixture, path), ...override },
+        [fixture, path, override, synthetic],
+    );
     const contentAvailable = data.pr.capabilities.fileContent;
 
     const store = useMemo(() => {
@@ -297,6 +303,41 @@ const LONG_RENAME = {
     path: 'services/orders/src/infra/platform/time/providers/generated/v3/internal/adapters/legacy/system/monotonic-clock.provider.ts',
 };
 
+/**
+ * Edit beyond line 1000: numbers go from 3 to 4 digits within a hunk,
+ * while the first hunk keeps 2-digit numbers. The whole card shares a column. The fixtures have no files this long with edits
+ * on both sides.
+ */
+const LEDGER: FileDiff = {
+    ...fileOf('medium', ORDER),
+    fileId: 'gallery-ledger',
+    path: 'services/orders/src/billing/ledger.ts',
+    additions: 4,
+    deletions: 3,
+    patch: [
+        '@@ -12,3 +12,3 @@',
+        ' const LEDGER_LIMIT = 500;',
+        '-const LEDGER_TTL = 60;',
+        '+const LEDGER_TTL = 90;',
+        ' ',
+        '@@ -996,7 +996,8 @@',
+        ' export function settle(entry: LedgerEntry): Settlement {',
+        '     const total = entry.lines.reduce(sum, 0);',
+        '-    if (total > LEDGER_LIMIT) {',
+        '-        return reject(entry);',
+        '+    if (total > LEDGER_LIMIT && !entry.approved) {',
+        "+        audit.record(entry, 'over-limit');",
+        "+        return reject(entry, 'over-limit');",
+        '     }',
+        '     return accept(entry, total);',
+        ' }',
+        '',
+    ].join('\n'),
+};
+
+/** Single-digit numbers on both sides: the line number column never shrinks below 2 digits. */
+const SHORT_FILE = 'services/orders/src/infra/time/clock.ts';
+
 export interface DiffGalleryState {
     readonly id: string;
     readonly title: string;
@@ -313,6 +354,26 @@ export const DIFF_STATES: readonly DiffGalleryState[] = [
         id: 'diff-split',
         title: 'card, side by side',
         render: () => <CardState fixture="medium" path={ORDER} mode="split" />,
+    },
+    {
+        id: 'diff-gutter-short',
+        title: 'single-digit line numbers: line number column at minimum width',
+        render: () => <CardState fixture="edge" path={SHORT_FILE} />,
+    },
+    {
+        id: 'diff-gutter-short-split',
+        title: 'single-digit line numbers, side by side',
+        render: () => <CardState fixture="edge" path={SHORT_FILE} mode="split" />,
+    },
+    {
+        id: 'diff-gutter-1000',
+        title: 'line numbers beyond 1000: wider line number column shared by the card',
+        render: () => <CardState fixture="medium" path={LEDGER.path} synthetic={LEDGER} />,
+    },
+    {
+        id: 'diff-gutter-1000-split',
+        title: 'line numbers beyond 1000, side by side: shared width for both halves',
+        render: () => <CardState fixture="medium" path={LEDGER.path} synthetic={LEDGER} mode="split" />,
     },
     {
         id: 'diff-long-lines',

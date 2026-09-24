@@ -12,6 +12,7 @@ import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
+import { asFetched } from './fetched.js';
 
 /**
  * Full diff view states: the left panel with filters and the tree, plus cards.
@@ -59,7 +60,7 @@ function WorkspaceState({
     prepareThreads,
 }: WorkspaceStateProps) {
     const data = useMemo(() => {
-        const source = fixtureIteration(fixture);
+        const source = asFetched(fixtureIteration(fixture));
         const keep =
             onlyPath === undefined
                 ? paths

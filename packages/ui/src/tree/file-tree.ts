@@ -4,6 +4,7 @@ import { fuzzyMatch } from '../palette/fuzzy.js';
 import type { FileReadState, ReadState } from '../progress/read-state.js';
 import { readStateOf } from '../progress/read-state.js';
 import type { RouteMarginFile } from '../route/margin-model.js';
+import { inTreeOrder } from './file-order.js';
 
 /**
  * Full diff left-panel file tree (docs/design/SPEC-elements.md §2.20,
@@ -125,13 +126,14 @@ interface EmitContext {
 }
 
 /**
- * Tree rows in traversal order. Within a directory, directories come before files,
- * each group alphabetically. The host has its own diff file order, which does not suit the tree.
+ * Tree rows in traversal order. `inTreeOrder` sets the order. Files are already placed into nodes
+ * in that order, so each node's directories and files follow insertion order. There is nothing
+ * to sort during traversal.
  */
 export function buildFileTree(input: FileTreeInput): FileTree {
     const root = makeNode('', '');
 
-    for (const file of input.files) {
+    for (const file of inTreeOrder(input.files)) {
         const segments = file.path.split('/');
         const name = segments.pop() ?? file.path;
         const read = input.readState.get(file.fileId) ?? readStateOf({ file, record: null });
@@ -193,9 +195,7 @@ export function buildFileTree(input: FileTreeInput): FileTree {
  * Its directories must appear in `directories` and the size-based defaults.
  */
 function emit(node: Node, depth: number, prefix: string, visible: boolean, context: EmitContext): void {
-    const dirs = [...node.dirs.values()].sort((a, b) => a.segment.localeCompare(b.segment));
-
-    for (const dir of dirs) {
+    for (const dir of node.dirs.values()) {
         const chain = prefix === '' ? dir.segment : `${prefix}/${dir.segment}`;
         const onlyDir = dir.dirs.size === 1 && dir.files.length === 0;
 
@@ -238,7 +238,7 @@ function emit(node: Node, depth: number, prefix: string, visible: boolean, conte
     // A combined directory chain has no files of its own (otherwise it is not a chain), so
     // a file label is always its name, with nothing added from `prefix`.
     if (visible) {
-        for (const file of [...node.files].sort((a, b) => a.label.localeCompare(b.label))) {
+        for (const file of node.files) {
             context.rows.push({ ...file, depth });
         }
     }

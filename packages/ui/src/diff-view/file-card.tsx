@@ -1,5 +1,5 @@
 import type { FileContent, FileDiff } from '@sherpa/protocol';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { FileContextMenu, useContextMenu } from '../components/context-menu.tsx';
@@ -15,6 +15,7 @@ import { useBlobLoader } from './blob-loader.tsx';
 import type { ContextExpandRequest, ContextExpandResult, GapExpandResult } from './context-expansion.js';
 import type { LinePosition } from './diff-rows.tsx';
 import { DiffRows } from './diff-rows.tsx';
+import { gutterDigits } from './gutter.js';
 import { MarkdownReview } from './markdown-review.tsx';
 import type { ImageBodyState } from './image-card.tsx';
 import { ImageBody } from './image-card.tsx';
@@ -32,7 +33,7 @@ import type { DiffMode, FileCollapseReason } from './store.js';
 
 /**
  * File card (docs/design/README.md §1 "Right column: one card per hunk", §10). A sticky header with filename,
- * path, counters, entity header and actions, followed by diff rows or a single-line notice.
+ * path, counters and actions, followed by diff rows or a single-line notice.
  *
  * The card loads nothing itself. It receives model, content and state as props and emits
  * intents (`FileCardActions`). The same card can therefore work with live endpoints
@@ -229,6 +230,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         () => (shownModel === undefined ? shownFileModel(model, content ?? null, expansion, transform) : shownModel),
         [content, expansion, model, shownModel, transform],
     );
+    const digits = useMemo(() => gutterDigits(shown), [shown]);
 
     const changed =
         counts === undefined
@@ -330,6 +332,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
             className={`file-card${file.generated ? ' file-card--generated' : ''}`}
             id={`file-${file.fileId}`}
             data-file={file.fileId}
+            style={{ '--gutter-digits': digits } as CSSProperties}
         >
             {/* Border, background and rounding live on the inner wrapper. The outer box reserves the left
                 14px for thread markers floating on the card edge (§3). */}
@@ -363,8 +366,6 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                             −{count(counts?.deletions ?? model?.deletions ?? file.deletions)}
                         </span>
                     </span>
-                    <span className="file-card__entity">{entityText(shown, t)}</span>
-
                     {routeBadge}
                     {threadsCollapse === null ? null : (
                         <button
@@ -841,25 +842,4 @@ function Body(props: BodyProps) {
             />
         </div>
     );
-}
-
-/**
- * Entity header (docs/design/SPEC-elements.md §2.13): empty if the parser returned nothing.
- * It never displays "unknown".
- */
-function entityText(model: DiffFileModel | null, t: Translate): string {
-    if (model?.content.kind !== 'text') {
-        return '';
-    }
-    const hunk = model.content.blocks.find((block) => block.kind === 'hunk' && block.entity !== null);
-    const entity = hunk?.kind === 'hunk' ? hunk.entity : null;
-    if (entity === null) {
-        return '';
-    }
-
-    const { label, range } = entity;
-    if (model.changeType === 'add') {
-        return range === null ? t('diff.entity.newFile', label) : t('diff.entity.newFileRange', label, range.from, range.to);
-    }
-    return range === null ? label : `${label} · ${String(range.from)}–${String(range.to)}`;
 }

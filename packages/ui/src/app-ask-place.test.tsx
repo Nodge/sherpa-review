@@ -13,9 +13,10 @@ import { createSessionStore } from './session/session-store.js';
 import type { Store, StoreSnapshot } from './store.js';
 
 /**
- * Ask AI entry points through the full app: "Other" opens chat with a list of
+ * Tests "Other" through the whole app. Ask AI entry points: "Other" opens chat with a list of
  * uncovered ranges and no anchor. The hatched Full diff strip anchors chat to its own
- * range. Neither sends the question, it waits for ⏎ in the composer.
+ * range. Neither sends the question. It waits for ⏎ in the composer. Overview knows as much about
+ * "Other" as the route does, even before the route has been opened.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -106,7 +107,7 @@ afterEach(() => {
  * are the same. Narrow the diff to one file to reach its card.
  */
 function mountApp(
-    view: 'route' | 'diff',
+    view: 'overview' | 'route' | 'diff',
     paths?: readonly string[],
 ): { readonly host: HTMLElement; readonly settle: () => Promise<void> } {
     const diff =
@@ -231,7 +232,6 @@ describe('Ask AI entry points in the app', () => {
         expect(text).toContain('For each one — which stop it belongs to and why');
         // A question has one anchor and many ranges. The composer must not show a range chip.
         expect(mounted.host.querySelector('.chat-panel__context--anchor')).toBeNull();
-        expect(mounted.host.querySelector('.chat-panel__context')?.textContent).not.toBe('');
     });
 
     it('the hatched Full diff strip opens chat anchored to its range', async () => {
@@ -257,5 +257,17 @@ describe('Ask AI entry points in the app', () => {
         const anchorChip = mounted.host.querySelector('.chat-panel__context--anchor');
         expect(anchorChip).not.toBeNull();
         expect(anchorChip?.textContent).toContain(numbers?.[1] ?? 'no number');
+    });
+});
+
+describe('"Other" outside the route view', () => {
+    it('Overview shows the same stop count before and after the first route visit', async () => {
+        const mounted = mountApp('overview');
+        const title = (): string => mounted.host.querySelector('.gen-card__title')?.textContent ?? '';
+        await mounted.settle();
+
+        // The model left uncovered lines in the medium fixture. "Other" is the seventh stop.
+        expect(title()).toBe('Route ready · 7 stops');
+        expect(mounted.host.querySelector('.gen-plan')?.textContent).toContain('Other');
     });
 });

@@ -46,14 +46,17 @@ function outsideReadme(keys: readonly string[]): string[] {
     return keys.filter((key) => !key.startsWith(`${README}:`));
 }
 
-/** Slice v1 → v3 files in order: `SLICE_V1_V2` plus the README rewritten by the force-push. */
+/**
+ * Files in the v1 → v3 slice, in tree order (as shown in the UI): `SLICE_V1_V2` plus README,
+ * which the force-push rewrote.
+ */
 const SLICE_V1_V3_PATHS = [
-    'services/orders/src/domain/policies/edit-policy.ts',
     'services/orders/src/api/handlers.ts',
     'services/orders/src/api/rejection-status.ts',
+    'services/orders/src/domain/policies/edit-policy.ts',
     'services/orders/src/payments/card-token.ts',
-    'pnpm-lock.yaml',
     README,
+    'pnpm-lock.yaml',
 ];
 
 test('F3 force-push: route iteration disappears, route stays readable, progress carries over past it', async ({

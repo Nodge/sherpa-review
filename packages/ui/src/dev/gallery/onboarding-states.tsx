@@ -86,7 +86,6 @@ function RouteUnderTour() {
 function ChatUnderTour() {
     return (
         <ChatPanel
-            prKey="fixture-medium"
             worker={CONNECTED}
             tasks={[]}
             exchanges={[]}

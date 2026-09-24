@@ -35,11 +35,11 @@ for (const mode of ['unified', 'split'] as const) {
         const server = await launchSherpa('fixture-medium');
         await page.goto(server.url);
         await openFullDiff(page, mode);
-        await checkDirection(page, 'up');
+        await checkDirection(page, mode, 'up');
 
         await page.reload();
         await openFullDiff(page, mode);
-        await checkDirection(page, 'down');
+        await checkDirection(page, mode, 'down');
     });
 }
 
@@ -55,7 +55,7 @@ async function openFullDiff(page: Page, mode: 'unified' | 'split'): Promise<void
     await expect.poll(() => page.locator('.diff-gap[data-edge="inner"]').count()).toBeGreaterThan(0);
 }
 
-async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<void> {
+async function checkDirection(page: Page, mode: 'unified' | 'split', direction: 'up' | 'down'): Promise<void> {
     const gap = await findInnerGap(page, 21);
     await gap.scrollIntoViewIfNeeded();
     await expect(gap).toBeVisible();
@@ -74,7 +74,11 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
         'aria-label',
         `load 20 lines ${direction === 'up' ? 'up' : 'down'}, ${hiddenLabel(initialHidden)}`,
     );
-    await expect(target).toHaveCSS('width', '46px');
+    // The target spans the whole line-number column, whose width depends on the card's line-number digit count:
+    // compare with the neighboring code row column instead of a fixed number.
+    const widths = await targetAndGutterWidth(target, mode, direction);
+    expect(widths.target).toBeCloseTo(widths.gutter, 1);
+    expect(widths.target).toBeGreaterThanOrEqual(24);
     await expect(target).toHaveCSS('height', '24px');
     if (direction === 'up') {
         await gap.focus();
@@ -112,6 +116,30 @@ async function checkDirection(page: Page, direction: 'up' | 'down'): Promise<voi
     expect(await gapGeometry(gap)).toEqual(beforeGeometry);
     await expect(gap.locator('.diff-gap__counter')).toHaveText(`${String(remaining)} unchanged lines`);
     await expect(gap.locator('.diff-gap__counter')).toHaveCSS('pointer-events', 'none');
+}
+
+/**
+ * Width of the target and its line-number column, measured on a code row in the same card:
+ * up is the first column, down is the new-line column (unified) or the right-side line-number column (split).
+ */
+async function targetAndGutterWidth(
+    target: Locator,
+    mode: 'unified' | 'split',
+    direction: 'up' | 'down',
+): Promise<{ readonly target: number; readonly gutter: number }> {
+    const column = direction === 'up' ? 0 : mode === 'unified' ? 1 : 3;
+    return target.evaluate((element, index) => {
+        const row = element.closest('.diff-rows')?.querySelector('.diff-row');
+        if (row === null || row === undefined) {
+            throw new Error('No code row next to the gap');
+        }
+        const tracks = getComputedStyle(row).gridTemplateColumns.split(' ').map(Number.parseFloat);
+        const gutter = tracks[index];
+        if (gutter === undefined) {
+            throw new Error(`Code row has no column ${String(index)}`);
+        }
+        return { target: element.getBoundingClientRect().width, gutter };
+    }, column);
 }
 
 async function findInnerGap(page: Page, minimumHidden: number): Promise<Locator> {

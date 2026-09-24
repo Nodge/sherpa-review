@@ -75,6 +75,7 @@ import {
 import type { z } from 'zod';
 
 import { activeT } from './i18n/index.js';
+import { withTreeOrder } from './tree/file-order.js';
 
 /**
  * UI actions (docs/protocol.md §2): standard REST with a bearer token. Protocol schemas validate
@@ -109,6 +110,7 @@ export async function cancelTask(token: string, taskId: number): Promise<UiCance
  */
 export type ReviewDiffSelection = { readonly diffId: string | null } | { readonly base: string; readonly head: string };
 
+/** The diff enters the UI here, already in tree order. Nothing downstream sees the host's order. */
 export async function fetchReviewDiff(token: string, selection?: ReviewDiffSelection | null): Promise<PrDiff> {
     const query =
         selection == null
@@ -116,7 +118,7 @@ export async function fetchReviewDiff(token: string, selection?: ReviewDiffSelec
             : 'diffId' in selection
               ? { diffId: selection.diffId }
               : { base: selection.base, head: selection.head };
-    return (await get(withQuery(UI_ENDPOINTS.reviewDiff, query), token, uiReviewDiffResponseSchema)).diff;
+    return withTreeOrder((await get(withQuery(UI_ENDPOINTS.reviewDiff, query), token, uiReviewDiffResponseSchema)).diff);
 }
 
 /** File filter lenses: ownership is separate from additional lenses (docs/design/README.md §Filters). */

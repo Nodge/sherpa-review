@@ -75,7 +75,10 @@ function State() {
             actions={galleryActions(store)}
             renderAfterLine={(_side, line) =>
                 line === 3 ? (
-                    <div className="file-card__notice">Reviewer comment: clarify what the lower bound means.</div>
+                    // Expanded thread wrapper: its document indentation is checked against the block text.
+                    <div className="thread-line">
+                        <div className="file-card__notice">Reviewer comment: clarify the meaning of the lower bound.</div>
+                    </div>
                 ) : null
             }
         />

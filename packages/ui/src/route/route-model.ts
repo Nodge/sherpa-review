@@ -17,6 +17,7 @@ import { threadAtLines } from '../threads/model.js';
 import type { IterationLayout } from '../threads/model.js';
 import type { ComposerSnapshot } from '../threads/store.js';
 import type { AnchorSpan } from './anchor-clip.js';
+import { otherStopVisible } from './other-stop.js';
 import {
     ANCHOR_CONTEXT,
     anchorSpans,
@@ -179,7 +180,7 @@ export interface RouteModel {
     readonly promoted: boolean;
     /**
      * Route slots, used as the denominator in "01 / 7" and the toolbar counter. Counted from `entries`, not
-     * the snapshot: "Other" is not rendered when no uncovered lines remain, so the card number,
+     * the snapshot, because Other is not always rendered (`otherStopVisible`). The card number, viewed
      * counter and guardrail must all refer to the same set.
      */
     readonly stopCount: number;
@@ -193,11 +194,6 @@ export interface RouteModelInput {
     readonly failed?: ReadonlySet<string>;
     /** Session preset (docs/design/SPEC-elements.md §2.5). Only affects entry order. */
     readonly preset?: RoutePreset;
-    /**
-     * The route is still filling (docs/design/README.md §8): uncovered ranges are unfilled plan slots, not the model's
-     * final judgement. "Other" is not promoted and its banner stays hidden until ready. The order stays fixed by the plan.
-     */
-    readonly filling?: boolean;
 }
 
 export function buildRouteModel({
@@ -206,7 +202,6 @@ export function buildRouteModel({
     models,
     failed = EMPTY_FAILED,
     preset = 'triage',
-    filling = false,
 }: RouteModelInput): RouteModel {
     // Conflicted files are excluded from coverage calculations entirely (docs/design/SPEC-elements.md §4.1). Their lines
     // count as neither changed nor uncovered, and the coverage bar omits them. A separate row
@@ -285,12 +280,11 @@ export function buildRouteModel({
     byTier.other = uncovered;
     const totals: RouteTotals = { changed, covered, uncovered, byTier, pendingFiles, failedFiles, conflictFiles };
 
-    // Hide "Other" only when there really are no uncovered ranges (docs/design/SPEC-elements.md §4.3). While the diff
-    // is being parsed, uncovered lines have not been counted yet. Keep the slot with "counting…",
-    // otherwise card numbers and the counter would jump from 6 to 7 during parsing.
-    // Conflicts also keep the slot: their row is the only place that reports them.
+    // While the diff is being parsed, uncovered ranges have not been counted and "Other" is absent. Otherwise,
+    // it would flash until parsing finished even on a route where the model placed everything.
+    const otherVisible = otherStopVisible(snapshot, { uncovered: pendingFiles > 0 ? null : uncovered, conflictFiles });
     const other: RouteOtherView | null =
-        otherStop === null || (uncovered === 0 && pendingFiles === 0 && conflictFiles === 0)
+        otherStop === null || !otherVisible
             ? null
             : {
                   stop: otherStop,
@@ -299,13 +293,26 @@ export function buildRouteModel({
                   lines: uncovered,
                   conflictFiles,
               };
-    const promoted = !filling && other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
+    // Visible "Other" means the route is complete. On an incomplete route, uncovered ranges are unfilled plan slots.
+    const promoted = other !== null && changed > 0 && uncovered / changed > PROMOTE_THRESHOLD;
     const entries =
         preset === 'tour'
             ? inTourOrder(order(views, other, false), snapshot.tourOrder)
             : order(views, other, promoted);
 
     return { entries, totals, promoted, stopCount: entries.length };
+}
+
+/**
+ * Uncovered changed lines in the route, the same count as the route model's `totals.uncovered`.
+ * `null` while any file has neither been parsed nor failed.
+ */
+export function routeUncoveredLines(input: RouteModelInput): number | null {
+    const failed = input.failed ?? EMPTY_FAILED;
+    const pending = input.files.some(
+        (file) => file.changeType !== 'conflict' && !input.models.has(file.fileId) && !failed.has(file.fileId),
+    );
+    return pending ? null : buildRouteModel(input).totals.uncovered;
 }
 
 /** The route entry's counts are not final yet because some of its files have not been parsed. */

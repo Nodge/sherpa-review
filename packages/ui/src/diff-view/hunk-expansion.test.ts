@@ -16,8 +16,6 @@ function hunk(newStart: number, count: number): DiffHunk {
         oldCount: count,
         newStart,
         newCount: count,
-        section: null,
-        entity: null,
         whitespaceOnly: false,
         lines,
     };

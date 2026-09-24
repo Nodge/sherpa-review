@@ -285,14 +285,39 @@ describe('route model', () => {
         expect(other?.kind === 'other' ? other.view.conflictFiles : 0).toBe(conflictsOnly.length);
     });
 
-    it('keeps Other as a slot while parsing the diff: numbers do not jump from 6 to 7', () => {
+    it('hides Other while the diff is being parsed because uncovered lines have not been counted', () => {
         const model = buildRouteModel({ snapshot: SNAPSHOT, files: DATA.diff.files, models: new Map() });
-        const other = model.entries.find((entry) => entry.kind === 'other');
 
-        expect(model.totals.uncovered).toBe(0);
-        expect(other?.kind).toBe('other');
-        expect(model.stopCount).toBe(7);
-        expect(model.entries).toHaveLength(7);
+        expect(model.totals.pendingFiles).toBe(DATA.diff.files.length);
+        expect(model.entries.some((entry) => entry.kind === 'other')).toBe(false);
+        expect(model.stopCount).toBe(6);
+    });
+
+    it('hides Other while the route is being built even though unfilled slots leave uncovered lines', () => {
+        const filling: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: SNAPSHOT.stops.map((stop) =>
+                stop.id === 's02' ? { ...stop, status: 'filling' as const, anchors: [] } : stop,
+            ),
+        };
+        const model = build(filling);
+
+        expect(model.totals.uncovered).toBeGreaterThan(0);
+        expect(model.entries.some((entry) => entry.kind === 'other')).toBe(false);
+        expect(model.promoted).toBe(false);
+    });
+
+    it('sends lines from a failed section to Other and treats a route with failures as complete', () => {
+        const failed: RouteSnapshot = {
+            ...SNAPSHOT,
+            stops: SNAPSHOT.stops.map((stop) =>
+                stop.id === 's02' ? { ...stop, status: 'failed' as const, anchors: [] } : stop,
+            ),
+        };
+        const model = build(failed);
+
+        expect(model.totals.uncovered).toBeGreaterThan(build().totals.uncovered);
+        expect(model.entries.some((entry) => entry.kind === 'other')).toBe(true);
     });
 
     it('does not keep a stop pending when a file fails to parse', () => {

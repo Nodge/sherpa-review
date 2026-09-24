@@ -18,6 +18,7 @@ import type { ThreadStore } from '../threads/store.js';
 import type { StopLink } from '../markdown/markdown.tsx';
 import { StopMarkdown } from '../markdown/markdown.tsx';
 import { provenanceLine } from '../route/generation.js';
+import type { OtherStopFacts } from '../route/other-stop.js';
 import type { ViewId } from '../session/views.js';
 import type { OwnershipKind, OwnershipSegment } from './overview-model.js';
 import { ownershipSummary } from './overview-model.js';
@@ -31,6 +32,8 @@ import './view-frames.css';
  */
 export interface RouteGenerationProps {
     readonly route: UiRouteState | null;
+    /** What is known about the snapshot's "Other" (`otherStopVisible`). Without it, the stop count is not stated. */
+    readonly other?: OtherStopFacts;
     /** The task has been running for over a minute: a "still working" line with cancellation (docs/design/SPEC-elements.md §3). */
     readonly longRunning?: boolean;
     readonly cancelling?: boolean;
@@ -343,6 +346,7 @@ export function OverviewView({
                     {route === null ? null : (
                         <GenerationCard
                             route={route}
+                            {...(generation?.other === undefined ? {} : { other: generation.other })}
                             diffFiles={diff?.files.length ?? null}
                             longRunning={generation?.longRunning ?? false}
                             cancelling={generation?.cancelling ?? false}

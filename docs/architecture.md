@@ -128,7 +128,7 @@ Sections have 2 levels of reduced functionality. Soft rules remove individual el
 
 The skeleton does not need the diff. Its only semantic rule is that `tourOrder` must be a permutation of the planned numbers, or the Full tour cannot be built. The server assigns stop IDs and the synthetic "Other" stop after validation. The model does not choose them.
 
-Uncovered ranges go into a synthetic **"Other"** stop. The server adds it, the model doesn't know about it, and the UI computes its contents (uncovered ranges). With no uncovered lines, the UI hides it. When uncovered lines exceed 40 % of changed lines (`PROMOTE_THRESHOLD` in `packages/ui/src/route/route-model.ts`), it moves to the top and the UI offers to regenerate the route.
+Uncovered ranges go into the synthetic **"Other"** stop. The server adds it without the model's involvement, and the UI computes its contents (uncovered ranges). The UI hides it while the route is incomplete or it has no uncovered lines (`otherStopVisible` in `packages/ui/src/route/other-stop.ts`). When more than 40% of changed lines are uncovered (`PROMOTE_THRESHOLD` in `packages/ui/src/route/route-model.ts`), the stop moves to the top and the UI offers to regenerate the route.
 
 **The orchestrator's state machine uses reconciliation.** `RouteOrchestrator.reconcile` remembers no events. It reads `RouteStore` state alongside queue state and decides what to do next. Reconciliation is idempotent, so a server restart during generation, an agent dying, or a session being displaced recover without separate handling.
 

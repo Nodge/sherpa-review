@@ -69,11 +69,10 @@
 }
 
 /*
- * Expanded thread below a line: full row width with an inset to the code column (108px in unified,
- * 60px to the code in its half in split). The background does not depend on resolved status. The edge shows it.
+ * An expanded thread under a line spans the row width, indented to the code column. The indentation lives
+ * in `diff-view.css` alongside the gutter grid. The background ignores resolved state. The border shows status.
  */
 .thread-line {
-    padding-left: 108px;
     border-top: 1px solid var(--border-hairline-strong);
     border-bottom: 1px solid var(--border-hairline-strong);
     box-shadow: inset 2px 0 0 var(--accent);
@@ -81,10 +80,6 @@
 
 .thread-line--resolved {
     box-shadow: inset 2px 0 0 var(--border-standard);
-}
-
-.diff-row-extras--split .thread-line {
-    padding-left: 60px;
 }
 
 .thread-line .thread-list {

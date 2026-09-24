@@ -406,6 +406,11 @@
     font-size: var(--font-size-scope);
 }
 
+.chat-panel__composer-hint {
+    display: flex;
+    flex-direction: column;
+}
+
 .chat-panel__composer-footer button {
     font-weight: 600;
 }

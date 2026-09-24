@@ -121,7 +121,6 @@ function ChatState({
     return (
         <div className="gallery-chat-panel">
             <ChatPanel
-                prKey="fixture-4821"
                 worker={worker}
                 tasks={tasks}
                 exchanges={exchanges}

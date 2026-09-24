@@ -15,7 +15,7 @@ export interface HunkSpec {
     /** First hunk line number in the old file version (1-based, 0 if there is no old version). */
     oldStart: number;
     newStart: number;
-    /** Text after the closing `@@`. The UI extracts the entity header from it (`docs/design/SPEC-elements.md §2.13`). */
+    /** Text after the closing `@@`, as written by git. */
     section?: string;
     lines: readonly PatchLine[];
 }

@@ -6,6 +6,7 @@ import { stripInlineCode } from '@sherpa/protocol/markdown';
 import { changedLinesOf } from '../progress/read-state.js';
 import type { AnchorSpan } from './anchor-clip.js';
 import { droppedWhitespaceLines, spanLines, uncoveredRanges } from './anchor-clip.js';
+import { otherStopVisible } from './other-stop.js';
 import { planLabel } from './route-model.js';
 
 /**
@@ -40,7 +41,7 @@ export interface RouteMarginFile {
 
 export interface RouteMarginModel {
     readonly files: ReadonlyMap<string, RouteMarginFile>;
-    /** Other is the target of a hatched badge click. null means it is absent from the snapshot. */
+    /** Other is the hatched badge's click target. null means it is hidden (`otherStopVisible`). */
     readonly otherStopId: string | null;
     readonly uncoveredLines: number;
     readonly uncoveredFiles: number;
@@ -87,7 +88,9 @@ export function buildRouteMargin({ snapshot, files, models, failed = EMPTY_FAILE
     let uncoveredFiles = 0;
     let pendingFiles = 0;
     let failedFiles = 0;
+    let conflictFiles = 0;
     for (const file of files) {
+        conflictFiles += file.changeType === 'conflict' ? 1 : 0;
         const model = models.get(file.fileId) ?? null;
         if (model === null) {
             if (failed.has(file.fileId)) {
@@ -111,9 +114,10 @@ export function buildRouteMargin({ snapshot, files, models, failed = EMPTY_FAILE
         });
     }
 
+    const other = otherStopVisible(snapshot, { uncovered: pendingFiles > 0 ? null : uncoveredLines, conflictFiles });
     return {
         files: byFile,
-        otherStopId: snapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null,
+        otherStopId: other ? (snapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null) : null,
         uncoveredLines,
         uncoveredFiles,
         pendingFiles,

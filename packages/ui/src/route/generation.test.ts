@@ -13,9 +13,9 @@ import {
     routeActionErrorInPlace,
     routeGenerationAvailable,
     routeViewKind,
-    snapshotFilling,
     snapshotLocale,
 } from './generation.js';
+import { snapshotFilling } from './other-stop.js';
 
 /** Generation state model. Phase selection and "N of M" counts all come from fixture data. */
 
@@ -132,9 +132,9 @@ describe('route filling progress', () => {
     it('takes counts from fixture slot statuses instead of the design handoff image', () => {
         const progress = generationProgress(snapshotOf('filling'));
 
-        expect(progress.total).toBe(7);
-        // s01, s02, s05 are filled, synthetic "Other" is readable immediately: four of seven.
-        expect(progress.ready).toBe(4);
+        // An unfinished route has no "Other". s01, s02 and s05 are filled, which is 3 out of 6.
+        expect(progress.total).toBe(6);
+        expect(progress.ready).toBe(3);
         expect(progress.slots.map((slot) => slot.status)).toEqual([
             'ready',
             'ready',
@@ -142,23 +142,22 @@ describe('route filling progress', () => {
             'queued',
             'ready',
             'filling',
-            'ready',
         ]);
-        expect(progress.slots.map((slot) => slot.planLabel)).toEqual([
-            '01',
-            '02',
-            '03',
-            '04',
-            '05',
-            '06',
-            '07',
-        ]);
+        expect(progress.slots.map((slot) => slot.planLabel)).toEqual(['01', '02', '03', '04', '05', '06']);
     });
 
     it('no longer considers a ready snapshot to be filling', () => {
         expect(snapshotFilling(snapshotOf('ready'))).toBe(false);
         expect(snapshotFilling(snapshotOf('filling'))).toBe(true);
-        expect(generationProgress(snapshotOf('ready')).ready).toBe(7);
+    });
+
+    it('includes Other in the plan of a ready route only when it has something to show', () => {
+        expect(generationProgress(snapshotOf('ready')).total).toBe(6);
+        expect(generationProgress(snapshotOf('ready'), { uncovered: 0, conflictFiles: 0 }).total).toBe(6);
+        const withOther = generationProgress(snapshotOf('ready'), { uncovered: 38, conflictFiles: 0 });
+        expect(withOther.total).toBe(7);
+        expect(withOther.ready).toBe(7);
+        expect(withOther.slots.at(-1)?.planLabel).toBe('07');
     });
 });
 

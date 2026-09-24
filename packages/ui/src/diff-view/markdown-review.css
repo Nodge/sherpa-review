@@ -25,6 +25,11 @@
     border-left-color: var(--accent);
 }
 
+/* The document has no line-number columns: a thread below a line aligns with block text (2px border + padding). */
+.markdown-review .thread-line {
+    padding-left: calc(2px + var(--space-inner));
+}
+
 .markdown-review__anchor {
     display: none;
 }

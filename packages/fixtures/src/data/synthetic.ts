@@ -37,7 +37,7 @@ export interface SyntheticParams {
     viewedAt: (index: number, changeType: FileChangeType) => boolean;
     /** Insert long lines into the file for line-wrapping tests. */
     longLinesAt?: (index: number) => boolean;
-    /** Text after the closing `@@`. The UI extracts the entity header from it (`docs/design/SPEC-elements.md §2.13`). */
+    /** Text after the closing `@@`, as written by git. */
     sectionAt?: (moduleIndex: number) => string;
 }
 

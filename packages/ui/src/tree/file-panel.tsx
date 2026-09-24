@@ -127,23 +127,26 @@ export function FilePanel(props: FilePanelProps) {
                 />
             </div>
 
-            <div className="file-panel__chips">
-                {filters.map((filter) => (
-                    <button
-                        key={filter.id}
-                        type="button"
-                        className={`ctl ctl--chip file-panel__chip${filter.id === activeFilter.id ? ' is-on' : ''}`}
-                        disabled={!filter.available}
-                        aria-pressed={filter.id === activeFilter.id}
-                        title={filter.available ? filter.label : (filter.note ?? t('tree.filter.unavailable'))}
-                        onClick={() => {
-                            onFilter(filter.id);
-                        }}
-                    >
-                        {filter.shortLabel} <span className="file-panel__chip-count">{filter.count}</span>
-                    </button>
-                ))}
-            </div>
+            {/* A single filter ("All") has nothing to switch to, so omit the row. */}
+            {filters.length < 2 ? null : (
+                <div className="file-panel__chips">
+                    {filters.map((filter) => (
+                        <button
+                            key={filter.id}
+                            type="button"
+                            className={`ctl ctl--chip file-panel__chip${filter.id === activeFilter.id ? ' is-on' : ''}`}
+                            disabled={!filter.available}
+                            aria-pressed={filter.id === activeFilter.id}
+                            title={filter.available ? filter.label : (filter.note ?? t('tree.filter.unavailable'))}
+                            onClick={() => {
+                                onFilter(filter.id);
+                            }}
+                        >
+                            {filter.shortLabel} <span className="file-panel__chip-count">{filter.count}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {writeError === null ? null : (
                 <p className="file-panel__notice" role="status">
@@ -534,7 +537,7 @@ function Counts({ additions }: { additions: number }) {
 
 /**
  * Single-file PR outline (docs/design/SPEC-elements.md §2.20: "the tree is replaced by the file's outline").
- * Items are hunks with entity labels from the diff model, an approximation of symbol navigation.
+ * Entries are hunks labelled with their line ranges.
  */
 function FileOutline({
     outline,
@@ -564,7 +567,6 @@ function FileOutline({
                         onOpenHunk(entry.index);
                     }}
                 >
-                    {/* An outline entry is an entity name, not a path. Truncate it from the end. */}
                     <span className="file-tree__outline-label">{entry.label}</span>
                 </button>
             ))}

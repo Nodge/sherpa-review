@@ -19,6 +19,8 @@ import { expect, test } from './sherpa-fixture.js';
 const IMPORTANT_STOPS = ['s01', 's02', 's03', 's04'] as const;
 const LOW_STOPS = ['s05', 's06'] as const;
 const PLAN_ORDER = ['s01', 's02', 's03', 's04', 's05', 's06', 'other'];
+/** Other is absent while the route is being built (docs/design/SPEC-elements.md §4.3). */
+const FILLING_ORDER = PLAN_ORDER.filter((stopId) => stopId !== 'other');
 const TOUR_ORDER = ['s03', 's01', 's02', 's05', 's06', 's04', 'other'];
 const FIRST_DRAFT = 'E2E F1: the window is calculated in one place. This belongs in the docs.';
 const SECOND_DRAFT = 'E2E F1: 409 versus 400. We should check on the client.';
@@ -56,9 +58,9 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
     await test.step('plan arrives: slots and summary are in place before filling', async () => {
         await submit(worker, skeletonTask.taskId, raw.skeleton);
 
-        await expect(stopNumbers(page)).toHaveText(['01 / 7', '02 / 7', '03 / 7', '04 / 7', '05 / 7', '06 / 7', '07 / 7']);
-        expect(await stopOrder(page)).toEqual(PLAN_ORDER);
-        // None filled yet: six model skeletons plus the ready "Other" stop.
+        await expect(stopNumbers(page)).toHaveText(['01 / 6', '02 / 6', '03 / 6', '04 / 6', '05 / 6', '06 / 6']);
+        expect(await stopOrder(page)).toEqual(FILLING_ORDER);
+        // None filled yet: six model skeletons, with no Other until ready.
         await expect(page.locator('.route-skeleton-card')).toHaveCount(6);
         await expect(page.locator('.coverage__legend-text')).toHaveText('coverage known after the plan');
 
@@ -246,8 +248,8 @@ async function expectHalfFilled(page: Page): Promise<void> {
 
     // The Overview plan card and route use the same numbers (docs/design/SPEC-elements.md §8 item 4).
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-    await expect(page.locator('.gen-plan__number')).toHaveText(['01', '02', '03', '04', '05', '06', '07']);
-    await expect(page.locator('.gen-card__counter')).toHaveText('4 of 7 ready');
+    await expect(page.locator('.gen-plan__number')).toHaveText(['01', '02', '03', '04', '05', '06']);
+    await expect(page.locator('.gen-card__counter')).toHaveText('3 of 6 ready');
     await expectSummary(page);
     await page.getByRole('tab', { name: 'Route', exact: true }).click();
 }

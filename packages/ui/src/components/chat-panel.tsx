@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MessageKey, Translate } from '../i18n/index.js';
 import { useT } from '../i18n/index.js';
-import { breadcrumbFromPrKey } from '../pr-key.js';
 import { Markdown } from '../markdown/markdown.tsx';
 import { NOTE_LOST_ANCHOR_REASON, noteAnchorForIteration, noteVisibleInIteration } from '../notes/model.js';
 import { CHAT_EXAMPLE_QUESTIONS } from './chat-prompts.js';
@@ -15,7 +14,6 @@ export type ChatActivityState = 'empty' | 'queued' | 'answering' | 'failed' | 'd
 export type ChatScrollTarget = 'queue' | 'error' | { readonly kind: 'exchange'; readonly exchangeId: number };
 
 export interface ChatPanelProps {
-    readonly prKey: string;
     readonly worker: WorkerStatus;
     readonly tasks: readonly UiTask[];
     readonly exchanges: readonly ChatExchange[];
@@ -310,7 +308,6 @@ export function ChatPanel(props: ChatPanelProps) {
     const runningFor = running === null ? 0 : now - Date.parse(running.createdAt);
     const typingVisible = running !== null && runningFor >= 300;
     const longRunning = running !== null && runningFor > 60_000;
-    const prLabel = breadcrumbFromPrKey(props.prKey).at(-1) ?? props.prKey;
 
     return (
         // `data-tour="chat"` is the target for step 06 of the first-pass tour.
@@ -382,9 +379,8 @@ export function ChatPanel(props: ChatPanelProps) {
             </div>
 
             <div className="chat-panel__composer">
-                <div className="chat-panel__contexts">
-                    <span className="chat-panel__context">{prLabel}</span>
-                    {anchor === null ? null : (
+                {anchor === null ? null : (
+                    <div className="chat-panel__contexts">
                         <span
                             className="chat-panel__context chat-panel__context--anchor"
                             title={chatAnchorTitle(anchor)}
@@ -394,8 +390,8 @@ export function ChatPanel(props: ChatPanelProps) {
                                 ×
                             </button>
                         </span>
-                    )}
-                </div>
+                    </div>
+                )}
                 {anchor?.selectedText === undefined ? null : (
                     <blockquote className="chat-panel__selection-quote">{anchor.selectedText}</blockquote>
                 )}
@@ -417,7 +413,10 @@ export function ChatPanel(props: ChatPanelProps) {
                     }}
                 />
                 <div className="chat-panel__composer-footer">
-                    <span>{t('chat.composer.hint')}</span>
+                    <span className="chat-panel__composer-hint">
+                        <span>{t('chat.composer.hint.send')}</span>
+                        <span>{t('chat.composer.hint.newline')}</span>
+                    </span>
                     <button
                         type="button"
                         className="ctl ctl--primary"

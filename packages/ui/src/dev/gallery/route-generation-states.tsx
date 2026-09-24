@@ -6,6 +6,7 @@ import type { BannerSource } from '../../components/banner-slot.tsx';
 import { BannerSlot } from '../../components/banner-slot.tsx';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
+import type { OtherStopFacts } from '../../route/other-stop.js';
 import { createDiffViewStore } from '../../diff-view/store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
@@ -40,7 +41,18 @@ function routeState(
     return state;
 }
 
-function OverviewState({ route, longRunning = false }: { route: UiRouteState; longRunning?: boolean }) {
+/** Uncovered ranges in the `medium` fixture with a ready route. In the app, App calculates them by parsing in the background. */
+const MEDIUM_UNCOVERED: OtherStopFacts = { uncovered: 38, conflictFiles: 0 };
+
+function OverviewState({
+    route,
+    longRunning = false,
+    other,
+}: {
+    route: UiRouteState;
+    longRunning?: boolean;
+    other?: OtherStopFacts;
+}) {
     const session = useMemo(() => createSessionStore({ initial: { view: 'overview', filter: 'all' } }), []);
     const threadStore = useMemo(
         () => createThreadStore(DATA.threads, new Set(DATA.diff.files.map((file) => file.fileId))),
@@ -59,7 +71,7 @@ function OverviewState({ route, longRunning = false }: { route: UiRouteState; lo
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}
                 reviewHostAvailable
-                generation={{ route, longRunning }}
+                generation={other === undefined ? { route, longRunning } : { route, longRunning, other }}
             />
         </div>
     );
@@ -259,7 +271,17 @@ export const ROUTE_GENERATION_STATES: readonly RouteGalleryState[] = [
     {
         id: 'overview-ready',
         title: 'Overview: route ready, stop list and "Open route"',
-        render: () => <OverviewState route={routeState('medium', 'ready')} />,
+        render: () => <OverviewState route={routeState('medium', 'ready')} other={MEDIUM_UNCOVERED} />,
+    },
+    {
+        id: 'overview-ready-all-placed',
+        title: 'Overview: route ready, the model placed all lines, no "Other"',
+        render: () => <OverviewState route={routeState('medium', 'ready')} other={{ uncovered: 0, conflictFiles: 0 }} />,
+    },
+    {
+        id: 'overview-ready-counting',
+        title: 'Overview: route ready, diff still parsing, no stop count or "Other" yet',
+        render: () => <OverviewState route={routeState('medium', 'ready')} other={{ uncovered: null, conflictFiles: 0 }} />,
     },
     {
         id: 'overview-failed',

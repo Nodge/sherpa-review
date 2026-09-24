@@ -1,6 +1,5 @@
 import type { FileChangeType } from '@sherpa/protocol';
 
-import { detectEntity } from './entity.js';
 import type {
     DiffBlock,
     DiffFileContent,
@@ -23,7 +22,7 @@ import { diffWords } from './word-diff.js';
  * as context with the `malformed` flag. The UI should show an odd diff instead of a blank screen.
  */
 
-const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
+const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 const OLD_MODE_RE = /^old mode (\d+)$/;
 const NEW_MODE_RE = /^new mode (\d+)$/;
 const BINARY_RE = /^(?:GIT )?[Bb]inary (?:files|patch)/;
@@ -129,7 +128,6 @@ function readHunk(
     const oldCount = header[2] === undefined ? 1 : Number(header[2]);
     const newStart = Number(header[3]);
     const newCount = header[4] === undefined ? 1 : Number(header[4]);
-    const section = header[5] ?? '';
 
     const body: DiffLine[] = [];
     let malformed = false;
@@ -206,20 +204,12 @@ function readHunk(
         highlightHunk(body, language);
     }
 
-    const hunkSection = section.length === 0 ? null : section;
     const hunk: DiffHunk = {
         kind: 'hunk',
         oldStart,
         oldCount: actualOldCount,
         newStart,
         newCount: actualNewCount,
-        section: hunkSection,
-        entity: detectEntity({
-            section: hunkSection,
-            lines: body,
-            newSideEmpty: !body.some((line) => line.newLine !== null),
-            language,
-        }),
         whitespaceOnly: isWhitespaceOnly(body),
         lines: body,
     };

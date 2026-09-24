@@ -85,8 +85,8 @@ export function validateSkeleton(rawText: string, locale: Locale = 'en'): RouteV
 
 /**
  * "Other" has nothing to fill. Its status is `ready` immediately, with no anchors. The UI computes its content (uncovered
- * ranges). With no uncovered lines, the UI hides the stop itself
- * (`docs/design/SPEC-elements.md §4.3`).
+ * ranges). The UI hides the stop until the route is complete and when there are no
+ * uncovered lines (`docs/design/SPEC-elements.md §4.3`).
  */
 function otherStop(planIndex: number, locale: Locale): RouteStop {
     return {

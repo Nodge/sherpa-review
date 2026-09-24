@@ -2,6 +2,8 @@ import type { Locale, RouteProvenance, RouteSnapshot, RouteStopStatus, UiRouteSt
 
 import type { MessageKey, Translate } from '../i18n/index.js';
 import type { ViewId } from '../session/views.js';
+import type { OtherStopFacts } from './other-stop.js';
+import { UNKNOWN_OTHER, visibleStops } from './other-stop.js';
 import { planLabel } from './route-model.js';
 
 /**
@@ -101,13 +103,17 @@ export interface GenerationSlot {
 
 export interface GenerationProgress {
     readonly slots: readonly GenerationSlot[];
-    /** Slots ready to read. Synthetic "Other" is ready immediately because it really is readable. */
+    /** Slots ready to read. */
     readonly ready: number;
     readonly total: number;
 }
 
-export function generationProgress(snapshot: RouteSnapshot): GenerationProgress {
-    const slots = snapshot.stops.map((stop) => ({
+/**
+ * Plan slots contain only visible stops. While the route is being built, Other is absent
+ * (`otherStopVisible`), so it is excluded from the "N of M" count.
+ */
+export function generationProgress(snapshot: RouteSnapshot, other: OtherStopFacts = UNKNOWN_OTHER): GenerationProgress {
+    const slots = visibleStops(snapshot, other).map((stop) => ({
         id: stop.id,
         planLabel: planLabel(stop.planIndex),
         title: stop.title,
@@ -118,11 +124,6 @@ export function generationProgress(snapshot: RouteSnapshot): GenerationProgress 
         ready: slots.filter((slot) => slot.status === 'ready').length,
         total: slots.length,
     };
-}
-
-/** The snapshot is still being built: at least one slot is neither ready nor failed. */
-export function snapshotFilling(snapshot: RouteSnapshot): boolean {
-    return snapshot.stops.some((stop) => stop.status === 'queued' || stop.status === 'filling');
 }
 
 /** Open route-generation tasks cancelled by Cancel (docs/design/SPEC-elements.md §3). */

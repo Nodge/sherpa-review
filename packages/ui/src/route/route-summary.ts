@@ -1,5 +1,8 @@
 import type { RouteSnapshot } from '@sherpa/protocol';
 
+import type { OtherStopFacts } from './other-stop.js';
+import { otherStopVisible, visibleStops } from './other-stop.js';
+
 /** Counts for the completed route, computed after parsing the diff. */
 export interface RouteSummary {
     /** Stops in render order, including "Other" if present. */
@@ -20,23 +23,24 @@ export interface ReportedRouteSummary {
     readonly value: RouteSummary;
 }
 
-/** An old report does not apply to a new snapshot with the same stop IDs. */
+/**
+ * Until the route view reports, the stop set consists of the snapshot's visible stops. An old report never applies to a new
+ * snapshot.
+ */
 export function routeFactsForSnapshot(
     snapshot: RouteSnapshot,
-    viewed: ReadonlyMap<string, boolean>,
     reported: ReportedRouteSummary | null,
+    other: OtherStopFacts,
 ): RouteFacts {
     if (reported?.snapshotId === snapshot.snapshotId) {
         return reported.value;
     }
 
-    const otherStopId = snapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null;
-    const trustViewedOther = reported === null;
     return {
-        stopIds: snapshot.stops
-            .filter((stop) => stop.tier !== 'other' || (trustViewedOther && viewed.get(stop.id) === true))
-            .map((stop) => stop.id),
-        otherStopId,
+        stopIds: visibleStops(snapshot, other).map((stop) => stop.id),
+        otherStopId: otherStopVisible(snapshot, other)
+            ? (snapshot.stops.find((stop) => stop.tier === 'other')?.id ?? null)
+            : null,
         uncoveredLines: null,
     };
 }

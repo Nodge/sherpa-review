@@ -17,6 +17,7 @@ import { DiffWorkspace, FullDiffView } from '../../views/full-diff.tsx';
 import { ReadOnlyIterationBanner } from '../../views/route/iteration-banners.tsx';
 import { IterationWithoutRoute, SliceWithoutOverview } from '../../views/view-frames.tsx';
 import type { RouteGalleryState } from './route-states.tsx';
+import { withTreeOrder } from '../../tree/file-order.js';
 
 /**
  * Slice between iterations: "what is new" from the previous iteration to the active one, without a route,
@@ -26,7 +27,7 @@ import type { RouteGalleryState } from './route-states.tsx';
 
 const V1 = fixtureIteration('medium', 0);
 const V2 = fixtureIteration('medium', 1);
-const SLICE: PrDiff = fixtureInterdiff('medium', 0, 1);
+const SLICE: PrDiff = withTreeOrder(fixtureInterdiff('medium', 0, 1));
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 const ITERATIONS: readonly Iteration[] = [

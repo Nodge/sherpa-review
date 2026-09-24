@@ -2,6 +2,7 @@ import { routeFixtures } from '@sherpa/fixtures';
 import type { RouteSnapshot } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { UNKNOWN_OTHER } from './other-stop.js';
 import { routeFactsForSnapshot } from './route-summary.js';
 
 const READY = routeFixtures('medium')?.states.ready?.snapshot ?? null;
@@ -17,11 +18,32 @@ describe('route counts for the action bar', () => {
             value: { stopIds: ['s01', 'other'], otherStopId: 'other', uncoveredLines: 32 },
         };
 
-        expect(routeFactsForSnapshot(SNAPSHOT, new Map(), report)).toEqual(report.value);
+        expect(routeFactsForSnapshot(SNAPSHOT, report, UNKNOWN_OTHER)).toEqual(report.value);
     });
 
-    it('preserves viewed "Other" from server progress when no report exists', () => {
-        expect(routeFactsForSnapshot(SNAPSHOT, new Map([['other', true]]), null).stopIds).toContain('other');
+    it('omits "Other" without a report until uncovered ranges are counted or when the count is zero', () => {
+        for (const other of [UNKNOWN_OTHER, { uncovered: 0, conflictFiles: 0 }]) {
+            const facts = routeFactsForSnapshot(SNAPSHOT, null, other);
+
+            expect(facts.stopIds).toEqual(
+                SNAPSHOT.stops.filter((stop) => stop.tier !== 'other').map((stop) => stop.id),
+            );
+            expect(facts.otherStopId).toBeNull();
+        }
+    });
+
+    it('includes nonempty "Other" in the stop set without a report', () => {
+        const facts = routeFactsForSnapshot(SNAPSHOT, null, { uncovered: 38, conflictFiles: 0 });
+
+        expect(facts.stopIds).toEqual(SNAPSHOT.stops.map((stop) => stop.id));
+        expect(facts.otherStopId).toBe('other');
+    });
+
+    it('keeps "Other" for conflicted files even without a report because there is nowhere else to report them', () => {
+        const facts = routeFactsForSnapshot(SNAPSHOT, null, { uncovered: null, conflictFiles: 2 });
+
+        expect(facts.stopIds).toContain('other');
+        expect(facts.otherStopId).toBe('other');
     });
 
     it('immediately discards previous stops and uncovered lines when the snapshot changes', () => {
@@ -35,11 +57,11 @@ describe('route counts for the action bar', () => {
             value: { stopIds: ['s01', 'other'], otherStopId: 'other', uncoveredLines: 32 },
         };
 
-        const facts = routeFactsForSnapshot(next, new Map([['other', true]]), oldReport);
+        const facts = routeFactsForSnapshot(next, oldReport, { uncovered: 0, conflictFiles: 0 });
 
         expect(facts.stopIds).not.toContain('s01');
         expect(facts.stopIds).not.toContain('other');
-        expect(facts.otherStopId).toBe('other');
+        expect(facts.otherStopId).toBeNull();
         expect(facts.uncoveredLines).toBeNull();
     });
 });

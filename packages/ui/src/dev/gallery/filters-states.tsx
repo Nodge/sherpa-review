@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { FilterSelect } from '../../components/filter-select.tsx';
+import type { FileFilter } from '../../filters/lens-filters.js';
 import {
     buildFileFilters,
     filterFiles,
@@ -23,7 +24,8 @@ const FILTERS = buildFileFilters({
     extra: fixtureIteration('large').extraLenses,
     t: createT('en'),
 });
-const MINE = findFilter(FILTERS, MINE_FILTER_ID);
+// Host has no ownership, other lenses are empty, no generated files. Only "All" remains.
+const SINGLE_FILTER = buildFileFilters({ files: FILES, ownership: null, extra: [], t: createT('en') });
 const READ_STATE = new Map(FILES.map((file) => [file.fileId, readStateOf({ file, record: null })]));
 
 export interface FilterGalleryState {
@@ -36,13 +38,18 @@ export const FILTER_STATES: readonly FilterGalleryState[] = [
     {
         id: 'filters-zero-lenses',
         title: 'empty lenses hidden, "My files" disabled',
-        render: () => <ZeroLensFiltersState />,
+        render: () => <FiltersState filters={FILTERS} />,
+    },
+    {
+        id: 'filters-single',
+        title: 'only the "All" filter: no chip row in the panel, select remains',
+        render: () => <FiltersState filters={SINGLE_FILTER} />,
     },
 ];
 
-function ZeroLensFiltersState() {
+function FiltersState({ filters }: { filters: readonly FileFilter[] }) {
     const [filterId, setFilterId] = useState('all');
-    const active = selectFilter(FILTERS, filterId);
+    const active = selectFilter(filters, filterId);
     const selectRoot = useRef<HTMLDivElement | null>(null);
 
     // The display shows the dropdown contents immediately, without a separate click.
@@ -57,11 +64,11 @@ function ZeroLensFiltersState() {
         <div className="gallery__viewport gallery-zero-filters">
             <FilePanel
                 files={filterFiles(FILES, active)}
-                filters={FILTERS}
+                filters={filters}
                 activeFilter={active}
                 onFilter={setFilterId}
                 pciFileIds={new Set()}
-                mineFileIds={MINE?.fileIds ?? null}
+                mineFileIds={findFilter(filters, MINE_FILTER_ID)?.fileIds ?? null}
                 readState={READ_STATE}
                 route={null}
                 activeFileId={null}
@@ -73,7 +80,7 @@ function ZeroLensFiltersState() {
             />
             <section className="gallery-zero-filters__select" ref={selectRoot}>
                 <h2>Filter select</h2>
-                <FilterSelect filters={FILTERS} active={active} onSelect={setFilterId} />
+                <FilterSelect filters={filters} active={active} onSelect={setFilterId} />
             </section>
         </div>
     );

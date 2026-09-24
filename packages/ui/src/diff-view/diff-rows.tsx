@@ -626,10 +626,12 @@ function Side({
     onLineFocus: ((side: 'old' | 'new', line: number) => void) | undefined;
     onLineBlur: (() => void) | undefined;
 }) {
+    // The divider starts the right half even when its line is empty.
+    const halfStart = side === 'new' ? ' diff-row__half-start' : '';
     if (cell === null) {
         return (
             <>
-                <span className="diff-row__gutter diff-row__gutter--empty" />
+                <span className={`diff-row__gutter diff-row__gutter--empty${halfStart}`} />
                 <span className="diff-row__sign diff-row__sign--empty" />
                 <span className="diff-row__code diff-row__code--empty" />
             </>
@@ -642,7 +644,11 @@ function Side({
     const position = positionOf(cell, side);
     return (
         <>
-            <span className={`diff-row__gutter diff-row__gutter--comment ${className}`} data-key={key} data-side={side}>
+            <span
+                className={`diff-row__gutter diff-row__gutter--comment ${className}${halfStart}`}
+                data-key={key}
+                data-side={side}
+            >
                 {(side === 'old' ? line.oldLine : line.newLine) ?? ''}
                 {position === null ? null : (
                     <CommentButton

@@ -106,7 +106,6 @@ function DockState({ overlay }: { overlay: boolean }) {
             {overlay ? <div className="gallery-dock-scrim" /> : null}
             <div className={`gallery-dock-chat${overlay ? ' gallery-dock-chat--overlay' : ''}`}>
                 <ChatPanel
-                    prKey="fixture-medium"
                     worker={WORKER}
                     tasks={[]}
                     exchanges={EXCHANGES}

@@ -11,6 +11,7 @@ import { createUiPrStateStore } from '../../pr-state/pr-state-store.js';
 import { createSessionStore } from '../../session/session-store.js';
 import { ShortcutsProvider } from '../../shortcuts/context.tsx';
 import { createShortcutRegistry } from '../../shortcuts/registry.js';
+import { asFetched } from './fetched.js';
 
 export interface PaletteGalleryState {
     readonly id: string;
@@ -18,7 +19,7 @@ export interface PaletteGalleryState {
     readonly render: () => ReactNode;
 }
 
-const DATA = fixtureIteration('medium');
+const DATA = asFetched(fixtureIteration('medium'));
 const CHAT = chatFixtures('medium');
 /** The gallery clock is frozen so relative times in history rows stay the same between runs. */
 const NOW = Date.parse('2026-08-20T10:00:00.000Z');

@@ -3,6 +3,8 @@ import type { RouteSnapshot, UiRoutePhase } from '@sherpa/protocol';
 import type { MessageKey } from '../../i18n/index.js';
 import { stripInlineCode } from '@sherpa/protocol/markdown';
 import { routeGenerationAvailable } from '../../route/generation.js';
+import type { OtherStopFacts } from '../../route/other-stop.js';
+import { visibleStops } from '../../route/other-stop.js';
 import { planLabel } from '../../route/route-model.js';
 import type { RoutePreset } from '../../session/session-store.js';
 import type { ViewId } from '../../session/views.js';
@@ -18,14 +20,16 @@ import type { Shortcut } from '../../shortcuts/registry.js';
  */
 export function RouteCommands({
     snapshot,
+    other,
     onJump,
 }: {
     snapshot: RouteSnapshot;
+    other: OtherStopFacts;
     onJump: (stopId: string) => void;
 }) {
     return (
         <>
-            {snapshot.stops.map((stop) => (
+            {visibleStops(snapshot, other).map((stop) => (
                 <StopCommand
                     key={stop.id}
                     id={stop.id}

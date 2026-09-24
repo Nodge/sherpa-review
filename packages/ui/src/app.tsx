@@ -16,6 +16,7 @@ import {
 import { useAuditFilter } from './app/use-audit-filter.js';
 import { useChat } from './app/use-chat.js';
 import { useDiffStore } from './app/use-diff-store.js';
+import { useRouteUncovered } from './app/use-route-uncovered.js';
 import { useIterationPicker } from './app/use-iteration-picker.tsx';
 import { useProgressWriter } from './app/use-progress-writer.js';
 import { useReviewData, useReviewState } from './app/use-review-data.js';
@@ -74,6 +75,8 @@ import type { PaletteDiffSource, PaletteNavigation, PaletteNavigationTarget } fr
 import { breadcrumbFor, documentTitleFor } from './pr-key.js';
 import type { ReportedRouteSummary, RouteSummary } from './route/route-summary.js';
 import { routeFactsForSnapshot } from './route/route-summary.js';
+import type { OtherStopFacts } from './route/other-stop.js';
+import { visibleStops } from './route/other-stop.js';
 import type { SessionStore } from './session/session-store.js';
 import type { ViewId } from './session/views.js';
 import { useShortcut, useShortcutRegistry } from './shortcuts/context.tsx';
@@ -239,7 +242,7 @@ export function App({ store, session, token }: AppProps) {
     const blobsAvailable = state?.pr?.capabilities.blobs === true;
     const routeSnapshotId = currentReview.route?.snapshot?.snapshotId ?? null;
     const prKey = state?.prKey ?? null;
-    const { diffStore, loadBlob } = useDiffStore({ diff: currentDiff, prKey, blobsAvailable, token });
+    const { diffStore, loadBlob, parse } = useDiffStore({ diff: currentDiff, prKey, blobsAvailable, token });
     /*
      * The app needs the actual diff mode for one reason: it changes the code panel limit,
      * and therefore the tour frame. The subscription returns a string, so other store updates (model parsing,
@@ -265,7 +268,7 @@ export function App({ store, session, token }: AppProps) {
     /** When the route explains less than half the diff, the notification slot shows a banner (docs/design/SPEC-elements.md §4.3). */
     const [routeUnderExplained, setRouteUnderExplained] = useState(false);
     /**
-     * Route counts from the view: only it knows them (uncovered lines are counted from parsed models).
+     * Route counts from the view: stops in render order and uncovered ranges for the guardrail and review result.
      * The report survives outside the tab, but only for its own snapshot.
      */
     const [routeSummaryState, setRouteSummaryState] = useState<
@@ -725,18 +728,29 @@ export function App({ store, session, token }: AppProps) {
         stopProgress.getSnapshot,
     );
     /**
-     * Until the route view mounts, slots come from the snapshot. "Other" enters the set
-     * only with its own mark: only a rendered stop can be marked, and with no uncovered
-     * lines it is not rendered. Otherwise the guardrail would keep asking to view a nonexistent
-     * stop. The mounted view refines the set because only it knows whether uncovered lines remain.
+     * Whether "Other" (`otherStopVisible`) appears in Overview, the palette, the tour and the action panel uses the same
+     * models as the route view, without mounting it. Parse the diff in the background.
      */
-    const routeSummary = useMemo(() => {
-        if (routeSnapshot === null) {
-            return null;
-        }
-        const reported = routeSummaryState?.key === reviewKey ? routeSummaryState : null;
-        return routeFactsForSnapshot(routeSnapshot, stopViewed, reported);
-    }, [reviewKey, routeSnapshot, routeSummaryState, stopViewed]);
+    const routeUncovered = useRouteUncovered({
+        diff: currentDiff,
+        store: diffStore,
+        snapshot: route?.snapshot ?? null,
+        parse,
+    });
+    const conflictFiles = useMemo(
+        () => currentDiff?.files.filter((file) => file.changeType === 'conflict').length ?? 0,
+        [currentDiff],
+    );
+    const routeOtherFacts = useMemo<OtherStopFacts>(
+        () => ({ uncovered: routeUncovered, conflictFiles }),
+        [conflictFiles, routeUncovered],
+    );
+    const reportedRouteSummary = routeSummaryState?.key === reviewKey ? routeSummaryState : null;
+    const routeSummary = useMemo(
+        () =>
+            routeSnapshot === null ? null : routeFactsForSnapshot(routeSnapshot, reportedRouteSummary, routeOtherFacts),
+        [reportedRouteSummary, routeOtherFacts, routeSnapshot],
+    );
     const reportRouteSummary = useCallback(
         (value: RouteSummary) => {
             // Counts are intermediate while the route is being filled. The guardrail and review result
@@ -842,7 +856,9 @@ export function App({ store, session, token }: AppProps) {
     const tourEpoch = tourAnchorEpoch({
         view,
         routeKind,
-        anyStopFilled: routeViewSnapshot?.stops.some((stop) => stop.status === 'ready') === true,
+        anyStopFilled:
+            routeViewSnapshot !== null &&
+            visibleStops(routeViewSnapshot, routeOtherFacts).some((stop) => stop.status === 'ready'),
         chatOpen,
         completed: completion !== null,
         diffMode: effectiveDiffMode,
@@ -959,6 +975,7 @@ export function App({ store, session, token }: AppProps) {
                     progressError={currentReview.progressError}
                     progressWriter={progressWriter}
                     store={diffStore}
+                    parse={parse}
                     threadStore={threadStore}
                     agentConnected={state.worker.kind === 'connected'}
                     onAskSelection={openChatForSelection}
@@ -1012,6 +1029,7 @@ export function App({ store, session, token }: AppProps) {
                     progressWriter={progressWriter}
                     stopProgress={stopProgress}
                     store={diffStore}
+                    parse={parse}
                     threadStore={threadStore}
                     snapshot={routeViewSnapshot}
                     agentConnected={state.worker.kind === 'connected'}
@@ -1077,6 +1095,7 @@ export function App({ store, session, token }: AppProps) {
                     }}
                     generation={{
                         route,
+                        other: routeOtherFacts,
                         longRunning,
                         cancelling,
                         retrying: generating,
@@ -1099,7 +1118,6 @@ export function App({ store, session, token }: AppProps) {
                             onClick={closeChat}
                         />
                         <ChatPanel
-                            prKey={state.prKey}
                             worker={state.worker}
                             tasks={state.tasks}
                             exchanges={chatData.exchanges}
@@ -1129,7 +1147,7 @@ export function App({ store, session, token }: AppProps) {
 
             {routeViewSnapshot === null ? null : (
                 <>
-                    <RouteCommands snapshot={routeViewSnapshot} onJump={jumpToStop} />
+                    <RouteCommands snapshot={routeViewSnapshot} other={routeOtherFacts} onJump={jumpToStop} />
                     <RoutePresetCommand
                         preset={preset}
                         setPreset={session.setPreset}

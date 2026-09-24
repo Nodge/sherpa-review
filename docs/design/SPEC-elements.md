@@ -205,8 +205,8 @@ Every interactive element must implement all applicable states.
   file boundaries with `title` "start of file"), **Mark viewed**, and on hover: "Copy link",
   "Open in editor", "Blame".
 - The header is sticky inside a tall card so the file name stays visible while scrolling the hunk.
-- Entity header text ("apply_edit · 142–164") comes from the parser; when the parser has nothing,
-  the slot is empty — never "unknown".
+- The header carries no hunk entity label: the name of the enclosing function/class cannot be
+  extracted reliably from the `@@` header or by regex, so the card doesn't guess.
 - A file above 2000 changed lines renders collapsed with "2,412 changed lines — open file" to protect
   scroll performance; the route's own directives can override this for high-tier ranges.
 
@@ -321,7 +321,7 @@ Every interactive element must implement all applicable states.
 
 ### 2.22 Markdown document view
 
-- Files `.md`, `.markdown`, `.mdown` get a header toggle next to the entity label. The button names the
+- Files `.md`, `.markdown`, `.mdown` get a toggle among the card header actions. The button names the
   destination ("Markdown" in code view, "Code" in document view); `aria-pressed` reflects document view.
 - The mode is per file, kept in the diff store for the session: it survives card unmount (full-diff
   virtualization, route column placeholder) and is not persisted across reloads.
@@ -386,7 +386,11 @@ match the final block height); a task that exceeds 60s shows "still working · N
 
 - **Model returns fewer stops than the plan:** missing slots become "not filled — the agent stopped
   early" with a Regenerate action; coverage math counts them as unexplained.
-- **Unplaced lines = 0:** the Other stop disappears entirely (no empty card).
+- **Unplaced lines = 0, or the route is not built yet:** the Other stop does not exist anywhere —
+  no card, no slot in stop counters, the Overview plan list, the palette or the tour. While sections
+  are still filling, "unplaced" is only the unfilled slots; while the diff is still parsing, the
+  count is unknown. A failed section counts as built: its lines honestly land in Other. Conflict
+  files keep the stop (§4.1).
 - **Unplaced lines > 40% of the diff:** the Other stop is promoted above low-tier stops and the
   banner says "the plan explains less than half of this diff — consider regenerating".
 - **Duplicate anchors** (two stops claiming one range): the validator keeps the first, the second

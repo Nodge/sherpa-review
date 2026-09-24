@@ -44,7 +44,8 @@ import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import { createStopProgressStore } from '../../progress/stop-progress-store.js';
 import { buildCoverageStrip } from '../../route/coverage-model.js';
 import type { RouteEntry, RouteFileGroup, RouteStopView } from '../../route/route-model.js';
-import { generationProgress, snapshotFilling } from '../../route/generation.js';
+import { generationProgress } from '../../route/generation.js';
+import { snapshotFilling } from '../../route/other-stop.js';
 import type { RouteSummary } from '../../route/route-summary.js';
 import {
     buildRouteModel,
@@ -334,7 +335,6 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
                 models: diffSnapshot.models,
                 failed: failedFiles,
                 preset,
-                filling: snapshotFilling(snapshot),
             }),
         [diff.files, diffSnapshot.models, failedFiles, preset, snapshot],
     );
@@ -350,8 +350,8 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     // While any file remains unparsed, uncovered ranges are unknown. The bar and exposed counts
     // wait for parsing, or the guardrail and review summary would record a temporary "100% explained".
     const settled = model.totals.pendingFiles === 0;
-    // The action bar and review summary need route counts, which can only be calculated here:
-    // uncovered lines are known only from parsed diff models.
+    // Stops in render order (set by the preset and promotion of Other) and uncovered ranges
+    // are exposed for the action panel and review summary.
     useEffect(() => {
         if (!settled) {
             return;

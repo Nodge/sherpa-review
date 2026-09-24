@@ -18,6 +18,7 @@ import {
 } from '../../api.js';
 import type { DiffClient } from '../../diff/client.js';
 import { createDiffClient } from '../../diff/client.js';
+import type { DiffFileModel } from '../../diff/model.js';
 import { toParseRequest } from '../../diff/model.js';
 import type { DiffViewStore } from '../../diff-view/store.js';
 import { readFragmentParam } from '../../fragment.js';
@@ -61,6 +62,8 @@ export interface RouteViewProps {
     readonly progressWriter: ProgressWriter | null;
     readonly stopProgress: StopProgressStore | null;
     readonly store: DiffViewStore | null;
+    /** Shared application parser. Without it, the view starts its own worker (gallery, tests). */
+    readonly parse?: (file: FileDiff) => Promise<DiffFileModel>;
     readonly threadStore: ThreadStore | null;
     readonly snapshot: RouteSnapshot;
     readonly agentConnected: boolean;
@@ -106,6 +109,7 @@ export function RouteView({
     progressWriter,
     stopProgress,
     store,
+    parse: sharedParse,
     threadStore,
     snapshot,
     agentConnected,
@@ -128,7 +132,7 @@ export function RouteView({
 }: RouteViewProps) {
     const t = useT();
     const clientRef = useRef<DiffClient | null>(null);
-    // One worker per view, as in the full diff. Models are cached in the shared store.
+    // Own worker only without App's shared parser, as in the full diff. Models are cached in the shared store.
     useEffect(
         () => () => {
             clientRef.current?.close();
@@ -138,13 +142,14 @@ export function RouteView({
     );
 
     const diffId = diff?.diffId ?? null;
-    const parse = useCallback(
+    const ownParse = useCallback(
         (file: FileDiff) => {
             clientRef.current ??= createDiffClient();
             return clientRef.current.parseFile(diffId ?? '', toParseRequest(file));
         },
         [diffId],
     );
+    const parse = sharedParse ?? ownParse;
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
     const threadTransport = useMemo(() => createComposerTransport(token), [token]);
     const publishedTransport = useMemo(() => createPublishedCommentTransport(token), [token]);

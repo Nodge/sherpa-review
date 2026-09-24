@@ -9,6 +9,7 @@ import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
 import type { RouteGalleryState } from './route-states.tsx';
+import { asFetched } from './fetched.js';
 
 /**
  * Route markers in full diff margins (docs/design/README.md §10): badges in the tree and card headers,
@@ -16,7 +17,7 @@ import type { RouteGalleryState } from './route-states.tsx';
  * for uncovered ranges. The second state is the same reader without a route, with no margins at all.
  */
 
-const DATA = fixtureIteration('medium');
+const DATA = asFetched(fixtureIteration('medium'));
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 function readySnapshot(): RouteSnapshot {

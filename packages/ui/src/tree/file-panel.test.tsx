@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { FileFilter } from '../filters/lens-filters.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
 import { FilePanel } from './file-panel.tsx';
@@ -42,7 +43,6 @@ const EMPTY_PCI: Lens = {
     zones: null,
 };
 const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t});
-const ACTIVE = selectFilter(FILTERS, 'all');
 
 const mounted: (() => void)[] = [];
 
@@ -52,7 +52,7 @@ afterEach(() => {
     }
 });
 
-function mount(readOnly = false) {
+function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -65,8 +65,8 @@ function mount(readOnly = false) {
             <ReadOnlyIterationProvider readOnly={readOnly}>
                 <FilePanel
                     files={FILES}
-                    filters={FILTERS}
-                    activeFilter={ACTIVE}
+                    filters={filters}
+                    activeFilter={selectFilter(filters, 'all')}
                     onFilter={onFilter}
                     pciFileIds={new Set()}
                     mineFileIds={new Set()}
@@ -118,6 +118,22 @@ describe('FilePanel filter chips', () => {
             mine?.click();
         });
         expect(onFilter).not.toHaveBeenCalled();
+    });
+
+    it('omits the chip row when All files is the only filter', () => {
+        const single = buildFileFilters({ files: FILES, ownership: null, extra: [EMPTY_PCI], t });
+        expect(single.map((filter) => filter.id)).toEqual(['all']);
+
+        const { host } = mount(false, single);
+
+        expect(host.querySelector('.file-panel__chips')).toBeNull();
+        expect(host.querySelector('.file-panel__search')).not.toBeNull();
+    });
+
+    it('shows the chip row for 2 or more filters', () => {
+        const { host } = mount();
+
+        expect(host.querySelectorAll('.file-panel__chips .file-panel__chip')).toHaveLength(2);
     });
 });
 

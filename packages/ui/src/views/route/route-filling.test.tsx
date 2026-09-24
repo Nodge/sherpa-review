@@ -67,12 +67,12 @@ function count(html: string, needle: string): number {
 }
 
 describe('route during filling', () => {
-    it('keeps all plan slots in plan order: Other is not promoted until ready', () => {
+    it('keeps all plan slots in plan order and hides Other until ready', () => {
         const html = render();
 
-        expect(order(html)).toEqual(['s01', 's02', 's03', 's04', 's05', 's06', 'other']);
-        expect(html).toContain('01 / 7');
-        expect(html).toContain('03 / 7');
+        expect(order(html)).toEqual(['s01', 's02', 's03', 's04', 's05', 's06']);
+        expect(html).toContain('01 / 6');
+        expect(html).toContain('03 / 6');
     });
 
     it('an unfilled slot shows a badge, an explanation and a skeleton instead of a diff', () => {
@@ -102,11 +102,11 @@ describe('route during filling', () => {
         expect(html).not.toContain('% explained');
     });
 
-    it('does not present "Other" on an unfinished route as the model\'s decision', () => {
+    it('hides Other in an unfinished route, where uncovered ranges are empty slots, not model leftovers', () => {
         const html = render();
 
-        expect(html).toContain('The route is still filling. For now, everything the agent has not reached goes here.');
-        expect(html).toContain('Waiting for the route to fill');
+        expect(html).not.toContain('data-stop="other"');
+        expect(html).not.toContain('The route is still filling — everything the agent has not reached lands here for now');
         expect(html).not.toContain('The model did not place these ranges');
     });
 

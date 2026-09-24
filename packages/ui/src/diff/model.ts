@@ -44,20 +44,6 @@ export interface DiffLine {
     sourceGapKey?: string;
 }
 
-/** Lines the parser can confidently assign to the hunk entity. */
-export interface EntityRange {
-    side: 'old' | 'new';
-    from: number;
-    to: number;
-}
-
-/** Entity for the card header (docs/design/SPEC-elements.md §2.13): used to build "apply_edit · 142–164". */
-export interface EntityHeader {
-    label: string;
-    /** null means the name is known (git put it in the hunk header), but its file bounds are not. */
-    range: EntityRange | null;
-}
-
 export interface DiffHunk {
     kind: 'hunk';
     oldStart: number;
@@ -65,10 +51,6 @@ export interface DiffHunk {
     oldCount: number;
     newStart: number;
     newCount: number;
-    /** Text after the second `@@`, as provided by the host, or null if absent. */
-    section: string | null;
-    /** null means the parser is unsure. The header slot stays empty and never says "unknown". */
-    entity: EntityHeader | null;
     /**
      * Hunk changes consist only of spaces and line breaks
      * (docs/design/SPEC-elements.md §2.14, single-line notice).

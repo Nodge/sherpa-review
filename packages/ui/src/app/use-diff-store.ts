@@ -1,7 +1,11 @@
-import type { PrDiff } from '@sherpa/protocol';
-import { useEffect, useMemo } from 'react';
+import type { FileDiff, PrDiff } from '@sherpa/protocol';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { fetchBlob } from '../api.js';
+import type { DiffClient } from '../diff/client.js';
+import { createDiffClient } from '../diff/client.js';
+import type { DiffFileModel } from '../diff/model.js';
+import { toParseRequest } from '../diff/model.js';
 import type { BlobLoader } from '../diff-view/blob-loader.tsx';
 import type { DiffViewStore } from '../diff-view/store.js';
 import { createDiffViewStore } from '../diff-view/store.js';
@@ -19,6 +23,11 @@ export interface DiffStoreOptions {
 export interface DiffStoreResult {
     readonly diffStore: DiffViewStore | null;
     readonly loadBlob: BlobLoader | null;
+    /**
+     * Parse patches for the current diff. One worker per application serves both the view and background
+     * counting for "Other", so a file requested twice is parsed once.
+     */
+    readonly parse: (file: FileDiff) => Promise<DiffFileModel>;
 }
 
 /**
@@ -91,5 +100,23 @@ export function useDiffStore({ diff, prKey, blobsAvailable, token }: DiffStoreOp
         });
     }, [diffStore, prState]);
 
-    return { diffStore, loadBlob };
+    const clientRef = useRef<DiffClient | null>(null);
+    // Use a ref, not `useMemo`: a closed client cannot reopen, and StrictMode mounts App twice.
+    useEffect(
+        () => () => {
+            clientRef.current?.close();
+            clientRef.current = null;
+        },
+        [],
+    );
+    const diffId = diff?.diffId ?? '';
+    const parse = useCallback(
+        (file: FileDiff) => {
+            clientRef.current ??= createDiffClient();
+            return clientRef.current.parseFile(diffId, toParseRequest(file));
+        },
+        [diffId],
+    );
+
+    return { diffStore, loadBlob, parse };
 }

@@ -12,6 +12,7 @@ import { createSessionStore } from '../../session/session-store.js';
 import { createThreadStore } from '../../threads/store.js';
 import { DiffWorkspace } from '../../views/full-diff.tsx';
 import type { RouteGalleryState } from './route-states.tsx';
+import { asFetched } from './fetched.js';
 
 /**
  * Threads pinned to a previous commit: the "pinned to 9f3c1ab" chip,
@@ -19,8 +20,8 @@ import type { RouteGalleryState } from './route-states.tsx';
  * Both states use the `medium` fixture: v2 is active, v1 is its previous iteration.
  */
 
-const V1 = fixtureIteration('medium', 0);
-const V2 = fixtureIteration('medium', 1);
+const V1 = asFetched(fixtureIteration('medium', 0));
+const V2 = asFetched(fixtureIteration('medium', 1));
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
 /** A thread whose anchor the push affected. It is outdated in v2 and beside its own lines in v1. */

@@ -110,7 +110,8 @@ export type RouteStopChange = z.infer<typeof routeStopChangeSchema>;
  * The synthetic "Other" stop has `id: 'other'`, `tier: 'other'`, and the last
  * `planIndex`. The server sets its title in the generation language (reviewer-facing).
  * It has `status: 'ready'` immediately, since there is nothing to fill. The UI computes its contents
- * itself. With no uncovered lines, the UI hides it (`docs/design/SPEC-elements.md §4.3`).
+ * (uncovered ranges). The UI hides it while the route is unfinished and when there are zero uncovered lines
+ * (`docs/design/SPEC-elements.md §4.3`).
  */
 export const routeStopSchema = z.object({
     id: z.string().min(1),

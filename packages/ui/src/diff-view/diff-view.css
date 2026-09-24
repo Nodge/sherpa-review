@@ -199,6 +199,8 @@
 .file-card__counts {
     display: flex;
     gap: 6px;
+    /* Counters end the left header group. Everything after them aligns right. */
+    margin-right: auto;
     font-family: var(--font-mono);
     font-size: var(--font-size-meta);
 }
@@ -222,16 +224,6 @@
     line-height: 1.45;
     color: var(--attention-text-dim);
     white-space: nowrap;
-}
-
-.file-card__entity {
-    flex: 1;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-gutter);
-    color: var(--text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* Hover actions (docs/design/README.md §1) are hidden at rest but keyboard-accessible. */
@@ -337,6 +329,19 @@
 
 /* --- Diff rows --- */
 
+/*
+ * Line number columns follow the digit count of the longest visible number. The card sets `--gutter-digits`,
+ * with one width per card for all number columns. Digit width uses the gutter font
+ * (0.6 of the font size for IBM Plex Mono). `ch` in the row grid would use the code font size.
+ * Columns never shrink below 2 digits. Numbers have 8px on one side and 25px on the other. On the right,
+ * that space is for the comment pencil. For old unified numbers it is on the left, for the thread marker on the card edge.
+ */
+.file-card {
+    /* Fallback value. The card overrides it with the actual value in an inline style. */
+    --gutter-digits: 2;
+    --gutter-col: calc(max(2, var(--gutter-digits)) * var(--font-size-gutter) * 0.6 + 33px);
+}
+
 .diff-rows {
     font-family: var(--font-mono);
     font-size: var(--font-size-code);
@@ -345,7 +350,7 @@
 
 .diff-gap {
     display: grid;
-    grid-template-columns: 46px 46px 16px minmax(0, 1fr);
+    grid-template-columns: var(--gutter-col) var(--gutter-col) 16px minmax(0, 1fr);
     height: 24px;
     padding: 0;
     font-family: var(--font-mono);
@@ -358,7 +363,7 @@
 }
 
 .diff-gap--split {
-    grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
+    grid-template-columns: var(--gutter-col) 14px minmax(0, 1fr) var(--gutter-col) 14px minmax(0, 1fr);
 }
 
 .diff-gap:focus-visible {
@@ -368,13 +373,12 @@
 
 .diff-gap__slot,
 .diff-gap__empty {
-    width: 46px;
     height: 24px;
 }
 
-/* The expansion target uses the toolbar icon from `styles/controls.css`, but is wider because it is a strip, not a button. */
+/* The expansion target uses the toolbar icon from `styles/controls.css`, but spans the number column as a strip. */
 .diff-gap .diff-gap__target {
-    width: 46px;
+    width: 100%;
 }
 
 /* The row is a single line. In split mode the counter sits in the column left of the "down" target, and forward-only
@@ -459,12 +463,17 @@
     position: relative;
     display: grid;
     /* docs/design/README.md §1: unified has old gutter, new gutter, sign, code. */
-    grid-template-columns: 46px 46px 16px minmax(0, 1fr);
+    grid-template-columns: var(--gutter-col) var(--gutter-col) 16px minmax(0, 1fr);
 }
 
 .diff-rows--split .diff-row {
     /* docs/design/README.md §1: side-by-side has gutter, sign and code on each side. */
-    grid-template-columns: 46px 14px minmax(0, 1fr) 46px 14px minmax(0, 1fr);
+    grid-template-columns: var(--gutter-col) 14px minmax(0, 1fr) var(--gutter-col) 14px minmax(0, 1fr);
+}
+
+/* Split half divider. Without it, the right-half numbers sit flush against the left-half code. */
+.diff-row__half-start {
+    border-left: 1px solid var(--border-hairline-strong);
 }
 
 .diff-row-extras--split {
@@ -474,6 +483,16 @@
 
 .diff-row-extras--split > div {
     min-width: 0;
+}
+
+/* An expanded thread below a line (`threads/threads.css`) starts at the code column, or its own half in split mode.
+   In a Markdown document it starts at the block text (`markdown-review.css`). */
+.thread-line {
+    padding-left: calc(2 * var(--gutter-col) + 16px);
+}
+
+.diff-row-extras--split .thread-line {
+    padding-left: calc(var(--gutter-col) + 14px);
 }
 
 /*

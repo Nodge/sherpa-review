@@ -484,16 +484,16 @@ describe('route view', () => {
         expect(html).toContain('counting coverage over the diff');
         expect(html).not.toContain('explained');
         expect(html).not.toContain('coverage__segment');
-        // The "Other" slot stays in place: the numbering denominator does not jump during parsing.
-        expect(order(html)).toContain('other');
-        expect(html).toContain('01 / 7');
+        // Uncovered ranges are not counted yet. Hide Other until parsing shows there is something for it to display.
+        expect(order(html)).not.toContain('other');
+        expect(html).toContain('01 / 6');
     });
 
     it('cannot mark a stop viewed until its ranges are counted', () => {
         const pending = render({ parsed: false });
         const marked = render({ parsed: false, stopViewed: ['s01'] });
 
-        expect(count(pending, 'class="viewed-toggle ctl ctl--toggle route-stop__viewed" aria-pressed="false" disabled=""')).toBe(7);
+        expect(count(pending, 'class="viewed-toggle ctl ctl--toggle route-stop__viewed" aria-pressed="false" disabled=""')).toBe(6);
         // Clearing a mark needs no ranges, so an already marked stop stays clickable.
         expect(section(marked, 's01')).toContain('aria-pressed="true"');
         expect(section(marked, 's01')).not.toContain('disabled=""');

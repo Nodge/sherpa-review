@@ -101,6 +101,8 @@ export interface FullDiffViewProps {
     /** Shared writer from App: one instance for the panel and Full diff. */
     readonly progressWriter: ProgressWriter | null;
     readonly store: DiffViewStore | null;
+    /** Shared application parser. Without it, the view starts its own worker (gallery, tests). */
+    readonly parse?: (file: FileDiff) => Promise<DiffFileModel>;
     readonly threadStore: ThreadStore | null;
     readonly agentConnected: boolean;
     readonly onAskSelection: (anchor: UiChatAskAnchor) => void;
@@ -154,6 +156,7 @@ export function FullDiffView({
     progressError,
     progressWriter,
     store,
+    parse: sharedParse,
     threadStore,
     agentConnected,
     onAskSelection,
@@ -177,8 +180,8 @@ export function FullDiffView({
 }: FullDiffViewProps) {
     const t = useT();
     const clientRef = useRef<DiffClient | null>(null);
-    // One worker per view, started on the first parse and closed with the view. Use a ref instead of
-    // `useMemo`: a closed client cannot restart, and StrictMode mounts the view twice.
+    // A private worker is only needed without the shared App parser. It starts on the first parse and closes
+    // with the view. Use a ref instead of `useMemo`: a closed client cannot restart, and StrictMode mounts the view twice.
     useEffect(
         () => () => {
             clientRef.current?.close();
@@ -188,13 +191,14 @@ export function FullDiffView({
     );
 
     const diffId = diff?.diffId ?? null;
-    const parse = useCallback(
+    const ownParse = useCallback(
         (file: FileDiff) => {
             clientRef.current ??= createDiffClient();
             return clientRef.current.parseFile(diffId ?? '', toParseRequest(file));
         },
         [diffId],
     );
+    const parse = sharedParse ?? ownParse;
     const loadContent = useCallback((fileId: string) => fetchFileContent(token, fileId), [token]);
     const threadTransport = useMemo(() => createComposerTransport(token), [token]);
     const publishedTransport = useMemo(() => createPublishedCommentTransport(token), [token]);
@@ -1684,8 +1688,7 @@ export function commentPosition(
 }
 
 /**
- * Outline items: the hunk entity from the diff model or, if the parser is unsure, the line range
- * on the new side from the `@@` header. Never display "unknown".
+ * Outline entries use the new-side line range from the `@@` header as their label.
  *
  * Not parsed yet and nothing to outline are different answers: the first is temporary, the second final,
  * and the panel must use different words for them.
@@ -1707,10 +1710,7 @@ function outlineOf(model: DiffFileModel | null): FileOutlineModel {
         if (block.kind !== 'hunk') {
             continue;
         }
-        const label =
-            block.entity === null
-                ? `${String(block.newStart)}–${String(block.newStart + Math.max(block.newCount, 1) - 1)}`
-                : block.entity.label;
+        const label = `${String(block.newStart)}–${String(block.newStart + Math.max(block.newCount, 1) - 1)}`;
         entries.push({ index, label });
         index += 1;
     }

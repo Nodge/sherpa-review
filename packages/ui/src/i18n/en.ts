@@ -92,6 +92,7 @@ export const en: Dictionary = {
 
     'route.gen.aria': 'Route generation',
     'route.gen.ready': (stops: number) => `Route ready · ${num(stops)} ${form(stops, 'stop', 'stops')}`,
+    'route.gen.readyCounting': 'Route ready',
     'route.gen.open': 'Open the route',
     'route.gen.filling.title': 'Filling the route',
     'route.gen.filling.counter': (ready: number, total: number) => `${num(ready)} of ${num(total)} ready`,
@@ -271,7 +272,8 @@ export const en: Dictionary = {
     'chat.anchor.remove': 'Remove the range from the context',
     'chat.composer.aria': 'Question to the agent',
     'chat.composer.placeholder': 'Ask the agent',
-    'chat.composer.hint': 'Enter — send · Shift+Enter — new line',
+    'chat.composer.hint.send': 'Enter — send',
+    'chat.composer.hint.newline': 'Shift+Enter — new line',
     'chat.composer.send': 'Send',
     'chat.queue.route': 'Generating the route · your question is next',
     'chat.queue.busy': 'Agent busy · your question is next',
@@ -482,9 +484,6 @@ export const en: Dictionary = {
     'diff.notice.malformed': 'part of the patch failed to parse — shown as is',
     'diff.body.parsing': 'parsing the diff…',
     'diff.body.whitespaceOnly': 'whitespace only — show',
-    'diff.entity.newFile': (label: string) => `new file · ${label}`,
-    'diff.entity.newFileRange': (label: string, from: number, to: number) =>
-        `new file · ${label} · ${num(from)}–${num(to)}`,
     'diff.oneSided': (kind: string) => `shown full width — this file is only ${kind}`,
     'diff.oneSided.additions': 'additions',
     'diff.oneSided.deletions': 'deletions',

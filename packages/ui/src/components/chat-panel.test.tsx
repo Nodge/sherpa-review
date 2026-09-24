@@ -94,7 +94,6 @@ function mountPanel(overrides: Partial<ChatPanelProps> = {}) {
     document.body.append(host);
     const root = createRoot(host);
     let props: ChatPanelProps = {
-        prKey: 'github-quillmart--quillmart--4821',
         worker: CONNECTED,
         tasks: [],
         exchanges: [],
@@ -361,6 +360,14 @@ describe('chat panel feed', () => {
 });
 
 describe('chat panel composer', () => {
+    it('has no context row without an anchor and shows a two-line hint', () => {
+        const { host } = mountPanel();
+
+        expect(host.querySelector('.chat-panel__contexts')).toBeNull();
+        const hint = [...host.querySelectorAll('.chat-panel__composer-hint > span')].map((line) => line.textContent);
+        expect(hint).toEqual(['Enter — send', 'Shift+Enter — new line']);
+    });
+
     it('sends on Enter, keeps the newline on Shift+Enter and removes the range chip separately', async () => {
         const onAsk = vi.fn(() => Promise.resolve(exchange(3, 'queued', { anchor: ANCHOR })));
         const onRemoveAnchor = vi.fn();
@@ -370,7 +377,6 @@ describe('chat panel composer', () => {
         act(() => {
             root.render(
                 <ChatPanel
-                    prKey="github-quillmart--quillmart--4821"
                     worker={CONNECTED}
                     tasks={[]}
                     exchanges={[]}
@@ -399,7 +405,8 @@ describe('chat panel composer', () => {
             host.remove();
         });
 
-        expect(host.textContent).toContain('PR 4821');
+        expect(host.textContent).not.toContain('PR 4821');
+        expect(host.querySelectorAll('.chat-panel__context')).toHaveLength(1);
         expect(host.textContent).toContain('cache.ts:41–43');
         const textarea = host.querySelector('textarea');
         if (textarea === null) {
@@ -435,7 +442,6 @@ describe('chat panel composer', () => {
         act(() => {
             root.render(
                 <ChatPanel
-                    prKey="fixture-medium"
                     worker={{ kind: 'never' }}
                     tasks={[]}
                     exchanges={[]}

@@ -3,6 +3,7 @@ import type { UiRouteState } from '@sherpa/protocol';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import type { OtherStopFacts } from '../route/other-stop.js';
 import { createSessionStore } from '../session/session-store.js';
 import { createThreadStore } from '../threads/store.js';
 import { ViewFrame } from './view-frames.tsx';
@@ -23,7 +24,7 @@ function state(name: 'medium' | 'small', phase: 'none' | 'reading' | 'filling' |
     return fixture;
 }
 
-function render(view: 'overview' | 'route', route: UiRouteState | null): string {
+function render(view: 'overview' | 'route', route: UiRouteState | null, other?: OtherStopFacts): string {
     return renderToStaticMarkup(
         <ViewFrame
             view={view}
@@ -35,7 +36,7 @@ function render(view: 'overview' | 'route', route: UiRouteState | null): string 
             threadStore={createThreadStore(DATA.threads, FILE_IDS)}
             threadNow={Date.parse('2026-08-24T12:00:00.000Z')}
             reviewHostAvailable
-            generation={{ route }}
+            generation={other === undefined ? { route } : { route, other }}
         />,
     );
 }
@@ -57,7 +58,8 @@ describe('Overview during generation', () => {
         expect(html).not.toContain('summary-skeleton');
         expect(html).toContain('The PR introduces a 30-minute edit window');
         expect(html).toContain('claude-code · claude-opus-5 · ');
-        expect(html).toContain('4 of 7 ready');
+        expect(html).toContain('3 of 6 ready');
+        expect(html).not.toContain('Other — lines the model did not place');
         // Summary and plan slots use the route profile: backticks become monospace code.
         expect(html).toContain('<code class="md-code">EditWindow</code>');
         expect(html).toContain('<code class="md-code">README.md</code>');
@@ -84,6 +86,16 @@ describe('Overview during generation', () => {
         expect(html).toContain('Small PR — no route needed.');
         expect(html).not.toContain('Run the skill');
         expect(html).not.toContain('gen-card');
+    });
+
+    it('excludes Other from the stop count in a ready route where the model placed every line', () => {
+        const placed = render('overview', state('medium', 'ready'), { uncovered: 0, conflictFiles: 0 });
+        const withOther = render('overview', state('medium', 'ready'), { uncovered: 38, conflictFiles: 0 });
+
+        expect(placed).toContain('Route ready · 6 stops');
+        expect(placed).not.toContain('Other — lines the model did not place');
+        expect(withOther).toContain('Route ready · 7 stops');
+        expect(withOther).toContain('Other — lines the model did not place');
     });
 
     it('has no snapshot card even after the route is ready', () => {
