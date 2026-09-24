@@ -152,9 +152,11 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
 
         // The second-pass snapshot remains the current PR route. The force-push removed its iteration,
         // but the reviewer does not have to rebuild the route and keeps reading it until rebuilding.
+        // The PR has moved ahead, so the menu row says "stale", just like the indicator.
         const snapshots = menu.locator('.snapshot-picker__row[data-snapshot]');
         await expect(snapshots).toHaveCount(2);
-        await expect(snapshots.nth(0)).toHaveText(new RegExp(`^${V2_SHORT} · .* · current$`));
+        await expect(snapshots.nth(0)).toHaveText(new RegExp(`^${V2_SHORT} · .* · stale$`));
+        await expect(snapshots.nth(0)).toHaveAttribute('aria-checked', 'true');
         await expect(snapshots.nth(1)).toHaveText(new RegExp(`^${V1_SHORT} · .* · stale$`));
 
         // The review host refuses to calculate a slice with a gone iteration, so it has no row.
