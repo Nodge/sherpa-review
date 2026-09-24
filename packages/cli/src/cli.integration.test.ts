@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
 import { localPrKey } from './local.js';
+import { taskResultDirFor, taskResultFileFor, taskResultRootFor } from './paths.js';
 
 const PR_KEY = 'github-quillmart--quillmart--777';
 
@@ -63,6 +64,7 @@ describe('CLI against server', () => {
         readonly ensureServer?: NonNullable<CliIo['ensureServer']>;
         readonly openBrowser?: NonNullable<CliIo['openBrowser']>;
         readonly runCommand?: NonNullable<CliIo['runCommand']>;
+        readonly tmpDir?: string;
     }
 
     async function sherpaWith(overrides: Overrides, ...argv: string[]): Promise<Invocation> {
@@ -74,6 +76,8 @@ describe('CLI against server', () => {
             err: (text) => stderr.push(text),
             // No server bundle beside the test file: it is not needed when the server is already running.
             entry: fileURLToPath(import.meta.url),
+            // Result files go into the test working directory instead of the system tmp.
+            tmpDir: overrides.tmpDir ?? workDir,
             ...(overrides.ensureServer === undefined ? {} : { ensureServer: overrides.ensureServer }),
             ...(overrides.openBrowser === undefined ? {} : { openBrowser: overrides.openBrowser }),
             ...(overrides.runCommand === undefined ? {} : { runCommand: overrides.runCommand }),
@@ -106,6 +110,12 @@ describe('CLI against server', () => {
             instructions,
             contextFiles: ['/tmp/sherpa/task-context.md'],
         }).id;
+    }
+
+    /** Path `worker next` gives the current session for the task result. */
+    async function resultFileOf(taskId: number, attempt = 1): Promise<string> {
+        const dir = taskResultDirFor(workDir, sherpaDir, PR_KEY, await readWorkerIdFile());
+        return taskResultFileFor(dir, { id: taskId, attempt });
     }
 
     async function writeFile(name: string, content: string): Promise<string> {
@@ -458,14 +468,16 @@ describe('CLI against server', () => {
         expect(issued.stdout).toContain(`TASK sherpa/${String(taskId)} (echo), attempt 1`);
         expect(issued.stdout).toContain('Summarize the diff in one paragraph.');
         expect(issued.stdout).toContain('Context: /tmp/sherpa/task-context.md');
-        expect(issued.stdout).toContain(`sherpa task complete ${String(taskId)} --file <path>`);
+        const resultFile = await resultFileOf(taskId);
+        expect(issued.stdout).toContain(`Write the result to ${resultFile} and submit it:`);
+        expect(issued.stdout).toContain(`sherpa task complete ${String(taskId)} --file ${resultFile}`);
 
         const progress = await sherpa('task', 'progress', String(taskId), '--text', 'reading the diff');
         expect(progress.code).toBe(0);
         expect(running.queue.getTask(taskId)?.progressText).toBe('reading the diff');
 
-        const file = await writeFile('answer.md', 'Completed answer.');
-        const completed = await sherpa('task', 'complete', String(taskId), '--file', file);
+        await fs.writeFile(resultFile, 'Finished answer.');
+        const completed = await sherpa('task', 'complete', String(taskId), '--file', resultFile);
         expect(completed.code).toBe(0);
         expect(completed.stdout).toContain('accepted');
         expect(completed.stdout).toContain('sherpa worker next');
@@ -475,6 +487,91 @@ describe('CLI against server', () => {
         const nextTaskId = enqueueEcho(running, 'Second task.');
         const again = await sherpa('worker', 'next');
         expect(again.stdout).toContain(`TASK sherpa/${String(nextTaskId)} (echo), attempt 1`);
+    });
+
+    it('issued path: creates directories accessible only to the owner', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+
+        const issued = await sherpa('worker', 'next');
+
+        expect(issued.code).toBe(0);
+        const resultFile = await resultFileOf(taskId);
+        expect(issued.stdout).toContain(`--file ${resultFile}`);
+        expect(path.dirname(path.dirname(resultFile))).toBe(path.join(taskResultRootFor(workDir), PR_KEY));
+        expect((await fs.stat(taskResultRootFor(workDir))).mode & 0o777).toBe(0o700);
+        expect((await fs.stat(path.dirname(resultFile))).mode & 0o777).toBe(0o700);
+    });
+
+    it('reissuing the same lease leaves an already written result untouched', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+        await sherpa('worker', 'next');
+        const resultFile = await resultFileOf(taskId);
+        await fs.writeFile(resultFile, 'Finished answer.');
+
+        const again = await sherpa('worker', 'next');
+
+        expect(again.stdout).toContain(`TASK sherpa/${String(taskId)} (echo), attempt 1`);
+        expect(again.stdout).toContain(`--file ${resultFile}`);
+        expect(await fs.readFile(resultFile, 'utf8')).toBe('Finished answer.');
+    });
+
+    it('a retry in a new session gets a different path in a different directory', async () => {
+        const running = await start();
+        await sherpa('worker', 'register');
+        const taskId = enqueueEcho(running);
+        const first = await sherpa('worker', 'next');
+        const firstFile = await resultFileOf(taskId, 1);
+        expect(first.stdout).toContain(`--file ${firstFile}`);
+
+        // A new session takes over the slot. The previous lease returns to the queue as the next attempt.
+        await sherpa('worker', 'register');
+        const second = await sherpa('worker', 'next');
+
+        expect(second.stdout).toContain(`TASK sherpa/${String(taskId)} (echo), attempt 2`);
+        const secondFile = await resultFileOf(taskId, 2);
+        expect(path.dirname(secondFile)).not.toBe(path.dirname(firstFile));
+        expect(second.stdout).toContain(`--file ${secondFile}`);
+    });
+
+    it('result root is accessible to others or a symlink: no task is issued, and the next step is named', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+        const root = taskResultRootFor(workDir);
+        await fs.mkdir(root);
+        await fs.chmod(root, 0o777);
+
+        const open = await sherpa('worker', 'next');
+
+        expect(open.code).toBe(1);
+        expect(open.stderr).toContain(`${root} is open to other users`);
+        expect(open.stderr).toContain('call `sherpa worker next` again');
+        expect(running.queue.getTask(taskId)?.status).toBe('queued');
+
+        await fs.rm(root, { recursive: true });
+        const target = await fs.mkdtemp(path.join(workDir, 'target-'));
+        await fs.symlink(target, root);
+
+        const linked = await sherpa('worker', 'next');
+
+        expect(linked.code).toBe(1);
+        expect(linked.stderr).toContain(`${root} is not a directory`);
+        expect(await fs.readdir(target)).toEqual([]);
+        expect(running.queue.getTask(taskId)?.status).toBe('queued');
+    });
+
+    it('result directory cannot be created: no task is issued, and the next step is named', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+        const notADir = await writeFile('not-a-dir', '');
+
+        const result = await sherpaWith({ tmpDir: notADir }, 'worker', 'next');
+
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('cannot prepare the directory for task results');
+        expect(result.stderr).toContain('call `sherpa worker next` again');
+        expect(running.queue.getTask(taskId)?.status).toBe('queued');
     });
 
     it('server rejects an empty result with a list of errors, and the task stays leased', async () => {
@@ -489,7 +586,7 @@ describe('CLI against server', () => {
         expect(rejected.code).toBe(0);
         expect(rejected.stdout).toContain('rejected');
         expect(rejected.stdout).toContain('1. ');
-        expect(rejected.stdout).toContain(`sherpa task complete ${String(taskId)} --file <path>`);
+        expect(rejected.stdout).toContain(`sherpa task complete ${String(taskId)} --file ${file}`);
         expect(running.queue.getTask(taskId)?.status).toBe('leased');
     });
 
@@ -560,14 +657,18 @@ describe('CLI against server', () => {
         expect(result.stderr).not.toContain('unknown_task');
     });
 
-    it('missing result file gives a clear error without contacting the server', async () => {
-        await start();
+    it('missing result file: clear error, nothing sent to the server', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+        await sherpa('worker', 'next');
+        const missing = await resultFileOf(taskId);
 
-        const result = await sherpa('task', 'complete', '1', '--file', path.join(workDir, 'missing.md'));
+        const result = await sherpa('task', 'complete', String(taskId), '--file', missing);
 
         expect(result.code).toBe(1);
-        expect(result.stderr).toContain('missing.md');
-        expect(result.stderr).toContain('sherpa task complete 1 --file');
+        expect(result.stderr).toContain(`Write the result to ${missing}`);
+        expect(result.stderr).toContain(`sherpa task complete ${String(taskId)} --file ${missing}`);
+        expect(running.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
     });
 
     it('no server: CLI says to run the skill again', async () => {

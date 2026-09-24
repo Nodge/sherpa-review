@@ -59,6 +59,8 @@ Flags: `--pr <key>` for all commands (otherwise `SHERPA_PR`, otherwise the PR of
 
 The output of `next` is a ready-to-use prompt for the model to read: a `TASK sherpa/<id> (<type>), attempt <n>` line, instructions, context file list, result schema path (if any) and submission commands.
 
+The CLI chooses the result file path: `<os.tmpdir()>/sherpa-<uid>/<prKey>/<session>/<taskId>-<attempt>.json` (`.md` for tasks without a schema), where the session is a hash of `SHERPA_DIR` and `workerId`. The path is unique to the lease, so `complete` submits only what this attempt wrote.
+
 Principles:
 
 - **Large context goes in files, not stdout.** The server writes diffs, plans and chat history to Markdown files under `~/.sherpa/prs/<prKey>/payload` (directories 0700, files 0600) and provides absolute paths.

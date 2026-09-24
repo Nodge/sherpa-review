@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 
 import type { WorkerNextResponse, WorkerRegisterResponse } from '@sherpa/protocol';
 import { RESULT_MAX_BYTES } from '@sherpa/protocol';
@@ -23,7 +24,13 @@ import {
     helpText,
 } from './format.js';
 import { resolveLocalTarget } from './local.js';
-import { serverBinOverrideFrom, sherpaDirFrom } from './paths.js';
+import {
+    serverBinOverrideFrom,
+    sherpaDirFrom,
+    taskResultDirFor,
+    taskResultFileFor,
+    taskResultRootFor,
+} from './paths.js';
 import type { CommandRunner } from './pr-discovery.js';
 import type { EnsureServerOptions, EnsureServerResult } from './up.js';
 import { ensureServer } from './up.js';
@@ -42,6 +49,8 @@ export interface CliIo {
     readonly ensureServer?: (options: EnsureServerOptions) => Promise<EnsureServerResult>;
     /** Test substitute for the system opener. Tests don't launch a real browser. */
     readonly openBrowser?: (options: OpenBrowserOptions) => void;
+    /** Root for task result files. Defaults to `os.tmpdir()`. */
+    readonly tmpDir?: string;
 }
 
 /**
@@ -144,15 +153,63 @@ function labelsOf(command: Extract<Command, { kind: 'up' | 'worker-register' }>)
 
 async function workerNext(command: Extract<Command, { kind: 'worker-next' }>, io: CliIo): Promise<number> {
     const connection = await connect(command.prKey, io.env, io.runCommand);
+    const resultDir = await prepareResultDir(io.tmpDir ?? os.tmpdir(), sherpaDirFrom(io.env), connection);
     const response = await awaitTask(connection);
 
     switch (response.kind) {
         case 'task':
-            io.out(formatTask(response.task));
+            io.out(formatTask(response.task, taskResultFileFor(resultDir, response.task)));
             return 0;
         case 'done':
             io.out(formatDone(response.message));
             return 0;
+    }
+}
+
+/**
+ * Prepare the session result directory before leasing. Failure won't leave a task assigned to the worker. The file path
+ * is unique to the lease, so a file already at that path belongs to the same lease (a repeated `next`) and
+ * stays untouched.
+ */
+async function prepareResultDir(tmpRoot: string, sherpaDir: string, connection: ServerConnection): Promise<string> {
+    const root = taskResultRootFor(tmpRoot);
+    const dir = taskResultDirFor(tmpRoot, sherpaDir, connection.prKey, connection.workerId);
+    try {
+        await fs.mkdir(root, { recursive: true, mode: RESULT_DIR_MODE });
+        await assertPrivateDir(root);
+        await fs.mkdir(dir, { recursive: true, mode: RESULT_DIR_MODE });
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new CliError(
+            `sherpa: cannot prepare the directory for task results ${dir} — ${detail}.\n` +
+                'Fix it or point TMPDIR to a private directory, then call `sherpa worker next` again.',
+        );
+    }
+    return dir;
+}
+
+/** Only the owning session reads task results. */
+const RESULT_DIR_MODE = 0o700;
+
+/**
+ * The root is in shared tmp, and someone else may have created it first. A symlink, a directory owned by someone else or an open
+ * directory would let others read and replace results. `mkdir` silently accepts an existing directory.
+ */
+async function assertPrivateDir(dir: string): Promise<void> {
+    const uid = process.getuid?.();
+    if (uid === undefined) {
+        // Windows: each user has their own tmp, with no POSIX permissions.
+        return;
+    }
+    const stats = await fs.lstat(dir);
+    if (!stats.isDirectory()) {
+        throw new Error(`${dir} is not a directory`);
+    }
+    if (stats.uid !== uid) {
+        throw new Error(`${dir} belongs to another user`);
+    }
+    if ((stats.mode & 0o077) !== 0) {
+        throw new Error(`${dir} is open to other users (mode ${(stats.mode & 0o777).toString(8)})`);
     }
 }
 
@@ -174,7 +231,7 @@ async function taskComplete(command: Extract<Command, { kind: 'task-complete' }>
 
     const connection = await connect(command.prKey, io.env, io.runCommand);
     const response = await requestComplete(connection, command.taskId, result);
-    io.out(formatCompleteResponse(response, command.taskId));
+    io.out(formatCompleteResponse(response, command.taskId, command.file));
     return 0;
 }
 
@@ -200,8 +257,8 @@ export async function readResultFile(file: string, taskId: number): Promise<stri
     const stats = await fs.stat(file).catch(() => null);
     if (stats === null) {
         throw new CliError(
-            `sherpa: there is no file ${file}.\nSave the result to a file and call ` +
-                `\`sherpa task complete ${String(taskId)} --file <path>\` again.`,
+            `sherpa: there is no file ${file}.\nWrite the result to ${file} and call ` +
+                `\`sherpa task complete ${String(taskId)} --file ${file}\` again.`,
         );
     }
     if (!stats.isFile()) {

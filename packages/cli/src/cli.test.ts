@@ -41,8 +41,9 @@ describe('result size precheck', () => {
     });
 
     it('missing file or a directory: clear error with a hint', async () => {
-        await expect(readResultFile(path.join(workDir, 'missing.md'), 42)).rejects.toThrow(
-            'sherpa task complete 42 --file <path>',
+        const missing = path.join(workDir, 'missing.md');
+        await expect(readResultFile(missing, 42)).rejects.toThrow(
+            `Write the result to ${missing} and call \`sherpa task complete 42 --file ${missing}\` again.`,
         );
         await expect(readResultFile(workDir, 42)).rejects.toThrow('is not a file');
     });

@@ -20,6 +20,8 @@ const task: Task = {
     contextFiles: ['/tmp/sherpa/task-42-context.md'],
 };
 
+const RESULT_FILE = '/tmp/sherpa/pr-1/42-1.md';
+
 describe('UI link', () => {
     it('uses the short fragment parameter name and loopback by default', () => {
         expect(formatUiUrl(4317, 'Ab_cd-12')).toBe('http://127.0.0.1:4317/#t=Ab_cd-12');
@@ -32,20 +34,22 @@ describe('UI link', () => {
 
 describe('task prompt format', () => {
     it('contains a title, instructions, context and submission commands', () => {
-        const output = formatTask(task);
+        const output = formatTask(task, RESULT_FILE);
 
         expect(output.startsWith('TASK sherpa/42 (echo), attempt 1')).toBe(true);
         expect(output).toContain('Return the contents of the file as is.');
         expect(output).toContain('Context: /tmp/sherpa/task-42-context.md');
-        expect(output).toContain('sherpa task complete 42 --file <path>');
+        expect(output).toContain(`Write the result to ${RESULT_FILE} and submit it:`);
+        expect(output).toContain(`  sherpa task complete 42 --file ${RESULT_FILE}`);
+        expect(output).not.toContain('<path>');
         expect(output).toContain('sherpa task progress 42 --text');
         expect(output).toContain('sherpa task fail 42 --reason');
     });
 
     it('prints "none" without context files and the result schema only when present', () => {
-        expect(formatTask({ ...task, contextFiles: [] })).toContain('Context: none');
-        expect(formatTask(task)).not.toContain('Result schema');
-        expect(formatTask({ ...task, resultSchemaFile: '/tmp/schema.json' })).toContain(
+        expect(formatTask({ ...task, contextFiles: [] }, RESULT_FILE)).toContain('Context: none');
+        expect(formatTask(task, RESULT_FILE)).not.toContain('Result schema');
+        expect(formatTask({ ...task, resultSchemaFile: '/tmp/schema.json' }, RESULT_FILE)).toContain(
             'Result schema: /tmp/schema.json — the result is validated against it.',
         );
     });
@@ -57,22 +61,34 @@ describe('task prompt format', () => {
 
 describe('complete responses', () => {
     it('accepted asks for the next task', () => {
-        const output = formatCompleteResponse({ kind: 'accepted', message: 'The result is accepted.' }, 42);
+        const output = formatCompleteResponse(
+            { kind: 'accepted', message: 'The result is accepted.' },
+            42,
+            RESULT_FILE,
+        );
 
         expect(output).toContain('The result is accepted.');
         expect(output).toContain('sherpa worker next');
     });
 
-    it('rejected lists errors and asks to call complete again', () => {
-        const output = formatCompleteResponse({ kind: 'rejected', errors: ['empty', 'no summary section'] }, 42);
+    it('rejected lists errors as items and asks to call complete again with the same file', () => {
+        const output = formatCompleteResponse(
+            { kind: 'rejected', errors: ['empty', 'no summary section'] },
+            42,
+            '/work/answer.md',
+        );
 
         expect(output).toContain('1. empty');
         expect(output).toContain('2. no summary section');
-        expect(output).toContain('sherpa task complete 42 --file <path>');
+        expect(output).toContain('sherpa task complete 42 --file /work/answer.md');
     });
 
     it('noop prints the server message', () => {
-        const output = formatCompleteResponse({ kind: 'noop', message: 'Task sherpa/42 is already finished.' }, 42);
+        const output = formatCompleteResponse(
+            { kind: 'noop', message: 'Task sherpa/42 is already finished.' },
+            42,
+            RESULT_FILE,
+        );
 
         expect(output).toContain('is already finished');
     });

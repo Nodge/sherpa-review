@@ -10,6 +10,7 @@ import { startServer } from '@sherpa/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FakeWorker } from './fake-worker.js';
+import { taskResultDirFor, taskResultFileFor, workerIdPathFor } from './paths.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** Built once in globalSetup (`src/bundle.global-setup.ts`). Only runs here. */
@@ -69,6 +70,12 @@ describe('worker session scenarios', () => {
         }).id;
     }
 
+    /** Path returned by `worker next` to the current session. The worker process uses `workDir` as tmp. */
+    async function resultFileOf(taskId: number, attempt: number): Promise<string> {
+        const workerId = (await fs.readFile(workerIdPathFor(sherpaDir, PR_KEY), 'utf8')).trim();
+        return taskResultFileFor(taskResultDirFor(workDir, sherpaDir, PR_KEY, workerId), { id: taskId, attempt });
+    }
+
     it('silent death: the lease expires and a new session finishes the task', async () => {
         await worker.register('claude-code');
         const taskId = enqueue('Summarize the diff.');
@@ -76,6 +83,9 @@ describe('worker session scenarios', () => {
         const issued = await worker.next();
         expect(issued.taskId).toBe(taskId);
         expect(issued.stdout).toContain('attempt 1');
+        // The result path is under the process tmp directory, unique to each session and attempt.
+        const firstFile = await resultFileOf(taskId, 1);
+        expect(issued.stdout).toContain(`--file ${firstFile}`);
 
         // The session disappeared without another call. There is nothing to wait for, so advance the clock.
         advance(PAST_LEASE_SECONDS);
@@ -86,6 +96,9 @@ describe('worker session scenarios', () => {
         const reissued = await worker.next();
         expect(reissued.taskId).toBe(taskId);
         expect(reissued.stdout).toContain('attempt 2');
+        const secondFile = await resultFileOf(taskId, 2);
+        expect(path.dirname(secondFile)).not.toBe(path.dirname(firstFile));
+        expect(reissued.stdout).toContain(`--file ${secondFile}`);
 
         const completed = await worker.complete(taskId, 'Answer from the second session.');
         expect(completed.code).toBe(0);
@@ -107,7 +120,9 @@ describe('worker session scenarios', () => {
         expect(rejected.code).toBe(0);
         expect(rejected.stdout).toContain('rejected');
         expect(rejected.stdout).toContain('1. ');
-        expect(rejected.stdout).toContain(`sherpa task complete ${String(taskId)} --file <path>`);
+        expect(rejected.stdout).toContain(
+            `sherpa task complete ${String(taskId)} --file ${path.join(workDir, 'result-1.md')}`,
+        );
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
 
         const accepted = await worker.complete(taskId, 'Valid result.');

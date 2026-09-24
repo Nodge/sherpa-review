@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { Task } from '@sherpa/protocol';
 import { prKeySchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
@@ -56,4 +58,31 @@ export function workerIdPathFor(sherpaDir: string, prKey: string): string {
 /** Server daemon log. The server writes it, the CLI reads it when the server fails to start. */
 export function serverLogPathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'server.log');
+}
+
+/**
+ * Result file root in the system temporary directory (`tmpRoot` is usually `os.tmpdir()`).
+ * On Linux this is shared `/tmp`. uid in the name separates users, the CLI checks ownership and permissions itself.
+ */
+export function taskResultRootFor(tmpRoot: string): string {
+    const uid = process.getuid?.();
+    return path.join(tmpRoot, uid === undefined ? 'sherpa' : `sherpa-${String(uid)}`);
+}
+
+/**
+ * Result directory for one worker session: a hash of the state root and workerId. Each server instance has
+ * its own task numbering, so matching numbers from different sessions and servers don't end up in the same file.
+ */
+export function taskResultDirFor(tmpRoot: string, sherpaDir: string, prKey: string, workerId: string): string {
+    const session = createHash('sha256').update(`${sherpaDir}\n${workerId}`).digest('hex').slice(0, 16);
+    return path.join(taskResultRootFor(tmpRoot), assertValidPrKey(prKey), session);
+}
+
+/**
+ * Result file for one task attempt in the session directory. The CLI assigns the path so sessions don't share
+ * a file. `json` means the task has a result schema, otherwise the answer is markdown.
+ */
+export function taskResultFileFor(dir: string, task: Pick<Task, 'id' | 'attempt' | 'resultSchemaFile'>): string {
+    const ext = task.resultSchemaFile === undefined ? 'md' : 'json';
+    return path.join(dir, `${String(task.id)}-${String(task.attempt)}.${ext}`);
 }

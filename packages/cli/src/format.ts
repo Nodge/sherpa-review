@@ -5,9 +5,10 @@ import { CLI_VERSION } from './version.js';
 
 /**
  * Task in prompt format (`docs/protocol.md §4`). The model reads the output as text, so it contains
- * instructions, context paths and ready-to-run submission commands. Large context stays in files.
+ * instructions, context paths, the CLI-assigned result file and ready-to-use submission commands.
+ * Large context stays in files.
  */
-export function formatTask(task: Task): string {
+export function formatTask(task: Task, resultFile: string): string {
     const lines = [
         `TASK sherpa/${String(task.id)} (${task.type}), attempt ${String(task.attempt)}`,
         '',
@@ -22,8 +23,8 @@ export function formatTask(task: Task): string {
 
     lines.push(
         '',
-        'Save the result to a file and submit it:',
-        `  sherpa task complete ${String(task.id)} --file <path>`,
+        `Write the result to ${resultFile} and submit it:`,
+        `  sherpa task complete ${String(task.id)} --file ${resultFile}`,
         `Interim status: sherpa task progress ${String(task.id)} --text "..."`,
         `Cannot do it: sherpa task fail ${String(task.id)} --reason "..."`,
     );
@@ -73,7 +74,8 @@ export function formatDone(message: string): string {
     return `${message}\n\nDONE`;
 }
 
-export function formatCompleteResponse(response: TaskCompleteResponse, taskId: number): string {
+/** `file` is the path the worker passed to `complete`. A retry uses the same path. */
+export function formatCompleteResponse(response: TaskCompleteResponse, taskId: number, file: string): string {
     switch (response.kind) {
         case 'accepted':
             return `${response.message}\nCall \`sherpa worker next\` for the next task.`;
@@ -81,7 +83,7 @@ export function formatCompleteResponse(response: TaskCompleteResponse, taskId: n
             return [
                 `The result of task sherpa/${String(taskId)} was rejected:`,
                 ...response.errors.map((error, index) => `  ${String(index + 1)}. ${error}`),
-                `Fix it and call \`sherpa task complete ${String(taskId)} --file <path>\` again.`,
+                `Fix it and call \`sherpa task complete ${String(taskId)} --file ${file}\` again.`,
             ].join('\n');
         case 'noop':
             return `${response.message}\nCall \`sherpa worker next\` for the next task.`;

@@ -105,6 +105,8 @@ export class FakeWorker {
             ...(process.env as Record<string, string>),
             SHERPA_DIR: this.options.sherpaDir,
             SHERPA_PR: this.options.prKey,
+            // CLI-assigned result files go in the session working directory, not system tmp.
+            TMPDIR: this.options.workDir,
         };
         if (this.options.workerId === undefined) {
             // Otherwise an inherited developer override would replace the session identity.

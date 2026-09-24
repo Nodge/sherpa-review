@@ -76,6 +76,8 @@ describe('skill package build', () => {
         // Shared task context rule: a path under `shared/` is read once per session.
         expect(skill).toContain('`shared/`');
         expect(skill).toContain('once per session');
+        // The task supplies the result file. A custom path in shared tmp would collide across sessions on one machine.
+        expect(skill).toContain('only to the file path the task gives you');
     });
 
     /**
