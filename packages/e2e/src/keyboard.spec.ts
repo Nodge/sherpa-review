@@ -115,6 +115,19 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
         await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     });
 
+    await test.step('v marks the stop under the mouse pointer without a click', async () => {
+        const toggle = page.locator('[data-stop="s03"] button.route-stop__viewed');
+        await hover(page.locator('[data-stop="s03"] .route-stop__title'));
+        await page.keyboard.press('v');
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+        // Marking collapses the stop and scrolls to the next one: hover once scrolling settles.
+        await settledRouteScroll(page);
+        await hover(page.locator('[data-stop="s03"] .route-stop__title'));
+        await page.keyboard.press('v');
+        await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    });
+
     await test.step('c comments on the focused line and ⌘⏎ saves the draft', async () => {
         await scrollRouteToTop(page);
         const stop = page.locator('[data-stop="s01"]');
@@ -130,6 +143,34 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
         await page.keyboard.press(`${MOD_KEY}+Enter`);
         await expect(textbox).toHaveCount(0, { timeout: 6_000 });
         await expect(stop.getByText(DRAFT, { exact: true })).toBeVisible();
+    });
+
+    await test.step('c comments on the line under the mouse pointer without a click or focus', async () => {
+        const stop = page.locator('[data-stop="s01"]');
+        const line = stop.locator('.file-card .diff-row[data-key]').nth(1);
+        await hover(line);
+        await page.keyboard.press('c');
+
+        const composer = stop.locator('.diff-line-composer');
+        await expect(composer).toBeVisible();
+        await composer.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(composer).toHaveCount(0);
+    });
+
+    await test.step('r replies to the thread under the mouse pointer without a click or focus', async () => {
+        const thread = page
+            .locator('[data-stop] .thread')
+            .filter({ has: page.getByRole('button', { name: 'Reply', exact: true }) })
+            .first();
+        const threadId = await thread.getAttribute('data-thread-id');
+        const target = page.locator(`[data-stop] .thread[data-thread-id="${String(threadId)}"]`);
+        await hover(target.locator('.thread__row').first());
+        await page.keyboard.press('r');
+
+        const reply = target.getByRole('textbox', { name: 'Thread reply' });
+        await expect(reply).toBeVisible();
+        await target.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(reply).toHaveCount(0);
     });
 
     await test.step('r replies to the focused thread', async () => {
@@ -304,6 +345,21 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
         );
     });
 
+    await test.step('v marks the file card under the mouse pointer without a click', async () => {
+        await scrollDiffToTop(page);
+        // Pin the card by its file: marking it will remove it from the unviewed selection.
+        const fileId = await page
+            .locator('.file-card[data-file]')
+            .filter({ has: page.locator('button.file-card__viewed[aria-pressed="false"]') })
+            .first()
+            .getAttribute('data-file');
+        const card = page.locator(`.file-card[data-file="${String(fileId)}"]`);
+        await hover(card.locator('.diff-row[data-key]').first());
+        await page.keyboard.press('v');
+
+        await expect(card.locator('button.file-card__viewed')).toHaveAttribute('aria-pressed', 'true');
+    });
+
     await test.step('e expands context for the focused hunk', async () => {
         // Marking the file in the previous step collapsed the card and started scrolling to the target:
         // while the list moves, the virtualizer removes the rows we found from the DOM.
@@ -372,6 +428,17 @@ function palette(page: Page): Locator {
 
 async function expectView(page: Page, label: string): Promise<void> {
     await expect(page.getByRole('tab', { name: label, exact: true })).toHaveAttribute('aria-selected', 'true');
+}
+
+/**
+ * Hover over an element without clicking: the command targets whatever is under the pointer if the mouse
+ * has moved since the last focus change (docs/design/SPEC-elements.md §5). Playwright `hover` itself
+ * scrolls the element into view and checks that the pointer lands on it. A sticky
+ * toolbar above the target would go unnoticed by the test.
+ */
+async function hover(locator: Locator): Promise<void> {
+    await locator.scrollIntoViewIfNeeded();
+    await locator.hover();
 }
 
 /** Focus inside a stop section: `v`/`x` commands use the focused `[data-stop]`. */

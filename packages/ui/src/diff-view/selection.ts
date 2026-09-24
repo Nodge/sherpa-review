@@ -57,6 +57,29 @@ export function lineSide(key: LineKey): 'old' | 'new' {
     return key.startsWith('d') ? 'old' : 'new';
 }
 
+/** Line numbers from its key. `null` means the line is not in `lineKey` format. */
+export function lineKeyNumbers(key: LineKey): { readonly old: number | null; readonly new: number | null } | null {
+    if (key.startsWith('a')) {
+        const line = lineNumber(key.slice(1));
+        return line === null ? null : { old: null, new: line };
+    }
+    if (key.startsWith('d')) {
+        const line = lineNumber(key.slice(1));
+        return line === null ? null : { old: line, new: null };
+    }
+    if (!key.startsWith('c')) {
+        return null;
+    }
+    const [oldPart, newPart, ...rest] = key.slice(1).split(':');
+    const oldLine = lineNumber(oldPart);
+    const newLine = lineNumber(newPart);
+    return rest.length > 0 || oldLine === null || newLine === null ? null : { old: oldLine, new: newLine };
+}
+
+function lineNumber(value: string | undefined): number | null {
+    return value === undefined || !/^\d+$/.test(value) ? null : Number(value);
+}
+
 /** Selection numbering side, with compatibility for values without an explicit field. */
 export function selectionSide(selection: LineSelection): 'old' | 'new' {
     return selection.side ?? lineSide(selection.anchor);

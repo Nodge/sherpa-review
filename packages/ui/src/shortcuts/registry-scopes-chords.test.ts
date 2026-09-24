@@ -11,6 +11,7 @@ import { createShortcutRegistry, formatKeys } from './registry.js';
 function keydown(key: string, extra: Partial<ShortcutEvent> = {}): ShortcutEvent {
     return {
         key,
+        code: '',
         ctrlKey: false,
         metaKey: false,
         shiftKey: false,

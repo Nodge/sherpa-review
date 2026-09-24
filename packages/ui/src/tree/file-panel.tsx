@@ -1,7 +1,7 @@
 import type { FileDiff } from '@sherpa/protocol';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 import { FileContextMenu, useContextMenu } from '../components/context-menu.tsx';
 import type { FileFilter } from '../filters/lens-filters.js';
@@ -16,7 +16,6 @@ import { readStateTooltip } from '../progress/read-state.js';
 import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
-import { useShortcut } from '../shortcuts/context.tsx';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
 import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
@@ -49,6 +48,15 @@ const OVERSCAN = 8;
 function rowIndent(row: TreeRow): number {
     const indent = INDENT_BASE + row.depth * INDENT_STEP;
     return row.kind === 'dir' ? indent : Math.max(FILE_INDENT_MIN, indent);
+}
+
+/**
+ * Exposed tree cursor: the full diff `v` key takes its file here when the mouse is not the latest
+ * input and the tree has focus (docs/design/SPEC-elements.md §5).
+ */
+export interface FileTreeCursor {
+    /** File under the keyboard cursor while the tree has focus, otherwise `null`. */
+    readonly cursorFileId: () => string | null;
 }
 
 /** A single hunk in the outline of a single-file PR. */
@@ -91,6 +99,8 @@ export interface FilePanelProps {
     readonly outline: FileOutlineModel | null;
     readonly onOpenHunk: (index: number) => void;
     readonly inputRef?: RefObject<HTMLInputElement | null>;
+    /** Where the panel exposes its cursor. The single-file PR outline has no cursor. */
+    readonly cursorRef?: RefObject<FileTreeCursor | null>;
 }
 
 export function FilePanel(props: FilePanelProps) {
@@ -193,10 +203,9 @@ function FileTreeView({
     onToggleViewed,
     route,
     onJumpToStop,
+    cursorRef,
 }: FileTreeViewProps) {
     const t = useT();
-    // Only the active iteration allows marking files viewed.
-    const readOnly = useReadOnlyIteration();
     // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
     // and directories without a record follow the size-based default.
     const prState = usePrStateStore();
@@ -274,23 +283,18 @@ function FileTreeView({
     };
 
     const cursorRow = cursor < 0 ? undefined : tree.rows[cursor];
-    // `v` is a registry command (docs/architecture.md §7.3), rather than a separate key handler, so it
-    // appears in the palette and shortcuts sheet. It acts on the row under the cursor only while the tree has
-    // focus. Previous iterations have no marks, so the command is unavailable there.
-    useShortcut({
-        id: 'diff.markViewed',
-        keys: ['v'],
-        label: 'shortcut.diff.markViewed',
-        scope: 'full-diff',
-        section: 'reading',
-        when: () =>
-            !readOnly && cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true,
-        action: () => {
-            if (cursorRow?.kind === 'file') {
-                onToggleViewed(cursorRow.fileId);
-            }
-        },
-    });
+    // Expose the cursor. The full diff view declares the `v` command because it has a second target,
+    // the file card under the pointer, and the registry must contain only one command.
+    useImperativeHandle(
+        cursorRef,
+        (): FileTreeCursor => ({
+            cursorFileId: () =>
+                cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true
+                    ? cursorRow.fileId
+                    : null,
+        }),
+        [cursorRow],
+    );
 
     if (files.length === 0) {
         return <p className="file-panel__empty">{t('tree.empty.filter')}</p>;
@@ -330,6 +334,8 @@ function FileTreeView({
                             aria-level={row.depth + 1}
                             aria-expanded={row.kind === 'dir' ? !row.collapsed : undefined}
                             aria-selected={row.kind === 'file' && row.fileId === activeFileId}
+                            // A file row is a target for commands under the pointer, just like a card in the list.
+                            data-file={row.kind === 'file' ? row.fileId : undefined}
                             title={
                                 row.kind === 'dir'
                                     ? t('tree.dir.read', row.readFiles, row.files)

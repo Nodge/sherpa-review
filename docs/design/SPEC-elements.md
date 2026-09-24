@@ -430,11 +430,11 @@ match the final block height); a task that exceeds 60s shows "still working · N
 | 1 / 2 / 3 | Overview / Route / Full diff |
 | j / k | next / previous stop (route) or file (full diff) |
 | n / p | next / previous unviewed range |
-| v | toggle viewed on the focused stop or file |
-| c | comment on the focused line; ⌘⏎ save draft |
-| r | reply to the focused thread |
-| e | expand context on the focused hunk |
-| x | toggle collapse of the focused stop |
+| v | toggle viewed on the stop or file under the pointer, or focused |
+| c | comment on the line under the pointer, or focused; ⌘⏎ save draft |
+| r | reply to the thread under the pointer, or focused |
+| e | expand context on the hunk under the pointer, or focused |
+| x | toggle collapse of the stop under the pointer, or focused |
 | t | switch preset (triage / full tour) |
 | d | switch diff mode |
 | f | focus the file filter |
@@ -445,6 +445,9 @@ match the final block height); a task that exceeds 60s shows "still working · N
 | ⌘⇧⏎ | request changes |
 | ? | shortcut cheatsheet |
 | Esc | close overlay / clear selection |
+
+The target of a shortcut is the element under the mouse pointer if the mouse moved after the last
+focus change; otherwise it is the focused element.
 
 Every shortcut must also exist as a palette command with the same wording, and the cheatsheet is
 generated from one registry (no drift between the two).

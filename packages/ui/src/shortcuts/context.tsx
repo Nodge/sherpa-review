@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
 
+import type { PointerTarget } from './pointer-target.js';
+import { FOCUS_ONLY_TARGET } from './pointer-target.js';
 import type { EscapeLayerKind, Shortcut, ShortcutRegistry } from './registry.js';
 
 /**
@@ -10,13 +12,32 @@ import type { EscapeLayerKind, Shortcut, ShortcutRegistry } from './registry.js'
  */
 
 const ShortcutsContext = createContext<ShortcutRegistry | null>(null);
+const PointerTargetContext = createContext<PointerTarget>(FOCUS_ONLY_TARGET);
 
-export function ShortcutsProvider({ registry, children }: { registry: ShortcutRegistry; children: ReactNode }) {
-    return <ShortcutsContext value={registry}>{children}</ShortcutsContext>;
+export function ShortcutsProvider({
+    registry,
+    pointer = FOCUS_ONLY_TARGET,
+    children,
+}: {
+    registry: ShortcutRegistry;
+    /** The page's pointer monitor. Without it, commands target only the focused element. */
+    pointer?: PointerTarget;
+    children: ReactNode;
+}) {
+    return (
+        <ShortcutsContext value={registry}>
+            <PointerTargetContext value={pointer}>{children}</PointerTargetContext>
+        </ShortcutsContext>
+    );
 }
 
 export function useShortcutRegistry(): ShortcutRegistry | null {
     return useContext(ShortcutsContext);
+}
+
+/** "Under the pointer or focused" rule for view commands (docs/design/SPEC-elements.md §5). */
+export function usePointerTarget(): PointerTarget {
+    return useContext(PointerTargetContext);
 }
 
 /**

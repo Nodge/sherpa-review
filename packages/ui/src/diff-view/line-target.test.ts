@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
-import { findAgentNote, findLineRow, flashAgentNote, flashRow } from './line-target.js';
+import { findAgentNote, findLineRow, flashAgentNote, flashRow, lineAt } from './line-target.js';
 
 /**
  * Finding a line in the card markup. The side matters: line 41 on the new side and line 41
@@ -72,5 +72,66 @@ describe('note focus', () => {
         note.dispatchEvent(new Event('animationend'));
         expect(note.classList.contains('agent-note--target')).toBe(false);
         root.remove();
+    });
+});
+
+
+/** File card: unified rows carry the key on the row itself, split cells also carry their side. */
+function fileCard(): HTMLElement {
+    const element = document.createElement('article');
+    element.dataset.file = 'checkout';
+    element.innerHTML = `
+        <div class="diff-row" data-key="a41" tabindex="0"><code class="diff-row__code">added</code></div>
+        <div class="diff-row" data-key="d17" tabindex="0"><code class="diff-row__code">removed</code></div>
+        <div class="diff-row" data-key="c40:39" tabindex="0"><code class="diff-row__code">context</code></div>
+        <div class="diff-row diff-row--pair">
+            <code class="diff-row__code" data-key="c40:39" data-side="old" id="split-old">context</code>
+            <code class="diff-row__code" data-key="c40:39" data-side="new" id="split-new">context</code>
+        </div>
+    `;
+    return element;
+}
+
+function at(card: HTMLElement, selector: string): ReturnType<typeof lineAt> {
+    const element = card.querySelector(selector);
+    if (element === null) {
+        throw new Error(`card has no ${selector}`);
+    }
+    return lineAt(element);
+}
+
+describe('line under an element', () => {
+    it('unified: `a` is new, `d` is old, `c` is new, matching the row itself', () => {
+        const card = fileCard();
+
+        expect(at(card, '[data-key="a41"] code')).toEqual({ fileId: 'checkout', side: 'new', line: 41 });
+        expect(at(card, '[data-key="d17"] code')).toEqual({ fileId: 'checkout', side: 'old', line: 17 });
+        expect(at(card, '.diff-row[data-key="c40:39"]')).toEqual({ fileId: 'checkout', side: 'new', line: 39 });
+    });
+
+    it('split: reads the side from the cell\'s `data-side`', () => {
+        const card = fileCard();
+
+        expect(at(card, '#split-old')).toEqual({ fileId: 'checkout', side: 'old', line: 40 });
+        expect(at(card, '#split-new')).toEqual({ fileId: 'checkout', side: 'new', line: 39 });
+    });
+
+    it('returns null for an element outside a line or card', () => {
+        const card = fileCard();
+        const loose = document.createElement('div');
+        loose.innerHTML = '<span data-key="a41"></span>';
+
+        expect(lineAt(card)).toBeNull();
+        expect(lineAt(null)).toBeNull();
+        expect(lineAt(loose.querySelector('span'))).toBeNull();
+    });
+
+    it('returns null for an invalid line key attribute, without producing a NaN line number', () => {
+        const card = fileCard();
+        const alien = document.createElement('span');
+        alien.dataset.key = 'gap:12';
+        card.append(alien);
+
+        expect(lineAt(alien)).toBeNull();
     });
 });

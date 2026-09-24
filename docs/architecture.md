@@ -228,7 +228,7 @@ Reviewer departure is separate from idleness. The agent receives the loop-comple
 
 **7.2. Filters hide stops with no matching files, and numbers stay as planned.** A stop with no files under the current filter disappears from view. A card held on screen remains visible. The skeleton fixes the stop number (`planIndex`), and filling does not change it. Filters and moving "Other" to the top reorder rendering, but not numbering.
 
-**7.3. Keyboard shortcuts are declared once.** The single registry is `packages/ui/src/shortcuts/registry.ts`. Both the command palette and shortcuts sheet are built from it. The UI stores shortcuts nowhere else. There is also one `keydown` listener. It decides which scope owns a key (`global`, `route`, `full-diff`, `overview`) and handles the Esc stack. Overlay layers close in priority order, one per press.
+**7.3. Keyboard shortcuts are declared once.** The single registry is `packages/ui/src/shortcuts/registry.ts`. Both the Command palette and shortcuts sheet are built from it. The UI has no second place that stores shortcuts. There is also a single `keydown` listener. It decides which command owns a key by dispatching commands to scopes (`global`, `route`, `full-diff`, `overview`), and manages the Esc sequence. Overlay layers close in priority order, one per press. The key is matched against the typed character. When that is not a Latin letter or digit, the listener also checks the physical key (`event.code`) so commands work with a Russian keyboard layout.
 
 **7.4. Reply nesting is limited by indentation.** Indentation grows up to level 4, then stops increasing. Deeper replies name the author they reply to (`packages/ui/src/threads/model.ts`).
 

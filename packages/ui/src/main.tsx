@@ -32,6 +32,7 @@ import { SettingsProvider } from './settings/context.tsx';
 import { DocumentSettingsSync } from './settings/document-settings.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
+import { createPointerTarget } from './shortcuts/pointer-target.js';
 import { attachShortcuts, createShortcutRegistry } from './shortcuts/registry.js';
 import type { Store } from './store.js';
 import { createStore } from './store.js';
@@ -95,6 +96,8 @@ if (token === null) {
     // The only keyboard listener on the page. Commands are declared only here (docs/architecture.md §7.3).
     const shortcuts = createShortcutRegistry();
     attachShortcuts(window, shortcuts);
+    // Command targets under the pointer (docs/design/SPEC-elements.md §5) use one pointer monitor per page, like the key listener.
+    const pointer = createPointerTarget(window, document);
 
     /**
      * Create the session store and its commands after server state loads: the initial view
@@ -166,7 +169,7 @@ if (token === null) {
         root.render(
             <StrictMode>
                 <IconSprite />
-                <ShortcutsProvider registry={shortcuts}>
+                <ShortcutsProvider registry={shortcuts} pointer={pointer}>
                     <SettingsProvider store={settings}>
                         <DocumentSettingsSync />
                         <AgentLocaleProvider store={store}>

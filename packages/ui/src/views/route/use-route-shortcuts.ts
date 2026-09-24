@@ -5,12 +5,13 @@ import { useCallback } from 'react';
 import type { ContextExpandRequest, ContextExpandResult } from '../../diff-view/context-expansion.js';
 import type { HunkExpandRequest } from '../../diff-view/hunk-expansion.js';
 import { hunkContextRequests } from '../../diff-view/hunk-expansion.js';
+import { lineAt } from '../../diff-view/line-target.js';
 import type { DiffViewSnapshot } from '../../diff-view/store.js';
 import type { StopProgressStore } from '../../progress/stop-progress-store.js';
 import type { RouteEntry, RouteFileGroup, RouteModel } from '../../route/route-model.js';
 import { changeFilterAvailable, entryParseFailed, entryPending } from '../../route/route-model.js';
 import type { SessionStore } from '../../session/session-store.js';
-import { useShortcut } from '../../shortcuts/context.tsx';
+import { usePointerTarget, useShortcut } from '../../shortcuts/context.tsx';
 import { neighbourId, unreadNeighbourId } from '../../shortcuts/navigation.js';
 import type { ThreadStore } from '../../threads/store.js';
 import { openReply } from '../../threads/thread-list.tsx';
@@ -46,9 +47,10 @@ export interface RouteShortcutsOptions {
 }
 
 /**
- * Route keys (docs/design/SPEC-elements.md §5): mark and collapse the focused stop, comment and reply,
- * move between stops, filter by "what is new" and expand the bridge. The hook only registers
- * commands and returns nothing.
+ * Route shortcuts (docs/design/SPEC-elements.md §5): mark and collapse a stop, comment and reply,
+ * navigate stops, filter "what is new" and expand a gap. The action targets the element
+ * under the pointer if it moved after the last focus change, otherwise the focused element. The hook only
+ * registers commands and returns nothing.
  */
 export function useRouteShortcuts({
     model,
@@ -73,16 +75,27 @@ export function useRouteShortcuts({
     openedCollapsed,
     expand,
 }: RouteShortcutsOptions): void {
-    /** The focused stop contains the focus: its section carries `data-stop` (docs/design/SPEC-elements.md §5). */
-    const focusedEntry = useCallback((): RouteEntry | null => {
-        if (typeof document === 'undefined') {
-            return null;
-        }
-        const active = document.activeElement;
-        const stopId = active instanceof Element ? (active.closest<HTMLElement>('[data-stop]')?.dataset.stop ?? null) : null;
+    const pointer = usePointerTarget();
+    /** The target stop contains the pointer or focus: the section carries `data-stop`. */
+    const targetStopId = useCallback(
+        (): string | null => pointer.target('[data-stop]')?.getAttribute('data-stop') ?? null,
+        [pointer],
+    );
+    const targetEntry = useCallback((): RouteEntry | null => {
+        const stopId = targetStopId();
         return stopId === null ? null : (shown.find((entry) => entryId(entry) === stopId) ?? null);
-    }, [shown]);
-
+    }, [shown, targetStopId]);
+    /** The target line is under the pointer, otherwise focused. Resolved at keypress time. */
+    const targetLine = useCallback(
+        (): { readonly fileId: string; readonly side: 'old' | 'new'; readonly line: number } | null =>
+            lineAt(pointer.hovered()) ?? focusedLine,
+        [focusedLine, pointer],
+    );
+    /** The target thread is under the pointer, otherwise focused. */
+    const targetThreadId = useCallback(
+        (): string | null => pointer.target('[data-thread-id]')?.getAttribute('data-thread-id') ?? focusedThreadId,
+        [focusedThreadId, pointer],
+    );
     /**
      * A mark can be set only after the stop's ranges have been counted. It can always be cleared.
      * The previous iteration has no marks at all.
@@ -103,11 +116,11 @@ export function useRouteShortcuts({
         scope: 'route',
         section: 'reading',
         when: () => {
-            const entry = focusedEntry();
+            const entry = targetEntry();
             return entry !== null && canToggleViewed(entry);
         },
         action: () => {
-            const entry = focusedEntry();
+            const entry = targetEntry();
             if (entry !== null) {
                 void markStop(entryId(entry), !stopProgress.isViewed(entryId(entry)));
             }
@@ -119,9 +132,9 @@ export function useRouteShortcuts({
         label: 'shortcut.route.toggleStopCollapse',
         scope: 'route',
         section: 'route',
-        when: () => focusedEntry() !== null,
+        when: () => targetEntry() !== null,
         action: () => {
-            const entry = focusedEntry();
+            const entry = targetEntry();
             if (entry !== null) {
                 toggleCollapse(entry);
             }
@@ -134,10 +147,11 @@ export function useRouteShortcuts({
         label: 'shortcut.thread.commentLine',
         scope: 'route',
         section: 'comments',
-        when: () => focusedLine !== null,
+        when: () => targetLine() !== null,
         action: () => {
-            if (focusedLine !== null) {
-                commentLine(focusedLine.fileId, focusedLine.side, focusedLine.line);
+            const line = targetLine();
+            if (line !== null) {
+                commentLine(line.fileId, line.side, line.line);
             }
         },
     });
@@ -147,9 +161,10 @@ export function useRouteShortcuts({
         label: 'shortcut.thread.reply',
         scope: 'route',
         section: 'comments',
-        when: () => focusedThreadId !== null,
+        when: () => targetThreadId() !== null,
         action: () => {
-            const thread = threads.find((candidate) => candidate.id === focusedThreadId);
+            const threadId = targetThreadId();
+            const thread = threads.find((candidate) => candidate.id === threadId);
             if (thread !== undefined) {
                 openReply(threadStore, thread, commentIssues);
             }
@@ -247,29 +262,34 @@ export function useRouteShortcuts({
     });
 
     /**
-     * The focused card: the section (`data-stop`) gives the stop, the focused row gives the file.
-     * The same file appears in several stops, so `fileId` alone cannot identify
-     * the card.
+     * The target card and its line. The same file appears at several stops, so
+     * `fileId` alone cannot identify the card: the same node that gives the line gives the stop, under the pointer
+     * or focus. Mixing sources would join a line from one stop with another stop's section,
+     * and expand context somewhere other than where the reviewer points.
      */
-    const focusedCard = useCallback((): { readonly stopId: string; readonly group: RouteFileGroup } | null => {
-        if (focusedLine === null || typeof document === 'undefined') {
-            return null;
-        }
-        const active = document.activeElement;
-        const stopId = active instanceof Element ? (active.closest<HTMLElement>('[data-stop]')?.dataset.stop ?? null) : null;
-        if (stopId === null) {
+    const targetCard = useCallback((): {
+        readonly stopId: string;
+        readonly group: RouteFileGroup;
+        readonly line: { readonly fileId: string; readonly side: 'old' | 'new'; readonly line: number };
+    } | null => {
+        const hovered = pointer.hovered();
+        const hoveredLine = lineAt(hovered);
+        const line = hoveredLine ?? focusedLine;
+        const source = hoveredLine === null ? document.activeElement : hovered;
+        const stopId = source?.closest('[data-stop]')?.getAttribute('data-stop') ?? null;
+        if (line === null || stopId === null) {
             return null;
         }
         const entry = shown.find((candidate) => entryId(candidate) === stopId);
         if (entry?.kind !== 'stop') {
             return null;
         }
-        const group = entry.view.files.find((candidate) => candidate.fileId === focusedLine.fileId);
-        return group === undefined ? null : { stopId, group };
-    }, [focusedLine, shown]);
-    const focusedHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
-        const card = focusedCard();
-        if (card === null || focusedLine === null) {
+        const group = entry.view.files.find((candidate) => candidate.fileId === line.fileId);
+        return group === undefined ? null : { stopId, group, line };
+    }, [focusedLine, pointer, shown]);
+    const targetHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
+        const card = targetCard();
+        if (card === null) {
             return [];
         }
         const model = stopFileShownModel(
@@ -279,21 +299,21 @@ export function useRouteShortcuts({
             diffSnapshot.expansion.get(card.group.fileId) ?? EMPTY_EXPANSION,
             openedCollapsed.has(`${card.stopId}\u0000${card.group.fileId}`),
         );
-        return model === null ? [] : hunkContextRequests(model, focusedLine.side, focusedLine.line);
-    }, [diffSnapshot, focusedCard, focusedLine, openedCollapsed]);
+        return model === null ? [] : hunkContextRequests(model, card.line.side, card.line.line);
+    }, [diffSnapshot, openedCollapsed, targetCard]);
     useShortcut({
         id: 'route.expandContext',
         keys: ['e'],
         label: 'shortcut.diff.expandContext',
         scope: 'route',
         section: 'reading',
-        when: () => focusedHunkRequests().length > 0,
+        when: () => targetHunkRequests().length > 0,
         action: () => {
-            const card = focusedCard();
+            const card = targetCard();
             if (card === null) {
                 return;
             }
-            for (const request of focusedHunkRequests()) {
+            for (const request of targetHunkRequests()) {
                 void expand(card.group.fileId, { kind: 'gap', ...request });
             }
         },

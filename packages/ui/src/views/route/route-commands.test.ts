@@ -18,6 +18,7 @@ const en = (key: MessageKey | undefined): string =>
 function keyEvent(key: string) {
     return {
         key,
+        code: '',
         ctrlKey: false,
         metaKey: false,
         shiftKey: false,

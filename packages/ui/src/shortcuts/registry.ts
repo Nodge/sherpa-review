@@ -6,6 +6,9 @@ import type { Translate } from '../i18n/translate.js';
  * and that declaration also builds the command palette and shortcuts sheet. The UI must not have
  * a second place that defines keyboard shortcuts.
  *
+ * Find a key by the typed character, and when it is not a Latin letter or digit, also by the
+ * physical key (`event.code`): commands work in the Russian layout without switching.
+ *
  * The application also has a single keydown listener: it decides which command owns the key. It also keeps
  * the Esc priority order. Overlay layers (palette, modal, popover, toast, selection) close
  * strictly by priority, one per keypress.
@@ -67,6 +70,8 @@ export interface Shortcut {
  */
 export interface ShortcutEvent {
     readonly key: string;
+    /** Physical key (`KeyV`, `Digit1`, `Slash`): finds the command in a non-Latin layout. */
+    readonly code: string;
     readonly ctrlKey: boolean;
     readonly metaKey: boolean;
     readonly shiftKey: boolean;
@@ -144,7 +149,7 @@ export function createShortcutRegistry(options: ShortcutRegistryOptions = {}): S
     let activeScope: ShortcutScope = 'global';
     let modalOpen = false;
     /** The first key of a chord was pressed. Waiting for the second. */
-    let pendingChord: { readonly combination: Combination; readonly timer: unknown } | null = null;
+    let pendingChord: { readonly press: Press; readonly timer: unknown } | null = null;
 
     const scoped = (): readonly Shortcut[] => {
         const all = [...shortcuts.values()];
@@ -260,7 +265,7 @@ export function createShortcutRegistry(options: ShortcutRegistryOptions = {}): S
                 scopedSnapshot.filter((shortcut) => shortcut.when?.() !== false);
 
             if (pendingChord !== null) {
-                const first = pendingChord.combination;
+                const first = pendingChord.press;
                 cancelChord();
                 // Focus has moved to an input. The second key belongs to the text.
                 for (const shortcut of editable ? [] : available()) {
@@ -268,7 +273,7 @@ export function createShortcutRegistry(options: ShortcutRegistryOptions = {}): S
                         const steps = parseSequence(keys);
                         return (
                             steps.length === 2 &&
-                            sameCombination(steps[0], first) &&
+                            matchesPress(steps[0], first) &&
                             matches(steps[1], event)
                         );
                     });
@@ -291,7 +296,7 @@ export function createShortcutRegistry(options: ShortcutRegistryOptions = {}): S
                 );
                 if (starts) {
                     pendingChord = {
-                        combination: combinationOf(event),
+                        press: pressOf(event),
                         timer: setTimer(() => {
                             pendingChord = null;
                         }, chordTimeoutMs),
@@ -361,17 +366,50 @@ export function parseKeys(keys: ShortcutKeys): Combination {
     };
 }
 
-function combinationOf(event: ShortcutEvent): Combination {
+/** Keypress subset needed for matching: candidate keys and modifiers. */
+interface Press {
+    readonly keys: readonly string[];
+    readonly mod: boolean;
+    readonly shift: boolean;
+    readonly alt: boolean;
+}
+
+function pressOf(event: ShortcutEvent): Press {
     return {
-        key: event.key.toLowerCase(),
+        keys: keyCandidates(event),
         mod: event.metaKey || event.ctrlKey,
         shift: event.shiftKey,
         alt: event.altKey,
     };
 }
 
-function sameCombination(first: Combination | undefined, second: Combination): boolean {
-    return first?.key === second.key && first.mod === second.mod && first.alt === second.alt;
+/**
+ * Keys used to find a command. Always include the typed character. Add the Latin physical-key character
+ * only when the character is not a Latin letter or digit (Cyrillic `\u043c`, punctuation `,`).
+ * In Dvorak and AZERTY, the layout takes precedence over the physical key. An extra candidate there
+ * would turn one keypress into two different commands.
+ */
+function keyCandidates(event: ShortcutEvent): readonly string[] {
+    const typed = event.key.toLowerCase();
+    if (typed.length === 1 && /[a-z0-9]/.test(typed)) {
+        return [typed];
+    }
+    const physical = physicalKey(event);
+    return physical === null || physical === typed ? [typed] : [typed, physical];
+}
+
+/** Latin physical-key name: `KeyX` → `x`, `Digit1` → `1`, `Slash` → `/` or `?` with shift. */
+function physicalKey(event: ShortcutEvent): string | null {
+    if (/^Key[A-Z]$/.test(event.code)) {
+        return event.code.slice(3).toLowerCase();
+    }
+    if (/^Digit[0-9]$/.test(event.code)) {
+        return event.code.slice(5);
+    }
+    if (event.code === 'Slash') {
+        return event.shiftKey ? '?' : '/';
+    }
+    return null;
 }
 
 /**
@@ -382,19 +420,25 @@ function symbolKey(key: string): boolean {
     return key.length === 1 && !/[a-z0-9]/.test(key);
 }
 
-function matches(combination: Combination | undefined, event: ShortcutEvent): boolean {
+/**
+ * A shortcut matches if its key is among the keypress candidates. `mod` means ⌘ on Mac
+ * and Ctrl elsewhere. Modifiers match strictly in both directions: Ctrl+1 must not
+ * run as "1".
+ */
+function matchesPress(combination: Combination | undefined, press: Press): boolean {
     if (combination === undefined) {
         return false;
     }
-    // `mod` is ⌘ on Mac and Ctrl elsewhere. Modifiers must match exactly in both directions:
-    // Ctrl+1 must not trigger "1".
-    const mod = event.metaKey || event.ctrlKey;
     return (
-        event.key.toLowerCase() === combination.key &&
-        mod === combination.mod &&
-        (symbolKey(combination.key) || event.shiftKey === combination.shift) &&
-        event.altKey === combination.alt
+        press.keys.includes(combination.key) &&
+        press.mod === combination.mod &&
+        (symbolKey(combination.key) || press.shift === combination.shift) &&
+        press.alt === combination.alt
     );
+}
+
+function matches(combination: Combination | undefined, event: ShortcutEvent): boolean {
+    return matchesPress(combination, pressOf(event));
 }
 
 /** Input field: keys belong to text here, not commands. */

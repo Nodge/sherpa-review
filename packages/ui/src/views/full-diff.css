@@ -52,8 +52,10 @@
     top: var(--full-diff-toolbar-height);
 }
 
-.full-diff [data-file],
-.full-diff [data-hunk] {
+/* Scroll targets in the card column need space below the sticky bar. Tree rows also carry
+   `data-file` but live in their own scrollable panel, where this space only gets in the way. */
+.full-diff__main [data-file],
+.full-diff__main [data-hunk] {
     scroll-margin-top: var(--full-diff-toolbar-height);
 }
 

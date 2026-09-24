@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
 import type { Lens } from '@sherpa/protocol';
+import { createRef } from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileFilter } from '../filters/lens-filters.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
+import type { FileTreeCursor } from './file-panel.tsx';
 import { FilePanel } from './file-panel.tsx';
 import { createT } from '../i18n/index.js';
 
@@ -59,6 +61,7 @@ function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
     const onFilter = vi.fn<(id: string) => void>();
     const onOpenFile = vi.fn<(fileId: string) => void>();
     const onToggleViewed = vi.fn<(fileId: string) => void>();
+    const cursorRef = createRef<FileTreeCursor>();
 
     act(() => {
         root.render(
@@ -78,6 +81,7 @@ function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
                     writeError={null}
                     outline={null}
                     onOpenHunk={() => undefined}
+                    cursorRef={cursorRef}
                 />
             </ReadOnlyIterationProvider>,
         );
@@ -89,7 +93,7 @@ function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
         host.remove();
     });
 
-    return { host, onFilter, onOpenFile, onToggleViewed };
+    return { host, onFilter, onOpenFile, onToggleViewed, cursorRef };
 }
 
 describe('tree row tags', () => {
@@ -283,5 +287,59 @@ describe('read-only viewed checkboxes', () => {
         });
 
         expect(onToggleViewed).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * The `v` command belongs to the full diff view and has 2 targets: a file card and a tree row.
+ * The panel only exposes its cursor and marks file rows with `data-file` so a row
+ * under the mouse can be a target too.
+ */
+describe('tree cursor for the `v` key', () => {
+    it('sets data-file on a file row but not on a directory row', () => {
+        const { host } = mount();
+        const file = host.querySelector<HTMLElement>('.file-tree__row--file');
+        const directory = host.querySelector<HTMLElement>('.file-tree__row--dir');
+
+        expect(FILES.map((candidate) => candidate.fileId)).toContain(file?.dataset.file);
+        expect(directory?.dataset.file).toBeUndefined();
+    });
+
+    it('exposes the cursor only while the tree has focus', () => {
+        const { host, cursorRef } = mount();
+        const tree = host.querySelector<HTMLElement>('[role="tree"]');
+        const row = host.querySelector<HTMLElement>('.file-tree__row--file');
+
+        // No cursor yet because the tree has not been navigated.
+        expect(cursorRef.current?.cursorFileId()).toBeNull();
+
+        act(() => {
+            row?.click();
+        });
+        // The cursor is set, but focus is outside the tree, so it supplies no target.
+        expect(cursorRef.current?.cursorFileId()).toBeNull();
+
+        act(() => {
+            tree?.focus();
+        });
+        expect(cursorRef.current?.cursorFileId()).toBe(row?.dataset.file);
+
+        act(() => {
+            tree?.blur();
+        });
+        expect(cursorRef.current?.cursorFileId()).toBeNull();
+    });
+
+    it('returns no file when the cursor is on a directory', () => {
+        const { host, cursorRef } = mount();
+        const tree = host.querySelector<HTMLElement>('[role="tree"]');
+        const directory = host.querySelector<HTMLElement>('.file-tree__row--dir');
+
+        act(() => {
+            directory?.click();
+            tree?.focus();
+        });
+
+        expect(cursorRef.current?.cursorFileId()).toBeNull();
     });
 });

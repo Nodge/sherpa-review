@@ -1005,7 +1005,7 @@ export const en: Dictionary = {
     'shortcut.diff.prevFile': 'Previous file',
     'shortcut.diff.nextUnread': 'Next unviewed file',
     'shortcut.diff.prevUnread': 'Previous unviewed file',
-    'shortcut.diff.expandContext': 'Expand context around the focused hunk',
+    'shortcut.diff.expandContext': 'Expand context around the hunk under the cursor',
     'shortcut.route.nextStop': 'Next stop',
     'shortcut.route.prevStop': 'Previous stop',
     'shortcut.route.nextUnviewed': 'Next unviewed stop',

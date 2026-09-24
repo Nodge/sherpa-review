@@ -35,7 +35,7 @@ import type { Feedback } from '../diff-view/file-card.tsx';
 import { shownFileModel } from '../diff-view/file-card.tsx';
 import type { DiffListHandle } from '../diff-view/file-list.tsx';
 import { DiffFileList } from '../diff-view/file-list.tsx';
-import { findLineRow, flashRow } from '../diff-view/line-target.js';
+import { findLineRow, flashRow, lineAt } from '../diff-view/line-target.js';
 import { selectedLineRange } from '../diff-view/selection.js';
 import type { DiffViewSnapshot, DiffViewStore } from '../diff-view/store.js';
 import { createDiffViewStore, fileCollapseReason } from '../diff-view/store.js';
@@ -52,6 +52,7 @@ import {
 } from '../filters/lens-filters.js';
 import { readFragmentParam } from '../fragment.js';
 import { PENDING_DELAY_MS, useDelayedPending } from '../components/use-delayed-pending.js';
+import { useReadOnlyIteration } from '../iterations/read-only.tsx';
 import type { MessageKey } from '../i18n/index.js';
 import { shortCommit, useT } from '../i18n/index.js';
 import { useTurnNoteIntoDraft } from '../notes/use-note-draft.js';
@@ -65,7 +66,7 @@ import { buildRouteMargin } from '../route/margin-model.js';
 import type { MarginStripActions } from '../route/route-margin.tsx';
 import type { SessionStore } from '../session/session-store.js';
 import { useUiSettingsStore } from '../settings/context.tsx';
-import { useShortcut } from '../shortcuts/context.tsx';
+import { usePointerTarget, useShortcut } from '../shortcuts/context.tsx';
 import { neighbourId, unreadNeighbourId } from '../shortcuts/navigation.js';
 import type { ComposerTransport } from '../threads/composer.js';
 import { createComposerTransport, createPublishedCommentTransport } from '../threads/transport.js';
@@ -76,7 +77,7 @@ import { createThreadActions } from '../threads/actions.js';
 import { openFileComposer, openNewComposer, openReply, OutsideThreads } from '../threads/thread-list.tsx';
 import type { ThreadActions } from '../threads/thread-list.tsx';
 import type { ThreadStore } from '../threads/store.js';
-import type { FileOutlineModel, OutlineEntry } from '../tree/file-panel.tsx';
+import type { FileOutlineModel, FileTreeCursor, OutlineEntry } from '../tree/file-panel.tsx';
 import { FilePanel } from '../tree/file-panel.tsx';
 import './full-diff.css';
 
@@ -1072,7 +1073,9 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                 }
             };
             const reveal = (): boolean => {
-                const card = document.querySelector<HTMLElement>(`[data-file="${CSS.escape(fileId)}"]`);
+                // The class is required: a tree row also carries `data-file` and precedes the card in the markup.
+                // Without the class, that row would intercept the line lookup.
+                const card = document.querySelector<HTMLElement>(`.file-card[data-file="${CSS.escape(fileId)}"]`);
                 if (card === null) {
                     return false;
                 }
@@ -1181,13 +1184,18 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             // There is no symbol navigation, so this approximates it: a single-file PR card is always
             // in the DOM, and native scrolling is enough to reach the hunk start.
             document
-                .querySelector(`[data-file="${CSS.escape(only.fileId)}"] [data-hunk="${String(index)}"]`)
+                .querySelector(`.file-card[data-file="${CSS.escape(only.fileId)}"] [data-hunk="${String(index)}"]`)
                 ?.scrollIntoView({ block: 'start' });
         },
         [only],
     );
 
     const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
+    // The "under the cursor or focused" rule applies to every command in this view.
+    const pointer = usePointerTarget();
+    // Only the active iteration allows marking files viewed.
+    const readOnly = useReadOnlyIteration();
+    const treeCursor = useRef<FileTreeCursor | null>(null);
     const focusLine = useCallback((fileId: string, side: 'old' | 'new', line: number) => {
         setFocusedLine({ fileId, side, line });
         setSelectedFileId(fileId);
@@ -1221,16 +1229,47 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         [diff.files, pr.capabilities.commentIssues, threadStore],
     );
 
+    /**
+     * Target for "under the cursor" commands (docs/design/SPEC-elements.md §5): the row under the mouse, or the focused row if the mouse
+     * has not moved since the last focus change. Compute it on keypress: the cursor may
+     * have stayed still while the wheel scrolled the content underneath.
+     */
+    const targetLine = useCallback(
+        (): { readonly fileId: string; readonly side: 'old' | 'new'; readonly line: number } | null =>
+            lineAt(pointer.hovered()) ?? focusedLine,
+        [focusedLine, pointer],
+    );
+    const targetThreadId = useCallback(
+        (): string | null => pointer.target('[data-thread-id]')?.getAttribute('data-thread-id') ?? focusedThreadId,
+        [focusedThreadId, pointer],
+    );
+    /**
+     * File for `v`: the card or tree row under the mouse. If no file is under the mouse, use the row
+     * under the tree cursor while the tree has focus. Otherwise, use the card containing focus.
+     */
+    const targetFileId = useCallback((): string | null => {
+        const hoveredFile = fileIdAt(pointer.hovered());
+        if (hoveredFile !== null) {
+            return hoveredFile;
+        }
+        const cursor = treeCursor.current?.cursorFileId() ?? null;
+        if (cursor !== null) {
+            return cursor;
+        }
+        return typeof document === 'undefined' ? null : fileIdAt(document.activeElement);
+    }, [pointer]);
+
     useShortcut({
         id: 'thread.commentLine',
         keys: ['c'],
         label: 'shortcut.thread.commentLine',
         scope: 'full-diff',
         section: 'comments',
-        when: () => focusedLine !== null,
+        when: () => targetLine() !== null,
         action: () => {
-            if (focusedLine !== null) {
-                commentLine(focusedLine.fileId, focusedLine.side, focusedLine.line);
+            const line = targetLine();
+            if (line !== null) {
+                commentLine(line.fileId, line.side, line.line);
             }
         },
     });
@@ -1240,11 +1279,30 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
         label: 'shortcut.thread.reply',
         scope: 'full-diff',
         section: 'comments',
-        when: () => focusedThreadId !== null,
+        when: () => targetThreadId() !== null,
         action: () => {
-            const thread = threadSnapshot.threads.find((candidate) => candidate.id === focusedThreadId);
+            const threadId = targetThreadId();
+            const thread = threadSnapshot.threads.find((candidate) => candidate.id === threadId);
             if (thread !== undefined) {
                 openReply(threadStore, thread, commentIssues);
+            }
+        },
+    });
+    /**
+     * `v` is declared here instead of in the tree panel: it has two targets, a file card and a tree
+     * row, but the registry must have one command. Previous iterations have no marks.
+     */
+    useShortcut({
+        id: 'diff.markViewed',
+        keys: ['v'],
+        label: 'shortcut.diff.markViewed',
+        scope: 'full-diff',
+        section: 'reading',
+        when: () => !readOnly && targetFileId() !== null,
+        action: () => {
+            const fileId = targetFileId();
+            if (fileId !== null) {
+                toggleViewed(fileId);
             }
         },
     });
@@ -1332,26 +1390,28 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
             goToUnread(-1);
         },
     });
-    const focusedHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
-        if (focusedLine === null) {
+    const targetHunkRequests = useCallback((): readonly HunkExpandRequest[] => {
+        const line = targetLine();
+        if (line === null) {
             return [];
         }
-        const model = shownModelOf(store.getSnapshot(), focusedLine.fileId);
-        return model === null ? [] : hunkContextRequests(model, focusedLine.side, focusedLine.line);
-    }, [focusedLine, store]);
+        const model = shownModelOf(store.getSnapshot(), line.fileId);
+        return model === null ? [] : hunkContextRequests(model, line.side, line.line);
+    }, [store, targetLine]);
     useShortcut({
         id: 'diff.expandContext',
         keys: ['e'],
         label: 'shortcut.diff.expandContext',
         scope: 'full-diff',
         section: 'reading',
-        when: () => focusedHunkRequests().length > 0,
+        when: () => targetHunkRequests().length > 0,
         action: () => {
-            if (focusedLine === null) {
+            const line = targetLine();
+            if (line === null) {
                 return;
             }
-            const fileId = focusedLine.fileId;
-            for (const request of focusedHunkRequests()) {
+            const fileId = line.fileId;
+            for (const request of targetHunkRequests()) {
                 void expandContext({
                     store,
                     fileId,
@@ -1456,6 +1516,7 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
                     outline={outline}
                     onOpenHunk={openHunk}
                     inputRef={searchRef}
+                    cursorRef={treeCursor}
                 />
 
                 <div className="full-diff__main">
@@ -1631,6 +1692,11 @@ const EMPTY_SET_VIEWED = (): Promise<number> =>
 const EMPTY_ASK_SELECTION = (): void => undefined;
 const NO_SELECTION_PENDING = (): boolean => false;
 const fileIdOf = (file: { readonly fileId: string }): string => file.fileId;
+
+/** The file containing an element: list cards and tree rows carry `data-file`. */
+function fileIdAt(element: Element | null): string | null {
+    return element?.closest<HTMLElement>('[data-file]')?.dataset.file ?? null;
+}
 const NO_SELECTION_ANCHOR_CHANGE = (): void => undefined;
 /** Full diff does not mark stops or their cards: it has no controls for that. */
 const NO_STOP_WRITES: StopWriterHooks = {
