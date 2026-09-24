@@ -12,7 +12,7 @@ pnpm -r typecheck && pnpm -r lint && pnpm -r test
 - `lint` runs eslint for each package.
 - `test` runs `vitest run` in 6 packages: `protocol`, `fixtures`, `cli`, `server`, `ui`, `skill`.
 
-E2E is outside the required checks: `packages/e2e` has no `test` script, only `e2e`. Run Playwright separately before a release and after changes to `packages/e2e`, the server or UI flows covered by e2e. The performance run is also outside the regular e2e suite. Run it explicitly (§5).
+E2E isn't part of the required checks. `packages/e2e` has no `test` script, only `e2e`. Run Playwright separately before a release and after changes to `packages/e2e`, the server, or UI flows covered by e2e. The performance spec is part of the regular e2e suite (§5).
 
 Tests must not call a live review host or model. The host uses recorded responses, generation uses raw fixture outputs.
 
@@ -116,13 +116,13 @@ Timeouts: 120 s per test, 10 s for `expect`, one worker with no parallelism (ser
 
 ## 5. Performance budgets
 
-`packages/e2e/src/performance.spec.ts`, run explicitly:
+`packages/e2e/src/performance.spec.ts` runs in the full e2e suite. To run it separately:
 
 ```
 pnpm --filter @sherpa/e2e e2e src/performance.spec.ts
 ```
 
-The run is long (about a minute and a half). The internal timeout for huge tests is raised to 600 s.
+The spec takes about a minute and a half. The internal timeout for huge tests is raised to 600 s.
 
 The `huge` fixture has 100 files and 25 274 changed lines. The measurement doesn't cover the entire PR. Twenty-four cards are collapsed for a reason (viewed or generated file) and don't request parsing, so 76 files and 21 260 lines reach the worker and renderer. Constants in `@sherpa/fixtures` fix these counts, and the test checks them, so the run's numbers describe a load of exactly this size.
 

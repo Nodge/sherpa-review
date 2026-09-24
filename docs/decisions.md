@@ -231,6 +231,7 @@ To maintain the log, add each new decision as a dated entry in its section. When
 - **2026-08-25 · The frame-time budget on the large fixture is a mean ≤ 16.7 ms and p95 ≤ 33 ms** during programmatic scrolling in headless chromium. This gives twice the margin over the measured 2.3–5.4 ms so runs don't become flaky on a slow machine.
 - **2026-09-03 · Performance is measured by intervals between frames, not just the cost of work within a frame.** On a route of 25 stops, the previous method reported 0.08 ms and looked perfect, even though the frame exceeded 16.7 ms. The 149 thousand DOM nodes cost the browser time, outside our code, and were absent from the measurement. The old series stays because it shows our share. The measurement covers 76 files out of 100 because cards collapsed for a reason do not request parsing.
 - **2026-09-04 · Heavy routes shed work by unmounting a stop's diff column, rather than virtualizing individual lines.** The section, narrative, chips and viewed toggle always stay in the DOM. Beyond 2500px from the viewport, a placeholder of the measured height replaces the column, following the same contract as Full diff. `content-visibility: auto` was rolled back after measurement because it reduces neither the DOM nor the heap and worsens p95 on top of unmounting.
+- **2026-09-24 · The performance spec runs in the standard e2e run, without a separate project or flag.** A minute and a half per run is acceptable, and checking the budget on every run catches regressions sooner.
 
 ## Threads, issues and composer (2026-09-21)
 

@@ -539,7 +539,8 @@ export function CommandPalette({
             onClose();
             if (restoreFocus) {
                 requestAnimationFrame(() => {
-                    triggerRef.current?.focus();
+                    // Without preventScroll, focusing an offscreen element jumped the scroll and cleared the line selection.
+                    triggerRef.current?.focus({ preventScroll: true });
                 });
             }
         },

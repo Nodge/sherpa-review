@@ -77,7 +77,7 @@ Install Chromium once:
 pnpm --filter @sherpa/e2e e2e
 ```
 
-`globalSetup` builds the production UI assets and CLI bundle. Each test starts a fixture server with a temporary `--sherpa-dir`. The performance spec is outside the normal run and runs before releases:
+`globalSetup` builds the production UI assets and CLI bundle. Each test starts a fixture server in a temporary `--sherpa-dir`. The performance spec runs with the full suite. To run it separately:
 
 ```
 pnpm --filter @sherpa/e2e e2e src/performance.spec.ts
