@@ -50,12 +50,15 @@ On error — show the text to the user and stop; do not start the loop.
 Run `node <this skill's directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the instructions in its output.
 Repeat until you receive DONE.
 
-`worker next` waits for a task for as long as it takes and returns only with a task, DONE, or an error:
+`worker next` waits for a task for as long as it takes and returns only with a task, DONE, or an error.
+Waiting must cost zero model turns: while nothing happens, you make no calls at all. Pick the branch that matches your harness:
 
-- **You can run background processes and wake up when they finish** — run it in the background. When it returns, act on its output and start the next one. Waiting then costs you nothing: it happens outside a tool call.
-- **You cannot** — run it in the foreground. If your harness kills the call on its tool timeout, that is normal: just run it again.
+- **You can run a command in the background and get woken up when it exits** — run it in the background and end your turn. When the wake-up arrives, act on the output and start the next one.
+- **You cannot** — run it in the foreground inside one blocking tool call. Explicitly set every timeout or yield parameter your tool accepts to 24 hours (86400000 ms): the initial command call, any stdin poll, and any wait call. Never rely on a default timeout. If a call returns while the command is still running, immediately call the wait again with the same 24-hour timeout and do nothing else.
 
+Either way, the command's exit is the only event to wait for: never poll, sleep, re-check, or post a status update while it is running.
 A long wait is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Stop only on DONE or an explicit "stop the loop" error.
+If the user interrupts the wait, run `worker next` again.
 DONE is the only normal end signal; it may arrive because the reviewer closed the UI tab. Stop the loop and relay its message to the user.
 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.

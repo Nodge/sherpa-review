@@ -53,7 +53,7 @@ Flags: `--pr <key>` for all commands (otherwise `SHERPA_PR`, otherwise the PR of
 
 **CLI result limit.** `task complete` checks the file size before sending (`readResultFile`, `RESULT_MAX_BYTES` = 256 KB) and rejects oversized files locally. The task stays leased, and the model has a chance to shorten the file. If the same result reached the server, it would close the task with an error (§5).
 
-**Session instructions** are in `packages/skill/SKILL.md`: derive the PR key from the invocation argument, run `up`, show the link to the reviewer, then run `worker next` repeatedly and follow its output until `DONE` arrives. The loop rules are there too: run `worker next` in the background if the harness supports it, otherwise in the foreground. If the harness times out and kills the call, just run it again. Stop only on `DONE` or an explicit "stop the loop". Every task ends with either `complete` or `fail --reason`. Files in `shared/` do not change between tasks and are read once per session.
+**Session instructions** are in `packages/skill/SKILL.md`: derive the PR key from the invocation argument, run `up`, show the link to the reviewer, then run `worker next` repeatedly and follow its output until `DONE` arrives. The loop rules are there too: waiting costs no model turns. Run `worker next` in the background with a wake-up on completion if the harness supports it. Otherwise run it in the foreground as one blocking call with an explicit one-day tool timeout, without polling or status checks in between. Restart a wait interrupted by the user. Stop only on `DONE` or an explicit "stop the loop". Every task ends with either `complete` or `fail --reason`. Files in `shared/` do not change between tasks and are read once per session.
 
 ## 4. Task format
 
