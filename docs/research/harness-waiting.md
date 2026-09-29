@@ -4,7 +4,7 @@
 
 ## Brief conclusion
 
-Harnesses fall into two types. The first can run a command in the background and wake the model when it finishes (Claude Code, Cursor). The second has no background execution but can hold one blocking call indefinitely with an explicit timeout (OpenCode, pi). Codex is formally the second type, but its system prompt requires it not to block for more than 60 s, and without instructions the model polls the process every ~25 s. A live measurement showed that the harness-neutral wording "set all tool timeouts to one day, do not poll" overrides this rule: 0 model requests in 10 minutes versus 23 without it.
+Harnesses fall into 2 types. The first can run a command in the background and wake the model when it finishes (Claude Code, Cursor). The second has no background mode but can hold a blocking call indefinitely with an explicit timeout (OpenCode, pi). Codex formally belongs to the second type, but its system prompt requires blocking for no more than 60 s, and without instructions the model polls the process about every 25 s. A live measurement showed that harness-neutral wording, "set all tool timeouts to a day, don't poll", overrides this rule: 0 model requests over 10 minutes versus 23 without it. This only holds for gpt-5.6-sol, though. With the same wording, gpt-6-astra polls every 60 s (15 requests over 10 minutes). It reaches zero only with text that explicitly names the cell pragma and overrides the documented tool limits (repeat measurement below).
 
 All 5 harnesses can therefore reach zero idle turns with one `SKILL.md` containing 2 branches based on harness capabilities. A task costs one turn when it arrives, almost always with a cold cache (a 5-minute TTL everywhere except Claude Code subscriptions, where it is an hour). A separate Codex handler isn't needed.
 
@@ -64,6 +64,17 @@ if (r.session_id !== undefined) {
 ```
 
 The wording from variant B was copied almost verbatim into `packages/skill/SKILL.md`.
+
+### Repeat measurement on gpt-6-astra (2026-09-29)
+
+The trigger was an audit of 2 reviewer sessions on Codex Desktop 0.158 with gpt-6-astra. Polling a pending `worker next` every 60 s used 89–92% of session tokens, even though the model had read skill 0.9.1. Tool descriptions in 0.153.4, 0.156.1, and 0.158 are identical word for word. Only the model differs. The setup was the same as above: `codex exec --json`, high reasoning effort, `sleep 600`, one run per variant.
+
+| Variant | Requests over 10 minutes | Behaviour |
+|---|---|---|
+| E. The "no background support" branch from SKILL.md 0.9.1 verbatim | 17 (15 while idle) | Day-long `exec_command` and `write_stdin` timeouts, but no cell pragma. The cell returned after 30 s, followed by 60 s `wait` calls. After 5 minutes, `write_stdin` hit the 300 s limit and the loop restarted |
+| F. The same branch with the cell pragma, a loop inside the script, and a note about documented ranges | 3 (0 while idle) | A cell like variant B above, one call before process exit |
+
+Sol works out the pragma on its own. Astra takes "effective range 250-30000" from the tool description and the system prompt's 60 s rule literally. Wording F was copied into `SKILL.md`. Zero idle turns depend on it.
 
 Measurement limits: one run per variant, 10 minutes, headless mode. In the TUI, user messages queue until the pending call returns. Esc interrupts it.
 

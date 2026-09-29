@@ -91,8 +91,8 @@ describe('skill package build', () => {
         const server = readFileSync(serverPath, 'utf8');
 
         // Quotes in the SKILL.md body enclose exactly the phrases the model looks for in output.
-        // Frontmatter does not count. Its quotes are required by the YAML validator.
-        const body = skill.replace(/^---\n[\s\S]*?\n---\n/u, '');
+        // Frontmatter does not count: its quotes serve the YAML validator. Nor do code spans, where quotes are code.
+        const body = skill.replace(/^---\n[\s\S]*?\n---\n/u, '').replace(/`[^`\n]*`/gu, '');
         const markers = [...body.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
         expect(markers).toEqual(expect.arrayContaining(['stop the loop']));
 
