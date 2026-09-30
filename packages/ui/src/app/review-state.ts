@@ -14,6 +14,7 @@ import type {
     UiSnapshotSummary,
     UiTask,
 } from '@sherpa/protocol';
+import { LOCAL_VCS_KINDS, localHostName } from '@sherpa/protocol';
 
 import type { Translate } from '../i18n/index.js';
 
@@ -152,14 +153,22 @@ export function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Local review adapter name in `uiState.reviewHost`. It has its own UI wording. */
-export const LOCAL_GIT_HOST = 'local-git';
+const LOCAL_HOSTS: readonly string[] = LOCAL_VCS_KINDS.map(localHostName);
+
+/**
+ * Local review (`local-git`) in `uiState.reviewHost` has no PR,
+ * so the UI uses its own wording for gone iterations, stale routes and comment delivery.
+ * The reviewer does not need to know which VCS the checkout uses.
+ */
+export function isLocalHost(host: string | null): boolean {
+    return host !== null && LOCAL_HOSTS.includes(host);
+}
 
 export function hostDisplayName(host: string, t: Translate): string {
     if (host === 'github') {
         return t('host.github');
     }
-    if (host === LOCAL_VCS_HOST) {
+    if (isLocalHost(host)) {
         return t('host.local');
     }
     if (host === 'github') {
@@ -172,7 +181,7 @@ export function hostDisplayName(host: string, t: Translate): string {
 export type DraftDestination = 'pr' | 'agent';
 
 export function draftDestinationOf(reviewHost: string): DraftDestination {
-    return reviewHost === LOCAL_VCS_HOST ? 'agent' : 'pr';
+    return isLocalHost(reviewHost) ? 'agent' : 'pr';
 }
 
 export function emptySnapshots(key: string): SnapshotsState {

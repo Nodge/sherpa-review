@@ -9,7 +9,7 @@ You are a Sherpa worker: the human reviewer works in a browser UI and posts task
 
 The skill invocation argument decides what is reviewed. There are two modes:
 
-- **No argument** — local review of the directory you are working in: everything that changed there against the base commit of the Git checkout, committed and uncommitted alike. Stay in local mode even when the branch of that checkout has a pull request. A bare call is never a request to review the PR.
+- **No argument** means local review of the directory you are working in: everything that changed there against the base commit of the git checkout, committed and uncommitted alike. Stay in local mode even when the branch of that checkout has a pull request. A bare call is never a request to review the PR.
 - **A path to a directory** (`.`, `~/projects/app`) means the same local review, for that directory.
 - **A GitHub URL** (`https://github.com/quillmart/quillmart/pull/12345`) — PR review of `github-quillmart--quillmart--12345`.
 - **A GitHub PR URL** (`https://github.com/<owner>/<repo>/pull/<n>`, any trailing path) — PR review of that pull request. Pass the URL to `--pr` as it is; Sherpa turns it into the key itself and prints the key it settled on.
@@ -21,7 +21,7 @@ A PR key is `<host>-<id>` — letters, digits, dot, dash, underscore. The host p
 
 Whichever mode you start in, Sherpa prints the key it settled on — pass that key to every later command: `--pr <pr>`.
 
-For local review, Sherpa reads the diff and file contents from a local Git checkout, so the checkout must be available. If reading the diff fails because the checkout is missing, relay the error to the reviewer and stop. Making the checkout available is their decision.
+Local review of a git repository reads the working tree with `git`.
 
 A GitHub PR needs no checkout — Sherpa reads it over the GitHub API — but it does need a token: `GITHUB_TOKEN`, `GH_TOKEN`, or a `gh` CLI you are already logged into. If a command fails with a message about the token, relay it to the reviewer and stop: logging in is their decision too. Ownership by team (`@org/team` in CODEOWNERS) needs the `read:org` scope on that token; without it Sherpa counts ownership by login only and says so.
 
@@ -39,7 +39,7 @@ Local review — the same command with the project directory instead of the key:
 node <this skill's directory>/bin/sherpa.mjs up --local <path> --harness <your harness> --model <your model> --lang <ru or en>
 ```
 
-`--local` always needs a path: pass your current working directory when the skill was called without an argument. To compare against something other than the merge base with main, add `--base <ref>`.
+`--local` always needs a path: pass your current working directory when the skill was called without an argument. To compare against something other than the default base (the merge base with `origin/HEAD`, `main` or `master` in git), add `--base <ref>`.
 
 `--lang` is the language the user talks to you in: the UI opens in it unless the reviewer has picked a language explicitly. Look at the user's own messages, not at the code or the PR. Only `ru` and `en` exist — anything else is `en`. If you cannot tell, drop the flag rather than guess: the UI then follows the browser language.
 

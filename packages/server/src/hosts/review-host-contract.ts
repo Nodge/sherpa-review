@@ -15,7 +15,8 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Shared `ReviewHost` contract suite (`docs/testing.md §3`): the same list of tests
- * runs against every implementation, on `FixtureHost` and recorded review host responses.
+ * runs against every implementation: `FixtureHost` and `LocalHost`
+ * with the real git backend.
  *
  * Checks interface promises rather than internals: response shapes
  * (fail-closed through protocol schemas), the `watchThreads` promise of an initial snapshot and a snapshot
@@ -34,6 +35,13 @@ export interface ReviewHostContractOptions<H extends ReviewHost> {
     readonly advance?: (host: H) => void | Promise<void>;
     /** Expected login in `PrMeta.viewer`. If absent, check only the general field requirements. */
     readonly viewer?: string | null;
+    /** Skip the entire suite: the required tool (real `git`) is missing from the machine. */
+    readonly skip?: boolean;
+    /**
+     * Implementation calls an external process (real `git`): each call spawns about ten processes,
+     * so raise test and wait timeouts.
+     */
+    readonly slow?: boolean;
 }
 
 interface ThreadFeed {
@@ -50,11 +58,18 @@ function subscribe(host: ReviewHost): ThreadFeed {
     return { snapshots, stop };
 }
 
+/** Convergence wait limits: one call to a host backed by an external process takes seconds. */
+const WAIT_MS = 2_000;
+const SLOW_WAIT_MS = 20_000;
+
+/** Per-test timeout for a slow implementation. Fast implementations keep the Vitest default. */
+const SLOW_TIMEOUT_MS = 60_000;
+
 /**
  * Wait for a condition: `watchThreads` transport is an adapter detail (synchronous in the fixture,
  * polling in the review host). The contract promises only convergence.
  */
-async function waitUntil(condition: () => boolean, what: string, timeoutMs = 2000): Promise<void> {
+async function waitWithin(condition: () => boolean, what: string, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (!condition()) {
         if (Date.now() > deadline) {
@@ -62,21 +77,6 @@ async function waitUntil(condition: () => boolean, what: string, timeoutMs = 200
         }
         await new Promise((resolve) => setTimeout(resolve, 5));
     }
-}
-
-/**
- * Waits for the subscription to deliver a **new** snapshot showing the mutation result.
- * Checks `snapshots.length` growth separately: a host that returns a live reference to its
- * thread array once and then mutates it silently breaks the "snapshot on every change" promise,
- * even though the final state in `lastSnapshot` converges.
- */
-async function waitFreshSnapshot(
-    feed: ThreadFeed,
-    seen: number,
-    condition: () => boolean,
-    what: string,
-): Promise<void> {
-    await waitUntil(() => feed.snapshots.length > seen && condition(), what);
 }
 
 interface IterationFeed {
@@ -193,8 +193,28 @@ export function describeReviewHostContract<H extends ReviewHost>(
 ): void {
     const writes = options.writes ?? true;
     const advance = options.advance;
+    const slow = options.slow ?? false;
+    const waitMs = slow ? SLOW_WAIT_MS : WAIT_MS;
 
-    describe(`ReviewHost contract: ${name}`, () => {
+    /** Wait for convergence within this implementation's limit. */
+    const waitUntil = (condition: () => boolean, what: string): Promise<void> =>
+        waitWithin(condition, what, waitMs);
+
+    /**
+     * Waits for the subscription to send a **new** snapshot after a mutation with the result visible in it.
+     * The increase in `snapshots.length` is checked separately. A host that returns a live reference to its
+     * thread array once and then silently mutates it breaks the promise of a snapshot on every change,
+     * even though the final state in `lastSnapshot` would still match.
+     */
+    const waitFreshSnapshot = (
+        feed: ThreadFeed,
+        seen: number,
+        condition: () => boolean,
+        what: string,
+    ): Promise<void> => waitUntil(() => feed.snapshots.length > seen && condition(), what);
+
+    const suite = describe.skipIf(options.skip ?? false);
+    suite(`ReviewHost contract: ${name}`, slow ? { timeout: SLOW_TIMEOUT_MS } : {}, () => {
         it('getPr returns a valid PR header', async () => {
             const pr = await makeHost().getPr();
             expect(() => prMetaSchema.parse(pr)).not.toThrow();

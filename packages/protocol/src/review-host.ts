@@ -14,8 +14,8 @@ import type {
 
 /**
  * Host adapter interface (`docs/architecture.md §5`, `docs/product.md §4a`). One
- * abstraction with 3 implementations: a remote review host, a local Git checkout, and a fixture host for the UI and
- * tests. Everything specific to a host stays behind this boundary. The core (route, queue, progress,
+ * abstraction with implementations for GitHub, local checkout (git backend)
+ * and fixtures for the UI and tests. All host-specific behaviour stays behind this boundary. The core (route, queue, progress,
  * snapshots) knows nothing about the host. Contract tests (`docs/testing.md §3`) run the same suite against every implementation.
  */
 export interface ReviewHost {

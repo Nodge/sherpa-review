@@ -114,7 +114,7 @@ export interface StartServerOptions {
     reviewHostFactory?: ReviewHostFactory;
     /**
      * Local review project directory (`--repo`), comparison base (`--base`) and branch used by
-     * the CLI used to build the key (`--branch`). Only `local-git-*` keys need these. Without them the local host
+     * the CLI to build the key (`--branch`). Needed only for `local-*` keys. Without them, the local host
      * starts from the state saved by the previous run.
      */
     repo?: string;

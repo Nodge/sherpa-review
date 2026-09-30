@@ -1,10 +1,10 @@
 import path from 'node:path';
 
-import { LOCAL_VCS_PR_KEY_PREFIX } from '@sherpa/protocol';
+import { localVcsOfPrKey } from '@sherpa/protocol';
 
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
-import { readLocalGitHostState } from './hosts/local-git/index.js';
+import { readLocalHostState } from './hosts/local/index.js';
 import { formatIdlePeriod, readIdleSeconds } from './idle.js';
 import { readOption } from './launch.js';
 import { readListenHost } from './listen-host.js';
@@ -111,7 +111,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
 /** A local key without a project directory has no host. Explain why to the user. */
 function localReviewUnconfigured(prKey: string, sherpaDir: string): boolean {
-    return prKey.startsWith(LOCAL_VCS_PR_KEY_PREFIX) && readLocalVcsHostState(sherpaDir, prKey) === null;
+    return localVcsOfPrKey(prKey) !== null && readLocalHostState(sherpaDir, prKey) === null;
 }
 
 function writeLog(text: string): void {

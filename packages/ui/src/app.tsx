@@ -9,7 +9,7 @@ import {
     EMPTY_ITERATIONS,
     EMPTY_THREADS,
     hostDisplayName,
-    LOCAL_VCS_HOST,
+    isLocalHost,
     reviewStateForKeys,
     sliceReviewState,
 } from './app/review-state.js';
@@ -149,7 +149,7 @@ export function App({ store, session, token }: AppProps) {
     const documentTitle = state === null ? null : documentTitleFor(state.prKey, state.pr);
     const reviewHost = state?.reviewHost ?? null;
     /** Local review has no PR. The UI uses its own wording for a missing iteration. */
-    const localHost = reviewHost === LOCAL_VCS_HOST;
+    const localHost = isLocalHost(reviewHost);
     const reviewKey = `${token}\u0000${reviewHost ?? 'none'}`;
     const chatKey = [reviewKey, state?.prKey ?? 'none'].join(':');
 

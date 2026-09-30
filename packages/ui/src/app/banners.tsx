@@ -30,7 +30,7 @@ import {
 import { RegenerateBanner } from '../views/route/other-card.tsx';
 import type { ViewId } from '../session/views.js';
 
-import { LOCAL_VCS_HOST } from './review-state.js';
+import { isLocalHost } from './review-state.js';
 
 export interface BannerSourcesOptions {
     readonly view: ViewId;
@@ -167,7 +167,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                     <RouteStaleBanner
                         stale={route.stale}
                         stops={route.snapshot.stops}
-                        localHost={reviewHost === LOCAL_VCS_HOST}
+                        localHost={isLocalHost(reviewHost)}
                         onRegenerate={startGeneration}
                         onOpenDiffWithoutRoute={openIterationWithoutRoute}
                     />
@@ -184,7 +184,7 @@ export function buildBannerSources(options: BannerSourcesOptions): readonly Bann
                         createdAt={resolved.createdAt}
                         now={now}
                         gone={resolved.gone}
-                        localHost={reviewHost === LOCAL_VCS_HOST}
+                        localHost={isLocalHost(reviewHost)}
                         onCurrent={() => {
                             session.setViewing(VIEWING_CURRENT);
                         }}

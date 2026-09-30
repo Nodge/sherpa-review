@@ -4,7 +4,8 @@ import type { AnchorPosition, Iteration, ReviewHost, ReviewUser, Verdict } from 
 import {
     
     GITHUB_PR_KEY_PREFIX,
-    LOCAL_VCS_PR_KEY_PREFIX,
+    localHostName,
+    localVcsOfPrKey,
     parseGithubPrKey,
 } from '@sherpa/protocol';
 
@@ -12,14 +13,15 @@ import { DEFAULT_SHERPA_DIR } from '../paths.js';
 
 
 import { makeGithubHost } from './github/index.js';
-import { makeLocalGitHost } from './local-git/index.js';
+import { makeLocalHost } from './local/index.js';
 
 /**
  * Select the host adapter by PR key (`<host>-<pr>`, `docs/protocol.md §8`):
  * `github-<owner>--<repository>--<number>` identifies a PR on
- * github.com, `local-git-<directory>-<hash>` identifies a local git working tree,
- * `fixture-<name from FIXTURE_NAMES>` identifies deterministic fixtures (UI development and e2e),
- * anything else has no host, and review endpoints return `no_review_host`.
+ * github.com, `local-git-<directory>-<hash>` for the working tree
+ * of a local checkout (the prefix names the VCS), `fixture-<name from FIXTURE_NAMES>` for
+ * deterministic fixtures (UI development and e2e). Anything else has no host, so review endpoints
+ * return `no_review_host`.
  *
  * The fixture host is intentionally connected to the server. Otherwise development mode and e2e would need a live
  * review host.
@@ -125,7 +127,7 @@ export interface SelectedHost {
 export interface SelectHostOptions {
     /** Local review project directory (`--repo`). null uses the saved key state. */
     readonly repo?: string | null;
-    /** Local review base (`--base`). With null, use `git merge-base main HEAD`. */
+    /** Local review base (`--base`). null means merge-base with the default base branch. */
     readonly base?: string | null;
     /** Branch where the CLI built the key (`--branch`). null leaves detection to the first snapshot. */
     readonly branch?: string | null;
@@ -167,9 +169,11 @@ export function selectReviewHost(prKey: string, options: SelectHostOptions = {})
         };
     }
 
-    if (prKey.startsWith(LOCAL_VCS_PR_KEY_PREFIX)) {
-        const host = makeLocalVcsHost({
+    const vcs = localVcsOfPrKey(prKey);
+    if (vcs !== null) {
+        const host = makeLocalHost({
             prKey,
+            vcs,
             sherpaDir: options.sherpaDir ?? DEFAULT_SHERPA_DIR,
             repo: options.repo ?? null,
             base: options.base ?? null,
@@ -179,7 +183,7 @@ export function selectReviewHost(prKey: string, options: SelectHostOptions = {})
             return null;
         }
         return {
-            name: 'local-git',
+            name: localHostName(vcs),
             host,
             currentUser: () => host.currentUser(),
             refresh: () => host.refresh(),

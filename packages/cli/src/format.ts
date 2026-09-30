@@ -1,4 +1,11 @@
-import type { RpcError, RpcErrorCode, Task, TaskAckResponse, TaskCompleteResponse } from '@sherpa/protocol';
+import type {
+    LocalVcsKind,
+    RpcError,
+    RpcErrorCode,
+    Task,
+    TaskAckResponse,
+    TaskCompleteResponse,
+} from '@sherpa/protocol';
 import { PROTOCOL_VERSION, RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import { CLI_VERSION } from './version.js';
@@ -43,6 +50,7 @@ export function formatUiUrl(port: number, token: string, host = '127.0.0.1'): st
 
 /** What is being reviewed locally, as a line in the `up` output. */
 export interface LocalReviewSummary {
+    readonly vcs: LocalVcsKind;
     readonly repo: string;
     readonly branch: string;
     /** Explicit base. undefined means the server computes it. */
@@ -58,7 +66,7 @@ export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSu
     if (local !== null) {
         lines.push(
             `Reviewing the working tree of ${local.repo} on branch ${local.branch}, ` +
-                `base ${local.base ?? 'merge-base with main'}.`,
+                `base ${local.base ?? defaultBaseWording(local.vcs)}.`,
         );
     }
 
@@ -67,6 +75,11 @@ export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSu
         `Then run \`sherpa worker next --pr ${prKey}\` and follow the instructions in its output.`,
     );
     return lines.join('\n');
+}
+
+/** How the server names an unspecified base: merge-base with the default git branch. */
+function defaultBaseWording(vcs: LocalVcsKind): string {
+    return 'merge-base with the default branch';
 }
 
 /** Worker work is finished. The word DONE tells the session to end (`docs/protocol.md §3`). */

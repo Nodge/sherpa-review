@@ -9,6 +9,7 @@ import {
     formatRpcError,
     formatTask,
     formatUiUrl,
+    formatUpReady,
 } from './format.js';
 
 const task: Task = {
@@ -29,6 +30,39 @@ describe('UI link', () => {
 
     it('escapes an IPv6 address in the URL', () => {
         expect(formatUiUrl(4317, 'Ab_cd-12', '::1')).toBe('http://[::1]:4317/#t=Ab_cd-12');
+    });
+});
+
+describe('up output for local review', () => {
+    const uiUrl = 'http://127.0.0.1:4317/#t=token';
+
+    it('names the default base in the VCS wording', () => {
+        const git = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
+            vcs: 'git',
+            repo: '/repo/app',
+            branch: 'feature',
+            base: undefined,
+        });
+        const git = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
+            vcs: 'git',
+            repo: '/repo/app',
+            branch: 'feature',
+            base: undefined,
+        });
+
+        expect(git).toContain('on branch feature, base merge-base with main.');
+        expect(git).toContain('on branch feature, base merge-base with the default branch.');
+    });
+
+    it('prints an explicit base as is', () => {
+        const ready = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
+            vcs: 'git',
+            repo: '/repo/app',
+            branch: 'feature',
+            base: 'origin/main~2',
+        });
+
+        expect(ready).toContain('base origin/main~2.');
     });
 });
 

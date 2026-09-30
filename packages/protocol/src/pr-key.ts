@@ -7,8 +7,27 @@
 
 
 
-/** `local-git-<directory>-<hash>`: the working tree of a git checkout. */
-export const LOCAL_GIT_PR_KEY_PREFIX = 'local-git-';
+/**
+ * Version control systems for local review. The kind is part of the key (`local-git-…`),
+ * allowing the server to select a backend and the CLI and UI to recognize local review without asking the server.
+ */
+export const LOCAL_VCS_KINDS = ['git'] as const;
+export type LocalVcsKind = (typeof LOCAL_VCS_KINDS)[number];
+
+/** `local-<vcs>-<directory>-<hash>`: the working tree of a local checkout. */
+export function localPrKeyPrefix(kind: LocalVcsKind): string {
+    return `local-${kind}-`;
+}
+
+/** Local adapter name (`SelectedHost.name`, also `uiState.reviewHost`): `local-git`. */
+export function localHostName(kind: LocalVcsKind): string {
+    return `local-${kind}`;
+}
+
+/** VCS kind of a local key. Returns null for keys outside local review. */
+export function localVcsOfPrKey(prKey: string): LocalVcsKind | null {
+    return LOCAL_VCS_KINDS.find((kind) => prKey.startsWith(localPrKeyPrefix(kind))) ?? null;
+}
 
 /**
  * `github-<owner>--<repository>--<number>`. The separator is a double hyphen: GitHub owners

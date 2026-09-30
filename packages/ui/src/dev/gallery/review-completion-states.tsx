@@ -1,9 +1,8 @@
 import { fixtureIteration } from '@sherpa/fixtures';
 import type { PrMeta, Thread, UiSettings, Verdict } from '@sherpa/protocol';
+import { localHostName } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-
-import { LOCAL_VCS_HOST } from '../../app/review-state.js';
 
 import type { PublicationFailure } from '../../components/review-action-model.js';
 import { ReviewActionBar } from '../../components/review-action-bar.tsx';
@@ -108,7 +107,7 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         id: 'review-bar-local',
         group: 'Finish review',
         title: 'local review: drafts go to the agent',
-        render: () => <BarState threads={DRAFT_THREADS} verdicts={COMMENT_ONLY} reviewHost={LOCAL_VCS_HOST} />,
+        render: () => <BarState threads={DRAFT_THREADS} verdicts={COMMENT_ONLY} reviewHost={localHostName('git')} />,
     },
     {
         id: 'review-publish-error',
@@ -138,7 +137,7 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         title: 'Review complete for local review',
         render: () => (
             <CompleteState
-                completion={{ ...COMPLETION, reviewHost: 'local-git', hostName: 'local checkout' }}
+                completion={{ ...COMPLETION, reviewHost: localHostName('git'), hostName: 'local checkout' }}
             />
         ),
     },

@@ -152,7 +152,7 @@ describe('CLI against server', () => {
 
     // `--local` names a directory, not a PR. The key comes from the directory and branch and overrides even SHERPA_PR.
     it('up --local starts a directory review and names the directory in output', async () => {
-        const localKey = localPrKey(await fs.realpath(workDir), 'feature', 'main~3');
+        const localKey = localPrKey('git', await fs.realpath(workDir), 'feature', 'main~3');
         server = await startServer({
             prKey: localKey,
             sherpaDir,

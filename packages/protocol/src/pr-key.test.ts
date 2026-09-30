@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { githubPrKey, parseGithubPrKey, parseGithubPrUrl } from './pr-key.js';
+import {
+    githubPrKey,
+    LOCAL_VCS_KINDS,
+    localPrKeyPrefix,
+    localVcsOfPrKey,
+    parseGithubPrKey,
+    parseGithubPrUrl,
+} from './pr-key.js';
 import { prKeySchema } from './manifest.js';
 
 describe('GitHub PR key', () => {
@@ -83,5 +90,23 @@ describe('github.com PR link', () => {
         ]) {
             expect(parseGithubPrUrl(url), url).toBeNull();
         }
+    });
+});
+
+describe('local review key', () => {
+    it('reads the VCS kind from the key prefix', () => {
+        expect(localVcsOfPrKey('local-git-sherpa-0badc0de')).toBe('git');
+        expect(localVcsOfPrKey('local-git-app-0badc0de')).toBe('git');
+    });
+
+    it('does not treat unrelated or incomplete keys as local', () => {
+        expect(localVcsOfPrKey('fixture-1')).toBeNull();
+        expect(localVcsOfPrKey('fixture-medium')).toBeNull();
+        expect(localVcsOfPrKey('local-app-0badc0de')).toBeNull();
+        expect(localVcsOfPrKey('local-svn-app-0badc0de')).toBeNull();
+    });
+
+    it('builds the prefix from the VCS kind', () => {
+        expect(LOCAL_VCS_KINDS.map((kind) => localPrKeyPrefix(kind))).toEqual(['local-git-']);
     });
 });

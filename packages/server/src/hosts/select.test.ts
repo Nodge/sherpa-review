@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -27,6 +28,24 @@ describe('host adapter selection', () => {
     it('does not create a host for an invalid GitHub key', () => {
         for (const key of ['github-acme--sherpa', 'github-acme--sherpa--0', 'github---sherpa--1']) {
             expect(selectReviewHost(key, { sherpaDir: SHERPA_DIR }), key).toBeNull();
+        }
+    });
+
+    it('creates a local host for a local git review key only with a project directory', () => {
+        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-select-repo-'));
+        const sherpaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-select-state-'));
+        try {
+            // Without `--repo` or saved key state, there is no way to find the directory.
+            expect(selectReviewHost('local-git-app-0badc0de', { sherpaDir })).toBeNull();
+
+            const selected = selectReviewHost('local-git-app-0badc0de', { repo, sherpaDir });
+
+            expect(selected?.name).toBe('local-git');
+            expect(selected?.feedback).toBeDefined();
+            expect(selected?.refresh).toBeDefined();
+        } finally {
+            fs.rmSync(repo, { recursive: true, force: true });
+            fs.rmSync(sherpaDir, { recursive: true, force: true });
         }
     });
 

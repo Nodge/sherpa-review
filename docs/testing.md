@@ -52,7 +52,9 @@ Three separate guards check:
 
 ## 3. The `ReviewHost` contract suite
 
-`packages/server/src/hosts/review-host-contract.ts` exports the function `describeReviewHostContract(name, makeHost, { writes?, advance? })`. The host implementations call it: `FixtureHost` loops over all fixtures, `GithubHost` uses recorded GitHub API responses, and `LocalHost` uses a temporary directory. One set of checks runs against all implementations, catching differences where the adapters are defined (`docs/architecture.md §5`).
+`packages/server/src/hosts/review-host-contract.ts` exports the function `describeReviewHostContract(name, makeHost, { writes?, advance?, viewer?, skip?, slow? })`. The host implementations call it: `FixtureHost` loops over all fixtures, `GithubHost` uses recorded GitHub API responses, and `LocalHost` uses real `git` in a temporary repository. One set of checks runs against all implementations, catching differences where the adapters are defined (`docs/architecture.md §5`).
+
+The local host's git backend (`git-vcs.test.ts`, `local-git-host*.test.ts`) runs against real `git`. Its repository is created in a system temporary directory, outside other checkouts, in an isolated environment. The backend itself runs as in production, using machine configuration. Only the author name is set in the temporary repository's configuration so test logins do not depend on the machine. If `git` is missing, the entire suites are skipped. Starting a process takes about 100 milliseconds, so these suites have their own timeouts.
 
 What the tests check:
 

@@ -11,10 +11,11 @@ import { openDatabase } from './db.js';
 import { FeedbackOrchestrator } from './feedback-orchestrator.js';
 import { buildFeedbackPayload } from './feedback-payload.js';
 import { FeedbackStore } from './feedback-store.js';
-import { FakeGit } from './hosts/local-git/fake-git.js';
-import { memoryIterationsStore } from './hosts/local-git/iterations-store.js';
-import { LocalGitHost } from './hosts/local-git/local-git-host.js';
-import { memoryThreadsStore } from './hosts/local-git/threads-store.js';
+
+
+import { memoryIterationsStore } from './hosts/local/iterations-store.js';
+import { LocalHost } from './hosts/local/local-host.js';
+import { memoryThreadsStore } from './hosts/local/threads-store.js';
 import type {
     FeedbackHost,
     FeedbackReply,
@@ -510,9 +511,9 @@ describe('publishing a local review queues a task for the agent', () => {
         const fake = new FakeVcs({ root: checkout, prefix: PREFIX });
         fake.commit(`${PREFIX}/src/a.ts`, 'const a = 1;\n');
         fake.writeDisk(`${PREFIX}/src/a.ts`, 'const a = 2;\n');
-        const host = new LocalVcsHost({
+        const host = new LocalHost({
             prKey: 'local-git-app-0badc0de',
-            git: fake.run,
+            vcs: scriptedVcs(fake.runner),
             projectDir: fake.projectDir,
             base: null,
             branch: fake.branch,
