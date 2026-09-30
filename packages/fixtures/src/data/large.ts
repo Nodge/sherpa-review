@@ -222,7 +222,7 @@ export function makeLargeFixture(): FixtureDataInput {
             statusLabel: 'review_in_progress',
             checks: 'failed',
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
+            capabilities: { publishVerdicts: ['comment', 'ship', 'sticky_ship', 'request_changes'], fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

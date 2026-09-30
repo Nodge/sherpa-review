@@ -59,7 +59,7 @@ test('draft buffer: host failure → buffered text → reload → retry', async 
         await page.locator('.thread-composer__status').getByRole('button', { name: 'retry' }).click();
 
         await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
-        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
+        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out when you publish');
         await expect(page.locator('.review-action-bar')).not.toContainText('not sent yet');
         await expect(page.locator('.review-action-bar__ship-primary')).toBeEnabled();
         expect(await draftBufferEntries(page, server)).toEqual([]);

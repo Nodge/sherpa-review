@@ -21,10 +21,12 @@ export const PCI_FILTER_ID = 'pci';
 /**
  * Known lens labels: we supply the label, while `Lens.label` arrives
  * in English from the adapter. Unknown ids display the host label unchanged.
+ *
+ * "My files" is separate. Its label names the ownership zone source (CODEOWNERS) and takes
+ * it as a parameter, see `label`.
  */
 const KNOWN_LABELS: Readonly<Record<string, MessageKey>> = {
     [ALL_FILTER_ID]: 'lens.all',
-    [MINE_FILTER_ID]: 'lens.mine',
     [PCI_FILTER_ID]: 'lens.pci',
     [GENERATED_FILTER_ID]: 'lens.generated',
 };
@@ -58,6 +60,11 @@ export interface FileFiltersInput {
     readonly extra: readonly Lens[];
     /** Filter labels are passed to `title` and chips as ready-made strings. */
     readonly t: Translate;
+    /**
+     * The name the host gives the zone source (`UiReviewLensesResponse.ownershipSource`): used to label
+     * My files. Without it, the label omits the source.
+     */
+    readonly zoneSource?: string | null;
 }
 
 /**
@@ -69,7 +76,13 @@ export interface FileFiltersInput {
  * Nothing is preselected regardless of the list: even when all files are mine and the mine count matches
  * the all count (docs/design/SPEC-elements.md §4.2), `all` stays selected.
  */
-export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInput): readonly FileFilter[] {
+export function buildFileFilters({
+    files,
+    ownership,
+    extra,
+    t,
+    zoneSource = null,
+}: FileFiltersInput): readonly FileFilter[] {
     const byPath = new Map<string, string>();
     for (const file of files) {
         byPath.set(file.path, file.fileId);
@@ -78,7 +91,7 @@ export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInpu
     const filters: FileFilter[] = [
         {
             id: ALL_FILTER_ID,
-            label: label(ALL_FILTER_ID, 'All files', t),
+            label: label(ALL_FILTER_ID, 'All files', t, zoneSource),
             shortLabel: shortLabel(ALL_FILTER_ID, 'All files', t),
             count: files.length,
             available: true,
@@ -90,7 +103,7 @@ export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInpu
     const seen = new Set([ALL_FILTER_ID, GENERATED_FILTER_ID]);
     if (ownership !== null && !seen.has(ownership.id)) {
         seen.add(ownership.id);
-        filters.push(fromOwnershipLens(ownership, byPath, t));
+        filters.push(fromOwnershipLens(ownership, byPath, t, zoneSource));
     }
 
     for (const item of extra) {
@@ -98,7 +111,7 @@ export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInpu
             continue;
         }
         seen.add(item.id);
-        const filter = fromLens(item, byPath, t);
+        const filter = fromLens(item, byPath, t, zoneSource);
         if (filter.count > 0) {
             filters.push(filter);
         }
@@ -108,7 +121,7 @@ export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInpu
     if (generated.size > 0) {
         filters.push({
             id: GENERATED_FILTER_ID,
-            label: label(GENERATED_FILTER_ID, 'Generated files', t),
+            label: label(GENERATED_FILTER_ID, 'Generated files', t, zoneSource),
             shortLabel: shortLabel(GENERATED_FILTER_ID, 'Generated files', t),
             count: generated.size,
             available: true,
@@ -120,8 +133,13 @@ export function buildFileFilters({ files, ownership, extra, t }: FileFiltersInpu
     return filters;
 }
 
-function fromOwnershipLens(source: Lens, byPath: ReadonlyMap<string, string>, t: Translate): FileFilter {
-    const filter = fromLens(source, byPath, t);
+function fromOwnershipLens(
+    source: Lens,
+    byPath: ReadonlyMap<string, string>,
+    t: Translate,
+    zoneSource: string | null,
+): FileFilter {
+    const filter = fromLens(source, byPath, t, zoneSource);
     if (!source.available || filter.count > 0) {
         return filter;
     }
@@ -132,7 +150,12 @@ function fromOwnershipLens(source: Lens, byPath: ReadonlyMap<string, string>, t:
     };
 }
 
-function fromLens(source: Lens, byPath: ReadonlyMap<string, string>, t: Translate): FileFilter {
+function fromLens(
+    source: Lens,
+    byPath: ReadonlyMap<string, string>,
+    t: Translate,
+    zoneSource: string | null,
+): FileFilter {
     const fileIds = new Set<string>();
     for (const path of source.paths) {
         const fileId = byPath.get(path);
@@ -143,7 +166,7 @@ function fromLens(source: Lens, byPath: ReadonlyMap<string, string>, t: Translat
 
     return {
         id: source.id,
-        label: label(source.id, source.label, t),
+        label: label(source.id, source.label, t, zoneSource),
         shortLabel: shortLabel(source.id, source.label, t),
         count: fileIds.size,
         available: source.available,
@@ -152,7 +175,10 @@ function fromLens(source: Lens, byPath: ReadonlyMap<string, string>, t: Translat
     };
 }
 
-function label(id: string, hostLabel: string, t: Translate): string {
+function label(id: string, hostLabel: string, t: Translate, zoneSource: string | null): string {
+    if (id === MINE_FILTER_ID) {
+        return t('lens.mine', zoneSource);
+    }
     const known = KNOWN_LABELS[id];
     return known === undefined ? hostLabel : t(known);
 }

@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { LOCAL_VCS_PR_KEY_PREFIX } from '@sherpa/protocol';
+
 import { CliError } from './errors.js';
 import type { CommandOutcome, CommandRunner } from './pr-discovery.js';
 import { runVcsCommand } from './pr-discovery.js';
@@ -70,7 +72,7 @@ export function localPrKey(repo: string, branch: string, base?: string): string 
     const digest = createHash('sha256')
         .update(`${repo}\n${branch}\n${base ?? ''}`)
         .digest('hex');
-    return `local-git-${keyNameOf(path.basename(repo))}-${digest.slice(0, KEY_HASH_CHARS)}`;
+    return `${LOCAL_VCS_PR_KEY_PREFIX}${keyNameOf(path.basename(repo))}-${digest.slice(0, KEY_HASH_CHARS)}`;
 }
 
 /** Directory name in the `prKeySchema` character set. Replaces other characters with hyphens, uses `dir` for an empty name. */

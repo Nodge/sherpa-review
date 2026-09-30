@@ -42,9 +42,9 @@ More details: `architecture.md` (packages, data flow, storage, orchestrator), `p
 
 Everything specific to a host lives in the `ReviewHost` adapter (diff source, comments and drafts, verdicts, viewed marks, ownership lens, statuses). The core, including the route, task loop, tiers, progress, chat and snapshots, is independent of the host. The data schema rule is that host concepts (for example, "sticky ship") stay within host verdicts and never enter the route model or state.
 
-There are 3 adapters: **review host** for pull request review, **local checkout** for reviewing a project directory's working tree against a base commit (key `local-git-<directory>-<hash>`), and **fixture** for deterministic data in tests, development and the state gallery (`packages/server/src/hosts/select.ts`, PR key `fixture-<name>`).
+There are three adapters: **GitHub** reviews PRs on github.com through the API (key `github-<owner>--<repo>--<number>`), **local checkout** reviews a project directory's working tree against a base commit (key `local-git-<directory>-<hash>`), and **fixture** provides deterministic data for tests, development mode and the state gallery (`packages/server/src/hosts/select.ts`, PR key `fixture-<name>`).
 
-There are 2 real hosts: the remote review host and the local checkout. Some capabilities depend on the remote host, including ownership rules and the PCI DSS lens. Local review treats each working-tree state as an iteration and keeps its own history. Its comments remain local, with no remote host. Publishing sends them to the agent in the same session. Each published round becomes a task, and the agent's replies appear in the same threads. The core learns what a host supports from `HostCapabilities` flags, rather than checks against its name.
+There are two real hosts, GitHub and local checkout. Their capabilities differ. GitHub's ownership lens reads the base branch's CODEOWNERS, while local review treats the entire diff as the reviewer's zone. GitHub has no previous iterations and reviews one branch head. Local review treats each working-tree state as an iteration and remembers the history itself. Its comments stay local because they have no remote host, and publishing sends them to the agent in the same session. Each publishing round becomes an agent task, and its replies appear in the same threads. The core learns what a host supports from `HostCapabilities` flags, rather than host-name checks.
 
 ## 5. Glossary
 
@@ -69,7 +69,7 @@ Three views of one PR, available as tabs and through keys `1` / `2` / `3`: **Ove
 - **A scrolling document, not a step-by-step wizard.** The reviewer keeps their peripheral view, jumps between anchors, switches freely to the full diff and returns. No "next / back" wizards or screens that cover everything.
 - Stops contain **real diff viewers** with all their tools: comments, viewed marks, search and context expansion.
 - **Progress has 2 levels.** The stop's position in the route plus actual viewed state (checkmarks on stops and files, with viewed content collapsed, so progress is visible in the density of code on screen). Progress is local and per-user.
-- **Final actions stay within reach.** PR comment, ship / sticky ship, "Request changes". Finishing publishes accumulated drafts as one batch, so before ship Sherpa shows a summary of exactly what will go to the review host.
+- **Review actions are always within reach.** PR comments, publishing comments without a verdict, ship / sticky ship, Request changes. The panel shows only what the host accepts for this PR. On your own GitHub PR and in local review, only publishing comments is available. Finishing publishes accumulated drafts as one batch, so before shipping, Sherpa shows a summary of what will be sent to the review host.
 - **Order preset switch.** "Triage" (by importance, the default) ↔ "Full tour" (reading order: entry point → definitions → consequences → verification). The data is shared, while order and presentation differ.
 - **Full diff** is the classic reader with a file tree, lenses and search. The AI layer stays in the margins with hatches on unexplained ranges, chat notes and links to stops.
 

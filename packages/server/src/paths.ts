@@ -64,6 +64,11 @@ export function localHostStatePathFor(sherpaDir: string, prKey: string): string 
     return path.join(prStateDirOf(sherpaDir, prKey), 'local-host.json');
 }
 
+/** Maps draft retry keys to GitHub comments. GitHub has no idempotency keys. */
+export function githubDraftsPathFor(sherpaDir: string, prKey: string): string {
+    return path.join(prStateDirOf(sherpaDir, prKey), 'github-drafts.json');
+}
+
 /** Local review comments: they have no remote host, so they live here. */
 export function localReviewPathFor(sherpaDir: string, prKey: string): string {
     return path.join(prStateDirOf(sherpaDir, prKey), 'local-review.json');

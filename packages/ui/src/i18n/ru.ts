@@ -31,6 +31,7 @@ export const ru = {
 
     
     'host.local': 'локальный чекаут',
+    'host.github': 'GitHub',
 
     'command.hint': 'Запусти в любом харнесе — сессия станет воркером.',
     'command.copy': 'Скопировать',
@@ -590,7 +591,7 @@ export const ru = {
     'tree.outline.aria': (name: string) => `Аутлайн файла ${name}`,
 
     'lens.all': 'Все файлы',
-    'lens.mine': 'Мои файлы · CODEOWNERS',
+    'lens.mine': (source: string | null) => (source === null ? 'Мои файлы' : `Мои файлы · ${source}`),
     'lens.pci': 'Файлы PCI DSS',
     'lens.generated': 'Сгенерированные',
     'lens.all.short': 'Все',
@@ -627,16 +628,18 @@ export const ru = {
     'margin.ask.asked': 'спрошено · ответ появится здесь',
     'margin.ask.place': 'Попросить агента разложить',
 
-    'overview.ownership.outsideZones': 'Вне зон CODEOWNERS',
+    'overview.ownership.outsideZones': (source: string) => `Вне зон ${source}`,
     'overview.ownership.generatedPath': 'Машинные файлы',
     'overview.ownership.fallbackNote': 'Зона ответственности для этого PR недоступна.',
-    'overview.ownership.note.mineZone': 'Ваша зона ответственности по CODEOWNERS.',
-    'overview.ownership.note.otherZone': 'Вне вашей зоны CODEOWNERS.',
-    'overview.ownership.note.uncovered': 'Файлы не покрыты зонами CODEOWNERS.',
+    'overview.ownership.note.mineZone': (source: string) => `Ваша зона ответственности по ${source}.`,
+    'overview.ownership.note.otherZone': (source: string) => `Вне вашей зоны ${source}.`,
+    'overview.ownership.note.uncovered': (source: string) => `Файлы не покрыты зонами ${source}.`,
     'overview.ownership.note.generated': 'Машинные файлы приглушены и считаются просмотренными по умолчанию.',
-    'overview.ownership.note.prefixMine': 'Файлы этой группы входят в вашу ответственность по CODEOWNERS.',
-    'overview.ownership.note.prefixOther': 'Файлы этой группы вне вашей зоны CODEOWNERS.',
-    'overview.ownership.note.prefixMixed': 'В группе есть файлы внутри и вне вашей зоны CODEOWNERS.',
+    'overview.ownership.note.prefixMine': (source: string) =>
+        `Файлы этой группы входят в вашу ответственность по ${source}.`,
+    'overview.ownership.note.prefixOther': (source: string) => `Файлы этой группы вне вашей зоны ${source}.`,
+    'overview.ownership.note.prefixMixed': (source: string) =>
+        `В группе есть файлы внутри и вне вашей зоны ${source}.`,
     'overview.ownership.note.prefixUnknown': 'Группа построена по префиксу пути: границы зон недоступны.',
 
     'audit.scope': (listed: string) => `Скоуп: ${listed}. `,
@@ -658,10 +661,12 @@ export const ru = {
     'prComments.context': (prId: string) => `вне диффа · ${prId}`,
     'prComments.close': 'Закрыть комментарии к PR',
     'prComments.close.title': 'Закрыть · Esc',
-    'prComments.empty': 'Комментариев к PR пока нет. Написанное здесь уйдёт вместе с ревью при Ship.',
+    'prComments.empty': 'Комментариев к PR пока нет. Написанное здесь уйдёт вместе с ревью при публикации.',
+    'prComments.empty.agent': 'Комментариев к PR пока нет. Написанное здесь уйдёт агенту вместе с остальными черновиками.',
     'prComments.placeholder': 'Текст комментария к PR',
     'prComments.new': 'Написать комментарий к PR…',
-    'prComments.footer': 'Черновики публикуются пакетом при Ship — вместе с комментариями к строкам',
+    'prComments.footer': 'Черновики уходят одним пакетом при публикации — вместе с комментариями к строкам',
+    'prComments.footer.agent': 'Черновики уходят агенту одним пакетом — вместе с комментариями к строкам',
     'prComments.hint.save': 'сохранить',
     'prComments.escape.cancel': 'отмена',
     'prComments.escape.close': 'закрыть',
@@ -716,9 +721,13 @@ export const ru = {
     'complete.published.value': (published: number, replies: number) =>
         `${num(published)} (из них ${num(replies)} ${form(replies, 'ответ', 'ответа', 'ответов')})`,
     'complete.snapshot': 'Подписан снапшот',
+    'complete.snapshot.reviewed': 'Просмотрен снапшот',
     'complete.openThreads': (threads: number) =>
+        `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыто')}`,
+    'complete.openThreads.shipped': (threads: number) =>
         `${num(threads)} ${form(threads, 'тред ещё открыт', 'треда ещё открыты', 'тредов ещё открыто')} — шипу это не мешает`,
     'complete.openThread': 'Открыть тред',
+    'complete.verdict.comment': 'Комментарии опубликованы',
     'complete.verdict.requestChanges': 'Запрошены изменения',
     'complete.verdict.shipped': 'Shipped',
     'complete.sticky': (commit: string) => `sticky ship · переносится на следующие пуши · ${commit}`,
@@ -732,7 +741,7 @@ export const ru = {
     'note.at.line': (line: number) => `спрошено у строки ${num(line)}`,
     'note.at.lines': (start: number, end: number) => `спрошено у строк ${num(start)}–${num(end)}`,
     'note.header': (range: string) => `Заметка агента · ${range}`,
-    'note.provenance': 'ответ модели · не публикуется на хосте ревью',
+    'note.provenance': 'ответ модели · не публикуется в PR',
     'note.openInChat': 'Открыть в чате',
     'note.toDraft': 'В черновик комментария',
     'note.collapse': 'Свернуть',
@@ -842,9 +851,16 @@ export const ru = {
     'overview.summary.noRoute.text': 'Запусти скилл, чтобы агент собрал маршрут и краткое описание PR.',
     'overview.ownership.title': 'Файлы по зонам ответственности',
     'overview.ownership.segments': 'Файлы по зоне ответственности',
-    'overview.ownership.stats': (mineFiles: number, totalFiles: number, mineLines: number, totalLines: number) =>
-        `CODEOWNERS · ${num(mineFiles)} из ${num(totalFiles)} ${form(totalFiles, 'файла', 'файлов', 'файлов')} · ${num(mineLines)} из ${num(totalLines)} ${form(totalLines, 'строки', 'строк', 'строк')} — ваши`,
-    'overview.ownership.statsUnavailable': 'CODEOWNERS · зона ответственности недоступна',
+    'overview.ownership.stats': (
+        source: string,
+        mineFiles: number,
+        totalFiles: number,
+        mineLines: number,
+        totalLines: number,
+    ) =>
+        `${source} · ${num(mineFiles)} из ${num(totalFiles)} ${form(totalFiles, 'файла', 'файлов', 'файлов')} · ${num(mineLines)} из ${num(totalLines)} ${form(totalLines, 'строки', 'строк', 'строк')} — ваши`,
+    'overview.ownership.statsUnavailable': (source: string | null) =>
+        source === null ? 'Зона ответственности недоступна' : `${source} · зона ответственности недоступна`,
     'overview.ownership.mine': (files: number) => `Моя зона ${num(files)}`,
     'overview.ownership.all': (files: number) => `Все ${num(files)}`,
     'overview.ownership.noZone': 'Зона ответственности для этого PR не пришла.',
@@ -929,18 +945,15 @@ export const ru = {
         `+${num(count)} ${form(count, 'уведомление', 'уведомления', 'уведомлений')}`,
 
     'ship.progress': (seen: number, total: number) => `${num(seen)} / ${num(total)} файлов`,
-    'ship.loading.files': 'файлов',
-    'ship.loading.filesAria': 'Счётчик файлов загружается',
-    'ship.loading.comments': 'комментарии загружаются',
-    'ship.loading.reason': 'Дифф и данные ревью ещё загружаются.',
-    'ship.diffFailed': 'дифф не загрузился',
-    'ship.diffFailed.reason': (error: string) => `Дифф не загрузился: ${error}`,
     'ship.prComment': 'Комментарий к PR',
     'ship.chooseMode': 'Выбрать режим шипа',
     'ship.menu': 'Режим шипа',
     'ship.noDrafts': 'нет неопубликованных комментариев',
+    'ship.noDraftsForAgent': 'нет комментариев для агента',
     'ship.drafts': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'уйдёт', 'уйдут', 'уйдут')} при шипе`,
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'уйдёт', 'уйдут', 'уйдут')} при публикации`,
+    'ship.draftsToAgent': (drafts: number) =>
+        `${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} ${form(drafts, 'уйдёт', 'уйдут', 'уйдут')} агенту`,
     'ship.drafts.pinned': (drafts: number) =>
         `· ${num(drafts)} ${form(drafts, 'закреплён', 'закреплены', 'закреплены')} за прошлыми коммитами`,
     'ship.publishing': 'Публикуется…',
@@ -954,11 +967,18 @@ export const ru = {
         `${num(files)} ${form(files, 'файл не просмотрен', 'файла не просмотрены', 'файлов не просмотрено')} — всё равно шипнуть?`,
     'ship.mode.ship': 'Ship',
     'ship.mode.sticky': 'Sticky ship',
+    'ship.mode.comment': 'Comment',
     'ship.mode.ship.description': 'Одобряет только этот снапшот. Новый пуш снимает одобрение и спросит снова.',
     'ship.mode.sticky.description': 'Одобрение переносится на следующие пуши — обычный sticky ship хоста.',
     'ship.mode.sticky.unavailable': 'Здесь Sticky ship недоступен.',
+    'ship.mode.ship.unavailable': 'Здесь Ship недоступен.',
+    'ship.mode.comment.unavailable': 'Здесь нельзя опубликовать без вердикта.',
     'ship.option.publishes': (drafts: number) =>
         `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')}.`,
+    'ship.consequence.comment': (drafts: number) =>
+        `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} без вердикта`,
+    'ship.consequence.commentAgent': (drafts: number) =>
+        `Передаст ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} агенту`,
     'ship.consequence.ship': (drafts: number) =>
         `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} и одобрит снапшот`,
     'ship.consequence.requestChanges': (drafts: number) =>
@@ -993,6 +1013,7 @@ export const ru = {
     'shortcut.thread.reply': 'Ответить в тред под курсором',
     'shortcut.review.shipMenu': 'Открыть меню шипа',
     'shortcut.review.requestChanges': 'Request changes',
+    'shortcut.review.publishComments': 'Comment',
     'shortcut.route.stop': (stop: string) => `Перейти к остановке ${stop}`,
     'shortcut.route.toggleStopViewed': 'Отметить остановку просмотренной',
     'shortcut.route.toggleStopCollapse': 'Свернуть или раскрыть остановку',
@@ -1077,7 +1098,7 @@ export const ru = {
         'Полный дифф — все файлы в обычном порядке, ничего не переставлено и не свёрнуто моделью. ИИ-слой уходит на поля, а не исчезает.',
     'tour.step.ship.title': 'Ничего не уйдёт автору, пока ты не скажешь',
     'tour.step.ship.body':
-        'Комментарии сохраняются черновиками сразу, как ты их пишешь. Панель считает, что ждёт публикации; Ship или Request changes отправляет пакет. Шерпа ничего не постит и не шипает за тебя.',
+        'Комментарии сохраняются черновиками сразу, как ты их пишешь. Панель считает, что ждёт публикации, а её кнопки отправляют пакет — с вердиктом или без. Шерпа ничего не постит и не шипает за тебя.',
     'tour.stub.title': 'Здесь появится первая остановка маршрута',
     'tour.stub.body':
         'Пока маршрута нет, тур показывает его устройство: слева рассказ остановки, справа её дифф. Как только агент сдаст первую остановку, на этом месте встанет она.',

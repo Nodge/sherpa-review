@@ -66,7 +66,7 @@ function OverviewState({
                 prKey="fixture-medium"
                 session={session}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 threads={DATA.threads}
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}
@@ -112,7 +112,7 @@ function RouteFillingState({ agentStopped = false }: { agentStopped?: boolean })
             <RouteWorkspace
                 pr={DATA.pr}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 snapshot={snapshot}
                 agentStopped={agentStopped}
                 session={session}
@@ -154,7 +154,7 @@ function SmallPrDiffState() {
                 pr={data.pr}
                 diff={data.diff}
                 threadStore={threadStore}
-                lenses={{ ownership: data.ownership, extra: data.extraLenses }}
+                lenses={{ ownership: data.ownership, extra: data.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 prKey="fixture-small"
                 session={session}
                 store={store}

@@ -26,6 +26,7 @@ export const en: Dictionary = {
 
     
     'host.local': 'local checkout',
+    'host.github': 'GitHub',
 
     'command.hint': 'Run it in any harness — that session becomes the worker.',
     'command.copy': 'Copy',
@@ -580,7 +581,7 @@ export const en: Dictionary = {
     'tree.outline.aria': (name: string) => `Outline of ${name}`,
 
     'lens.all': 'All files',
-    'lens.mine': 'My files · CODEOWNERS',
+    'lens.mine': (source: string | null) => (source === null ? 'My files' : `My files · ${source}`),
     'lens.pci': 'PCI DSS files',
     'lens.generated': 'Generated',
     'lens.all.short': 'All',
@@ -616,16 +617,19 @@ export const en: Dictionary = {
     'margin.ask.asked': 'asked · the answer will land here',
     'margin.ask.place': 'Ask the agent to place them',
 
-    'overview.ownership.outsideZones': 'Outside CODEOWNERS zones',
+    'overview.ownership.outsideZones': (source: string) => `Outside ${source} zones`,
     'overview.ownership.generatedPath': 'Generated files',
     'overview.ownership.fallbackNote': 'The ownership zone for this PR is unavailable.',
-    'overview.ownership.note.mineZone': 'Your ownership zone by CODEOWNERS.',
-    'overview.ownership.note.otherZone': 'Outside your CODEOWNERS zone.',
-    'overview.ownership.note.uncovered': 'These files are not covered by CODEOWNERS zones.',
+    'overview.ownership.note.mineZone': (source: string) => `Your ownership zone by ${source}.`,
+    'overview.ownership.note.otherZone': (source: string) => `Outside your ${source} zone.`,
+    'overview.ownership.note.uncovered': (source: string) => `These files are not covered by ${source} zones.`,
     'overview.ownership.note.generated': 'Generated files are dimmed and count as read by default.',
-    'overview.ownership.note.prefixMine': 'The files of this group are your responsibility by CODEOWNERS.',
-    'overview.ownership.note.prefixOther': 'The files of this group are outside your CODEOWNERS zone.',
-    'overview.ownership.note.prefixMixed': 'The group mixes files inside and outside your CODEOWNERS zone.',
+    'overview.ownership.note.prefixMine': (source: string) =>
+        `The files of this group are your responsibility by ${source}.`,
+    'overview.ownership.note.prefixOther': (source: string) =>
+        `The files of this group are outside your ${source} zone.`,
+    'overview.ownership.note.prefixMixed': (source: string) =>
+        `The group mixes files inside and outside your ${source} zone.`,
     'overview.ownership.note.prefixUnknown': 'The group is built by path prefix: zone boundaries are unavailable.',
 
     'audit.scope': (listed: string) => `Scope: ${listed}. `,
@@ -647,10 +651,12 @@ export const en: Dictionary = {
     'prComments.context': (prId: string) => `outside the diff · ${prId}`,
     'prComments.close': 'Close the PR comments',
     'prComments.close.title': 'Close · Esc',
-    'prComments.empty': 'No comments on the PR yet. What you write here goes out with the review on Ship.',
+    'prComments.empty': 'No comments on the PR yet. What you write here goes out with the review when you publish.',
+    'prComments.empty.agent': 'No comments on the PR yet. What you write here goes to the agent along with the other drafts.',
     'prComments.placeholder': 'Comment on the PR',
     'prComments.new': 'Write a comment on the PR…',
-    'prComments.footer': 'Drafts publish as one batch on Ship — together with the line comments',
+    'prComments.footer': 'Drafts go out as one batch when you publish — together with the line comments',
+    'prComments.footer.agent': 'Drafts go to the agent as one batch — together with the line comments',
     'prComments.hint.save': 'save',
     'prComments.escape.cancel': 'cancel',
     'prComments.escape.close': 'close',
@@ -704,9 +710,13 @@ export const en: Dictionary = {
     'complete.published.value': (published: number, replies: number) =>
         `${num(published)} (${num(replies)} of them ${form(replies, 'a reply', 'replies')})`,
     'complete.snapshot': 'Snapshot signed',
+    'complete.snapshot.reviewed': 'Snapshot reviewed',
     'complete.openThreads': (threads: number) =>
+        `${num(threads)} ${form(threads, 'thread is', 'threads are')} still open`,
+    'complete.openThreads.shipped': (threads: number) =>
         `${num(threads)} ${form(threads, 'thread is', 'threads are')} still open — that does not block the ship`,
     'complete.openThread': 'Open the thread',
+    'complete.verdict.comment': 'Comments published',
     'complete.verdict.requestChanges': 'Changes requested',
     'complete.verdict.shipped': 'Shipped',
     'complete.sticky': (commit: string) => `sticky ship · carries over to later pushes · ${commit}`,
@@ -719,7 +729,7 @@ export const en: Dictionary = {
     'note.at.line': (line: number) => `asked at line ${num(line)}`,
     'note.at.lines': (start: number, end: number) => `asked at lines ${num(start)}–${num(end)}`,
     'note.header': (range: string) => `Agent note · ${range}`,
-    'note.provenance': 'model answer · never published to the review host',
+    'note.provenance': 'model answer · never published to the PR',
     'note.openInChat': 'Open in the chat',
     'note.toDraft': 'Turn into a comment draft',
     'note.collapse': 'Collapse',
@@ -825,9 +835,16 @@ export const en: Dictionary = {
     'overview.summary.noRoute.text': 'Run the skill so the agent builds the route and the PR summary.',
     'overview.ownership.title': 'Files by ownership zone',
     'overview.ownership.segments': 'Files by ownership zone',
-    'overview.ownership.stats': (mineFiles: number, totalFiles: number, mineLines: number, totalLines: number) =>
-        `CODEOWNERS · ${num(mineFiles)} of ${num(totalFiles)} files · ${num(mineLines)} of ${num(totalLines)} lines are yours`,
-    'overview.ownership.statsUnavailable': 'CODEOWNERS · ownership zone unavailable',
+    'overview.ownership.stats': (
+        source: string,
+        mineFiles: number,
+        totalFiles: number,
+        mineLines: number,
+        totalLines: number,
+    ) =>
+        `${source} · ${num(mineFiles)} of ${num(totalFiles)} files · ${num(mineLines)} of ${num(totalLines)} lines are yours`,
+    'overview.ownership.statsUnavailable': (source: string | null) =>
+        source === null ? 'Ownership zone unavailable' : `${source} · ownership zone unavailable`,
     'overview.ownership.mine': (files: number) => `My files ${num(files)}`,
     'overview.ownership.all': (files: number) => `All ${num(files)}`,
     'overview.ownership.noZone': 'No ownership zone came back for this PR.',
@@ -908,18 +925,15 @@ export const en: Dictionary = {
     'banner.slot.more': (count: number) => `+${num(count)} ${form(count, 'notice', 'notices')}`,
 
     'ship.progress': (seen: number, total: number) => `${num(seen)} / ${num(total)} files`,
-    'ship.loading.files': 'files',
-    'ship.loading.filesAria': 'File counter is loading',
-    'ship.loading.comments': 'comments are loading',
-    'ship.loading.reason': 'The diff and the review data are still loading.',
-    'ship.diffFailed': 'diff failed to load',
-    'ship.diffFailed.reason': (error: string) => `Diff failed to load: ${error}`,
     'ship.prComment': 'Comment on the PR',
     'ship.chooseMode': 'Choose the ship mode',
     'ship.menu': 'Ship mode',
     'ship.noDrafts': 'no unpublished comments',
+    'ship.noDraftsForAgent': 'no comments for the agent',
     'ship.drafts': (drafts: number) =>
-        `${num(drafts)} ${form(drafts, 'draft goes', 'drafts go')} out on ship`,
+        `${num(drafts)} ${form(drafts, 'draft goes', 'drafts go')} out when you publish`,
+    'ship.draftsToAgent': (drafts: number) =>
+        `${num(drafts)} ${form(drafts, 'draft goes', 'drafts go')} to the agent`,
     'ship.drafts.pinned': (drafts: number) =>
         `· ${num(drafts)} ${form(drafts, 'is', 'are')} pinned to earlier commits`,
     'ship.publishing': 'Publishing…',
@@ -932,10 +946,17 @@ export const en: Dictionary = {
         `${num(files)} ${form(files, 'file', 'files')} not viewed — ship anyway?`,
     'ship.mode.ship': 'Ship',
     'ship.mode.sticky': 'Sticky ship',
+    'ship.mode.comment': 'Comment',
     'ship.mode.ship.description': 'Approves this snapshot only. A new push drops the approval and asks again.',
     'ship.mode.sticky.description': 'The approval carries over to later pushes — the host’s own sticky ship.',
     'ship.mode.sticky.unavailable': 'Sticky ship is unavailable here.',
+    'ship.mode.ship.unavailable': 'Ship is unavailable here.',
+    'ship.mode.comment.unavailable': 'Publishing without a verdict is unavailable here.',
     'ship.option.publishes': (drafts: number) => `Publishes ${num(drafts)} ${form(drafts, 'draft', 'drafts')}.`,
+    'ship.consequence.comment': (drafts: number) =>
+        `Publishes ${num(drafts)} ${form(drafts, 'draft', 'drafts')} without a verdict`,
+    'ship.consequence.commentAgent': (drafts: number) =>
+        `Hands ${num(drafts)} ${form(drafts, 'draft', 'drafts')} to the agent`,
     'ship.consequence.ship': (drafts: number) =>
         `Publishes ${num(drafts)} ${form(drafts, 'draft', 'drafts')} and approves the snapshot`,
     'ship.consequence.requestChanges': (drafts: number) =>
@@ -970,6 +991,7 @@ export const en: Dictionary = {
     'shortcut.thread.reply': 'Reply in the thread under the cursor',
     'shortcut.review.shipMenu': 'Open the ship menu',
     'shortcut.review.requestChanges': 'Request changes',
+    'shortcut.review.publishComments': 'Comment',
     'shortcut.route.stop': (stop: string) => `Go to stop ${stop}`,
     'shortcut.route.toggleStopViewed': 'Mark the stop viewed',
     'shortcut.route.toggleStopCollapse': 'Collapse or expand the stop',
@@ -1052,7 +1074,7 @@ export const en: Dictionary = {
         'Full diff shows every file in plain order — nothing reordered or folded by the model. The AI layer moves to the margin instead of disappearing.',
     'tour.step.ship.title': 'Nothing reaches the author until you say so',
     'tour.step.ship.body':
-        'Comments are saved as drafts the moment you write them. This panel counts what is waiting, and Ship or Request changes publishes the batch. Sherpa never posts and never ships for you.',
+        'Comments are saved as drafts the moment you write them. This panel counts what is waiting, and its buttons publish the batch — with a verdict or without one. Sherpa never posts and never ships for you.',
     'tour.stub.title': 'The first stop of the route will appear here',
     'tour.stub.body':
         'While there is no route yet, the tour shows how it is built: the narrative of a stop on the left, its diff on the right. The first stop takes this place as soon as the agent hands it over.',

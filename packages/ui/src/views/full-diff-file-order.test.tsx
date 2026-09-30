@@ -98,7 +98,7 @@ function mount(diff: PrDiff): HTMLElement {
             <DiffWorkspace
                 pr={DATA.pr}
                 diff={diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 prKey="fixture-medium"
                 session={createSessionStore({ initial: { view: 'diff', filter: 'all' } })}
                 store={store}

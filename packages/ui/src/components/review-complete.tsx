@@ -1,9 +1,11 @@
 import type { Verdict } from '@sherpa/protocol';
 
+import { draftDestinationOf } from '../app/review-state.js';
 import type { Translate } from '../i18n/index.js';
 import { shortCommit, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { ReviewCompletion } from './review-action-bar.tsx';
+import { unreachableVerdict } from './review-action-model.js';
 import './review-complete.css';
 
 export interface ReviewCompleteProps {
@@ -68,12 +70,15 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
                         label={t('complete.published')}
                         value={t('complete.published.value', completion.publishedComments, replies)}
                     />
-                    <Counter label={t('complete.snapshot')} value={`${commit} · PR head ${commit}`} />
+                    <Counter
+                        label={snapshotLabel(completion.verdict, t)}
+                        value={`${commit} · PR head ${commit}`}
+                    />
                 </dl>
 
                 {completion.openThreads > 0 && completion.firstOpenThreadId !== null ? (
                     <footer className="review-complete__open-threads">
-                        <span>{t('complete.openThreads', completion.openThreads)}</span>
+                        <span>{openThreadsText(completion.verdict, completion.openThreads, t)}</span>
                         <button
                             type="button"
                             className="ctl ctl--ghost"
@@ -98,14 +103,14 @@ export function ReviewComplete({ completion, onOpenThread, onOpenFullDiff }: Rev
     );
 }
 
-/**
- * Where the comments went. Local review does not deliver them elsewhere. The round becomes a task
- * for the agent in this same session.
- */
+/** Comment destination: local review sends the round as an agent task in the same session. */
 function deliveryText(completion: ReviewCompletion, t: Translate): string {
-    return completion.reviewHost === 'local-git'
-        ? t('complete.handedToAgent')
-        : t('complete.deliveredTo', completion.hostName);
+    switch (draftDestinationOf(completion.reviewHost)) {
+        case 'agent':
+            return t('complete.handedToAgent');
+        case 'pr':
+            return t('complete.deliveredTo', completion.hostName);
+    }
 }
 
 /** "7 of 7 · Other read as raw diff" (docs/design/README.md §13): the second clause appears only when true. */
@@ -133,17 +138,60 @@ function Counter({ label, value }: { label: string; value: string }) {
     );
 }
 
-
 function verdictTitle(verdict: Verdict, t: Translate): string {
-    if (verdict === 'sticky_ship') {
-        return t('ship.mode.sticky');
+    switch (verdict) {
+        case 'comment':
+            return t('complete.verdict.comment');
+        case 'ship':
+            return t('complete.verdict.shipped');
+        case 'sticky_ship':
+            return t('ship.mode.sticky');
+        case 'request_changes':
+            return t('complete.verdict.requestChanges');
+        default:
+            return unreachableVerdict(verdict);
     }
-    return t(verdict === 'request_changes' ? 'complete.verdict.requestChanges' : 'complete.verdict.shipped');
+}
+
+/** Without a verdict, the reviewer signed nothing. The snapshot was only viewed. */
+function snapshotLabel(verdict: Verdict, t: Translate): string {
+    switch (verdict) {
+        case 'comment':
+            return t('complete.snapshot.reviewed');
+        case 'ship':
+        case 'sticky_ship':
+        case 'request_changes':
+            return t('complete.snapshot');
+        default:
+            return unreachableVerdict(verdict);
+    }
+}
+
+/** "This does not prevent ship" appears only after a ship. */
+function openThreadsText(verdict: Verdict, threads: number, t: Translate): string {
+    switch (verdict) {
+        case 'ship':
+        case 'sticky_ship':
+            return t('complete.openThreads.shipped', threads);
+        case 'comment':
+        case 'request_changes':
+            return t('complete.openThreads', threads);
+        default:
+            return unreachableVerdict(verdict);
+    }
 }
 
 function verdictProvenance(verdict: Verdict, commit: string, t: Translate): string {
-    if (verdict === 'sticky_ship') {
-        return t('complete.sticky', commit);
+    switch (verdict) {
+        case 'comment':
+            return `comment · ${commit}`;
+        case 'ship':
+            return `ship · ${commit}`;
+        case 'sticky_ship':
+            return t('complete.sticky', commit);
+        case 'request_changes':
+            return `request changes · ${commit}`;
+        default:
+            return unreachableVerdict(verdict);
     }
-    return verdict === 'request_changes' ? `request changes · ${commit}` : `ship · ${commit}`;
 }

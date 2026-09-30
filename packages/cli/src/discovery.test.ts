@@ -83,6 +83,22 @@ describe('discovery', () => {
             await expect(resolvePrKey(undefined, {}, noCheckout)).rejects.toThrow('not a Git checkout');
         });
 
+        it('normalizes a github.com PR URL into a key before anything else', async () => {
+            await expect(
+                resolvePrKey('https://github.com/acme/sherpa/pull/42', {}, vcsOnBranch(3)),
+            ).resolves.toBe('github-acme--sherpa--42');
+            await expect(
+                resolvePrKey('https://github.com/acme/ui--kit/pull/7/files#diff-abc', {}, vcsOnBranch(3)),
+            ).resolves.toBe('github-acme--ui--kit--7');
+            await expect(
+                resolvePrKey(undefined, { SHERPA_PR: 'https://github.com/acme/sherpa/pull/9' }, vcsOnBranch(3)),
+            ).resolves.toBe('github-acme--sherpa--9');
+            // An existing key stays as it is.
+            await expect(resolvePrKey('github-acme--sherpa--42', {}, vcsOnBranch(3))).resolves.toBe(
+                'github-acme--sherpa--42',
+            );
+        });
+
         it('rejects a key that escapes the state directory', async () => {
             await expect(resolvePrKey('../../etc', {}, vcsOnBranch(3))).rejects.toThrow('invalid PR key');
         });

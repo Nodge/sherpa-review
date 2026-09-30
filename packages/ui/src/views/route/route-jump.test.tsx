@@ -273,7 +273,7 @@ function mount(
             <RouteWorkspace
                 pr={DATA.pr}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: [...(options.extraLenses ?? DATA.extraLenses)] }}
+                lenses={{ ownership: DATA.ownership, extra: [...(options.extraLenses ?? DATA.extraLenses)], ownershipSource: 'CODEOWNERS' }}
                 snapshot={options.snapshot ?? SNAPSHOT}
                 session={session}
                 store={store}

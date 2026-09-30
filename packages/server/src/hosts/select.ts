@@ -1,16 +1,24 @@
 import type { FixtureName } from '@sherpa/fixtures';
 import { FIXTURE_NAMES, makeFixtureHost } from '@sherpa/fixtures';
 import type { AnchorPosition, Iteration, ReviewHost, ReviewUser, Verdict } from '@sherpa/protocol';
+import {
+    
+    GITHUB_PR_KEY_PREFIX,
+    LOCAL_VCS_PR_KEY_PREFIX,
+    parseGithubPrKey,
+} from '@sherpa/protocol';
 
 import { DEFAULT_SHERPA_DIR } from '../paths.js';
 
 
+import { makeGithubHost } from './github/index.js';
 import { makeLocalGitHost } from './local-git/index.js';
 
 /**
  * Select the host adapter by PR key (`<host>-<pr>`, `docs/protocol.md §8`):
- * `github-<owner>--<repo>--<number>` selects a remote review host, `local-git-<directory>-<hash>` a local
- * Git checkout's working tree, `fixture-<name from FIXTURE_NAMES>` deterministic fixtures (development UI and e2e),
+ * `github-<owner>--<repository>--<number>` identifies a PR on
+ * github.com, `local-git-<directory>-<hash>` identifies a local git working tree,
+ * `fixture-<name from FIXTURE_NAMES>` identifies deterministic fixtures (UI development and e2e),
  * anything else has no host, and review endpoints return `no_review_host`.
  *
  * The fixture host is intentionally connected to the server. Otherwise development mode and e2e would need a live
@@ -127,9 +135,7 @@ export interface SelectHostOptions {
 
 export type ReviewHostFactory = (prKey: string, options: SelectHostOptions) => SelectedHost | null;
 
-
 const FIXTURE_PREFIX = 'fixture-';
-const LOCAL_PREFIX = 'local-git-';
 
 export function selectReviewHost(prKey: string, options: SelectHostOptions = {}): SelectedHost | null {
     
@@ -147,7 +153,21 @@ export function selectReviewHost(prKey: string, options: SelectHostOptions = {})
         };
     }
 
-    if (prKey.startsWith(LOCAL_PREFIX)) {
+    if (prKey.startsWith(GITHUB_PR_KEY_PREFIX)) {
+        const ref = parseGithubPrKey(prKey);
+        if (ref === null) {
+            return null;
+        }
+        const host = makeGithubHost({ ...ref, sherpaDir: options.sherpaDir ?? DEFAULT_SHERPA_DIR });
+        return {
+            name: 'github',
+            host,
+            currentUser: () => host.currentUser(),
+            watchStatus: (onChange) => host.watchStatus(onChange),
+        };
+    }
+
+    if (prKey.startsWith(LOCAL_VCS_PR_KEY_PREFIX)) {
         const host = makeLocalVcsHost({
             prKey,
             sherpaDir: options.sherpaDir ?? DEFAULT_SHERPA_DIR,

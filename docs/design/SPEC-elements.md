@@ -288,15 +288,30 @@ Every interactive element must implement all applicable states.
   reappears on release.
 - Progress and draft counters are live. With 0 drafts the amber cluster is replaced by
   "no unpublished comments" in `#6b7078`.
-- **Ship split button.** Primary click ships with the last used mode (default: plain ship); the caret
-  opens the two-option menu. Menu rows carry their consequences verbatim (README §5).
+- **Ship split button.** The primary part publishes with the current mode — its label ("Ship",
+  "Sticky ship", "Comment") plus " · N"; the thumbs-up icon only for the ship modes. The caret opens
+  the menu: **Ship**, **Sticky ship**, **Comment**, in that order. Menu rows carry their consequences
+  verbatim (README §5); Comment publishes the drafts without a verdict — nothing is approved or
+  blocked. A choice from the menu is remembered globally (`shipMode`); the current mode is the saved
+  one if the PR accepts it, otherwise Ship, otherwise Comment, otherwise the first accepted mode.
+- **Modes per PR.** The bar draws only the modes the host accepts on this PR
+  (`capabilities.publishVerdicts`): Request changes disappears when absent; a ship mode outside the
+  list stays in the menu as a disabled row with the reason — Comment too: the host decides whether
+  it is accepted. With no drafts the Comment row and the primary part (when Comment is current) are
+  disabled ("no unpublished comments"), the caret stays available. When Comment is the only mode (own
+  PR on GitHub, local review) the split is a single primary button "Comment · N" with no caret and no
+  menu; with no split-button mode at all the split is not drawn.
+- **Where drafts go.** On the local host nothing is published — the drafts are handed to the agent;
+  the draft counter, "no drafts" text and Comment's consequence say so ("1 draft goes to the agent",
+  "Hands 1 draft to the agent").
 - Guardrails: if any stop is unviewed, the ship menu prepends a line "3 stops not viewed — ship
   anyway?" (informational, never blocking — the reviewer decides). If unpublished drafts exist, both
   ship and request-changes state the count they will publish.
 - Failure while publishing: the bar turns into an error state "2 comments failed to publish · retry"
   and the review is **not** marked shipped.
 - Request changes is styled as a peer, not a destructive action; it publishes the same batch.
-- Keyboard: `⌘⏎` opens the ship menu (never ships blind), `⌘⇧⏎` requests changes.
+- Keyboard: `⌘⏎` opens the ship menu (never ships blind) and works only when the menu exists, `⌘⇧⏎`
+  requests changes when that mode is available. Comment has no key of its own, only a palette command.
 
 ### 2.20 File tree (full diff)
 

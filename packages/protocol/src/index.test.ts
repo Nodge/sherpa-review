@@ -10,6 +10,7 @@ import {
     distributionVersionSchema,
     fileDiffSchema,
     generateJsonSchemas,
+    hostCapabilitiesSchema,
     imageMimeOf,
     iterationSchema,
     lensZoneSchema,
@@ -212,7 +213,7 @@ describe('review domain', () => {
             checks: null,
             updatedAt: '2026-08-20T12:00:00.000Z',
             capabilities: {
-                stickyShip: true,
+                publishVerdicts: ['comment', 'ship', 'sticky_ship', 'request_changes'],
                 fileViewedSync: true,
                 fileContent: true,
                 commentIssues: true,
@@ -229,6 +230,27 @@ describe('review domain', () => {
         expect(prMetaSchema.safeParse({ ...meta, viewer: { login: 'alice' } }).success).toBe(false);
         const { viewer: _viewer, ...withoutViewer } = meta;
         expect(prMetaSchema.safeParse(withoutViewer).success).toBe(false);
+    });
+
+    it('rejects duplicate publishing modes and lets the host choose the set', () => {
+        const capabilities = {
+            publishVerdicts: ['comment'],
+            fileViewedSync: false,
+            fileContent: false,
+            commentIssues: false,
+            commentResolve: false,
+            editPublished: false,
+            iterations: false,
+            blobs: false,
+        };
+        expect(hostCapabilitiesSchema.safeParse(capabilities).success).toBe(true);
+        const verdicts = (publishVerdicts: string[]): boolean =>
+            hostCapabilitiesSchema.safeParse({ ...capabilities, publishVerdicts }).success;
+        expect(verdicts(['comment', 'ship', 'sticky_ship', 'request_changes'])).toBe(true);
+        expect(verdicts([])).toBe(true);
+        expect(verdicts(['ship', 'request_changes'])).toBe(true);
+        expect(verdicts(['comment', 'ship', 'ship'])).toBe(false);
+        expect(verdicts(['comment', 'approve'])).toBe(false);
     });
 
     it('requires a boundary and at least one path for an ownership zone', () => {

@@ -98,7 +98,7 @@ function mountApp(options: {
             case UI_ENDPOINTS.reviewDiff:
                 return Promise.resolve(json({ diff: DATA.diff }));
             case UI_ENDPOINTS.reviewLenses:
-                return Promise.resolve(json({ ownership: DATA.ownership, extra: DATA.extraLenses }));
+                return Promise.resolve(json({ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }));
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: DATA.threads }));
             case UI_ENDPOINTS.reviewProgress:

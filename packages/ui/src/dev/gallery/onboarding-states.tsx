@@ -1,10 +1,9 @@
 import { fileContentOf, fixtureIteration, routeFixtures } from '@sherpa/fixtures';
-import type { RouteSnapshot, WorkerStatus } from '@sherpa/protocol';
+import type { RouteSnapshot, Thread, WorkerStatus } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
 import { ChatPanel } from '../../components/chat-panel.tsx';
-import { ReviewActionBarLoading } from '../../components/review-action-bar.tsx';
 import { ViewTabs } from '../../components/view-tabs.tsx';
 import { toParseRequest } from '../../diff/model.js';
 import { parseFileDiff } from '../../diff/parse.js';
@@ -16,6 +15,7 @@ import { createThreadStore } from '../../threads/store.js';
 import { RouteReadingView } from '../../views/route/route-generating.tsx';
 import { RouteWorkspace } from '../../views/route/route-workspace.tsx';
 import { RouteInvitation } from '../../views/view-frames.tsx';
+import { FixtureReviewActionBar } from './review-completion-states.tsx';
 import type { RouteGalleryState } from './route-states.tsx';
 
 /**
@@ -64,7 +64,7 @@ function RouteUnderTour() {
         <RouteWorkspace
             pr={DATA.pr}
             diff={DATA.diff}
-            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             snapshot={readySnapshot()}
             session={session}
             store={store}
@@ -141,7 +141,7 @@ function TourFrame({
                 {children}
                 {chatOpen ? <ChatUnderTour /> : null}
             </div>
-            <ReviewActionBarLoading diffError={null} />
+            <FixtureReviewActionBar threads={NO_THREADS} />
             <TourLayer
                 step={step}
                 index={index}
@@ -156,6 +156,7 @@ function TourFrame({
 }
 
 const NOOP = (): void => undefined;
+const NO_THREADS: readonly Thread[] = [];
 
 export const ONBOARDING_STATES: readonly RouteGalleryState[] = [
     {

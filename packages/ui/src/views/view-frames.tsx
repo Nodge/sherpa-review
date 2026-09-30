@@ -333,6 +333,7 @@ export function OverviewView({
                         diff={diff}
                         ownership={lenses?.ownership ?? null}
                         hostAvailable={reviewHostAvailable}
+                        zoneSource={lenses?.ownershipSource ?? null}
                         diffLoading={diffLoading}
                         lensesLoading={lensesLoading}
                         diffError={diffError}
@@ -461,6 +462,7 @@ function OwnershipCard({
     diff,
     ownership,
     hostAvailable,
+    zoneSource,
     diffLoading,
     lensesLoading,
     diffError,
@@ -472,6 +474,8 @@ function OwnershipCard({
     diff: PrDiff | null;
     ownership: UiReviewLensesResponse['ownership'];
     hostAvailable: boolean;
+    /** `UiReviewLensesResponse.ownershipSource`. null means no lenses. */
+    zoneSource: string | null;
     diffLoading: boolean;
     lensesLoading: boolean;
     diffError: string | null;
@@ -486,7 +490,7 @@ function OwnershipCard({
     const fallbackNote = hostAvailable
         ? (lensesError ?? t('overview.ownership.noZone'))
         : t('overview.ownership.noHost');
-    const summary = ownershipSummary(files, ownership, segment, t, fallbackNote);
+    const summary = ownershipSummary(files, ownership, segment, t, fallbackNote, zoneSource);
 
     const title = t('overview.ownership.title');
     const header =
@@ -495,15 +499,16 @@ function OwnershipCard({
                 <div className="ownership-card__toolbar-row">
                     <h2 className="overview-card__title">{title}</h2>
                     <div className="ownership-card__header">
-                        {summary.available
+                        {summary.available && zoneSource !== null
                             ? t(
                                   'overview.ownership.stats',
+                                  zoneSource,
                                   summary.mineFiles,
                                   summary.totalFiles,
                                   summary.mineLines,
                                   summary.totalLines,
                               )
-                            : t('overview.ownership.statsUnavailable')}
+                            : t('overview.ownership.statsUnavailable', zoneSource)}
                     </div>
                     <div className="ownership-card__toolbar-spacer" />
                     <div className="ownership-segments ctl-tabs" aria-label={t('overview.ownership.segments')}>

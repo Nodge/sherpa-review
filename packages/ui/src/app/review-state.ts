@@ -65,7 +65,7 @@ export interface ReviewState {
     readonly routeLoading: boolean;
 }
 
-const EMPTY_SLICE_LENSES: UiReviewLensesResponse = { ownership: null, extra: [] };
+const EMPTY_SLICE_LENSES: UiReviewLensesResponse = { ownership: null, extra: [], ownershipSource: null };
 
 /** Placeholder slice progress belongs to the slice itself. The server never returns progress for it. */
 function emptySliceProgress(diff: PrDiff | null): UiReviewProgressResponse {
@@ -162,7 +162,17 @@ export function hostDisplayName(host: string, t: Translate): string {
     if (host === LOCAL_VCS_HOST) {
         return t('host.local');
     }
+    if (host === 'github') {
+        return t('host.github');
+    }
     return host === 'fixture' ? 'FixtureHost' : host;
+}
+
+/** Where published drafts go: to the hosted PR or into an agent task (local review has no PR). */
+export type DraftDestination = 'pr' | 'agent';
+
+export function draftDestinationOf(reviewHost: string): DraftDestination {
+    return reviewHost === LOCAL_VCS_HOST ? 'agent' : 'pr';
 }
 
 export function emptySnapshots(key: string): SnapshotsState {

@@ -154,12 +154,21 @@ function normalizeThreadResolve(thread: Thread): void {
     applyResolveRule(thread, null);
 }
 
-/** Status label after an applied verdict, in the host's words as displayed by the review host. */
-function statusLabelFor(verdict: Verdict): string {
-    return verdict === 'request_changes' ? 'needs_work' : 'shipped';
-}
+/**
+ * Status label after applying a verdict, in the wording shown by the host.
+ * null means this verdict mode has no status and leaves it unchanged.
+ */
+const STATUS_LABELS: Readonly<Record<Verdict, string | null>> = {
+    comment: null,
+    ship: 'shipped',
+    sticky_ship: 'shipped',
+    request_changes: 'needs_work',
+};
 
 export class FixtureHost implements ReviewHost {
+    /** Fixtures reproduce ownership zones. */
+    readonly ownershipSource = 'CODEOWNERS';
+
     private readonly data: FixtureData;
     private readonly failPublishFor: ReadonlySet<HostId>;
     private readonly watchers = new Set<(threads: Thread[]) => void>();
@@ -484,18 +493,23 @@ export class FixtureHost implements ReviewHost {
     }
 
     /**
-     * Publishes all accumulated drafts. The verdict applies only if every draft is published
+     * Publishes all accumulated drafts. Rejects verdicts outside `publishVerdicts`. With no drafts,
+     * `comment` changes nothing. Applies the verdict only when all drafts were published
      * (`docs/design/SPEC-elements.md §4.5`). Failed comments remain drafts, and the review stays unfinished.
      */
     publishBatch(verdict: Verdict): Promise<PublishResult> {
         const parsed = verdictSchema.parse(verdict);
-        if (parsed === 'sticky_ship' && !this.data.pr.capabilities.stickyShip) {
-            return Promise.reject(new Error('host does not support sticky ship (capabilities.stickyShip)'));
+        if (!this.data.pr.capabilities.publishVerdicts.includes(parsed)) {
+            return Promise.reject(new Error(`verdict ${parsed} is unavailable on this PR (capabilities.publishVerdicts)`));
         }
 
         const drafts: Comment[] = [];
         for (const thread of this.activeData().threads) {
             collectDrafts(thread.root, drafts);
+        }
+        // Nothing to publish or apply: the host does not change at all.
+        if (parsed === 'comment' && drafts.length === 0) {
+            return Promise.resolve({ publishedCommentIds: [], failed: [], verdictApplied: true });
         }
 
         const publishedCommentIds: HostId[] = [];
@@ -512,7 +526,7 @@ export class FixtureHost implements ReviewHost {
         const verdictApplied = failed.length === 0;
         if (verdictApplied) {
             this.verdict = parsed;
-            this.data.pr.statusLabel = statusLabelFor(parsed);
+            this.data.pr.statusLabel = STATUS_LABELS[parsed] ?? this.data.pr.statusLabel;
             this.data.pr.updatedAt = this.nextTimestamp();
         }
 

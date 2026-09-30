@@ -2,6 +2,7 @@ import type { DraftBufferEntry, PrMeta } from '@sherpa/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
+import type { DraftDestination } from '../app/review-state.js';
 import type { MessageKey } from '../i18n/index.js';
 import { useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
@@ -34,6 +35,8 @@ export interface PrCommentsModalProps {
     readonly actions?: ThreadActions;
     /** Draft buffer records. All are shown, and this is the only place to discard them. */
     readonly draftBuffer?: readonly DraftBufferEntry[];
+    /** Where drafts will be sent. Determines the publication hints. */
+    readonly draftDestination?: DraftDestination;
     readonly onClose: () => void;
     readonly now?: number;
     readonly initialLayout?: ComposerLayout;
@@ -50,6 +53,7 @@ export function PrCommentsModal({
     transport,
     actions,
     draftBuffer = EMPTY_DRAFT_BUFFER,
+    draftDestination = 'pr',
     onClose,
     now,
     initialLayout,
@@ -220,7 +224,7 @@ export function PrCommentsModal({
                     <div ref={listRef} className="pr-comments-modal__list">
                         {threads.length === 0 ? (
                             <div className="pr-comments-modal__empty">
-                                {t('prComments.empty')}
+                                {t(draftDestination === 'agent' ? 'prComments.empty.agent' : 'prComments.empty')}
                             </div>
                         ) : (
                             <ThreadList
@@ -261,7 +265,7 @@ export function PrCommentsModal({
                     )}
                     <div className="pr-comments-modal__ship-note">
                         <Icon name="updown" size={13} />
-                        {t('prComments.footer')}
+                        {t(draftDestination === 'agent' ? 'prComments.footer.agent' : 'prComments.footer')}
                     </div>
                 </footer>
             </section>

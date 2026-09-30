@@ -79,7 +79,7 @@ function SliceState() {
                 <DiffWorkspace
                     pr={V2.pr}
                     diff={SLICE}
-                    lenses={{ ownership: null, extra: [] }}
+                    lenses={{ ownership: null, extra: [], ownershipSource: null }}
                     prKey="fixture-medium"
                     session={session}
                     store={store}

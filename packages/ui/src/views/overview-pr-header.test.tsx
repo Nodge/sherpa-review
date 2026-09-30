@@ -35,7 +35,7 @@ function render(
             session={createSessionStore({ initial: { view: 'overview', filter: 'all' } })}
             pr={pr}
             diff={options.withDiff === false ? null : DATA.diff}
-            lenses={{ ownership: DATA.ownership, extra: options.extraLenses ?? DATA.extraLenses }}
+            lenses={{ ownership: DATA.ownership, extra: options.extraLenses ?? DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             threads={DATA.threads}
             threadStore={createThreadStore(DATA.threads, FILE_IDS)}
             threadNow={NOW}

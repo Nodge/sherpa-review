@@ -42,7 +42,7 @@ function render(options: { snapshot?: RouteSnapshot; agentStopped?: boolean } = 
         <RouteWorkspace
             pr={DATA.pr}
             diff={DATA.diff}
-            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             snapshot={options.snapshot ?? FILLING}
             agentStopped={options.agentStopped ?? false}
             session={createSessionStore({ initial: { view: 'route', filter: 'all' } })}

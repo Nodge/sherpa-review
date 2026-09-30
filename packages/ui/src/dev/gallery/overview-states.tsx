@@ -67,7 +67,7 @@ export const OVERVIEW_STATES: readonly OverviewGalleryState[] = [
         group: 'Overview and Route',
         title: 'Overview: ownership zone unavailable',
         render: () => (
-            <ViewState view="overview" lenses={{ ownership: UNAVAILABLE_OWNERSHIP, extra: DATA.extraLenses }} />
+            <ViewState view="overview" lenses={{ ownership: UNAVAILABLE_OWNERSHIP, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }} />
         ),
     },
     {
@@ -77,7 +77,7 @@ export const OVERVIEW_STATES: readonly OverviewGalleryState[] = [
         render: () => (
             <ViewState
                 view="overview"
-                lenses={{ ownership: PREFIX_FALLBACK_OWNERSHIP, extra: DATA.extraLenses }}
+                lenses={{ ownership: PREFIX_FALLBACK_OWNERSHIP, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             />
         ),
     },
@@ -121,7 +121,7 @@ export const OVERVIEW_STATES: readonly OverviewGalleryState[] = [
 
 function ViewState({
     view,
-    lenses = { ownership: DATA.ownership, extra: DATA.extraLenses },
+    lenses = { ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' },
     pr = DATA.pr,
 }: {
     view: 'overview' | 'route';

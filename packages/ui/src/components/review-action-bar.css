@@ -80,40 +80,6 @@
     color: var(--text-muted);
 }
 
-.review-action-bar__progress.is-loading {
-    display: inline-flex;
-    min-width: 104px;
-    align-items: center;
-    gap: 6px;
-}
-
-.review-action-bar__progress.is-error {
-    color: var(--error-text);
-}
-
-.review-action-bar__progress-spinner {
-    width: 10px;
-    height: 10px;
-    flex: none;
-    border: 1px solid var(--text-dim);
-    border-top-color: var(--text-secondary);
-    border-radius: 50%;
-    animation: review-action-spin var(--motion-spin) linear infinite;
-}
-
-@keyframes review-action-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .review-action-bar__progress-spinner {
-        animation: none;
-        border-style: dotted;
-    }
-}
-
 .review-action-bar__divider {
     width: 1px;
     height: 18px;
@@ -150,7 +116,7 @@
     opacity: var(--disabled-opacity);
 }
 
-/* Ship is a primary split button: the label and caret form a single button. */
+/* Ship is a split primary button: the current mode label and caret form one button. */
 .review-action-bar__ship {
     position: relative;
     display: flex;
@@ -160,6 +126,11 @@
     padding: 0 11px;
     border-radius: var(--radius-input) 0 0 var(--radius-input);
     font-weight: 600;
+}
+
+/* With one publishing mode there is no caret, and the primary part has all corners rounded. */
+.review-action-bar__ship .review-action-bar__ship-primary:only-child {
+    border-radius: var(--radius-input);
 }
 
 .review-action-bar__ship .review-action-bar__ship-caret {

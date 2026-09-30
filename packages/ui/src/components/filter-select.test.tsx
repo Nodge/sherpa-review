@@ -23,7 +23,7 @@ const EMPTY_PCI: Lens = {
     note: null,
     zones: null,
 };
-const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t});
+const FILTERS = buildFileFilters({ files: FILES, ownership: EDGE.ownership, extra: [EMPTY_PCI], t, zoneSource: 'CODEOWNERS' });
 const ACTIVE = selectFilter(FILTERS, 'all');
 
 const mounted: (() => void)[] = [];

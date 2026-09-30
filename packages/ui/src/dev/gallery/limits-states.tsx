@@ -160,7 +160,7 @@ function EmptyOverview() {
             session={createSessionStore({ initial: { view: 'overview', filter: 'all' } })}
             pr={MEDIUM.pr}
             diff={{ ...MEDIUM.diff, files: [] }}
-            lenses={{ ownership: null, extra: [] }}
+            lenses={{ ownership: null, extra: [], ownershipSource: null }}
             threads={[]}
             threadStore={createThreadStore([], new Set())}
             threadNow={GALLERY_NOW}

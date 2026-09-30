@@ -149,7 +149,7 @@ test('F2: selection → agent question → answer and note → draft → request
     await test.step('draft saved as blocking, note still present', async () => {
         await expect(card(page).getByText(DRAFT_TAIL, { exact: true })).toBeVisible();
         await expect(card(page).locator('.thread__chip--draft')).toHaveText('draft');
-        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
+        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out when you publish');
         await expect(card(page).locator('.agent-note--expanded')).toHaveCount(1);
         await expect(page.locator('.chat-panel__notes')).toHaveText('Notes 1');
 

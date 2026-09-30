@@ -124,7 +124,7 @@ function mountApp(): Mounted {
             case UI_ENDPOINTS.reviewDiff:
                 return Promise.resolve(json({ diff: query.get('diffId') === V1.diff.diffId ? V1.diff : V2.diff }));
             case UI_ENDPOINTS.reviewLenses:
-                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses }));
+                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses, ownershipSource: 'CODEOWNERS' }));
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: THREADS }));
             case UI_ENDPOINTS.reviewProgress:

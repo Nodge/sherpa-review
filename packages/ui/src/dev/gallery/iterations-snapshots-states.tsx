@@ -222,7 +222,7 @@ function ReadingState({
                 <RouteWorkspace
                     pr={DATA.pr}
                     diff={DATA.diff}
-                    lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                    lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                     snapshot={CURRENT}
                     session={session}
                     store={store}
@@ -260,7 +260,7 @@ function OverviewSnapshotsState() {
                 session={session}
                 pr={DATA.pr}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 threads={DATA.threads}
                 threadStore={threadStore}
                 threadNow={GALLERY_NOW}

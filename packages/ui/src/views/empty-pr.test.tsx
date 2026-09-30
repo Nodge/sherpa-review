@@ -23,7 +23,7 @@ function overview(locale: 'ru' | 'en'): string {
                 session={createSessionStore({ initial: { view: 'overview', filter: 'all' } })}
                 pr={DATA.pr}
                 diff={EMPTY_DIFF}
-                lenses={{ ownership: null, extra: [] }}
+                lenses={{ ownership: null, extra: [], ownershipSource: null }}
                 threads={[]}
                 threadStore={createThreadStore([], new Set())}
                 threadNow={Date.parse('2026-08-24T12:00:00.000Z')}

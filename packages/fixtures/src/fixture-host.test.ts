@@ -181,10 +181,22 @@ describe('FixtureHost', () => {
         expect((await host.getPr()).statusLabel).toBe('needs_work');
     });
 
-    it('rejects sticky ship on a host that does not support it', async () => {
+    it('the host rejects a verdict outside publishVerdicts', async () => {
         const host = makeFixtureHost('edge');
-        expect((await host.getPr()).capabilities.stickyShip).toBe(false);
-        await expect(host.publishBatch('sticky_ship')).rejects.toThrow(/sticky/);
+        expect((await host.getPr()).capabilities.publishVerdicts).not.toContain('sticky_ship');
+        await expect(host.publishBatch('sticky_ship')).rejects.toThrow(/sticky_ship/);
+    });
+
+    it('comment publishes drafts without changing PR status', async () => {
+        const host = makeFixtureHost('medium');
+        const before = (await host.getPr()).statusLabel;
+        const draft = await host.saveDraft({ body: 'ok', parentId: null, anchor: null });
+
+        const result = await host.publishBatch('comment');
+
+        expect(result).toEqual({ publishedCommentIds: [draft.id], failed: [], verdictApplied: true });
+        expect(host.appliedVerdict()).toBe('comment');
+        expect((await host.getPr()).statusLabel).toBe(before);
     });
 
     it('a host without fileViewedSync does not provide setFileViewed', async () => {

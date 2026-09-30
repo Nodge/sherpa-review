@@ -3,9 +3,14 @@ import type { FileDiff, Lens, Thread } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { createT } from '../i18n/index.js';
+import type { OwnershipSummary } from './overview-model.js';
 import { discussionStats, ownershipSummary } from './overview-model.js';
 
 const t = createT('en');
+
+function summarize(files: readonly FileDiff[], lens: Lens | null, segment: 'mine' | 'all'): OwnershipSummary {
+    return ownershipSummary(files, lens, segment, t, t('overview.ownership.fallbackNote'), 'CODEOWNERS');
+}
 
 const DATA = fixtureIteration('medium');
 const BASE = requiredFile();
@@ -50,7 +55,7 @@ const OWNERSHIP: Lens = {
 
 describe('Overview: files by ownership', () => {
     it('groups files by zones, owners and files outside zones', () => {
-        const summary = ownershipSummary(FILES, OWNERSHIP, 'all', t);
+        const summary = summarize(FILES, OWNERSHIP, 'all');
 
         expect(summary).toMatchObject({
             available: true,
@@ -104,7 +109,7 @@ describe('Overview: files by ownership', () => {
     });
 
     it('keeps only ownership.paths files in the "My zone" segment', () => {
-        expect(ownershipSummary(FILES, OWNERSHIP, 'mine', t).groups).toEqual([
+        expect(summarize(FILES, OWNERSHIP, 'mine').groups).toEqual([
             {
                 path: 'services/orders',
                 files: 1,
@@ -118,8 +123,15 @@ describe('Overview: files by ownership', () => {
         ]);
     });
 
+    it('passes the host explanation to the card even when the lens is working', () => {
+        const note = 'GitHub did not tell which teams you are in (read:org scope?).';
+
+        expect(summarize(FILES, { ...OWNERSHIP, note }, 'all').note).toBe(note);
+        expect(summarize(FILES, OWNERSHIP, 'all').note).toBeNull();
+    });
+
     it('keeps fallback prefix grouping with a mixed group for zones:null', () => {
-        const summary = ownershipSummary(FILES, { ...OWNERSHIP, zones: null }, 'all', t);
+        const summary = summarize(FILES, { ...OWNERSHIP, zones: null }, 'all');
 
         expect(summary.groups.map((group) => [group.path, group.ownership])).toEqual([
             ['services/orders', 'mixed'],
@@ -130,7 +142,7 @@ describe('Overview: files by ownership', () => {
 
     it('keeps zones owned by others visible when the edge fixture filter is unavailable', () => {
         const edge = fixtureIteration('edge');
-        const summary = ownershipSummary(edge.diff.files, edge.ownership, 'mine', t);
+        const summary = summarize(edge.diff.files, edge.ownership, 'mine');
 
         expect(summary.available).toBe(false);
         expect(summary.note).toContain('do not own');
@@ -139,7 +151,7 @@ describe('Overview: files by ownership', () => {
     });
 
     it('derives header counts from the same files as the zones in the medium fixture', () => {
-        const summary = ownershipSummary(DATA.diff.files, DATA.ownership, 'all', t);
+        const summary = summarize(DATA.diff.files, DATA.ownership, 'all');
         const mine = new Set(DATA.ownership?.paths ?? []);
         const mineLines = DATA.diff.files.reduce(
             (total, item) => total + (mine.has(item.path) ? item.additions + item.deletions : 0),

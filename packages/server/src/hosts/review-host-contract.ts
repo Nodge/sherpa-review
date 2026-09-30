@@ -1,4 +1,4 @@
-import type { Comment, Iteration, ReviewHost, Thread } from '@sherpa/protocol';
+import type { Comment, Iteration, ReviewHost, Thread, Verdict } from '@sherpa/protocol';
 import {
     fileContentSchema,
     fileImageSchema,
@@ -9,6 +9,7 @@ import {
     prMetaSchema,
     reviewUserSchema,
     threadSchema,
+    verdictSchema,
 } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -133,6 +134,15 @@ function countDraftsIn(comment: Comment): number {
 
 function countDrafts(threads: readonly Thread[]): number {
     return threads.reduce((total, thread) => total + countDraftsIn(thread.root), 0);
+}
+
+/**
+ * Verdict used by the contract to publish drafts: `comment` if the host accepts it, otherwise the first
+ * in `publishVerdicts`. null means the host has no way to publish on this PR.
+ */
+async function publishingVerdict(host: ReviewHost): Promise<Verdict | null> {
+    const { publishVerdicts } = (await host.getPr()).capabilities;
+    return publishVerdicts.includes('comment') ? 'comment' : (publishVerdicts[0] ?? null);
 }
 
 function commentsOf(comment: Comment): Comment[] {
@@ -449,6 +459,9 @@ export function describeReviewHostContract<H extends ReviewHost>(
                 host.ownershipLens(),
                 host.extraLenses(),
             ]);
+            if (ownership !== null) {
+                expect(host.ownershipSource, 'the ownership lens has a name for its zone source').not.toBeNull();
+            }
             const lenses = ownership === null ? extra : [ownership, ...extra];
             const diffPaths = new Set(diff.files.map((file) => file.path));
 
@@ -740,7 +753,8 @@ export function describeReviewHostContract<H extends ReviewHost>(
             const host = makeHost();
             const updateComment = host.updateComment?.bind(host);
             const deleteComment = host.deleteComment?.bind(host);
-            if (updateComment === undefined || deleteComment === undefined) {
+            const verdict = await publishingVerdict(host);
+            if (updateComment === undefined || deleteComment === undefined || verdict === null) {
                 return;
             }
 
@@ -748,7 +762,7 @@ export function describeReviewHostContract<H extends ReviewHost>(
             await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
 
             const draft = await host.saveDraft({ body: 'contract published', parentId: null, anchor: null });
-            const published = await host.publishBatch('ship');
+            const published = await host.publishBatch(verdict);
             expect(published.failed).toEqual([]);
             await waitUntil(
                 () => findInThreads(lastSnapshot(feed), draft.id)?.draft === false,
@@ -776,14 +790,18 @@ export function describeReviewHostContract<H extends ReviewHost>(
             feed.stop();
         });
 
-        it.runIf(writes)('publishBatch publishes drafts and applies the verdict', async () => {
+        it.runIf(writes)('publishBatch publishes drafts as one batch', async () => {
             const host = makeHost();
+            const verdict = await publishingVerdict(host);
+            if (verdict === null) {
+                return;
+            }
             const feed = subscribe(host);
             await waitUntil(() => feed.snapshots.length > 0, 'initial thread snapshot');
 
             const draft = await host.saveDraft({ body: 'contract publish', parentId: null, anchor: null });
             const seen = feed.snapshots.length;
-            const result = await host.publishBatch('ship');
+            const result = await host.publishBatch(verdict);
 
             expect(result.failed).toEqual([]);
             expect(result.publishedCommentIds).toContain(draft.id);
@@ -800,6 +818,60 @@ export function describeReviewHostContract<H extends ReviewHost>(
             expect(countDrafts(lastSnapshot(feed))).toBe(0);
 
             feed.stop();
+        });
+
+        it('publishVerdicts has no duplicates', async () => {
+            const { publishVerdicts } = (await makeHost().getPr()).capabilities;
+            expect(new Set(publishVerdicts).size).toBe(publishVerdicts.length);
+        });
+
+        it.runIf(writes)('a verdict outside publishVerdicts is rejected and drafts remain drafts', async () => {
+            const host = makeHost();
+            const { publishVerdicts } = (await host.getPr()).capabilities;
+            const outside = verdictSchema.options.filter((verdict) => !publishVerdicts.includes(verdict));
+            if (outside.length === 0) {
+                return;
+            }
+
+            const draft = await host.saveDraft({ body: 'contract refused', parentId: null, anchor: null });
+            for (const verdict of outside) {
+                await expect(host.publishBatch(verdict), verdict).rejects.toThrow();
+            }
+            expect(findInThreads(await host.getThreads(), draft.id)?.draft).toBe(true);
+        });
+
+        it.runIf(writes)('comment without drafts does nothing', async () => {
+            const host = makeHost();
+            if (!(await host.getPr()).capabilities.publishVerdicts.includes('comment')) {
+                return;
+            }
+            // Remove drafts from the host data beforehand to test an empty batch.
+            if (countDrafts(await host.getThreads()) > 0) {
+                await host.publishBatch('comment');
+            }
+            const before = await host.getThreads();
+            expect(countDrafts(before)).toBe(0);
+
+            expect(await host.publishBatch('comment')).toEqual({
+                publishedCommentIds: [],
+                failed: [],
+                verdictApplied: true,
+            });
+            expect(await host.getThreads()).toEqual(before);
+        });
+
+        it.runIf(writes)('each verdict in publishVerdicts publishes a draft and takes effect', async () => {
+            const { publishVerdicts } = (await makeHost().getPr()).capabilities;
+            for (const verdict of publishVerdicts.filter((candidate) => candidate !== 'comment')) {
+                const host = makeHost();
+                const draft = await host.saveDraft({ body: `contract ${verdict}`, parentId: null, anchor: null });
+
+                const result = await host.publishBatch(verdict);
+
+                expect(result.failed, verdict).toEqual([]);
+                expect(result.publishedCommentIds, verdict).toContain(draft.id);
+                expect(result.verdictApplied, verdict).toBe(true);
+            }
         });
 
         it.runIf(writes)('setFileViewed is reflected in the next getDiff', async () => {

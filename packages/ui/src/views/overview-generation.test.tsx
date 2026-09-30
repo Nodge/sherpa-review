@@ -31,7 +31,7 @@ function render(view: 'overview' | 'route', route: UiRouteState | null, other?: 
             prKey="fixture-medium"
             session={createSessionStore({ initial: { view, filter: 'all' } })}
             diff={DATA.diff}
-            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             threads={DATA.threads}
             threadStore={createThreadStore(DATA.threads, FILE_IDS)}
             threadNow={Date.parse('2026-08-24T12:00:00.000Z')}

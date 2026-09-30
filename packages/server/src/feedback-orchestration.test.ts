@@ -469,6 +469,12 @@ describe('round payload', () => {
     });
 
     it('describes the verdict in the instructions', () => {
+        // Local review only publishes comments, and the agent addresses each one.
+        expect(buildFeedbackPayload({ ...context, verdict: 'comment' }, 'ru').instructions).toMatchInlineSnapshot(
+            `"The reviewer published review comments on the local checkout /tmp/project. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema): what you did, or why you did not. Write the replies and the summary in Russian. Never edit files outside the project directory. Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is. The working tree is re-read automatically; do not run any other Sherpa command for this."`,
+        );
+
+        // Rounds with ship and request_changes remain in files published earlier.
         expect(buildFeedbackPayload(context, 'ru').instructions).toMatchInlineSnapshot(
             `"The reviewer finished a review round on the local checkout /tmp/project, verdict request_changes. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema): what you did, or why you did not. Write the replies and the summary in Russian. Never edit files outside the project directory. Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is. The working tree is re-read automatically; do not run any other Sherpa command for this."`,
         );
@@ -534,7 +540,7 @@ describe('publishing a local review queues a task for the agent', () => {
         const response = await postJson(
             server.port,
             UI_ENDPOINTS.reviewPublish,
-            { verdict: 'request_changes' },
+            { verdict: 'comment' },
             server.token,
         );
         expect(response.status).toBe(200);

@@ -480,7 +480,11 @@ export function createReviewRoutes(options: ReviewRoutesOptions): Route[] {
                 const [ownership, extra] = await call(() =>
                     Promise.all([host.ownershipLens(), host.extraLenses()]),
                 );
-                return respond(uiReviewLensesResponseSchema, { ownership, extra });
+                return respond(uiReviewLensesResponseSchema, {
+                    ownership,
+                    extra,
+                    ownershipSource: host.ownershipSource,
+                });
             }),
         },
     ];

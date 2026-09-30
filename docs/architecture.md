@@ -73,7 +73,7 @@ Chat questions follow the same path. The endpoint queues a `chat` task with sele
 
 **Generation runs in the reviewer's harness, not on the server.** The server has no model keys or model client. It prepares context, queues tasks, accepts results and validates them. The model works in the reviewer's own session, with the reviewer's access rights.
 
-The server makes outbound requests only to the review host API and to the issue service when the reviewer sends feedback. Distribution update checks use the same review host API and only notify. Sherpa downloads and installs nothing (`packages/server/src/update-check.ts`).
+The server makes outgoing requests only to the host API (GitHub) and the issue service when the reviewer sends feedback. The distribution update check uses the update channel and only notifies. Sherpa downloads and installs nothing (`packages/server/src/update-check.ts`).
 
 The **host adapter** is the only way to access PR data. The server chooses it by the PR key prefix. Everything specific to a host lives behind this boundary (§5).
 
@@ -155,7 +155,7 @@ The interface is in `packages/protocol/src/review-host.ts`. Required methods fal
 - PR reads: `getPr`, `listIterations`, `getDiff`.
 - Subscriptions: `watchIterations`, `getThreads`, `watchThreads`.
 - Writes: `saveDraft`, `updateDraft`, `deleteDraft`, `setThreadResolved`, `publishBatch`.
-- lenses: `ownershipLens` (CODEOWNERS, `null` when the host has no ownership concept), `extraLenses`.
+- Lenses: `ownershipLens` (CODEOWNERS or the entire diff for local review, `null` if the host has no ownership concept), `extraLenses`. The `ownershipSource` property names the zone source for UI labels.
 
 Optional methods are `setFileViewed`, `getFileContent`, `getBlob`, `setCommentResolved`, `updateComment`, `deleteComment`. Each is tied to its capability flag.
 
@@ -163,11 +163,11 @@ Subscriptions promise a full snapshot once immediately, then on every change. Th
 
 `getDiff` without arguments returns the active iteration. With a pair of iterations, it returns a slice between them (what changed from one to the other).
 
-Host capabilities are declared by `hostCapabilitiesSchema` (`packages/protocol/src/review.ts`), with 8 flags:
+`hostCapabilitiesSchema` (`packages/protocol/src/review.ts`) declares host capabilities: a list of publication modes and 7 flags.
 
-| Flag | What it enables |
+| Field | What it enables |
 |---|---|
-| `stickyShip` | the "Sticky ship" verdict in the publishing panel |
+| `publishVerdicts` | publication modes the host accepts for this PR: `comment` (drafts without a verdict), `ship`, `sticky_ship`, `request_changes`. The host decides the list, including whether it contains `comment`. The publication panel renders exactly this list without distinguishing hosts. The host rejects verdicts outside the list. The list is computed on every header read because it depends on the PR, not just the host |
 | `fileViewedSync` | synchronization of viewed marks with the host. Without it, `file.viewed` is always `null` and progress stays in Sherpa |
 | `fileContent` | "Expand context", expanding a file beyond the patch |
 | `commentIssues` | the "comment opens an issue / requires no reply" control |
@@ -180,7 +180,7 @@ The PR header also carries the identity of its reader. `PrMeta.viewer` is this s
 
 **Invariant: a method is implemented if and only if its corresponding flag is set.** The shared `describeReviewHostContract` suite (`packages/server/src/hosts/review-host-contract.ts`) enforces it with the same tests for every implementation. It also checks response shapes against protocol schemas, subscription promises, the two-stage draft model and consistency between `file.viewed` and `fileViewedSync`.
 
-There are 2 implementations: **local checkout** (`packages/server/src/hosts/local-git/`) and **fixture host** (`packages/fixtures`), which supplies deterministic PRs for dev mode, the state gallery and e2e.
+There are three implementations: **GitHub** (`packages/server/src/hosts/github/`), **local checkout** (`packages/server/src/hosts/local/`) and **fixture host** (`packages/fixtures`), which provides deterministic PRs for development mode, the state gallery and e2e.
 
 
 
@@ -188,9 +188,17 @@ There are 2 implementations: **local checkout** (`packages/server/src/hosts/loca
 
 
 
-The local host reviews a project directory's working tree in a Git checkout against a base commit: committed, staged, unstaged and untracked changes in one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter keeps previous ones itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/` and also supply slices between 2 iterations. Four of the 8 flags are enabled: `fileContent`, `blobs`, `iterations` and `editPublished` (your own comments are edited and deleted directly in local storage). Without `iterations`, editing one file would clear viewed marks across the whole diff. There are no local issues, so resolution applies to the whole thread rather than each comment. The tree has no head commit. An iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside review state and have no remote host. Publishing clears the draft flag, records the verdict and opens a round. The orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns the round into a `review.feedback` task. The agent edits the code and replies in threads with bot comments. Its edits create a new iteration, the route becomes stale, and the reviewer reads again.
+The **GitHub adapter** reviews PRs on github.com using the key `github-<owner>--<repository>--<number>` (a double hyphen separates parts because it cannot occur in an owner name but can in a repository name). GraphQL is the main API for metadata, threads, reviews and verdicts, viewed marks, file text, and all writes. REST remains for exactly 3 things missing from GraphQL: patch text (`…/pulls/{n}/files`), merge-base (`…/compare/{base}...{head}`), and image bytes (`…/contents/{path}`). Token lookup follows the `gh` chain: `$GITHUB_TOKEN` → `$GH_TOKEN` → `gh auth token`. No repository checkout is needed.
 
-Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`: `local-git-<directory>-<hash>` means a local checkout, `fixture-<name>` means a fixture. Any other key has no host, and review endpoints respond with `no_review_host`. The local host also needs the project directory, supplied by `sherpa up --local <path>` (server argument `--repo`) and saved in `~/.sherpa/prs/<key>/local-host.json`, so the daemon can restart without the flag. Reading progress remains available because it is local and needs no host.
+GitHub has one iteration. It has no diffsets, and the review compares the branch head against the merge-base, so `iterations` is disabled and slices are rejected. Of the 7 flags, `fileViewedSync`, `fileContent`, `blobs` and `editPublished` are enabled. `commentIssues` is disabled because GitHub has no such concept. `commentResolve` is disabled for the same reason. The whole thread is resolved. Publication modes on someone else's PR are `comment`, `ship` and `request_changes` (GitHub has no sticky ship). On your own PR (the PR author login matches the token owner, ignoring case), only `comment` is available. GitHub prohibits authors from both approving and requesting changes on their own PRs.
+
+Ownership uses the PR base branch's CODEOWNERS, the first found among `.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS`, fetched in one query with three aliases. The **last** matching rule names a file's owners and defines its zone boundary. A rule without owners removes ownership, leaving the file outside all zones. Owner teams (`@org/team`) are expanded with a separate `organization.teams(userLogins:)` query. It requires the `read:org` scope. Failure reduces functionality instead of producing an error: the lens uses logins, and `note` says team ownership was not calculated.
+
+Drafts live in a pending GitHub review. Line comments are created directly in it. A PR draft becomes a paragraph in the review body because GitHub has nowhere else for unpublished text. Paragraphs are marked with `<!-- sherpa:draft <n> -->` (not rendered on GitHub). The marker gives each paragraph a stable ID that survives edits to neighbouring paragraphs and publication. The body is never left empty. GitHub permanently prevents edits to a review created without a body, so a pending review is created with the `<!-- sherpa:body -->` placeholder. The same placeholder replaces an empty string when the last paragraph is deleted. Publication is one `submitPullRequestReview` call, with the final body passed as a parameter (the placeholder is excluded from the published review). GitHub has no partial success. Submission either publishes all drafts with the verdict or publishes nothing. `comment` uses the `COMMENT` event and does nothing without drafts, leaving the pending review with just the placeholder. GitHub does not support idempotency keys, so the adapter keeps its own "retry key → comment" map in `~/.sherpa/prs/<key>/github-drafts.json`.
+
+The local host reviews the project directory's working tree in a Git checkout against a base commit, combining committed, staged, unstaged and untracked changes in one diff. The active iteration is the current tree state. A new one appears when the diff actually changes, and the adapter remembers previous ones itself. Their file lists and new-side contents live in `~/.sherpa/prs/<key>/local-iterations/`, which also supplies the slice between two iterations. Of the seven flags, it sets `fileContent`, `blobs`, `iterations` and `editPublished` (your own comment can be edited and deleted directly in local storage). Without `iterations`, changing one file would clear viewed marks across the diff. There are no local issues, so there is no per-comment resolution. The entire thread is resolved. A working tree has no head commit, so an iteration's `headCommit` is the same diff fingerprint as `diffId`. Comments live beside the review state and have no remote host. There is one publishing mode, `comment`. There is no one to apply a verdict to, because findings are written for the agent. Publishing clears the draft flag and, if at least one comment was published, opens a round. The round orchestrator (`packages/server/src/feedback-orchestrator.ts`) turns it into a `review.feedback` task. The agent changes the code for each finding and replies in the threads with bot comments. Its edits create a new iteration, making the route stale, and the reviewer reads again.
+
+Selection uses the PR key prefix in `packages/server/src/hosts/select.ts`: `github-<owner>--<repo>--<number>` for a PR on github.com, `local-git-<directory>-<hash>` for a local checkout, `fixture-<name>` for a fixture. Anything else has no host, and review endpoints return `no_review_host`. The local host also needs the project directory from `sherpa up --local <path>` (server argument `--repo`). It is saved in `~/.sherpa/prs/<key>/local-host.json`, so restarting the daemon needs no flag. Reading progress remains available because it is local and needs no host.
 
 **Host-specific details stay inside the adapter.** Host identifiers are opaque (`hostIdSchema`), and the contract promises only equality. Sticky ship is a verdict rather than a mechanism. The few things an adapter must expose (forced working-tree polling and publication rounds for the local host, dev "push" and a write-failure toggle for the fixture) live in `SelectedHost` and go no further than the registration point for the corresponding routes. Shared server code knows nothing about fixtures.
 

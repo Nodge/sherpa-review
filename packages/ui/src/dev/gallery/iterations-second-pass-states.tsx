@@ -130,7 +130,7 @@ function IterationState({ snapshot, routeFilter = 'all', banners = [] }: Iterati
             <RouteWorkspace
                 pr={DATA.pr}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 snapshot={snapshot}
                 session={session}
                 store={store}

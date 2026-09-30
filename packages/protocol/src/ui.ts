@@ -230,11 +230,19 @@ export type UiReviewFileContentResponse = z.infer<typeof uiReviewFileContentResp
 export const uiReviewBlobRequestSchema = z.object({ blobId: hostIdSchema });
 export type UiReviewBlobRequest = z.infer<typeof uiReviewBlobRequestSchema>;
 
-/** File filter lenses: ownership ("mine") is separate from additional lenses (PCI DSS). */
-export const uiReviewLensesResponseSchema = z.object({
-    ownership: lensSchema.nullable(),
-    extra: z.array(lensSchema),
-});
+/**
+ * File filter lenses: ownership ("mine") is separate from extra lenses (PCI DSS).
+ * `ownershipSource` is `ReviewHost.ownershipSource`, always present for the ownership lens.
+ */
+export const uiReviewLensesResponseSchema = z
+    .object({
+        ownership: lensSchema.nullable(),
+        extra: z.array(lensSchema),
+        ownershipSource: z.string().min(1).nullable(),
+    })
+    .refine((lenses) => lenses.ownership === null || lenses.ownershipSource !== null, {
+        message: 'ownership lens without an ownership zone source name',
+    });
 export type UiReviewLensesResponse = z.infer<typeof uiReviewLensesResponseSchema>;
 
 /**
@@ -489,7 +497,8 @@ export type UiDevUpdateAvailableRequest = z.infer<typeof uiDevUpdateAvailableReq
  */
 const uiSettingsFields = {
     diffMode: z.enum(['unified', 'split']),
-    shipMode: z.enum(['ship', 'sticky_ship']),
+    /** Ship split-button mode selected from its menu. `comment` means publishing without a verdict. */
+    shipMode: z.enum(['ship', 'sticky_ship', 'comment']),
     composerLayout: z.enum(['visual', 'markdown']),
     /** UI language. */
     locale: localeSettingSchema,
@@ -797,8 +806,8 @@ export const uiDeleteCommentRequestSchema = z.object({ commentId: hostIdSchema }
 export type UiDeleteCommentRequest = z.infer<typeof uiDeleteCommentRequestSchema>;
 
 /**
- * Publishing the accumulated batch with a verdict: one `publishBatch` call to the
- * host call. The response is the result as returned: `verdictApplied: false` on any failure
+ * Publish the accumulated batch in one of the `capabilities.publishVerdicts` modes: one call to
+ * the host's `publishBatch`. The response is the result as returned: `verdictApplied: false` on any failure
  * (`docs/design/SPEC-elements.md §4.5`, the review is NOT considered finished, the UI shows
  * the unsuccessful entries from `failed`). A retry calls the same endpoint again: the adapter does not discard
  * already published entries (`publishedSilently`). Success increments `threadsRevision`

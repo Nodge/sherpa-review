@@ -84,7 +84,7 @@ function render(
         <RouteWorkspace
             pr={DATA.pr}
             diff={{ ...DATA.diff, files }}
-            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+            lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
             snapshot={options.snapshot ?? SNAPSHOT}
             session={
                 options.session ??

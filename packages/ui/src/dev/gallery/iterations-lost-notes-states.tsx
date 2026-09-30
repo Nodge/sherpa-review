@@ -72,7 +72,7 @@ function NotesLostState() {
                         diff={V2.diff}
                         threads={V2.threads}
                         threadStore={threadStore}
-                        lenses={{ ownership: V2.ownership, extra: V2.extraLenses }}
+                        lenses={{ ownership: V2.ownership, extra: V2.extraLenses, ownershipSource: 'CODEOWNERS' }}
                         prKey="fixture-medium"
                         session={session}
                         store={store}

@@ -93,8 +93,11 @@ export interface ReviewHost {
     deleteComment?(commentId: HostId): Promise<void>;
 
     /**
-     * Publish accumulated drafts as one batch and apply the verdict.
+     * Publish your own drafts as one batch and apply the verdict.
+     * The host rejects verdicts outside `capabilities.publishVerdicts` without publishing anything.
      * The verdict applies only if all drafts were published (`docs/design/SPEC-elements.md §4.5`).
+     * `comment` has nothing to apply, so `verdictApplied` means "all published". `comment` without
+     * drafts does nothing: `{ publishedCommentIds: [], failed: [], verdictApplied: true }`.
      * The result carries no final PR state. Read it again through `getPr`.
      */
     publishBatch(verdict: Verdict): Promise<PublishResult>;
@@ -120,6 +123,13 @@ export interface ReviewHost {
      * the server determines the response type from the magic bytes itself.
      */
     getBlob?(blobId: HostId): Promise<Uint8Array | null>;
+
+    /**
+     * The name the host gives its ownership zone source in UI labels ("My files · CODEOWNERS"):
+     * the rules filename or the source of the zone in local review. The UI does not translate it.
+     * null means the host has no ownership concept. In that case `ownershipLens` also returns null.
+     */
+    readonly ownershipSource: string | null;
 
     /**
      * The "My files" lens (CODEOWNERS). null means the host has no ownership concept.

@@ -34,7 +34,6 @@ import type { ReviewCompletion } from './components/review-action-bar.tsx';
 import {
     reviewActionBarVisible,
     ReviewActionBar,
-    ReviewActionBarLoading,
 } from './components/review-action-bar.tsx';
 import { useUpdateCheckCommand, useUpdateToast } from './components/update-state.js';
 import { UpdateToast } from './components/update-toast.tsx';
@@ -901,7 +900,6 @@ export function App({ store, session, token }: AppProps) {
         diffStore !== null &&
         threadStore !== null;
     const showReviewActionBar = reviewActionBarVisible({
-        view,
         completed: completion !== null,
         reviewHost,
         pr: state.pr,
@@ -1225,9 +1223,7 @@ export function App({ store, session, token }: AppProps) {
                         prComments={prComments}
                         chatOpen={chatOpen}
                     />
-                ) : (
-                    <ReviewActionBarLoading diffError={currentReview.diffError} />
-                )
+                ) : null
             ) : null}
             </ThreadPinProvider>
         </ReadOnlyIterationProvider>

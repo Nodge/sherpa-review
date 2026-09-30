@@ -105,6 +105,12 @@ describe('global UI settings', () => {
         expect(first.read()).toEqual(merged);
     });
 
+    it('saves and reloads the split button Comment mode', () => {
+        new SettingsStore(sherpaDir).patch({ shipMode: 'comment' });
+
+        expect(new SettingsStore(sherpaDir).read().shipMode).toBe('comment');
+    });
+
     it('drops unknown file fields on write', async () => {
         const file = settingsPathFor(sherpaDir);
         await fs.writeFile(file, JSON.stringify({ diffMode: 'split', pizza: 'pineapple' }));

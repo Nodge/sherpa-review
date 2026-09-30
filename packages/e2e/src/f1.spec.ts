@@ -140,7 +140,7 @@ test('F1: queue → validator → snapshot → SSE → UI, through Review comple
 
     await test.step('two drafts at different stops along the way', async () => {
         await addDraft(page, 's01', FIRST_DRAFT);
-        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out on ship');
+        await expect(page.locator('.review-action-bar')).toContainText('1 draft goes out when you publish');
 
         await addDraft(page, 's03', SECOND_DRAFT);
         await expect(page.locator('.review-action-bar')).toContainText('2 drafts go out when you publish');

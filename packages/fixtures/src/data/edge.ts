@@ -11,8 +11,8 @@ import type { FixtureDataInput } from './types.js';
  * deletion, binary, whitespace-only, one-sided file (additions only), empty file,
  * conflict, mode change. Everything the UI must display as a notice instead of an empty card.
  *
- * Sticky ship is disabled here (`stickyShip: false`). This is the only fixture that shows
- * how the UI hides a verdict unsupported by the host.
+ * Sticky ship is absent from publishing modes (`publishVerdicts`). This is the only fixture that shows
+ * how the UI disables a verdict unavailable on this PR.
  */
 
 const PR_ID = '5122';
@@ -195,7 +195,7 @@ export function makeEdgeFixture(): FixtureDataInput {
             statusLabel: 'needs_work',
             checks: null,
             updatedAt: UPDATED_AT,
-            capabilities: { stickyShip: false, fileViewedSync: true, fileContent: false, commentIssues: false, commentResolve: false, editPublished: true, iterations: false, blobs: false },
+            capabilities: { publishVerdicts: ['comment', 'ship', 'request_changes'], fileViewedSync: true, fileContent: false, commentIssues: false, commentResolve: false, editPublished: true, iterations: false, blobs: false },
             verdicts: [],
         },
         iterations: singleIteration(

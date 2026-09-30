@@ -110,7 +110,9 @@ Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg 
 
 ### 5. Terminal actions (floating, always reachable)
 
-`position:fixed; bottom:22px; left:50%; transform:translateX(-50%); width:max-content; white-space:nowrap`, bg `#212429`, border `1px solid #4c5466`, radius 11px, shadow `0 16px 44px rgba(0,0,0,.6)`, padding 8px 9px, gap 8px: progress "2 / 7 stops", divider, unpublished counter (6px `#e2954c` dot + "2 drafts will publish" in `#e2b878`), divider, "Comment on the PR", "Request changes" (`#d99a95`), and the **ship split button**: primary `#7f8cff` with the 15px thumbs-up icon + "Ship" (radius 7px 0 0 7px) and a caret half that opens a 330px menu with two options, each with an explanation — **Ship** ("Approves this snapshot only. A new push clears it and asks you again.") and **Sticky ship** ("Approval carries to the next pushes until a file in your CODEOWNERS zone changes.").
+`position:fixed; bottom:22px; left:50%; transform:translateX(-50%); width:max-content; white-space:nowrap`, bg `#212429`, border `1px solid #4c5466`, radius 11px, shadow `0 16px 44px rgba(0,0,0,.6)`, padding 8px 9px, gap 8px: progress "2 / 7 stops", divider, unpublished counter (6px `#e2954c` dot + "2 drafts will publish" in `#e2b878`), divider, "Comment on the PR", "Request changes" (`#d99a95`), and the **ship split button**: primary `#7f8cff` with the 15px thumbs-up icon + "Ship" (radius 7px 0 0 7px) and a caret half that opens a 330px menu with three options, each with an explanation — **Ship** ("Approves this snapshot only. A new push clears it and asks you again.") and **Sticky ship** ("Approval carries to the next pushes until a file in your CODEOWNERS zone changes.").
+
+The menu has a third row, **Comment** ("Publishes N drafts without a verdict"; on the local host "Hands N drafts to the agent"): the drafts go out, nothing is approved or blocked. The primary part publishes the mode last chosen in the menu, with its label ("Ship", "Sticky ship", "Comment"). The bar draws only the modes the host accepts on this PR; when Comment is the only one (own PR on GitHub, local review), "Request changes" is gone and the split is a single primary "Comment · N" without the caret.
 
 ### 6. Overview — PR card, phase A: reading the diff (`gen:'generating', genPhase:'reading'`)
 
@@ -147,6 +149,8 @@ Red-tinted card (bg `#1f1719`, border `1px solid #3d2a2c`): reason in one senten
 ### 13. Review complete (`view:'done'`)
 
 Centered 620px card. Header: 22px `#1f3d2c` circle with ✓ `#86d9a8` + "Shipped · PR 4821" (or "Sticky ship · PR 4821"), provenance on the right ("ship · 9f3c1ab" / "sticky ship · carries to the next pushes · 9f3c1ab"). First row: "2 comments published as one batch" + "delivered to review host" (`#6cc38f`). Then one row per counter, value 12px mono `#ffffff`: Stops viewed "7 of 7 · Other read as raw diff" · Diff you actually saw "100% of 862 lines" · Of that, read outside the route "34 lines the model did not place" · Comments published "2 · 1 replying to ai-review-bot" · Signed off on snapshot "9f3c1ab · PR head 9f3c1ab · sonnet-5". Amber footer: "1 thread from kai is still open — it does not block the ship, but it stays on your list." + "Open thread". Single action "Back to the route" (there is no "next review" — v1 opens one PR per session).
+
+After Publish without a verdict nothing was approved or blocked, so the card says only what happened: header "Comments published · PR 4821", provenance "comment · 9f3c1ab", the snapshot row reads "Snapshot reviewed" instead of "Signed off on snapshot", and the amber footer drops the ship clause ("2 threads are still open"). The ship clause stays only after Ship and Sticky ship.
 
 ### 14. Command palette (⌘K)
 
@@ -210,7 +214,7 @@ The toolbar control is a select (button + 250px dropdown, active row bg `#2d323b
 
 ## State model (what the implementation needs)
 
-Per session (UI): `view` (overview|route|diff|done), `preset` (triage|tour), `routeFilter` (all|new), `diffMode` (unified|split), `fileFilter` (all|mine|pci|generated), `chatOpen`, `paletteOpen`, `threadsShow` {people,bots,resolved}, `dirClosed` {path→bool}, `showTestCode`, `repliesOpen`, `shipMode` (ship|sticky).
+Per session (UI): `view` (overview|route|diff|done), `preset` (triage|tour), `routeFilter` (all|new), `diffMode` (unified|split), `fileFilter` (all|mine|pci|generated), `chatOpen`, `paletteOpen`, `threadsShow` {people,bots,resolved}, `dirClosed` {path→bool}, `showTestCode`, `repliesOpen`, `shipMode` (ship|sticky|comment).
 
 Per PR, persisted locally: `viewed` {stopId→bool}, `fileViewed` {fileId→bool}, per-file seen ranges (for partial read state), route snapshots, chat history, agent notes.
 

@@ -10,6 +10,7 @@ export * from './json-schema.js';
 export * from './locale.js';
 export * from './manifest.js';
 export * from './messages.js';
+export * from './pr-key.js';
 export * from './review.js';
 export * from './review-host.js';
 export * from './route.js';

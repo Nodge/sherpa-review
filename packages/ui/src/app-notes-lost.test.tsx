@@ -79,7 +79,7 @@ function mountApp(options: { readonly notes?: readonly AgentNote[]; readonly vie
             case UI_ENDPOINTS.reviewDiff:
                 return Promise.resolve(json({ diff: V2.diff }));
             case UI_ENDPOINTS.reviewLenses:
-                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses }));
+                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses, ownershipSource: 'CODEOWNERS' }));
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: V2.threads }));
             case UI_ENDPOINTS.reviewProgress:

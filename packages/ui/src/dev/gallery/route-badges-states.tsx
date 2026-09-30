@@ -58,7 +58,7 @@ function MarginState({ route = true, paths }: { route?: boolean; paths?: readonl
             <DiffWorkspace
                 pr={DATA.pr}
                 diff={diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 prKey="fixture-medium"
                 session={session}
                 store={store}

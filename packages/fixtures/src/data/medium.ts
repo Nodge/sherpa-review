@@ -1907,7 +1907,7 @@ export function makeMediumFixture(): FixtureDataInput {
             statusLabel: 'review_in_progress',
             checks: 'passed',
             updatedAt: CREATED_AT_V1,
-            capabilities: { stickyShip: true, fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: true, blobs: true },
+            capabilities: { publishVerdicts: ['comment', 'ship', 'sticky_ship', 'request_changes'], fileViewedSync: true, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: true, blobs: true },
             verdicts: [],
         },
         iterations: iterations(),

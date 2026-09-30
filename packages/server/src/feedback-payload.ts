@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { Locale } from '@sherpa/protocol';
+import type { Locale, Verdict } from '@sherpa/protocol';
 import { generateJsonSchemas } from '@sherpa/protocol';
 
 import type { FeedbackComment, FeedbackRoundContext, FeedbackThread } from './hosts/select.js';
@@ -70,30 +70,74 @@ export function feedbackInstructions(context: FeedbackRoundContext, locale: Loca
     const writeIn = `Write the replies and the summary in ${locale === 'ru' ? 'Russian' : 'English'}.`;
     const tail =
         'The working tree is re-read automatically; do not run any other Sherpa command for this.';
+    const guidance = verdictGuidance(context.verdict);
+    const opening = guidance.opening(context.projectDir);
     if (context.threads.length === 0) {
         return [
-            `The reviewer finished a review round on the local checkout ${context.projectDir}, ` +
-                `verdict ${context.verdict}.`,
-            context.verdict === 'request_changes'
-                ? 'The reviewer left no comments in this round. Nothing to fix: submit a result with an empty replies list and a one-line summary.'
-                : 'The reviewer approved the changes without comments. Nothing to fix: submit a result with an empty replies list and a one-line summary.',
+            opening,
+            `${guidance.empty} Nothing to fix: submit a result with an empty replies list and a one-line summary.`,
             writeIn,
             tail,
         ].join(' ');
     }
 
     return [
-        `The reviewer finished a review round on the local checkout ${context.projectDir}, ` +
-            `verdict ${context.verdict}.`,
+        opening,
         'The review comments are in feedback.md, each with the absolute file path, line and code excerpt.',
         'Reply to every thread by threadId in the result file (see schema): what you did, or why you did not.',
         writeIn,
         'Never edit files outside the project directory.',
-        context.verdict === 'request_changes'
-            ? 'Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is.'
-            : 'The changes are approved. The comments are optional: apply the trivial ones, reply to the rest.',
+        guidance.comments,
         tail,
     ].join(' ');
+}
+
+interface VerdictGuidance {
+    /** Opening prompt sentence describing what the reviewer did. */
+    readonly opening: (projectDir: string) => string;
+    /** A round without threads. */
+    readonly empty: string;
+    /** What to do with comments. */
+    readonly comments: string;
+}
+
+const FIX_EVERY_COMMENT =
+    'Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is.';
+
+/**
+ * What the agent should do with a round based on its publication mode. Local review now publishes only `comment`.
+ * ship and request_changes remain for previously published rounds that have not yet finished.
+ */
+function verdictGuidance(verdict: Verdict): VerdictGuidance {
+    switch (verdict) {
+        case 'comment':
+            return {
+                opening: (projectDir) => `The reviewer published review comments on the local checkout ${projectDir}.`,
+                empty: 'The reviewer published no comments in this round.',
+                comments: FIX_EVERY_COMMENT,
+            };
+        case 'request_changes':
+            return {
+                opening: (projectDir) =>
+                    `The reviewer finished a review round on the local checkout ${projectDir}, verdict request_changes.`,
+                empty: 'The reviewer left no comments in this round.',
+                comments: FIX_EVERY_COMMENT,
+            };
+        case 'ship':
+        case 'sticky_ship':
+            return {
+                opening: (projectDir) =>
+                    `The reviewer finished a review round on the local checkout ${projectDir}, verdict ${verdict}.`,
+                empty: 'The reviewer approved the changes without comments.',
+                comments: 'The changes are approved. The comments are optional: apply the trivial ones, reply to the rest.',
+            };
+        default:
+            return unreachableVerdict(verdict);
+    }
+}
+
+function unreachableVerdict(verdict: never): never {
+    throw new Error(`unknown round verdict ${String(verdict)}`);
 }
 
 /** Creates the round directory and assembles the queue task. */

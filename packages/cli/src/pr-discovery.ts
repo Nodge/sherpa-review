@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 
+
+
 /**
  * Resolve the PR from the launch directory (`docs/protocol.md §8`): git checkout → current branch → branch PR.
  * Explicit `--pr` and `SHERPA_PR` take precedence. This is called only when neither is set.
@@ -37,9 +39,6 @@ export type PrDiscovery =
 
 const INFO_ARGS = ['info', '--json'] as const;
 const PR_STATUS_ARGS = ['pr', 'status', '--json'] as const;
-
-/** Host PR key (`packages/server/src/hosts/select.ts`). */
-
 
 /** PR status uses the network (measured at 1.3 s). Local branch info takes under 0.1 s. */
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -86,7 +85,7 @@ export async function discoverPrKeyFromCheckout(run: CommandRunner): Promise<PrD
     if (prId === null) {
         return { kind: 'unavailable', hint: 'PR status printed something Sherpa cannot read' };
     }
-    return { kind: 'found', prKey: `${HOST_PREFIX}${String(prId)}` };
+    
 }
 
 /**

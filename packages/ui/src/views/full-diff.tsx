@@ -619,7 +619,14 @@ export function DiffWorkspace(props: DiffWorkspaceProps) {
     );
     const { filter: filterId, threadAuthor } = useSyncExternalStore(session.subscribe, session.getSnapshot);
     const filters = useMemo(
-        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
+        () =>
+            buildFileFilters({
+                files: diff.files,
+                ownership: lenses.ownership,
+                extra: lenses.extra,
+                t,
+                zoneSource: lenses.ownershipSource,
+            }),
         [diff.files, lenses, t],
     );
     const filter = selectFilter(filters, filterId);

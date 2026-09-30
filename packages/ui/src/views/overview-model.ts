@@ -28,30 +28,39 @@ export interface OwnershipSummary {
 
 
 
-/** Groups the diff by lens zones, with path-prefix grouping as a fallback. */
+/**
+ * Groups the diff by lens zones. The old prefix-based path remains a fallback.
+ * `zoneSource` is the host's name for the zone source (`UiReviewLensesResponse.ownershipSource`), also used
+ * in labels. null means there are no lenses, and the summary ignores an unlabeled lens.
+ */
 export function ownershipSummary(
     files: readonly FileDiff[],
-    ownership: Lens | null,
+    lens: Lens | null,
     segment: OwnershipSegment,
     t: Translate,
-    fallbackNote = t('overview.ownership.fallbackNote'),
+    fallbackNote: string,
+    zoneSource: string | null,
 ): OwnershipSummary {
-    const available = ownership?.available === true;
-    const minePaths = new Set(available ? ownership.paths : []);
+    const ownership = lens === null || zoneSource === null ? null : { lens, source: zoneSource };
+    const available = ownership?.lens.available === true;
+    const minePaths = new Set(ownership !== null && available ? ownership.lens.paths : []);
     const mineFiles = available ? files.filter((file) => minePaths.has(file.path)) : [];
     const shown = segment === 'mine' && available ? mineFiles : files;
+    const zones = ownership?.lens.zones ?? null;
 
     return {
         available,
-        note: available ? null : (ownership?.note ?? fallbackNote),
+        // The host also explains partial responses from a working lens ("teams were not reported"),
+        // so `note` is shown even when `available` is true.
+        note: ownership?.lens.note ?? (available ? null : fallbackNote),
         mineFiles: mineFiles.length,
         totalFiles: files.length,
         mineLines: changedLines(mineFiles),
         totalLines: changedLines(files),
         groups:
-            ownership?.zones === null || ownership === null
-                ? groupsByPrefix(shown, available, minePaths, t)
-                : groupsByZones(shown, ownership.zones, t),
+            ownership === null || zones === null
+                ? groupsByPrefix(shown, available ? ownership : null, minePaths, t)
+                : groupsByZones(shown, zones, t, ownership.source),
     };
 }
 
@@ -60,7 +69,12 @@ export function ownershipGroupPath(path: string): string {
     return path.split('/').slice(0, 2).join('/');
 }
 
-function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[], t: Translate): OwnershipGroup[] {
+function groupsByZones(
+    files: readonly FileDiff[],
+    zones: readonly LensZone[],
+    t: Translate,
+    zoneSource: string,
+): OwnershipGroup[] {
     const byPath = new Map(files.map((file) => [file.path, file] as const));
     const zoned = new Set<string>();
     const groups: OwnershipGroup[] = [];
@@ -82,7 +96,7 @@ function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[], t
                 grouped,
                 zone.mine ? 'mine' : 'other',
                 zone.owner,
-                t(zone.mine ? 'overview.ownership.note.mineZone' : 'overview.ownership.note.otherZone'),
+                t(zone.mine ? 'overview.ownership.note.mineZone' : 'overview.ownership.note.otherZone', zoneSource),
             ),
         );
     }
@@ -93,11 +107,11 @@ function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[], t
     if (uncovered.length > 0) {
         groups.push(
             groupOf(
-                t('overview.ownership.outsideZones'),
+                t('overview.ownership.outsideZones', zoneSource),
                 uncovered,
                 'other',
                 null,
-                t('overview.ownership.note.uncovered'),
+                t('overview.ownership.note.uncovered', zoneSource),
             ),
         );
     }
@@ -115,9 +129,10 @@ function groupsByZones(files: readonly FileDiff[], zones: readonly LensZone[], t
     return groups;
 }
 
+/** `ownership` is a working lens with a source name. null means file ownership is unknown. */
 function groupsByPrefix(
     files: readonly FileDiff[],
-    available: boolean,
+    ownership: { readonly source: string } | null,
     minePaths: ReadonlySet<string>,
     t: Translate,
 ): OwnershipGroup[] {
@@ -133,8 +148,11 @@ function groupsByPrefix(
     }
 
     return [...buckets].map(([path, grouped]) => {
-        const ownership = available ? ownershipOf(grouped, minePaths) : null;
-        return groupOf(path, grouped, ownership, null, prefixNote(ownership, t));
+        if (ownership === null) {
+            return groupOf(path, grouped, null, null, t('overview.ownership.note.prefixUnknown'));
+        }
+        const kind = ownershipOf(grouped, minePaths);
+        return groupOf(path, grouped, kind, null, prefixNote(kind, t, ownership.source));
     });
 }
 
@@ -157,18 +175,16 @@ function groupOf(
     };
 }
 
-function prefixNote(ownership: OwnershipKind | null, t: Translate): string {
+function prefixNote(ownership: OwnershipKind, t: Translate, zoneSource: string): string {
     switch (ownership) {
         case 'mine':
-            return t('overview.ownership.note.prefixMine');
+            return t('overview.ownership.note.prefixMine', zoneSource);
         case 'other':
-            return t('overview.ownership.note.prefixOther');
+            return t('overview.ownership.note.prefixOther', zoneSource);
         case 'mixed':
-            return t('overview.ownership.note.prefixMixed');
+            return t('overview.ownership.note.prefixMixed', zoneSource);
         case 'generated':
             return t('overview.ownership.note.generated');
-        case null:
-            return t('overview.ownership.note.prefixUnknown');
     }
 }
 

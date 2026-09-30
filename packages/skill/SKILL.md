@@ -12,6 +12,7 @@ The skill invocation argument decides what is reviewed. There are two modes:
 - **No argument** — local review of the directory you are working in: everything that changed there against the base commit of the Git checkout, committed and uncommitted alike. Stay in local mode even when the branch of that checkout has a pull request. A bare call is never a request to review the PR.
 - **A path to a directory** (`.`, `~/projects/app`) means the same local review, for that directory.
 - **A GitHub URL** (`https://github.com/quillmart/quillmart/pull/12345`) — PR review of `github-quillmart--quillmart--12345`.
+- **A GitHub PR URL** (`https://github.com/<owner>/<repo>/pull/<n>`, any trailing path) — PR review of that pull request. Pass the URL to `--pr` as it is; Sherpa turns it into the key itself and prints the key it settled on.
 - **A bare number** (`12345`) — PR review of `github-quillmart--quillmart--12345`.
 - **An already-formed key** `<host>-<id>` (`github-quillmart--quillmart--12345`, `fixture-medium`) means PR review, key as is.
 - Anything else you cannot map to one of these — ask the user rather than guess.
@@ -20,7 +21,9 @@ A PR key is `<host>-<id>` — letters, digits, dot, dash, underscore. The host p
 
 Whichever mode you start in, Sherpa prints the key it settled on — pass that key to every later command: `--pr <pr>`.
 
+For local review, Sherpa reads the diff and file contents from a local Git checkout, so the checkout must be available. If reading the diff fails because the checkout is missing, relay the error to the reviewer and stop. Making the checkout available is their decision.
 
+A GitHub PR needs no checkout — Sherpa reads it over the GitHub API — but it does need a token: `GITHUB_TOKEN`, `GH_TOKEN`, or a `gh` CLI you are already logged into. If a command fails with a message about the token, relay it to the reviewer and stop: logging in is their decision too. Ownership by team (`@org/team` in CODEOWNERS) needs the `read:org` scope on that token; without it Sherpa counts ownership by login only and says so.
 
 ## Start
 

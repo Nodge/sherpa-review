@@ -110,7 +110,7 @@ function WorkspaceState({
                 diff={data.diff}
                 threads={shownThreads}
                 threadStore={threadStore}
-                lenses={lenses ?? { ownership: data.ownership, extra: data.extraLenses }}
+                lenses={lenses ?? { ownership: data.ownership, extra: data.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 prKey={`fixture-${fixture}`}
                 session={session}
                 store={store}
@@ -434,7 +434,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
             <WorkspaceState
                 fixture="medium"
                 filter="pci"
-                lenses={{ ownership: fixtureIteration('medium').ownership, extra: [EMPTY_PCI] }}
+                lenses={{ ownership: fixtureIteration('medium').ownership, extra: [EMPTY_PCI], ownershipSource: 'CODEOWNERS' }}
             />
         ),
     },

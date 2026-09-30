@@ -313,7 +313,14 @@ export function RouteWorkspace(props: RouteWorkspaceProps) {
     );
 
     const filters = useMemo(
-        () => buildFileFilters({ files: diff.files, ownership: lenses.ownership, extra: lenses.extra, t }),
+        () =>
+            buildFileFilters({
+                files: diff.files,
+                ownership: lenses.ownership,
+                extra: lenses.extra,
+                t,
+                zoneSource: lenses.ownershipSource,
+            }),
         [diff.files, lenses, t],
     );
     const filter = selectFilter(filters, filterId);

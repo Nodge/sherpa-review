@@ -70,7 +70,7 @@ function FailedStopState() {
             <RouteWorkspace
                 pr={DATA.pr}
                 diff={DATA.diff}
-                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses }}
+                lenses={{ ownership: DATA.ownership, extra: DATA.extraLenses, ownershipSource: 'CODEOWNERS' }}
                 snapshot={failedStopSnapshot()}
                 session={session}
                 store={store}

@@ -1,8 +1,12 @@
 import type { DraftBufferEntry, PrDiff, PrMeta, PublishResult, Verdict } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { draftDestinationOf } from '../app/review-state.js';
+import type { DraftDestination } from '../app/review-state.js';
 import type { DiffViewStore } from '../diff-view/store.js';
 import { Icon } from '../icons/icon.tsx';
+import type { IconName } from '../icons/icon.tsx';
+import type { Translate } from '../i18n/index.js';
 import { useFormat, useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useThreadPinContext } from '../iterations/thread-pin.tsx';
@@ -16,7 +20,6 @@ import {
     reviewProgressSummary,
 } from '../progress/summary.js';
 import { useEscapeLayer, useShortcut } from '../shortcuts/context.tsx';
-import type { ViewId } from '../session/views.js';
 import { useUiSettings, useUiSettingsStore } from '../settings/context.tsx';
 import type { ConnectionState } from '../store.js';
 import { closePublishedComposers } from '../threads/composer.js';
@@ -30,12 +33,20 @@ import { usePrCommentsGate } from './pr-comments-gate.js';
 import { PrCommentsModal } from './pr-comments-modal.tsx';
 import {
     availableShipMode,
+    draftsCounterKey,
+    noDraftsKey,
     partialPublicationFailure,
     type PublicationFailure,
     publishConsequenceKey,
     publishDisabledReason,
     requestPublicationFailure,
+    SHIP_MENU_MODES,
     type ShipMode,
+    shipModeLabelKey,
+    shipModeOf,
+    shipModesOf,
+    shipOptionDisabledKey,
+    unreachableVerdict,
 } from './review-action-model.js';
 import './review-action-bar.css';
 
@@ -89,7 +100,7 @@ export interface ReviewActionBarProps {
     readonly threadStore: ThreadStore;
     readonly connection: ConnectionState;
     readonly hostName: string;
-    /** Adapter name passed to the publication result. The host label stays in `hostName`. */
+    /** Adapter name: included in the publication result and determines where drafts go. `hostName` is the host label. */
     readonly reviewHost: string;
     readonly route?: RouteProgress | null;
     readonly composerTransport: ComposerTransport;
@@ -116,88 +127,26 @@ export interface ReviewActionBarProps {
 interface PublishOptions {
     /** Retry after failure: allowed even when normal publishing is blocked. */
     readonly retry?: boolean;
-    /** The reviewer selected the ship mode by hand. Save it in global settings. */
+    /** The reviewer selected a mode in the Ship menu. Save it in global settings. */
     readonly remember?: boolean;
 }
 
-/** Panel mount condition: Overview shows loading, the other views wait for usable data. */
+/**
+ * Mount the bar only with usable review data. There is no bar while data loads,
+ * because a placeholder would show publishing modes this PR might not support.
+ */
 export function reviewActionBarVisible({
-    view,
     completed,
     reviewHost,
     pr,
     dataReady,
 }: {
-    readonly view: ViewId;
     readonly completed: boolean;
     readonly reviewHost: string | null;
     readonly pr: PrMeta | null;
     readonly dataReady: boolean;
 }): boolean {
-    if (completed || reviewHost === null || pr === null) {
-        return false;
-    }
-    switch (view) {
-        case 'overview':
-            return true;
-        case 'route':
-        case 'diff':
-            return dataReady;
-    }
-}
-
-/** Panel without a usable diff: keeps the layout and distinguishes loading from errors. */
-export function ReviewActionBarLoading({ diffError }: { readonly diffError: string | null }) {
-    const t = useT();
-    const errored = diffError !== null;
-    const disabledReason =
-        diffError === null ? t('ship.loading.reason') : t('ship.diffFailed.reason', diffError);
-    return (
-        <div className="review-action-bar" aria-busy={errored ? undefined : true} data-tour="ship">
-            <span
-                className={`review-action-bar__progress ${errored ? 'is-error' : 'is-loading'}`}
-                aria-label={errored ? undefined : t('ship.loading.filesAria')}
-            >
-                {errored ? (
-                    t('ship.diffFailed')
-                ) : (
-                    <>
-                        <span className="review-action-bar__progress-spinner" aria-hidden="true" />
-                        <span>{t('ship.loading.files')}</span>
-                    </>
-                )}
-            </span>
-            <span className="review-action-bar__divider" aria-hidden="true" />
-            <span className="review-action-bar__no-drafts">{t('ship.loading.comments')}</span>
-            <span className="review-action-bar__divider" aria-hidden="true" />
-            <button type="button" className="ctl ctl--ghost review-action-bar__button" disabled title={disabledReason}>
-                {t('ship.prComment')}
-            </button>
-            <button
-                type="button"
-                className="ctl ctl--danger-ghost review-action-bar__button"
-                disabled
-                title={disabledReason}
-            >
-                Request changes
-            </button>
-            <div className="review-action-bar__ship">
-                <button type="button" className="ctl ctl--primary review-action-bar__ship-primary" disabled title={disabledReason}>
-                    <Icon name="thumb" size={15} className="review-action-bar__thumb" />
-                    {t('ship.mode.ship')}
-                </button>
-                <button
-                    type="button"
-                    className="ctl ctl--primary review-action-bar__ship-caret"
-                    disabled
-                    title={disabledReason}
-                    aria-label={t('ship.chooseMode')}
-                >
-                    <Icon name="chev-down" size={14} />
-                </button>
-            </div>
-        </div>
-    );
+    return !completed && reviewHost !== null && pr !== null && dataReady;
 }
 
 /** Final review actions with live counters, a save check and one publishing batch. */
@@ -229,13 +178,21 @@ export function ReviewActionBar({
         threadStore.getComposerGuardSnapshot,
         threadStore.getComposerGuardSnapshot,
     );
-    const stickyAvailable = pr.capabilities.stickyShip;
+    // The bar shows exactly the modes the host accepts on this PR, without distinguishing hosts.
+    const publishVerdicts = pr.capabilities.publishVerdicts;
+    const requestChangesAvailable = publishVerdicts.includes('request_changes');
+    const shipModes = shipModesOf(publishVerdicts);
+    // One mode (local review, own PR on GitHub) gives a button without a caret or menu.
+    const hasShipMenu = shipModes.length > 1;
+    const destination = draftDestinationOf(reviewHost);
     const settings = useUiSettingsStore();
-    // Ship mode is global (docs/design/SPEC-elements.md §2.8). Unavailable sticky always falls back to ship.
+    // Ship mode is global (docs/design/SPEC-elements.md §2.8). An unavailable mode falls back to one the PR supports.
     const shipMode = useUiSettings().shipMode;
-    const effectiveShipMode = availableShipMode(shipMode, stickyAvailable);
-    const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
-    const [cursor, setCursor] = useState(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+    const effectiveShipMode = availableShipMode(shipMode, shipModes);
+    // null means the host accepts no split-button modes on this PR, so the button is absent.
+    const effectiveCursor = effectiveShipMode === null ? 0 : SHIP_MENU_MODES.indexOf(effectiveShipMode);
+    const [menuOpen, setMenuOpen] = useState(defaultMenuOpen && hasShipMenu);
+    const [cursor, setCursor] = useState(effectiveCursor);
     const ownPrComments = usePrCommentsGate();
     const prCommentsGate = prComments ?? ownPrComments;
     const prCommentsOpen = prCommentsGate.open;
@@ -253,7 +210,7 @@ export function ReviewActionBar({
     } | null>(null);
 
     const threadPin = useThreadPinContext();
-    // Buffered records are drafts in the batch. They will be published on ship once they reach the host.
+    // Buffered entries are drafts in the same batch. They publish once they reach the host.
     // Count only creates: an edit belongs to a draft already counted in the threads.
     const buffered = draftBuffer.length;
     const bufferedNew = draftBuffer.filter((entry) => entry.commentId === null).length;
@@ -294,6 +251,19 @@ export function ReviewActionBar({
         readOnlyReason,
     });
     const disabled = disabledReason !== null;
+    // The host may not accept publishing without a verdict, and without drafts there is nothing to publish.
+    const publishCommentsReason =
+        disabledReason ??
+        (publishVerdicts.includes('comment')
+            ? drafts === 0
+                ? t(noDraftsKey(destination))
+                : null
+            : t('ship.mode.comment.unavailable'));
+    const primaryDisabledReason = effectiveShipMode === 'comment' ? publishCommentsReason : disabledReason;
+    const optionDisabledReason = (mode: ShipMode): string | null => {
+        const key = shipOptionDisabledKey(mode, shipModes, drafts, destination);
+        return key === null ? null : t(key);
+    };
 
     const closeMenu = useCallback((returnFocus: boolean): void => {
         setMenuOpen(false);
@@ -323,9 +293,9 @@ export function ReviewActionBar({
     }, menuOpen);
 
     /**
-     * Publishes the verdict. `remember` is set only where the reviewer selects the ship mode by hand:
-     * the main button publishes the downgraded mode (this PR has no sticky), and saving that downgrade
-     * in global settings would reset the choice for every other PR.
+     * Publishes a verdict. `remember` is set only for menu selections: the primary part may
+     * publish a fallback mode (this PR has no sticky). Saving that fallback in global
+     * settings would reset the choice on all other PRs.
      */
     const publish = useCallback(
         async (verdict: Verdict, { retry = false, remember = false }: PublishOptions = {}): Promise<void> => {
@@ -354,8 +324,9 @@ export function ReviewActionBar({
                     setFailure(partial);
                     return;
                 }
-                if (publication.remember && (verdict === 'ship' || verdict === 'sticky_ship')) {
-                    settings.update({ shipMode: verdict });
+                const chosenShipMode = shipModeOf(verdict);
+                if (publication.remember && chosenShipMode !== null) {
+                    settings.update({ shipMode: chosenShipMode });
                 }
                 const discussion = discussionStats(currentThreads);
                 const publishedIds = [...publication.publishedIds];
@@ -406,11 +377,16 @@ export function ReviewActionBar({
         label: 'shortcut.review.shipMenu',
         scope: 'global',
         section: 'ship',
-        consequence: publishConsequenceKey(effectiveShipMode),
+        ...(effectiveShipMode === null ? {} : { consequence: publishConsequenceKey(effectiveShipMode, destination) }),
         consequenceArg: drafts,
-        when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
+        when: () =>
+            hasShipMenu &&
+            !draggingSelection &&
+            !disabled &&
+            !prCommentsOpen &&
+            !chatOverlaysContent(chatOpen),
         action: () => {
-            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
+            setCursor(effectiveCursor);
             setMenuOpen(true);
         },
     });
@@ -420,11 +396,33 @@ export function ReviewActionBar({
         label: 'shortcut.review.requestChanges',
         scope: 'global',
         section: 'ship',
-        consequence: publishConsequenceKey('request_changes'),
+        consequence: publishConsequenceKey('request_changes', destination),
         consequenceArg: drafts,
-        when: () => !draggingSelection && !disabled && !prCommentsOpen && !chatOverlaysContent(chatOpen),
+        when: () =>
+            requestChangesAvailable &&
+            !draggingSelection &&
+            !disabled &&
+            !prCommentsOpen &&
+            !chatOverlaysContent(chatOpen),
         action: () => {
             void publish('request_changes');
+        },
+    });
+    useShortcut({
+        id: 'review.publishComments',
+        keys: [],
+        label: 'shortcut.review.publishComments',
+        scope: 'global',
+        section: 'ship',
+        consequence: publishConsequenceKey('comment', destination),
+        consequenceArg: drafts,
+        when: () =>
+            publishCommentsReason === null &&
+            !draggingSelection &&
+            !prCommentsOpen &&
+            !chatOverlaysContent(chatOpen),
+        action: () => {
+            void publish('comment');
         },
     });
 
@@ -472,11 +470,11 @@ export function ReviewActionBar({
             </span>
             <span className="review-action-bar__divider" aria-hidden="true" />
             {drafts === 0 ? (
-                <span className="review-action-bar__no-drafts">{t('ship.noDrafts')}</span>
+                <span className="review-action-bar__no-drafts">{t(noDraftsKey(destination))}</span>
             ) : (
                 <span className="review-action-bar__drafts">
                     <span className="review-action-bar__draft-dot" aria-hidden="true" />
-                    {t('ship.drafts', drafts)}
+                    {t(draftsCounterKey(destination), drafts)}
                     {issueDrafts === 0 ? null : <> {t('ship.drafts.issues', issueDrafts)}</>}
                     {buffered === 0 ? null : (
                         <span className="review-action-bar__pinned-drafts">
@@ -508,110 +506,107 @@ export function ReviewActionBar({
             >
                 {t('ship.prComment')}
             </button>
-            <button
-                type="button"
-                className="ctl ctl--danger-ghost review-action-bar__button"
-                disabled={disabled}
-                title={disabledReason ?? t('ship.consequence.requestChanges', drafts)}
-                onClick={() => void publish('request_changes')}
-            >
-                {t('shortcut.review.requestChanges')}
-                {drafts === 0 ? '' : ` · ${format.count(drafts)}`}
-            </button>
-            <div className="review-action-bar__ship">
-                <button
-                    ref={shipButtonRef}
-                    type="button"
-                    className="ctl ctl--primary review-action-bar__ship-primary"
-                    disabled={disabled}
-                    title={disabledReason ?? t(publishConsequenceKey(effectiveShipMode), drafts)}
-                    onClick={() => void publish(effectiveShipMode)}
-                >
-                    <Icon name="thumb" size={15} className="review-action-bar__thumb" />
-                    {publishing === null
-                        ? `${t(shipModeKey(effectiveShipMode))}${drafts === 0 ? '' : ` · ${format.count(drafts)}`}`
-                        : t('ship.publishing')}
-                </button>
+            {requestChangesAvailable ? (
                 <button
                     type="button"
-                    className="ctl ctl--primary review-action-bar__ship-caret"
-                    aria-haspopup="listbox"
-                    aria-expanded={menuOpen}
+                    className="ctl ctl--danger-ghost review-action-bar__button"
                     disabled={disabled}
-                    title={disabledReason ?? t('ship.chooseMode')}
-                    onClick={() => {
-                        if (menuOpen) {
-                            closeMenu(false);
-                        } else {
-                            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
-                            setMenuOpen(true);
-                            prCommentsGate.close();
-                        }
-                    }}
-                    onKeyDown={(event) => {
-                        if (event.key === 'ArrowDown' && !menuOpen) {
-                            event.preventDefault();
-                            setCursor(effectiveShipMode === 'sticky_ship' ? 1 : 0);
-                            setMenuOpen(true);
-                        }
-                    }}
+                    title={disabledReason ?? t(publishConsequenceKey('request_changes', destination), drafts)}
+                    onClick={() => void publish('request_changes')}
                 >
-                    <Icon name="chev-down" size={14} />
+                    {t('shortcut.review.requestChanges')}
+                    {drafts === 0 ? '' : ` · ${format.count(drafts)}`}
                 </button>
-                {menuOpen ? (
-                    <div
-                        ref={menuRef}
-                        className="review-action-menu"
-                        role="listbox"
-                        aria-label={t('ship.menu')}
-                        tabIndex={-1}
-                        aria-activedescendant={`review-ship-option-${String(cursor)}`}
-                        onKeyDown={(event) => {
-                            if (event.key === 'ArrowDown') {
-                                event.preventDefault();
-                                setCursor((value) => Math.min(value + 1, 1));
-                            } else if (event.key === 'ArrowUp') {
-                                event.preventDefault();
-                                setCursor((value) => Math.max(value - 1, 0));
-                            } else if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                const mode: ShipMode = cursor === 0 ? 'ship' : 'sticky_ship';
-                                if (mode === 'ship' || stickyAvailable) {
-                                    void publish(mode, { remember: true });
-                                }
-                            } else if (event.key === 'Tab') {
-                                closeMenu(false);
-                            }
-                        }}
+            ) : null}
+            {effectiveShipMode === null ? null : (
+                <div className="review-action-bar__ship">
+                    <button
+                        ref={shipButtonRef}
+                        type="button"
+                        className="ctl ctl--primary review-action-bar__ship-primary"
+                        disabled={primaryDisabledReason !== null}
+                        title={primaryDisabledReason ?? t(publishConsequenceKey(effectiveShipMode, destination), drafts)}
+                        onClick={() => void publish(effectiveShipMode)}
                     >
-                        <ShipGuard files={unviewed} stops={routeCompletion === null ? null : unviewedStops} />
-                        <ShipOption
-                            index={0}
-                            cursor={cursor}
-                            mode="ship"
-                            active={effectiveShipMode === 'ship'}
-                            label={t('ship.mode.ship')}
-                            description={t('ship.mode.ship.description')}
-                            drafts={drafts}
-                            onHover={setCursor}
-                            onChoose={(mode) => void publish(mode, { remember: true })}
-                        />
-                        <ShipOption
-                            index={1}
-                            cursor={cursor}
-                            mode="sticky_ship"
-                            active={effectiveShipMode === 'sticky_ship'}
-                            label={t('ship.mode.sticky')}
-                            description={t('ship.mode.sticky.description')}
-                            drafts={drafts}
-                            disabled={!stickyAvailable}
-                            disabledReason={t('ship.mode.sticky.unavailable')}
-                            onHover={setCursor}
-                            onChoose={(mode) => void publish(mode, { remember: true })}
-                        />
-                    </div>
-                ) : null}
-            </div>
+                        <ShipModeIcon mode={effectiveShipMode} />
+                        {publishing === null
+                            ? `${t(shipModeLabelKey(effectiveShipMode))}${drafts === 0 ? '' : ` · ${format.count(drafts)}`}`
+                            : t('ship.publishing')}
+                    </button>
+                    {hasShipMenu ? (
+                        <button
+                            type="button"
+                            className="ctl ctl--primary review-action-bar__ship-caret"
+                            aria-haspopup="listbox"
+                            aria-expanded={menuOpen}
+                            disabled={disabled}
+                            title={disabledReason ?? t('ship.chooseMode')}
+                            onClick={() => {
+                                if (menuOpen) {
+                                    closeMenu(false);
+                                } else {
+                                    setCursor(effectiveCursor);
+                                    setMenuOpen(true);
+                                    prCommentsGate.close();
+                                }
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'ArrowDown' && !menuOpen) {
+                                    event.preventDefault();
+                                    setCursor(effectiveCursor);
+                                    setMenuOpen(true);
+                                }
+                            }}
+                        >
+                            <Icon name="chev-down" size={14} />
+                        </button>
+                    ) : null}
+                    {hasShipMenu && menuOpen ? (
+                        <div
+                            ref={menuRef}
+                            className="review-action-menu"
+                            role="listbox"
+                            aria-label={t('ship.menu')}
+                            tabIndex={-1}
+                            aria-activedescendant={`review-ship-option-${String(cursor)}`}
+                            onKeyDown={(event) => {
+                                if (event.key === 'ArrowDown') {
+                                    event.preventDefault();
+                                    setCursor((value) => Math.min(value + 1, SHIP_MENU_MODES.length - 1));
+                                } else if (event.key === 'ArrowUp') {
+                                    event.preventDefault();
+                                    setCursor((value) => Math.max(value - 1, 0));
+                                } else if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    const mode = SHIP_MENU_MODES[cursor];
+                                    if (mode !== undefined && optionDisabledReason(mode) === null) {
+                                        void publish(mode, { remember: true });
+                                    }
+                                } else if (event.key === 'Tab') {
+                                    closeMenu(false);
+                                }
+                            }}
+                        >
+                            <ShipGuard files={unviewed} stops={routeCompletion === null ? null : unviewedStops} />
+                            {SHIP_MENU_MODES.map((mode, index) => (
+                                <ShipOption
+                                    key={mode}
+                                    index={index}
+                                    cursor={cursor}
+                                    mode={mode}
+                                    active={effectiveShipMode === mode}
+                                    label={t(shipModeLabelKey(mode))}
+                                    description={shipOptionDescription(mode, drafts, destination, t)}
+                                    drafts={mode === 'comment' ? 0 : drafts}
+                                    disabledReason={optionDisabledReason(mode)}
+                                    onHover={setCursor}
+                                    onChoose={(chosen) => void publish(chosen, { remember: true })}
+                                />
+                            ))}
+                        </div>
+                    ) : null}
+                </div>
+            )}
 
             {prCommentsOpen ? (
                 <PrCommentsModal
@@ -620,6 +615,7 @@ export function ReviewActionBar({
                     transport={composerTransport}
                     {...(threadActions === undefined ? {} : { actions: threadActions })}
                     draftBuffer={draftBuffer}
+                    draftDestination={destination}
                     onClose={prCommentsGate.close}
                 />
             ) : null}
@@ -660,7 +656,6 @@ function ShipOption({
     label,
     description,
     drafts,
-    disabled = false,
     disabledReason,
     onHover,
     onChoose,
@@ -670,21 +665,22 @@ function ShipOption({
     mode: ShipMode;
     active: boolean;
     label: string;
-    description: string;
+    description: string | null;
+    /** Draft count for the "Will publish N" suffix. Zero omits the suffix. */
     drafts: number;
-    disabled?: boolean;
-    disabledReason?: string;
+    disabledReason: string | null;
     onHover: (index: number) => void;
     onChoose: (mode: ShipMode) => void;
 }) {
     const t = useT();
+    const disabled = disabledReason !== null;
     return (
         <div
             id={`review-ship-option-${String(index)}`}
             role="option"
             aria-selected={active}
             aria-disabled={disabled}
-            title={disabled ? disabledReason : undefined}
+            title={disabledReason ?? undefined}
             className={`review-action-menu__option${index === cursor ? ' is-cursor' : ''}`}
             onMouseEnter={() => {
                 onHover(index);
@@ -700,7 +696,7 @@ function ShipOption({
             </span>
             <span>
                 <strong>{label}</strong>
-                <span>{description}</span>
+                {description === null ? null : <span>{description}</span>}
                 {drafts === 0 ? null : <small>{t('ship.option.publishes', drafts)}</small>}
                 {disabled ? <small>{disabledReason}</small> : null}
             </span>
@@ -708,6 +704,42 @@ function ShipOption({
     );
 }
 
-function shipModeKey(mode: ShipMode): 'ship.mode.ship' | 'ship.mode.sticky' {
-    return mode === 'sticky_ship' ? 'ship.mode.sticky' : 'ship.mode.ship';
+/**
+ * Menu row explanation. For Comment it describes the consequence. Without drafts the row is disabled,
+ * and omits "will publish 0" because the row itself shows the reason.
+ */
+function shipOptionDescription(
+    mode: ShipMode,
+    drafts: number,
+    destination: DraftDestination,
+    t: Translate,
+): string | null {
+    switch (mode) {
+        case 'ship':
+            return t('ship.mode.ship.description');
+        case 'sticky_ship':
+            return t('ship.mode.sticky.description');
+        case 'comment':
+            return drafts === 0 ? null : t(publishConsequenceKey('comment', destination), drafts);
+        default:
+            return unreachableVerdict(mode);
+    }
+}
+
+/** Primary-part icon: thumbs up for ship modes. The set has no comment bubble, so Comment has no icon. */
+function ShipModeIcon({ mode }: { mode: ShipMode }) {
+    const name = shipModeIcon(mode);
+    return name === null ? null : <Icon name={name} size={15} className="review-action-bar__thumb" />;
+}
+
+function shipModeIcon(mode: ShipMode): IconName | null {
+    switch (mode) {
+        case 'ship':
+        case 'sticky_ship':
+            return 'thumb';
+        case 'comment':
+            return null;
+        default:
+            return unreachableVerdict(mode);
+    }
 }

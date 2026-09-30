@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ServerManifest } from '@sherpa/protocol';
-import { serverManifestSchema } from '@sherpa/protocol';
+import { githubPrKey, parseGithubPrUrl, serverManifestSchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
 import { assertValidPrKey, manifestPathFor, sherpaDirFrom, workerIdPathFor } from './paths.js';
@@ -66,7 +66,7 @@ export async function resolvePrKey(
 ): Promise<string> {
     const explicit = (prKeyArg ?? env.SHERPA_PR ?? '').trim();
     if (explicit !== '') {
-        return assertValidPrKey(explicit);
+        return assertValidPrKey(normalizePrKey(explicit));
     }
 
     const discovered = await discoverPrKeyFromCheckout(run);
@@ -74,6 +74,15 @@ export async function resolvePrKey(
         return assertValidPrKey(discovered.prKey);
     }
     throw new CliError(unclearWhichPr(discovered.hint));
+}
+
+/**
+ * A github.com PR URL also identifies a PR. It is converted to a key before all checks,
+ * and the normalized key then travels through the session.
+ */
+function normalizePrKey(value: string): string {
+    const github = parseGithubPrUrl(value);
+    return github === null ? value : githubPrKey(github);
 }
 
 /** Failed discovery asks the user for input, with a reason and three ways to answer. */

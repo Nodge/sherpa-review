@@ -72,7 +72,7 @@ function mount(slice: boolean) {
             <DiffWorkspace
                 pr={V2.pr}
                 diff={{ ...SLICE, files }}
-                lenses={{ ownership: null, extra: [] }}
+                lenses={{ ownership: null, extra: [], ownershipSource: null }}
                 prKey="fixture-medium"
                 session={session}
                 store={store}

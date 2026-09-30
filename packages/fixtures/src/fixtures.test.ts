@@ -330,7 +330,7 @@ describe('empty fixture', () => {
     });
 
     it('does not block ship on the host: sticky ship and viewed sync are available', () => {
-        expect(data.pr.capabilities.stickyShip).toBe(true);
+        expect(data.pr.capabilities.publishVerdicts).toContain('sticky_ship');
         expect(data.pr.state).toBe('open');
     });
 });

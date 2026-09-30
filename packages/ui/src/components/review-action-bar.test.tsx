@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { DraftBufferEntry, Thread, UiSettings, Verdict } from '@sherpa/protocol';
+import type { DraftBufferEntry, PublishResult, Thread, UiSettings, Verdict } from '@sherpa/protocol';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -17,7 +17,6 @@ import type { RouteProgress } from './review-action-bar.tsx';
 import {
     reviewActionBarVisible,
     ReviewActionBar,
-    ReviewActionBarLoading,
 } from './review-action-bar.tsx';
 import { ReviewComplete } from './review-complete.tsx';
 
@@ -45,15 +44,21 @@ function renderBar(
     options: {
         menu?: boolean;
         threads?: typeof DRAFT_THREADS;
-        sticky?: boolean;
+        /** PR publishing modes. Defaults to the fixture modes. */
+        verdicts?: readonly Verdict[];
         route?: RouteProgress | null;
         /** Active PR iteration, used to count drafts pinned to previous commits. */
         activeDiffId?: string;
         draftBuffer?: readonly DraftBufferEntry[];
+        reviewHost?: string;
+        /** Saved split-button mode. */
+        shipMode?: UiSettings['shipMode'];
     } = {},
 ): string {
     const threads = options.threads ?? DRAFT_THREADS;
+    const settings = createUiSettingsStore({ loaded: true, initial: { shipMode: options.shipMode ?? 'ship' } });
     return renderToStaticMarkup(
+        <SettingsProvider store={settings}>
         <ThreadPinProvider
             value={{
                 activeDiffId: options.activeDiffId ?? null,
@@ -66,7 +71,7 @@ function renderBar(
                 ...DATA.pr,
                 capabilities: {
                     ...DATA.pr.capabilities,
-                    stickyShip: options.sticky ?? DATA.pr.capabilities.stickyShip,
+                    publishVerdicts: [...(options.verdicts ?? DATA.pr.capabilities.publishVerdicts)],
                 },
             }}
             diff={DATA.diff}
@@ -74,7 +79,7 @@ function renderBar(
             threadStore={createThreadStore(threads, FILE_IDS)}
             connection="online"
             hostName="FixtureHost"
-            reviewHost="fixture"
+            reviewHost={options.reviewHost ?? 'fixture'}
             composerTransport={TRANSPORT}
             {...(options.draftBuffer === undefined ? {} : { draftBuffer: options.draftBuffer })}
             onPublish={() => Promise.reject(new Error('not called during static rendering'))}
@@ -82,7 +87,8 @@ function renderBar(
             route={options.route ?? null}
             {...(options.menu === undefined ? {} : { defaultMenuOpen: options.menu })}
         />
-        </ThreadPinProvider>,
+        </ThreadPinProvider>
+        </SettingsProvider>,
     );
 }
 
@@ -259,14 +265,27 @@ function mountSharedGate(): { readonly outside: HTMLButtonElement } {
     return { outside };
 }
 
-/** Live bar for checking ship mode writes: publishing always succeeds. */
-function mountShipBar(options: { readonly shipMode: UiSettings['shipMode']; readonly sticky: boolean; readonly menu?: boolean }): {
+/** PR publishing modes with sticky ship disabled in settings. */
+const WITHOUT_STICKY: readonly Verdict[] = ['comment', 'ship', 'request_changes'];
+
+/**
+ * Mounted bar for publishing checks: publishing always succeeds by default, and `results`
+ * supplies host responses in order.
+ */
+function mountShipBar(options: {
+    readonly shipMode: UiSettings['shipMode'];
+    readonly verdicts: readonly Verdict[];
+    readonly menu?: boolean;
+    readonly threads?: readonly Thread[];
+    readonly results?: PublishResult[];
+}): {
     readonly host: HTMLElement;
     readonly published: Verdict[];
     readonly shipMode: () => UiSettings['shipMode'];
 } {
     const settings = createUiSettingsStore({ initial: { shipMode: options.shipMode } });
     const published: Verdict[] = [];
+    const results = [...(options.results ?? [])];
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -275,17 +294,19 @@ function mountShipBar(options: { readonly shipMode: UiSettings['shipMode']; read
         root.render(
             <SettingsProvider store={settings}>
                 <ReviewActionBar
-                    pr={{ ...DATA.pr, capabilities: { ...DATA.pr.capabilities, stickyShip: options.sticky } }}
+                    pr={{ ...DATA.pr, capabilities: { ...DATA.pr.capabilities, publishVerdicts: [...options.verdicts] } }}
                     diff={DATA.diff}
                     diffStore={createDiffViewStore({ files: DATA.diff.files })}
-                    threadStore={createThreadStore([], FILE_IDS)}
+                    threadStore={createThreadStore([...(options.threads ?? [])], FILE_IDS)}
                     connection="online"
                     hostName="FixtureHost"
                     reviewHost="fixture"
                     composerTransport={TRANSPORT}
                     onPublish={(verdict) => {
                         published.push(verdict);
-                        return Promise.resolve({ publishedCommentIds: [], failed: [], verdictApplied: true });
+                        return Promise.resolve(
+                            results.shift() ?? { publishedCommentIds: [], failed: [], verdictApplied: true },
+                        );
                     }}
                     onComplete={() => undefined}
                     route={null}
@@ -317,7 +338,7 @@ function clickByText(host: HTMLElement, selector: string, text: string): void {
 describe('global ship mode', () => {
     it('publishing with a fallback mode preserves the reviewer choice', async () => {
         // Settings request sticky, but this PR has none: the button publishes ship without choosing it.
-        const bar = mountShipBar({ shipMode: 'sticky_ship', sticky: false });
+        const bar = mountShipBar({ shipMode: 'sticky_ship', verdicts: WITHOUT_STICKY });
 
         clickByText(bar.host, '.review-action-bar__ship-primary', 'Ship');
         await act(async () => {
@@ -329,7 +350,7 @@ describe('global ship mode', () => {
     });
 
     it('remembers an explicit mode selection in the menu', async () => {
-        const bar = mountShipBar({ shipMode: 'ship', sticky: true, menu: true });
+        const bar = mountShipBar({ shipMode: 'ship', verdicts: DATA.pr.capabilities.publishVerdicts, menu: true });
 
         clickByText(bar.host, '.review-action-menu__option', 'Sticky ship');
         await act(async () => {
@@ -341,6 +362,106 @@ describe('global ship mode', () => {
     });
 });
 
+describe('publishing without a verdict', () => {
+    it('publishes comment from the Comment menu row and remembers the mode', async () => {
+        const bar = mountShipBar({
+            shipMode: 'ship',
+            verdicts: DATA.pr.capabilities.publishVerdicts,
+            threads: DRAFT_THREADS,
+            menu: true,
+        });
+
+        clickByText(bar.host, '.review-action-menu__option', 'Comment');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['comment']);
+        expect(bar.shipMode()).toBe('comment');
+    });
+
+    it('shows saved Comment as the primary part with a caret', async () => {
+        const bar = mountShipBar({ shipMode: 'comment', verdicts: DATA.pr.capabilities.publishVerdicts, threads: DRAFT_THREADS });
+
+        expect(bar.host.querySelector('.review-action-bar__ship-caret')).not.toBeNull();
+        clickByText(bar.host, '.review-action-bar__ship-primary', 'Comment');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['comment']);
+    });
+
+    it('navigates all 3 menu rows by keyboard and ignores Enter on a disabled row', async () => {
+        const bar = mountShipBar({ shipMode: 'ship', verdicts: WITHOUT_STICKY, threads: [], menu: true });
+        const menu = bar.host.querySelector<HTMLElement>('.review-action-menu');
+        if (menu === null) {
+            throw new Error('the menu is not open');
+        }
+        const press = (key: string): void => {
+            act(() => {
+                menu.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+            });
+        };
+
+        press('ArrowDown');
+        press('ArrowDown');
+        press('ArrowDown');
+        expect(menu.getAttribute('aria-activedescendant')).toBe('review-ship-option-2');
+        // Comment is disabled without drafts.
+        press('Enter');
+        press('ArrowUp');
+        // Sticky ship is disabled when the host modes exclude it.
+        press('Enter');
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(bar.published).toEqual([]);
+
+        press('ArrowUp');
+        press('Enter');
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(bar.published).toEqual(['ship']);
+    });
+
+    it('shows Comment without a caret for one mode and does not save the selection', async () => {
+        const bar = mountShipBar({ shipMode: 'ship', verdicts: ['comment'], threads: DRAFT_THREADS });
+
+        expect(bar.host.querySelector('.review-action-bar__ship-caret')).toBeNull();
+        clickByText(bar.host, '.review-action-bar__ship-primary', 'Comment');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['comment']);
+        expect(bar.shipMode()).toBe('ship');
+    });
+
+    it('retries the same comment after a failure', async () => {
+        const bar = mountShipBar({
+            shipMode: 'ship',
+            verdicts: ['comment'],
+            threads: DRAFT_THREADS,
+            results: [
+                { publishedCommentIds: [], failed: [{ commentId: 'draft-1', message: 'host refused' }], verdictApplied: false },
+            ],
+        });
+
+        clickByText(bar.host, '.review-action-bar__ship-primary', 'Comment');
+        await act(async () => {
+            await Promise.resolve();
+        });
+        clickByText(bar.host, '.review-action-error__summary button', 'retry');
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(bar.published).toEqual(['comment', 'comment']);
+    });
+});
+
 describe('floating bar mount condition', () => {
     const base = {
         completed: false,
@@ -348,44 +469,20 @@ describe('floating bar mount condition', () => {
         pr: DATA.pr,
     } as const;
 
-    it('is visible on Overview before the diff is ready, route and diff keep waiting for data as before', () => {
-        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false })).toBe(true);
-        expect(reviewActionBarVisible({ ...base, view: 'route', dataReady: false })).toBe(false);
-        expect(reviewActionBarVisible({ ...base, view: 'diff', dataReady: false })).toBe(false);
-        expect(reviewActionBarVisible({ ...base, view: 'route', dataReady: true })).toBe(true);
-        expect(reviewActionBarVisible({ ...base, view: 'diff', dataReady: true })).toBe(true);
+    it('mounts only with usable data in any view', () => {
+        expect(reviewActionBarVisible({ ...base, dataReady: false })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, dataReady: true })).toBe(true);
     });
 
     it('hides the bar after review completion or without a PR or host', () => {
-        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, completed: true })).toBe(false);
-        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, reviewHost: null })).toBe(false);
-        expect(reviewActionBarVisible({ ...base, view: 'overview', dataReady: false, pr: null })).toBe(false);
-    });
-
-    it('loading keeps the counter label and disables dependent actions with a reason', () => {
-        const html = renderToStaticMarkup(<ReviewActionBarLoading diffError={null} />);
-
-        expect(html).toContain('aria-busy="true"');
-        expect(html).toContain('review-action-bar__progress-spinner');
-        expect(html).toContain('files');
-        expect(html).toContain('The diff and review data are still loading.');
-        expect(html.match(/disabled=""/g)).toHaveLength(4);
-    });
-
-    it('a diff error replaces the spinner and loading reason', () => {
-        const html = renderToStaticMarkup(<ReviewActionBarLoading diffError="host refused" />);
-
-        expect(html).not.toContain('aria-busy');
-        expect(html).not.toContain('review-action-bar__progress-spinner');
-        expect(html).toContain('review-action-bar__progress is-error');
-        expect(html).toContain('diff failed to load');
-        expect(html).toContain('The diff failed to load: host refused');
-        expect(html).not.toContain('The diff and review data are still loading.');
+        expect(reviewActionBarVisible({ ...base, dataReady: true, completed: true })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, dataReady: true, reviewHost: null })).toBe(false);
+        expect(reviewActionBarVisible({ ...base, dataReady: true, pr: null })).toBe(false);
     });
 });
 
 describe('floating review bar', () => {
-    it('shows the live draft count and the count on both final action buttons', () => {
+    it('shows a live draft counter and the count on all final action buttons', () => {
         const drafts = countDraftComments(DRAFT_THREADS);
         expect(drafts).toBeGreaterThan(0);
 
@@ -394,13 +491,84 @@ describe('floating review bar', () => {
         expect(html).toContain(`${String(drafts)} draft`);
         expect(html).toContain(`Request changes · ${String(drafts)}`);
         expect(html).toContain(`Ship · ${String(drafts)}`);
+        // There is no separate publish-without-verdict button: Comment is a Ship menu mode.
+        expect(html).not.toContain('>Publish');
+        expect(html).not.toContain('Comment ·');
+    });
+
+    it('shows one Comment button without a caret or verdicts in comments-only mode', () => {
+        const html = renderBar({ verdicts: ['comment'] });
+
+        expect(html).toMatch(
+            /<button[^>]*class="ctl ctl--primary review-action-bar__ship-primary"[^>]*title="Publishes 1 draft without a verdict"[^>]*>Comment · 1<\/button>/,
+        );
+        expect(html).not.toContain('Request changes');
+        expect(html).not.toContain('review-action-bar__ship-caret');
+        expect(html).not.toContain('ic-thumb');
+    });
+
+    it('disables Comment with a reason in comments-only mode without drafts', () => {
+        const html = renderBar({ threads: [], verdicts: ['comment'] });
+
+        expect(html).toMatch(/<button[^>]*review-action-bar__ship-primary"[^>]*disabled=""[^>]*title="no unpublished comments"/);
+        expect(html).toContain('>Comment</button>');
+    });
+
+    it('disables the primary part for saved Comment without drafts and keeps the caret enabled', () => {
+        const html = renderBar({ threads: [], shipMode: 'comment' });
+
+        expect(html).toMatch(/<button[^>]*review-action-bar__ship-primary"[^>]*disabled=""[^>]*title="no unpublished comments"/);
+        expect(html).toMatch(/<button[^>]*review-action-bar__ship-caret"(?![^>]*disabled)[^>]*>/);
+    });
+
+    it('falls back to ship when the saved sticky mode is unavailable on the PR', () => {
+        const html = renderBar({ shipMode: 'sticky_ship', verdicts: WITHOUT_STICKY });
+
+        expect(html).toContain(`>Ship · ${String(countDraftComments(DRAFT_THREADS))}</button>`);
+    });
+
+    it('omits Request changes when the modes exclude request_changes and keeps ship', () => {
+        const html = renderBar({ verdicts: ['comment', 'ship'] });
+
+        expect(html).not.toContain('Request changes');
+        expect(html).toContain('review-action-bar__ship-primary');
+        expect(html).toContain('review-action-bar__ship-caret');
+    });
+
+    it('falls back to ship when the modes exclude the saved Comment', () => {
+        const html = renderBar({ shipMode: 'comment', verdicts: ['ship', 'request_changes'] });
+
+        expect(html).toContain(`>Ship · ${String(countDraftComments(DRAFT_THREADS))}</button>`);
+        expect(html).not.toContain('review-action-bar__ship-caret');
+    });
+
+    it('omits the split button when it has no modes and keeps Request changes', () => {
+        const html = renderBar({ verdicts: ['request_changes'] });
+
+        expect(html).not.toContain('review-action-bar__ship-primary');
+        expect(html).toContain('Request changes');
+    });
+
+    it('sends local review drafts to the agent', () => {
+        const html = renderBar({ verdicts: ['comment'], reviewHost: 'local-git' });
+
+        expect(html).toContain('1 draft goes to the agent');
+        expect(html).toContain('title="Hands 1 draft to the agent"');
+        expect(html).not.toContain('when you publish');
+    });
+
+    it('shows no comments for the agent in local review without drafts', () => {
+        const html = renderBar({ threads: [], verdicts: ['comment'], reviewHost: 'local-git' });
+
+        expect(html).toContain('<span class="review-action-bar__no-drafts">no comments for the agent</span>');
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="no comments for the agent"/);
     });
 
     it('shows neutral text with zero drafts', () => {
         const html = renderBar({ threads: [] });
 
         expect(html).toContain('no unpublished comments');
-        expect(html).not.toContain('go out on ship');
+        expect(html).not.toContain('go out when you publish');
     });
 
     it('uses the singular verb for numbers ending in one', () => {
@@ -414,7 +582,7 @@ describe('floating review bar', () => {
             root: { ...source.root, id: `draft-${String(index)}`, draft: true },
         }));
 
-        expect(renderBar({ threads })).toContain('21 drafts go out on ship');
+        expect(renderBar({ threads })).toContain('21 drafts go out when you publish');
     });
 
     // The draft counter suffix shows how many drafts open an issue (SPEC-changes-2026-09-20 §1).
@@ -477,8 +645,25 @@ describe('floating review bar', () => {
         expect(renderBar()).not.toContain('review-action-bar__ship-primary" disabled');
     });
 
+    it('shows Ship, Sticky ship and Comment with their consequences in the menu', () => {
+        const html = renderBar({ menu: true });
+
+        expect(html.indexOf('<strong>Ship</strong>')).toBeLessThan(html.indexOf('<strong>Sticky ship</strong>'));
+        expect(html.indexOf('<strong>Sticky ship</strong>')).toBeLessThan(html.indexOf('<strong>Comment</strong>'));
+        expect(html).toContain('id="review-ship-option-2"');
+        expect(html).toContain('<span>Publishes 1 draft without a verdict</span>');
+    });
+
+    it('disables the Comment menu row with a reason when there are no drafts', () => {
+        const html = renderBar({ menu: true, threads: [] });
+
+        expect(html).toMatch(
+            /id="review-ship-option-2"[^>]*aria-disabled="true"[^>]*title="no unpublished comments"/,
+        );
+    });
+
     it('shows a non-blocking warning, exact consequences and a reason for disabled sticky in the menu', () => {
-        const html = renderBar({ menu: true, sticky: false });
+        const html = renderBar({ menu: true, verdicts: WITHOUT_STICKY });
 
         expect(html).toContain('ship anyway?');
         expect(html).toContain('Approves this snapshot only. A new push drops the approval and asks again.');
@@ -611,11 +796,43 @@ describe('Review complete screen', () => {
         expect(html).toContain('17 of 18');
         expect(html).toContain('92% of 862 lines');
         expect(html).toContain('2 (1 of them a reply)');
-        expect(html).toContain('1 thread is still open');
+        expect(html).toContain('1 thread is still open — that does not block the ship');
+        expect(html).toContain('Snapshot signed');
         expect(html).toContain('To the full diff');
         // Without a route, the card has no rows about stops.
         expect(html).not.toContain('Stops viewed');
         expect(html).not.toContain('outside the route');
+    });
+
+    it('shows Comments published and comment provenance when publishing without a verdict', () => {
+        const html = renderToStaticMarkup(
+            <ReviewComplete
+                completion={{
+                    verdict: 'comment',
+                    prId: '42',
+                    headCommit: '9f3c1ab012345',
+                    hostName: 'GitHub',
+                    reviewHost: 'github',
+                    publishedComments: 2,
+                    publishedReplies: 0,
+                    progress: { filesSeen: 3, filesTotal: 5, linesSeen: 40, linesTotal: 90, percentSeen: 44 },
+                    route: null,
+                    openThreads: 2,
+                    firstOpenThreadId: 'thread-1',
+                }}
+                onOpenThread={() => undefined}
+                onOpenFullDiff={() => undefined}
+            />,
+        );
+
+        expect(html).toContain('Comments published · PR 42');
+        expect(html).toContain('comment · 9f3c1ab');
+        expect(html).toContain('delivered to GitHub');
+        // There was no ship and no snapshot was signed, so there is no ship-related or signed-snapshot copy.
+        expect(html).toContain('2 threads are still open');
+        expect(html).not.toContain('the ship');
+        expect(html).toContain('Snapshot reviewed');
+        expect(html).not.toContain('signed');
     });
 
     it('sends local review comments to the agent', () => {

@@ -60,7 +60,7 @@ describe('buildFileFilters', () => {
         const filters = buildFileFilters({
             files: FILES,
             ownership: lens('mine', 'My files', ['src/a.ts']),
-            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t,});
+            extra: [lens('pci', 'PCI DSS', ['src/b.ts'])], t, zoneSource: 'CODEOWNERS',});
 
         expect(filters.map((filter) => [filter.label, filter.count])).toEqual([
             [ruDictionary['lens.all'], 3],
@@ -68,6 +68,15 @@ describe('buildFileFilters', () => {
             [ruDictionary['lens.audit']('PCI DSS'), 1],
             [ruDictionary['lens.generated'], 1],
         ]);
+    });
+
+    it('without a zone source, the My files label omits it', () => {
+        const filters = buildFileFilters({
+            files: FILES,
+            ownership: lens('mine', 'My files', ['src/a.ts']),
+            extra: [], t,});
+
+        expect(filters.find((filter) => filter.id === 'mine')?.label).toBe(ruDictionary['lens.mine'](null));
     });
 
     it('a lens count uses its intersection with the diff, not its length', () => {

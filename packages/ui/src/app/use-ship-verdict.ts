@@ -2,6 +2,7 @@ import type { PublishResult, ReviewerVerdict, Verdict } from '@sherpa/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { publishReview } from '../api.js';
+import { isShipVerdict } from '../components/review-action-model.js';
 import type { ShipVerdictEvent, ShipVerdictWatch } from '../components/ship-verdict-banner.tsx';
 import { INITIAL_SHIP_VERDICT_WATCH, observeShipVerdicts } from '../components/ship-verdict-banner.tsx';
 
@@ -37,7 +38,7 @@ export function useShipVerdict(
     const publishHere = useCallback(
         async (verdict: Verdict): Promise<PublishResult> => {
             const result = await publishReview(token, verdict);
-            if (verdict === 'ship' || verdict === 'sticky_ship') {
+            if (isShipVerdict(verdict)) {
                 // Our own verdict is about to appear in metadata. There is nobody to notify with a banner.
                 verdictWatch.current = { ...verdictWatch.current, ownShipPending: true };
             }

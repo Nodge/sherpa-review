@@ -92,7 +92,7 @@ function mountApp(options: {
                     json({ diff: query.get('base') === null ? V2.diff : (options.interdiff ?? INTERDIFF) }),
                 );
             case UI_ENDPOINTS.reviewLenses:
-                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses }));
+                return Promise.resolve(json({ ownership: V2.ownership, extra: V2.extraLenses, ownershipSource: 'CODEOWNERS' }));
             case UI_ENDPOINTS.reviewThreads:
                 return Promise.resolve(json({ threads: V2.threads }));
             case UI_ENDPOINTS.reviewProgress:

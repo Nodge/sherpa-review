@@ -24,9 +24,26 @@ export const reviewUserSchema = z.object({
 });
 export type ReviewUser = z.infer<typeof reviewUserSchema>;
 
-/** Host capabilities. The UI hides unavailable actions (sticky ship and viewed sync vary across hosts). */
+/**
+ * Draft batch publication mode. `comment` publishes drafts without applying anything.
+ * `ship`, `sticky_ship`, `request_changes` publish and apply a verdict. `HostCapabilities.publishVerdicts`
+ * specifies which modes the host accepts for this PR.
+ */
+export const verdictSchema = z.enum(['comment', 'ship', 'sticky_ship', 'request_changes']);
+export type Verdict = z.infer<typeof verdictSchema>;
+
+/** Host capabilities. The UI hides unavailable features (viewed sync, context expansion, etc. vary by host). */
 export const hostCapabilitiesSchema = z.object({
-    stickyShip: z.boolean(),
+    /**
+     * Publication modes the host accepts for this PR: the UI shows exactly this list, the host
+     * rejects any verdict outside it. Computed on every header read because it depends on the PR as well
+     * as the host (the PR author on GitHub).
+     */
+    publishVerdicts: z.array(verdictSchema).superRefine((verdicts, ctx) => {
+        if (new Set(verdicts).size !== verdicts.length) {
+            ctx.addIssue({ code: 'custom', message: 'duplicate publication modes' });
+        }
+    }),
     fileViewedSync: z.boolean(),
     /** The host can return full file contents (`getFileContent`). Without it, "Expand context" is unavailable. */
     fileContent: z.boolean(),
@@ -72,6 +89,7 @@ export type PrChecks = z.infer<typeof prChecksSchema>;
  * The reviewer's current PR verdict (`docs/design/SPEC-elements.md §4.5`, "someone else ships first"): on the review host,
  * the reviewer's action (`ship` / `sticky_ship` / `request_changes`).
  * Hosts do not supply verdict timestamps. The UI records when the verdict appeared in a snapshot.
+ * Publishing without a verdict (`comment`) does not count as a reviewer verdict and is excluded here.
  */
 export const reviewerVerdictSchema = z.object({
     user: reviewUserSchema,
@@ -339,7 +357,7 @@ export type Thread = z.infer<typeof threadSchema>;
 
 /**
  * Draft to create (two-stage model, `docs/product.md §3`, principle 6). Saved to the host immediately,
- * published as one batch with a verdict. Either a reply (`parentId`) or a new thread (`anchor`;
+ * published as one batch (`publishBatch`). Either a reply (`parentId`) or a new thread (`anchor`).
  * null in both means a PR comment.
  */
 export const commentDraftSchema = z.object({
@@ -353,10 +371,6 @@ export const commentDraftSchema = z.object({
     issue: z.boolean().optional(),
 });
 export type CommentDraft = z.infer<typeof commentDraftSchema>;
-
-/** Verdict for finishing a review. New variants require a minor version bump. */
-export const verdictSchema = z.enum(['ship', 'sticky_ship', 'request_changes']);
-export type Verdict = z.infer<typeof verdictSchema>;
 
 /**
  * Batch publication result. On partial failure, the verdict is NOT applied,
