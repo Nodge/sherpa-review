@@ -188,6 +188,8 @@ The host implementations are **GitHub** (`packages/server/src/hosts/github/`), *
 
 
 
+
+
 The **GitHub adapter** reviews PRs on github.com using the key `github-<owner>--<repository>--<number>` (a double hyphen separates parts because it cannot occur in an owner name but can in a repository name). GraphQL is the main API for metadata, threads, reviews and verdicts, viewed marks, file text, and all writes. REST remains for exactly 3 things missing from GraphQL: patch text (`…/pulls/{n}/files`), merge-base (`…/compare/{base}...{head}`), and image bytes (`…/contents/{path}`). Token lookup follows the `gh` chain: `$GITHUB_TOKEN` → `$GH_TOKEN` → `gh auth token`. No repository checkout is needed.
 
 GitHub has one iteration. It has no diffsets, and the review compares the branch head against the merge-base, so `iterations` is disabled and slices are rejected. Of the 7 flags, `fileViewedSync`, `fileContent`, `blobs` and `editPublished` are enabled. `commentIssues` is disabled because GitHub has no such concept. `commentResolve` is disabled for the same reason. The whole thread is resolved. Publication modes on someone else's PR are `comment`, `ship` and `request_changes` (GitHub has no sticky ship). On your own PR (the PR author login matches the token owner, ignoring case), only `comment` is available. GitHub prohibits authors from both approving and requesting changes on their own PRs.

@@ -2,6 +2,7 @@ import { fixtureIteration } from '@sherpa/fixtures';
 import type { FileDiff } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 
+import { ReviewHostProvider } from '../../app/review-host-context.tsx';
 import type { ContextMenuAnchor } from '../../components/context-menu.tsx';
 import { FileContextMenu } from '../../components/context-menu.tsx';
 import { toParseRequest } from '../../diff/model.js';
@@ -50,7 +51,7 @@ const ACTIONS: FileCardActions = {
 /** Menu from the header of a viewed file card: all 4 items are available. */
 function CardMenu() {
     return (
-        <>
+        <ReviewHostProvider value="github">
             <FileCard
                 file={FILE}
                 model={parseFileDiff(toParseRequest(FILE))}
@@ -72,7 +73,7 @@ function CardMenu() {
                 anchor={CARD_ANCHOR}
                 onClose={() => undefined}
             />
-        </>
+        </ReviewHostProvider>
     );
 }
 
@@ -105,7 +106,7 @@ function Tree({ activeFileId }: { activeFileId: string }) {
 /** Menu from a tree row for a file with no links from the host. */
 function TreeMenu() {
     return (
-        <>
+        <ReviewHostProvider value="github">
             <Tree activeFileId={NO_LINK.fileId} />
             <FileContextMenu
                 file={NO_LINK}
@@ -114,7 +115,7 @@ function TreeMenu() {
                 anchor={TREE_ANCHOR}
                 onClose={() => undefined}
             />
-        </>
+        </ReviewHostProvider>
     );
 }
 

@@ -802,6 +802,8 @@ export const ru = {
     'file.menu.copyPath': 'Скопировать путь',
     'file.menu.copyLink': 'Скопировать ссылку на файл',
     'file.menu.copyLinkUnavailable': 'у этого файла нет веб-ссылки',
+    
+    'file.menu.openGithub': 'Открыть на GitHub',
     'file.menu.openWeb': 'Открыть в вебе',
     'file.menu.commentFile': 'Комментарий к файлу',
     'file.menu.markViewed': 'Просмотрено',

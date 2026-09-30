@@ -2,6 +2,8 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useReviewHost } from '../app/review-host-context.tsx';
+import { fileWebActionLabel } from '../app/review-state.js';
 import { useT } from '../i18n/index.js';
 import { useReadOnlyIteration, useReadOnlyReason } from '../iterations/read-only.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
@@ -337,6 +339,7 @@ export function FileContextMenu({
     toggleRef,
 }: FileContextMenuProps) {
     const t = useT();
+    const reviewHost = useReviewHost();
     const readOnly = useReadOnlyIteration();
     const readOnlyReason = useReadOnlyReason();
 
@@ -362,8 +365,8 @@ export function FileContextMenu({
             onSelect: () => copy(file.hostFileUrl ?? ''),
         },
         {
-            id: 'open-web',
-            label: t('file.menu.openWeb'),
+            id: 'blame',
+            label: fileWebActionLabel(reviewHost, t),
             disabled: file.blameUrl === null,
             title: file.blameUrl === null ? t('file.menu.copyLinkUnavailable') : undefined,
             onSelect: () => {

@@ -788,6 +788,8 @@ export const en: Dictionary = {
     'file.menu.copyPath': 'Copy path',
     'file.menu.copyLink': 'Copy file link',
     'file.menu.copyLinkUnavailable': 'this file has no web link',
+    
+    'file.menu.openGithub': 'Open on GitHub',
     'file.menu.openWeb': 'Open on the web',
     'file.menu.commentFile': 'Comment on the file',
     'file.menu.markViewed': 'Viewed',

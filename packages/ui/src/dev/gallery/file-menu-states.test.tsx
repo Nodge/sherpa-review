@@ -77,7 +77,7 @@ describe('file menu gallery', () => {
         expect(items().map((item) => item.textContent)).toEqual([
             'Copy path',
             'Copy file link',
-            'Open on the web',
+            'Open on GitHub',
             'Clear the mark',
         ]);
         expect(items().filter((item) => item.getAttribute('aria-disabled') === 'true')).toEqual([]);

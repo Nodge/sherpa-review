@@ -40,6 +40,7 @@ import { UpdateToast } from './components/update-toast.tsx';
 import { ReviewComplete } from './components/review-complete.tsx';
 import { ShortcutCheatsheet } from './components/shortcut-cheatsheet.tsx';
 import { TopBar } from './components/top-bar.tsx';
+import { ReviewHostProvider } from './app/review-host-context.tsx';
 import { BlobLoaderProvider } from './diff-view/blob-loader.tsx';
 import { expandFileContext } from './diff-view/expand.js';
 import { findAgentNote, flashAgentNote, revealWhenReady } from './diff-view/line-target.js';
@@ -907,6 +908,7 @@ export function App({ store, session, token }: AppProps) {
     });
 
     return (
+        <ReviewHostProvider value={reviewHost}>
         <BlobLoaderProvider loadBlob={loadBlob}>
         <ReadOnlyIterationProvider
             readOnly={readOnly}
@@ -1228,6 +1230,7 @@ export function App({ store, session, token }: AppProps) {
             </ThreadPinProvider>
         </ReadOnlyIterationProvider>
         </BlobLoaderProvider>
+        </ReviewHostProvider>
     );
 }
 

@@ -21,7 +21,7 @@ A PR key is `<host>-<id>` — letters, digits, dot, dash, underscore. The host p
 
 Whichever mode you start in, Sherpa prints the key it settled on — pass that key to every later command: `--pr <pr>`.
 
-Local review of a git repository reads the working tree with `git`.
+Local review reads the working tree of a git checkout with `git`.
 
 A GitHub PR needs no checkout — Sherpa reads it over the GitHub API — but it does need a token: `GITHUB_TOKEN`, `GH_TOKEN`, or a `gh` CLI you are already logged into. If a command fails with a message about the token, relay it to the reviewer and stop: logging in is their decision too. Ownership by team (`@org/team` in CODEOWNERS) needs the `read:org` scope on that token; without it Sherpa counts ownership by login only and says so.
 

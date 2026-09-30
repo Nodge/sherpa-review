@@ -177,6 +177,20 @@ export function hostDisplayName(host: string, t: Translate): string {
     return host === 'fixture' ? 'FixtureHost' : host;
 }
 
+/**
+ * The file menu item label for opening `blameUrl` names GitHub explicitly.
+ * Other hosts (fixtures and local checkouts without a link) use generic wording.
+ */
+export function fileWebActionLabel(host: string | null, t: Translate): string {
+    if (host === 'github') {
+        
+    }
+    if (host === 'github') {
+        return t('file.menu.openGithub');
+    }
+    return t('file.menu.openWeb');
+}
+
 /** Where published drafts go: to the hosted PR or into an agent task (local review has no PR). */
 export type DraftDestination = 'pr' | 'agent';
 

@@ -74,7 +74,7 @@ Unified and split modes, syntax highlighting and word-level highlighting within 
 
 In `.md`, `.markdown` and `.mdown` files, the **Markdown** button renders the document. **Code** returns to the source. Select a few words or a sentence and choose "Ask the agent" to include the exact quote and its line context in the question. Use "Comment" to leave a regular review comment anchored to the same lines and visible in both modes. Changed documents have versions from before and after the edit. Expand omitted context in code mode.
 
-The "My files" lens only counts ownership rules that requested your review. The PCI DSS lens appears only when the PR actually touches files in the audit scope. Generated files are muted and count as viewed by default. Right-click a file (or "⋯" in the card header and tree) to copy its path, copy a link to the file on the review host, open it on the review host or mark it viewed.
+The "My files" lens counts only CODEOWNERS rules that requested you specifically. The PCI DSS lens appears only when the PR touches files in the audit scope. Generated files are muted and count as viewed by default. Right-click a file, or use "⋯" in its card header or the file tree, to copy its path, copy its link on the review host, open it on the host's website or mark it viewed.
 
 File viewed marks sync with the review host in both directions. Your marks go to the host if it supports them, and host marks come back. Local marks win conflicts. Route stop marks, line-level coverage and the "generated files are viewed" default stay local. Viewed content collapses, so the density of code on screen shows your progress. After "Viewed", the screen moves to the next file, or the next stop in the route.
 

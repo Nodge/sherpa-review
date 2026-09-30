@@ -382,7 +382,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         </button>
                     ) : null}
 
-                    {/* The blame link moved to the menu ("Open in the repository"). Only "⋯" remains in the header. */}
+                    {/* The blame link moved into the menu ("Open on GitHub"). Only "⋯" remains in the header. */}
                     <span className="file-card__actions">
                         <button
                             type="button"

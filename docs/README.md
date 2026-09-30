@@ -12,7 +12,7 @@ Code is the source of truth. These documents describe what the code cannot tell 
 | [`decisions.md`](decisions.md) | Decision log by subsystem. Record each new decision here |
 | [`testing.md`](testing.md) | Checks, unit tests, host contract suite, e2e, performance budgets, state gallery |
 | [`design/`](design/) | Design handoff: `README.md` (screens, tokens, state model), `SPEC-elements.md` (element behaviour, keyboard), `SPEC-additions-2026-08-26.md`, `SPEC-onboarding-2026-09-02.md`, `SPEC-theming-2026-09-12.md`, `*.dc.html` prototypes |
-| [`research/`](research/) | Research: review host API, GitHub API, difftastic, waiting for tasks in harnesses |
+| [`research/`](research/) | Research: GitHub API, difftastic, waiting for tasks in harnesses |
 
 ## Precedence when documents conflict
 

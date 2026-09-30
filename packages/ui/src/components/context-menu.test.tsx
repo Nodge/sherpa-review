@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ReviewHostProvider } from '../app/review-host-context.tsx';
 import type { FileMenuTarget } from './context-menu.tsx';
 import { FileContextMenu, useContextMenu } from './context-menu.tsx';
 
@@ -41,7 +42,12 @@ interface Mounted {
     readonly rowKeys: string[];
 }
 
-function mount(file: FileMenuTarget = FILE, viewed = false, onCommentFile?: () => void): Mounted {
+function mount(
+    file: FileMenuTarget = FILE,
+    viewed = false,
+    onCommentFile?: () => void,
+    reviewHost: string | null = 'github',
+): Mounted {
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -50,13 +56,15 @@ function mount(file: FileMenuTarget = FILE, viewed = false, onCommentFile?: () =
 
     act(() => {
         root.render(
-            <Harness
-                file={file}
-                viewed={viewed}
-                onToggleViewed={onToggleViewed}
-                onRowKey={(key) => rowKeys.push(key)}
-                {...(onCommentFile === undefined ? {} : { onCommentFile })}
-            />,
+            <ReviewHostProvider value={reviewHost}>
+                <Harness
+                    file={file}
+                    viewed={viewed}
+                    onToggleViewed={onToggleViewed}
+                    onRowKey={(key) => rowKeys.push(key)}
+                    {...(onCommentFile === undefined ? {} : { onCommentFile })}
+                />
+            </ReviewHostProvider>,
         );
     });
     mounted.push(() => {
@@ -155,7 +163,7 @@ describe('file context menu', () => {
         expect(items().map((item) => item.textContent)).toEqual([
             'Copy path',
             'Copy file link',
-            'Open on the web',
+            'Open on GitHub',
             'Viewed',
         ]);
         expect(document.activeElement).toBe(items()[0]);
@@ -171,7 +179,7 @@ describe('file context menu', () => {
         expect(items().map((item) => item.textContent)).toEqual([
             'Copy path',
             'Copy file link',
-            'Open on the web',
+            'Open on GitHub',
             'Comment on the file',
             'Viewed',
         ]);
@@ -360,5 +368,23 @@ describe('file context menu', () => {
 
         expect(document.body.querySelector('[role="menu"]')).toBeNull();
         expect(document.activeElement).not.toBe(trigger);
+    });
+});
+
+describe('label for opening the file on the web', () => {
+    it('says "Open on GitHub" for GitHub', () => {
+        const { trigger } = mount(FILE, false, undefined, 'github');
+        act(() => {
+            trigger.click();
+        });
+        expect(items().map((item) => item.textContent)).toContain('Open on GitHub');
+    });
+
+    it('uses generic wording without a host', () => {
+        const { trigger } = mount(FILE, false, undefined, null);
+        act(() => {
+            trigger.click();
+        });
+        expect(items().map((item) => item.textContent)).toContain('Open on the web');
     });
 });
