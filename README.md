@@ -1,15 +1,17 @@
 # Sherpa
 
-Sherpa is a local code review tool. The reviewer reads a pull request's diff in the browser, while an AI agent in a neighbouring session of the same harness builds a **route** through it, an ordered account of what changed and its consequences, and answers questions beside the code. The server and UI run on localhost. Sherpa only makes external requests to the review host (using your credentials) and the feedback channel (feedback, when you click the button).
+Sherpa is a local code review tool. The reviewer reads a pull request diff in the browser, while an AI agent in another session of the same harness builds a **route** through it. The route is an ordered narrative of what changed and its consequences. The agent also answers questions right beside the code. The server and UI run on localhost. Sherpa makes external requests only to the PR host, GitHub with your GitHub token, and to the feedback channel when you send feedback.
 
 The UI is a complete review interface: file tree and search, a highlighted diff with context expansion, threads and comment drafts, and ship. All of it keeps working without an agent. The route is a layer over the reader, which works on its own.
 
-For reviewers in a monorepo whose PR queue exceeds what they can read line by line. Status: early build, MVP in development. Bugs and oddities happen. There is a place to report them (see "Feedback").
+For reviewers in a monorepo or on GitHub who receive more PRs than they can read line by line. This is an early build, with the MVP still in development. Bugs and odd behaviour happen. See "Feedback" for where to report them.
 
 ## Requirements
 
-- Credentials for the review host. No separate sign-in or browser OAuth.
 
+
+- For GitHub PRs, a token: `$GITHUB_TOKEN` → `$GH_TOKEN` → `gh auth token`. No checkout is needed because the PR is read through the API. For the "My files" lens to include CODEOWNERS teams (`@org/team`), the token needs the `read:org` scope.
+- For local review, any git repository checkout.
 - Node ≥ 22.13 (on the 23 release line, 23.4 or later, because earlier versions lack `node:sqlite`).
 - An agent harness: Claude Code (tested) or Codex (supported, tested less). Any other harness works too if it supports skills and can call bash.
 - Model: this configuration has been tested with `opus:high` and `gpt-5.60-sol:high`. These are the recommended models.
@@ -36,7 +38,9 @@ In an agent session:
 /sherpa https://github.com/quillmart/quillmart/pull/12345
 ```
 
-The argument can be a GitHub link, a bare PR number (`12345`) or a key such as `github-quillmart--quillmart--12345`. When running from a checkout of the branch under review, you can omit the argument. The PR is discovered from the branch.
+The argument can be a GitHub PR link or a key such as `github-quillmart--quillmart--12345`.
+
+With no argument, or with a directory path, Sherpa starts a local review of everything changed against the base in a git checkout, committed or not. The default base is the merge-base with `origin/HEAD`, `main` or `master`. Tell the agent if you want a different base. Local review does not become a PR review even if the branch has a PR. Its comments are never published externally. The agent in the same session receives them as requests to fix the code and replies in the same threads.
 
 The UI opens in your browser automatically, and the agent prints the link either way. The link is local and contains the access token. Do not publish it. Over SSH or in a headless environment, ask the agent to add `--no-open`, then open the printed link manually.
 
@@ -84,7 +88,7 @@ Sherpa polls threads from the review host and attaches them to ranges and stops.
 
 Publishing has 2 stages. A draft goes to the review host immediately, and accumulated drafts are published as one batch when you finish. Before ship, Sherpa shows a summary of exactly what will be sent. Unfinished comments survive a tab reload. Comments support lists, quotes, headings, tables, checklists, code blocks and strikethrough. The editor has Notion-style shortcuts (`- ` and `1. ` start a list, ``` starts a code block, and Enter and Tab follow list behaviour).
 
-Verdict: Ship (approves only this snapshot), Sticky ship (carries over to later pushes) and Request changes.
+Verdicts are Ship (approves only this snapshot), Sticky ship (carries over to later pushes) and "Request changes". "Publish · N" sends drafts without a verdict. The panel shows only actions the host accepts. On your own GitHub PR and in local review, publishing is the only action. Sticky ship requires host support and permission in the PR settings.
 
 ### Agent chat and notes
 
@@ -98,7 +102,7 @@ When the author pushes another commit, Sherpa detects it without a restart and s
 
 "What is new since the last pass" (key `w`) leaves only changed content on screen. Each stop has a "why this stop changed" explanation with thread links. Chat notes move with their lines. Sherpa marks notes that no longer have a target "anchor lost after push" and keeps them in chat.
 
-The snapshot indicator in the top bar opens a menu. Previous snapshots and iterations open read-only (comments and viewed marks are available only in the active iteration). "Show changes since iteration…" opens the difference between 2 pushes without a route. A force-push does not break history: Sherpa reads the snapshot of a disappeared commit from its local copy.
+The snapshot indicator in the top bar opens a menu. Previous snapshots and iterations open read-only (comments and marks are available only in the active iteration). "Show changes since iteration…" opens the difference between 2 pushes without a route. Force-push does not break history. Sherpa reads the snapshot of a vanished commit from a local copy. GitHub has no previous iterations. Review there uses the current branch head.
 
 ### Keyboard
 
@@ -174,9 +178,10 @@ All state lives in `~/.sherpa` (directories 0700, manifests 0600):
 - `settings.json` contains global UI settings.
 - `update-check.json` caches version checks.
 
-Three things leave the machine:
+External requests cover the following:
 
 
+- **GitHub**, only for PRs on github.com, with your token: PR metadata, diff and file contents, threads, drafts and publishing, viewed marks, CODEOWNERS and organisation team membership.
 - **Feedback**, only when you click Feedback and have a token for the channel.
 - **Update checks** ask the npm registry for the latest published version, at most once every 30 minutes.
 
@@ -205,12 +210,12 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 ## Limits
 
 - One PR per session, one session per PR.
-- There is one review host.
+- Hosts are GitHub and a local git checkout.
 - Sherpa does not generate its own findings. It shows existing comments, including AI review comments.
 
 ## Version
 
-`0.9.2` is printed by `sherpa --version` and shown in the UI's top bar.
+`0.10.0` is printed by `sherpa --version` and shown in the UI top bar.
 
 ## Development
 
