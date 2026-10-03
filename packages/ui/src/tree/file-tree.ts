@@ -20,6 +20,18 @@ import { inTreeOrder } from './file-order.js';
 /** Directories with more than this many children collapse by default (docs/design/SPEC-elements.md §2.20). */
 export const BULK_DIRECTORY_CHILDREN = 20;
 
+/** Top-level indentation: the left 26px hold the stop marker (docs/design/SPEC-theming-2026-09-12.md §6a). */
+export const TREE_INDENT_BASE = 26;
+export const TREE_INDENT_STEP = 10;
+
+/**
+ * Rows at the same level start in the same column: directory chevron and file checkbox.
+ * A combined chain is one level.
+ */
+export function rowIndent(row: Pick<TreeRow, 'depth'>): number {
+    return TREE_INDENT_BASE + row.depth * TREE_INDENT_STEP;
+}
+
 export interface TreeFileRow {
     readonly kind: 'file';
     /** File path, also the row key. */

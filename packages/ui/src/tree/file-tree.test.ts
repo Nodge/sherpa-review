@@ -8,9 +8,11 @@ import {
     isCollapsed,
     matchesQuery,
     readBox,
+    rowIndent,
     rowKey,
     splitLabel,
     toggleDirectory,
+    TREE_INDENT_STEP,
 } from './file-tree.js';
 import type { FileTreeInput, TreeDirRow, TreeFileRow } from './file-tree.js';
 
@@ -336,6 +338,32 @@ describe('rowKey', () => {
 
         expect(tree.rows.filter((row) => row.path === 'src/a')).toHaveLength(2);
         expect(new Set(keys).size).toBe(keys.length);
+    });
+});
+
+describe('rowIndent', () => {
+    it('aligns a file with the adjacent combined chain and places its children one level deeper', () => {
+        const tree = buildFileTree(
+            input([
+                file('checkout/ui/assets/countdown-icon.svg'),
+                file('checkout/ui/assets/legacy-window-badge.png'),
+                file('checkout/src/order.ts'),
+                file('checkout/.github/CODEOWNERS'),
+            ]),
+        );
+        const indent = (label: string): number => {
+            const row = tree.rows.find((candidate) => candidate.label === label);
+            if (row === undefined) {
+                throw new Error(`no row ${label}`);
+            }
+            return rowIndent(row);
+        };
+
+        expect(indent('.github/CODEOWNERS')).toBe(indent('ui/assets'));
+        expect(indent('src')).toBe(indent('ui/assets'));
+        // A two-segment chain is one level. Its children are one level deeper, not two.
+        expect(indent('countdown-icon.svg')).toBe(indent('ui/assets') + TREE_INDENT_STEP);
+        expect(indent('order.ts')).toBe(indent('countdown-icon.svg'));
     });
 });
 

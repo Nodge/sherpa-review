@@ -61,6 +61,11 @@
     box-shadow: 0 calc(-1 * var(--space-inner)) 0 var(--surface-card-header);
 }
 
+/* The strip above markers (`diff-view.css`) covers this gap too, or a marker would show to the left of the border. */
+.route .file-card__header::before {
+    top: calc(-1 * var(--space-inner));
+}
+
 .route-toolbar__row {
     display: flex;
     align-items: center;

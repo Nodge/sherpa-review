@@ -16,7 +16,7 @@
     position: absolute;
     left: -15px;
     top: 1px;
-    /* Above the card corner overlay (`diff-view.css`, 3), because the marker sits on the border, not beneath it. */
+    /* Above rows but below the sticky card header (`diff-view.css`, 5). Scrolls under it with the line. */
     z-index: 4;
     gap: 3px;
     height: 18px;

@@ -164,7 +164,7 @@
     box-shadow: inset 0 0 0 1px var(--border-strong-lifted);
 }
 
-/* Only directories have chevrons. Files reserve an empty slot so names line up in one column. */
+/* Only directories have chevrons. A file's read-state checkbox occupies that column (`rowIndent`). */
 .file-tree__chevron {
     display: flex;
     align-items: center;

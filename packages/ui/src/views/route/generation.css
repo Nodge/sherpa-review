@@ -105,20 +105,11 @@
     background: var(--accent);
 }
 
+/* As in the prototype, the gradient stays still while opacity shimmers, so repeats have no jump.
+   It shares the rhythm of the plan list's "filling" status. */
 .gen-bar__segment--filling {
-    background: linear-gradient(90deg, var(--tier-unfilled), var(--accent), var(--tier-unfilled));
-    background-size: 220% 100%;
-    animation: gen-shimmer var(--motion-shimmer) ease-in-out infinite;
-}
-
-@keyframes gen-shimmer {
-    0% {
-        background-position: 100% 0;
-    }
-
-    100% {
-        background-position: -100% 0;
-    }
+    background: linear-gradient(90deg, var(--accent), var(--tier-unfilled));
+    animation: gen-pulse var(--motion-shimmer) ease-in-out infinite;
 }
 
 .gen-plan {

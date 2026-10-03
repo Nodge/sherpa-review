@@ -17,7 +17,7 @@ import type { RouteMarginModel } from '../route/margin-model.js';
 import { marginFooterNote } from '../route/margin-model.js';
 import { RouteBadge } from '../route/route-margin.tsx';
 import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js';
-import { buildFileTree, filterByQuery, readBox, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
+import { buildFileTree, filterByQuery, readBox, rowIndent, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
 import { treeKeyCommand } from './tree-keys.js';
 
@@ -32,23 +32,7 @@ import { treeKeyCommand } from './tree-keys.js';
 /** Tree row height (docs/design/SPEC-elements.md §2.20). The virtualizer needs an exact size, not an estimate. */
 const ROW_HEIGHT = 26;
 
-/** Row indentation: base plus nesting depth (docs/design/README.md §10). */
-const INDENT_BASE = 4;
-const INDENT_STEP = 10;
-
-/**
- * Minimum file row indentation: a 17×13 stop marker sits to the left of the name at the panel edge
- * (docs/design/SPEC-theming-2026-09-12.md §6a), and the name must not overlap it.
- */
-const FILE_INDENT_MIN = 26;
-
 const OVERSCAN = 8;
-
-/** Row indentation by kind and depth (docs/design/README.md §10). */
-function rowIndent(row: TreeRow): number {
-    const indent = INDENT_BASE + row.depth * INDENT_STEP;
-    return row.kind === 'dir' ? indent : Math.max(FILE_INDENT_MIN, indent);
-}
 
 /**
  * Exposed tree cursor: the full diff `v` key takes its file here when the mouse is not the latest
@@ -456,8 +440,7 @@ function FileRow({
     const readOnlyReason = useReadOnlyReason();
     return (
         <>
-            {/* The file's chevron slot is empty. Without it, filenames would sit to the left of directory labels. */}
-            <span className="file-tree__chevron" aria-hidden="true" />
+            {/* Files have no chevron. The checkbox occupies the chevron column of adjacent directories. */}
             {/* The stop marker lives in the row's indentation area, so it comes before everything else. */}
             {row.route === null ? null : (
                 <RouteBadge file={row.route} otherStopId={otherStopId} variant="tree" onJump={onJumpToStop} />

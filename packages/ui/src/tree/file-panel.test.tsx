@@ -173,6 +173,25 @@ describe('FilePanel viewed checkboxes', () => {
         expect(directory?.querySelector('.file-tree__read')).toBeNull();
         expect(directory?.title).toMatch(/^\d+ of \d+ read$/);
     });
+
+    it('omits the chevron slot on files and aligns files and directories at the same level', () => {
+        const { host } = mount();
+        const rows = [...host.querySelectorAll<HTMLElement>('.file-tree__row')];
+        const files = rows.filter((row) => row.classList.contains('file-tree__row--file'));
+
+        expect(files.length).toBeGreaterThan(0);
+        for (const row of files) {
+            expect(row.querySelector('.file-tree__chevron')).toBeNull();
+        }
+        const indentsByLevel = new Map<string, Set<string>>();
+        for (const row of rows) {
+            const level = row.getAttribute('aria-level') ?? '';
+            indentsByLevel.set(level, (indentsByLevel.get(level) ?? new Set()).add(row.style.paddingLeft));
+        }
+        for (const indents of indentsByLevel.values()) {
+            expect(indents.size).toBe(1);
+        }
+    });
 });
 
 describe('tree file menu', () => {

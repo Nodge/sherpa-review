@@ -238,13 +238,14 @@ Production problem: the filename had less than half the row, so almost everythin
  ▲   ▲ ▲ └ name: flex:1, ellipsis                    └ tag  └ +N, 30px column, right-aligned
  │   │ └ read-state 10×10 (unchanged)
  │   └ chevron only for folders (files keep the 9px slot for alignment)
+ │     implemented without a slot: rows at the same level start in the same column, folder chevron or file read-state
  └ stop marker: absolute, left:3px, sits in the indentation area without taking space from the name
 ```
 
 | Item | Production | New |
 |---|---|---|
 | Panel padding | 14px | `12px 10px` |
-| Nesting indent | `8 + depth×13` px | folders `4 + depth×10`, files `max(26, 4 + depth×10)` (space for the marker) |
+| Nesting indentation | `8 + depth×13` px | folders `4 + depth×10`, files `max(26, 4 + depth×10)` (room for the marker) *(implemented as `26 + depth×10` for all rows. Deviation: different bases put a file beside a folder to the right of its chevron, making it look nested inside)* |
 | Single-child folder chains | each folder is a row | **collapse into one row** `domain/policies` (like compact folders in VS Code). Clicking the row collapses the whole chain. Descendant depth decreases by the number of collapsed levels. With a filter active, only visible children count |
 | Stop marker `01…07` | badge on the right, 11px, border `#2b2f36`, text `#8a8f98` | **on the left, pinned to the panel edge**: 17×13, radius 3, **10px** mono (the only deliberate exception to the 11px minimum, a secondary marker), text `--c-4a4f57`, border `--c-1e2126`. `title` "explained in stop 02" |
 | "not placed" | hatched badge with text on the right | same slot on the left: 17×13 hatch `repeating-linear-gradient(115deg, --c-33373e 0 2px, --c-1b1e22 2px 4px)`, no text. `title` "no route stop covers this file" |

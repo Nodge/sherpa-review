@@ -1,5 +1,5 @@
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { Comment, Thread } from '@sherpa/protocol';
+import type { Comment, FileDiff, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
 
@@ -24,8 +24,9 @@ import type { PublishedCommentTransport } from '../../threads/transport.js';
  */
 
 const DATA = fixtureIteration('medium');
-const FILE = fileForGallery();
-const MODEL = parseFileDiff(toParseRequest(FILE));
+const FILE = fileForGallery('services/orders/src/api/handlers.ts');
+// New file: diff reaches the end of the file, with no trailing bridge after the last line.
+const NEW_FILE = fileForGallery('services/orders/src/infra/clock.ts');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 // The gallery's "me" is the same reviewer as in the fixture, used to determine what is "own".
 const ME = DATA.currentUser;
@@ -100,24 +101,44 @@ export const CODE_THREAD_STATES: readonly CodeThreadGalleryState[] = [
         title: 'split: right-half marker on the divider',
         render: () => <CardState threads={markerThreads()} mode="split" collapseAll />,
     },
+    {
+        id: 'code-threads-under-header',
+        title: 'line with a marker halfway under the sticky header: marker moves with it',
+        render: () => <CardState threads={markerThreads()} collapseAll underHeader />,
+    },
+    {
+        id: 'code-threads-last-line-under-header',
+        title: 'new file, thread on the last line: header reached the card bottom and covers the marker',
+        render: () => <CardState file={NEW_FILE} threads={lastLineThreads()} collapseAll underHeader />,
+    },
+    {
+        id: 'code-threads-last-line',
+        title: 'new file, thread on the last line: marker at the bottom corner of the border',
+        render: () => <CardState file={NEW_FILE} threads={lastLineThreads()} collapseAll />,
+    },
 ];
 
 function CardState({
+    file = FILE,
     threads,
     mode = 'unified',
     collapseAll = false,
     editing = false,
     confirmDelete = false,
+    underHeader = false,
 }: {
+    file?: FileDiff;
     threads: readonly Thread[];
     mode?: DiffMode;
     /** Threads start collapsed: the card is about the markers themselves. */
     collapseAll?: boolean;
     editing?: boolean;
     confirmDelete?: boolean;
+    /** View is scrolled so the first marker's line is halfway under the sticky header. */
+    underHeader?: boolean;
 }) {
     const store = useMemo(() => {
-        const created = createThreadStore(threads, new Set([FILE.fileId]));
+        const created = createThreadStore(threads, new Set([file.fileId]));
         created.setViewer(DATA.pr.viewer?.login ?? null);
         if (collapseAll) {
             created.setThreadsOpen(
@@ -130,18 +151,30 @@ function CardState({
             openDraftEditor(created, target, target.root);
         }
         return created;
-    }, [collapseAll, editing, threads]);
+    }, [collapseAll, editing, file, threads]);
 
     return (
-        <div className="gallery__viewport">
-            <div style={{ padding: 24 }}>
-                <Card store={store} mode={mode} confirmDelete={confirmDelete} />
+        <div className="gallery__viewport" ref={underHeader ? scrollMarkerUnderHeader : undefined}>
+            {/* Extra space below to allow enough scrolling to reach the target line. */}
+            <div style={underHeader ? { padding: 24, paddingBottom: '70vh' } : { padding: 24 }}>
+                <Card file={file} store={store} mode={mode} confirmDelete={confirmDelete} />
             </div>
         </div>
     );
 }
 
-function Card({ store, mode, confirmDelete }: { store: ThreadStore; mode: DiffMode; confirmDelete: boolean }) {
+function Card({
+    file,
+    store,
+    mode,
+    confirmDelete,
+}: {
+    file: FileDiff;
+    store: ThreadStore;
+    mode: DiffMode;
+    confirmDelete: boolean;
+}) {
+    const model = useMemo(() => parseFileDiff(toParseRequest(file)), [file]);
     const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const actions = useMemo<ThreadActions>(
         () => ({
@@ -153,9 +186,9 @@ function Card({ store, mode, confirmDelete }: { store: ThreadStore; mode: DiffMo
         [],
     );
     const { threadsUnderHeader, renderAfterLine, renderLineMarker, lineThreadIds } = useCardThreads({
-        model: MODEL,
+        model,
         rowsShown: true,
-        threads: snapshot.byFile.get(FILE.fileId) ?? [],
+        threads: snapshot.byFile.get(file.fileId) ?? [],
         composers: [],
         store,
         actions,
@@ -168,8 +201,8 @@ function Card({ store, mode, confirmDelete }: { store: ThreadStore; mode: DiffMo
     return (
         <div ref={confirmDelete ? clickDelete : undefined}>
             <FileCard
-                file={FILE}
-                model={MODEL}
+                file={file}
+                model={model}
                 mode={mode}
                 content={null}
                 contentAvailable={false}
@@ -189,6 +222,21 @@ function Card({ store, mode, confirmDelete }: { store: ThreadStore; mode: DiffMo
     );
 }
 
+/** Scrolling is a screen state, not a scenario: the first marker's line sits halfway under the header. */
+function scrollMarkerUnderHeader(viewport: HTMLDivElement | null): void {
+    if (viewport === null) {
+        return;
+    }
+    const marker = viewport.querySelector('.thread-marker');
+    const header = viewport.querySelector('.file-card__header');
+    if (marker === null || header === null) {
+        return;
+    }
+    const markerBox = marker.getBoundingClientRect();
+    const markerTop = markerBox.top - viewport.getBoundingClientRect().top + viewport.scrollTop;
+    viewport.scrollTop = markerTop - header.getBoundingClientRect().height + markerBox.height / 2;
+}
+
 /** Delete confirmation is a screen state, not a scenario: the gallery clicks the link for the reviewer. */
 function clickDelete(host: HTMLDivElement | null): void {
     host?.querySelector<HTMLButtonElement>('.thread__action--delete')?.click();
@@ -199,10 +247,11 @@ function threadOf(
     line: number,
     root: Partial<Comment> & Pick<Comment, 'id' | 'body'>,
     resolved = false,
+    file: FileDiff = FILE,
 ): Thread {
     return {
         id,
-        anchor: { fileId: FILE.fileId, path: FILE.path, position: { side: 'new', line, size: 1 } },
+        anchor: { fileId: file.fileId, path: file.path, position: { side: 'new', line, size: 1 } },
         resolved,
         resolvedBy: resolved ? OTHER.login : null,
         outdated: false,
@@ -260,6 +309,19 @@ function markerThreads(): Thread[] {
             author: ME,
             body: 'Also move the window constant into config.',
         }),
+    ];
+}
+
+/** Thread on the last line of a new file: for an added file, the last line number equals the addition count. */
+function lastLineThreads(): Thread[] {
+    return [
+        threadOf(
+            'last-line',
+            NEW_FILE.additions,
+            { id: 'last-line-root', body: 'Exporting a singleton hides the clock dependency.' },
+            false,
+            NEW_FILE,
+        ),
     ];
 }
 
@@ -354,10 +416,10 @@ function myThread(): Thread {
     });
 }
 
-function fileForGallery() {
-    const file = DATA.diff.files.find((candidate) => candidate.path === 'services/orders/src/api/handlers.ts');
+function fileForGallery(path: string): FileDiff {
+    const file = DATA.diff.files.find((candidate) => candidate.path === path);
     if (file === undefined) {
-        throw new Error('the medium fixture needs handlers.ts');
+        throw new Error(`fixture medium needs ${path}`);
     }
     return file;
 }

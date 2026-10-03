@@ -83,18 +83,38 @@
  * page colour outside the curve, border line along the curve. Together they cover
  * the entire square excess, so children need no rounding. The header is sticky and would carry its
  * rounded corners with it into the middle of the card.
- * The overlay is above the sticky header (z-index 2) and below the thread markers (4), which are intended
- * to sit on the border.
+ *
+ * The overlay is clipped to two corner strips, top and bottom. The straight edges need no overlay,
+ * so thread markers can sit there on the border. Layers inside the frame: markers (4) < sticky header (5)
+ * < corners (6). The header overlaps the corners both at rest and at the card bottom, so corners go above it.
+ * The bottom strip does not extend left past the border because there is nothing to cover there.
+ *
+ * The exception is a marker on the last line. It sits on the bottom-left corner, where the strip above it
+ * would cut it along the border curve at rest. The bottom strip then goes below the markers (3), at the cost
+ * of square bottom header corners as the header reaches the bottom of the departing card.
  */
+.file-card__frame::before,
 .file-card__frame::after {
     content: '';
     position: absolute;
     inset: -1px;
-    z-index: 3;
+    z-index: 6;
     border: 1px solid var(--border-control);
     border-radius: var(--radius-card);
     box-shadow: 0 0 0 4px var(--surface-app);
     pointer-events: none;
+}
+
+.file-card__frame::before {
+    clip-path: inset(-4px -4px calc(100% - var(--radius-card)) -4px);
+}
+
+.file-card__frame::after {
+    clip-path: inset(calc(100% - var(--radius-card)) -4px -4px 0);
+}
+
+.file-card__frame:has(.diff-rows > .diff-row:last-child > :is(.thread-marker, .diff-row__marker-slot--old))::after {
+    z-index: 3;
 }
 
 /* Generated files are dimmed (docs/design/README.md §10: generated → dim). */
@@ -106,13 +126,29 @@
 .file-card__header {
     position: sticky;
     top: 0;
-    z-index: 2;
+    /* Above thread markers (4). A row with a thread slides under the header together with its marker. */
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: var(--space-inner-tight);
     padding: 9px 13px;
     background: var(--surface-card-header);
     border-bottom: 1px solid var(--border-hairline-strong);
+}
+
+/*
+ * The marker protrudes past the border into the extended clip strip, where the header inside the border cannot cover it.
+ * A header extension covers the strip and left border line for the header height with the page colour and the same line.
+ */
+.file-card__header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: -1px;
+    left: -16px;
+    width: 15px;
+    border-right: 1px solid var(--border-control);
+    background: var(--surface-app);
 }
 
 .file-card__header--collapsible {
@@ -502,7 +538,7 @@
 .diff-row__marker-slot {
     position: absolute;
     top: 0;
-    /* Above the card corner overlay (3), because the marker is meant to sit on the border, not beneath it. */
+    /* Same layer as the unified marker (`threads/threads.css`), below the sticky header. */
     z-index: 4;
     width: 0;
     height: 0;
