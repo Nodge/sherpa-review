@@ -217,7 +217,7 @@ export function App({ store, session, token }: AppProps) {
         const active = iterations.find((iteration) => iteration.status === 'active')?.diffId ?? null;
         return active === null ? null : (facts.snapshot?.diffId ?? active);
     }, [facts.snapshot, iterations, sliceBase, viewDiffId]);
-    const viewKey = `${reviewKey}\u0000${viewDiffId ?? ''}\u0000${viewSnapshotId ?? ''}\u0000${sliceBase ?? ''}`;
+    const viewKey = [reviewKey, viewDiffId ?? '', viewSnapshotId ?? '', sliceBase ?? '', sliceHead ?? ''].join('\u0000');
     const storedReview = reviewStateForKeys(reviewState, reviewKey, viewKey);
     /**
      * Tab data. A slice has no progress, lenses or threads. Its `fileId` values belong to a separate
@@ -236,7 +236,7 @@ export function App({ store, session, token }: AppProps) {
     }, [resolved.unknown, session]);
     const currentDiff = currentReview.diff;
     const viewedMirrorAvailable = state?.pr?.capabilities.fileViewedSync === true;
-    /** The host supplies slices between iterations. Otherwise this picker section stays hidden. */
+    /** The host provides inter-iteration slices. Without this, Shift+click in the picker cannot build a slice. */
     const interdiffAvailable = state?.pr?.capabilities.iterations === true;
     /** Image bytes. Without `capabilities.blobs`, image cards are not rendered at all. */
     const blobsAvailable = state?.pr?.capabilities.blobs === true;
@@ -343,8 +343,8 @@ export function App({ store, session, token }: AppProps) {
     );
     const serverThreads = currentReview.threads ?? EMPTY_THREADS;
     /**
-     * Thread store key: a slice shares its `diffId` with the active iteration, so it needs its own key.
-     * Otherwise its empty thread list would overwrite the active iteration's threads and open composers.
+     * Thread store key. A slice shares its `diffId` with its head iteration, so it needs a separate key,
+     * or its empty thread list would erase that iteration's threads and open composers.
      */
     const threadStoreKey =
         sliceBase === null ? (currentDiff?.diffId ?? null) : `${sliceBase}..${sliceHead ?? ''}`;

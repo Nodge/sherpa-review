@@ -14,7 +14,7 @@ export type Viewing =
     | { readonly kind: 'current' }
     | { readonly kind: 'snapshot'; readonly snapshotId: string }
     | { readonly kind: 'diff'; readonly diffId: string }
-    /** Slice between iterations: `base` is a saved iteration, `head` is always active. */
+    /** Slice between iterations: `base` is older, `head` is newer and need not be active. */
     | { readonly kind: 'slice'; readonly base: string; readonly head: string };
 
 export const VIEWING_CURRENT: Viewing = { kind: 'current' };
@@ -99,7 +99,7 @@ export type ViewingStatus = 'current' | 'stale' | 'gone' | 'noRoute' | 'slice';
 
 export type ViewingLabel =
     | { readonly kind: 'snapshot' | 'diff'; readonly commit: string; readonly status: ViewingStatus }
-    /** A slice has 2 sides: `commit` is the active iteration, `baseCommit` is the starting point. */
+    /** A slice has 2 sides: `commit` is its head, `baseCommit` is the starting point. */
     | {
           readonly kind: 'slice';
           readonly commit: string;
@@ -237,9 +237,10 @@ export function resolveViewing(input: ViewingInput): ResolvedViewing {
 }
 
 /**
- * Slice between iterations: `base` is a saved iteration from the list, `head` is always active.
- * Any other URL combination is invalid (a force-push rewrote the iteration, or the URL came from another
- * tab). Like an unknown snapshot, the selection is cleared and the tab returns to the active iteration.
+ * Slice between iterations: both endpoints must be valid (`sliceIndex`), with the base older than the head, so
+ * the base must be in the list, and the head must be in the list or active. Any other URL combination is invalid (a force-push
+ * rewrote an iteration, or the URL came from another tab). Clear the selection as with an unknown
+ * snapshot, and fall back to the active iteration.
  */
 function resolveSlice(
     viewing: { readonly kind: 'slice'; readonly base: string; readonly head: string },
@@ -248,9 +249,17 @@ function resolveSlice(
     current: ResolvedViewing,
 ): ResolvedViewing {
     const { base, head } = viewing;
+    const baseIndex = sliceIndex(input.iterations, active, base);
+    const headIndex = sliceIndex(input.iterations, active, head);
     const baseIteration = input.iterations.find((candidate) => candidate.diffId === base) ?? null;
     const headCommit = commitOfDiff(head, input);
-    if (baseIteration === null || headCommit === null || base === head || active === null || head !== active) {
+    if (
+        baseIndex === null ||
+        headIndex === null ||
+        baseIndex >= headIndex ||
+        baseIteration === null ||
+        headCommit === null
+    ) {
         return { ...current, unknown: true };
     }
     return {
@@ -267,6 +276,19 @@ function resolveSlice(
         routeless: true,
         slice: { base, head },
     };
+}
+
+/**
+ * Position among slice endpoints, oldest to newest: index in the iteration list (the server returns
+ * it oldest to newest). The active iteration outside the list is newest. null cannot be a slice endpoint:
+ * a gone iteration (the review host returns 400 for it) or an unknown one.
+ */
+function sliceIndex(iterations: readonly Iteration[], active: string | null, diffId: string): number | null {
+    const index = iterations.findIndex((iteration) => iteration.diffId === diffId);
+    if (index === -1) {
+        return diffId === active ? iterations.length : null;
+    }
+    return iterations[index]?.status === 'gone' ? null : index;
 }
 
 /**
@@ -335,12 +357,9 @@ export function fallbackSnapshots(snapshot: RouteSnapshot | null): readonly UiSn
     ];
 }
 
-/**
- * Picker row: one per snapshot, one per iteration without a snapshot, and one per slice
- * from a saved iteration to the active one.
- */
+/** Picker row: one per snapshot and one per iteration without a snapshot. */
 export interface PickerRow {
-    readonly kind: 'snapshot' | 'diff' | 'slice';
+    readonly kind: 'snapshot' | 'diff';
     /** `snapshotId` or `diffId`, used for the selection and `data-*` in e2e. */
     readonly id: string;
     readonly diffId: string;
@@ -356,10 +375,6 @@ export interface PickerRow {
     readonly status: ViewingStatus | 'activeIteration' | 'previousIteration';
     /** Current PR snapshot (`current` on the server): selected without parameters, even when labelled "stale". */
     readonly latest: boolean;
-    /** Slice head (active iteration commit). Null for other rows. */
-    readonly toCommit: string | null;
-    /** Short slice head identifier. Null for other rows. */
-    readonly toShort: string | null;
     /** The commit does not distinguish this row from another in the menu, so show the exact time. */
     readonly ambiguous: boolean;
     readonly viewing: Viewing;
@@ -372,7 +387,7 @@ export interface PickerRowsInput {
     readonly activeIteration: { readonly diffId: string; readonly commit: string } | null;
     /**
      * The host supports iterations (`pr.capabilities.iterations`). Otherwise the slice endpoint returns 400,
-     * leaving no slices to offer.
+     * and Shift+click does not build a slice.
      */
     readonly interdiff?: boolean;
 }
@@ -384,12 +399,14 @@ export interface PickerRows {
      * beside its iteration. Multiple snapshots of one iteration appear newest first.
      */
     readonly iterations: readonly PickerRow[];
-    /** "Show changes since iteration…": a slice from each qualifying iteration to the active one. */
-    readonly slices: readonly PickerRow[];
+    /** Valid slice endpoints and their order (`sliceIndex`). Empty when the host does not support slices. */
+    readonly sliceOrder: ReadonlyMap<string, number>;
+    /** Active iteration: Shift+click starts here when the current state has no snapshot. */
+    readonly activeDiffId: string | null;
 }
 
 /** Row before labels calculated across the whole menu: short id and uniqueness. */
-type RawRow = Omit<PickerRow, 'short' | 'toShort' | 'ambiguous'>;
+type RawRow = Omit<PickerRow, 'short' | 'ambiguous'>;
 
 /**
  * Picker rows. An empty iteration list still yields an active iteration row if it has no
@@ -413,7 +430,6 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
                 summary.status === 'current' && active !== null && summary.diffId !== active.diffId
                     ? 'stale'
                     : summary.status,
-            toCommit: null,
             latest: summary.status === 'current',
             viewing: { kind: 'snapshot', snapshotId: summary.snapshotId },
         }),
@@ -438,7 +454,6 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
                         : iteration.status === 'gone'
                           ? 'gone'
                           : 'previousIteration',
-                toCommit: null,
                 latest: false,
                 viewing: { kind: 'diff', diffId: iteration.diffId },
             }),
@@ -456,33 +471,94 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
             harness: null,
             locale: null,
             status: 'activeIteration',
-            toCommit: null,
             latest: false,
             viewing: { kind: 'diff', diffId: active.diffId },
         });
     }
 
-    const timeline = orderedTimeline([...snapshots, ...routeless], input);
-    const slices = sliceRows(input);
+    const activeDiffId =
+        input.iterations.find((iteration) => iteration.status === 'active')?.diffId ?? active?.diffId ?? null;
+    const timeline = orderedTimeline([...snapshots, ...routeless], input, activeDiffId);
     // Calculate short identifiers across the whole menu, where they must be distinct.
-    const short = shortCommits(
-        [...timeline, ...slices].flatMap((row) =>
-            row.toCommit === null ? [row.commit] : [row.commit, row.toCommit],
-        ),
-    );
+    const short = shortCommits(timeline.map((row) => row.commit));
     // A commit shared by multiple menu rows does not distinguish them. Show
     // exact times instead of rounded ones (iterations without routes had no time at all before).
     const perCommit = new Map<string, number>();
-    for (const row of [...timeline, ...slices]) {
+    for (const row of timeline) {
         perCommit.set(row.commit, (perCommit.get(row.commit) ?? 0) + 1);
     }
     const dressed = (row: RawRow): PickerRow => ({
         ...row,
         short: short.get(row.commit) ?? row.commit,
-        toShort: row.toCommit === null ? null : (short.get(row.toCommit) ?? row.toCommit),
         ambiguous: (perCommit.get(row.commit) ?? 0) > 1,
     });
-    return { iterations: timeline.map(dressed), slices: slices.map(dressed) };
+    return {
+        iterations: timeline.map(dressed),
+        sliceOrder: sliceOrder(input, activeDiffId),
+        activeDiffId,
+    };
+}
+
+function sliceOrder(input: PickerRowsInput, activeDiffId: string | null): ReadonlyMap<string, number> {
+    const order = new Map<string, number>();
+    if (input.interdiff !== true) {
+        return order;
+    }
+    const candidates = input.iterations.map((iteration) => iteration.diffId);
+    if (activeDiffId !== null) {
+        candidates.push(activeDiffId);
+    }
+    for (const diffId of candidates) {
+        const index = sliceIndex(input.iterations, activeDiffId, diffId);
+        if (index !== null) {
+            order.set(diffId, index);
+        }
+    }
+    return order;
+}
+
+/**
+ * The iteration Shift+click starts from is the one the tab currently shows. The current state
+ * shows the current snapshot's iteration (even if stale), or the active one without a snapshot. A slice
+ * is anchored to its head.
+ */
+function sliceAnchor(rows: PickerRows, viewing: Viewing): string | null {
+    switch (viewing.kind) {
+        case 'current':
+            return rows.iterations.find((row) => row.kind === 'snapshot' && row.latest)?.diffId ?? rows.activeDiffId;
+        case 'snapshot':
+            return (
+                rows.iterations.find((row) => row.kind === 'snapshot' && row.id === viewing.snapshotId)?.diffId ??
+                null
+            );
+        case 'diff':
+            return viewing.diffId;
+        case 'slice':
+            return viewing.head;
+    }
+}
+
+/**
+ * Picker row selection. Shift+click selects a slice between the iteration the tab shows
+ * and the row's iteration. The older is the base, the newer is the head. With the same anchor, a gone iteration or
+ * a host without slices, Shift+click behaves like a regular click.
+ */
+export function rowSelection(rows: PickerRows, viewing: Viewing, row: PickerRow, shift: boolean): Viewing {
+    if (!shift) {
+        return row.viewing;
+    }
+    const anchor = sliceAnchor(rows, viewing);
+    if (anchor === null || anchor === row.diffId) {
+        return row.viewing;
+    }
+    const anchorOrder = rows.sliceOrder.get(anchor);
+    const rowOrder = rows.sliceOrder.get(row.diffId);
+    if (anchorOrder === undefined || rowOrder === undefined) {
+        return row.viewing;
+    }
+    return anchorOrder < rowOrder
+        ? { kind: 'slice', base: anchor, head: row.diffId }
+        : { kind: 'slice', base: row.diffId, head: anchor };
 }
 
 /**
@@ -490,7 +566,7 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
  * Snapshots do not form a separate section at the top. The reviewer looks for an iteration,
  * regardless of whether a route was built on it.
  */
-function orderedTimeline(rows: readonly RawRow[], input: PickerRowsInput): RawRow[] {
+function orderedTimeline(rows: readonly RawRow[], input: PickerRowsInput, activeDiffId: string | null): RawRow[] {
     const times = new Map(input.iterations.map((iteration) => [iteration.diffId, iteration.createdAt]));
     const groups = new Map<string, RawRow[]>();
     for (const row of rows) {
@@ -507,10 +583,6 @@ function orderedTimeline(rows: readonly RawRow[], input: PickerRowsInput): RawRo
         group.map((row) => row.createdAt).filter((at) => at !== null).toSorted().at(-1) ??
         null;
 
-    const activeDiffId =
-        input.iterations.find((iteration) => iteration.status === 'active')?.diffId ??
-        input.activeIteration?.diffId ??
-        null;
     return [...groups.entries()]
         .map(([diffId, group]) => ({ diffId, group, time: timeOf(diffId, group) }))
         .toSorted((left, right) => {
@@ -569,42 +641,4 @@ function shortestUnique(
         }
     }
     return null;
-}
-
-/**
- * Slices worth offering: from each saved iteration to the active one. The active iteration
- * is not compared with itself, and a gone (`gone`) one is never offered. The review host returns
- * 400 for it because the commit is no longer in the PR.
- */
-function sliceRows(input: PickerRowsInput): readonly RawRow[] {
-    const listed = input.iterations.find((iteration) => iteration.status === 'active') ?? null;
-    const active =
-        listed === null ? input.activeIteration : { diffId: listed.diffId, commit: listed.headCommit };
-    if (input.interdiff !== true || active === null) {
-        return [];
-    }
-    return input.iterations
-        .filter(
-            (iteration) =>
-                iteration.diffId !== active.diffId &&
-                iteration.status !== 'active' &&
-                iteration.status !== 'gone',
-        )
-        .map(
-            (iteration): RawRow => ({
-                kind: 'slice',
-                id: iteration.diffId,
-                diffId: iteration.diffId,
-                commit: iteration.headCommit,
-                createdAt: iteration.createdAt,
-                model: null,
-                harness: null,
-                locale: null,
-                status: 'slice',
-                toCommit: active.commit,
-                latest: false,
-                viewing: { kind: 'slice', base: iteration.diffId, head: active.diffId },
-            }),
-        )
-        .reverse();
 }

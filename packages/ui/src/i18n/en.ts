@@ -369,7 +369,7 @@ export const en: Dictionary = {
     'iteration.title.iteration': (commit: string) => `PR iteration at commit ${commit}`,
     'iteration.menu.aria': 'Snapshots and iterations',
     'iteration.menu.timeline': 'Snapshots and iterations',
-    'iteration.menu.slices': 'Show changes since iteration…',
+    'iteration.menu.sliceHint': '⇧ + click — changes between iterations',
     'iteration.empty': 'No snapshots yet — they appear with the first route.',
     'iteration.readOnly.reason': 'only in the active iteration',
     'iteration.readOnly.sliceReason': 'in a slice between iterations',

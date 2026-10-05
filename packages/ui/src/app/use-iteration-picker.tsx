@@ -14,7 +14,7 @@ export interface IterationPickerOptions {
     /** Active PR iteration from route facts returned without parameters. */
     readonly factsDiffId: string | null;
     readonly factsCommit: string | null;
-    /** The host supplies slices between iterations. Otherwise this picker section stays hidden. */
+    /** The host provides inter-iteration slices. Without this, Shift+click in the picker cannot build a slice. */
     readonly interdiffAvailable: boolean;
     /** Local review uses different wording for a past iteration because there is no PR. */
     readonly localHost: boolean;

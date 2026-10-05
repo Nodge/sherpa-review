@@ -1,5 +1,6 @@
 import type { Locale } from '@sherpa/protocol';
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 import type { MessageKey, Translate } from '../i18n/index.js';
 import { useLocale, useT } from '../i18n/index.js';
@@ -8,7 +9,7 @@ import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import { localeNameKey } from '../route/generation.js';
 import type { PickerRow, PickerRows, Viewing, ViewingLabel } from './viewing.js';
-import { sameViewing } from './viewing.js';
+import { rowSelection, sameViewing } from './viewing.js';
 import './snapshot-picker.css';
 
 /**
@@ -16,8 +17,8 @@ import './snapshot-picker.css';
  * The prototype has no menu. It uses the indicator tokens and follows the file filter
  * select: Esc closes it and restores focus, arrows navigate, ⏎ selects.
  *
- * The third menu section is "Show changes since iteration…". Selecting a row opens a slice
- * between the selected iteration and the active one.
+ * Select a slice between iterations by Shift+clicking (or Shift+⏎ in the menu) a timeline
+ * row. See `rowSelection` for the rules.
  */
 
 /** First 7 hex characters. The full commit goes in `title`. */
@@ -76,20 +77,11 @@ function rowTime(row: PickerRow, now: number, locale: Locale): string | null {
 }
 
 /**
- * Menu row: "9f3c1ab · 6 h ago · sonnet-5 · current" for a snapshot,
- * "a71d4e2 · active iteration · no route" for an iteration without a route, and
- * "9f3c1ab · 6 h ago · → a71d4e2" for a slice to the active iteration.
+ * Menu row: "9f3c1ab · 6 hr. ago · sonnet-5 · current" for a snapshot and
+ * "a71d4e2 · active iteration · no route" for an iteration without a route.
  */
 export function rowText(row: PickerRow, now: number, t: Translate, locale: Locale, localHost = false): string {
     const time = rowTime(row, now, locale);
-    if (row.kind === 'slice') {
-        const parts = [row.short];
-        if (time !== null) {
-            parts.push(time);
-        }
-        parts.push(`→ ${row.toShort ?? ''}`);
-        return parts.join(' · ');
-    }
     if (row.kind === 'diff') {
         // An iteration without a route shows no time. Its commit and status already identify it.
         const parts = [row.short];
@@ -122,9 +114,6 @@ export function provenanceText(row: PickerRow, t: Translate, uiLocale: Locale): 
 
 /** The tooltip shows the same text with the full commit so the reviewer can compare it with the host. */
 export function rowTitle(row: PickerRow): string {
-    if (row.kind === 'slice') {
-        return `${row.commit} → ${row.toCommit ?? ''}`;
-    }
     return join([row.harness, row.model, row.commit]);
 }
 
@@ -133,13 +122,35 @@ function join(parts: readonly (string | null)[]): string {
 }
 
 /**
- * The `current` selection marks the current snapshot row. It is absent from the URL, but it is
- * the snapshot the reviewer is viewing.
+ * Rows marked by the selection. `current` marks the current snapshot row: it is absent from the URL,
+ * but it is what the reviewer is viewing. A slice marks both edges, using the first row in
+ * each iteration group. Intermediate rows are not marked.
  */
-export function isRowSelected(row: PickerRow, viewing: Viewing): boolean {
-    return viewing.kind === 'current'
-        ? row.kind === 'snapshot' && row.latest
-        : sameViewing(row.viewing, viewing);
+export function selectedRows(rows: readonly PickerRow[], viewing: Viewing): ReadonlySet<PickerRow> {
+    if (viewing.kind === 'slice') {
+        return new Set(
+            [viewing.base, viewing.head]
+                .map((diffId) => rows.find((row) => row.diffId === diffId))
+                .filter((row) => row !== undefined),
+        );
+    }
+    return new Set(
+        rows.filter((row) =>
+            viewing.kind === 'current' ? row.kind === 'snapshot' && row.latest : sameViewing(row.viewing, viewing),
+        ),
+    );
+}
+
+/** Shift+click hint: only when the host supports slices and there are iterations to compare. */
+export function sliceHintVisible(rows: PickerRows): boolean {
+    return rows.sliceOrder.size >= 2;
+}
+
+/** Shift+click on a row selects a slice, so the browser must not also select text. */
+function keepSelectionOnShift(event: ReactMouseEvent): void {
+    if (event.shiftKey) {
+        event.preventDefault();
+    }
 }
 
 export interface SnapshotMenu {
@@ -152,25 +163,6 @@ export interface SnapshotMenu {
     readonly onSelect: (viewing: Viewing) => void;
     /** The gallery shows an open menu. */
     readonly initialOpen?: boolean;
-}
-
-export interface MenuSection {
-    readonly title: MessageKey;
-    readonly rows: readonly PickerRow[];
-    /** Index of the section's first row in the flat list, used by arrows and ⏎. */
-    readonly offset: number;
-}
-
-/**
- * Menu sections: snapshots and iterations in one list (an empty section explains there is nothing to view),
- * slices in a separate section, shown only when it has entries.
- */
-export function menuSections(rows: PickerRows): readonly MenuSection[] {
-    const sections: MenuSection[] = [{ title: 'iteration.menu.timeline', rows: rows.iterations, offset: 0 }];
-    if (rows.slices.length > 0) {
-        sections.push({ title: 'iteration.menu.slices', rows: rows.slices, offset: rows.iterations.length });
-    }
-    return sections;
 }
 
 export interface SnapshotPillProps {
@@ -208,9 +200,9 @@ function SnapshotPillMenu({
     const t = useT();
     const locale = useLocale();
     const [open, setOpen] = useState(menu.initialOpen ?? false);
-    const sections = menuSections(menu.rows);
-    const flat = sections.flatMap((section) => section.rows);
-    const selectedIndex = flat.findIndex((row) => isRowSelected(row, menu.viewing));
+    const flat = menu.rows.iterations;
+    const selected = selectedRows(flat, menu.viewing);
+    const selectedIndex = flat.findIndex((row) => selected.has(row));
     const [cursor, setCursor] = useState(Math.max(selectedIndex, 0));
     const rootRef = useRef<HTMLDivElement | null>(null);
     const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -251,17 +243,17 @@ function SnapshotPillMenu({
         }
     }, [open]);
 
-    const choose = (index: number): void => {
+    const choose = (index: number, shift: boolean): void => {
         const row = flat[index];
         if (row === undefined) {
             return;
         }
-        menu.onSelect(row.viewing);
+        menu.onSelect(rowSelection(menu.rows, menu.viewing, row, shift));
         close(true);
     };
 
     const renderRow = (row: PickerRow, index: number) => {
-        const checked = index === selectedIndex;
+        const checked = selected.has(row);
         return (
             <div
                 key={`${row.kind}:${row.id}`}
@@ -271,13 +263,13 @@ function SnapshotPillMenu({
                 title={rowTitle(row)}
                 data-snapshot={row.kind === 'snapshot' ? row.id : undefined}
                 data-diff={row.kind === 'diff' ? row.id : undefined}
-                data-slice={row.kind === 'slice' ? row.id : undefined}
                 className={`snapshot-picker__row${index === cursor ? ' is-cursor' : ''}`}
                 onMouseEnter={() => {
                     setCursor(index);
                 }}
-                onClick={() => {
-                    choose(index);
+                onMouseDown={keepSelectionOnShift}
+                onClick={(event) => {
+                    choose(index, event.shiftKey);
                 }}
             >
                 <span className="snapshot-picker__tick" aria-hidden="true">
@@ -338,18 +330,17 @@ function SnapshotPillMenu({
                             setCursor((index) => Math.max(index - 1, 0));
                         } else if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
-                            choose(cursor);
+                            choose(cursor, event.key === 'Enter' && event.shiftKey);
                         } else if (event.key === 'Tab') {
                             close(false);
                         }
                     }}
                 >
-                    {sections.map((section) => (
-                        <Fragment key={section.title}>
-                            <div className="snapshot-picker__section">{t(section.title)}</div>
-                            {section.rows.map((row, index) => renderRow(row, section.offset + index))}
-                        </Fragment>
-                    ))}
+                    <div className="snapshot-picker__section">{t('iteration.menu.timeline')}</div>
+                    {flat.map(renderRow)}
+                    {sliceHintVisible(menu.rows) ? (
+                        <div className="snapshot-picker__hint">{t('iteration.menu.sliceHint')}</div>
+                    ) : null}
                 </div>
             ) : null}
         </div>
@@ -373,10 +364,11 @@ export function SnapshotsCard({
     if (all.length === 0) {
         return <p className="overview-card__empty">{t('iteration.empty')}</p>;
     }
+    const selected = selectedRows(all, viewing);
     return (
         <ul className="snapshot-list">
             {all.map((row) => {
-                const checked = isRowSelected(row, viewing);
+                const checked = selected.has(row);
                 return (
                     <li key={`${row.kind}:${row.id}`}>
                         <button
@@ -386,8 +378,9 @@ export function SnapshotsCard({
                             title={rowTitle(row)}
                             data-snapshot={row.kind === 'snapshot' ? row.id : undefined}
                             data-diff={row.kind === 'diff' ? row.id : undefined}
-                            onClick={() => {
-                                onSelect(row.viewing);
+                            onMouseDown={keepSelectionOnShift}
+                            onClick={(event) => {
+                                onSelect(rowSelection(rows, viewing, row, event.shiftKey));
                             }}
                         >
                             <span className="snapshot-list__line">{rowText(row, now, t, locale, localHost)}</span>

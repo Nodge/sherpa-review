@@ -46,6 +46,14 @@
     color: var(--text-dim);
 }
 
+/* Shift+click hint: not a menu item, so the cursor skips it. */
+.snapshot-picker__hint {
+    padding: 6px 11px 7px;
+    border-top: 1px solid var(--border-hairline);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+}
+
 .snapshot-picker__row {
     display: flex;
     align-items: center;

@@ -20,13 +20,14 @@ import type { RouteGalleryState } from './route-states.tsx';
 import { withTreeOrder } from '../../tree/file-order.js';
 
 /**
- * Slice between iterations: "what is new" from the previous iteration to the active one, without a route,
- * no progress, and read-only. Data is the `medium` fixture's v1→v2 interdiff, the same one
- * the host returns for `getDiff({base, head})`.
+ * Inter-iteration slice: what is new between 2 iterations, with no route or progress
+ * and in read-only mode. Data is the v1→v2 interdiff from the `medium` fixture, the same one the host returns
+ * for `getDiff({base, head})`.
  */
 
 const V1 = fixtureIteration('medium', 0);
 const V2 = fixtureIteration('medium', 1);
+const V3 = fixtureIteration('medium', 2);
 const SLICE: PrDiff = withTreeOrder(fixtureInterdiff('medium', 0, 1));
 const GALLERY_NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
@@ -57,6 +58,45 @@ function pill(initialOpen = false) {
             label={LABEL}
             menu={{ rows: ROWS, viewing: VIEWING, now: GALLERY_NOW, onSelect: () => undefined, initialOpen }}
         />
+    );
+}
+
+const THREE_ROWS = pickerRows({
+    snapshots: [],
+    iterations: [
+        { ...V1.iteration, status: 'previous' },
+        { ...V2.iteration, status: 'previous' },
+        { ...V3.iteration, status: 'active' },
+    ],
+    activeIteration: { diffId: V3.iteration.diffId, commit: V3.iteration.headCommit },
+    interdiff: true,
+});
+
+/**
+ * Expanded menu for a slice that skips an iteration: both endpoints are marked, the intermediate
+ * iteration is unmarked, and the bottom of the menu shows a Shift+click hint.
+ */
+function SlicePickerState() {
+    return (
+        <div className="gallery__viewport">
+            <div className="pr-header">
+                <SnapshotPill
+                    label={{
+                        kind: 'slice',
+                        commit: V3.iteration.headCommit,
+                        baseCommit: V1.iteration.headCommit,
+                        status: 'slice',
+                    }}
+                    menu={{
+                        rows: THREE_ROWS,
+                        viewing: { kind: 'slice', base: V1.iteration.diffId, head: V3.iteration.diffId },
+                        now: GALLERY_NOW,
+                        onSelect: () => undefined,
+                        initialOpen: true,
+                    }}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -154,6 +194,11 @@ export const ITERATION_SLICE_STATES: readonly RouteGalleryState[] = [
         id: 'iterations-slice',
         title: 'inter-iteration slice: full diff v1 → v2, read-only',
         render: () => <SliceState />,
+    },
+    {
+        id: 'iterations-slice-picker',
+        title: 'slice picker menu: both endpoints marked, ⇧ + click hint at the bottom',
+        render: () => <SlicePickerState />,
     },
     {
         id: 'iterations-slice-route',

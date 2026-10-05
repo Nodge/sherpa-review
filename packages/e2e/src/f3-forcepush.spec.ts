@@ -24,7 +24,7 @@ import {
  * F3, continued: the second push rewrites the first with a force-push. The iteration the route
  * was built on disappears from the host, and all Sherpa knows about it is the locally saved
  * patch. The route stays readable, progress carries over past the missing iteration,
- * and the UI never offers a slice to it. After rebuilding, its snapshot becomes read-only,
+ * and Shift+click on it does not build a slice. After a rebuild, its snapshot becomes read-only,
  * marked to say the commit is no longer in the PR.
  *
  * Live integration through the CLI bundle: 2 route generations exceed the default 120 s.
@@ -137,13 +137,11 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         );
     });
 
-    await test.step('picker keeps the vanished iteration snapshot but offers no slice to it', async () => {
+    await test.step('picker: missing iteration snapshot stays, no slices section, Shift+click hint at the bottom', async () => {
         await page.locator('button.snapshot-pill--button[aria-haspopup="menu"]').click();
         const menu = page.locator('[role="menu"][aria-label="Snapshots and iterations"]');
-        await expect(menu.locator('.snapshot-picker__section')).toHaveText([
-            'Snapshots and iterations',
-            'Show changes since iteration…',
-        ]);
+        await expect(menu.locator('.snapshot-picker__section')).toHaveText(['Snapshots and iterations']);
+        await expect(menu.locator('.snapshot-picker__hint')).toHaveText('⇧ + click — changes between iterations');
 
         // The active iteration is the first row even without a route, because the reviewer looks for it first.
         await expect(menu.locator('.snapshot-picker__row').first()).toHaveText(
@@ -158,12 +156,6 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         await expect(snapshots.nth(0)).toHaveText(new RegExp(`^${V2_SHORT} · .* · stale$`));
         await expect(snapshots.nth(0)).toHaveAttribute('aria-checked', 'true');
         await expect(snapshots.nth(1)).toHaveText(new RegExp(`^${V1_SHORT} · .* · stale$`));
-
-        // The review host refuses to calculate a slice with a gone iteration, so it has no row.
-        await expect(menu.locator(`.snapshot-picker__row[data-slice="${MEDIUM_DIFF_ID_V2}"]`)).toHaveCount(0);
-        await expect(menu.locator('.snapshot-picker__row[data-slice]')).toHaveText(
-            new RegExp(`^${V1_SHORT} · .* · → ${V3_SHORT}$`),
-        );
 
         await page.keyboard.press('Escape');
         await expect(menu).toHaveCount(0);
@@ -254,15 +246,18 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
         );
     });
 
-    await test.step('the gone iteration is in the picker but has no slice to it', async () => {
+    await test.step('the gone iteration stays in the picker, Shift+click the active one for a slice from the first to the active iteration', async () => {
         await page.locator('button.snapshot-pill--button[aria-haspopup="menu"]').click();
         const menu = page.locator('[role="menu"][aria-label="Snapshots and iterations"]');
         await expect(menu.locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V2}"]`)).toHaveText(
             `${V2_SHORT} · commit no longer in the PR · no route`,
         );
-        await expect(menu.locator('.snapshot-picker__row[data-slice]')).toHaveCount(1);
 
-        await menu.locator(`.snapshot-picker__row[data-slice="${MEDIUM_DIFF_ID}"]`).click();
+        // The tab shows the first iteration's snapshot, which is also the slice base. Gone iterations
+        // cannot be compared, so Shift+clicking one would just open that iteration.
+        await menu
+            .locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V3}"]`)
+            .click({ modifiers: ['Shift'] });
         await expect.poll(() => fragmentParam(page, 'base')).toBe(MEDIUM_DIFF_ID);
         await expect.poll(() => fragmentParam(page, 'head')).toBe(MEDIUM_DIFF_ID_V3);
     });

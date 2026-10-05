@@ -377,7 +377,7 @@ export const ru = {
     'iteration.title.iteration': (commit: string) => `Итерация PR с коммитом ${commit}`,
     'iteration.menu.aria': 'Снапшоты и итерации',
     'iteration.menu.timeline': 'Снапшоты и итерации',
-    'iteration.menu.slices': 'Показать изменения с итерации…',
+    'iteration.menu.sliceHint': '⇧ + клик — изменения между итерациями',
     'iteration.empty': 'Снапшотов нет — появятся с первым маршрутом.',
     'iteration.readOnly.reason': 'только в активной итерации',
     'iteration.readOnly.sliceReason': 'в срезе между итерациями',

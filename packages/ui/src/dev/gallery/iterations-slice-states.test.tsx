@@ -56,6 +56,7 @@ describe('inter-iteration slice gallery', () => {
     it('registers exactly the ids defined by the task slice', () => {
         expect(ITERATION_SLICE_STATES.map((state) => state.id)).toEqual([
             'iterations-slice',
+            'iterations-slice-picker',
             'iterations-slice-route',
             'iterations-slice-overview',
             'iterations-slice-empty',
@@ -78,6 +79,17 @@ describe('inter-iteration slice gallery', () => {
         expect(host.querySelector('.snapshot-pill')?.textContent).toContain('slice');
         expect(host.textContent).toContain('You are looking at the slice between iterations');
         expect(host.textContent).toContain('To the active iteration');
+    });
+
+    it('the slice menu marks both endpoints, leaves the intermediate iteration unmarked and shows a Shift+click hint', () => {
+        const host = mount('iterations-slice-picker');
+
+        expect([...host.querySelectorAll('.snapshot-picker__section')].map((node) => node.textContent)).toEqual([
+            'Snapshots and iterations',
+        ]);
+        const rows = [...host.querySelectorAll('.snapshot-picker__row')];
+        expect(rows.map((row) => row.getAttribute('aria-checked'))).toEqual(['true', 'false', 'true']);
+        expect(host.querySelector('.snapshot-picker__hint')?.textContent).toBe('⇧ + click — changes between iterations');
     });
 
     it('the route tab explains why a slice has no route', () => {

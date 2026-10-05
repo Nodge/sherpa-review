@@ -22,6 +22,7 @@ import type { Store, StoreSnapshot } from './store.js';
 
 const V1 = fixtureIteration('medium', 0);
 const V2 = fixtureIteration('medium', 1);
+const V3 = fixtureIteration('medium', 2);
 const INTERDIFF: PrDiff = fixtureInterdiff('medium', 0, 1);
 const BASE = V1.iteration.diffId;
 const HEAD = V2.iteration.diffId;
@@ -55,6 +56,8 @@ function mountApp(options: {
     readonly interdiff?: PrDiff;
     /** The slice endpoint fails with this text (400 from the review host, 502 from the fixture). */
     readonly sliceError?: string;
+    /** PR iterations. Defaults to previous v1 and active v2. */
+    readonly iterations?: readonly Iteration[];
 }): Mounted {
     const originalFetch = globalThis.fetch;
     const globals = globalThis as { ResizeObserver?: unknown };
@@ -120,7 +123,7 @@ function mountApp(options: {
         reviewHost: 'fixture',
         pr: V2.pr,
         feedback: { available: false, reason: 'The test feedback channel is unavailable.' },
-        iterations: [...ITERATIONS],
+        iterations: [...(options.iterations ?? ITERATIONS)],
         update: null,
         generationCap: null,
     };
@@ -293,5 +296,43 @@ describe('inter-iteration slice', () => {
 
         expect(mounted.session.getSnapshot().viewing).toEqual({ kind: 'current' });
         expect(mounted.host.textContent).not.toContain('You are looking at the slice');
+    });
+
+    describe('a slice between two previous iterations when the active iteration has moved on', () => {
+        const THREE: readonly Iteration[] = [
+            { ...V1.iteration, status: 'previous' },
+            { ...V2.iteration, status: 'previous' },
+            { ...V3.iteration, status: 'active' },
+        ];
+
+        it('opens from the URL, loads the diff through base/head and names both sides in the indicator', async () => {
+            const mounted = mountApp({ viewing: SLICE, iterations: THREE });
+            await mounted.settle();
+
+            expect(mounted.session.getSnapshot().viewing).toEqual(SLICE);
+            expect(mounted.calls).toContain(`${UI_ENDPOINTS.reviewDiff}?base=${BASE}&head=${HEAD}`);
+            expect(mounted.host.querySelector('.snapshot-pill')?.textContent).toContain(
+                `slice ${V1.iteration.headCommit.slice(0, 7)} → ${V2.iteration.headCommit.slice(0, 7)}`,
+            );
+            expect(mounted.host.textContent).toContain('You are looking at the slice between iterations');
+        });
+
+        it('opens from the menu by Shift+clicking another previous iteration row', async () => {
+            const mounted = mountApp({ viewing: { kind: 'diff', diffId: BASE }, iterations: THREE });
+            await mounted.settle();
+
+            act(() => {
+                mounted.host.querySelector<HTMLButtonElement>('button.snapshot-pill--button')?.click();
+            });
+            act(() => {
+                mounted.host
+                    .querySelector(`.snapshot-picker__row[data-diff="${HEAD}"]`)
+                    ?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+            });
+            await mounted.settle();
+
+            expect(mounted.session.getSnapshot().viewing).toEqual(SLICE);
+            expect(mounted.calls).toContain(`${UI_ENDPOINTS.reviewDiff}?base=${BASE}&head=${HEAD}`);
+        });
     });
 });

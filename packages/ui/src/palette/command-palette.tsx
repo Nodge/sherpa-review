@@ -11,7 +11,7 @@ import { addRecentCommand, PALETTE_RECENT_LIMIT } from '../pr-state/pr-state-sto
 import { useEscapeLayer, useShortcut, useShortcutList } from '../shortcuts/context.tsx';
 import type { Shortcut } from '../shortcuts/registry.js';
 import { formatKeys } from '../shortcuts/registry.js';
-import { isRowSelected, menuSections, rowText, rowTitle } from '../iterations/snapshot-picker.tsx';
+import { rowText, rowTitle, selectedRows } from '../iterations/snapshot-picker.tsx';
 import type { PickerRows, Viewing } from '../iterations/viewing.js';
 import { searchChat } from './chat-search.js';
 import { movePaletteCursor, scrollPaletteCursor } from './cursor.js';
@@ -420,30 +420,28 @@ export function CommandPalette({
                     truncated: false,
                 };
             }
-            const items = menuSections(iterations.rows).flatMap((section) =>
-                section.rows
-                    .map((row): PaletteItem => {
-                        const text = rowText(row, iterations.now, t, locale, iterations.localHost ?? false);
-                        return {
-                            // Keyed by kind+id, as in the picker itself: one commit can have
-                            // several snapshots after route regeneration.
-                            id: `iteration:${row.kind}:${row.id}`,
-                            group: section.title,
-                            label: text,
-                            keyHint: null,
-                            consequence: isRowSelected(row, iterations.viewing)
-                                ? t('palette.iteration.current')
-                                : rowTitle(row),
-                            detail: null,
-                            commandId: null,
-                            keepOpen: false,
-                            action: () => {
-                                iterations.onSelect(row.viewing);
-                            },
-                        };
-                    })
-                    .filter((item) => parsed.text === '' || fuzzyMatch(item.label, parsed.text)),
-            );
+            const rows = iterations.rows.iterations;
+            const selected = selectedRows(rows, iterations.viewing);
+            const items = rows
+                .map((row): PaletteItem => {
+                    const text = rowText(row, iterations.now, t, locale, iterations.localHost ?? false);
+                    return {
+                        // Keyed by kind+id, as in the picker itself: regenerating the route can leave
+                        // several snapshots for the same commit.
+                        id: `iteration:${row.kind}:${row.id}`,
+                        group: 'iteration.menu.timeline',
+                        label: text,
+                        keyHint: null,
+                        consequence: selected.has(row) ? t('palette.iteration.current') : rowTitle(row),
+                        detail: null,
+                        commandId: null,
+                        keepOpen: false,
+                        action: () => {
+                            iterations.onSelect(row.viewing);
+                        },
+                    };
+                })
+                .filter((item) => parsed.text === '' || fuzzyMatch(item.label, parsed.text));
             return {
                 items,
                 notice: items.length === 0 ? t('palette.notice.nothingFor', parsed.text) : null,

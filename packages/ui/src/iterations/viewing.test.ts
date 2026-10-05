@@ -6,6 +6,7 @@ import {
     parseViewing,
     pickerRows,
     resolveViewing,
+    rowSelection,
     VIEWING_CURRENT,
     viewingFragmentPatch,
 } from './viewing.js';
@@ -334,10 +335,57 @@ describe('resolve a slice between iterations', () => {
         });
     });
 
-    it('clears an invalid selection when head is not the active iteration', () => {
-        const resolved = resolveViewing(sliceInput({ viewing: { kind: 'slice', base: '182801', head: '182800' } }));
+    it('a slice between 2 previous iterations does not require an active head', () => {
+        const older = iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'previous' });
+        const resolved = resolveViewing(
+            sliceInput({
+                iterations: [older, OLD, ACTIVE],
+                viewing: { kind: 'slice', base: '182799', head: '182800' },
+            }),
+        );
 
-        expect(resolved).toMatchObject({ unknown: true, viewing: VIEWING_CURRENT, slice: null, readOnly: false });
+        expect(resolved).toMatchObject({ diffId: '182800', readOnly: true, routeless: true, unknown: false });
+        expect(resolved.slice).toEqual({ base: '182799', head: '182800' });
+        expect(resolved.label).toEqual({ kind: 'slice', commit: OLD_COMMIT, baseCommit: 'c0ffee1', status: 'slice' });
+    });
+
+    it('the active iteration outside the list is an eligible head because known facts provide its commit', () => {
+        const resolved = resolveViewing(sliceInput({ iterations: [OLD] }));
+
+        expect(resolved.slice).toEqual({ base: '182800', head: '182801' });
+        expect(resolved.label).toMatchObject({ commit: NEW_COMMIT, baseCommit: OLD_COMMIT });
+    });
+
+    it('a gone iteration cannot be either edge of a slice, base or head', () => {
+        const gone = iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'gone' });
+        const asBase = resolveViewing(
+            sliceInput({ iterations: [gone, OLD, ACTIVE], viewing: { kind: 'slice', base: '182799', head: '182801' } }),
+        );
+        const asHead = resolveViewing(
+            sliceInput({ iterations: [OLD, gone, ACTIVE], viewing: { kind: 'slice', base: '182800', head: '182799' } }),
+        );
+
+        expect(asBase).toMatchObject({ unknown: true, viewing: VIEWING_CURRENT, slice: null, readOnly: false });
+        expect(asHead).toMatchObject({ unknown: true, viewing: VIEWING_CURRENT, slice: null, readOnly: false });
+    });
+
+    it('a base newer than the head is invalid because the UI never builds this URL and the diff would be reversed', () => {
+        const older = iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'previous' });
+        const fromActive = resolveViewing(
+            sliceInput({ iterations: [older, OLD, ACTIVE], viewing: { kind: 'slice', base: '182801', head: '182799' } }),
+        );
+        const betweenPrevious = resolveViewing(
+            sliceInput({ iterations: [older, OLD, ACTIVE], viewing: { kind: 'slice', base: '182800', head: '182799' } }),
+        );
+
+        expect(fromActive).toMatchObject({ unknown: true, viewing: VIEWING_CURRENT, slice: null });
+        expect(betweenPrevious).toMatchObject({ unknown: true, viewing: VIEWING_CURRENT, slice: null });
+    });
+
+    it('a head outside the list that is not active is invalid', () => {
+        const resolved = resolveViewing(sliceInput({ viewing: { kind: 'slice', base: '182800', head: '999' } }));
+
+        expect(resolved).toMatchObject({ unknown: true, slice: null });
     });
 
     it('a base outside the iteration list is invalid', () => {
@@ -470,7 +518,7 @@ describe('picker rows', () => {
         expect(rows.iterations[0]).toMatchObject({ id: '182801', commit: NEW_COMMIT, status: 'activeIteration' });
     });
 
-    it('offers slices only from iterations other than active and gone ones', () => {
+    it('the menu has one timeline and slice edges are iterations excluding gone ones, oldest to newest', () => {
         const rows = pickerRows({
             snapshots: [CURRENT],
             iterations: [
@@ -482,23 +530,40 @@ describe('picker rows', () => {
             interdiff: true,
         });
 
-        expect(rows.slices.map((row) => row.id)).toEqual(['182800']);
-        expect(rows.slices[0]).toMatchObject({
-            kind: 'slice',
-            commit: OLD_COMMIT,
-            toCommit: NEW_COMMIT,
-            viewing: { kind: 'slice', base: '182800', head: '182801' },
-        });
+        expect(rows.iterations.map((row) => `${row.kind}:${row.id}`)).toEqual([
+            'snapshot:route-new',
+            'diff:182800',
+            'diff:182799',
+        ]);
+        expect([...rows.sliceOrder]).toEqual([
+            ['182800', 1],
+            ['182801', 2],
+        ]);
+        expect(rows.activeDiffId).toBe('182801');
     });
 
-    it('leaves the section empty for a host without slices', () => {
+    it('a host without slice support has no slice edges', () => {
         const rows = pickerRows({
             snapshots: [CURRENT],
             iterations: [iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous' }), iteration()],
             activeIteration: { diffId: '182801', commit: NEW_COMMIT },
         });
 
-        expect(rows.slices).toEqual([]);
+        expect(rows.sliceOrder.size).toBe(0);
+    });
+
+    it('the active iteration outside the list is the newest', () => {
+        const rows = pickerRows({
+            snapshots: [CURRENT],
+            iterations: [iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous' })],
+            activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+            interdiff: true,
+        });
+
+        expect([...rows.sliceOrder]).toEqual([
+            ['182800', 0],
+            ['182801', 1],
+        ]);
     });
 
     it('without a snapshots endpoint, the list uses the current route snapshot', () => {
@@ -507,5 +572,169 @@ describe('picker rows', () => {
         expect(list).toHaveLength(1);
         expect(list[0]).toMatchObject({ snapshotId: 'route-new', diffId: '182801', status: 'current' });
         expect(fallbackSnapshots(null)).toEqual([]);
+    });
+});
+
+describe('picker row selection and Shift+click', () => {
+    const OLDER = iteration({ diffId: '182799', headCommit: 'c0ffee1', status: 'previous' });
+    const OLD = iteration({ diffId: '182800', headCommit: OLD_COMMIT, status: 'previous' });
+    const ACTIVE = iteration();
+    const ROWS = pickerRows({
+        snapshots: [CURRENT],
+        iterations: [OLDER, OLD, ACTIVE],
+        activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+        interdiff: true,
+    });
+
+    function row(diffId: string) {
+        const found = ROWS.iterations.find((candidate) => candidate.diffId === diffId);
+        if (found === undefined) {
+            throw new Error(`no row for ${diffId}`);
+        }
+        return found;
+    }
+
+    it('a regular click selects the row', () => {
+        expect(rowSelection(ROWS, VIEWING_CURRENT, row('182800'), false)).toEqual({ kind: 'diff', diffId: '182800' });
+    });
+
+    it('the current state uses the active iteration as anchor and head, with the row as base', () => {
+        expect(rowSelection(ROWS, VIEWING_CURRENT, row('182799'), true)).toEqual({
+            kind: 'slice',
+            base: '182799',
+            head: '182801',
+        });
+    });
+
+    it('when the current snapshot belongs to a previous iteration, its iteration anchors the current state, not the active one', () => {
+        const stale = pickerRows({
+            snapshots: [summary({ status: 'current' })],
+            iterations: [OLDER, OLD, ACTIVE],
+            activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+            interdiff: true,
+        });
+        const at = (diffId: string) => {
+            const found = stale.iterations.find((candidate) => candidate.diffId === diffId);
+            if (found === undefined) {
+                throw new Error(`no row ${diffId}`);
+            }
+            return found;
+        };
+
+        expect(rowSelection(stale, VIEWING_CURRENT, at('182799'), true)).toEqual({
+            kind: 'slice',
+            base: '182799',
+            head: '182800',
+        });
+        expect(rowSelection(stale, VIEWING_CURRENT, at('182800'), true)).toEqual({
+            kind: 'snapshot',
+            snapshotId: 'route-old',
+        });
+        expect(rowSelection(stale, VIEWING_CURRENT, at('182801'), true)).toEqual({
+            kind: 'slice',
+            base: '182800',
+            head: '182801',
+        });
+    });
+
+    it('an active iteration outside the list with no row remains the anchor and slice head', () => {
+        const rows = pickerRows({
+            snapshots: [],
+            iterations: [OLDER, OLD],
+            activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+            interdiff: true,
+        });
+        const old = rows.iterations.find((candidate) => candidate.diffId === '182800');
+
+        expect(rows.iterations.some((candidate) => candidate.diffId === '182801')).toBe(false);
+        expect(old).toBeDefined();
+        if (old !== undefined) {
+            expect(rowSelection(rows, VIEWING_CURRENT, old, true)).toEqual({
+                kind: 'slice',
+                base: '182800',
+                head: '182801',
+            });
+        }
+    });
+
+    it('an iteration active in the facts but gone in the list cannot be a slice endpoint', () => {
+        const rows = pickerRows({
+            snapshots: [summary({ snapshotId: 's1', diffId: '182801', commit: NEW_COMMIT })],
+            iterations: [OLD, iteration({ diffId: '182801', status: 'gone' })],
+            activeIteration: { diffId: '182801', commit: NEW_COMMIT },
+            interdiff: true,
+        });
+        const snapshot = rows.iterations.find((candidate) => candidate.id === 's1');
+
+        expect(rows.sliceOrder.has('182801')).toBe(false);
+        expect(snapshot).toBeDefined();
+        if (snapshot !== undefined) {
+            expect(rowSelection(rows, { kind: 'diff', diffId: '182800' }, snapshot, true)).toEqual({
+                kind: 'snapshot',
+                snapshotId: 's1',
+            });
+        }
+    });
+
+    it('when the anchor is a previous iteration and the row is newer, the anchor is the base and the row is the head', () => {
+        expect(rowSelection(ROWS, { kind: 'diff', diffId: '182799' }, row('182800'), true)).toEqual({
+            kind: 'slice',
+            base: '182799',
+            head: '182800',
+        });
+    });
+
+    it('a snapshot is anchored to its own iteration', () => {
+        expect(rowSelection(ROWS, { kind: 'snapshot', snapshotId: 'route-new' }, row('182800'), true)).toEqual({
+            kind: 'slice',
+            base: '182800',
+            head: '182801',
+        });
+    });
+
+    it('a slice is anchored to its head, so Shift+click moves the base and keeps the head', () => {
+        const slice = { kind: 'slice', base: '182800', head: '182801' } as const;
+
+        expect(rowSelection(ROWS, slice, row('182799'), true)).toEqual({
+            kind: 'slice',
+            base: '182799',
+            head: '182801',
+        });
+    });
+
+    it('Shift+click on the anchor selects the row normally', () => {
+        expect(rowSelection(ROWS, { kind: 'diff', diffId: '182800' }, row('182800'), true)).toEqual({
+            kind: 'diff',
+            diffId: '182800',
+        });
+    });
+
+    it('a gone iteration or a host without slices selects the row normally', () => {
+        const withGone = pickerRows({
+            snapshots: [],
+            iterations: [{ ...OLDER, status: 'gone' }, OLD, ACTIVE],
+            activeIteration: null,
+            interdiff: true,
+        });
+        const gone = withGone.iterations.find((candidate) => candidate.diffId === '182799');
+        expect(gone).toBeDefined();
+        if (gone !== undefined) {
+            expect(rowSelection(withGone, VIEWING_CURRENT, gone, true)).toEqual({ kind: 'diff', diffId: '182799' });
+            // A gone anchor cannot be used either.
+            expect(
+                rowSelection(withGone, { kind: 'diff', diffId: '182799' }, withGone.iterations[0] ?? gone, true),
+            ).toEqual(withGone.iterations[0]?.viewing);
+        }
+
+        const noInterdiff = pickerRows({
+            snapshots: [],
+            iterations: [OLD, ACTIVE],
+            activeIteration: null,
+        });
+        const old = noInterdiff.iterations.find((candidate) => candidate.diffId === '182800');
+        expect(old).toBeDefined();
+        if (old !== undefined) {
+            expect(rowSelection(noInterdiff, VIEWING_CURRENT, old, true)).toEqual({ kind: 'diff', diffId: '182800' });
+        }
     });
 });
