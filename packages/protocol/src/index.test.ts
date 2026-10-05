@@ -470,10 +470,26 @@ describe('iterations and snapshots in the UI contract', () => {
 });
 
 describe('locale, onboarding, update', () => {
+    it('a patch preserves fields that are absent', () => {
+        expect(uiSettingsSchema.parse({ theme: 'light', textSize: 'l' })).toMatchObject({
+            theme: 'light',
+            
+            textSize: 'l',
+        });
+        
+        
+        expect(uiSettingsPatchSchema.parse({ theme: 'auto' })).toEqual({ theme: 'auto' });
+        
+        
+        
+        
+    });
+
     it('settings: new fields get defaults, patches have no defaults and replace fields as a whole', () => {
         expect(uiSettingsSchema.parse({})).toMatchObject({
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },

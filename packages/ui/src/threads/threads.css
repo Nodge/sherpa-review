@@ -19,7 +19,7 @@
     /* Above rows but below the sticky card header (`diff-view.css`, 5). Scrolls under it with the line. */
     z-index: 4;
     gap: 3px;
-    height: 18px;
+    height: var(--thread-avatar-size);
     padding-right: 5px;
     border-radius: 9px;
 }
@@ -75,7 +75,7 @@
 .thread-line {
     border-top: 1px solid var(--border-hairline-strong);
     border-bottom: 1px solid var(--border-hairline-strong);
-    box-shadow: inset 2px 0 0 var(--accent);
+    box-shadow: var(--thread-line-shadow);
 }
 
 .thread-line--resolved {
@@ -90,17 +90,23 @@
 .thread-line .thread--bot,
 .thread-line .thread--resolved {
     opacity: 1;
-    background: var(--surface-card-header);
+    background: var(--thread-surface);
 }
 
 .thread {
+    font-family: var(--thread-font);
+    font-size: var(--thread-text-size);
+    line-height: var(--thread-line-height);
     position: relative;
-    background: var(--surface-card-header);
+    background: var(--thread-surface);
     color: var(--text-body);
     outline: none;
 }
 
 .thread + .thread {
+    font-family: var(--thread-font);
+    font-size: var(--thread-text-size);
+    line-height: var(--thread-line-height);
     border-top: 1px solid var(--border-hairline-strong);
 }
 
@@ -163,7 +169,7 @@
 /* The chevron precedes the root avatar and shifts its column by 29px (20 + gap 9).
    The root body and actions sit directly under its name. */
 .thread--card .thread__row:first-child {
-    --thread-indent: 56px;
+    --thread-indent: var(--thread-card-indent);
 }
 
 /* Replies in a card start at the same column as the root text (29px after the chevron). */
@@ -224,11 +230,11 @@
 .thread__row {
     /* Message text column: avatar 18 + gap 9. A thread card in the modal shifts it
        for the root because a chevron precedes the avatar there. */
-    --thread-indent: 27px;
+    --thread-indent: var(--thread-row-indent);
     /* Reply indentation by depth. No one sets the variable on the root. */
     --reply-indent: 0px;
 
-    padding: 10px 12px 11px;
+    padding: var(--thread-row-padding);
 }
 
 /*
@@ -276,8 +282,8 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: var(--thread-avatar-size);
+    height: var(--thread-avatar-size);
     border-radius: 50%;
     background: var(--surface-selected);
     font-size: var(--font-size-avatar-glyph);
@@ -296,8 +302,8 @@
 }
 
 .thread__meta {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-gutter);
+    font-family: var(--thread-meta-font);
+    font-size: var(--thread-meta-size);
     color: var(--text-dim);
 }
 
@@ -305,21 +311,21 @@
     padding: 1px 5px;
     border: 1px solid var(--border-strong-lifted);
     border-radius: var(--radius-key);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-badge);
+    font-family: var(--thread-meta-font);
+    font-size: var(--thread-chip-size);
     color: var(--text-muted);
 }
 
 .thread__chip--issue {
-    border-color: var(--accent-border);
-    background: var(--accent-surface-alt);
-    color: var(--accent-text);
+    border-color: var(--thread-issue-border);
+    background: var(--thread-issue-bg);
+    color: var(--thread-issue-text);
 }
 
 .thread__chip--draft {
-    border-color: var(--attention-border);
-    background: var(--attention-surface);
-    color: var(--attention-text);
+    border-color: var(--thread-draft-border);
+    background: var(--thread-draft-bg);
+    color: var(--thread-draft-text);
 }
 
 .thread__chip--pinned {
@@ -383,7 +389,7 @@
     align-items: center;
     gap: 14px;
     margin: 6px 0 0 var(--thread-indent, 27px);
-    min-height: 18px;
+    min-height: var(--thread-avatar-size);
     font-size: var(--font-size-control);
 }
 
@@ -426,7 +432,7 @@
     min-width: 0;
     padding: 5px 6px;
     border-bottom: 1px solid var(--border-hairline-strong);
-    background: var(--surface-card-header);
+    background: var(--thread-surface);
 }
 
 .thread-composer__tool:disabled {
@@ -674,7 +680,7 @@
     width: 100%;
     padding: 10px 13px;
     border: 0;
-    background: var(--surface-card-header);
+    background: var(--thread-surface);
     text-align: left;
     font-size: var(--font-size-secondary);
     color: var(--text-secondary);

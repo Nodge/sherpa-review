@@ -39,6 +39,7 @@ export const en: Dictionary = {
     'settings.kicker': 'SETTINGS',
     'settings.auto': 'Auto',
     'settings.theme': 'Theme',
+    
     'settings.theme.dark': 'Dark',
     'settings.theme.light': 'Light',
     'settings.language': 'Language',

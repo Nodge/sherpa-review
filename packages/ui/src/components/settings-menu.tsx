@@ -106,6 +106,23 @@ export function SettingsMenu({ agentConnected, onOpenCommands, onReplayTour, def
                         />
                     </SettingsRow>
 
+                    
+                        <button
+                            type="button"
+                            role="switch"
+                            
+                            
+                            
+                            onClick={() => {
+                                
+                            }}
+                        >
+                            <span className="ctl-switch__track" aria-hidden="true">
+                                <span className="ctl-switch__knob" />
+                            </span>
+                        </button>
+                    </SettingsRow>
+
                     <SettingsRow label={t('settings.language')}>
                         <Segments
                             label={t('settings.language')}
@@ -180,18 +197,20 @@ function SettingsRow({ label, children }: { label: string; children: ReactNode }
 
 /** Small settings row segment: selection applies immediately and the menu stays open. */
 function Segments<T extends string>({
+    className = '',
     label,
     value,
     options,
     onSelect,
 }: {
+    className?: string;
     label: string;
     value: T;
     options: readonly { value: T; label: string }[];
     onSelect: (value: T) => void;
 }) {
     return (
-        <div className="settings-menu__segments ctl-tabs ctl-tabs--small" role="group" aria-label={label}>
+        <div className={`settings-menu__segments ctl-tabs ctl-tabs--small ${className}`} role="group" aria-label={label}>
             {options.map((option) => (
                 <button
                     key={option.value}

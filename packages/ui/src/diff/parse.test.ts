@@ -111,7 +111,7 @@ describe('hunk highlighting by side', () => {
         expect(painted(model, 0)).toEqual([['comment', '/* legacy note']]);
         expect(painted(model, 1)).toEqual([
             ['keyword', 'const'],
-            ['string', '42'],
+            ['number', '42'],
         ]);
     });
 

@@ -26,7 +26,7 @@ body {
        14.6px at L. Stop paragraphs are larger and use their own `--font-size-body`. */
     font-size: var(--font-size-ui);
     line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+    -webkit-font-smoothing: var(--font-smoothing);
 }
 
 ::selection {
@@ -81,4 +81,17 @@ button {
 [aria-disabled='true'] {
     opacity: var(--disabled-opacity);
     cursor: default;
+}
+
+/* Apply font smoothing at every theme boundary, including gallery cards. */
+:root,
+[data-theme] {
+    -webkit-font-smoothing: var(--font-smoothing);
+}
+
+code,
+pre,
+kbd,
+samp {
+    font-family: var(--native-code-font);
 }

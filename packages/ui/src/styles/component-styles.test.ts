@@ -37,6 +37,11 @@ describe('component styles', () => {
         const name = path.relative(SRC, file);
         const css = readFileSync(file, 'utf8');
 
+        it(`${name}: palette selection stays in tokens.css`, () => {
+            const selectors = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/\[data-theme\s*(?:=|[~|^$*]=)[^\]]*\]/g);
+            expect(selectors ?? []).toEqual([]);
+        });
+
         it(`${name}: colours use tokens only`, () => {
             const literals = [
                 ...css.matchAll(/#[0-9a-fA-F]{3,8}\b/g),

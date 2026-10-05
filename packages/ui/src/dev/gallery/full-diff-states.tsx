@@ -45,12 +45,16 @@ interface WorkspaceStateProps {
     readonly prepareThreads?: (store: ThreadStore, threads: readonly Thread[]) => void;
 }
 
+// Stable defaults: changing the theme must not create a new store and lose parsed models.
+const EMPTY_VIEWED: readonly string[] = [];
+const EMPTY_RECORDS: readonly UiFileProgress[] = [];
+
 function WorkspaceState({
     fixture,
     filter = 'all',
     lenses,
-    viewed = [],
-    records = [],
+    viewed = EMPTY_VIEWED,
+    records = EMPTY_RECORDS,
     preloadModels = true,
     onlyPath,
     paths,

@@ -20,6 +20,7 @@ import type { FileTree, TreeDirRow, TreeFileRow, TreeRow } from './file-tree.js'
 import { buildFileTree, filterByQuery, readBox, rowIndent, rowKey, splitLabel, toggleDirectory } from './file-tree.js';
 import './file-tree.css';
 import { treeKeyCommand } from './tree-keys.js';
+import { useCssPixelSizes } from '../styles/use-css-pixel-sizes.js';
 
 /**
  * Left panel of the full diff (docs/design/README.md §10, docs/design/SPEC-elements.md §2.20):
@@ -29,10 +30,9 @@ import { treeKeyCommand } from './tree-keys.js';
  * A single-file PR gets a file outline, a list of hunks, instead of a single-row tree.
  */
 
-/** Tree row height (docs/design/SPEC-elements.md §2.20). The virtualizer needs an exact size, not an estimate. */
-const ROW_HEIGHT = 26;
-
 const OVERSCAN = 8;
+
+const TREE_CSS_SIZES = { rowHeight: '--tree-row-height', indentStep: '--tree-indent-step' } as const;
 
 /**
  * Exposed tree cursor: the full diff `v` key takes its file here when the mouse is not the latest
@@ -190,6 +190,8 @@ function FileTreeView({
     cursorRef,
 }: FileTreeViewProps) {
     const t = useT();
+    const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+    const { rowHeight, indentStep } = useCssPixelSizes(scrollElement, TREE_CSS_SIZES);
     // Directory collapse state lives in the server's PR state. It stores the reviewer's explicit choice,
     // and directories without a record follow the size-based default.
     const prState = usePrStateStore();
@@ -220,11 +222,10 @@ function FileTreeView({
     // One menu per tree. Its target row is stored separately from the anchor point.
     const menu = useContextMenu();
     const [menuRow, setMenuRow] = useState<TreeFileRow | null>(null);
-    const scrollRef = useRef<HTMLDivElement | null>(null);
     const virtualizer = useVirtualizer({
         count: tree.rows.length,
-        getScrollElement: () => scrollRef.current,
-        estimateSize: () => ROW_HEIGHT,
+        getScrollElement: () => scrollElement,
+        estimateSize: () => rowHeight,
         overscan: OVERSCAN,
         getItemKey: (index) => {
             const row = tree.rows[index];
@@ -242,13 +243,21 @@ function FileTreeView({
         },
     });
 
+    const previousRowHeight = useRef(rowHeight);
+    useEffect(() => {
+        if (previousRowHeight.current !== rowHeight) {
+            previousRowHeight.current = rowHeight;
+            virtualizer.measure();
+        }
+    }, [rowHeight, virtualizer]);
+
     // The active row comes from the right-panel scroll-spy and needs to be brought into view.
     const activeIndex = tree.rows.findIndex((row) => row.kind === 'file' && row.fileId === activeFileId);
     useEffect(() => {
         if (activeIndex >= 0) {
             virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
         }
-    }, [activeIndex, virtualizer]);
+    }, [activeIndex, rowHeight, scrollElement, virtualizer]);
 
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
         const command = treeKeyCommand(event.key, tree.rows, cursor);
@@ -273,11 +282,11 @@ function FileTreeView({
         cursorRef,
         (): FileTreeCursor => ({
             cursorFileId: () =>
-                cursorRow?.kind === 'file' && scrollRef.current?.contains(document.activeElement) === true
+                cursorRow?.kind === 'file' && scrollElement?.contains(document.activeElement) === true
                     ? cursorRow.fileId
                     : null,
         }),
-        [cursorRow],
+        [cursorRow, scrollElement],
     );
 
     if (files.length === 0) {
@@ -297,7 +306,7 @@ function FileTreeView({
     return (
         <div
             className="file-tree"
-            ref={scrollRef}
+            ref={setScrollElement}
             role="tree"
             aria-label={t('tree.rows.aria')}
             tabIndex={0}
@@ -328,7 +337,7 @@ function FileTreeView({
                             className={rowClassName(row, activeFileId, item.index === cursor)}
                             // Position with `top`. Using `transform` breaks sticky
                             // elements inside the scrollable panel.
-                            style={{ top: `${String(item.start)}px`, paddingLeft: `${String(rowIndent(row))}px` }}
+                            style={{ top: `${String(item.start)}px`, paddingLeft: `${String(rowIndent(row, indentStep))}px` }}
                             onClick={(event) => {
                                 setCursor(item.index);
                                 if (row.kind === 'dir') {

@@ -45,6 +45,23 @@ describe('diff line segments', () => {
         ]);
     });
 
+    it('merges adjacent tokens of the same category within word-level highlighting', () => {
+        const segments = lineSegments(line({
+            text: 'leftRight',
+            tokens: [
+                { from: 0, to: 4, kind: 'variable' },
+                { from: 4, to: 9, kind: 'variable' },
+            ],
+            words: [{ from: 2, to: 6 }],
+        }));
+
+        expect(segments).toEqual([
+            { text: 'le', kind: 'variable', word: false, trailing: false },
+            { text: 'ftRi', kind: 'variable', word: true, trailing: false },
+            { text: 'ght', kind: 'variable', word: false, trailing: false },
+        ]);
+    });
+
     it('displays tabs as four spaces without shifting offsets', () => {
         const raw = '\tconst x = 1;';
         const segments = lineSegments(line({ text: raw, tokens: [{ from: 1, to: 6, kind: 'keyword' }] }));

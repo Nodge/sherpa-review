@@ -13,7 +13,7 @@ import '../../diff-view/diff-view.css';
 /**
  * Syntax highlighting for languages absent from fixtures: one card per language using a handwritten
  * hunk. Lines with `-`/`+` are deletions and additions, and the rest are context. Check visually:
- * the 4 categories from docs/design/README.md §1, with nothing else colored.
+ * semantic categories and the palette are documented in docs/design/theme.md.
  */
 
 interface Sample {

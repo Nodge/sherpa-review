@@ -28,8 +28,8 @@ export const TREE_INDENT_STEP = 10;
  * Rows at the same level start in the same column: directory chevron and file checkbox.
  * A combined chain is one level.
  */
-export function rowIndent(row: Pick<TreeRow, 'depth'>): number {
-    return TREE_INDENT_BASE + row.depth * TREE_INDENT_STEP;
+export function rowIndent(row: Pick<TreeRow, 'depth'>, indentStep = TREE_INDENT_STEP): number {
+    return TREE_INDENT_BASE + row.depth * indentStep;
 }
 
 export interface TreeFileRow {

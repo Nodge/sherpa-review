@@ -16,7 +16,7 @@ import { GALLERY_STATES } from './states.tsx';
  *
  * The locale is selected in the header and stored in the URL (`#locale=ru`): states need inspection in both
  * languages, so the provider gets the language as an explicit prop. Theme and text size live in the local settings
- * store and in the URL (`#theme=light`, `#textsize=l`). All 3 controls belong to the gallery:
+ * settings and in the URL (`#theme=light`, `#textsize=l`). The gallery has its own switches:
  * in the product they live in the settings menu, which itself is one of the gallery states.
  * The theme defaults to dark here rather than the product's `auto`: cards must render identically
  * under any system theme unless `#theme=auto` is explicitly requested.
@@ -25,29 +25,40 @@ export function Gallery({
     initialId,
     initialLocale = 'en',
     initialTheme = 'dark',
+    
     initialTextSize = 'm',
 }: {
     initialId: string | null;
     initialLocale?: Locale;
     initialTheme?: UiSettings['theme'];
+    
     initialTextSize?: UiSettings['textSize'];
 }) {
     const [settings] = useState(() =>
-        createUiSettingsStore({ loaded: true, initial: { theme: initialTheme, textSize: initialTextSize } }),
+        createUiSettingsStore({
+            loaded: true,
+            initial: { theme: initialTheme, textSize: initialTextSize },
+        }),
     );
-    useEffect(() => settings.subscribe(() => {
-        const snapshot = settings.getSnapshot();
-        const fragment = updateFragment(window.location.hash, {
-            theme: snapshot.theme,
-            textsize: snapshot.textSize,
-        });
-        history.replaceState(null, '', fragment);
-    }), [settings]);
+    useEffect(() => {
+        const syncFragment = (): void => {
+            const snapshot = settings.getSnapshot();
+            const fragment = updateFragment(window.location.hash, {
+                theme: snapshot.theme,
+                
+                textsize: snapshot.textSize,
+            });
+            history.replaceState(null, '', fragment);
+        };
+        syncFragment();
+        return settings.subscribe(syncFragment);
+    }, [settings]);
     const [selectedId, setSelectedId] = useState(initialId ?? GALLERY_STATES[0]?.id ?? '');
     const [locale, setLocale] = useState<Locale>(initialLocale);
     // `DocumentSettingsSync` sets the attribute on `<html>` from the store, as in the product.
     const textSize = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().textSize);
     const theme = useSyncExternalStore(settings.subscribe, () => settings.getSnapshot().theme);
+    
     const selected = GALLERY_STATES.find((state) => state.id === selectedId) ?? GALLERY_STATES[0];
 
     const select = (id: string): void => {
@@ -117,6 +128,19 @@ export function Gallery({
                                         </button>
                                     ))}
                                 </div>
+                                <div className="gallery__themes">
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        
+                                        
+                                        onClick={() => {
+                                            
+                                        }}
+                                    >
+                                        
+                                    </button>
+                                </div>
                                 <div className="gallery__locales" role="group" aria-label="Interface language">
                                     {LOCALES.map((option) => (
                                         <button
@@ -173,9 +197,14 @@ export function parseGalleryLocale(value: string | null): Locale {
     return value === 'ru' ? 'ru' : 'en';
 }
 
-/** `#theme=auto|dark|light`. All other values mean dark, so cards do not depend on the system theme. */
+/** Three theme modes. An unknown or empty value keeps the gallery dark theme. */
 export function parseGalleryTheme(value: string | null): UiSettings['theme'] {
     return value === 'light' || value === 'auto' ? value : 'dark';
+}
+
+
+
+    return value === '1';
 }
 
 /** `#textsize=l`. Any other value uses the normal size. */

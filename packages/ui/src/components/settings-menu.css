@@ -90,6 +90,11 @@
     font-size: var(--font-size-control);
 }
 
+/* Style is selected independently of the light/dark theme. */
+.settings-menu__switch {
+    margin-left: auto;
+}
+
 /* --- Actions below the divider --- */
 
 .settings-menu__divider {

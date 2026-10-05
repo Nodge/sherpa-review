@@ -230,6 +230,27 @@ describe('settings menu beside other popovers', () => {
 });
 
 describe('settings from the menu', () => {
+    
+        const { host, settings } = mount();
+        press(trigger(host));
+        const themes = host.querySelector('[role="group"][aria-label="Theme"]');
+        expect(themes?.querySelectorAll('button')).toHaveLength(3);
+        
+        
+
+        
+        
+        
+        for (const theme of ['light', 'dark'] as const) {
+            press(segment(host, t(`settings.theme.${theme}`)));
+            expect(settings.getSnapshot()).toMatchObject({ theme });
+        }
+        
+        
+        
+        expect(panel(host)).not.toBeNull();
+    });
+
     it('segments write the selection to the settings store', () => {
         const { host, settings } = mount();
         press(trigger(host));

@@ -23,6 +23,7 @@ const SETTINGS_FIELDS = [
     'composerLayout',
     'locale',
     'theme',
+    
     'textSize',
     // Nested objects use reference equality for "same value", so the patch is always sent.
     // Each has one writer: the onboarding tour and "do not remind me about this version".
@@ -39,7 +40,7 @@ export interface UiSettingsStore {
      * wait for this flag.
      */
     readonly isLoaded: () => boolean;
-    /** Applies the named fields immediately and sends PATCH. Fields with unchanged values are not sent. */
+    /** Applies specified fields immediately and sends PATCH. Does not send repeated choices already known. */
     readonly update: (patch: UiSettingsPatch) => void;
     /**
      * Settings received from the server at startup. The response does not override fields the reviewer
@@ -101,6 +102,12 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
         update: (patch) => {
             const changes = applyLocally(patch);
             for (const field of SETTINGS_FIELDS) {
+                const value = patch[field];
+                // Before GET, the value may only reflect the initial HTML appearance (light for Auto).
+                // Persist the first explicit choice even if it matches. Subsequent repeats are no-ops.
+                if (!loaded && value !== undefined && !changedHere.has(field)) {
+                    Object.assign(changes, { [field]: value });
+                }
                 if (changes[field] !== undefined) {
                     changedHere.add(field);
                 }
@@ -136,8 +143,8 @@ export function createUiSettingsStore(options: UiSettingsStoreOptions = {}): UiS
 }
 
 /**
- * Settings boot-GET: applies the result to the store, leaves defaults on failure. The UI does not wait for it.
- * It works without settings, using defaults.
+ * Settings boot GET applies its result to the store and leaves initial values on failure.
+ * In the main UI, appearance already comes from the initial HTML and other fields use defaults.
  */
 export function loadUiSettings(store: UiSettingsStore, load: () => Promise<UiSettings>): Promise<void> {
     return load().then(
@@ -145,7 +152,7 @@ export function loadUiSettings(store: UiSettingsStore, load: () => Promise<UiSet
             store.applyLoaded(settings);
         },
         (error: unknown) => {
-            console.warn('Sherpa: UI settings failed to load, falling back to defaults:', error);
+            console.warn('Sherpa: UI settings failed to load, keeping initial values:', error);
         },
     );
 }

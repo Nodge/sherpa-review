@@ -6,31 +6,31 @@ import type { LanguageId, SyntaxKind, SyntaxToken } from './model.js';
 /**
  * Syntax highlighting with highlight.js (`lowlight` wrapper, grammar registry in `languages.ts`).
  *
- * docs/design/README.md §1: highlighting is "intentionally minimal", with 4 categories. hljs has
- * an order of magnitude more scopes, so this table maps scopes to categories. Anything absent inherits
- * its parent category, with plain at the root. The rule for ambiguous cases is unchanged: when in doubt, use plain.
+ * One tree traversal assigns categories shared by all themes. Anything absent from the table
+ * inherits its parent category, while the root uses plain.
+ * Switching themes changes CSS without reparsing the text.
  */
 
 /**
- * hljs scope → highlighting category. The key is the first scope segment. Compound scopes (`title.function`,
- * `char.escape`) arrive in hast with `hljs-title` or `hljs-char` as the first class.
+ * Original hljs scope → highlighting category. The key is the first scope segment.
  *
  * A `null` value resets the category: `subst` (template string substitution) is inside `string`,
  * but it is code, not a string. A missing key inherits the parent category, so
- * `doctag` inside a comment remains a comment, and `title` inside `keyword` gets no color.
+ * `doctag` inside a comment stays a comment.
  */
 const SCOPE_KINDS = new Map<string, SyntaxKind | null>([
     ['keyword', 'keyword'],
     ['built_in', 'keyword'],
-    ['type', 'keyword'],
+    ['type', 'type'],
     ['literal', 'keyword'],
     // Markdown heading: the old lexer used keyword colour, so keep that colour.
     ['section', 'keyword'],
     ['string', 'string'],
-    // JSON/YAML keys and XML attributes keep configs from fading to values alone.
-    ['attr', 'string'],
-    // docs/design/README.md §1 gives numbers the same color as strings.
-    ['number', 'string'],
+    ['attr', 'property'],
+    ['property', 'property'],
+    ['number', 'number'],
+    ['variable', 'variable'],
+    ['template-variable', 'variable'],
     ['regexp', 'string'],
     ['char', 'string'],
     ['symbol', 'string'],
@@ -207,7 +207,7 @@ export function highlightText(text: string, language: LanguageId): SyntaxToken[]
         return lines;
     }
 
-    walk(lowlight.highlight(language, text).children, null, lines, { line: 0, column: 0 });
+    walk(lowlight.highlight(language, text).children, null, lines, { line: 0, column: 0 }, language);
     return lines.map(merge);
 }
 
@@ -222,26 +222,63 @@ interface Cursor {
     column: number;
 }
 
-function walk(nodes: readonly RootContent[], kind: SyntaxKind | null, lines: SyntaxToken[][], cursor: Cursor): void {
+function walk(
+    nodes: readonly RootContent[],
+    kind: SyntaxKind | null,
+    lines: SyntaxToken[][],
+    cursor: Cursor,
+    language: LanguageId,
+    container?: Element,
+): void {
     for (const node of nodes) {
         if (node.type === 'text') {
             emit(node.value, kind, lines, cursor);
             continue;
         }
         if (node.type === 'element') {
-            walk(node.children, kindOf(node, kind), lines, cursor);
+            walk(
+                node.children,
+                kindOf(node, kind, language, container),
+                lines,
+                cursor,
+                language,
+                node,
+            );
         }
     }
 }
 
 /** Node category: its own if the table has its scope (including a reset), otherwise its parent category. */
-function kindOf(node: Element, parent: SyntaxKind | null): SyntaxKind | null {
+function kindOf(
+    node: Element,
+    parent: SyntaxKind | null,
+    language: LanguageId,
+    container?: Element,
+): SyntaxKind | null {
     const classes = node.properties.className;
     const first = Array.isArray(classes) ? classes[0] : undefined;
     if (typeof first !== 'string' || !first.startsWith('hljs-')) {
         return parent;
     }
     const scope = first.slice('hljs-'.length);
+    // Older Go/C++ grammars nest `title` inside `function`, newer ones return `title.function`.
+    // Colour only the name, not the entire declaration container with parameters and spaces.
+    if (scope === 'title' && Array.isArray(classes) && parent !== 'decorator') {
+        const containerClasses = container?.properties.className;
+        if (classes.includes('class_') || containerClasses?.includes('hljs-class')) {
+            return 'type';
+        }
+        if (classes.includes('function_') || containerClasses?.includes('hljs-function')) {
+            return 'function';
+        }
+    }
+    // YAML calls both document boundaries and anchors meta. Only an anchor/reference is a variable.
+    if (scope === 'meta' && (language === 'yaml' || language === 'yml')) {
+        const firstChild = node.children[0];
+        if (firstChild?.type === 'text' && /^[&*]/.test(firstChild.value)) {
+            return 'variable';
+        }
+    }
     if (!SCOPE_KINDS.has(scope)) {
         return parent;
     }
@@ -271,7 +308,12 @@ function spansLines(node: Element): boolean {
 }
 
 /** Convert node text into tokens, one piece per line. Empty pieces and plain are not emitted. */
-function emit(value: string, kind: SyntaxKind | null, lines: SyntaxToken[][], cursor: Cursor): void {
+function emit(
+    value: string,
+    kind: SyntaxKind | null,
+    lines: SyntaxToken[][],
+    cursor: Cursor,
+): void {
     for (const [index, piece] of value.split('\n').entries()) {
         if (index > 0) {
             cursor.line += 1;
@@ -281,13 +323,17 @@ function emit(value: string, kind: SyntaxKind | null, lines: SyntaxToken[][], cu
             continue;
         }
         if (kind !== null) {
-            lines[cursor.line]?.push({ from: cursor.column, to: cursor.column + piece.length, kind });
+            lines[cursor.line]?.push({
+                from: cursor.column,
+                to: cursor.column + piece.length,
+                kind,
+            });
         }
         cursor.column += piece.length;
     }
 }
 
-/** Merge adjacent tokens of the same category, which hljs splits into nested nodes. */
+/** Merge adjacent tokens of the same category. */
 function merge(tokens: readonly SyntaxToken[]): SyntaxToken[] {
     const merged: SyntaxToken[] = [];
     for (const token of tokens) {

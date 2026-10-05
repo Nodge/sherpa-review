@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest';
  * Check design tokens against the handoff.
  *
  * Geometry, fonts, disabled opacity and motion are checked against `EXPECTED`, a table
- * copied verbatim from `docs/design/README.md`, under "Design tokens". Colours for both themes
- * are checked against the table in `docs/design/theme.md`. Changing a token without updating the document fails the test,
- * and vice versa. An extra or missing token also fails it. The sets must match exactly.
+ * copied from the "Design tokens" section of `docs/design/README.md`.
+ * Palette colours are checked against `docs/design/theme.md`. Component tokens live only in CSS:
+ * each theme is checked for a complete set without duplicating values in the docs.
  */
 
 /** Non-colour token → value from the design handoff. Each group comment names its section. */
@@ -44,7 +44,7 @@ const EXPECTED: Record<string, string> = {
     '--font-size-close-glyph': '1.125rem',
     '--font-size-code': '0.75rem',
     '--line-height-body': '1.62',
-    // The only size still in px: code line density does not depend on text size.
+    // Code line density in px does not depend on text size.
     '--line-height-code': '20px',
 
     // Radius — 2–3px (rules, tier marks) · 4–5px (badges, small chips) · 6px (buttons, rows) ·
@@ -93,6 +93,36 @@ const EXPECTED: Record<string, string> = {
     '--motion-flash': '900ms',
 };
 
+
+
+    ...EXPECTED,
+    
+    '--font-mono': "Menlo, Monaco, Consolas, 'Liberation Mono', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', Courier, monospace",
+    '--font-size-body': '0.875rem',
+    '--font-size-ui': '0.875rem',
+    '--font-size-secondary': '0.8125rem',
+    '--font-size-control': '0.8125rem',
+    '--font-size-meta': '0.8125rem',
+    '--font-size-gutter': '0.75rem',
+    '--line-height-body': '1.5',
+    '--line-height-code': '17px',
+    '--radius-badge': '3px',
+    '--radius-button': '5px',
+    '--radius-input': '5px',
+    '--radius-card': '5px',
+    '--radius-floating': '8px',
+    '--radius-panel': '8px',
+    '--space-page': '20px',
+    '--space-column': '32px',
+    '--space-card': '12px',
+    '--space-control': '12px',
+    '--width-file-tree': 'clamp(280px, 22vw, 420px)',
+};
+
+const THEMES = ['dark', 'light'] as const;
+
+type Theme = typeof THEMES[number];
+
 const TOKENS_CSS = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8');
 const THEME_MD = readFileSync(fileURLToPath(new URL('../../../../docs/design/theme.md', import.meta.url)), 'utf8');
 
@@ -110,9 +140,9 @@ function normalize(value: string): string {
         .trim();
 }
 
-/** `--name: value;` declarations from the `:root` block. */
+/** `--name: value;` declarations from the base block. */
 function parseRootTokens(css: string): Map<string, string> {
-    const root = /:root\s*\{([\s\S]*?)\n\}/.exec(css)?.[1];
+    const root = /:root(?:,\s*\[data-theme\])?\s*\{([\s\S]*?)\n\}/.exec(css)?.[1];
     if (root === undefined) {
         throw new Error('no :root block found in tokens.css');
     }
@@ -127,23 +157,39 @@ function parseRootTokens(css: string): Map<string, string> {
     return tokens;
 }
 
-/** The "token | dark | light | source" table from docs/design/theme.md. */
-function parseThemeDoc(markdown: string): { dark: Map<string, string>; light: Map<string, string> } {
-    const dark = new Map<string, string>();
-    const light = new Map<string, string>();
+/** Colour palette table from docs/design/theme.md. */
+function parseThemeDoc(markdown: string): Record<Theme, Map<string, string>> {
+    const result: Record<Theme, Map<string, string>> = {
+        dark: new Map(), light: new Map(),
+    };
     for (const [, name, darkValue, lightValue] of markdown.matchAll(
-        /^\| `(--[a-z0-9-]+)` \| `([^`]+)` \| `([^`]+)` \| [^|]+\|$/gm,
+        /^\| `(--[a-z0-9-]+)` \| `([^`]+)` \| `([^`]+)` \| `([^`]+)` \| `([^`]+)` \| [^|]+\|$/gm,
     )) {
-        if (name === undefined || darkValue === undefined || lightValue === undefined) {
+        if (name === undefined || darkValue === undefined || lightValue === undefined
+            ) {
             continue;
         }
-        dark.set(name, normalize(darkValue));
-        light.set(name, normalize(lightValue));
+        result.dark.set(name, normalize(darkValue));
+        result.light.set(name, normalize(lightValue));
+        
+        
     }
-    if (dark.size === 0) {
+    if (result.dark.size === 0) {
         throw new Error('colour token table not found in theme.md');
     }
-    return { dark, light };
+    return result;
+}
+
+/** Only the selected theme's own block, without adjacent selectors or inherited values. */
+function themeCss(theme: 'light'): string {
+    const marker = `:root[data-theme='${theme}']`;
+    const start = TOKENS_CSS.indexOf(marker);
+    if (start < 0) {
+        throw new Error(`No ${theme} block found in tokens.css`);
+    }
+    const after = TOKENS_CSS.slice(start + marker.length);
+    const body = after.slice(after.indexOf('{') + 1, after.indexOf('}'));
+    return `:root {${body}\n}`;
 }
 
 /**
@@ -171,16 +217,23 @@ function remToPx(rem: string, base: number): string {
 }
 
 const darkPalette = parseRootTokens(TOKENS_CSS);
-// The light palette selector is a list: the root and any subtree with the attribute (docs/design/theme.md).
-const lightCss = TOKENS_CSS.split(/:root\[data-theme='light'\][^{]*/)[1] ?? '';
-const lightPalette = parseRootTokens(`:root ${lightCss}`);
+const lightCss = themeCss('light');
+const lightPalette = parseRootTokens(lightCss);
+
+
+
+
+const palettes: Record<Theme, Map<string, string>> = {
+    dark: darkPalette, light: lightPalette,
+};
 const documented = parseThemeDoc(THEME_MD);
 const documentedScale = parseTypographyDoc(THEME_MD);
 
+
 describe('design tokens', () => {
-    it(':root declares exactly the non-colour tokens from the handoff and colour tokens from theme.md', () => {
-        expect([...darkPalette.keys()].sort()).toEqual(
-            [...Object.keys(EXPECTED), ...documented.dark.keys()].sort(),
+    it(':root declares every handoff token from README.md and theme.md', () => {
+        expect([...darkPalette.keys()]).toEqual(
+            expect.arrayContaining([...Object.keys(EXPECTED), ...documented.dark.keys()]),
         );
     });
 
@@ -250,19 +303,65 @@ describe('font scale', () => {
 });
 
 describe('theme palettes', () => {
-    it('the light palette overrides exactly the colour tokens and switches color-scheme', () => {
-        expect([...lightPalette.keys()].sort()).toEqual([...documented.light.keys()].sort());
+    
+        
+        const values = parseRootTokens(css);
+        expect(css).toContain('color-scheme: light;');
+        expect([...values.keys()].sort()).toEqual([...darkPalette.keys()].sort());
+        expect(values.get('--surface-app')).toBe('#ffffff');
+        expect(values.get('--surface-card-header')).toBe('#f2f2f2');
+        expect(values.get('--surface-diff-gap')).toBe('#f1f8ff');
+        expect(values.get('--diff-add-gutter-bg')).toBe('#cbf5cb');
+        expect(values.get('--diff-del-gutter-bg')).toBe('#fdd7d7');
+        
+            expect(values.get(name), name).toBe(normalize(expected));
+        }
+    });
+
+    it('the light palette switches color-scheme', () => {
         expect(lightCss).toContain('color-scheme: light;');
     });
 
-    it('dark values match theme.md', () => {
-        const colors = new Map([...darkPalette].filter(([name]) => documented.dark.has(name)));
-        expect(Object.fromEntries(colors)).toEqual(Object.fromEntries(documented.dark));
+    it('each theme subtree starts with the original tokens, including fonts and geometry', () => {
+        expect(TOKENS_CSS).toMatch(/:root,\s*\[data-theme\]\s*\{/);
     });
 
-    it('light values match theme.md', () => {
-        expect(Object.fromEntries(lightPalette)).toEqual(Object.fromEntries(documented.light));
+    
+        
     });
+
+    for (const theme of THEMES) {
+        it(`${theme}: the full token set resets at the theme boundary`, () => {
+            expect([...palettes[theme].keys()].sort()).toEqual([...darkPalette.keys()].sort());
+        });
+
+        it(`${theme}: all colour values match theme.md`, () => {
+            const colors = new Map([...palettes[theme]].filter(([name]) => documented[theme].has(name)));
+            expect(Object.fromEntries(colors)).toEqual(Object.fromEntries(documented[theme]));
+        });
+    }
+
+    
+        
+            it(`${theme}: ${name} = ${expected}`, () => {
+                expect(palettes[theme].get(name)).toBe(normalize(expected));
+            });
+        }
+    }
+
+    
+        
+    });
+
+    
+        
+            
+                expect(palettes[theme].get(name)).toBe(normalize(row.rem));
+                expect(row.m).toBe(remToPx(row.rem, 16));
+                expect(row.l).toBe(remToPx(row.rem, 18));
+            });
+        }
+    }
 });
 
 /**
@@ -278,11 +377,14 @@ describe('theme palettes', () => {
  * ink 4.31, comment edit chip 4.26, delete confirmation text 4.50, "new" badge
  * 4.46, queued plan item on an alternate background 4.17, "saved" mark 3.69 on a
  * thread card (4.37 in dark) and 3.82 in the modal composer, tree stop label 3.56.
+ 
+ 
  */
 interface TextPair {
     readonly text: string;
     readonly on: readonly string[];
-    readonly low?: readonly ('dark' | 'light')[];
+    readonly low?: readonly Theme[];
+    readonly inherited?: string;
 }
 
 const TEXT_PAIRS: readonly TextPair[] = [
@@ -326,15 +428,24 @@ const TEXT_PAIRS: readonly TextPair[] = [
     { text: '--code-text', on: ['--diff-add-bg', '--surface-diff-card'] },
     { text: '--code-text-del', on: ['--diff-del-bg', '--surface-diff-card'] },
     { text: '--diff-add-text', on: ['--diff-add-bg', '--surface-diff-card'], low: ['light'] },
+    
     { text: '--diff-del-text', on: ['--diff-del-bg', '--surface-diff-card'], low: ['light'] },
-    { text: '--diff-add-gutter', on: ['--diff-add-bg', '--surface-diff-card'], low: ['light'] },
-    { text: '--diff-del-gutter', on: ['--diff-del-bg', '--surface-diff-card'], low: ['dark', 'light'] },
+    { text: '--diff-add-gutter', on: ['--diff-add-gutter-bg', '--diff-add-bg', '--surface-diff-card'], low: ['light'] },
+    { text: '--diff-del-gutter', on: ['--diff-del-gutter-bg', '--diff-del-bg', '--surface-diff-card'], low: ['dark', 'light'] },
     { text: '--diff-add-text', on: ['--surface-card-header'], low: ['light'] },
+    
     { text: '--diff-del-text', on: ['--surface-card-header'], low: ['light'] },
     { text: '--syntax-keyword', on: ['--surface-diff-card'] },
     { text: '--syntax-string', on: ['--surface-diff-card'] },
     { text: '--syntax-comment', on: ['--surface-diff-card'] },
     { text: '--syntax-decorator', on: ['--surface-diff-card'], low: ['light'] },
+    ...['--syntax-property', '--syntax-number', '--syntax-type'].map(
+        (text) => ({ text, on: ['--surface-diff-card'] }),
+    ),
+    ...['--syntax-variable', '--syntax-function'].flatMap((text) => [
+        { text, on: ['--surface-diff-card'], inherited: '--code-text' },
+        { text, on: ['--diff-del-bg', '--surface-diff-card'], inherited: '--code-text-del' },
+    ]),
     // Accent and amber groups on their own surfaces.
     { text: '--accent-text', on: ['--accent-surface'] },
     { text: '--accent-text-soft', on: ['--accent-surface'] },
@@ -355,9 +466,16 @@ const TEXT_PAIRS: readonly TextPair[] = [
     { text: '--attention-text-soft', on: ['--attention-surface-alt'] },
     { text: '--attention-body', on: ['--attention-surface-alt'] },
     { text: '--attention-label', on: ['--attention-surface-alt'] },
+    // The same existing green badge pair: its recorded light contrast is 4.46.
+    { text: '--success-text', on: ['--ownership-mine-surface', '--surface-panel-deep'], low: ['light'] },
+    { text: '--success-text', on: ['--ownership-mine-surface', '--surface-app'], low: ['light'] },
     { text: '--error-text', on: ['--error-surface'] },
     { text: '--error-text', on: ['--surface-digest-footer'] },
     { text: '--text-dim-strong', on: ['--surface-digest-footer'] },
+    // "Uncovered": the chip sits on the red footer, and the footer on the digest card.
+    // The original light theme's previous pair gives 3.89:1.
+    { text: '--error-text', on: ['--error-border', '--surface-digest-footer', '--surface-panel-deep'], low: ['light'] },
+    { text: '--text-secondary', on: ['--surface-digest-footer', '--surface-panel-deep'] },
     // Stop label in a tree row (§6a): a secondary marker, using the pair from the spec.
     { text: '--stop-mark-text', on: ['--surface-panel'], low: ['light'] },
     { text: '--chat-body-text', on: ['--surface-panel'] },
@@ -398,16 +516,20 @@ const TEXT_PAIRS: readonly TextPair[] = [
 ];
 
 describe('text contrast on backgrounds', () => {
-    for (const palette of ['dark', 'light'] as const) {
-        const tokens = palette === 'dark' ? darkPalette : lightPalette;
+    for (const palette of THEMES) {
+        const tokens = palettes[palette];
         for (const pair of TEXT_PAIRS) {
             const known = pair.low?.includes(palette) === true;
             it(`${palette}: ${pair.text} on ${pair.on.join(' → ')}${known ? ' — below standard' : ''}`, () => {
-                const background = pair.on.reduceRight<number[] | null>(
+                const background = pair.on.reduceRight<number[]>(
                     (below, layer) => blend(parseColor(tokenValue(tokens, layer)), below),
-                    null,
+                    parseColor(tokenValue(tokens, '--surface-app')).rgb,
                 );
-                const ratio = contrast(parseColor(tokenValue(tokens, pair.text)).rgb, background ?? []);
+                const textColor = tokenValue(tokens, pair.text);
+                const inherited = textColor === 'currentcolor' && pair.inherited !== undefined
+                    ? tokenValue(tokens, pair.inherited)
+                    : textColor;
+                const ratio = contrast(parseColor(inherited).rgb, background);
                 if (known) {
                     // Lower bound: the worst recorded pair (line numbers on a collapsed row in light, 2.62).
                     expect(ratio).toBeGreaterThanOrEqual(2.6);
@@ -422,11 +544,21 @@ describe('text contrast on backgrounds', () => {
 });
 
 function tokenValue(tokens: Map<string, string>, name: string): string {
-    const found = tokens.get(name);
-    if (found === undefined) {
-        throw new Error(`palette has no token ${name}`);
+    const seen = new Set<string>();
+    let current = name;
+    while (!seen.has(current)) {
+        seen.add(current);
+        const found = tokens.get(current);
+        if (found === undefined) {
+            throw new Error(`palette has no token ${current}`);
+        }
+        const reference = /^var\((--[a-z0-9-]+)\)$/.exec(found)?.[1];
+        if (reference === undefined) {
+            return found;
+        }
+        current = reference;
     }
-    return found;
+    throw new Error(`circular colour token reference ${name}`);
 }
 
 /** `#rrggbb` or `rgba(r,g,b,a)` → channel values and alpha. */

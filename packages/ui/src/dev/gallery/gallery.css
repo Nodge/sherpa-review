@@ -103,6 +103,7 @@
     cursor: pointer;
 }
 
+.gallery__themes button[aria-checked='true'],
 .gallery__themes button[aria-pressed='true'],
 .gallery__locales button[aria-pressed='true'],
 .gallery__textsize button[aria-pressed='true'] {
@@ -125,6 +126,9 @@
  * around the control uses its own palette. Otherwise a light card would sit on a dark stage.
  */
 .gallery-themed {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-ui);
+    line-height: var(--line-height-body);
     margin: calc(-1 * var(--space-card));
     padding: var(--space-card);
     background: var(--surface-app);

@@ -53,6 +53,7 @@ describe('global UI settings endpoint', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -72,11 +73,49 @@ describe('global UI settings endpoint', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
         expect(await readSettings(server)).toMatchObject({ diffMode: 'split', shipMode: 'sticky_ship' });
+    });
+
+    it.each([
+        ['dark', false], ['light', false], ['auto', false],
+        ['dark', true], ['light', true], ['auto', true],
+    ] as const)('theme %s is readable by another server', async (theme) => {
+        const first = await start();
+
+        const response = await patchJson(first.port, UI_ENDPOINTS.settings, { theme }, first.token);
+
+        expect(response.status).toBe(200);
+        expect(uiSettingsResponseSchema.parse(await response.json()).settings).toMatchObject({ theme });
+        expect(await readSettings(first)).toMatchObject({ theme });
+
+        const second = await start(OTHER_PR_KEY);
+        expect(await readSettings(second)).toMatchObject({ theme });
+    });
+
+    
+        const server = await start();
+        await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'light' }, server.token);
+        
+        
+
+        await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'auto' }, server.token);
+        expect(await readSettings(server)).toMatchObject({ theme: 'auto' });
+
+        
+        
+    });
+
+    it.each([{ theme: 'invalid-theme' }])('rejects an invalid new selection: %j', async (patch) => {
+        const server = await start();
+        const response = await patchJson(server.port, UI_ENDPOINTS.settings, patch, server.token);
+
+        expect(response.status).toBe(400);
+        
     });
 
     it('replaces a nested patch object in full without changing the language', async () => {
@@ -94,6 +133,7 @@ describe('global UI settings endpoint', () => {
             onboarding: { completedAt: null, step: 3 },
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
         });
     });

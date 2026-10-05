@@ -19,6 +19,7 @@ createRoot(container).render(
         <IconSprite />
         <Gallery
             initialTheme={parseGalleryTheme(readFragmentParam(window.location.hash, 'theme'))}
+            
             initialTextSize={parseGalleryTextSize(readFragmentParam(window.location.hash, 'textsize'))}
             initialId={readFragmentParam(window.location.hash, 'state')}
             initialLocale={parseGalleryLocale(readFragmentParam(window.location.hash, 'locale'))}

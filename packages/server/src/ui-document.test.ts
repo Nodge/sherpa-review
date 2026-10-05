@@ -1,3 +1,5 @@
+import { runInNewContext } from 'node:vm';
+
 import { describe, expect, it } from 'vitest';
 
 import type { StaticAssets } from './static.js';
@@ -15,11 +17,17 @@ const INDEX = [
 ].join('\n');
 
 describe('document state in index.html', () => {
-    it('passes an explicit theme as an attribute, with no script in the document', () => {
-        const html = injectDocumentSettings(INDEX, { theme: 'light', textSize: 'm' });
+    it.each([
+        ['dark', false, 'dark'],
+        ['light', false, 'light'],
+        
+        
+    ] as const)('explicit theme %s is set as an attribute without a system script', (theme, expected) => {
+        const html = injectDocumentSettings(INDEX, { theme, textSize: 'm' });
 
-        expect(html).toContain('<html lang="ru" data-textsize="m" data-theme="light">');
+        expect(html).toContain(`<html lang="ru" data-textsize="m" data-theme="${expected}">`);
         expect(html).not.toContain('<script>');
+        expect(html).not.toContain('prefers-color-scheme');
     });
 
     it('sets the text size on `<html>` with any theme', () => {
@@ -36,12 +44,31 @@ describe('document state in index.html', () => {
         expect(html.indexOf('<head>')).toBeLessThan(html.indexOf('<script>'));
     });
 
+    it.each([
+        [false, false, 'light'],
+        [false, true, 'dark'],
+        
+        
+    ] as const)('Auto: system dark=%s resolves before CSS', (dark, expected) => {
+        const html = injectDocumentSettings(INDEX, { theme: 'auto', textSize: 'm' });
+        const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+        expect(script).toBeDefined();
+        expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
+        const attributes: Record<string, string> = {};
+        runInNewContext(script ?? '', {
+            document: { documentElement: { setAttribute: (key: string, value: string) => { attributes[key] = value; } } },
+            window: { matchMedia: () => ({ matches: dark }) },
+        });
+
+        expect(attributes).toEqual({ 'data-theme': expected });
+    });
+
     it('replaces existing document attributes without duplicating them', () => {
         const stale = INDEX.replace('<html lang="ru">', '<html lang="ru" data-theme=\'dark\' data-textsize=l>');
 
-        const html = injectDocumentSettings(stale, { theme: 'light', textSize: 'm' });
+        const html = injectDocumentSettings(stale, { theme: 'dark', textSize: 'm' });
 
-        expect(html).toContain('<html lang="ru" data-textsize="m" data-theme="light">');
+        expect(html).toContain('<html lang="ru" data-textsize="m" data-theme="dark">');
         expect([...html.matchAll(/data-theme=/g)]).toHaveLength(1);
         expect([...html.matchAll(/data-textsize=/g)]).toHaveLength(1);
     });
@@ -49,6 +76,7 @@ describe('document state in index.html', () => {
     it('minimal document: tag case and a missing `<head>` do not break injection', () => {
         const upper = injectDocumentSettings('<!DOCTYPE HTML><HTML><BODY>x</BODY></HTML>', {
             theme: 'auto',
+            
             textSize: 'm',
         });
 
@@ -67,6 +95,7 @@ describe('document state in index.html', () => {
         let theme: 'auto' | 'dark' | 'light' = 'light';
         const assets = withDocumentSettings(staticAssets({ '/index.html': INDEX, '/assets/app.css': 'body{}' }), () => ({
             theme,
+            
             textSize: 'm',
         }));
 

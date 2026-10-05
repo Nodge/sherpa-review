@@ -29,7 +29,7 @@ import {
 import type { ViewId } from './session/views.js';
 import { DEFAULT_VIEW, parseViewId, VIEWS } from './session/views.js';
 import { SettingsProvider } from './settings/context.tsx';
-import { DocumentSettingsSync } from './settings/document-settings.tsx';
+import { DocumentSettingsSync, readDocumentAppearance } from './settings/document-settings.tsx';
 import { createUiSettingsStore, loadUiSettings } from './settings/settings-store.js';
 import { ShortcutsProvider } from './shortcuts/context.tsx';
 import { createPointerTarget } from './shortcuts/pointer-target.js';
@@ -67,7 +67,10 @@ if (token === null) {
     // Global settings live on the server, and the first render waits for them. Diff mode and composer layout
     // must be known before creating the stores, or the toggle visibly flips
     // and the editor gets recreated while the reviewer is already typing.
-    const settings = createUiSettingsStore({ send: (patch) => patchUiSettings(token, patch) });
+    const settings = createUiSettingsStore({
+        initial: readDocumentAppearance(document.documentElement),
+        send: (patch) => patchUiSettings(token, patch),
+    });
     const settingsReady = loadUiSettings(settings, () => fetchUiSettings(token));
     // Collapsed directories and cards for this PR load in the same race. A late response does not
     // recreate the diff view store: its map is loaded separately (see App).

@@ -18,9 +18,11 @@ const HEAD_OPEN_TAG = /<head\b[^>]*>/i;
 const DOCUMENT_ATTRIBUTES = /\s+data-(?:theme|textsize)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 
 /** The UI runtime reads the same request (`settings/document-settings.tsx`). */
-const AUTO_THEME_SCRIPT =
-    '<script>document.documentElement.setAttribute("data-theme",' +
-    'window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")</script>';
+function autoThemeScript(): string {
+    const themes = '"dark":"light"';
+    return '<script>document.documentElement.setAttribute("data-theme",' +
+        `window.matchMedia("(prefers-color-scheme: dark)").matches?${themes})</script>`;
+}
 
 /** UI static assets that serve `index.html` with document state injected. */
 export function withDocumentSettings(assets: StaticAssets, readSettings: () => DocumentSettings): StaticAssets {
@@ -66,10 +68,11 @@ function rewriteHtmlTag(tag: string, attributes: readonly string[]): string {
 
 /** The script goes first in `<head>`: it must run before stylesheets, or the first frame changes color. */
 function withAutoThemeScript(html: string): string {
+    const script = autoThemeScript();
     const head = HEAD_OPEN_TAG.exec(html);
     if (head !== null) {
-        return html.replace(HEAD_OPEN_TAG, () => `${head[0]}${AUTO_THEME_SCRIPT}`);
+        return html.replace(HEAD_OPEN_TAG, () => `${head[0]}${script}`);
     }
     // `<head>` is optional in the document: the browser opens it itself, placing the script inside.
-    return html.replace(HTML_OPEN_TAG, (tag) => `${tag}${AUTO_THEME_SCRIPT}`);
+    return html.replace(HTML_OPEN_TAG, (tag) => `${tag}${script}`);
 }

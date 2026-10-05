@@ -1,9 +1,9 @@
+@import '../diff/syntax.css';
+
 /*
  * Diff rendering: file card and diff rows. All sizes and colours come from docs/design/README.md §1
  * ("Right column: one card per hunk…") and docs/design/SPEC-elements.md §2.13–2.14. Values use tokens only.
  */
-
-@import '../diff/syntax.css';
 
 /*
  * Code panel limit for the actual diff mode. The view root (`.route`,
@@ -131,7 +131,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-inner-tight);
-    padding: 9px 13px;
+    padding: var(--file-header-padding);
+    min-height: var(--file-header-height);
     background: var(--surface-card-header);
     border-bottom: 1px solid var(--border-hairline-strong);
 }
@@ -172,8 +173,8 @@
     flex: 0 0 auto;
     max-width: 100%;
     overflow: hidden;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-control);
+    font-family: var(--file-label-font);
+    font-size: var(--file-name-size);
     color: var(--text-primary-soft);
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -193,8 +194,8 @@
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-gutter);
+    font-family: var(--file-label-font);
+    font-size: var(--file-path-size);
     color: var(--text-dim-strong);
 }
 
@@ -237,7 +238,7 @@
     gap: 6px;
     /* Counters end the left header group. Everything after them aligns right. */
     margin-right: auto;
-    font-family: var(--font-mono);
+    font-family: var(--file-label-font);
     font-size: var(--font-size-meta);
 }
 
@@ -524,11 +525,11 @@
 /* An expanded thread below a line (`threads/threads.css`) starts at the code column, or its own half in split mode.
    In a Markdown document it starts at the block text (`markdown-review.css`). */
 .thread-line {
-    padding-left: calc(2 * var(--gutter-col) + 16px);
+    padding-left: var(--thread-line-indent, calc(2 * var(--gutter-col) + 16px));
 }
 
 .diff-row-extras--split .thread-line {
-    padding-left: calc(var(--gutter-col) + 14px);
+    padding-left: var(--thread-line-split-indent, calc(var(--gutter-col) + 14px));
 }
 
 /*
@@ -666,4 +667,20 @@
 
 .diff-row__no-newline {
     color: var(--text-dim-strong);
+}
+
+.diff-row--add > .diff-row__gutter {
+    background: var(--file-gutter-add-bg, transparent);
+}
+
+.diff-row__gutter.diff-side--add {
+    background: var(--file-gutter-add-bg, var(--diff-add-bg));
+}
+
+.diff-row--del > .diff-row__gutter {
+    background: var(--file-gutter-del-bg, transparent);
+}
+
+.diff-row__gutter.diff-side--del {
+    background: var(--file-gutter-del-bg, var(--diff-del-bg));
 }

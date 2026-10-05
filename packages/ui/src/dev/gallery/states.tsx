@@ -10,6 +10,9 @@ import { SettingsMenu } from '../../components/settings-menu.tsx';
 import { AgentPill, TopBar } from '../../components/top-bar.tsx';
 import { breadcrumbFor } from '../../pr-key.js';
 import type { ViewId } from '../../session/views.js';
+import { SettingsProvider } from '../../settings/context.tsx';
+import { useResolvedTheme } from '../../settings/document-settings.tsx';
+import { createUiSettingsStore } from '../../settings/settings-store.js';
 import { UI_VERSION } from '../../version.js';
 import { MARKDOWN_STATES } from './markdown-states.tsx';
 import { DIFF_STATES } from './diff-states.tsx';
@@ -179,7 +182,19 @@ export const GALLERY_STATES: readonly GalleryState[] = [
         id: 'settings-menu-open-light',
         group: 'Settings menu',
         title: 'open, light theme',
-        render: () => <SettingsMenuLightState />,
+        render: () => <SettingsMenuThemedState theme="light" />,
+    },
+    {
+        
+        group: 'Settings menu',
+        
+        
+    },
+    {
+        
+        group: 'Settings menu',
+        
+        
     },
     ...OVERVIEW_STATES.filter((state) => state.id !== START_STATE_ID),
     ...REVIEW_COMPLETION_STATES,
@@ -375,13 +390,26 @@ function SettingsMenuState({ open = false, agentConnected = true }: { open?: boo
 }
 
 /**
- * The same menu in the light theme, independent of the gallery toggle. `data-theme` is on the
- * card itself rather than `<html>`. Light tokens apply to any subtree (docs/design/theme.md).
+ * The same menu with a selected appearance, independent of the gallery toggle: `data-theme` sits
+ * on the card itself instead of `<html>`. Tokens apply to any subtree (docs/design/theme.md).
  * The surrounding gallery keeps its own theme, so its theme toggle does not conflict with the card.
  */
-function SettingsMenuLightState() {
+function SettingsMenuThemedState({ theme }: { theme: 'dark' | 'light' }) {
+    const [settings] = useState(() =>
+        createUiSettingsStore({ loaded: true, initial: { theme } }),
+    );
     return (
-        <div data-theme="light" className="gallery-themed">
+        <SettingsProvider store={settings}>
+            <SettingsMenuThemedContent />
+        </SettingsProvider>
+    );
+}
+
+/** Toggles inside the card change its colour palette without affecting the gallery appearance. */
+function SettingsMenuThemedContent() {
+    const theme = useResolvedTheme();
+    return (
+        <div data-theme={theme} className="gallery-themed">
             <SettingsMenuState open />
         </div>
     );

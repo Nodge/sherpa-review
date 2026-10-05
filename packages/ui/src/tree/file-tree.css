@@ -72,6 +72,7 @@
 .file-panel__chip {
     gap: 4px;
     height: 22px;
+    line-height: var(--tree-row-line-height);
     padding: 0 7px;
 }
 
@@ -145,7 +146,8 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    height: 26px;
+    height: var(--tree-row-height);
+    line-height: var(--tree-row-line-height);
     padding-right: 6px;
     border-radius: var(--radius-button);
     cursor: pointer;
@@ -214,9 +216,9 @@
     align-items: center;
     flex: 1;
     min-width: 0;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-control);
-    color: var(--text-secondary);
+    font-family: var(--tree-label-font);
+    font-size: var(--tree-label-size);
+    color: var(--tree-label-color);
 }
 
 .file-tree__label-dir,
@@ -244,8 +246,8 @@
 }
 
 .file-tree__row--dir .file-tree__label {
-    font-weight: 500;
-    color: var(--text-muted);
+    font-weight: var(--tree-dir-weight);
+    color: var(--tree-dir-color);
 }
 
 /* Roots outside the ownership zone and generated files are dimmed (docs/design/README.md §10). */

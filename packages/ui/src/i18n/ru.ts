@@ -46,6 +46,7 @@ export const ru = {
     'settings.kicker': 'НАСТРОЙКИ',
     'settings.auto': 'Авто',
     'settings.theme': 'Тема',
+    
     'settings.theme.dark': 'Тёмная',
     'settings.theme.light': 'Светлая',
     'settings.language': 'Язык',

@@ -15,11 +15,19 @@ export interface CharRange {
 }
 
 /**
- * Highlighting categories from docs/design/README.md §1 ("intentionally minimal"): the README colours numbers the same
- * as strings, so they have no separate category. Anything the lexer is unsure of gets no category
- * at all, to avoid misleading highlighting.
+ * Highlight categories distinguish config keys, numbers, and names from string values.
+ * Anything the lexer is unsure about gets no category, to avoid misleading coloring.
  */
-export type SyntaxKind = 'keyword' | 'string' | 'comment' | 'decorator';
+export type SyntaxKind =
+    | 'keyword'
+    | 'property'
+    | 'number'
+    | 'variable'
+    | 'type'
+    | 'function'
+    | 'string'
+    | 'comment'
+    | 'decorator';
 
 export interface SyntaxToken extends CharRange {
     kind: SyntaxKind;

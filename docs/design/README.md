@@ -10,6 +10,8 @@
 
 > **2026-09-20 addition: customer-requested changes and controls.** The spec is `SPEC-changes-2026-09-20.md`. It adds an "Open issue" switch above the composer editor. Stop descriptions support paragraphs, lists, links and inline code within the validator's budget. Code threads collapse entirely into a marker on the card's left edge, with a ○ Resolve / ✓ Resolved button and Reply/Edit/Delete below the text. The "Comments from" filter is removed. The PR comments modal has width `clamp(620px, 68vw, 1120px)` and contains threads. Basic controls share one state rule (hover = background up one step, pressed = another step). The combined page is `Sherpa Changes 2026-09-20.dc.html`. The reference for (2), (3) is `Sherpa.dc.html`, stop 02. Overrides §3 (threads), 1c/1d of the 08-26 spec and the SPEC-elements state matrix wherever they differ. Departures accepted during implementation are in `../decisions.md`, the "Threads, issues and composer" section.
 
+> **2026-09-26 addition: theme settings.** The "Theme" setting selects Auto · Dark · Light. Auto follows the system. The original dark and light themes keep their palette and geometry. The Design tokens section below describes the original themes. See `theme.md` for their colours and font scale.
+
 ## Overview
 
 Sherpa is an internal code-review UI. An AI agent running in the reviewer's own agent harness (Claude Code, Codex, …) prepares a **route** through a pull request — an ordered set of stops that covers the whole diff, from the heart of the change to its consequences and glue — while the UI itself is a full replacement for the current review tool: a diff reader with two-way comments and ship. The reviewer walks the route, reads only what matters, and decides faster without losing control over what they are signing off.
@@ -53,7 +55,7 @@ Sticky, height 46px, background `#0d0e10`, bottom border `1px solid #333741`, ho
 | Agent status | Ghost button, height 28px, border `1px solid #363b44`, radius 7px. 6px status dot: connected `#6cc38f`, working `#e2954c`, failed `#e0736c`, disconnected `#e7f1ff`. Label: "Agent · claude-code" / "Agent working · 1 in queue" / "Agent disconnected". Click toggles the chat panel. |
 | Search | Ghost button "Search" + ⌘K key hint (11px mono, border `1px solid #434954`, radius 4px). Opens the command palette. |
 | Feedback | Ghost button "Feedback" — opens the report-a-problem form (free text, optional category, auto-attached context: Sherpa version, PR, snapshot, active screen; context shown before sending). |
-| Settings | 28×28 icon button, sliders icon 15px, border `1px solid #363b44`, radius 7px; open: bg `#262b34`, border `#4a515c`. Opens the settings menu (252px panel under the trigger): Theme Auto · Dark · Light, Language, Text size M · L, Replay onboarding, Commands ⌘K — `SPEC-theming-2026-09-12.md` §7. There is no avatar or account: the skill runs locally. |
+| Settings | 28×28 icon button, sliders icon 15px, border `1px solid #363b44`, radius 7px. Open: bg `#262b34`, border `#4a515c`. Opens the settings menu (252px panel under the trigger): Theme Auto · Dark · Light, Language, Text size M · L, Replay onboarding, Commands ⌘K. See `SPEC-theming-2026-09-12.md` §7. There is no avatar or account: the skill runs locally. |
 
 ### 1. Route — triage (the main screen; `view:'route', preset:'triage', gen:'ready'`)
 
@@ -224,7 +226,9 @@ Route stop shape used by the UI: `{ id, planIndex, tier: high|medium|low|other, 
 
 ## Design tokens
 
-The dark theme is below. `theme.md` lists every colour token's value in both themes and the light-theme rules that cannot be inferred from the table. The original design table is in `SPEC-theming-2026-09-12.md` §1–2. The theme is the `data-theme` attribute on `<html>` together with `color-scheme`. Auto follows the system theme and is the default.
+The following values apply to the original dark/light themes.
+
+Below is the original dark theme. See `theme.md` for every colour token in both palettes and the light-theme rules the table does not express. The original design table is in `SPEC-theming-2026-09-12.md` §1–2. The resulting palette is the `data-theme` attribute on `<html>`, together with `color-scheme`. Auto follows the system theme and is the default.
 
 **Surfaces** — app `#0d0e10`; panels `#121315`, `#16171b`; diff card `#111214`; card header `#1a1b1e`; inputs/chips `#1b1e24`, `#18191d`, `#1d2020`; raised (menus, floating bar) `#212429`, `#262b34`; selected row `#2d323b`.
 
@@ -256,20 +260,27 @@ The dark theme is below. `theme.md` lists every colour token's value in both the
 
 **Motion** — spinner `spin .8s linear infinite` · skeleton/streaming `shimmer 1.6s ease-in-out infinite` (0.35 → 0.8 → 0.35 opacity) · caret `caret 1s step-end infinite` · jump scroll ~320ms ease-in-out cubic · jump flash ~900ms. Nothing else animates; the reader must feel static.
 
+### Component tokens
+
+All themes declare the same set of tokens in `tokens.css` so nested styling
+cannot inherit values from the outer theme. Components do not select a theme, and virtualization reads
+sizes from its container's CSS.
+
 ## Assets
 
-- **Fonts**: IBM Plex Sans + IBM Plex Mono (Google Fonts). Swap for the codebase's own sans/mono if it has them — keep the sans/mono split and the mono-for-machine-data rule.
+- **Fonts**: the original themes use IBM Plex Sans + IBM Plex Mono from locally built npm packages. Fonts are served from the build at runtime.
 - **Thumbs-up icon** on the ship button: 16×16 `fill="currentColor"` SVG supplied by the team (already inlined in the prototype). Use the design-system icon set for it and for the small glyphs (⌄ › ⇄ ↕ ↳ ✓ ✕), which the prototype renders as text characters.
 - **Product mark**: a rotated 15px accent square — placeholder, not final branding.
 - No imagery anywhere; this UI is text, code and controls only.
 
 ## Files
 
+
 - `SPEC-changes-2026-09-20.md` covers the **current phase's spec changes**: issue switch, stop description markup, collapsing threads into markers, a wide PR modal with threads, shared control-state rules. Includes contracts, removals, an acceptance checklist and open questions.
 - `Sherpa Changes 2026-09-20.dc.html` is the 09-20 iteration overview page: a table of base control states in both themes and interactive mockups 2a–2e.
 - `Sherpa Additions.dc.html` is the interactive mockup for the 08-26 additions and 09-20 changes. Section `#t3` (3 thread marker positions, recommending 3a) is a rejected exploration. The marker on the card's left edge was accepted per SPEC-changes §3.
 - `SPEC-theming-2026-09-12.md` covers the theme phase's spec changes: theme model and tokens, light palette, revised dark palette, settings menu, language, typography in rem, responsive width, acceptance checklist and open questions.
-- `theme.md` contains the **colour token table for both themes**: each token's value in the dark and light palettes, its source and light-theme rules that cannot be inferred from the table. A test checks it against `tokens.css`.
+- `theme.md` contains the **colour token table for both palettes**: the original dark/light themes, value sources and theme rules. A test checks it against `tokens.css`.
 - `SPEC-elements.md` — **element-level spec**: state matrix for every control (hover, active, focus, disabled, loading, error), per-component behaviour, data edge cases, loading timings, keyboard map, accessibility and the acceptance checklist. Read it together with this document: the README defines *what* each screen is, SPEC-elements defines *how every part behaves*.
 - `Sherpa.dc.html` — the clickable prototype (all 13 states + the onboarding tour; `SCENARIOS` menu switches between them).
 - `SPEC-onboarding-2026-09-02.md` — **onboarding handoff spec**: card and ring anatomy, the eight steps with final copy and anchors, placement algorithm, states, show-once and resume model, degradation, keyboard/a11y, telemetry, open questions, acceptance checklist.

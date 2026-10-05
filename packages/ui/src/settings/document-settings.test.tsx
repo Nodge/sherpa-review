@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsProvider } from './context.tsx';
-import { DocumentSettingsSync } from './document-settings.tsx';
+import { DocumentSettingsSync, readDocumentAppearance } from './document-settings.tsx';
 import type { UiSettingsStore } from './settings-store.js';
 import { createUiSettingsStore, DEFAULT_UI_SETTINGS } from './settings-store.js';
 
@@ -57,13 +57,63 @@ describe('document attributes from settings', () => {
         expect(document.documentElement.getAttribute('data-textsize')).toBeNull();
     });
 
+    
+        const system = stubSystemTheme('light');
+        
+        const unmount = mount(settings);
+        
+        act(() => { system.switchTo('dark'); });
+        
+        act(() => { settings.update({ theme: 'light' }); });
+        
+        act(() => { system.switchTo('light'); });
+        act(() => { system.switchTo('dark'); });
+        
+        
+        expect(themeAttribute()).toBe('light');
+        unmount();
+    });
+
+    it.each(['dark', 'light'] as const)('the first HTML sets %s appearance before GET', (theme) => {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-textsize', 'l');
+        expect(readDocumentAppearance(document.documentElement)).toEqual({ theme, textSize: 'l' });
+    });
+
+    
+        document.documentElement.setAttribute('data-theme', 'light');
+        stubSystemTheme('light');
+        const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
+        const unmount = mount(settings);
+        
+        
+        
+        
+        
+        unmount();
+    });
+
+    
+        
+        stubSystemTheme('light');
+        const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
+        const unmount = mount(settings);
+
+        
+        act(() => {
+            
+        });
+        
+        unmount();
+    });
+
     it('preserves server attributes until the server responds', () => {
         // This is the document served with `theme: light`, `textSize: l`.
         document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.setAttribute('data-textsize', 'l');
         stubSystemTheme('dark');
-        // Store before the endpoint responds: the snapshot contains the defaults (`auto`, `m`).
-        const settings = createUiSettingsStore();
+        // Until the endpoint responds, the store takes its appearance from the initial HTML.
+        const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
         const unmount = mount(settings);
 
         expect(themeAttribute()).toBe('light');
@@ -81,7 +131,7 @@ describe('document attributes from settings', () => {
     it('repaints the document when the server responds with a different theme', () => {
         document.documentElement.setAttribute('data-theme', 'light');
         stubSystemTheme('dark');
-        const settings = createUiSettingsStore();
+        const settings = createUiSettingsStore({ initial: readDocumentAppearance(document.documentElement) });
         const unmount = mount(settings);
 
         act(() => {

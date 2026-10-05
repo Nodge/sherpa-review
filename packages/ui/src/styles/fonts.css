@@ -99,3 +99,12 @@
     font-display: block;
     src: url('@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-Medium.woff2') format('woff2');
 }
+
+/* The code fallback font is served locally. */
+@font-face {
+    font-family: 'Liberation Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./fonts/liberation-mono.ttf') format('truetype');
+}

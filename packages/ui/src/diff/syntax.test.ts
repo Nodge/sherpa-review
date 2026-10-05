@@ -70,26 +70,47 @@ describe('language from the file path', () => {
 });
 
 describe('highlight categories', () => {
-    it('highlights TypeScript keywords and numbers, with numbers in the string color', () => {
+    it('parsing returns one category per token regardless of styling', () => {
+        expect(tokenizeLine('int main() { return 0; }', 'cpp')).toEqual([
+            { from: 0, to: 3, kind: 'type' },
+            { from: 4, to: 8, kind: 'function' },
+            { from: 13, to: 19, kind: 'keyword' },
+            { from: 20, to: 21, kind: 'number' },
+        ]);
+    });
+
+    it('class names and properties receive type and property categories', () => {
+        expect(paint('class Order extends Base {}; value.field;', 'typescript')).toEqual([
+            ['keyword', 'class'],
+            ['type', 'Order'],
+            ['keyword', 'extends'],
+            ['type', 'Base'],
+            ['property', 'field'],
+        ]);
+    });
+
+    it('TypeScript keywords and numbers have different categories', () => {
         expect(paint('export const EDIT_WINDOW_MS = 30 * 60 * 1000;', 'typescript')).toEqual([
             ['keyword', 'export'],
             ['keyword', 'const'],
-            ['string', '30'],
-            ['string', '60'],
-            ['string', '1000'],
+            ['variable', 'EDIT_WINDOW_MS'],
+            ['number', '30'],
+            ['number', '60'],
+            ['number', '1000'],
         ]);
     });
 
     it('an import path is a string', () => {
         expect(paint('import { Clock } from "../infra/clock";', 'typescript')).toEqual([
             ['keyword', 'import'],
+            ['type', 'Clock'],
             ['keyword', 'from'],
             ['string', '"../infra/clock"'],
         ]);
     });
 
     it('an ordinary identifier has no category and falls back to plain', () => {
-        expect(paint('recomputeEditWindow(order);', 'typescript')).toEqual([]);
+        expect(paint('const value = order;', 'typescript')).toEqual([['keyword', 'const']]);
     });
 
     it('a decorator has its own category', () => {
@@ -108,30 +129,92 @@ describe('highlight categories', () => {
         ]);
     });
 
-    it('highlights JSON and YAML keys in the string color', () => {
+    it('JSON and YAML keys differ from string values and numbers', () => {
         expect(paint('  "editWindowMs": 1800000,', 'json')).toEqual([
-            ['string', '"editWindowMs"'],
-            ['string', '1800000'],
+            ['property', '"editWindowMs"'],
+            ['number', '1800000'],
         ]);
         expect(paint('replicas: 3', 'yaml')).toEqual([
-            ['string', 'replicas:'],
-            ['string', '3'],
+            ['property', 'replicas:'],
+            ['number', '3'],
+        ]);
+    });
+
+    it('a config string value keeps a separate category', () => {
+        expect(paint('title: "Build service"', 'yaml')).toEqual([
+            ['property', 'title:'],
+            ['string', '"Build service"'],
+        ]);
+        expect(paint('"title": "Build service"', 'json')).toEqual([
+            ['property', '"title"'],
+            ['string', '"Build service"'],
+        ]);
+    });
+
+    it('a YAML anchor and its reference are highlighted as variables', () => {
+        for (const language of ['yaml', 'yml']) {
+            expect(paintText('config: &service\ncopy: *service', language)).toEqual([
+                [
+                    ['property', 'config:'],
+                    ['variable', '&service'],
+                ],
+                [
+                    ['property', 'copy:'],
+                    ['variable', '*service'],
+                ],
+            ]);
+            expect(paint('---', language)).toEqual([['decorator', '---']]);
+        }
+    });
+
+    it('function and class names differ from keywords', () => {
+        expect(paint('function apply() { return 1; }', 'typescript')).toEqual([
+            ['keyword', 'function'],
+            ['function', 'apply'],
+            ['keyword', 'return'],
+            ['number', '1'],
+        ]);
+        expect(paint('class Order extends Base {}', 'typescript')).toEqual([
+            ['keyword', 'class'],
+            ['type', 'Order'],
+            ['keyword', 'extends'],
+            ['type', 'Base'],
+        ]);
+        expect(paint('apply(order);', 'typescript')).toEqual([['function', 'apply']]);
+        expect(paint('int main() { return 0; }', 'cpp')).toEqual([
+            ['type', 'int'],
+            ['function', 'main'],
+            ['keyword', 'return'],
+            ['number', '0'],
+        ]);
+    });
+
+    it('a variable inside a shell string keeps its category', () => {
+        expect(paint('echo "$HOME"', 'bash')).toEqual([
+            ['keyword', 'echo'],
+            ['string', '"'],
+            ['variable', '$HOME'],
+            ['string', '"'],
         ]);
     });
 
     it('python: declaration, literals and comment', () => {
         expect(paint('def apply_edit(self, order: Order) -> None:', 'python')).toEqual([
             ['keyword', 'def'],
+            ['function', 'apply_edit'],
             ['keyword', 'None'],
         ]);
         expect(paint('    total = 0  # running sum', 'python')).toEqual([
-            ['string', '0'],
+            ['number', '0'],
             ['comment', '# running sum'],
         ]);
     });
 
     it('go: keyword and string', () => {
-        expect(paint('func main() {', 'go')).toEqual([['keyword', 'func']]);
+        expect(paint('func main() {', 'go')).toEqual([
+            ['keyword', 'func'],
+            ['function', 'main'],
+        ]);
         expect(paint('\tfmt.Println("hi")', 'go')).toEqual([['string', '"hi"']]);
     });
 
@@ -193,7 +276,7 @@ describe('multiline constructs', () => {
             [['comment', ' */']],
             [
                 ['keyword', 'const'],
-                ['string', '1'],
+                ['number', '1'],
             ],
         ]);
     });
@@ -202,7 +285,7 @@ describe('multiline constructs', () => {
         expect(paintText('"""doc\nmore"""\nx = 1', 'python')).toEqual([
             [['string', '"""doc']],
             [['string', 'more"""']],
-            [['string', '1']],
+            [['number', '1']],
         ]);
     });
 

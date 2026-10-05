@@ -38,6 +38,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -71,9 +72,32 @@ describe('global UI settings', () => {
         expect(patches).toEqual([{ theme: 'light' }, { theme: 'dark' }]);
     });
 
-    it('does not send a repeated value', async () => {
+    it('persists an explicit choice before loading even when it matches the initial HTML', async () => {
         const { patches, send } = recording();
-        const store = createUiSettingsStore({ send });
+        // HTML resolved the saved Auto to light. This is not yet an explicit Light theme choice.
+        const store = createUiSettingsStore({ initial: { theme: 'light' }, send });
+        store.update({ theme: 'light' });
+        store.update({ theme: 'light' });
+        store.applyLoaded(merged({ theme: 'auto', textSize: 'l' }));
+
+        expect(store.getSnapshot()).toMatchObject({ theme: 'light', textSize: 'l' });
+        await flush();
+        expect(patches).toEqual([{ theme: 'light' }]);
+    });
+
+    
+        const { patches, send } = recording();
+        
+        
+        
+        
+        await flush();
+        
+    });
+
+    it('sends nothing when an already loaded value repeats', async () => {
+        const { patches, send } = recording();
+        const store = createUiSettingsStore({ loaded: true, send });
 
         store.update({ diffMode: 'unified' });
         store.update({ shipMode: 'sticky_ship' });
@@ -133,6 +157,7 @@ describe('global UI settings', () => {
             composerLayout: 'markdown',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -144,6 +169,7 @@ describe('global UI settings', () => {
             composerLayout: 'markdown',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -161,6 +187,7 @@ describe('global UI settings', () => {
                 composerLayout: 'visual',
                 locale: 'auto',
                 theme: 'auto',
+            
                 textSize: 'm',
                 onboarding: { completedAt: null, step: 0 },
                 updates: { dismissedVersion: null },

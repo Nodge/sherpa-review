@@ -24,18 +24,28 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
         });
     });
 
-    it('preserves other settings in an old file and keeps the theme after reopening', async () => {
+    it.each(['dark', 'light', 'auto'] as const)('theme %s survives reopening the old file', async (theme) => {
         await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify({ diffMode: 'split', locale: 'en' }));
         const store = new SettingsStore(sherpaDir);
         expect(store.read()).toMatchObject({ theme: 'auto', textSize: 'm', diffMode: 'split', locale: 'en' });
+        store.patch({ theme });
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme, diffMode: 'split', locale: 'en' });
+    });
+
+    
+        const store = new SettingsStore(sherpaDir);
         store.patch({ theme: 'light' });
-        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ theme: 'light', diffMode: 'split', locale: 'en' });
+        
+        
+        
+        
     });
 
     it('falls back to defaults for malformed JSON without throwing an error', async () => {
@@ -44,10 +54,10 @@ describe('global UI settings', () => {
         expect(new SettingsStore(sherpaDir).read().diffMode).toBe('unified');
     });
 
-    it('falls back to defaults for a value outside the schema', async () => {
-        await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify({ diffMode: 'three-way' }));
+    it.each([{ diffMode: 'three-way' }, { theme: 'invalid-theme' }])('falls back to defaults for values outside the schema: %j', async (settings) => {
+        await fs.writeFile(settingsPathFor(sherpaDir), JSON.stringify(settings));
 
-        expect(new SettingsStore(sherpaDir).read().diffMode).toBe('unified');
+        expect(new SettingsStore(sherpaDir).read()).toMatchObject({ diffMode: 'unified', theme: 'auto' });
     });
 
     it('patching one field leaves the others unchanged', () => {
@@ -62,6 +72,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },
@@ -123,6 +134,7 @@ describe('global UI settings', () => {
             composerLayout: 'visual',
             locale: 'auto',
             theme: 'auto',
+            
             textSize: 'm',
             onboarding: { completedAt: null, step: 0 },
             updates: { dismissedVersion: null },

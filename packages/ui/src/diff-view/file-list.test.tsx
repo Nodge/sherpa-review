@@ -11,6 +11,9 @@ import { toParseRequest } from '../diff/model.js';
 import { parseFileDiff } from '../diff/parse.js';
 import { createT } from '../i18n/index.js';
 import { createSessionStore } from '../session/session-store.js';
+import { SettingsProvider } from '../settings/context.tsx';
+import type { UiSettingsStore } from '../settings/settings-store.js';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import type { ThreadStore } from '../threads/store.js';
 import { createThreadStore } from '../threads/store.js';
 import { COLLAPSE_THRESHOLD } from './file-card.tsx';
@@ -53,6 +56,9 @@ const virtual = vi.hoisted(() => {
         readonly scrollToIndex: ReturnType<typeof vi.fn>;
         readonly resizeItem: ReturnType<typeof vi.fn>;
         readonly measureElement: () => void;
+        readonly measure: ReturnType<typeof vi.fn>;
+        readonly elementsCache: Map<string, HTMLElement>;
+        estimateSize: (index: number) => number;
         readonly getTotalSize: () => number;
         readonly getVirtualItems: () => readonly FakeItem[];
         readonly setCount: (count: number) => void;
@@ -70,6 +76,9 @@ const virtual = vi.hoisted(() => {
             scrollToIndex: vi.fn(),
             resizeItem: vi.fn(),
             measureElement: () => undefined,
+            measure: vi.fn(),
+            elementsCache: new Map(),
+            estimateSize: () => ITEM_HEIGHT,
             getTotalSize: () => fake.count * ITEM_HEIGHT,
             // Keep the item set stable. It is a dependency of the parsing effect,
             // so a new array on every frame would rerun the effect for no reason.
@@ -98,8 +107,9 @@ const virtual = vi.hoisted(() => {
         reset: (): void => {
             current = null;
         },
-        use: (count: number): FakeVirtualizer => {
+        use: (count: number, estimateSize: (index: number) => number): FakeVirtualizer => {
             current ??= create();
+            current.estimateSize = estimateSize;
             current.setCount(count);
             return current;
         },
@@ -113,7 +123,8 @@ const virtual = vi.hoisted(() => {
 });
 
 vi.mock('@tanstack/react-virtual', () => ({
-    useVirtualizer: ({ count }: { count: number }) => virtual.use(count),
+    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (index: number) => number }) =>
+        virtual.use(count, estimateSize),
 }));
 
 const t = createT('en');
@@ -166,6 +177,8 @@ function plainFiles(count: number): FileDiff[] {
 const GENERATED = pickFile(MEDIUM.diff.files, (file) => file.generated, 'generated file');
 
 interface MountOptions {
+    readonly settings?: UiSettingsStore;
+    readonly scrollElement?: HTMLDivElement;
     readonly files?: readonly FileDiff[];
     readonly store?: DiffViewStore;
     readonly parse?: (file: FileDiff) => Promise<DiffFileModel>;
@@ -203,7 +216,8 @@ function mount(options: MountOptions = {}): Mounted {
     const files = options.files ?? plainFiles(2);
     const store = options.store ?? createDiffViewStore({ files });
     const host = document.createElement('div');
-    const scrollElement = document.createElement('div');
+    const scrollElement = options.scrollElement ?? document.createElement('div');
+    const settings = options.settings ?? createUiSettingsStore({ loaded: true });
     document.body.append(scrollElement, host);
     // Track listeners by both type and callback. Removing one with a different reference leaves
     // the real handler attached, which tracking just the event type would miss.
@@ -248,30 +262,32 @@ function mount(options: MountOptions = {}): Mounted {
     const render = (next: readonly FileDiff[]): void => {
         act(() => {
             root.render(
-                <DiffFileList
-                    ref={handle}
-                    scrollElement={scrollElement}
-                    scrollPaddingStart={0}
-                    files={next}
-                    store={store}
-                    contentAvailable={false}
-                    parse={parse}
-                    loadContent={() => Promise.resolve(null)}
-                    onViewed={() => Promise.resolve(null)}
-                    session={session}
-                    {...(options.threadStore === undefined ? {} : { threadStore: options.threadStore })}
-                    {...(options.threadVisible === undefined ? {} : { threadVisible: options.threadVisible })}
-                    {...(reportTop === undefined
-                        ? {}
-                        : {
-                              // A new reference on every render: the list's own guard suppresses repeats,
-                              // rather than stable effect dependencies.
-                              onTopFileChange: (fileId: string | null) => {
-                                  reportTop(fileId);
-                              },
-                          })}
-                    {...(options.outsideThreads === undefined ? {} : { outsideThreads: options.outsideThreads })}
-                />,
+                <SettingsProvider store={settings}>
+                    <DiffFileList
+                        ref={handle}
+                        scrollElement={scrollElement}
+                        scrollPaddingStart={0}
+                        files={next}
+                        store={store}
+                        contentAvailable={false}
+                        parse={parse}
+                        loadContent={() => Promise.resolve(null)}
+                        onViewed={() => Promise.resolve(null)}
+                        session={session}
+                        {...(options.threadStore === undefined ? {} : { threadStore: options.threadStore })}
+                        {...(options.threadVisible === undefined ? {} : { threadVisible: options.threadVisible })}
+                        {...(reportTop === undefined
+                            ? {}
+                            : {
+                                  // New reference on every render. The list's own guard prevents repeats,
+                                  // independently of stable effect dependencies.
+                                  onTopFileChange: (fileId: string | null) => {
+                                      reportTop(fileId);
+                                  },
+                              })}
+                        {...(options.outsideThreads === undefined ? {} : { outsideThreads: options.outsideThreads })}
+                    />
+                </SettingsProvider>,
             );
         });
     };
@@ -611,5 +627,68 @@ describe('diff card list', () => {
         expect(TestResizeObserver.instances.every((observer) => observer.disconnect.mock.calls.length > 0)).toBe(true);
         // Empty, not just a removed type. Removing with a different reference would leave the entry.
         expect(view.liveEvents()).toEqual([]);
+    });
+});
+
+describe('height estimates from scroll container CSS', () => {
+    it('changing only the palette preserves measured heights', async () => {
+        const scrollElement = document.createElement('div');
+        scrollElement.style.setProperty('--line-height-code', '17px');
+        scrollElement.style.setProperty('--diff-card-estimate-chrome-height', '46px');
+        scrollElement.setAttribute('data-theme', 'dark');
+        const settings = createUiSettingsStore({ loaded: true, initial: { theme: 'dark' } });
+        const file = pickFile(MEDIUM.diff.files, isPlain, 'regular text file');
+        mount({ files: [file], settings, scrollElement, parse: () => new Promise(() => undefined) });
+        const estimate = virtual.instance().estimateSize(0);
+        virtual.instance().measure.mockClear();
+
+        await act(async () => {
+            settings.update({ theme: 'light' });
+            scrollElement.setAttribute('data-theme', 'light');
+            await Promise.resolve();
+        });
+
+        expect(virtual.instance().estimateSize(0)).toBe(estimate);
+        expect(virtual.instance().measure).not.toHaveBeenCalled();
+    });
+
+    it('uses CSS instead of settings and updates skeleton height and estimate when the subtree changes', async () => {
+        const style = document.createElement('style');
+        style.textContent = `
+            .geometry { --line-height-code: 13px; --diff-card-estimate-chrome-height: 41px; }
+            .geometry[data-theme="light"] { --line-height-code: 31px; --diff-card-estimate-chrome-height: 59px; }
+        `;
+        document.head.append(style);
+        mounted.push(() => {
+            style.remove();
+        });
+        const scrollElement = document.createElement('div');
+        scrollElement.className = 'geometry';
+        scrollElement.setAttribute('data-theme', 'light');
+        const settings = createUiSettingsStore({ loaded: true, initial: {} });
+        const file = {
+            ...pickFile(MEDIUM.diff.files, isPlain, 'regular text file'),
+            changeType: 'add' as const,
+            additions: 10,
+            deletions: 0,
+        };
+        const { host } = mount({ files: [file], settings, scrollElement, parse: () => new Promise(() => undefined) });
+
+        expect(virtual.instance().estimateSize(0)).toBe(171);
+        expect(host.querySelector<HTMLElement>('.file-card__loading')?.style.minHeight).toBe('130px');
+        virtual.instance().measure.mockClear();
+        await act(async () => {
+            scrollElement.setAttribute('data-theme', 'light');
+            await Promise.resolve();
+        });
+        expect(virtual.instance().estimateSize(0)).toBe(369);
+        expect(host.querySelector<HTMLElement>('.file-card__loading')?.style.minHeight).toBe('310px');
+        expect(virtual.instance().measure).toHaveBeenCalled();
+
+        virtual.instance().measure.mockClear();
+        act(() => {
+            settings.update({ textSize: 'l' });
+        });
+        expect(virtual.instance().measure).toHaveBeenCalled();
     });
 });

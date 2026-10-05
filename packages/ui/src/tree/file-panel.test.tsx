@@ -9,6 +9,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileFilter } from '../filters/lens-filters.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
+import { PrStateProvider } from '../pr-state/context.tsx';
+import { createUiPrStateStore } from '../pr-state/pr-state-store.js';
+import { SettingsProvider } from '../settings/context.tsx';
+import type { UiSettingsStore } from '../settings/settings-store.js';
+import { createUiSettingsStore } from '../settings/settings-store.js';
 import type { FileTreeCursor } from './file-panel.tsx';
 import { FilePanel } from './file-panel.tsx';
 import { createT } from '../i18n/index.js';
@@ -17,17 +22,20 @@ const t = createT('en');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const virtual = vi.hoisted(() => ({ measure: vi.fn() }));
+
 vi.mock('@tanstack/react-virtual', () => ({
     defaultRangeExtractor: () => [],
-    useVirtualizer: ({ count }: { count: number }) => ({
-        getTotalSize: () => count * 26,
+    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+        measure: virtual.measure,
+        getTotalSize: () => count * estimateSize(),
         getVirtualItems: () =>
             Array.from({ length: count }, (_, index) => ({
                 index,
                 key: index,
-                start: index * 26,
-                size: 26,
-                end: (index + 1) * 26,
+                start: index * estimateSize(),
+                size: estimateSize(),
+                end: (index + 1) * estimateSize(),
                 lane: 0,
             })),
         scrollToIndex: () => undefined,
@@ -54,7 +62,11 @@ afterEach(() => {
     }
 });
 
-function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
+function mount(
+    readOnly = false,
+    filters: readonly FileFilter[] = FILTERS,
+    settings: UiSettingsStore = createUiSettingsStore({ loaded: true }),
+) {
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -62,28 +74,33 @@ function mount(readOnly = false, filters: readonly FileFilter[] = FILTERS) {
     const onOpenFile = vi.fn<(fileId: string) => void>();
     const onToggleViewed = vi.fn<(fileId: string) => void>();
     const cursorRef = createRef<FileTreeCursor>();
+    const prState = createUiPrStateStore();
 
     act(() => {
         root.render(
-            <ReadOnlyIterationProvider readOnly={readOnly}>
-                <FilePanel
-                    files={FILES}
-                    filters={filters}
-                    activeFilter={selectFilter(filters, 'all')}
-                    onFilter={onFilter}
-                    pciFileIds={new Set()}
-                    mineFileIds={new Set()}
-                    readState={new Map()}
-                    route={null}
-                    activeFileId={null}
-                    onOpenFile={onOpenFile}
-                    onToggleViewed={onToggleViewed}
-                    writeError={null}
-                    outline={null}
-                    onOpenHunk={() => undefined}
-                    cursorRef={cursorRef}
-                />
-            </ReadOnlyIterationProvider>,
+            <SettingsProvider store={settings}>
+                <PrStateProvider store={prState}>
+                    <ReadOnlyIterationProvider readOnly={readOnly}>
+                        <FilePanel
+                            files={FILES}
+                            filters={filters}
+                            activeFilter={selectFilter(filters, 'all')}
+                            onFilter={onFilter}
+                            pciFileIds={new Set()}
+                            mineFileIds={new Set()}
+                            readState={new Map()}
+                            route={null}
+                            activeFileId={null}
+                            onOpenFile={onOpenFile}
+                            onToggleViewed={onToggleViewed}
+                            writeError={null}
+                            outline={null}
+                            onOpenHunk={() => undefined}
+                            cursorRef={cursorRef}
+                        />
+                    </ReadOnlyIterationProvider>
+                </PrStateProvider>
+            </SettingsProvider>,
         );
     });
     mounted.push(() => {
@@ -360,5 +377,38 @@ describe('tree cursor for the `v` key', () => {
         });
 
         expect(cursorRef.current?.cursorFileId()).toBeNull();
+    });
+});
+
+
+describe('tree geometry from CSS', () => {
+    it('uses subtree sizes when settings differ and updates them on theme changes', async () => {
+        const style = document.createElement('style');
+        style.textContent = `
+            .file-tree { --tree-row-height: 31px; --tree-indent-step: 27px; }
+            [data-theme="light"] .file-tree { --tree-row-height: 19px; --tree-indent-step: 15px; }
+        `;
+        document.head.append(style);
+        mounted.push(() => {
+            style.remove();
+        });
+        
+        const { host } = mount(false, FILTERS, settings);
+        const rows = [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+        const secondRow = rows[1];
+        expect(secondRow?.style.top).toBe('31px');
+        const nestedRow = rows.find((row) => row.getAttribute('aria-level') === '2');
+        expect(nestedRow?.style.paddingLeft).toBe('53px');
+
+        virtual.measure.mockClear();
+        await act(async () => {
+            host.setAttribute('data-theme', 'light');
+            await Promise.resolve();
+        });
+
+        expect(secondRow?.style.top).toBe('19px');
+        // The shared 26px indentation for the route marker stays on both files and directories.
+        expect(nestedRow?.style.paddingLeft).toBe('41px');
+        expect(virtual.measure).toHaveBeenCalled();
     });
 });

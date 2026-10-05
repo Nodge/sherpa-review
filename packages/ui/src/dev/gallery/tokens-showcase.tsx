@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { useResolvedTheme } from '../../settings/document-settings.tsx';
+import { type ResolvedTheme, useResolvedTheme } from '../../settings/document-settings.tsx';
 import tokensCss from '../../styles/tokens.css?raw';
 
 /**
@@ -35,11 +35,37 @@ function parseGroups(css: string): readonly TokenGroup[] {
     return groups;
 }
 
-const GROUPS = parseGroups(tokensCss.split(":root[data-theme='light']")[0] ?? '');
-const LIGHT_VALUES = new Map(
-    [...(tokensCss.split(":root[data-theme='light']")[1] ?? '').matchAll(/(--[a-z0-9-]+): ([^;]+);/g)]
-        .map((match) => [match[1], match[2]]),
-);
+const BASE_RULE = /:root(?:\s*,\s*\[data-theme\])?\s*\{([^}]*)\}/.exec(tokensCss)?.[1] ?? '';
+const GROUPS = parseGroups(BASE_RULE);
+const BASE_VALUES = new Map(GROUPS.flatMap((group) => group.tokens.map((token) => [token.name, token.value])));
+const THEME_VALUES: Readonly<Record<ResolvedTheme, ReadonlyMap<string, string>>> = {
+    dark: themeValues('dark'),
+    light: themeValues('light'),
+    
+    
+};
+
+/** Applies all rules for the selected theme in order, including blocks shared by both colour palettes. */
+function themeValues(theme: ResolvedTheme): ReadonlyMap<string, string> {
+    const values = new Map<string, string>();
+    const selector = new RegExp(`^(?::root)?\\[data-theme=['"]${theme}['"]\\]$`);
+    const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!selectors?.split(',').some((candidate) => selector.test(candidate.trim()))) {
+            continue;
+        }
+        for (const match of (body ?? '').matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+            if (match[1] !== undefined && match[2] !== undefined) {
+                values.set(match[1], match[2].trim());
+            }
+        }
+    }
+    return values;
+}
+
+function tokenValue(theme: ResolvedTheme, name: string): string {
+    return THEME_VALUES[theme].get(name) ?? BASE_VALUES.get(name) ?? '';
+}
 
 function isPaint(value: string): boolean {
     return value.startsWith('#') || value.startsWith('rgba(') || value.includes('gradient(');
@@ -53,19 +79,20 @@ export function TokenSwatches() {
                 <section key={group.title} className="showcase__group">
                     <h3 className="showcase__group-title">{group.title}</h3>
                     <div className="showcase__grid">
-                        {group.tokens.map((token) => (
-                            <div key={token.name} className="swatch">
-                                {isPaint(token.value) ? (
-                                    <span className="swatch__paint" style={{ background: `var(${token.name})` }} />
-                                ) : (
-                                    <span className="swatch__paint swatch__paint--empty" />
-                                )}
-                                <span className="swatch__name">{token.name}</span>
-                                <span className="swatch__value">
-                                    {theme === 'light' ? LIGHT_VALUES.get(token.name) ?? token.value : token.value}
-                                </span>
-                            </div>
-                        ))}
+                        {group.tokens.map((token) => {
+                            const value = tokenValue(theme, token.name);
+                            return (
+                                <div key={token.name} className="swatch">
+                                    {isPaint(value) ? (
+                                        <span className="swatch__paint" style={{ background: `var(${token.name})` }} />
+                                    ) : (
+                                        <span className="swatch__paint swatch__paint--empty" />
+                                    )}
+                                    <span className="swatch__name">{token.name}</span>
+                                    <span className="swatch__value">{value}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
             ))}
@@ -151,10 +178,11 @@ const SIZE_TOKENS = GROUPS.flatMap((group) => group.tokens).filter((token) =>
 );
 
 export function TypographyScale() {
+    const theme = useResolvedTheme();
     return (
         <div className="showcase">
             <section className="showcase__group">
-                <h3 className="showcase__group-title">IBM Plex Sans</h3>
+                <h3 className="showcase__group-title">{tokenValue(theme, '--font-sans')}</h3>
                 {SIZE_TOKENS.map((token) => (
                     <p
                         key={token.name}
@@ -162,7 +190,7 @@ export function TypographyScale() {
                         style={{ fontSize: `var(${token.name})` }}
                     >
                         <span className="sample__label">
-                            {token.name} · {token.value}
+                            {token.name} · {tokenValue(theme, token.name)}
                         </span>
                         {SAMPLE}
                     </p>
@@ -170,7 +198,7 @@ export function TypographyScale() {
             </section>
 
             <section className="showcase__group">
-                <h3 className="showcase__group-title">IBM Plex Mono</h3>
+                <h3 className="showcase__group-title">{tokenValue(theme, '--font-mono')}</h3>
                 {SIZE_TOKENS.map((token) => (
                     <p
                         key={token.name}
@@ -178,7 +206,7 @@ export function TypographyScale() {
                         style={{ fontSize: `var(${token.name})` }}
                     >
                         <span className="sample__label">
-                            {token.name} · {token.value}
+                            {token.name} · {tokenValue(theme, token.name)}
                         </span>
                         {SAMPLE}
                     </p>

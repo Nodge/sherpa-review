@@ -130,32 +130,37 @@ describe('card height estimate', () => {
     });
 
     it('counts diff lines and adds an allowance for context between hunks', () => {
-        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified')).toBe(30 * 20 + 104);
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified', false, 20)).toBe(30 * 20 + 104);
+    });
+
+    it('accounts for the compact theme\'s 17px code height', () => {
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified', false, 17)).toBe(30 * 17 + 104);
+        expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'split', false, 17)).toBe(28 * 17);
     });
 
     it('has no context for add and delete, the whole file is one hunk', () => {
-        expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'unified')).toBe(28 * 20);
-        expect(estimateBodyHeight(file({ changeType: 'delete', deletions: 28 }), 'unified')).toBe(28 * 20);
+        expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'unified', false, 20)).toBe(28 * 20);
+        expect(estimateBodyHeight(file({ changeType: 'delete', deletions: 28 }), 'unified', false, 20)).toBe(28 * 20);
     });
 
     it('counts a pair of lines as one row in split mode, except for a one-sided file', () => {
-        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'split')).toBe(25 * 20 + 104);
-        expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'split')).toBe(28 * 20);
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'split', false, 20)).toBe(25 * 20 + 104);
+        expect(estimateBodyHeight(file({ changeType: 'add', additions: 28 }), 'split', false, 20)).toBe(28 * 20);
     });
 
     it('knows about viewed, manual and generated folds from the first frame', () => {
-        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified', true)).toBe(32);
-        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'split', true)).toBe(32);
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'unified', true, 20)).toBe(32);
+        expect(estimateBodyHeight(file({ additions: 25, deletions: 5 }), 'split', true, 20)).toBe(32);
     });
 
     it('uses a single-line notice for binary files, files without a patch and files collapsed by size', () => {
-        expect(estimateBodyHeight(file({ binary: true, patch: null }), 'unified')).toBe(32);
-        expect(estimateBodyHeight(file({ patch: null }), 'unified')).toBe(32);
-        expect(estimateBodyHeight(file({ additions: 3000, deletions: 1 }), 'unified')).toBe(32);
+        expect(estimateBodyHeight(file({ binary: true, patch: null }), 'unified', false, 20)).toBe(32);
+        expect(estimateBodyHeight(file({ patch: null }), 'unified', false, 20)).toBe(32);
+        expect(estimateBodyHeight(file({ additions: 3000, deletions: 1 }), 'unified', false, 20)).toBe(32);
     });
 
     it('has nothing to estimate when the file is missing', () => {
-        expect(estimateBodyHeight(undefined, 'unified')).toBe(0);
+        expect(estimateBodyHeight(undefined, 'unified', false, 20)).toBe(0);
     });
 });
 

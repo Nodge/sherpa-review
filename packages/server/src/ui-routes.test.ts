@@ -354,14 +354,18 @@ describe('UI endpoints', () => {
             expect(await response.text()).toContain('Sherpa');
         });
 
-        it('includes the saved theme and text size in the first frame', async () => {
-            new SettingsStore(sherpaDir).patch({ theme: 'light', textSize: 'l' });
+        it.each([
+            ['dark', false, 'dark'], ['light', false, 'light'],
+            
+        ] as const)('saved theme %s appears in the first frame', async (theme, expected) => {
+            new SettingsStore(sherpaDir).patch({ theme, textSize: 'l' });
             const server = await start(uiDir);
 
             const html = await (await get(server.port, '/')).text();
 
-            expect(html).toContain('data-theme="light"');
+            expect(html).toContain(`data-theme="${expected}"`);
             expect(html).toContain('data-textsize="l"');
+            expect(html).not.toContain('<script>');
             expect(html).not.toContain('prefers-color-scheme');
         });
 
@@ -383,6 +387,22 @@ describe('UI endpoints', () => {
             await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'dark' }, server.token);
 
             expect(await (await get(server.port, '/')).text()).toContain('data-theme="dark"');
+        });
+
+        
+            
+            const server = await start(uiDir);
+
+            const response = await patchJson(server.port, UI_ENDPOINTS.settings, { theme: 'auto' }, server.token);
+            const document = await get(server.port, '/');
+            const html = await document.text();
+
+            expect(response.status).toBe(200);
+            expect(document.status).toBe(200);
+            expect(html).not.toContain('data-theme=');
+            expect(html).toContain('prefers-color-scheme: dark');
+            
+            expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
         });
 
         it('serves assets with the correct content-type', async () => {

@@ -77,6 +77,21 @@ function renderGaps(mode: 'unified' | 'split', model = GAP_MODEL): HTMLElement {
     return host;
 }
 
+describe('highlight categories', () => {
+    it.each(['unified', 'split'] as const)('mode %s assigns the same name category to deleted and added lines', (mode) => {
+        const model = parseFileDiff({
+            fileId: 'classes', path: 'classes.ts', oldPath: null, changeType: 'modify', binary: false,
+            patch: '@@ -1,1 +1,1 @@\n-class Before {}\n+class After {}',
+        });
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(<DiffRows model={model} mode={mode} content={null} selection={null} />);
+
+        const names = [...host.querySelectorAll('.syntax-type')];
+        expect(names.map((name) => name.textContent)).toEqual(['Before', 'After']);
+        expect(names.map((name) => name.className)).toEqual(['syntax-type diff-word', 'syntax-type diff-word']);
+    });
+});
+
 describe('context gap bars', () => {
     it.each(['unified', 'split'] as const)('preserve directions and one tab stop in mode %s', (mode) => {
         const host = renderGaps(mode);

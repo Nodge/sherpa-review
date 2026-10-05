@@ -15,6 +15,8 @@ import {
 
 import type { DiffFileModel } from '../diff/model.js';
 import { useT } from '../i18n/index.js';
+import { useUiSettings } from '../settings/context.tsx';
+import { useCssPixelSizes } from '../styles/use-css-pixel-sizes.js';
 import type { CardNoteActions } from '../notes/card-notes.tsx';
 import { useCardNotes } from '../notes/card-notes.tsx';
 import type { FileReadState } from '../progress/read-state.js';
@@ -53,10 +55,6 @@ import { useSelectionLifecycle } from './use-selection.js';
  * and the card would overlap the next one.
  */
 
-/** Code line height, `--line-height-code`. Used to estimate the card body before measurement. */
-const CODE_LINE_HEIGHT = 20;
-/** Everything in the card except code lines: header 36.8 + borders 2 + gap to the next card 22 (measured). */
-const CARD_CHROME_HEIGHT = 61;
 /** Single-line notice or collapsed card: 7+7 padding, 11px/1.5 line and a border. */
 const NOTICE_ROW_HEIGHT = 32;
 /**
@@ -69,6 +67,11 @@ const HUNK_CONTEXT_HEIGHT = 104;
 
 /** Cards to keep beyond the viewport. Fewer expose loading, more cost more. */
 const OVERSCAN = 3;
+
+const DIFF_CSS_SIZES = {
+    codeLineHeight: '--line-height-code',
+    cardChromeHeight: '--diff-card-estimate-chrome-height',
+} as const;
 
 /** Frames to adjust scrolling to a linked file, giving the cards time to measure. */
 const SCROLL_TO_FILE_FRAMES = 12;
@@ -194,6 +197,8 @@ export function DiffFileList({
     }, [notes]);
     const threadNowRef = useRef(providedThreadNow ?? Date.now());
     const threadNow = providedThreadNow ?? threadNowRef.current;
+    const { textSize } = useUiSettings();
+    const { codeLineHeight, cardChromeHeight } = useCssPixelSizes(scrollElement, DIFF_CSS_SIZES);
     const listRef = useRef<HTMLDivElement | null>(null);
     const [scrollMargin, setScrollMargin] = useState(0);
     const requested = useRef(new Set<string>());
@@ -251,8 +256,8 @@ export function DiffFileList({
         count: files.length,
         getScrollElement: () => scrollElement,
         estimateSize: (index) =>
-            CARD_CHROME_HEIGHT +
-            estimateBodyHeight(files[index], estimateMode.current, collapseReasons.has(files[index]?.fileId ?? '')),
+            cardChromeHeight +
+            estimateBodyHeight(files[index], estimateMode.current, collapseReasons.has(files[index]?.fileId ?? ''), codeLineHeight),
         overscan: OVERSCAN,
         getItemKey: (index) => files[index]?.fileId ?? index,
         scrollMargin,
@@ -270,6 +275,24 @@ export function DiffFileList({
      */
     virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
         item.end <= (virtualizer.scrollOffset ?? 0) + scrollPaddingStart + virtualizer.scrollAdjustments;
+
+    const previousTypography = useRef({ textSize, codeLineHeight, cardChromeHeight });
+    useEffect(() => {
+        const previous = previousTypography.current;
+        if (
+            previous.textSize === textSize &&
+            previous.codeLineHeight === codeLineHeight &&
+            previous.cardChromeHeight === cardChromeHeight
+        ) {
+            return;
+        }
+        previousTypography.current = { textSize, codeLineHeight, cardChromeHeight };
+        // Offscreen cards change size too. ResizeObserver measures only elements in the DOM.
+        virtualizer.measure();
+        for (const element of virtualizer.elementsCache.values()) {
+            virtualizer.measureElement(element);
+        }
+    }, [textSize, codeLineHeight, cardChromeHeight, virtualizer]);
 
     const items = virtualizer.getVirtualItems();
 
@@ -402,7 +425,7 @@ export function DiffFileList({
                 }
                 virtualizer.resizeItem(
                     index,
-                    CARD_CHROME_HEIGHT + estimateBodyHeight(file, estimateMode.current, collapsed),
+                    cardChromeHeight + estimateBodyHeight(file, estimateMode.current, collapsed, codeLineHeight),
                 );
             }
             if (anchorIndex !== null) {
@@ -413,7 +436,7 @@ export function DiffFileList({
         return () => {
             cancelAnimationFrame(frame);
         };
-    }, [advancingFileId, collapseReasons, converge, files, scrollPaddingStart, virtualizer]);
+    }, [advancingFileId, cardChromeHeight, codeLineHeight, collapseReasons, converge, files, scrollPaddingStart, virtualizer]);
 
     // Adjustment lasts up to 12 frames and calls `scrollToIndex` throughout. Without cancellation,
     // the reviewer's wheel and touch would have no effect during those frames.
@@ -580,6 +603,7 @@ export function DiffFileList({
                                 file,
                                 estimateMode.current,
                                 collapseReasons.has(file.fileId),
+                                codeLineHeight,
                             )}
                             collapseReason={collapseReasons.get(file.fileId) ?? null}
                             content={snapshot.content.get(file.fileId)}
@@ -935,7 +959,12 @@ function countGeneratedCollapsed(
  * Estimate of everything below the card header. The virtualizer uses it until measurement, and the
  * skeleton uses it to fill its slot, so the model changes height by a small delta instead of several times.
  */
-export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, collapsed = false): number {
+export function estimateBodyHeight(
+    file: FileDiff | undefined,
+    mode: DiffMode,
+    collapsed: boolean,
+    codeLineHeight: number,
+): number {
     if (file === undefined) {
         return 0;
     }
@@ -954,7 +983,7 @@ export function estimateBodyHeight(file: FileDiff | undefined, mode: DiffMode, c
             : changed;
     // add/delete files form one hunk for the whole file, with no unchanged context.
     const context = file.changeType === 'add' || file.changeType === 'delete' ? 0 : HUNK_CONTEXT_HEIGHT;
-    return lines * CODE_LINE_HEIGHT + context;
+    return lines * codeLineHeight + context;
 }
 
 /**

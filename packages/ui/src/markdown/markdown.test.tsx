@@ -56,11 +56,20 @@ describe('markdown, comment profile', () => {
 
         expect(html).toContain(
             '<pre class="md-pre" data-lang="ts"><code><span class="syntax-keyword">const</span> a = ' +
-                '<span class="syntax-string">1</span>;\n<span class="syntax-keyword">const</span> b = ' +
-                '<span class="syntax-string">2</span>;</code></pre>',
+                '<span class="syntax-number">1</span>;\n<span class="syntax-keyword">const</span> b = ' +
+                '<span class="syntax-number">2</span>;</code></pre>',
         );
         expect(html).toContain('<p class="md-p">before</p>');
         expect(html).toContain('<p class="md-p">after</p>');
+    });
+
+    it('uses shared token categories for types and variables', () => {
+        expect(comment('```ts\nclass Order {}\n```')).toContain(
+            '<span class="syntax-type">Order</span>',
+        );
+        expect(comment('```sh\necho "$HOME"\n```')).toContain(
+            '<span class="syntax-variable">$HOME</span>',
+        );
     });
 
     it('sets only data-lang for an unknown language and omits the attribute for a fence without a language', () => {

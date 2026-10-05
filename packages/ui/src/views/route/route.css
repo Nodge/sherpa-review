@@ -323,7 +323,7 @@
 .route-stop__badge--new {
     border-color: var(--ownership-mine-border);
     background: var(--ownership-mine-surface);
-    color: var(--diff-add-text-strong);
+    color: var(--success-text);
 }
 
 .route-stop__comments {
@@ -1026,7 +1026,7 @@
 .digest__chip--new {
     border-color: var(--viewed-border);
     background: var(--ownership-mine-surface);
-    color: var(--diff-add-text-strong);
+    color: var(--success-text);
 }
 
 .digest__chip--changed,
