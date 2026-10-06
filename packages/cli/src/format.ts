@@ -55,6 +55,8 @@ export interface LocalReviewSummary {
     readonly branch: string;
     /** Explicit base. undefined means the server computes it. */
     readonly base: string | undefined;
+    /** Instruction for the review outcome, confirmed by the server (`--verdicts`). null means review without verdicts. */
+    readonly verdicts: string | null;
 }
 
 /**
@@ -68,6 +70,12 @@ export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSu
             `Reviewing the working tree of ${local.repo} on branch ${local.branch}, ` +
                 `base ${local.base ?? defaultBaseWording(local.vcs)}.`,
         );
+        if (local.verdicts !== null) {
+            lines.push(
+                'The reviewer finishes with Ship or Request changes; both arrive as a `review.feedback` task ' +
+                    `that repeats the user's instruction: "${local.verdicts}".`,
+            );
+        }
     }
 
     lines.push(
@@ -164,7 +172,8 @@ export function formatOversizedResult(taskId: number, file: string, bytes: numbe
 export function helpText(): string {
     const commands: readonly (readonly [string, string])[] = [
         [
-            'sherpa up [--local <path>] [--harness <name>] [--model <name>] [--lang <ru|en>] [--no-open]',
+            'sherpa up [--local <path> [--verdicts <instruction>]] [--harness <name>] [--model <name>] ' +
+                '[--lang <ru|en>] [--no-open]',
             'start the review server and become its worker',
         ],
         [
@@ -183,6 +192,11 @@ export function helpText(): string {
             'review the working tree of this project directory instead of a PR; only for `up`',
         ],
         ['--base <ref>', 'what the working tree is compared with; only with `--local`'],
+        [
+            '--verdicts <instruction>',
+            "the user's instruction for the outcome of the review, in their words; the reviewer then " +
+                'finishes with Ship or Request changes instead of Comment; only with `--local`',
+        ],
         ['--harness <name>', 'harness label in the worker status; for `up` and `worker register`'],
         ['--model <name>', 'model name in the worker status; for `up` and `worker register`'],
         [

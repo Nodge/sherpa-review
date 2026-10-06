@@ -60,9 +60,15 @@ import type { LocalVcs } from './vcs.js';
 /** Working-tree polling interval. No debounce: an edit appears on the next tick. */
 const POLL_INTERVAL_MS = 30_000;
 
-const CAPABILITIES: HostCapabilities = {
-    // There is no one to apply a local verdict. Comments are published for the agent to address individually.
-    publishVerdicts: ['comment'],
+/**
+ * Publish modes. By default, nobody acts on a verdict: comments go to the agent, which addresses
+ * each one. With `--verdicts`, Ship and Request changes work as in a PR: the agent awaits the verdict
+ * to perform the action the user requested on approval, while remarks go through Request changes.
+ */
+const COMMENT_ONLY: readonly Verdict[] = ['comment'];
+const WITH_VERDICTS: readonly Verdict[] = ['request_changes', 'ship'];
+
+const CAPABILITIES: Omit<HostCapabilities, 'publishVerdicts'> = {
     fileViewedSync: false,
     fileContent: true,
     commentIssues: false,
@@ -83,6 +89,11 @@ export interface LocalHostOptions {
     readonly base: string | null;
     /** Branch used to build the review key. If null, the first snapshot fixes it. */
     readonly branch: string | null;
+    /**
+     * User instruction for the review outcome (`--verdicts`): enables Ship and Request changes instead of
+     * Comment. Without it, only Comment is available.
+     */
+    readonly verdicts?: string | null;
     readonly threads: LocalThreadsStore;
     /** Iteration history: past working-tree iterations exist nowhere else. */
     readonly iterations: LocalIterationsStore;
@@ -90,6 +101,8 @@ export interface LocalHostOptions {
     readonly now?: () => Date;
     /** The first snapshot fixed the branch. Save it alongside the directory and base. */
     readonly onBranchResolved?: (branch: string) => void;
+    /** The instruction changed on the running server. Save it for restart. */
+    readonly onVerdictsChanged?: (verdicts: string | null) => void;
     /** Where to log iteration history failures. Defaults to stderr. */
     readonly log?: (message: string) => void;
 }
@@ -116,6 +129,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
     /** The checkout left this review (branch changed). The host rejects requests until the branch returns. */
     private failure: Error | null = null;
     private expectedBranch: string | null;
+    private verdicts: string | null;
 
     /** In-memory iteration history. Null means it has not yet been read from disk. */
     private historyValue: LocalIterationRecord[] | null = null;
@@ -139,11 +153,27 @@ export class LocalHost implements ReviewHost, FeedbackHost {
                 process.stderr.write(`sherpa-server: ${message}\n`);
             });
         this.expectedBranch = options.branch;
+        this.verdicts = options.verdicts ?? null;
     }
 
     /** Login from the last snapshot. Null if no snapshot has been taken. */
     currentUser(): string | null {
         return this.current?.login ?? null;
+    }
+
+    /**
+     * Running server instruction, supplied by each `up --local`. Null disables the mode. Returns true
+     * if the mode switched on or off, so PR metadata with the new `publishVerdicts` needs rereading.
+     */
+    setVerdicts(verdicts: string | null): boolean {
+        if (verdicts === this.verdicts) {
+            return false;
+        }
+        // Write first: if it fails, the in-memory instruction stays unchanged and the next `up` retries it.
+        this.options.onVerdictsChanged?.(verdicts);
+        const toggled = (verdicts === null) !== (this.verdicts === null);
+        this.verdicts = verdicts;
+        return toggled;
     }
 
     /** Forces a working-tree poll, bypassing the timer interval and the cheap check. */
@@ -167,7 +197,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
             statusLabel: 'local',
             checks: null,
             updatedAt: snapshot.createdAt,
-            capabilities: CAPABILITIES,
+            capabilities: { ...CAPABILITIES, publishVerdicts: [...this.publishVerdicts()] },
             // A verdict belongs to an iteration: a new diff makes the review unfinished again.
             verdicts: verdict?.diffId === snapshot.diffId ? this.verdictsOf(verdict.verdict, snapshot.login) : [],
             // A local review is read by the owner of the tree.
@@ -372,23 +402,25 @@ export class LocalHost implements ReviewHost, FeedbackHost {
     }
 
     /**
-     * Local review publishes comments only. Drafts lose their draft flag,
-     * the mode is saved with the iteration, and publishing at least one comment opens a round.
-     * Without comments the agent has nothing to do, so there is no round or record.
+     * Publishes a local review: clears draft flags, saves the mode together with the iteration,
+     * and opens a round for an agent task. `comment` without comments opens no round because
+     * the agent has nothing to do. A verdict opens one even empty: the session must learn what the reviewer decided.
      */
     async publishBatch(verdict: Verdict): Promise<PublishResult> {
         const parsed = verdictSchema.parse(verdict);
-        if (!CAPABILITIES.publishVerdicts.includes(parsed)) {
+        if (!this.publishVerdicts().includes(parsed)) {
             throw new RpcFailure(
                 'bad_request',
-                'Local review publishes comments only. There is no one here to approve or request changes.',
+                this.verdicts !== null
+                    ? 'This local review ends with a verdict: submit findings through Request changes.'
+                    : 'Local review only publishes comments: there is no one here to approve or request changes.',
             );
         }
 
         const drafts = (await this.reviewData()).threads.some((thread) =>
             flatten(thread.root).some((comment) => comment.draft),
         );
-        if (!drafts) {
+        if (!drafts && parsed === 'comment') {
             return { publishedCommentIds: [], failed: [], verdictApplied: true };
         }
 
@@ -409,8 +441,8 @@ export class LocalHost implements ReviewHost, FeedbackHost {
                 }
             }
             data.verdict = { verdict: parsed, diffId: snapshot.diffId };
-            // Drafts may have gone while publication waited in the queue. The agent needs no empty round.
-            if (publishedCommentIds.length === 0) {
+            // Drafts may have gone while publishing waited in the queue: the agent needs no empty round without a verdict.
+            if (publishedCommentIds.length === 0 && parsed === 'comment') {
                 return { publishedCommentIds, failed: [], verdictApplied: true };
             }
             data.rounds.push({
@@ -453,7 +485,14 @@ export class LocalHost implements ReviewHost, FeedbackHost {
         const threads = round.threadIds.map((threadId) =>
             this.feedbackThread(snapshot, data.threads.find((thread) => thread.id === threadId) ?? null, threadId),
         );
-        return { roundId, verdict: round.verdict, projectDir: this.options.projectDir, threads };
+        return {
+            roundId,
+            verdict: round.verdict,
+            // Use the current instruction: the round does not store it.
+            instruction: this.verdicts,
+            projectDir: this.options.projectDir,
+            threads,
+        };
     }
 
     /**
@@ -590,10 +629,11 @@ export class LocalHost implements ReviewHost, FeedbackHost {
         return { login, displayName: null, bot: false };
     }
 
-    /**
-     * Converts the stored publication mode into header verdicts. `comment` is not a verdict.
-     * ship and request_changes remain in files published before local review was restricted to `comment`.
-     */
+    private publishVerdicts(): readonly Verdict[] {
+        return this.verdicts === null ? COMMENT_ONLY : WITH_VERDICTS;
+    }
+
+    /** Map the saved publishing mode to header verdicts. `comment` is not a verdict. */
     private verdictsOf(verdict: Verdict, login: string): ReviewerVerdict[] {
         switch (verdict) {
             case 'comment':

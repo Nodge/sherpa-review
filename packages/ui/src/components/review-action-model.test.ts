@@ -132,6 +132,11 @@ describe('floating bar model', () => {
     it('passes drafts to the agent for comment on the local host', () => {
         expect(publishConsequenceKey('comment', 'agent')).toBe('ship.consequence.commentAgent');
         expect(createT('en')(publishConsequenceKey('comment', 'agent'), 1)).toBe('Hands 1 draft to the agent');
+        // Local review with `--verdicts` sends the verdict to the agent too, without publishing it on the PR.
+        expect(publishConsequenceKey('ship', 'agent')).toBe('ship.consequence.shipAgent');
+        expect(createT('en')(publishConsequenceKey('request_changes', 'agent'), 2)).toBe(
+            'Hands 2 drafts to the agent and requests changes',
+        );
         expect(draftsCounterKey('agent')).toBe('ship.draftsToAgent');
         expect(createT('en')(draftsCounterKey('agent'), 1)).toBe('1 draft goes to the agent');
         expect(draftsCounterKey('pr')).toBe('ship.drafts');

@@ -33,7 +33,7 @@ afterAll(() => {
     }
 });
 
-function makeHost(): LocalHost {
+function makeHost(verdicts: string | null = null): LocalHost {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-local-'));
     checkouts.push(root);
 
@@ -46,6 +46,7 @@ function makeHost(): LocalHost {
         projectDir: fake.projectDir,
         base: null,
         branch: fake.branch,
+        verdicts,
         threads: memoryThreadsStore(),
         iterations: memoryIterationsStore(),
         pollIntervalMs: POLL_INTERVAL_MS,
@@ -81,18 +82,26 @@ function seed(fake: FakeVcs): void {
     fake.writeDisk('other/outside.ts', 'export const outside = 2;\n');
 }
 
-describeReviewHostContract('LocalHost/git', makeHost, {
-    // Default login of the fake checkout.
-    viewer: 'reviewer',
-    advance: async (host) => {
-        const fake = fakes.get(host);
-        if (fake === undefined) {
-            throw new Error('fake VCS for the host was not found');
-        }
-        fake.writeDisk(
-            `${PROJECT_PREFIX}/${TOUCHED_FILE}`,
-            `${['export function serve() {', '    const port = 7070;', '    listen(port);', '    log("up");', '}'].join('\n')}\n`,
-        );
-        await host.refresh();
-    },
+/** A local host "push": edit a working-tree file and force a poll. */
+async function advance(host: LocalHost): Promise<void> {
+    const fake = fakes.get(host);
+    if (fake === undefined) {
+        throw new Error('Fake git for the host was not found');
+    }
+    fake.writeDisk(
+        `${PROJECT_PREFIX}/${TOUCHED_FILE}`,
+        `${['export function serve() {', '    const port = 7070;', '    listen(port);', '    log("up");', '}'].join('\n')}\n`,
+    );
+    await host.refresh();
+}
+
+/** Default fake checkout login. */
+const VIEWER = 'reviewer';
+
+describeReviewHostContract('LocalHost/git', () => makeHost(), { viewer: VIEWER, advance });
+
+// `--verdicts` mode: the same contract, with Request changes and Ship instead of Comment.
+describeReviewHostContract('LocalHost/git --verdicts', () => makeHost('on ship, commit and open a PR'), {
+    viewer: VIEWER,
+    advance,
 });

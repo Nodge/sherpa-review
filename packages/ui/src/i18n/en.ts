@@ -964,6 +964,10 @@ export const en: Dictionary = {
         `Publishes ${num(drafts)} ${form(drafts, 'draft', 'drafts')} and approves the snapshot`,
     'ship.consequence.requestChanges': (drafts: number) =>
         `Publishes ${num(drafts)} ${form(drafts, 'draft', 'drafts')} and requests changes`,
+    'ship.consequence.shipAgent': (drafts: number) =>
+        `Hands ${num(drafts)} ${form(drafts, 'draft', 'drafts')} to the agent and approves the changes`,
+    'ship.consequence.requestChangesAgent': (drafts: number) =>
+        `Hands ${num(drafts)} ${form(drafts, 'draft', 'drafts')} to the agent and requests changes`,
     'ship.disabled.publishing': 'publishing…',
     'ship.disabled.offline': 'no connection to the server',
     'ship.disabled.pending': 'there is unsaved text',

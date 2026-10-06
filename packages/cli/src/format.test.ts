@@ -10,6 +10,7 @@ import {
     formatTask,
     formatUiUrl,
     formatUpReady,
+    helpText,
 } from './format.js';
 
 const task: Task = {
@@ -42,12 +43,14 @@ describe('up output for local review', () => {
             repo: '/repo/app',
             branch: 'feature',
             base: undefined,
+            verdicts: null,
         });
         const git = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
             vcs: 'git',
             repo: '/repo/app',
             branch: 'feature',
             base: undefined,
+            verdicts: null,
         });
 
         expect(git).toContain('on branch feature, base merge-base with main.');
@@ -60,9 +63,50 @@ describe('up output for local review', () => {
             repo: '/repo/app',
             branch: 'feature',
             base: 'origin/main~2',
+            verdicts: null,
         });
 
         expect(ready).toContain('base origin/main~2.');
+        expect(ready).not.toContain('Ship');
+    });
+
+    it('describes verdict mode on a separate line with the instruction', () => {
+        const ready = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
+            vcs: 'git',
+            repo: '/repo/app',
+            branch: 'feature',
+            base: undefined,
+            verdicts: 'on ship, commit and open a PR',
+        });
+
+        expect(ready).toContain(
+            'The reviewer finishes with Ship or Request changes; both arrive as a `review.feedback` task ' +
+                'that repeats the user\'s instruction: "on ship, commit and open a PR".',
+        );
+    });
+
+    it('prints the instruction verbatim in the ready line, without escaping', () => {
+        const verdicts = 'on ship, commit with message "#61: done" in C:\\work\nthen open a PR';
+        const ready = formatUpReady(uiUrl, 'local-git-app-0badc0de', {
+            vcs: 'git',
+            repo: '/repo/app',
+            branch: 'feature',
+            base: undefined,
+            verdicts,
+        });
+
+        expect(ready).toContain(`that repeats the user's instruction: "${verdicts}".`);
+    });
+});
+
+describe('help', () => {
+    it('lists --verdicts with an instruction for up and its relationship to --local', () => {
+        const help = helpText();
+
+        expect(help).toContain('sherpa up [--local <path> [--verdicts <instruction>]]');
+        expect(help).toMatch(
+            /--verdicts <instruction> +the user's instruction for the outcome of the review, in their words; the reviewer then finishes with Ship or Request changes instead of Comment; only with `--local`/u,
+        );
     });
 });
 

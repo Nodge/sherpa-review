@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { verdictsInstructionSchema } from '@sherpa/protocol';
 import { z } from 'zod';
 
 import { localHostStatePathFor } from '../../paths.js';
@@ -21,12 +22,19 @@ export interface LocalHostState {
     readonly branch: string | null;
     /** Explicit comparison base. null means compute merge-base with the default base branch. */
     readonly base: string | null;
+    /**
+     * User instruction for the review outcome (`--verdicts`): enables finishing with Ship or Request
+     * changes instead of Comment. null means the mode is disabled.
+     */
+    readonly verdicts: string | null;
 }
 
 const stateSchema = z.object({
     repo: z.string().min(1),
     branch: z.string().min(1).nullable(),
     base: z.string().min(1).nullable(),
+    // Files from before verdict mode lack this field, so verdict mode is disabled.
+    verdicts: verdictsInstructionSchema.nullable().default(null),
 });
 
 /** Saved key state. null means the file is missing or failed schema validation (fail-closed). */

@@ -25,6 +25,7 @@ import {
 } from './format.js';
 import { resolveLocalTarget } from './local.js';
 import {
+    manifestPathFor,
     serverBinOverrideFrom,
     sherpaDirFrom,
     taskResultDirFor,
@@ -106,13 +107,36 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         sherpaDir: sherpaDirFrom(io.env),
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
-        ...(local === null ? {} : { repo: local.repo, base: local.base, branch: local.branch }),
+        ...(local === null
+            ? {}
+            : { repo: local.repo, base: local.base, branch: local.branch, verdicts: command.verdicts }),
     });
     // A fresh session always gets the worker slot. The server takes it even from a live previous session,
-    // so `up` registers through the normal path, with no fallback paths.
-    await registerWorker(prKey, labelsOf(command), io);
+    // so `up` registers through the normal flow and has no fallback paths. The verdict mode goes
+    // here too. A running server doesn't see startup arguments, and the last `up` wins.
+    const registered = await registerWorker(
+        prKey,
+        labelsOf(command),
+        io,
+        local === null ? undefined : (command.verdicts ?? null),
+    );
+    // A running server from an old build silently drops `localVerdicts` without echoing it. The reviewer would see
+    // only Comment, while the agent waited for a verdict that would never arrive.
+    if (command.verdicts !== undefined && registered.localVerdicts !== command.verdicts) {
+        throw new CliError(
+            'The Sherpa server already running for this review is older than this CLI and ignores ' +
+                '`--verdicts`: the reviewer would see only Comment. Stop that server (its pid is in ' +
+                `${manifestPathFor(sherpaDirFrom(io.env), prKey)}) and run the same \`sherpa up\` command again.`,
+        );
+    }
 
-    io.out(formatUpReady(server.uiUrl, prKey, local));
+    io.out(
+        formatUpReady(
+            server.uiUrl,
+            prKey,
+            local === null ? null : { ...local, verdicts: registered.localVerdicts ?? null },
+        ),
+    );
     if (server.started && !command.noOpen) {
         try {
             (io.openBrowser ?? openBrowser)({ uiUrl: server.uiUrl });
@@ -141,9 +165,10 @@ async function registerWorker(
     prKeyArg: string | undefined,
     labels: WorkerLabels,
     io: CliIo,
+    localVerdicts?: string | null,
 ): Promise<WorkerRegisterResponse> {
     const connection = await connectAs(prKeyArg, io.env, freshWorkerId(io.env), io.runCommand);
-    return requestRegister(connection, labels);
+    return requestRegister(connection, labels, localVerdicts);
 }
 
 /** Session labels from command arguments. `up` and `worker register` declare them the same way. */

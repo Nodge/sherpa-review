@@ -64,6 +64,7 @@ class FakeFeedbackHost implements FeedbackHost {
         return Promise.resolve({
             roundId,
             verdict: round.verdict,
+            instruction: null,
             projectDir: PROJECT_DIR,
             threads: this.threadsOf.get(roundId) ?? [],
         });
@@ -409,6 +410,7 @@ describe('round payload', () => {
     const context: FeedbackRoundContext = {
         roundId: '7',
         verdict: 'request_changes',
+        instruction: null,
         projectDir: PROJECT_DIR,
         threads: [
             thread('3'),
@@ -475,16 +477,57 @@ describe('round payload', () => {
             `"The reviewer published review comments on the local checkout /tmp/project. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema): what you did, or why you did not. Write the replies and the summary in Russian. Never edit files outside the project directory. Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is. The working tree is re-read automatically; do not run any other Sherpa command for this."`,
         );
 
-        // Rounds with ship and request_changes remain in files published earlier.
+        // request_changes covers verdict mode (`--verdicts`) and rounds published before comment-only mode.
         expect(buildFeedbackPayload(context, 'ru').instructions).toMatchInlineSnapshot(
             `"The reviewer finished a review round on the local checkout /tmp/project, verdict request_changes. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema): what you did, or why you did not. Write the replies and the summary in Russian. Never edit files outside the project directory. Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is. The working tree is re-read automatically; do not run any other Sherpa command for this."`,
         );
+    });
 
-        expect(buildFeedbackPayload({ ...context, verdict: 'ship' }, 'ru').instructions).toContain(
-            'The changes are approved. The comments are optional: apply the trivial ones, reply to the rest.',
+    it('ship without instructions: changes are approved, with generic instructions for approval', () => {
+        const ship = buildFeedbackPayload({ ...context, verdict: 'ship' }, 'en').instructions;
+        expect(ship).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict ship. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema). Write the replies and the summary in English. Never edit files outside the project directory. The changes are approved. If the user asked you earlier to do something once the changes are approved (for example, commit them and open a pull request), do it now and say what you did in the summary. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+        // Ship does not prohibit code changes: approval still allows carrying out user instructions.
+        expect(ship).not.toContain('do not change the code');
+        expect(buildFeedbackPayload({ ...context, verdict: 'sticky_ship' }, 'en').instructions).not.toContain(
+            'do not change the code',
         );
-        expect(buildFeedbackPayload({ ...context, threads: [], verdict: 'ship' }, 'ru').instructions).toContain(
-            'The reviewer approved the changes without comments.',
+    });
+
+    it('ship without comments: empty replies, a one-line summary and generic approval instructions', () => {
+        expect(
+            buildFeedbackPayload({ ...context, threads: [], verdict: 'ship' }, 'en').instructions,
+        ).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict ship. The reviewer approved the changes without comments. If the user asked you earlier to do something once the changes are approved (for example, commit them and open a pull request), do it now and say what you did in the summary. Submit a result with an empty replies list and a one-line summary. Write the replies and the summary in English. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+    });
+
+    it('prints ship instructions verbatim instead of generic text', () => {
+        const withInstruction = { ...context, instruction: 'on ship, commit and open a PR' };
+
+        expect(buildFeedbackPayload({ ...withInstruction, verdict: 'ship' }, 'en').instructions).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict ship. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema). Write the replies and the summary in English. Never edit files outside the project directory. The changes are approved. The user's instruction for the outcome of this review: "on ship, commit and open a PR". Carry out the part that applies to verdict ship now and say what you did in the summary. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+        expect(
+            buildFeedbackPayload({ ...withInstruction, threads: [], verdict: 'sticky_ship' }, 'en').instructions,
+        ).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict sticky_ship. The reviewer approved the changes without comments. The user's instruction for the outcome of this review: "on ship, commit and open a PR". Carry out the part that applies to verdict sticky_ship now and say what you did in the summary. Submit a result with an empty replies list and a one-line summary. Write the replies and the summary in English. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+    });
+
+    it('request_changes with instructions: address comments first, then follow the instructions', () => {
+        const withInstruction = { ...context, instruction: 'on request changes, fix and run the tests' };
+
+        expect(buildFeedbackPayload(withInstruction, 'en').instructions).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict request_changes. The review comments are in feedback.md, each with the absolute file path, line and code excerpt. Reply to every thread by threadId in the result file (see schema): what you did, or why you did not. Write the replies and the summary in English. Never edit files outside the project directory. Fix the code for every comment. If a comment is unclear or you disagree, reply in the thread and leave the code as is. The user's instruction for the outcome of this review: "on request changes, fix and run the tests". Carry out the part that applies to verdict request_changes now and say what you did in the summary. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+        expect(buildFeedbackPayload({ ...withInstruction, threads: [] }, 'en').instructions).toMatchInlineSnapshot(`"The reviewer finished a review round on the local checkout /tmp/project, verdict request_changes. The reviewer left no comments in this round, so there is nothing to fix. The user's instruction for the outcome of this review: "on request changes, fix and run the tests". Carry out the part that applies to verdict request_changes now and say what you did in the summary. Submit a result with an empty replies list and a one-line summary. Write the replies and the summary in English. The working tree is re-read automatically; do not run any other Sherpa command for this."`);
+    });
+
+    it('prints instructions with quotes, a backslash and a newline verbatim', () => {
+        const instruction = 'on ship, commit with message "#61: done" in C:\\work\nthen open a PR';
+        const instructions = buildFeedbackPayload({ ...context, verdict: 'ship', instruction }, 'en').instructions;
+
+        expect(instructions).toContain(`outcome of this review: "${instruction}". Carry out`);
+    });
+
+    it('still requests no fixes for empty comment and request_changes rounds', () => {
+        expect(buildFeedbackPayload({ ...context, threads: [], verdict: 'comment' }, 'en').instructions).toContain(
+            'The reviewer published no comments in this round. Nothing to fix: submit a result with an empty replies list and a one-line summary.',
+        );
+        expect(buildFeedbackPayload({ ...context, threads: [] }, 'en').instructions).toContain(
+            'The reviewer left no comments in this round. Nothing to fix: submit a result with an empty replies list and a one-line summary.',
         );
     });
 });

@@ -123,6 +123,8 @@ describe('server startup in `up`', () => {
         const base = baseIndex === -1 ? null : process.argv[baseIndex + 1];
         const branchIndex = process.argv.indexOf('--branch');
         const branch = branchIndex === -1 ? null : process.argv[branchIndex + 1];
+        const verdictsIndex = process.argv.indexOf('--verdicts');
+        const verdicts = verdictsIndex === -1 ? null : process.argv[verdictsIndex + 1];
         const token = 'f'.repeat(64);
 
         let slowFirstHealth = process.argv.includes('--slow-first-health');
@@ -147,6 +149,7 @@ describe('server startup in `up`', () => {
             repo,
             base,
             branch,
+            verdicts,
             port: server.address().port,
             pid: process.pid,
             token,
@@ -158,7 +161,10 @@ describe('server startup in `up`', () => {
         await fs.writeFile(path.join(sherpaDir, 'servers', prKey + '.json'), JSON.stringify(manifest));
     `;
 
-    async function up(serverBin: string, local?: { repo: string; base?: string; branch?: string }) {
+    async function up(
+        serverBin: string,
+        local?: { repo: string; base?: string; branch?: string; verdicts?: string },
+    ) {
         return ensureServer({
             prKey: PR_KEY,
             sherpaDir,
@@ -167,7 +173,7 @@ describe('server startup in `up`', () => {
             startupTimeoutMs: STARTUP_TIMEOUT_MS,
             ...(local === undefined
                 ? {}
-                : { repo: local.repo, base: local.base, branch: local.branch }),
+                : { repo: local.repo, base: local.base, branch: local.branch, verdicts: local.verdicts }),
         });
     }
 
@@ -226,6 +232,13 @@ describe('server startup in `up`', () => {
         expect(manifest.repo).toBe('/repo/app');
         expect(manifest.base).toBe('main~3');
         expect(manifest.branch).toBe('feature');
+        expect(manifest.verdicts).toBeNull();
+    });
+
+    it('passes the verdict instruction to the daemon as --verdicts', async () => {
+        await up(await fakeServer(WORKING_SERVER), { repo: '/repo/app', verdicts: 'on ship, open a PR' });
+
+        expect((await readManifest(sherpaDir)).verdicts).toBe('on ship, open a PR');
     });
 
     it('passes neither --repo, --base nor --branch to the daemon outside local review', async () => {
@@ -235,6 +248,7 @@ describe('server startup in `up`', () => {
         expect(manifest.repo).toBeNull();
         expect(manifest.base).toBeNull();
         expect(manifest.branch).toBeNull();
+        expect(manifest.verdicts).toBeNull();
     });
 
     it('reuses a live manifest without starting a second server', async () => {
@@ -377,6 +391,7 @@ interface TestManifest {
     readonly repo?: string | null;
     readonly base?: string | null;
     readonly branch?: string | null;
+    readonly verdicts?: string | null;
 }
 
 async function readManifest(sherpaDir: string): Promise<TestManifest> {

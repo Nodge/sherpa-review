@@ -986,6 +986,10 @@ export const ru = {
         `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} и одобрит снапшот`,
     'ship.consequence.requestChanges': (drafts: number) =>
         `Опубликует ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} и запросит изменения`,
+    'ship.consequence.shipAgent': (drafts: number) =>
+        `Передаст ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} агенту и одобрит изменения`,
+    'ship.consequence.requestChangesAgent': (drafts: number) =>
+        `Передаст ${num(drafts)} ${form(drafts, 'черновик', 'черновика', 'черновиков')} агенту и запросит изменения`,
     'ship.disabled.publishing': 'публикуется…',
     'ship.disabled.offline': 'нет связи с сервером',
     'ship.disabled.pending': 'есть несохранённый текст',

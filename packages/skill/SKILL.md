@@ -41,6 +41,8 @@ node <this skill's directory>/bin/sherpa.mjs up --local <path> --harness <your h
 
 `--local` always needs a path: pass your current working directory when the skill was called without an argument. To compare against something other than the default base (the merge base with `origin/HEAD`, `main` or `master` in git), add `--base <ref>`.
 
+If the user asks you to do something once they approve the changes or request changes — open a PR when they ship, merge after approval — pass that instruction as the value of the flag, in the user's words: `--verdicts '<what to do on ship or on request changes>'`. Use single quotes so the shell passes the words as they are; write a single quote inside the instruction as `'\''`. The reviewer then finishes the local review with Ship or Request changes instead of Comment, and the `review.feedback` task with the verdict repeats the instruction: carry it out. Without such an instruction, leave the flag out.
+
 `--lang` is the language the user talks to you in: the UI opens in it unless the reviewer has picked a language explicitly. Look at the user's own messages, not at the code or the PR. Only `ru` and `en` exist — anything else is `en`. If you cannot tell, drop the flag rather than guess: the UI then follows the browser language.
 
 The command opens the UI in the default browser when it starts a new server, and always prints the link — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).

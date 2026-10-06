@@ -42,6 +42,11 @@ export interface WorkerRoutesOptions {
      * as claiming the slot, so writes follow registration order.
      */
     readonly publishWorkerId: (workerId: string) => void;
+    /**
+     * Review outcome instruction from `up --local` registration (`localVerdicts`, null clears the mode).
+     * Only the local host supports this. Without it, the request field changes nothing.
+     */
+    readonly setLocalVerdicts?: (instruction: string | null) => void;
 }
 
 /**
@@ -100,11 +105,18 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
                 // Immediately after claiming the slot, with no await in between: the identity file must
                 // change in the same order as the slot owner.
                 options.publishWorkerId(request.workerId);
+                let applied: string | null | undefined;
+                if (request.localVerdicts !== undefined && options.setLocalVerdicts !== undefined) {
+                    options.setLocalVerdicts(request.localVerdicts);
+                    applied = request.localVerdicts;
+                }
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
                         'This session is registered as the worker of this PR. Run `sherpa worker next` ' +
                         'and follow the instructions in its output.',
+                    // The CLI compares the instruction with the echo. An older server silently drops the request field.
+                    ...(applied === undefined ? {} : { localVerdicts: applied }),
                 };
                 return { status: 200, body };
             }),

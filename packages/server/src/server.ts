@@ -120,6 +120,11 @@ export interface StartServerOptions {
     repo?: string;
     base?: string;
     branch?: string;
+    /**
+     * Local review verdict instruction (`--verdicts`). With it, review finishes with Ship or Request
+     * changes. Like the base, it only applies when `repo` is provided.
+     */
+    verdicts?: string;
     /** Feedback channel transport and environment. Tests replace fetch and credentials without a live issue service. */
     feedback?: FeedbackIntegrationOptions;
     /**
@@ -268,6 +273,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
             repo: options.repo ?? null,
             base: options.base ?? null,
             branch: options.branch ?? null,
+            verdicts: options.verdicts ?? null,
         });
         const advanceIteration = reviewHost?.advanceIteration;
         // Without a host, there are no review events. The SSE channel carries state only.
@@ -367,6 +373,7 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 null,
         );
 
+        const setLocalVerdicts = reviewHost?.setLocalVerdicts;
         routes.push(
             ...createWorkerRoutes({
                 queue,
@@ -377,6 +384,16 @@ export async function startServer(options: StartServerOptions): Promise<SherpaSe
                 publishWorkerId: (workerId) => {
                     writeWorkerIdFile(workerIdPath, workerId);
                 },
+                // The mode changed. The same snapshot sends metadata with the new `publishVerdicts` to the UI.
+                ...(setLocalVerdicts === undefined
+                    ? {}
+                    : {
+                          setLocalVerdicts: (instruction: string | null) => {
+                              if (setLocalVerdicts(instruction)) {
+                                  void prMeta.refresh();
+                              }
+                          },
+                      }),
             }),
             ...createUiRoutes({
                 prKey,

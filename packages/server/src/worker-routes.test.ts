@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 
-import type { WorkerStatus } from '@sherpa/protocol';
+import type { WorkerRegisterResponse, WorkerStatus } from '@sherpa/protocol';
 import {
     PROTOCOL_VERSION,
     RESULT_MAX_BYTES,
+    VERDICTS_INSTRUCTION_MAX_CHARS,
     rpcErrorSchema,
     taskAckResponseSchema,
     taskCompleteResponseSchema,
@@ -15,6 +16,7 @@ import {
 } from '@sherpa/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { selectReviewHost } from './hosts/select.js';
 import { REQUEST_BODY_MAX_BYTES } from './http.js';
 import { workerIdPathFor } from './paths.js';
 import type { SherpaServer } from './server.js';
@@ -239,6 +241,72 @@ describe('worker endpoints', () => {
             expect(response.status).toBe(409);
             expect(rpcErrorSchema.parse(await response.json()).error.code).toBe('version_incompatible');
             expect(server.workerRegistry.status().kind).toBe('never');
+        });
+
+        // The running server cannot see launch arguments. Local review verdict mode arrives through `up` registration.
+        it('passes the localVerdicts instruction to the host and leaves the mode unchanged without the field', async () => {
+            const calls: (string | null)[] = [];
+            const fixture = selectReviewHost('fixture-small');
+            if (fixture === null) {
+                throw new Error('fixture host was not selected');
+            }
+            const server = await startServer({
+                prKey: PR_KEY,
+                sherpaDir,
+                longPollSeconds: 0.3,
+                reviewHostFactory: () => ({
+                    ...fixture,
+                    setLocalVerdicts: (instruction) => {
+                        calls.push(instruction);
+                        return true;
+                    },
+                }),
+            });
+            servers.push(server);
+
+            const register = async (body: object): Promise<WorkerRegisterResponse> =>
+                workerRegisterResponseSchema.parse(
+                    await (await postJson(server.port, WORKER_ENDPOINTS.register, body, server.token)).json(),
+                );
+
+            // The echo names the applied instruction so the CLI can tell the server understood the field.
+            expect((await register({ ...BASE, localVerdicts: 'on ship, open a PR' })).localVerdicts).toBe(
+                'on ship, open a PR',
+            );
+            expect((await register(BASE)).localVerdicts).toBeUndefined();
+            expect((await register({ ...BASE, localVerdicts: 'on ship, merge' })).localVerdicts).toBe('on ship, merge');
+            expect((await register({ ...BASE, localVerdicts: null })).localVerdicts).toBeNull();
+
+            expect(calls).toEqual(['on ship, open a PR', 'on ship, merge', null]);
+        });
+
+        it('rejects empty and overly long instructions through the schema', async () => {
+            const server = await start();
+
+            for (const localVerdicts of ['  ', 'x'.repeat(VERDICTS_INSTRUCTION_MAX_CHARS + 1)]) {
+                const response = await postJson(
+                    server.port,
+                    WORKER_ENDPOINTS.register,
+                    { ...BASE, localVerdicts },
+                    server.token,
+                );
+                expect(response.status).toBe(400);
+            }
+            expect(server.workerRegistry.status().kind).toBe('never');
+        });
+
+        it('ignores localVerdicts on a host without verdict mode and does not echo it', async () => {
+            const server = await start();
+
+            const response = await postJson(
+                server.port,
+                WORKER_ENDPOINTS.register,
+                { ...BASE, localVerdicts: 'on ship, open a PR' },
+                server.token,
+            );
+
+            expect(response.status).toBe(200);
+            expect(workerRegisterResponseSchema.parse(await response.json()).localVerdicts).toBeUndefined();
         });
 
         it('allows registration after the previous session dies', async () => {

@@ -39,6 +39,12 @@ export const IMAGE_BLOB_MAX_BYTES = 10_000_000;
 export const PROGRESS_TEXT_MAX_CHARS = 500;
 
 /**
+ * Local review outcome instruction limit (`sherpa up --local --verdicts <instruction>`): the instruction
+ * is printed verbatim in the `review.feedback` task as a user request, not a document.
+ */
+export const VERDICTS_INSTRUCTION_MAX_CHARS = 2000;
+
+/**
  * Worker endpoint paths are part of the CLI↔server contract (`docs/protocol.md §3`).
  * All use POST with a JSON body matching the corresponding schema from `messages.ts`.
  */

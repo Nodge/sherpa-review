@@ -62,6 +62,11 @@ export interface FeedbackThread {
 export interface FeedbackRoundContext {
     readonly roundId: string;
     readonly verdict: Verdict;
+    /**
+     * User instruction for the review outcome (`--verdicts`) when the task is built. null means verdict
+     * mode is disabled.
+     */
+    readonly instruction: string | null;
     /** Project directory: the agent has nothing to edit outside it. */
     readonly projectDir: string;
     readonly threads: readonly FeedbackThread[];
@@ -117,6 +122,11 @@ export interface SelectedHost {
      */
     readonly refresh?: () => Promise<void>;
     /**
+     * Local host only: review outcome instruction (`--verdicts`) on a running server. null means
+     * the mode is disabled. true means the mode was enabled or disabled and PR metadata needs rereading.
+     */
+    readonly setLocalVerdicts?: (instruction: string | null) => boolean;
+    /**
      * Local host only: publication rounds that the server turns into agent tasks.
      * Without it, there is no feedback orchestrator.
      */
@@ -131,6 +141,8 @@ export interface SelectHostOptions {
     readonly base?: string | null;
     /** Branch where the CLI built the key (`--branch`). null leaves detection to the first snapshot. */
     readonly branch?: string | null;
+    /** Instruction for the local review outcome (`--verdicts`), used only together with `repo`. */
+    readonly verdicts?: string | null;
     /** State root: contains the key state. */
     readonly sherpaDir?: string;
 }
@@ -178,6 +190,7 @@ export function selectReviewHost(prKey: string, options: SelectHostOptions = {})
             repo: options.repo ?? null,
             base: options.base ?? null,
             branch: options.branch ?? null,
+            verdicts: options.verdicts ?? null,
         });
         if (host === null) {
             return null;
@@ -187,6 +200,7 @@ export function selectReviewHost(prKey: string, options: SelectHostOptions = {})
             host,
             currentUser: () => host.currentUser(),
             refresh: () => host.refresh(),
+            setLocalVerdicts: (instruction) => host.setVerdicts(instruction),
             feedback: host,
         };
     }

@@ -1,5 +1,5 @@
 import type { Locale } from '@sherpa/protocol';
-import { localeSchema } from '@sherpa/protocol';
+import { VERDICTS_INSTRUCTION_MAX_CHARS, localeSchema } from '@sherpa/protocol';
 
 import { CliError } from './errors.js';
 
@@ -14,6 +14,11 @@ export type Command =
           readonly local: string | undefined;
           /** Local review comparison base (`--base`). Requires `--local`. */
           readonly base: string | undefined;
+          /**
+           * User instruction for the local review outcome (`--verdicts <instruction>`). With it, the review
+           * ends with Ship or Request changes. Requires `--local`.
+           */
+          readonly verdicts: string | undefined;
           /** Harness label for worker status in the UI. Optional. */
           readonly harness: string | undefined;
           /** Worker model name for worker status in the UI. Optional. */
@@ -66,6 +71,7 @@ const OPTIONS = [
     '--harness',
     '--model',
     '--lang',
+    '--verdicts',
 ] as const;
 const FLAGS = ['--no-open'] as const;
 type OptionName = (typeof OPTIONS)[number];
@@ -95,8 +101,8 @@ export function parseArgs(argv: readonly string[]): Command {
     if (group !== 'up' && flags.size > 0) {
         throw new CliError('sherpa: --no-open is only available for `sherpa up`.');
     }
-    if (group !== 'up' && (options.has('--local') || options.has('--base'))) {
-        throw new CliError('sherpa: --local and --base are only available for `sherpa up`.');
+    if (group !== 'up' && (options.has('--local') || options.has('--base') || options.has('--verdicts'))) {
+        throw new CliError('sherpa: --local, --base and --verdicts are only available for `sherpa up`.');
     }
     if (group === 'up') {
         return parseUpCommand(positionals, options, flags, prKey);
@@ -142,7 +148,7 @@ function parseUpCommand(
     if (positionals.length > 1) {
         throw new CliError(
             `sherpa: unexpected arguments after \`up\`: ${positionals.slice(1).join(' ')}.\n` +
-                'Expected `sherpa up [--pr <pr key> | --local <path> [--base <ref>]] ' +
+                'Expected `sherpa up [--pr <pr key> | --local <path> [--base <ref>] [--verdicts <instruction>]] ' +
                 '[--harness <harness name>] [--model <model name>] [--lang <ru|en>] [--no-open]`; ' +
                 'without `--pr` and `--local` the PR is taken from the Git branch of the current directory.',
         );
@@ -162,12 +168,20 @@ function parseUpCommand(
                 'Call `sherpa up --local <path> --base <ref>`; for a PR the base comes from the host.',
         );
     }
+    const verdicts = parseVerdicts(options.get('--verdicts'));
+    if (verdicts !== undefined && local === undefined) {
+        throw new CliError(
+            'sherpa: `--verdicts` only makes sense with `--local`.\n' +
+                'Call `sherpa up --local <path> --verdicts \'<instruction>\'`; a PR takes its verdicts from the host.',
+        );
+    }
 
     return {
         kind: 'up',
         prKey,
         local,
         base: base === '' ? undefined : base,
+        verdicts,
         harness: sanitizeLabel(options.get('--harness')),
         model: sanitizeLabel(options.get('--model')),
         lang: parseLang(options.get('--lang')),
@@ -186,6 +200,30 @@ function parseLocal(raw: string | undefined): string | undefined {
     }
     return value;
 }
+
+/** Instruction from `--verdicts`. Must be nonempty and no longer than `VERDICTS_INSTRUCTION_MAX_CHARS`. */
+function parseVerdicts(raw: string | undefined): string | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+    const value = raw.trim();
+    if (value === '') {
+        throw new CliError(MISSING_VERDICTS_INSTRUCTION);
+    }
+    if (value.length > VERDICTS_INSTRUCTION_MAX_CHARS) {
+        throw new CliError(
+            `sherpa: the \`--verdicts\` instruction is ${String(value.length)} characters long, ` +
+                `the limit is ${String(VERDICTS_INSTRUCTION_MAX_CHARS)}.\n` +
+                'Pass what the user asked for on ship or on request changes in a sentence or two, in their words.',
+        );
+    }
+    return value;
+}
+
+const MISSING_VERDICTS_INSTRUCTION =
+    'sherpa: `--verdicts` needs the user\'s instruction for the outcome of the review.\n' +
+    'Call `sherpa up --local <path> --verdicts \'<what to do on ship or on request changes>\'` ' +
+    'in the user\'s words, in single quotes; without such an instruction leave the flag out.';
 
 const MISSING_LOCAL_PATH =
     'sherpa: `--local` needs the path of the project directory to review.\n' +
@@ -347,16 +385,25 @@ function splitArgs(argv: readonly string[]): {
 
         const value = argv[index + 1];
         if (value === undefined || value.startsWith('--')) {
-            // The project directory cannot be guessed, so the failure names exactly what is missing.
-            throw new CliError(
-                name === '--local' ? MISSING_LOCAL_PATH : `sherpa: flag ${name} has no value.`,
-            );
+            throw new CliError(missingValueMessage(name));
         }
         options.set(name, value);
         index += 1;
     }
 
     return { options, flags, positionals };
+}
+
+/** The project directory and instruction cannot be guessed, so rejection names exactly what is missing. */
+function missingValueMessage(name: OptionName): string {
+    switch (name) {
+        case '--local':
+            return MISSING_LOCAL_PATH;
+        case '--verdicts':
+            return MISSING_VERDICTS_INSTRUCTION;
+        default:
+            return `sherpa: flag ${name} has no value.`;
+    }
 }
 
 function isOption(name: string): name is OptionName {

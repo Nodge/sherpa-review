@@ -564,6 +564,26 @@ describe('floating review bar', () => {
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="no comments for the agent"/);
     });
 
+    it('shows Request changes and Ship without a caret for local review with verdicts and sends both to the agent', () => {
+        const html = renderBar({ verdicts: ['request_changes', 'ship'], reviewHost: 'local-git' });
+
+        expect(html).toContain('title="Hands 1 draft to the agent and requests changes"');
+        expect(html).toMatch(
+            /<button[^>]*review-action-bar__ship-primary"[^>]*title="Hands 1 draft to the agent and approves the changes"[^>]*>.*Ship · 1<\/button>/,
+        );
+        expect(html).not.toContain('review-action-bar__ship-caret');
+        expect(html).not.toMatch(/>Comment(?! on the PR)/);
+    });
+
+    // The session must learn the verdict even without comments: empty Ship and Request changes stay enabled.
+    it('enables Ship and Request changes for local review with verdicts and no drafts', () => {
+        const html = renderBar({ threads: [], verdicts: ['request_changes', 'ship'], reviewHost: 'local-git' });
+
+        expect(html).toContain('review-action-bar__ship-primary');
+        expect(html).toContain('Request changes');
+        expect(html).not.toContain('disabled=""');
+    });
+
     it('shows neutral text with zero drafts', () => {
         const html = renderBar({ threads: [] });
 

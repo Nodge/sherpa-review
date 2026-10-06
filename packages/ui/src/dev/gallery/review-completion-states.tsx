@@ -45,6 +45,8 @@ const FAILURE: PublicationFailure = {
 };
 /** Your own PR on GitHub and local review: no verdicts, only Comment. */
 const COMMENT_ONLY: readonly Verdict[] = ['comment'];
+/** Local review with `sherpa up --local --verdicts`: Request changes and Ship, without Comment. */
+const LOCAL_VERDICTS: readonly Verdict[] = ['request_changes', 'ship'];
 const TRANSPORT = {
     save: () => Promise.reject(new Error('gallery does not write to the host')),
     update: () => Promise.reject(new Error('gallery does not write to the host')),
@@ -108,6 +110,18 @@ export const REVIEW_COMPLETION_STATES: readonly ReviewCompletionGalleryState[] =
         group: 'Finish review',
         title: 'local review: drafts go to the agent',
         render: () => <BarState threads={DRAFT_THREADS} verdicts={COMMENT_ONLY} reviewHost={localHostName('git')} />,
+    },
+    {
+        id: 'review-bar-local-verdicts',
+        group: 'Finish review',
+        title: 'local review with verdicts: Request changes and Ship without a caret',
+        render: () => <BarState threads={DRAFT_THREADS} verdicts={LOCAL_VERDICTS} reviewHost={localHostName('git')} />,
+    },
+    {
+        id: 'review-bar-local-verdicts-empty',
+        group: 'Finish review',
+        title: 'local review with verdicts, no drafts: Ship available',
+        render: () => <BarState threads={[]} verdicts={LOCAL_VERDICTS} reviewHost={localHostName('git')} />,
     },
     {
         id: 'review-publish-error',

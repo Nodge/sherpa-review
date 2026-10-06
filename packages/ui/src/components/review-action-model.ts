@@ -18,6 +18,8 @@ export type PublishConsequenceKey = Extract<
     | 'ship.consequence.commentAgent'
     | 'ship.consequence.ship'
     | 'ship.consequence.requestChanges'
+    | 'ship.consequence.shipAgent'
+    | 'ship.consequence.requestChangesAgent'
 >;
 
 export interface PublishGuardInput {
@@ -200,9 +202,9 @@ export function publishConsequenceKey(verdict: Verdict, destination: DraftDestin
             return destination === 'agent' ? 'ship.consequence.commentAgent' : 'ship.consequence.comment';
         case 'ship':
         case 'sticky_ship':
-            return 'ship.consequence.ship';
+            return destination === 'agent' ? 'ship.consequence.shipAgent' : 'ship.consequence.ship';
         case 'request_changes':
-            return 'ship.consequence.requestChanges';
+            return destination === 'agent' ? 'ship.consequence.requestChangesAgent' : 'ship.consequence.requestChanges';
         default:
             return unreachableVerdict(verdict);
     }

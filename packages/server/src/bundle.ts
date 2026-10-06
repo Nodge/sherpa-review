@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { localVcsOfPrKey } from '@sherpa/protocol';
+import { localVcsOfPrKey, verdictsInstructionSchema } from '@sherpa/protocol';
 
 import { ServerAlreadyRunningError } from './errors.js';
 import { feedbackOptionsFor } from './feedback-launch.js';
@@ -26,7 +26,7 @@ import { UI_ASSETS } from './ui-assets.js';
  */
 const USAGE =
     'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
-    '[--repo <project directory>] [--base <ref>] [--branch <branch>]';
+    '[--repo <project directory>] [--base <ref>] [--branch <branch>] [--verdicts <instruction>]';
 
 async function main(argv: readonly string[]): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
@@ -47,11 +47,17 @@ async function main(argv: readonly string[]): Promise<number> {
     // Only the CLI knows where the distribution is installed. The server compares this version with main.
     const installDir = readOption(argv, '--install-dir');
 
-    // Local review: project directory, comparison base and the key's branch. They come from
-    // `sherpa up --local`. A daemon restart uses the saved key state.
+    // Local review: project directory, comparison base, key branch and review outcome instructions. These
+    // come from `sherpa up --local`. Restarting the daemon uses the key's saved state.
     const repo = readOption(argv, '--repo');
     const base = readOption(argv, '--base');
     const branch = readOption(argv, '--branch');
+    const verdicts = readOption(argv, '--verdicts');
+    // Instructions that fail schema validation would enter local-host.json and leave the next restart without a host.
+    if (verdicts !== null && !verdictsInstructionSchema.safeParse(verdicts).success) {
+        writeLog('startup error: --verdicts instructions are empty or exceed the allowed length');
+        return 1;
+    }
     if (repo === null && localReviewUnconfigured(prKey, sherpaDir)) {
         writeLog(
             `no review host: key ${prKey} is local, but neither --repo nor a saved local-host.json is available. ` +
@@ -73,6 +79,7 @@ async function main(argv: readonly string[]): Promise<number> {
             ...(repo === null ? {} : { repo: path.resolve(repo) }),
             ...(base === null ? {} : { base }),
             ...(branch === null ? {} : { branch }),
+            ...(verdicts === null ? {} : { verdicts }),
             updateCheck: installDir === null ? {} : { installDir },
             feedback: feedbackOptionsFor(installDir),
             onIdleStop: (seconds) => {

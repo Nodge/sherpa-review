@@ -1,3 +1,4 @@
+import { VERDICTS_INSTRUCTION_MAX_CHARS } from '@sherpa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { parseArgs, sanitizeLabel } from './args.js';
@@ -20,6 +21,7 @@ describe('argument parsing', () => {
                 prKey: 'github-quillmart--quillmart--1',
                 local: undefined,
                 base: undefined,
+                verdicts: undefined,
                 harness: 'claude-code',
                 model: 'claude-opus-5',
                 lang: undefined,
@@ -31,6 +33,7 @@ describe('argument parsing', () => {
             prKey: undefined,
             local: undefined,
             base: undefined,
+            verdicts: undefined,
             harness: undefined,
             model: undefined,
             lang: undefined,
@@ -49,6 +52,45 @@ describe('argument parsing', () => {
             base: 'main~3',
         });
         expect(parseArgs(['up', '--local=/tmp/app'])).toMatchObject({ local: '/tmp/app', base: undefined });
+    });
+
+    it('up --local --verdicts <instruction>: accepts an instruction only for local review and only on up', () => {
+        expect(parseArgs(['up', '--local', '.', '--verdicts', 'on ship, commit and open a PR'])).toMatchObject({
+            local: '.',
+            verdicts: 'on ship, commit and open a PR',
+        });
+        expect(parseArgs(['up', '--local', '.', '--verdicts=  on ship, merge  '])).toMatchObject({
+            verdicts: 'on ship, merge',
+        });
+        expect(parseArgs(['up', '--local', '.'])).toMatchObject({ verdicts: undefined });
+        expect(() => parseArgs(['up', '--verdicts', 'on ship, merge'])).toThrow(
+            '`--verdicts` only makes sense with `--local`',
+        );
+        expect(() => parseArgs(['up', '--pr', 'github-quillmart--quillmart--1', '--verdicts', 'on ship, merge'])).toThrow(
+            '`--verdicts` only makes sense with `--local`',
+        );
+        expect(() => parseArgs(['worker', 'next', '--verdicts', 'on ship, merge'])).toThrow(
+            '--local, --base and --verdicts are only available for `sherpa up`',
+        );
+    });
+
+    it('up --verdicts: rejects missing, empty or oversized instructions with a hint', () => {
+        for (const argv of [
+            ['up', '--local', '.', '--verdicts'],
+            ['up', '--local', '.', '--verdicts', '--no-open'],
+            ['up', '--local', '.', '--verdicts='],
+            ['up', '--local', '.', '--verdicts', '   '],
+        ]) {
+            expect(() => parseArgs(argv)).toThrow("`--verdicts` needs the user's instruction");
+        }
+
+        const limit = VERDICTS_INSTRUCTION_MAX_CHARS;
+        expect(parseArgs(['up', '--local', '.', '--verdicts', 'x'.repeat(limit)])).toMatchObject({
+            verdicts: 'x'.repeat(limit),
+        });
+        expect(() => parseArgs(['up', '--local', '.', '--verdicts', 'x'.repeat(limit + 1)])).toThrow(
+            `the \`--verdicts\` instruction is ${String(limit + 1)} characters long, the limit is ${String(limit)}`,
+        );
     });
 
     it('up --local without a path: rejects with a hint instead of a generic "missing value"', () => {

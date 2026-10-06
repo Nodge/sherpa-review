@@ -121,6 +121,8 @@ describe('parsing VCS output', () => {
     });
 });
 
+const ON_SHIP = 'on ship, commit and open a PR';
+
 describe('local host on the working tree', () => {
     let root: string;
     let fake: FakeVcs;
@@ -134,13 +136,16 @@ describe('local host on the working tree', () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
-    function makeHost(overrides: { branch?: string | null; threads?: LocalThreadsStore } = {}): LocalHost {
+    function makeHost(
+        overrides: { branch?: string | null; threads?: LocalThreadsStore; verdicts?: string | null } = {},
+    ): LocalHost {
         return new LocalHost({
             prKey: 'local-git-app-0badc0de',
             vcs: scriptedVcs(fake.runner),
             projectDir: fake.projectDir,
             base: null,
             branch: overrides.branch === undefined ? fake.branch : overrides.branch,
+            ...(overrides.verdicts === undefined ? {} : { verdicts: overrides.verdicts }),
             threads: overrides.threads ?? memoryThreadsStore(),
             iterations: memoryIterationsStore(),
             pollIntervalMs: 600_000,
@@ -239,7 +244,7 @@ describe('local host on the working tree', () => {
         fake.commit(`${PREFIX}/src/a.ts`, 'const a = 1;\n');
         fake.writeDisk(`${PREFIX}/src/a.ts`, 'const a = 2;\n');
         const { diffId } = await makeHost().getDiff();
-        // Ship is no longer published locally, but previously written files must remain readable.
+        // Without `--verdicts`, ship cannot be published, but previously written files must remain readable.
         const host = makeHost({
             threads: memoryThreadsStore({ ...emptyReviewData(), verdict: { verdict: 'ship', diffId } }),
         });
@@ -267,6 +272,138 @@ describe('local host on the working tree', () => {
         await host.publishBatch('comment');
         // Publishing without a verdict does not count as a reviewer verdict.
         expect((await host.getPr()).verdicts).toEqual([]);
+    });
+
+    it('with --verdicts the modes match a PR: Request changes and Ship, without Comment', async () => {
+        seedTwoFiles(fake);
+
+        expect((await makeHost({ verdicts: ON_SHIP }).getPr()).capabilities.publishVerdicts).toEqual([
+            'request_changes',
+            'ship',
+        ]);
+        expect((await makeHost({ verdicts: null }).getPr()).capabilities.publishVerdicts).toEqual(['comment']);
+    });
+
+    it('with --verdicts, comment and sticky_ship are rejected and the draft remains', async () => {
+        seedTwoFiles(fake);
+        const host = makeHost({ verdicts: ON_SHIP });
+        const draft = await host.saveDraft({ body: 'about B', parentId: null, anchor: null });
+
+        for (const verdict of ['comment', 'sticky_ship'] as const) {
+            await expect(host.publishBatch(verdict)).rejects.toThrow(/through Request changes/);
+        }
+        expect((await host.getThreads()).find((thread) => thread.id === draft.id)?.root.draft).toBe(true);
+        expect(await host.pendingRounds()).toEqual([]);
+    });
+
+    it('a verdict creates a round even without comments: the session must receive it', async () => {
+        seedTwoFiles(fake);
+        const host = makeHost({ verdicts: ON_SHIP });
+
+        expect(await host.publishBatch('ship')).toEqual({ publishedCommentIds: [], failed: [], verdictApplied: true });
+        expect(await host.publishBatch('request_changes')).toEqual({
+            publishedCommentIds: [],
+            failed: [],
+            verdictApplied: true,
+        });
+
+        const rounds = await host.pendingRounds();
+        expect(rounds.map((round) => [round.verdict, round.threadIds])).toEqual([
+            ['ship', []],
+            ['request_changes', []],
+        ]);
+        // The latest iteration verdict appears in the header.
+        expect((await host.getPr()).verdicts).toEqual([
+            { user: { login: fake.login, displayName: null, bot: false }, verdict: 'request_changes' },
+        ]);
+    });
+
+    it('ship publishes drafts and includes their threads in the round', async () => {
+        seedTwoFiles(fake);
+        const host = makeHost({ verdicts: ON_SHIP });
+        const draft = await host.saveDraft({ body: 'about B', parentId: null, anchor: null });
+
+        const result = await host.publishBatch('ship');
+
+        expect(result.publishedCommentIds).toEqual([draft.id]);
+        expect(await host.pendingRounds()).toMatchObject([{ verdict: 'ship', threadIds: [draft.id] }]);
+        expect((await host.roundContext((await host.pendingRounds())[0]?.id ?? '')).verdict).toBe('ship');
+    });
+
+    it('round context includes the current host instruction', async () => {
+        seedTwoFiles(fake);
+        const host = makeHost({ verdicts: ON_SHIP });
+        await host.publishBatch('ship');
+        const roundId = (await host.pendingRounds())[0]?.id ?? '';
+
+        expect((await host.roundContext(roundId)).instruction).toBe(ON_SHIP);
+
+        host.setVerdicts('on ship, merge into main');
+        expect((await host.roundContext(roundId)).instruction).toBe('on ship, merge into main');
+
+        host.setVerdicts(null);
+        expect((await host.roundContext(roundId)).instruction).toBeNull();
+    });
+
+    it('the mode switches on a running host and reports the change', async () => {
+        seedTwoFiles(fake);
+        const changes: (string | null)[] = [];
+        const host = new LocalHost({
+            prKey: 'local-git-app-0badc0de',
+            vcs: scriptedVcs(fake.runner),
+            projectDir: fake.projectDir,
+            base: null,
+            branch: fake.branch,
+            threads: memoryThreadsStore(),
+            iterations: memoryIterationsStore(),
+            pollIntervalMs: 600_000,
+            onVerdictsChanged: (verdicts) => changes.push(verdicts),
+        });
+
+        expect(host.setVerdicts(null)).toBe(false);
+        expect(host.setVerdicts(ON_SHIP)).toBe(true);
+        expect((await host.getPr()).capabilities.publishVerdicts).toEqual(['request_changes', 'ship']);
+        await expect(host.publishBatch('comment')).rejects.toThrow();
+
+        // A new instruction with the mode already enabled is saved, but does not require rereading metadata.
+        expect(host.setVerdicts('on ship, merge into main')).toBe(false);
+        expect(host.setVerdicts('on ship, merge into main')).toBe(false);
+
+        expect(host.setVerdicts(null)).toBe(true);
+        expect((await host.getPr()).capabilities.publishVerdicts).toEqual(['comment']);
+        expect(changes).toEqual([ON_SHIP, 'on ship, merge into main', null]);
+    });
+
+    // A failed write leaves the mode in memory unchanged. Otherwise another `up` would consider it enabled.
+    it('a repeated call retries saving a mode after the previous save failed', async () => {
+        seedTwoFiles(fake);
+        const stored: (string | null)[] = [];
+        let calls = 0;
+        const host = new LocalHost({
+            prKey: 'local-git-app-0badc0de',
+            vcs: scriptedVcs(fake.runner),
+            projectDir: fake.projectDir,
+            base: null,
+            branch: fake.branch,
+            threads: memoryThreadsStore(),
+            iterations: memoryIterationsStore(),
+            pollIntervalMs: 600_000,
+            onVerdictsChanged: (verdicts) => {
+                calls += 1;
+                if (calls === 1) {
+                    throw new Error('disk full');
+                }
+                stored.push(verdicts);
+            },
+        });
+
+        expect(() => host.setVerdicts(ON_SHIP)).toThrow('disk full');
+        expect((await host.getPr()).capabilities.publishVerdicts).toEqual(['comment']);
+
+        expect(host.setVerdicts(ON_SHIP)).toBe(true);
+        expect(calls).toBe(2);
+        expect(stored).toEqual([ON_SHIP]);
+        expect((await host.getPr()).capabilities.publishVerdicts).toEqual(['request_changes', 'ship']);
     });
 
     it('switching the checkout branch makes all host endpoints fail', async () => {
