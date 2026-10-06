@@ -35,7 +35,7 @@ import { expandContext } from './context-expansion.js';
 import type { FileExpansion } from './expand.js';
 import type { Feedback, FileCardActions } from './file-card.tsx';
 import type { LineSelection } from './selection.js';
-import { COLLAPSE_THRESHOLD, FileCard, shownFileModel } from './file-card.tsx';
+import { COLLAPSE_THRESHOLD, FileCard, showsCollapsedSummary, shownFileModel } from './file-card.tsx';
 import type { DiffMode, DiffViewStore, FileCollapseReason } from './store.js';
 import { fileCollapseReason } from './store.js';
 import { useSelectionLifecycle } from './use-selection.js';
@@ -736,21 +736,24 @@ const VirtualFileCard = memo(function VirtualFileCard({
         [keptThreadIds, threadVisible, threads],
     );
     const changed = (model?.additions ?? file.additions) + (model?.deletions ?? file.deletions);
+    const sizeCollapsed = !opened && changed > COLLAPSE_THRESHOLD;
     const canRenderRows =
         collapseReason === null &&
         parseError === null &&
         shownModel?.content.kind === 'text' &&
         (!shownModel.whitespaceOnly || showWhitespace) &&
-        (opened || changed <= COLLAPSE_THRESHOLD);
+        !sizeCollapsed;
     const {
         threadsUnderHeader,
         renderAfterLine: renderThreads,
         renderLineMarker,
+        collapsedMarkers,
         focusedThreadRange,
         lineThreadIds,
     } = useCardThreads({
         model: shownModel,
         rowsShown: canRenderRows,
+        cardCollapsed: showsCollapsedSummary(collapseReason, sizeCollapsed, parseError, model),
         threads: visibleThreads,
         composers,
         store: threadStore,
@@ -847,6 +850,7 @@ const VirtualFileCard = memo(function VirtualFileCard({
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 renderLineMarker={renderLineMarker}
+                collapsedMarkers={collapsedMarkers}
                 threadsCollapse={threadsCollapse}
                 actions={actions}
             />

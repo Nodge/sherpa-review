@@ -83,7 +83,7 @@ Remove the "N replies ›/⌄" button (collapse replies only, release 1) beside 
   The marker uses `position:absolute; left:-15px; top:1px` and floats on the card's left edge, halfway outside. The hunk card
   gets `margin-left:14px` (taken from the outer gutter, the 1280/1920 limits are not recalculated). The card has no `overflow:hidden`,
   rounding applies to the header and last row. In side-by-side mode the right half's marker sits on the divider.
-- Marker: h18, radius 9, avatar 16 (bot radius 4) + mono 10px counter (`n+1` messages. Resolved uses `✓`, opacity .7).
+- Marker: h18, radius 9, avatar 14 (bot: radius 5) with a 1px gap to the outline on both sides + mono 10px counter (`n+1` messages. Resolved: `✓`, opacity .7).
   Rest: background `0d0e10` (the page colour, to cover the border), 1px `24272d` border. Hover/press use the steps in §5.
   Expanded: 1px `7f8cff` border, `191c2b` background, `aeb6ff` counter.
   Multiple threads on one line share a marker with a total count and the first author's avatar.

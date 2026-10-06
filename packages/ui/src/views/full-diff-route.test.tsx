@@ -14,6 +14,7 @@ import type { UiPrStateStore } from '../pr-state/pr-state-store.js';
 import { createUiPrStateStore } from '../pr-state/pr-state-store.js';
 import { createSessionStore } from '../session/session-store.js';
 import { createThreadStore } from '../threads/store.js';
+import type { ThreadStore } from '../threads/store.js';
 import { DiffWorkspace } from './full-diff.tsx';
 
 /**
@@ -31,6 +32,8 @@ const SNAPSHOT: RouteSnapshot = (() => {
     return snapshot;
 })();
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
+/** Resolved thread on a `logging.ts` line in the medium fixture. */
+const LOGGING_THREAD = '4820109';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,6 +87,7 @@ interface Mounted {
     readonly parsed: string[];
     /** Render again with a different diff, as on a PR update. */
     readonly rerender: (files: readonly FileDiff[]) => void;
+    readonly threadStore: ThreadStore;
 }
 
 const mounted: (() => void)[] = [];
@@ -102,7 +106,6 @@ function mount(
         ownStore?: boolean;
         /** Shared PR state store. Two mounts use it to share server collapse state. */
         prState?: UiPrStateStore;
-        resolvedThreads?: boolean;
     } = {},
 ): Mounted {
     const host = document.createElement('div');
@@ -170,7 +173,7 @@ function mount(
         host.remove();
     });
 
-    return { host, jumps, parsed, rerender: render };
+    return { host, jumps, parsed, rerender: render, threadStore };
 }
 
 /** Wait for background parsing: deferred start and resolution of `parse` promises. */
@@ -260,16 +263,25 @@ describe('route in full diff margins', () => {
         expect(host.querySelector('.route-badge--card')?.textContent).toMatch(/^explained in /);
     });
 
-    it('a collapsed viewed card keeps the thread below the header', () => {
-        const { host } = mount({
-            paths: ['services/orders/src/infra/logging.ts'],
-            route: false,
-            resolvedThreads: true,
-        });
+    it('keeps a thread as a marker in a collapsed viewed card and shows it below the header only when expanded', () => {
+        // A resolved thread collapses into a marker by default.
+        const { host, threadStore } = mount({ paths: ['services/orders/src/infra/logging.ts'], route: false });
+        const marker = (): Element | null => host.querySelector('.file-card .thread-marker');
 
         expect(host.querySelector('.file-card__collapsed--file')?.textContent).toContain('viewed');
-        expect(host.querySelector('.thread')?.textContent).toContain('process.env.DEBUG');
         expect(host.querySelector('.file-card__collapsed-hint')?.textContent).toBe('click to expand the lines');
+        expect(marker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(marker()?.closest('.file-card__collapsed-row')).not.toBeNull();
+        expect(host.querySelector('.thread')).toBeNull();
+
+        act(() => {
+            threadStore.setThreadsOpen([LOGGING_THREAD], true);
+        });
+        expect(marker()?.getAttribute('aria-expanded')).toBe('true');
+        expect(marker()?.closest('.file-card__marked-thread')?.querySelector('.thread')?.textContent).toContain(
+            'process.env.DEBUG',
+        );
+        expect(host.querySelector('.file-card__collapsed-row')).toBeNull();
     });
 
     it('parses files again after a diff change so the note does not get stuck on "Counting the lines…"', async () => {

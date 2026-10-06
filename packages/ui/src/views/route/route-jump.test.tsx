@@ -456,9 +456,18 @@ describe('collapsing route file cards', () => {
         expect([...card.querySelectorAll<HTMLElement>('.thread')].map((thread) => thread.dataset.threadId)).toEqual(
             before,
         );
-        const threads = card.querySelector<HTMLElement>('.thread-list');
-        expect(threads?.parentElement).toBe(card.querySelector('.file-card__frame'));
-        expect(threads?.previousElementSibling?.classList.contains('file-card__header')).toBe(true);
+        // Each expanded thread has its own block and marker inside the card border, the first right after the header,
+        // all above the summary row.
+        const marked = [...card.querySelectorAll<HTMLElement>('.file-card__marked-thread')];
+        const frame = card.querySelector('.file-card__frame');
+        const summary = card.querySelector('.file-card__collapsed--file');
+        expect(marked.map((block) => block.querySelector<HTMLElement>('.thread')?.dataset.threadId)).toEqual(before);
+        expect(marked.every((block) => block.parentElement === frame)).toBe(true);
+        expect(marked.every((block) => block.querySelector(':scope > .thread-marker') !== null)).toBe(true);
+        expect(marked[0]?.previousElementSibling?.classList.contains('file-card__header')).toBe(true);
+        const aboveSummary = (block: HTMLElement): boolean =>
+            summary !== null && (block.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        expect(marked.every(aboveSummary)).toBe(true);
     });
 
     it('marking viewed collapses the card and clearing the mark expands it', () => {

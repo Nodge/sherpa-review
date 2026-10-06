@@ -40,6 +40,8 @@ interface WorkspaceStateProps {
      * for one frame costs more. Lens membership moves with the path, so tags remain.
      */
     readonly renameTo?: Readonly<Record<string, string>>;
+    /** Paths of files collapsed by hand. */
+    readonly collapsed?: readonly string[];
     readonly showThreads?: boolean;
     readonly threads?: readonly Thread[];
     readonly prepareThreads?: (store: ThreadStore, threads: readonly Thread[]) => void;
@@ -59,6 +61,7 @@ function WorkspaceState({
     onlyPath,
     paths,
     renameTo,
+    collapsed,
     showThreads = false,
     threads,
     prepareThreads,
@@ -91,7 +94,18 @@ function WorkspaceState({
     }, [data.diff.files, prepareThreads, shownThreads]);
 
     const store = useMemo(() => {
-        const created = createDiffViewStore({ files: data.diff.files });
+        const created = createDiffViewStore({
+            files: data.diff.files,
+            ...(collapsed === undefined
+                ? {}
+                : {
+                      collapsed: new Map(
+                          data.diff.files
+                              .filter((file) => collapsed.includes(file.path))
+                              .map((file) => [file.fileId, true]),
+                      ),
+                  }),
+        });
         if (preloadModels) {
             for (const file of data.diff.files) {
                 created.setModel(file.fileId, parseFileDiff(toParseRequest(file)));
@@ -105,7 +119,7 @@ function WorkspaceState({
             ...records,
         ]);
         return created;
-    }, [data, preloadModels, records, viewed]);
+    }, [collapsed, data, preloadModels, records, viewed]);
 
     return (
         <div className="gallery__viewport">
@@ -290,6 +304,43 @@ function sourceThreadsOnHandlers(): Thread[] {
     return [openPerson, bot, resolved]
         .filter((thread): thread is Thread => thread !== undefined)
         .map((thread) => ({ ...thread, anchor: { fileId: file.fileId, path: file.path, position } }));
+}
+
+const HANDLERS = 'services/orders/src/api/handlers.ts';
+
+/**
+ * Collapsed file with threads at 3 different lines (bot and human collapsed, another human expanded)
+ * and a thread without a position: 3 summary markers, with the expanded and unpositioned threads below the header.
+ */
+function collapsedFileThreads(): Thread[] {
+    const data = fixtureIteration('medium');
+    const file = fileOf('medium', HANDLERS);
+    const people = data.threads.filter((thread) => !thread.resolved && !thread.root.author.bot);
+    const bot = data.threads.find((thread) => thread.root.author.bot);
+    const [folded, opened, general] = people;
+    if (bot === undefined || folded === undefined || opened === undefined || general === undefined) {
+        return [];
+    }
+    const at = (thread: Thread, line: number | null): Thread => ({
+        ...thread,
+        anchor: {
+            fileId: file.fileId,
+            path: file.path,
+            position: line === null ? null : { side: 'new', line, size: 1 },
+        },
+    });
+    return [at(opened, 52), at(bot, 46), at(folded, 58), at(general, null)];
+}
+
+function openFirstThread(store: ThreadStore, threads: readonly Thread[]): void {
+    store.setThreadsOpen(
+        threads.map((thread) => thread.id),
+        false,
+    );
+    const opened = threads[0];
+    if (opened !== undefined) {
+        store.setThreadsOpen([opened.id], true);
+    }
 }
 
 function botThreadWithFortyReplies(): Thread[] {
@@ -535,6 +586,20 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 showThreads
                 onlyPath="services/orders/src/payments/card-token.ts"
                 threads={botThreadWithFortyReplies()}
+            />
+        ),
+    },
+    {
+        id: 'threads-collapsed-file',
+        title: 'collapsed file: expanded thread below the header with its own marker, collapsed threads marked above and below by line',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath={HANDLERS}
+                collapsed={[HANDLERS]}
+                threads={collapsedFileThreads()}
+                prepareThreads={openFirstThread}
             />
         ),
     },

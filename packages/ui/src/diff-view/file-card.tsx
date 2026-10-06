@@ -44,6 +44,19 @@ import type { DiffMode, FileCollapseReason } from './store.js';
 export const COLLAPSE_THRESHOLD = 2000;
 
 /**
+ * Whether `FileCard` renders a collapsed summary instead of rows. Follows its branch order: the parse
+ * failure notice precedes size-based collapse, so there is no summary with markers in that case.
+ */
+export function showsCollapsedSummary(
+    collapseReason: FileCollapseReason | null,
+    sizeCollapsed: boolean,
+    parseError: string | null,
+    model: DiffFileModel | null,
+): boolean {
+    return collapseReason !== null || (sizeCollapsed && !(parseError !== null && model === null));
+}
+
+/**
  * "Collapse all / expand all" file threads (docs/design/SPEC-changes-2026-09-20.md §3).
  * The button appears with 2 or more threads. Markers replace the counter next to it.
  */
@@ -146,6 +159,8 @@ export interface FileCardProps {
     readonly focusedThreadRange?: LineRange | null;
     readonly renderAfterLine?: ((side: 'old' | 'new', line: number) => ReactNode) | undefined;
     readonly renderLineMarker?: ((positions: readonly LinePosition[]) => ReactNode) | undefined;
+    /** Collapsed card thread markers stack on the edge by the summary row (`useCardThreads`). */
+    readonly collapsedMarkers?: ReactNode;
     /** "Collapse all / expand all" in the header appears only when the file has ≥ 2 threads. */
     readonly threadsCollapse?: ThreadsCollapse | null;
     readonly actions: FileCardActions;
@@ -211,6 +226,7 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         focusedThreadRange = null,
         renderAfterLine,
         renderLineMarker,
+        collapsedMarkers = null,
         threadsCollapse = null,
         actions,
     } = props;
@@ -479,14 +495,16 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                 {collapseReason === null ? <Notices model={shown} file={file} hideBinary={showImage} /> : null}
 
                 {collapseReason !== null ? (
-                    <CollapsedFileSummary
-                        file={file}
-                        counts={counts}
-                        reason={collapseReason}
-                        onExpand={() => {
-                            onToggleCollapse?.();
-                        }}
-                    />
+                    <CollapsedRow markers={collapsedMarkers}>
+                        <CollapsedFileSummary
+                            file={file}
+                            counts={counts}
+                            reason={collapseReason}
+                            onExpand={() => {
+                                onToggleCollapse?.();
+                            }}
+                        />
+                    </CollapsedRow>
                 ) : parseError !== null && model === null ? (
                     <p className="file-card__notice">
                         {t('diff.file.parseFailed', parseError)}
@@ -501,15 +519,17 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
                         </button>
                     </p>
                 ) : sizeCollapsed ? (
-                    <button
-                        type="button"
-                        className="file-card__collapsed"
-                        onClick={() => {
-                            actions.onOpenFile(file.fileId);
-                        }}
-                    >
-                        {t('diff.file.sizeCollapsed', changed)}
-                    </button>
+                    <CollapsedRow markers={collapsedMarkers}>
+                        <button
+                            type="button"
+                            className="file-card__collapsed"
+                            onClick={() => {
+                                actions.onOpenFile(file.fileId);
+                            }}
+                        >
+                            {t('diff.file.sizeCollapsed', changed)}
+                        </button>
+                    </CollapsedRow>
                 ) : image !== null && loadBlob !== null ? (
                     // Keyed by file because mode and scale are card state. When the list moves
                     // to a different file, they must reset.
@@ -533,6 +553,22 @@ export const FileCard = memo(function FileCard(props: FileCardProps) {
         </article>
     );
 });
+
+/**
+ * Summary row of a collapsed card with thread markers on the edge. Markers are siblings of the summary button,
+ * so clicking a marker toggles the thread without expanding the file.
+ */
+function CollapsedRow({ markers, children }: { markers: ReactNode; children: ReactNode }) {
+    if (markers === null || markers === undefined) {
+        return children;
+    }
+    return (
+        <div className="file-card__collapsed-row">
+            <div className="file-card__collapsed-markers">{markers}</div>
+            {children}
+        </div>
+    );
+}
 
 function CollapsedFileSummary({
     file,

@@ -364,6 +364,60 @@
     color: var(--text-dim-strong);
 }
 
+/*
+ * Thread markers on a collapsed card stack along the edge beside the summary row, one per thread.
+ * The stack and summary share a grid cell. The row grows with the stack, and the summary button stretches
+ * to its full height. The left offset matches the line marker (`left: -15px`), as does the layer (4).
+ * The stack bottom spacing plus border (8 + 1) is at least the corner radius, so the bottom corner strip (6) does not cut the marker.
+ */
+.file-card__collapsed-row {
+    display: grid;
+}
+
+.file-card__collapsed-row > * {
+    grid-area: 1 / 1;
+}
+
+.file-card__collapsed-markers {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    justify-self: start;
+    margin-left: -15px;
+    padding: 6px 0 8px;
+    pointer-events: none;
+}
+
+.file-card__collapsed-markers > .thread-marker {
+    position: static;
+    pointer-events: auto;
+}
+
+/*
+ * An expanded thread in a collapsed card sits below the header, with its marker on the edge at the thread top.
+ * There is no gutter, so there is no line-number padding. The thread sits back from the edge like the summary text
+ * with markers, or the marker would overlap the avatar.
+ */
+.file-card__marked-thread {
+    position: relative;
+}
+
+.file-card__marked-thread > .thread-marker {
+    top: 12px;
+}
+
+.file-card__marked-thread > .thread-line {
+    padding-left: 12px;
+}
+
+/* Summary text sits back from the edge like a line number from a gutter marker. */
+.file-card__collapsed-row > .file-card__collapsed {
+    padding-left: 25px;
+}
+
 /* --- Diff rows --- */
 
 /*

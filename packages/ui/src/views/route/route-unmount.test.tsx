@@ -350,3 +350,73 @@ describe('offscreen stop diff column', () => {
         expect(placeholder(wide)?.style.height).toBe(height);
     });
 });
+
+describe('threads beside route code when a card collapses', () => {
+    it('the marker toggles a thread in a collapsed card and its state survives expansion and column unmounting', () => {
+        const { host, store, threadStore } = mount();
+        const wide = section(host, WIDE_STOP);
+        act(() => {
+            report(wide, '800px', true);
+        });
+        const fileId = DATA.threads.find((thread) => thread.id === WIDE_STOP_THREAD)?.anchor?.fileId;
+        if (fileId === undefined) {
+            throw new Error(`thread ${WIDE_STOP_THREAD} needs a file`);
+        }
+        const card = (): HTMLElement | null => wide.querySelector<HTMLElement>(`.file-card[data-file="${fileId}"]`);
+        const marker = (): HTMLButtonElement | null => card()?.querySelector<HTMLButtonElement>('.thread-marker') ?? null;
+        const summaryMarkers = (): HTMLButtonElement[] => [
+            ...(card()?.querySelectorAll<HTMLButtonElement>(
+                '.file-card__collapsed-row > .file-card__collapsed-markers > .thread-marker',
+            ) ?? []),
+        ];
+        const openMarker = (): HTMLButtonElement | null =>
+            card()?.querySelector<HTMLButtonElement>('.file-card__marked-thread > .thread-marker') ?? null;
+        const shown = (): boolean => wide.querySelector(`[data-thread-id="${WIDE_STOP_THREAD}"]`) !== null;
+        const collapsed = (): boolean => card()?.querySelector('.file-card__collapsed') !== null;
+        expect(shown()).toBe(true);
+
+        act(() => {
+            marker()?.click();
+        });
+        expect(shown()).toBe(false);
+
+        act(() => {
+            store.toggleFileCollapse(fileId);
+        });
+        expect(collapsed()).toBe(true);
+        expect(shown()).toBe(false);
+        expect(summaryMarkers()).toHaveLength(1);
+        expect(summaryMarkers()[0]?.getAttribute('aria-expanded')).toBe('false');
+
+        act(() => {
+            summaryMarkers()[0]?.click();
+        });
+        expect(collapsed()).toBe(true);
+        expect(threadStore.getSnapshot().openThreads.has(WIDE_STOP_THREAD)).toBe(true);
+        expect(shown()).toBe(true);
+        // The expanded thread moves below the header with its own marker.
+        expect(summaryMarkers()).toHaveLength(0);
+        expect(openMarker()?.getAttribute('aria-expanded')).toBe('true');
+        act(() => {
+            openMarker()?.click();
+        });
+        expect(shown()).toBe(false);
+        expect(summaryMarkers()).toHaveLength(1);
+
+        act(() => {
+            store.toggleFileCollapse(fileId);
+        });
+        expect(marker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(shown()).toBe(false);
+
+        act(() => {
+            report(wide, '2500px', false);
+        });
+        expect(card()).toBeNull();
+        act(() => {
+            report(wide, '1200px', true);
+        });
+        expect(marker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(shown()).toBe(false);
+    });
+});

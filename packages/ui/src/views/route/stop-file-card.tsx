@@ -127,12 +127,15 @@ export function StopFileCard({
         threadsUnderHeader,
         renderAfterLine: renderThreads,
         renderLineMarker,
+        collapsedMarkers,
         focusedThreadRange,
         lineThreadIds,
     } = useCardThreads({
         model: shownModel,
         rowsShown,
+        cardCollapsed: collapseReason !== null,
         placement: 'exact',
+        shownSpans: anchors,
         threads,
         composers,
         store: threadStore,
@@ -204,6 +207,7 @@ export function StopFileCard({
                 focusedThreadRange={focusedThreadRange}
                 renderAfterLine={renderAfterLine}
                 renderLineMarker={renderLineMarker}
+                collapsedMarkers={collapsedMarkers}
                 threadsCollapse={threadsCollapse}
                 actions={actions}
             />

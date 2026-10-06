@@ -692,3 +692,234 @@ describe('height estimates from scroll container CSS', () => {
         expect(virtual.instance().measure).toHaveBeenCalled();
     });
 });
+
+/**
+ * Collapsing a file removes only its lines. A line thread in a collapsed card has a marker at the edge.
+ * Expanded threads sit under the header with their markers. Collapsed ones after the last expanded thread sit by the summary.
+ */
+describe('collapsed card threads', () => {
+    const LINE_THREAD = (() => {
+        const found = MEDIUM.threads.find((candidate) => {
+            const file = MEDIUM.diff.files.find((item) => item.fileId === candidate.anchor?.fileId);
+            return (
+                candidate.anchor?.position != null &&
+                !candidate.resolved &&
+                !candidate.outdated &&
+                file !== undefined &&
+                isPlain(file) &&
+                file.additions + file.deletions <= COLLAPSE_THRESHOLD
+            );
+        });
+        if (found === undefined) {
+            throw new Error('medium fixture needs an open line thread in a regular file');
+        }
+        return found;
+    })();
+    const FILE = pickFile(MEDIUM.diff.files, (file) => file.fileId === LINE_THREAD.anchor?.fileId, 'thread file');
+
+    async function mountWith(threads: readonly Thread[]) {
+        const files = [FILE];
+        const store = createDiffViewStore({ files });
+        const threadStore = createThreadStore(threads, new Set([FILE.fileId]));
+        const view = mount({ files, store, threadStore, threadVisible: () => true });
+        await settle();
+        const marker = (): HTMLButtonElement | null => view.host.querySelector<HTMLButtonElement>('.thread-marker');
+        const summaryMarkers = (): HTMLButtonElement[] => [
+            ...view.host.querySelectorAll<HTMLButtonElement>(
+                '.file-card__collapsed-row > .file-card__collapsed-markers > .thread-marker',
+            ),
+        ];
+        const summaryMarker = (): HTMLButtonElement | null => summaryMarkers()[0] ?? null;
+        /** Marker of the expanded thread under the collapsed card header. */
+        const openMarker = (): HTMLButtonElement | null =>
+            view.host.querySelector<HTMLButtonElement>('.file-card__marked-thread > .thread-marker');
+        const shown = (id: string): boolean => view.host.querySelector(`[data-thread-id="${id}"]`) !== null;
+        const toggleFile = async (): Promise<void> => {
+            await act(async () => {
+                store.toggleFileCollapse(FILE.fileId);
+                await Promise.resolve();
+            });
+        };
+        const click = async (button: HTMLButtonElement | null): Promise<void> => {
+            await act(async () => {
+                button?.click();
+                await Promise.resolve();
+            });
+        };
+        const cardCollapsed = (): boolean => view.host.querySelector('.file-card__collapsed') !== null;
+        return {
+            host: view.host,
+            threadStore,
+            marker,
+            summaryMarker,
+            summaryMarkers,
+            openMarker,
+            shown,
+            toggleFile,
+            click,
+            cardCollapsed,
+        };
+    }
+
+    it('toggles a collapsed card thread through the store, keeps the card collapsed and passes state to the line', async () => {
+        const card = await mountWith([LINE_THREAD]);
+        expect(card.marker()?.getAttribute('aria-expanded')).toBe('true');
+
+        await card.click(card.marker());
+        expect(card.shown(LINE_THREAD.id)).toBe(false);
+
+        await card.toggleFile();
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.summaryMarker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(card.shown(LINE_THREAD.id)).toBe(false);
+
+        await card.click(card.summaryMarker());
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.threadStore.getSnapshot().openThreads.has(LINE_THREAD.id)).toBe(true);
+        // The expanded thread moves from the summary to below the header with its marker.
+        expect(card.summaryMarker()).toBeNull();
+        expect(card.openMarker()?.classList.contains('is-open')).toBe(true);
+        expect(card.shown(LINE_THREAD.id)).toBe(true);
+
+        await card.toggleFile();
+        expect(card.cardCollapsed()).toBe(false);
+        expect(card.openMarker()).toBeNull();
+        expect(card.summaryMarker()).toBeNull();
+        expect(card.marker()?.getAttribute('aria-expanded')).toBe('true');
+        expect(card.shown(LINE_THREAD.id)).toBe(true);
+
+        await card.toggleFile();
+        await card.click(card.openMarker());
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.shown(LINE_THREAD.id)).toBe(false);
+        expect(card.summaryMarker()?.getAttribute('aria-expanded')).toBe('false');
+
+        await card.toggleFile();
+        expect(card.marker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(card.shown(LINE_THREAD.id)).toBe(false);
+    });
+
+    it('keeps a resolved thread expanded in a collapsed card when expanded by hand', async () => {
+        const card = await mountWith([{ ...LINE_THREAD, resolved: true }]);
+        // Resolved threads are collapsed by default.
+        expect(card.marker()?.getAttribute('aria-expanded')).toBe('false');
+        expect(card.shown(LINE_THREAD.id)).toBe(false);
+
+        await card.click(card.marker());
+        expect(card.shown(LINE_THREAD.id)).toBe(true);
+
+        await card.toggleFile();
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.openMarker()?.getAttribute('aria-expanded')).toBe('true');
+        expect(card.summaryMarker()).toBeNull();
+        expect(card.shown(LINE_THREAD.id)).toBe(true);
+
+        await card.toggleFile();
+        expect(card.marker()?.getAttribute('aria-expanded')).toBe('true');
+        expect(card.shown(LINE_THREAD.id)).toBe(true);
+    });
+
+    it('places a thread without a position under the collapsed card header without a marker', async () => {
+        const general: Thread = {
+            ...LINE_THREAD,
+            id: `${LINE_THREAD.id}-general`,
+            anchor: LINE_THREAD.anchor === null ? null : { ...LINE_THREAD.anchor, position: null },
+        };
+        const card = await mountWith([general, LINE_THREAD]);
+
+        await card.toggleFile();
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.shown(general.id)).toBe(true);
+        // Only the positioned thread has a marker. The thread without a position sits outside the marked block.
+        expect(card.host.querySelectorAll('.thread-marker')).toHaveLength(1);
+        expect(card.openMarker()?.parentElement?.querySelector(`[data-thread-id="${LINE_THREAD.id}"]`)).not.toBeNull();
+        expect(
+            card.host.querySelector(`[data-thread-id="${general.id}"]`)?.closest('.file-card__marked-thread'),
+        ).toBeNull();
+    });
+
+    it('places an expanded thread among markers in line order, earlier above it and later below it', async () => {
+        const atLine = (line: number, name: string): Thread => ({
+            ...LINE_THREAD,
+            id: `${LINE_THREAD.id}-${String(line)}`,
+            anchor:
+                LINE_THREAD.anchor === null
+                    ? null
+                    : { ...LINE_THREAD.anchor, position: { side: 'new', line, size: 1 } },
+            root: {
+                ...LINE_THREAD.root,
+                author: { ...LINE_THREAD.root.author, login: name.toLowerCase(), displayName: name },
+            },
+        });
+        // Author initials label the markers: A is line 46, B is 52, C is 58.
+        const t46 = atLine(46, 'Ann');
+        const t52 = atLine(52, 'Bob');
+        const t58 = atLine(58, 'Cid');
+        const threads = [t58, t46, t52];
+        const card = await mountWith(threads);
+        act(() => {
+            card.threadStore.setThreadsOpen(
+                threads.map((item) => item.id),
+                false,
+            );
+        });
+        await card.toggleFile();
+        expect(card.cardCollapsed()).toBe(true);
+
+        const markerOf = (initial: string): HTMLButtonElement | null =>
+            [...card.host.querySelectorAll<HTMLButtonElement>('.thread-marker')].find(
+                (marker) => marker.querySelector('.thread-marker__avatar')?.textContent === initial,
+            ) ?? null;
+        /** Markers, thread bodies and card summary in document order. */
+        const order = (): string[] =>
+            [
+                ...card.host.querySelectorAll<HTMLElement>('.thread-marker, [data-thread-id], .file-card__collapsed'),
+            ].map((element) => {
+                if (element.classList.contains('thread-marker')) {
+                    const initial = element.querySelector('.thread-marker__avatar')?.textContent;
+                    return `${initial ?? ''}:${element.getAttribute('aria-expanded') ?? ''}`;
+                }
+                return element.classList.contains('file-card__collapsed')
+                    ? 'summary'
+                    : `body:${element.dataset.threadId ?? ''}`;
+            });
+        const inSummaryRow = (initial: string): boolean =>
+            markerOf(initial)?.closest('.file-card__collapsed-row') !== null;
+        expect(order()).toEqual(['A:false', 'B:false', 'C:false', 'summary']);
+
+        await card.click(markerOf('B'));
+        expect(order()).toEqual(['A:false', 'B:true', `body:${t52.id}`, 'C:false', 'summary']);
+        expect(inSummaryRow('A')).toBe(false);
+        expect(inSummaryRow('C')).toBe(true);
+
+        await card.click(markerOf('C'));
+        expect(order()).toEqual(['A:false', 'B:true', `body:${t52.id}`, 'C:true', `body:${t58.id}`, 'summary']);
+        expect(inSummaryRow('C')).toBe(false);
+
+        await card.click(markerOf('B'));
+        expect(order()).toEqual(['A:false', 'B:false', 'C:true', `body:${t58.id}`, 'summary']);
+        // Collapsed threads before the expanded one form a single stack under the header.
+        expect(markerOf('A')?.parentElement).toBe(markerOf('B')?.parentElement);
+        expect(inSummaryRow('B')).toBe(false);
+        expect(card.cardCollapsed()).toBe(true);
+        expect(card.shown(t46.id)).toBe(false);
+    });
+
+    it('shows a collapsed thread under the header of a large file with a parse failure instead of hiding it', async () => {
+        const large: FileDiff = { ...FILE, additions: COLLAPSE_THRESHOLD + 1 };
+        const resolved: Thread = { ...LINE_THREAD, resolved: true };
+        const view = mount({
+            files: [large],
+            parse: () => Promise.reject(new Error('worker crashed')),
+            threadStore: createThreadStore([resolved], new Set([large.fileId])),
+            threadVisible: () => true,
+        });
+        await settle();
+
+        expect(view.host.querySelector('.file-card__notice')?.textContent).toContain(
+            t('diff.file.parseFailed', 'worker crashed'),
+        );
+        expect(view.host.querySelector(`[data-thread-id="${resolved.id}"]`)).not.toBeNull();
+        expect(view.host.querySelector('.thread-marker')).toBeNull();
+    });
+});
