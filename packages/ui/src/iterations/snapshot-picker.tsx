@@ -8,8 +8,8 @@ import { formatDateTime, relativeTime } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import { useEscapeLayer } from '../shortcuts/context.tsx';
 import { localeNameKey } from '../route/generation.js';
-import type { PickerRow, PickerRows, Viewing, ViewingLabel } from './viewing.js';
-import { rowSelection, sameViewing } from './viewing.js';
+import type { PickerRow, PickerRows, RowAction, SliceRowMark, Viewing, ViewingLabel } from './viewing.js';
+import { liveSliceEdge, rowAction, sameViewing, sliceMarks } from './viewing.js';
 import './snapshot-picker.css';
 
 /**
@@ -17,8 +17,9 @@ import './snapshot-picker.css';
  * The prototype has no menu. It uses the indicator tokens and follows the file filter
  * select: Esc closes it and restores focus, arrows navigate, ⏎ selects.
  *
- * Select a slice between iterations by Shift+clicking (or Shift+⏎ in the menu) a timeline
- * row. See `rowSelection` for the rules.
+ * Select a slice between iterations in two steps: Shift-click (or Shift+⏎ in the menu) to select
+ * the first iteration, then click the second. `rowAction` defines the rules. The first edge is local state
+ * in the menu and card. It never enters the URL or `Viewing`.
  */
 
 /** First 7 hex characters. The full commit goes in `title`. */
@@ -146,14 +147,48 @@ export function sliceHintVisible(rows: PickerRows): boolean {
     return rows.sliceOrder.size >= 2;
 }
 
-/** Shift+click on a row selects a slice, so the browser must not also select text. */
+/** Hint at the bottom of the list: how to start a slice, or what to do after choosing the first edge. */
+function SliceHint({ rows, edge, className }: { rows: PickerRows; edge: string | null; className: string }) {
+    const t = useT();
+    if (!sliceHintVisible(rows)) {
+        return null;
+    }
+    return (
+        <div className={className}>
+            {t(edge === null ? 'iteration.menu.sliceHint' : 'iteration.menu.sliceHintSecond')}
+        </div>
+    );
+}
+
+const ROLE_LABELS = {
+    base: 'iteration.menu.sliceBase',
+    head: 'iteration.menu.sliceHead',
+} as const satisfies Readonly<Record<string, MessageKey>>;
+
+function sliceClass(mark: SliceRowMark | undefined): string {
+    if (mark === undefined) {
+        return '';
+    }
+    return mark.part === 'edge' ? ' is-slice-edge' : ' is-slice-inside';
+}
+
+/** Active slice edge label: "base" or "head". */
+function SliceRole({ mark, className }: { mark: SliceRowMark | undefined; className: string }) {
+    const t = useT();
+    if (mark?.role == null) {
+        return null;
+    }
+    return <span className={className}>{t(ROLE_LABELS[mark.role])}</span>;
+}
+
+/** Shift+click on a row sets a slice edge. The browser must not also select text. */
 function keepSelectionOnShift(event: ReactMouseEvent): void {
     if (event.shiftKey) {
         event.preventDefault();
     }
 }
 
-export interface SnapshotMenu {
+export interface SnapshotListProps {
     readonly rows: PickerRows;
     readonly viewing: Viewing;
     /** Reference time for relative timestamps, injected to keep the gallery deterministic. */
@@ -161,8 +196,15 @@ export interface SnapshotMenu {
     /** Local review uses different wording for a past iteration because there is no PR. */
     readonly localHost?: boolean;
     readonly onSelect: (viewing: Viewing) => void;
+}
+
+export interface SnapshotMenu extends SnapshotListProps {
     /** The gallery shows an open menu. */
     readonly initialOpen?: boolean;
+    /** The gallery shows a menu with the first slice edge selected (`diffId`). */
+    readonly initialSliceEdge?: string;
+    /** The gallery puts the keyboard cursor on the row at this index. */
+    readonly initialCursor?: number;
 }
 
 export interface SnapshotPillProps {
@@ -188,6 +230,7 @@ export function SnapshotPill({ label, localHost = false, menu }: SnapshotPillPro
 }
 
 function SnapshotPillMenu({
+    label,
     text,
     title,
     menu,
@@ -203,7 +246,10 @@ function SnapshotPillMenu({
     const flat = menu.rows.iterations;
     const selected = selectedRows(flat, menu.viewing);
     const selectedIndex = flat.findIndex((row) => selected.has(row));
-    const [cursor, setCursor] = useState(Math.max(selectedIndex, 0));
+    const [cursor, setCursor] = useState(menu.initialCursor ?? Math.max(selectedIndex, 0));
+    const [rawEdge, setEdge] = useState<string | null>(menu.initialSliceEdge ?? null);
+    const edge = liveSliceEdge(menu.rows, rawEdge);
+    const marks = sliceMarks(menu.rows, menu.viewing, edge, flat[cursor] ?? null);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const buttonRef = useRef<HTMLButtonElement | null>(null);
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +257,7 @@ function SnapshotPillMenu({
 
     const close = useCallback((returnFocus: boolean): void => {
         setOpen(false);
+        setEdge(null);
         if (returnFocus) {
             buttonRef.current?.focus();
         }
@@ -233,7 +280,11 @@ function SnapshotPillMenu({
     }, [close, open]);
 
     useEscapeLayer('popover', () => {
-        close(true);
+        if (edge === null) {
+            close(true);
+        } else {
+            setEdge(null);
+        }
     }, open);
 
     // Focus moves to the list. `aria-activedescendant` moves the selection within it.
@@ -248,27 +299,34 @@ function SnapshotPillMenu({
         if (row === undefined) {
             return;
         }
-        menu.onSelect(rowSelection(menu.rows, menu.viewing, row, shift));
+        const action = rowAction(menu.rows, edge, row, shift);
+        if (action.kind === 'edge') {
+            setEdge(action.edge);
+            return;
+        }
+        menu.onSelect(action.viewing);
         close(true);
     };
 
     const renderRow = (row: PickerRow, index: number) => {
         const checked = selected.has(row);
+        const mark = marks.get(row);
         return (
             <div
-                key={`${row.kind}:${row.id}`}
+                key={rowKey(row)}
                 id={`${listId}-${String(index)}`}
                 role="menuitemradio"
                 aria-checked={checked}
                 title={rowTitle(row)}
                 data-snapshot={row.kind === 'snapshot' ? row.id : undefined}
                 data-diff={row.kind === 'diff' ? row.id : undefined}
-                className={`snapshot-picker__row${index === cursor ? ' is-cursor' : ''}`}
+                className={`snapshot-picker__row${index === cursor ? ' is-cursor' : ''}${sliceClass(mark)}`}
                 onMouseEnter={() => {
                     setCursor(index);
                 }}
                 onMouseDown={keepSelectionOnShift}
                 onClick={(event) => {
+                    setCursor(index);
                     choose(index, event.shiftKey);
                 }}
             >
@@ -278,6 +336,7 @@ function SnapshotPillMenu({
                 <span className="snapshot-picker__row-text">
                     {rowText(row, menu.now, t, locale, menu.localHost ?? false)}
                 </span>
+                <SliceRole mark={mark} className="snapshot-picker__role" />
             </div>
         );
     };
@@ -336,11 +395,15 @@ function SnapshotPillMenu({
                         }
                     }}
                 >
+                    {label.kind === 'slice' ? (
+                        <div className="snapshot-picker__now">
+                            {t('iteration.menu.now')}
+                            <span className="snapshot-picker__now-value">{pillText(label, t)}</span>
+                        </div>
+                    ) : null}
                     <div className="snapshot-picker__section">{t('iteration.menu.timeline')}</div>
                     {flat.map(renderRow)}
-                    {sliceHintVisible(menu.rows) ? (
-                        <div className="snapshot-picker__hint">{t('iteration.menu.sliceHint')}</div>
-                    ) : null}
+                    <SliceHint rows={menu.rows} edge={edge} className="snapshot-picker__hint" />
                 </div>
             ) : null}
         </div>
@@ -349,50 +412,91 @@ function SnapshotPillMenu({
 
 /**
  * "Snapshots" card on Overview (docs/design/README.md §6): the same rows as the indicator menu,
- * plus a separate provenance line for each snapshot (docs/design/SPEC-elements.md §4.4).
+ * plus each snapshot's provenance on its own line (docs/design/SPEC-elements.md §4.4). Slice
+ * selection works as in the menu. Hover and focus control the range preview.
  */
-export function SnapshotsCard({
-    rows,
-    viewing,
-    now,
-    localHost = false,
-    onSelect,
-}: Omit<SnapshotMenu, 'initialOpen'>) {
+export function SnapshotsCard({ rows, viewing, now, localHost = false, onSelect }: SnapshotListProps) {
     const t = useT();
     const locale = useLocale();
+    const [rawEdge, setEdge] = useState<string | null>(null);
+    /** Row keys under the mouse and under focus. Each source clears only its own key. */
+    const [hovered, setHovered] = useState<string | null>(null);
+    const [focused, setFocused] = useState<string | null>(null);
+    const edge = liveSliceEdge(rows, rawEdge);
+
+    useEscapeLayer('popover', () => {
+        setEdge(null);
+    }, edge !== null);
+
     const all = rows.iterations;
     if (all.length === 0) {
         return <p className="overview-card__empty">{t('iteration.empty')}</p>;
     }
     const selected = selectedRows(all, viewing);
+    // The mouse takes precedence over focus because it shows the next click target more precisely.
+    const pointed = hovered ?? focused;
+    const marks = sliceMarks(rows, viewing, edge, all.find((row) => rowKey(row) === pointed) ?? null);
+    const apply = (action: RowAction): void => {
+        if (action.kind === 'edge') {
+            setEdge(action.edge);
+            return;
+        }
+        setEdge(null);
+        onSelect(action.viewing);
+    };
     return (
-        <ul className="snapshot-list">
-            {all.map((row) => {
-                const checked = selected.has(row);
-                return (
-                    <li key={`${row.kind}:${row.id}`}>
-                        <button
-                            type="button"
-                            className={`snapshot-list__row${checked ? ' is-current' : ''}`}
-                            aria-pressed={checked}
-                            title={rowTitle(row)}
-                            data-snapshot={row.kind === 'snapshot' ? row.id : undefined}
-                            data-diff={row.kind === 'diff' ? row.id : undefined}
-                            onMouseDown={keepSelectionOnShift}
-                            onClick={(event) => {
-                                onSelect(rowSelection(rows, viewing, row, event.shiftKey));
-                            }}
-                        >
-                            <span className="snapshot-list__line">{rowText(row, now, t, locale, localHost)}</span>
-                            {row.kind === 'snapshot' ? (
-                                <span className="snapshot-list__provenance">
-                                    {provenanceText(row, t, locale)}
+        <>
+            <ul className="snapshot-list">
+                {all.map((row) => {
+                    const key = rowKey(row);
+                    const checked = selected.has(row);
+                    const mark = marks.get(row);
+                    const drop = (current: string | null): string | null => (current === key ? null : current);
+                    return (
+                        <li key={key}>
+                            <button
+                                type="button"
+                                className={`snapshot-list__row${checked ? ' is-current' : ''}${sliceClass(mark)}`}
+                                aria-pressed={checked}
+                                title={rowTitle(row)}
+                                data-snapshot={row.kind === 'snapshot' ? row.id : undefined}
+                                data-diff={row.kind === 'diff' ? row.id : undefined}
+                                onMouseDown={keepSelectionOnShift}
+                                onMouseEnter={() => {
+                                    setHovered(key);
+                                }}
+                                onMouseLeave={() => {
+                                    setHovered(drop);
+                                }}
+                                onFocus={() => {
+                                    setFocused(key);
+                                }}
+                                onBlur={() => {
+                                    setFocused(drop);
+                                }}
+                                onClick={(event) => {
+                                    apply(rowAction(rows, edge, row, event.shiftKey));
+                                }}
+                            >
+                                <span className="snapshot-list__line">
+                                    {rowText(row, now, t, locale, localHost)}
+                                    <SliceRole mark={mark} className="snapshot-list__role" />
                                 </span>
-                            ) : null}
-                        </button>
-                    </li>
-                );
-            })}
-        </ul>
+                                {row.kind === 'snapshot' ? (
+                                    <span className="snapshot-list__provenance">
+                                        {provenanceText(row, t, locale)}
+                                    </span>
+                                ) : null}
+                            </button>
+                        </li>
+                    );
+                })}
+            </ul>
+            <SliceHint rows={rows} edge={edge} className="snapshot-list__hint" />
+        </>
     );
+}
+
+function rowKey(row: PickerRow): string {
+    return `${row.kind}:${row.id}`;
 }

@@ -52,11 +52,20 @@ function mount(id: string): HTMLElement {
     return host;
 }
 
+function sliceClass(row: Element): string {
+    if (row.classList.contains('is-slice-edge')) {
+        return 'edge';
+    }
+    return row.classList.contains('is-slice-inside') ? 'inside' : '-';
+}
+
 describe('inter-iteration slice gallery', () => {
     it('registers exactly the ids defined by the task slice', () => {
         expect(ITERATION_SLICE_STATES.map((state) => state.id)).toEqual([
             'iterations-slice',
             'iterations-slice-picker',
+            'iterations-slice-picker-edge',
+            'iterations-slice-picker-preview',
             'iterations-slice-route',
             'iterations-slice-overview',
             'iterations-slice-empty',
@@ -81,15 +90,41 @@ describe('inter-iteration slice gallery', () => {
         expect(host.textContent).toContain('To the active iteration');
     });
 
-    it('the slice menu marks both endpoints, leaves the intermediate iteration unmarked and shows a Shift+click hint', () => {
+    it('menu in a slice: Now: slice …, checkmarks and labels at the ends, middle iteration inside the range', () => {
         const host = mount('iterations-slice-picker');
 
+        expect(host.querySelector('.snapshot-picker__now')?.textContent).toMatch(/^Now: slice \w{7} → \w{7}$/);
         expect([...host.querySelectorAll('.snapshot-picker__section')].map((node) => node.textContent)).toEqual([
             'Snapshots and iterations',
         ]);
         const rows = [...host.querySelectorAll('.snapshot-picker__row')];
         expect(rows.map((row) => row.getAttribute('aria-checked'))).toEqual(['true', 'false', 'true']);
-        expect(host.querySelector('.snapshot-picker__hint')?.textContent).toBe('⇧ + click — changes between iterations');
+        expect(rows.map((row) => sliceClass(row))).toEqual(['edge', 'inside', 'edge']);
+        expect([...host.querySelectorAll('.snapshot-picker__role')].map((node) => node.textContent)).toEqual([
+            'head',
+            'base',
+        ]);
+        expect(host.querySelector('.snapshot-picker__hint')?.textContent).toBe(
+            'Shift+click two iterations — the slice between them',
+        );
+    });
+
+    it('first end selected: only it is marked, with a hint to choose the second iteration', () => {
+        const host = mount('iterations-slice-picker-edge');
+
+        const rows = [...host.querySelectorAll('.snapshot-picker__row')];
+        expect(rows.map((row) => sliceClass(row))).toEqual(['-', '-', 'edge']);
+        expect(host.querySelector('.snapshot-picker__hint')?.textContent).toBe(
+            'Pick the second iteration · Esc or clicking the first one again cancels',
+        );
+    });
+
+    it('hovering another iteration previews the range', () => {
+        const host = mount('iterations-slice-picker-preview');
+
+        const rows = [...host.querySelectorAll('.snapshot-picker__row')];
+        expect(rows.map((row) => sliceClass(row))).toEqual(['edge', 'inside', 'edge']);
+        expect(rows[0]?.classList.contains('is-cursor')).toBe(true);
     });
 
     it('the route tab explains why a slice has no route', () => {

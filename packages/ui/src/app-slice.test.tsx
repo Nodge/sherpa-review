@@ -317,7 +317,7 @@ describe('inter-iteration slice', () => {
             expect(mounted.host.textContent).toContain('You are looking at the slice between iterations');
         });
 
-        it('opens from the menu by Shift+clicking another previous iteration row', async () => {
+        it('opens from the menu in two steps: Shift+click one previous iteration, then click another', async () => {
             const mounted = mountApp({ viewing: { kind: 'diff', diffId: BASE }, iterations: THREE });
             await mounted.settle();
 
@@ -328,6 +328,13 @@ describe('inter-iteration slice', () => {
                 mounted.host
                     .querySelector(`.snapshot-picker__row[data-diff="${HEAD}"]`)
                     ?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+            });
+            // Selecting the first side neither closes the menu nor changes the selection.
+            expect(mounted.session.getSnapshot().viewing).toEqual({ kind: 'diff', diffId: BASE });
+            act(() => {
+                mounted.host
+                    .querySelector(`.snapshot-picker__row[data-diff="${BASE}"]`)
+                    ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
             });
             await mounted.settle();
 

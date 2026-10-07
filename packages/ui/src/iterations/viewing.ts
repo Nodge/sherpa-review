@@ -401,8 +401,6 @@ export interface PickerRows {
     readonly iterations: readonly PickerRow[];
     /** Valid slice endpoints and their order (`sliceIndex`). Empty when the host does not support slices. */
     readonly sliceOrder: ReadonlyMap<string, number>;
-    /** Active iteration: Shift+click starts here when the current state has no snapshot. */
-    readonly activeDiffId: string | null;
 }
 
 /** Row before labels calculated across the whole menu: short id and uniqueness. */
@@ -495,7 +493,6 @@ export function pickerRows(input: PickerRowsInput): PickerRows {
     return {
         iterations: timeline.map(dressed),
         sliceOrder: sliceOrder(input, activeDiffId),
-        activeDiffId,
     };
 }
 
@@ -517,48 +514,112 @@ function sliceOrder(input: PickerRowsInput, activeDiffId: string | null): Readon
     return order;
 }
 
-/**
- * The iteration Shift+click starts from is the one the tab currently shows. The current state
- * shows the current snapshot's iteration (even if stale), or the active one without a snapshot. A slice
- * is anchored to its head.
- */
-function sliceAnchor(rows: PickerRows, viewing: Viewing): string | null {
-    switch (viewing.kind) {
-        case 'current':
-            return rows.iterations.find((row) => row.kind === 'snapshot' && row.latest)?.diffId ?? rows.activeDiffId;
-        case 'snapshot':
-            return (
-                rows.iterations.find((row) => row.kind === 'snapshot' && row.id === viewing.snapshotId)?.diffId ??
-                null
-            );
-        case 'diff':
-            return viewing.diffId;
-        case 'slice':
-            return viewing.head;
+/** A row can be a slice endpoint when the host supports slices, the iteration still exists, and there is another to compare. */
+export function canBeSliceEdge(rows: PickerRows, row: PickerRow): boolean {
+    return rows.sliceOrder.size >= 2 && rows.sliceOrder.has(row.diffId);
+}
+
+/** First endpoint still valid for a slice: the rows may have changed since it was selected. */
+export function liveSliceEdge(rows: PickerRows, edge: string | null): string | null {
+    return edge !== null && rows.sliceOrder.has(edge) ? edge : null;
+}
+
+/** Slice between two iterations: the older is the base, the newer is the head. null means the pair cannot form a slice. */
+export function sliceBetween(
+    rows: PickerRows,
+    first: string,
+    second: string,
+): Extract<Viewing, { kind: 'slice' }> | null {
+    const firstOrder = rows.sliceOrder.get(first);
+    const secondOrder = rows.sliceOrder.get(second);
+    if (firstOrder === undefined || secondOrder === undefined || firstOrder === secondOrder) {
+        return null;
     }
+    return firstOrder < secondOrder
+        ? { kind: 'slice', base: first, head: second }
+        : { kind: 'slice', base: second, head: first };
+}
+
+/** Row click action: select a view (closing the menu) or set and clear the first slice endpoint. */
+export type RowAction =
+    | { readonly kind: 'select'; readonly viewing: Viewing }
+    | { readonly kind: 'edge'; readonly edge: string | null };
+
+/**
+ * A click on a picker row. Slice selection takes two steps: Shift-click sets the first
+ * endpoint. The next click on another iteration, with or without Shift, builds the slice. Clicking the iteration
+ * of the first endpoint clears it. A row that cannot be an endpoint uses normal click selection,
+ * whether a first endpoint is set or not.
+ */
+export function rowAction(rows: PickerRows, edge: string | null, row: PickerRow, shift: boolean): RowAction {
+    const first = liveSliceEdge(rows, edge);
+    if (first !== null) {
+        if (row.diffId === first) {
+            return { kind: 'edge', edge: null };
+        }
+        return { kind: 'select', viewing: sliceBetween(rows, first, row.diffId) ?? row.viewing };
+    }
+    if (shift && canBeSliceEdge(rows, row)) {
+        return { kind: 'edge', edge: row.diffId };
+    }
+    return { kind: 'select', viewing: row.viewing };
+}
+
+export interface SliceRowMark {
+    readonly part: 'edge' | 'inside';
+    /** Active slice endpoint label on the first row of the iteration group, like the selection checkmark. */
+    readonly role: 'base' | 'head' | null;
 }
 
 /**
- * Picker row selection. Shift+click selects a slice between the iteration the tab shows
- * and the row's iteration. The older is the base, the newer is the head. With the same anchor, a gone iteration or
- * a host without slices, Shift+click behaves like a regular click.
+ * Slice range on picker rows. With the first endpoint set, mark it alone, or preview the future slice
+ * when hovering over another valid iteration. The preview replaces the active slice mark.
+ * Without a first endpoint, mark the slice the tab is viewing, with base and head labels.
  */
-export function rowSelection(rows: PickerRows, viewing: Viewing, row: PickerRow, shift: boolean): Viewing {
-    if (!shift) {
-        return row.viewing;
+export function sliceMarks(
+    rows: PickerRows,
+    viewing: Viewing,
+    edge: string | null,
+    cursor: PickerRow | null,
+): ReadonlyMap<PickerRow, SliceRowMark> {
+    const first = liveSliceEdge(rows, edge);
+    if (first !== null) {
+        const preview = cursor === null ? null : sliceBetween(rows, first, cursor.diffId);
+        return preview === null
+            ? rangeMarks(rows, first, first, false)
+            : rangeMarks(rows, preview.base, preview.head, false);
     }
-    const anchor = sliceAnchor(rows, viewing);
-    if (anchor === null || anchor === row.diffId) {
-        return row.viewing;
+    return viewing.kind === 'slice' ? rangeMarks(rows, viewing.base, viewing.head, true) : new Map();
+}
+
+/** Rows whose iteration falls between the endpoints, inclusive, by `sliceOrder`, with snapshots of those iterations. */
+function rangeMarks(
+    rows: PickerRows,
+    base: string,
+    head: string,
+    roles: boolean,
+): ReadonlyMap<PickerRow, SliceRowMark> {
+    const marks = new Map<PickerRow, SliceRowMark>();
+    const low = rows.sliceOrder.get(base);
+    const high = rows.sliceOrder.get(head);
+    if (low === undefined || high === undefined) {
+        return marks;
     }
-    const anchorOrder = rows.sliceOrder.get(anchor);
-    const rowOrder = rows.sliceOrder.get(row.diffId);
-    if (anchorOrder === undefined || rowOrder === undefined) {
-        return row.viewing;
+    const labelled = new Set<string>();
+    for (const row of rows.iterations) {
+        const order = rows.sliceOrder.get(row.diffId);
+        if (order === undefined || order < low || order > high) {
+            continue;
+        }
+        if (row.diffId !== base && row.diffId !== head) {
+            marks.set(row, { part: 'inside', role: null });
+            continue;
+        }
+        const role = roles && !labelled.has(row.diffId) ? (row.diffId === base ? 'base' : 'head') : null;
+        labelled.add(row.diffId);
+        marks.set(row, { part: 'edge', role });
     }
-    return anchorOrder < rowOrder
-        ? { kind: 'slice', base: anchor, head: row.diffId }
-        : { kind: 'slice', base: row.diffId, head: anchor };
+    return marks;
 }
 
 /**

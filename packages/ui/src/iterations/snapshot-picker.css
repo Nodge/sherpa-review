@@ -46,6 +46,19 @@
     color: var(--text-dim);
 }
 
+/* "Now: slice …" shows what the tab is viewing. It is not a menu item. */
+.snapshot-picker__now {
+    padding: 7px 11px;
+    border-bottom: 1px solid var(--border-hairline);
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+}
+
+.snapshot-picker__now-value {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+}
+
 /* Shift+click hint: not a menu item, so the cursor skips it. */
 .snapshot-picker__hint {
     padding: 6px 11px 7px;
@@ -85,6 +98,34 @@
     white-space: nowrap;
 }
 
+/*
+ * Slice range: the inside is a band in the selection colour, with denser edges and an accent line
+ * on the left. The fill is an image over the background colour, so the cursor stays visible beneath it.
+ */
+.snapshot-picker__row.is-slice-inside,
+.snapshot-list__row.is-slice-inside {
+    background-image: linear-gradient(var(--accent-selection), var(--accent-selection));
+    box-shadow: inset 2px 0 0 var(--accent-border);
+}
+
+.snapshot-picker__row.is-slice-edge,
+.snapshot-list__row.is-slice-edge {
+    background-image: linear-gradient(var(--accent-text-selection), var(--accent-text-selection));
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* "base" / "head" at the edges of the active slice are small and secondary, like the time in a row. */
+.snapshot-picker__role,
+.snapshot-list__role {
+    flex: none;
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
+}
+
+.snapshot-list__role {
+    margin-left: var(--space-inner-tight);
+}
+
 /* --- "Snapshots" card on Overview --- */
 
 .snapshot-list {
@@ -110,12 +151,12 @@
 }
 
 .snapshot-list__row:hover {
-    background: var(--surface-chip);
+    background-color: var(--surface-chip);
 }
 
 .snapshot-list__row.is-current {
     border-color: var(--border-control);
-    background: var(--surface-control);
+    background-color: var(--surface-control);
 }
 
 .snapshot-list__line {
@@ -131,4 +172,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.snapshot-list__hint {
+    margin-top: 6px;
+    padding: 0 8px;
+    font-size: var(--font-size-badge);
+    color: var(--text-dim);
 }

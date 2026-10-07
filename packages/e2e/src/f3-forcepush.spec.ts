@@ -141,7 +141,7 @@ test('F3 force-push: route iteration disappears, route stays readable, progress 
         await page.locator('button.snapshot-pill--button[aria-haspopup="menu"]').click();
         const menu = page.locator('[role="menu"][aria-label="Snapshots and iterations"]');
         await expect(menu.locator('.snapshot-picker__section')).toHaveText(['Snapshots and iterations']);
-        await expect(menu.locator('.snapshot-picker__hint')).toHaveText('⇧ + click — changes between iterations');
+        await expect(menu.locator('.snapshot-picker__hint')).toHaveText('Shift+click two iterations — the slice between them');
 
         // The active iteration is the first row even without a route, because the reviewer looks for it first.
         await expect(menu.locator('.snapshot-picker__row').first()).toHaveText(
@@ -246,18 +246,17 @@ test('F3 force-push: the 9f3c1ab → c4f9b17 slice shows changes across the miss
         );
     });
 
-    await test.step('the gone iteration stays in the picker, Shift+click the active one for a slice from the first to the active iteration', async () => {
+    await test.step('picker includes the missing iteration, Shift+click first then click active for a slice', async () => {
         await page.locator('button.snapshot-pill--button[aria-haspopup="menu"]').click();
         const menu = page.locator('[role="menu"][aria-label="Snapshots and iterations"]');
         await expect(menu.locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V2}"]`)).toHaveText(
             `${V2_SHORT} · commit no longer in the PR · no route`,
         );
 
-        // The tab shows the first iteration's snapshot, which is also the slice base. Gone iterations
-        // cannot be compared, so Shift+clicking one would just open that iteration.
-        await menu
-            .locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V3}"]`)
-            .click({ modifiers: ['Shift'] });
+        // The tab shows the first iteration snapshot. It is checked and becomes the slice base.
+        // The review host does not compare a gone iteration. Shift-clicking it would simply open the iteration.
+        await menu.locator('.snapshot-picker__row[aria-checked="true"]').click({ modifiers: ['Shift'] });
+        await menu.locator(`.snapshot-picker__row[data-diff="${MEDIUM_DIFF_ID_V3}"]`).click();
         await expect.poll(() => fragmentParam(page, 'base')).toBe(MEDIUM_DIFF_ID);
         await expect.poll(() => fragmentParam(page, 'head')).toBe(MEDIUM_DIFF_ID_V3);
     });

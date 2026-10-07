@@ -72,9 +72,41 @@ const THREE_ROWS = pickerRows({
     interdiff: true,
 });
 
+/** Slice v1 → v3 across one iteration. The interior of the range is nonempty. */
+const WIDE_SLICE: Viewing = { kind: 'slice', base: V1.iteration.diffId, head: V3.iteration.diffId };
+
+/** THREE_ROWS from top to bottom: v3 (active), v2, v1. */
+const V3_ROW = 0;
+const V1_ROW = 2;
+
 /**
- * Expanded menu for a slice that skips an iteration: both endpoints are marked, the intermediate
- * iteration is unmarked, and the bottom of the menu shows a Shift+click hint.
+ * Menu during slice selection: Shift+click on v1 set the first end, while the tab shows the active iteration.
+ * Hovering the end itself marks only it. Hovering v3 previews the v1 → v3 range.
+ */
+function SliceEdgePickerState({ cursor }: { cursor: number }) {
+    return (
+        <div className="gallery__viewport">
+            <div className="pr-header">
+                <SnapshotPill
+                    label={{ kind: 'diff', commit: V3.iteration.headCommit, status: 'noRoute' }}
+                    menu={{
+                        rows: THREE_ROWS,
+                        viewing: { kind: 'diff', diffId: V3.iteration.diffId },
+                        now: GALLERY_NOW,
+                        onSelect: () => undefined,
+                        initialOpen: true,
+                        initialSliceEdge: V1.iteration.diffId,
+                        initialCursor: cursor,
+                    }}
+                />
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Expanded menu in a slice spanning one intermediate iteration: "Now: slice …" at the top, endpoints marked
+ * with a checkmark and "base" and "head" labels, and the intermediate iteration inside the range.
  */
 function SlicePickerState() {
     return (
@@ -89,7 +121,7 @@ function SlicePickerState() {
                     }}
                     menu={{
                         rows: THREE_ROWS,
-                        viewing: { kind: 'slice', base: V1.iteration.diffId, head: V3.iteration.diffId },
+                        viewing: WIDE_SLICE,
                         now: GALLERY_NOW,
                         onSelect: () => undefined,
                         initialOpen: true,
@@ -197,8 +229,18 @@ export const ITERATION_SLICE_STATES: readonly RouteGalleryState[] = [
     },
     {
         id: 'iterations-slice-picker',
-        title: 'slice picker menu: both endpoints marked, ⇧ + click hint at the bottom',
+        title: 'picker menu in a slice: Now: slice …, ends labelled base and head, range between them',
         render: () => <SlicePickerState />,
+    },
+    {
+        id: 'iterations-slice-picker-edge',
+        title: 'slice selection: Shift+click set the first end, hint to choose the second iteration',
+        render: () => <SliceEdgePickerState cursor={V1_ROW} />,
+    },
+    {
+        id: 'iterations-slice-picker-preview',
+        title: 'slice selection: hovering another iteration previews the range',
+        render: () => <SliceEdgePickerState cursor={V3_ROW} />,
     },
     {
         id: 'iterations-slice-route',
