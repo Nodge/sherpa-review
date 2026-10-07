@@ -319,6 +319,7 @@ html[data-textsize='l'] {
     --tree-row-height: 26px;
     --tree-label-font: var(--font-mono);
     --tree-label-color: var(--text-secondary);
+    --tree-read-color: #848b97;
     --tree-indent-step: 10px;
 
     /* --- Diff card --- */
@@ -652,6 +653,7 @@ html[data-textsize='l'] {
     --tree-row-height: 26px;
     --tree-label-font: var(--font-mono);
     --tree-label-color: var(--text-secondary);
+    --tree-read-color: #70767f;
     --tree-indent-step: 10px;
 
     /* --- Diff card --- */
@@ -976,6 +978,7 @@ html[data-textsize='l'] {
     --tree-row-height: 22px;
     --tree-label-font: var(--font-sans);
     --tree-label-color: var(--text-primary);
+    --tree-read-color: #9e9da3;
     --tree-indent-step: 18px;
 
     /* --- Diff card --- */
@@ -1300,6 +1303,7 @@ html[data-textsize='l'] {
     --tree-row-height: 22px;
     --tree-label-font: var(--font-sans);
     --tree-label-color: var(--text-primary);
+    --tree-read-color: #767676;
     --tree-indent-step: 18px;
 
     /* --- Diff card --- */

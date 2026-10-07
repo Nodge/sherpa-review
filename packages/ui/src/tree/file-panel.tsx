@@ -414,7 +414,15 @@ function rowClassName(row: TreeRow, activeFileId: string | null, cursor: boolean
     if (row.kind === 'dir' && row.foreign) {
         classes.push('is-foreign');
     }
+    if (isRowRead(row)) {
+        classes.push('is-read');
+    }
     return classes.join(' ');
+}
+
+/** A file is fully read. A directory is read when all visible files in its subtree are read. */
+function isRowRead(row: TreeRow): boolean {
+    return row.kind === 'file' ? row.read.state === 'read' : row.files > 0 && row.readFiles === row.files;
 }
 
 function DirRow({ row }: { row: TreeDirRow }) {

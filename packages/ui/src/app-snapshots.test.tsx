@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './app.tsx';
+import { parseFileDiff } from './diff/parse.js';
 import type { Viewing } from './iterations/viewing.js';
 import type { SessionStore } from './session/session-store.js';
 import { createSessionStore } from './session/session-store.js';
@@ -96,8 +97,30 @@ function mountApp(options: {
     readonly route?: UiRouteState;
 }): Mounted {
     const originalFetch = globalThis.fetch;
-    const globals = globalThis as { ResizeObserver?: unknown };
+    const globals = globalThis as { Worker?: unknown; ResizeObserver?: unknown };
+    const originalWorker = globals.Worker;
     const originalResizeObserver = globals.ResizeObserver;
+
+    // jsdom has no real worker. Background diff parsing starts on a timer and can run before
+    // unmount on a busy machine. Use the same parser in the same thread.
+    class FakeWorker {
+        private readonly listeners = new Map<string, ((event: unknown) => void)[]>();
+        addEventListener(type: string, listener: (event: unknown) => void): void {
+            this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+        }
+        postMessage(message: { id: number; file: Parameters<typeof parseFileDiff>[0] }): void {
+            const reply = { id: message.id, ok: true, model: parseFileDiff(message.file) };
+            queueMicrotask(() => {
+                for (const listener of this.listeners.get('message') ?? []) {
+                    listener({ data: reply });
+                }
+            });
+        }
+        terminate(): void {
+            this.listeners.clear();
+        }
+    }
+    globals.Worker = FakeWorker;
     globals.ResizeObserver ??= class {
         observe(): void {
             // jsdom has no layout.
@@ -227,6 +250,7 @@ function mountApp(options: {
         });
         host.remove();
         globalThis.fetch = originalFetch;
+        globals.Worker = originalWorker;
         globals.ResizeObserver = originalResizeObserver;
     });
 

@@ -318,6 +318,9 @@ Every interactive element must implement all applicable states.
 - Rows are 26px tall; hover lifts the bg, the active file gets `#1b1e24`.
 - Directories: click toggles; ⌥-click collapses the whole subtree; state persists per PR.
   Directory rows show aggregate `+N/−M` and a read-state summary (all read → ✓, some read → half box).
+- A read file, or a directory whose files visible under the current filter are all read, dims its
+  label to `--tree-read-color`. Partial and unread rows keep their colour; read dimming skips the
+  active row. Only the label colour changes, without opacity; the box, tags and `+N` stay as they are.
 - Keyboard: ↑/↓ move, →/← expand/collapse, ⏎ opens the file in the diff pane, `/` focuses the filter.
 - Filter input: matches path substrings and fuzzy file names; shows "No files match" + "Clear".
 - 60+ files: the tree virtualises and directories with more than 20 children collapse by default.

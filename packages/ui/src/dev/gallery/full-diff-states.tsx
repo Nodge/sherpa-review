@@ -185,6 +185,9 @@ const MEDIUM_VIEWED = [
     'services/orders/src/domain/order.ts',
 ];
 
+/** Also the top diff file: the active row is read, but its label still is not dimmed. */
+const READ_DIMMED_VIEWED = [...MEDIUM_VIEWED, 'services/orders/docs/edit-window.md'];
+
 /**
  * Partial file coverage: ranges come from the file's own changed lines, so "N of M"
  * in the tooltip is the actual model count, not a made-up number.
@@ -510,6 +513,17 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
             <WorkspaceState
                 fixture="medium"
                 viewed={MEDIUM_VIEWED}
+                records={[partialRecord('medium', 'services/orders/src/domain/edit-window.ts', 0.4)]}
+            />
+        ),
+    },
+    {
+        id: 'full-diff-tree-read-dimmed',
+        title: 'read items dimmed: files and fully read directories. Partial directories and the active row stay unchanged',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                viewed={READ_DIMMED_VIEWED}
                 records={[partialRecord('medium', 'services/orders/src/domain/edit-window.ts', 0.4)]}
             />
         ),

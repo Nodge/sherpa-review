@@ -210,6 +210,7 @@ To maintain the log, add each new decision as a dated entry in its section. When
 
 ## UI: keyboard, palette, i18n, onboarding, settings
 
+
 - **2026-09-30 · Visual styles share one token set, and components do not choose the theme.** Each `data-theme` boundary defines the palette, fonts and geometry. Virtual lists read dimensions from their container's computed CSS variables, so a nested theme is independent of the global setting. Highlighting uses one syntax classification across all styles. Additional roles in built-in themes get colours from the previous palette, without a parallel classification for compatibility.
 
 

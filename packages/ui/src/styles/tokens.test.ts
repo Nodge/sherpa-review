@@ -335,6 +335,26 @@ describe('theme palettes', () => {
             expect([...palettes[theme].keys()].sort()).toEqual([...darkPalette.keys()].sort());
         });
 
+        // Dark Sherpa has a flat grey scale: a text role matching the regular label will not dim it.
+        it(`${theme}: read labels in the tree differ from regular file and directory labels`, () => {
+            const readColor = tokenValue(palettes[theme], '--tree-read-color');
+            expect(readColor).not.toBe(tokenValue(palettes[theme], '--tree-label-color'));
+            expect(readColor).not.toBe(tokenValue(palettes[theme], '--tree-dir-color'));
+        });
+
+        // Read state overrides foreign and generated shades, so a read row must not be brighter than either.
+        it(`${theme}: read labels in the tree have no more contrast than foreign and generated shades`, () => {
+            const tokens = palettes[theme];
+            const panel = blend(
+                parseColor(tokenValue(tokens, '--surface-panel')),
+                parseColor(tokenValue(tokens, '--surface-app')).rgb,
+            );
+            const onPanel = (name: string): number => contrast(parseColor(tokenValue(tokens, name)).rgb, panel);
+            const read = onPanel('--tree-read-color');
+            expect(read).toBeLessThanOrEqual(onPanel('--text-muted-dim'));
+            expect(read).toBeLessThanOrEqual(onPanel('--text-dim-strong'));
+        });
+
         it(`${theme}: all colour values match theme.md`, () => {
             const colors = new Map([...palettes[theme]].filter(([name]) => documented[theme].has(name)));
             expect(Object.fromEntries(colors)).toEqual(Object.fromEntries(documented[theme]));
@@ -478,6 +498,9 @@ const TEXT_PAIRS: readonly TextPair[] = [
     { text: '--text-secondary', on: ['--surface-digest-footer', '--surface-panel-deep'] },
     // Stop label in a tree row (§6a): a secondary marker, using the pair from the spec.
     { text: '--stop-mark-text', on: ['--surface-panel'], low: ['light'] },
+    // Read label in the tree: on the panel and on row hover.
+    { text: '--tree-read-color', on: ['--surface-panel'] },
+    { text: '--tree-read-color', on: ['--surface-raised'] },
     { text: '--chat-body-text', on: ['--surface-panel'] },
     { text: '--pr-comments-body-text', on: ['--surface-raised'] },
     { text: '--text-on-selected', on: ['--surface-selected'] },

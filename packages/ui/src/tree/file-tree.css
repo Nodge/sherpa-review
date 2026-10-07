@@ -259,6 +259,11 @@
     color: var(--text-dim-strong);
 }
 
+/* Read state adds dimming over foreign and generated. The active row stays undimmed (docs/design/README.md §10). */
+.file-tree__row.is-read:not(.is-active) .file-tree__label {
+    color: var(--tree-read-color);
+}
+
 /*
  * Row menu button (docs/design/SPEC-elements.md §2.11): always reserves its width, becomes visible on hover
  * and focus, so the row layout does not jump under the pointer.

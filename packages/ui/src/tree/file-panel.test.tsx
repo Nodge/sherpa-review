@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fixtureIteration } from '@sherpa/fixtures';
-import type { Lens } from '@sherpa/protocol';
+import type { FileDiff, Lens } from '@sherpa/protocol';
 import { createRef } from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,12 +9,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileFilter } from '../filters/lens-filters.js';
 import { buildFileFilters, selectFilter } from '../filters/lens-filters.js';
 import { ReadOnlyIterationProvider } from '../iterations/read-only.tsx';
+import type { FileReadState, ReadState } from '../progress/read-state.js';
 import { PrStateProvider } from '../pr-state/context.tsx';
 import { createUiPrStateStore } from '../pr-state/pr-state-store.js';
 import { SettingsProvider } from '../settings/context.tsx';
 import type { UiSettingsStore } from '../settings/settings-store.js';
 import { createUiSettingsStore } from '../settings/settings-store.js';
-import type { FileTreeCursor } from './file-panel.tsx';
+import type { FilePanelProps, FileTreeCursor } from './file-panel.tsx';
 import { FilePanel } from './file-panel.tsx';
 import { createT } from '../i18n/index.js';
 
@@ -66,6 +67,7 @@ function mount(
     readOnly = false,
     filters: readonly FileFilter[] = FILTERS,
     settings: UiSettingsStore = createUiSettingsStore({ loaded: true }),
+    props: Partial<FilePanelProps> = {},
 ) {
     const host = document.createElement('div');
     document.body.append(host);
@@ -97,6 +99,7 @@ function mount(
                             outline={null}
                             onOpenHunk={() => undefined}
                             cursorRef={cursorRef}
+                            {...props}
                         />
                     </ReadOnlyIterationProvider>
                 </PrStateProvider>
@@ -208,6 +211,110 @@ describe('FilePanel viewed checkboxes', () => {
         for (const indents of indentsByLevel.values()) {
             expect(indents.size).toBe(1);
         }
+    });
+});
+
+describe('dimming read items in the tree', () => {
+    function file(path: string, patch: Partial<FileDiff> = {}): FileDiff {
+        return {
+            fileId: `f-${path}`,
+            path,
+            oldPath: null,
+            changeType: 'modify',
+            binary: false,
+            generated: false,
+            additions: 10,
+            deletions: 2,
+            patch: null,
+            viewed: null,
+            blameUrl: null,
+            hostFileUrl: null,
+            image: null,
+            ...patch,
+        };
+    }
+
+    function read(state: ReadState): FileReadState {
+        return { state, seen: state === 'read' ? 12 : state === 'partial' ? 5 : 0, total: 12, pinned: false, generatedDefault: false };
+    }
+
+    const files = [
+        file('done/a.ts'),
+        file('done/b.ts'),
+        file('mixed/c.ts'),
+        file('mixed/d.ts'),
+        file('mixed/e.ts'),
+        // A generated file without a progress record is read by default (`readStateOf`).
+        file('gen/schema.ts', { generated: true }),
+    ];
+    const readState = new Map<string, FileReadState>([
+        ['f-done/a.ts', read('read')],
+        ['f-done/b.ts', read('read')],
+        ['f-mixed/c.ts', read('read')],
+        ['f-mixed/d.ts', read('partial')],
+        ['f-mixed/e.ts', read('unread')],
+    ]);
+
+    function mountTree(props: Partial<FilePanelProps> = {}) {
+        // My files includes only `mixed`, so `done` and `gen` become roots outside your ownership zone.
+        return mount(false, FILTERS, undefined, {
+            files,
+            readState,
+            mineFileIds: new Set(['f-mixed/c.ts', 'f-mixed/d.ts', 'f-mixed/e.ts']),
+            ...props,
+        });
+    }
+
+    function row(host: HTMLElement, kind: 'file' | 'dir', name: string): HTMLElement {
+        const found = [...host.querySelectorAll<HTMLElement>(`.file-tree__row--${kind}`)].find(
+            (candidate) => candidate.querySelector('.file-tree__label-name')?.textContent === name,
+        );
+        if (found === undefined) {
+            throw new Error(`the tree has no row ${kind} ${name}`);
+        }
+        return found;
+    }
+
+    it('gives a read file is-read but omits it for partial and unread files', () => {
+        const { host } = mountTree();
+
+        expect(row(host, 'file', 'a.ts').classList.contains('is-read')).toBe(true);
+        expect(row(host, 'file', 'c.ts').classList.contains('is-read')).toBe(true);
+        expect(row(host, 'file', 'd.ts').classList.contains('is-read')).toBe(false);
+        expect(row(host, 'file', 'e.ts').classList.contains('is-read')).toBe(false);
+    });
+
+    it('dims a directory only when all its files are read', () => {
+        const { host } = mountTree();
+
+        expect(row(host, 'dir', 'done').classList.contains('is-read')).toBe(true);
+        expect(row(host, 'dir', 'mixed').classList.contains('is-read')).toBe(false);
+    });
+
+    it('marks both a generated row and a root outside your ownership zone as read', () => {
+        const { host } = mountTree();
+
+        expect([...row(host, 'file', 'schema.ts').classList]).toEqual(
+            expect.arrayContaining(['is-generated', 'is-read']),
+        );
+        expect([...row(host, 'dir', 'done').classList]).toEqual(expect.arrayContaining(['is-foreign', 'is-read']));
+        expect([...row(host, 'dir', 'gen').classList]).toEqual(
+            expect.arrayContaining(['is-generated', 'is-foreign', 'is-read']),
+        );
+    });
+
+    it('counts visible files for a directory and dims it when the lens has no unread files', () => {
+        const { host } = mountTree({
+            files: files.filter((candidate) => candidate.path !== 'mixed/d.ts' && candidate.path !== 'mixed/e.ts'),
+        });
+
+        expect(row(host, 'dir', 'mixed').classList.contains('is-read')).toBe(true);
+    });
+
+    it('gives an active read row both classes and relies on CSS to prevent dimming', () => {
+        const { host } = mountTree({ activeFileId: 'f-done/a.ts' });
+
+        expect([...row(host, 'file', 'a.ts').classList]).toEqual(expect.arrayContaining(['is-active', 'is-read']));
     });
 });
 

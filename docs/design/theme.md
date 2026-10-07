@@ -286,6 +286,7 @@ The test recalculates them to keep the table in sync with CSS.
 | `--read-box-border` | `#515a65` | `#afb5c0` | `--c-33383f` |
 | `--stop-mark-text` | `#7b8390` | `#828894` | `--c-4a4f57` (§6a) |
 | `--stop-mark-border` | `#2c3038` | `#e0e2e7` | `--c-1e2126` (§6a) |
+| `--tree-read-color` | `#848b97` | `#70767f` | `#9e9da3` | `#767676` | read labels in the tree. The dimmest grey that gives 4.5:1 both on the panel and on a hovered row (`--surface-raised`). The `--text-*` levels were too close to regular labels, making read and unread files hard to tell apart. |
 | `--border-button-outline` | `#7b8390` | `#828894` | `--c-4a4f57` |
 | `--border-button-outline-hover` | `#dae4f3` | `#28303b` | `--c-5e636b` |
 | `--syntax-keyword` | `#9aa6ff` | `#5462e3` | `--c-9aa6ff` |
