@@ -314,7 +314,7 @@ describe('local host on the working tree', () => {
         ]);
         // The latest iteration verdict appears in the header.
         expect((await host.getPr()).verdicts).toEqual([
-            { user: { login: fake.login, displayName: null, bot: false }, verdict: 'request_changes' },
+            { user: { login: fake.login, displayName: null, bot: false, avatarUrl: null }, verdict: 'request_changes' },
         ]);
     });
 
