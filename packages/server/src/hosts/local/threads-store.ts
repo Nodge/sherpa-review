@@ -84,9 +84,12 @@ export interface LocalThreadsStore {
     write(data: LocalReviewData): Promise<void>;
 }
 
+/** Files written before `avatarUrl` lack the key: without `default` the schema would reject them. */
+const localAuthorSchema = reviewUserSchema.extend({ avatarUrl: reviewUserSchema.shape.avatarUrl.default(null) });
+
 const commentSchema: z.ZodType<LocalComment> = z.object({
     id: z.string().min(1),
-    author: reviewUserSchema,
+    author: localAuthorSchema,
     body: z.string(),
     draft: z.boolean(),
     createdAt: z.iso.datetime(),

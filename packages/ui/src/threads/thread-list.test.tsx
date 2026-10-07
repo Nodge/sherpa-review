@@ -51,7 +51,7 @@ function deferred<T>() {
 
 const DRAFT: Comment = {
     id: 'draft-reply',
-    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
     body: 'I will check the race again before Ship.',
     draft: true,
     issue: null,

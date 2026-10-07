@@ -237,6 +237,7 @@ export interface DiscussionParticipant {
     readonly login: string;
     readonly name: string;
     readonly bot: boolean;
+    readonly avatarUrl: string | null;
     /** Threads they contributed to (root or reply) under the current chips: filters change both rows and counts. */
     readonly threads: number;
     readonly open: number;
@@ -272,6 +273,7 @@ export function discussionSummary(threads: readonly Thread[], fileIds: ReadonlyS
                         login: author.login,
                         name: author.displayName ?? author.login,
                         bot: author.bot,
+                        avatarUrl: author.avatarUrl,
                         threads: 1,
                         open: thread.resolved ? 0 : 1,
                         lastActivity: lastActivityIso(thread.root),

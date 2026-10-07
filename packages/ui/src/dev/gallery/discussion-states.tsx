@@ -1,4 +1,14 @@
-import { anchor, bot, comment, fixtureIteration, human, thread } from '@sherpa/fixtures';
+import {
+    anchor,
+    bot,
+    comment,
+    fixtureIteration,
+    GALLERY_AVATAR_BROKEN,
+    GALLERY_AVATAR_PHOTOS,
+    human,
+    thread,
+    withAvatars,
+} from '@sherpa/fixtures';
 import type { Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -126,6 +136,17 @@ const SCALE_THREADS: readonly Thread[] = [
     }),
 ];
 
+/** Same scale with photos: 2 people and one bot have photos, the reply author's photo fails to load. */
+const AVATAR_THREADS = withAvatars(
+    SCALE_THREADS,
+    new Map([
+        ['morgan', GALLERY_AVATAR_PHOTOS[0]],
+        ['ada', GALLERY_AVATAR_PHOTOS[1]],
+        ['ai-review-bot', GALLERY_AVATAR_PHOTOS[2]],
+        [REPLIER.login, GALLERY_AVATAR_BROKEN],
+    ]),
+);
+
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('Sherpa gallery: writing drafts is not available')),
     update: () => Promise.reject(new Error('Sherpa gallery: writing drafts is not available')),
@@ -212,6 +233,11 @@ export const DISCUSSION_STATES: readonly {
                 replyTo="human-pr-level"
             />
         ),
+    },
+    {
+        id: 'discussion-avatars',
+        title: 'discussion: participant photos, including the bot. Broken photo shows initials',
+        render: () => <Card threads={AVATAR_THREADS} fileIds={SCALE_FILE_IDS} outsideOpen />,
     },
 ];
 

@@ -13,7 +13,7 @@
 const RATE_LIMIT = 'rateLimit { cost remaining resetAt }';
 
 /** Comment, review or PR author. Only people have `name`, bots and organizations do not. */
-const AUTHOR = 'author { login __typename ... on User { name } }';
+const AUTHOR = 'author { login __typename avatarUrl(size: 100) ... on User { name } }';
 
 /** PR header with everything used to build `PrMeta`, the iteration and web file URLs. */
 const PR_META = `
@@ -32,7 +32,7 @@ const PR_META = `
     headRepositoryOwner { login }
     ${AUTHOR}
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-    latestOpinionatedReviews(first: 100) { nodes { state author { login __typename } } }
+    latestOpinionatedReviews(first: 100) { nodes { state ${AUTHOR} } }
 `;
 
 const THREAD_COMMENT = `
@@ -159,7 +159,7 @@ export const REVIEW_BODY_QUERY = `query SherpaReviewBody($reviewId: ID!) {
 /** The token owner, also the reviewer's identity in the PR header (`PrMeta.viewer`). */
 export const VIEWER_QUERY = `query SherpaViewer {
     ${RATE_LIMIT}
-    viewer { login name }
+    viewer { login name avatarUrl(size: 100) }
 }`;
 
 /** Both file sides in one query, old at merge-base and new at the branch head. */

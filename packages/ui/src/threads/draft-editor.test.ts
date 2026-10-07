@@ -7,7 +7,7 @@ import { createThreadStore } from './store.js';
 function comment(id: string, issue: boolean | null): Comment {
     return {
         id,
-        author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+        author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
         body: `text ${id}`,
         draft: true,
         issue,

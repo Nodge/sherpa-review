@@ -6,7 +6,7 @@ import { createThreadStore } from './store.js';
 
 const DRAFT: Comment = {
     id: 'draft-1',
-    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
     body: 'my draft',
     draft: true,
     issue: null,

@@ -9,7 +9,7 @@ import { makeFileId } from './patch.js';
  */
 
 export function human(login: string, displayName: string | null = null): ReviewUser {
-    return { login, displayName, bot: false };
+    return { login, displayName, bot: false, avatarUrl: null };
 }
 
 /**
@@ -17,7 +17,7 @@ export function human(login: string, displayName: string | null = null): ReviewU
  * supplies it, and the UI shows it as a source chip.
  */
 export function bot(login: string, displayName: string): ReviewUser {
-    return { login, displayName, bot: true };
+    return { login, displayName, bot: true, avatarUrl: null };
 }
 
 export interface CommentSpec {

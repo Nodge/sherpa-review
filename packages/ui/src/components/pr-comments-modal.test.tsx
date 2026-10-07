@@ -23,8 +23,8 @@ import { PrCommentsModal } from './pr-comments-modal.tsx';
 
 const DATA = fixtureIteration('medium');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
-const HUMAN = { login: 'alice', displayName: 'Alice Ingram', bot: false } as const;
-const BOT = { login: 'ai-review-bot', displayName: 'AI Review', bot: true } as const;
+const HUMAN = { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null } as const;
+const BOT = { login: 'ai-review-bot', displayName: 'AI Review', bot: true, avatarUrl: null } as const;
 const PUBLISHED = thread({
     id: 'pr-published',
     author: HUMAN,

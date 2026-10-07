@@ -2,6 +2,7 @@ import type { Comment, FileAnchor, Locale, Thread } from '@sherpa/protocol';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { Avatar } from '../components/avatar.tsx';
 import type { Translate } from '../i18n/index.js';
 import { relativeTime, shortCommit, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
@@ -263,9 +264,11 @@ function ThreadBlock({
                                     <Icon name={collapsed ? 'chev-right' : 'chev-down'} size={13} />
                                 </button>
                             )}
-                            <span className={`thread__avatar${comment.author.bot ? ' thread__avatar--bot' : ''}`}>
-                                {initials(comment.author.displayName ?? comment.author.login)}
-                            </span>
+                            <Avatar
+                                className="thread__avatar"
+                                name={comment.author.displayName ?? comment.author.login}
+                                url={comment.author.avatarUrl}
+                            />
                             <strong className="thread__author">
                                 {comment.author.bot ? comment.author.login : authorName(comment)}
                             </strong>
@@ -787,14 +790,5 @@ function metaOf(thread: Thread, createdAt: string, now: number, t: Translate, lo
 function lineRange(position: { readonly line: number; readonly size: number }): string {
     const last = position.line + Math.max(position.size, 1) - 1;
     return last === position.line ? String(position.line) : `${String(position.line)}–${String(last)}`;
-}
-
-function initials(name: string): string {
-    return name
-        .split(/[\s._-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('');
 }
 

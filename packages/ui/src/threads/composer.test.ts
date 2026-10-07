@@ -32,7 +32,7 @@ function bufferedEntry(id: string, body: string, error = 'host is down'): DraftB
 
 const CREATED: Comment = {
     id: 'draft-1',
-    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
     body: 'first',
     draft: true,
     issue: null,

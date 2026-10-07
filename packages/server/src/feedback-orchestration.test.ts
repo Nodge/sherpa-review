@@ -95,7 +95,7 @@ function thread(threadId: string, overrides: Partial<FeedbackThread> = {}): Feed
         resolved: false,
         comments: [
             {
-                author: { login: 'reviewer', displayName: null, bot: false },
+                author: { login: 'reviewer', displayName: null, bot: false, avatarUrl: null },
                 createdAt: '2026-09-11T10:00:00.000Z',
                 body: 'extract the constant',
                 replies: [],
@@ -209,7 +209,7 @@ describe('local review round orchestration', () => {
                 roundId: '7',
                 replies: [{ threadId: '3', body: 'extracted the constant' }],
                 summary: 'fixed one thing',
-                author: { login: 'agent', displayName: 'Agent', bot: true },
+                author: { login: 'agent', displayName: 'Agent', bot: true, avatarUrl: null },
             },
         ]);
         expect(store.ofRound('7')?.state).toBe('done');
@@ -249,6 +249,7 @@ describe('local review round orchestration', () => {
             login: 'claude-code',
             displayName: 'Agent · claude-opus-5',
             bot: true,
+            avatarUrl: null,
         });
         withRegistry.close();
     });

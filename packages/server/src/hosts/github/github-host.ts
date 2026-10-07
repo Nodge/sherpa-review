@@ -111,6 +111,7 @@ import {
 } from './schemas.js';
 import type { ParsedCommentId } from './threads.js';
 import {
+    avatarOf,
     buildThreads,
     isoTime,
     isReviewParagraphOf,
@@ -1008,6 +1009,7 @@ export class GithubHost implements ReviewHost {
                 displayName: response.viewer.name ?? null,
                 // `viewer` owns Sherpa's token. A person does the review, not a bot.
                 bot: false,
+                avatarUrl: avatarOf(response.viewer.avatarUrl),
             }),
             (error: unknown) => {
                 // Do not cache a failed response. The next call asks again.

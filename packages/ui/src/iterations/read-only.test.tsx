@@ -60,7 +60,7 @@ const THREAD: Thread = {
     anchor: { fileId: 'f1', path: 'app.ts', position: { side: 'new', line: 10, size: 1 } },
     root: {
         id: 'c1',
-        author: { login: 'avery', displayName: 'Avery', bot: false },
+        author: { login: 'avery', displayName: 'Avery', bot: false, avatarUrl: null },
         body: 'question about the line',
         createdAt: '2026-08-31T06:00:00.000Z',
         editedAt: null,

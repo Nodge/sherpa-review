@@ -38,6 +38,8 @@ export { routeFixtures } from './data/index.js';
  */
 export { anchor, bot, comment, human, lens, singleIteration, thread } from './builders.js';
 export type { CommentSpec, LensSpec, ThreadSpec } from './builders.js';
+/** People photos for the gallery: offline data URIs and a deliberately broken URL for initials fallback. */
+export { GALLERY_AVATAR_BROKEN, GALLERY_AVATAR_PHOTOS, withAvatar, withAvatars } from './avatars.js';
 export type { RouteBrokenResults, RouteFixtures, RouteRawResults, RouteRawResultsEn } from './data/index.js';
 /** Image outside `medium`: the gallery needs a second side of a different size. */
 export { PNG_SMALL_BASE64 } from './data/images.js';

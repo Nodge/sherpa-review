@@ -23,7 +23,7 @@ const META: PrMeta = {
     id: '4242',
     url: 'https://github.com/quillmart/quillmart/pull/4242',
     title: 'Order editing window',
-    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
     fromBranch: 'alice/edit-window',
     toBranch: 'main',
     state: 'open',
@@ -32,7 +32,7 @@ const META: PrMeta = {
     updatedAt: '2026-08-20T10:00:00.000Z',
     capabilities: { publishVerdicts: ['comment', 'ship', 'sticky_ship', 'request_changes'], fileViewedSync: false, fileContent: true, commentIssues: true, commentResolve: true, editPublished: true, iterations: false, blobs: false },
     verdicts: [],
-    viewer: { login: 'bob', displayName: null, bot: false },
+    viewer: { login: 'bob', displayName: null, bot: false, avatarUrl: null },
 };
 
 const READY_ROUTE: UiRouteState = {

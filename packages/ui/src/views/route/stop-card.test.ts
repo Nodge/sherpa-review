@@ -23,7 +23,7 @@ function thread(id: string, line: number | null): Thread {
         pinnedTo: null,
         root: {
             id: `${id}-root`,
-            author: { login: 'reviewer', displayName: 'Reviewer', bot: false },
+            author: { login: 'reviewer', displayName: 'Reviewer', bot: false, avatarUrl: null },
             body: 'text',
             draft: false,
             issue: null,

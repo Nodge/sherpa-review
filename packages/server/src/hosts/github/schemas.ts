@@ -30,6 +30,7 @@ const actorSchema = z.object({
     login: z.string().min(1),
     __typename: z.string(),
     name: z.string().nullable().optional(),
+    avatarUrl: z.string().optional(),
 });
 export type GithubActor = z.infer<typeof actorSchema>;
 
@@ -156,7 +157,11 @@ export const filesResponseSchema = z.object({
 export type GithubFilesResponse = z.infer<typeof filesResponseSchema>;
 
 export const viewerResponseSchema = z.object({
-    viewer: z.object({ login: z.string().min(1), name: z.string().nullable().optional() }),
+    viewer: z.object({
+        login: z.string().min(1),
+        name: z.string().nullable().optional(),
+        avatarUrl: z.string().optional(),
+    }),
 });
 
 export const reviewBodyResponseSchema = z.object({

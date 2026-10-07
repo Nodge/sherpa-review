@@ -205,7 +205,7 @@ function draftThread(commentId: string, body: string): Thread {
         pinnedTo: null,
         root: {
             id: commentId,
-            author: { login: 'alice', displayName: null, bot: false },
+            author: { login: 'alice', displayName: null, bot: false, avatarUrl: null },
             body,
             createdAt: '2026-09-03T09:00:00.000Z',
             editedAt: null,

@@ -6,7 +6,7 @@ import { INITIAL_SHIP_VERDICT_WATCH, newShipVerdict, observeShipVerdicts } from 
 /** "Someone shipped earlier": the event is a new ship by another reviewer, not the existence of one. */
 
 function verdict(login: string, value: ReviewerVerdict['verdict']): ReviewerVerdict {
-    return { user: { login, displayName: null, bot: false }, verdict: value };
+    return { user: { login, displayName: null, bot: false, avatarUrl: null }, verdict: value };
 }
 
 const NOW = Date.parse('2026-09-03T12:00:00.000Z');

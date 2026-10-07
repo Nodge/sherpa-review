@@ -78,10 +78,6 @@
     color: var(--text-secondary);
 }
 
-.discussion-participant__avatar.is-bot {
-    border-radius: var(--radius-badge);
-}
-
 .discussion-participant__body {
     display: block;
     min-width: 0;

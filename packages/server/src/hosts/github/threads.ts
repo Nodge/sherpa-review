@@ -204,7 +204,7 @@ function placeholderComment(thread: GithubReviewThread): Comment {
     const now = new Date(0).toISOString();
     return {
         id: `${THREAD_PREFIX}${thread.id}`,
-        author: { login: 'ghost', displayName: null, bot: false },
+        author: { login: 'ghost', displayName: null, bot: false, avatarUrl: null },
         body: '',
         draft: false,
         issue: null,
@@ -251,13 +251,19 @@ function pinOf(first: GithubThreadComment | undefined): ThreadPin | null {
 export function userOf(actor: GithubActor | null): ReviewUser {
     if (actor === null) {
         // A deleted account. GitHub returns `author: null` and displays the comment as ghost.
-        return { login: 'ghost', displayName: null, bot: false };
+        return { login: 'ghost', displayName: null, bot: false, avatarUrl: null };
     }
     return {
         login: actor.login,
         displayName: actor.name ?? null,
         bot: actor.__typename === 'Bot' || actor.login.endsWith('[bot]'),
+        avatarUrl: avatarOf(actor.avatarUrl),
     };
+}
+
+/** GitHub photo. The protocol rejects non-https URLs, so initials replace them. */
+export function avatarOf(url: string | undefined): string | null {
+    return url?.startsWith('https://') === true ? url : null;
 }
 
 function compactNodes<T>(nodes: readonly (T | null)[] | null): T[] {

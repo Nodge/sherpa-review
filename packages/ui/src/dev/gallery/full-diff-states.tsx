@@ -1,4 +1,11 @@
-import { fileContentOf, fixtureIteration } from '@sherpa/fixtures';
+import {
+    fileContentOf,
+    fixtureIteration,
+    GALLERY_AVATAR_BROKEN,
+    GALLERY_AVATAR_PHOTOS,
+    withAvatar,
+    withAvatars,
+} from '@sherpa/fixtures';
 import type { FixtureIterationView, FixtureName } from '@sherpa/fixtures';
 import type { Comment, FileDiff, Lens, Thread, UiFileProgress, UiReviewLensesResponse } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
@@ -45,6 +52,8 @@ interface WorkspaceStateProps {
     readonly showThreads?: boolean;
     readonly threads?: readonly Thread[];
     readonly prepareThreads?: (store: ThreadStore, threads: readonly Thread[]) => void;
+    /** Photos by login for the PR author in the header and thread authors. */
+    readonly photos?: ReadonlyMap<string, string>;
 }
 
 // Stable defaults: changing the theme must not create a new store and lose parsed models.
@@ -65,6 +74,7 @@ function WorkspaceState({
     showThreads = false,
     threads,
     prepareThreads,
+    photos,
 }: WorkspaceStateProps) {
     const data = useMemo(() => {
         const source = asFetched(fixtureIteration(fixture));
@@ -79,14 +89,18 @@ function WorkspaceState({
                       ...source,
                       diff: { ...source.diff, files: source.diff.files.filter((file) => keep.includes(file.path)) },
                   };
-        return renameTo === undefined ? narrowed : renamePaths(narrowed, renameTo);
-    }, [fixture, onlyPath, paths, renameTo]);
+        const renamed = renameTo === undefined ? narrowed : renamePaths(narrowed, renameTo);
+        const authorPhoto = photos?.get(renamed.pr.author.login);
+        return authorPhoto === undefined
+            ? renamed
+            : { ...renamed, pr: { ...renamed.pr, author: withAvatar(renamed.pr.author, authorPhoto) } };
+    }, [fixture, onlyPath, paths, photos, renameTo]);
     const session = useMemo(() => createSessionStore({ initial: { view: 'diff', filter } }), [filter]);
 
-    const shownThreads = useMemo(
-        () => (showThreads ? (threads ?? data.threads) : []),
-        [data.threads, showThreads, threads],
-    );
+    const shownThreads = useMemo(() => {
+        const source = showThreads ? (threads ?? data.threads) : [];
+        return photos === undefined ? source : withAvatars(source, photos);
+    }, [data.threads, photos, showThreads, threads]);
     const threadStore = useMemo(() => {
         const created = createThreadStore(shownThreads, new Set(data.diff.files.map((file) => file.fileId)));
         prepareThreads?.(created, shownThreads);
@@ -252,7 +266,7 @@ function prepareDraftComposer(store: ThreadStore, threads: readonly Thread[]): v
     }
     const draft: Comment = {
         id: 'gallery-draft',
-        author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+        author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
         body: 'I will add a check at the window boundary and update the test.',
         draft: true,
         issue: null,
@@ -310,6 +324,15 @@ function sourceThreadsOnHandlers(): Thread[] {
 }
 
 const HANDLERS = 'services/orders/src/api/handlers.ts';
+
+/** Photos for the `medium` fixture: the PR author, two commenters and AI review have photos. Iris's fails to load. */
+const MEDIUM_PHOTOS: ReadonlyMap<string, string> = new Map([
+    [fixtureIteration('medium').pr.author.login, GALLERY_AVATAR_PHOTOS[1]],
+    ['alice', GALLERY_AVATAR_PHOTOS[0]],
+    ['kai', GALLERY_AVATAR_PHOTOS[2]],
+    ['iris', GALLERY_AVATAR_BROKEN],
+    ['ai-review-bot', GALLERY_AVATAR_PHOTOS[0]],
+]);
 
 /**
  * Collapsed file with threads at 3 different lines (bot and human collapsed, another human expanded)
@@ -626,6 +649,18 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
                 showThreads
                 onlyPath="services/orders/src/api/handlers.ts"
                 threads={markdownShowcaseThread()}
+            />
+        ),
+    },
+    {
+        id: 'threads-avatars',
+        title: 'photos: PR author in the header and thread authors, including the bot. Broken photo shows initials',
+        render: () => (
+            <WorkspaceState
+                fixture="medium"
+                showThreads
+                onlyPath="services/orders/src/domain/edit-window.ts"
+                photos={MEDIUM_PHOTOS}
             />
         ),
     },

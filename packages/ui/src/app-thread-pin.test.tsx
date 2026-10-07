@@ -40,7 +40,7 @@ const OUTSIDE_THREAD = (() => {
     }
     return {
         ...thread,
-        root: { ...thread.root, author: { login: 'morgan', displayName: 'Morgan Price', bot: false } },
+        root: { ...thread.root, author: { login: 'morgan', displayName: 'Morgan Price', bot: false, avatarUrl: null } },
     };
 })();
 

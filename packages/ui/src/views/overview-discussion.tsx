@@ -1,6 +1,7 @@
 import type { Thread } from '@sherpa/protocol';
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import { Avatar } from '../components/avatar.tsx';
 import { relativeTime, useFormat, useLocale, useT } from '../i18n/index.js';
 import { Icon } from '../icons/icon.tsx';
 import type { SessionStore } from '../session/session-store.js';
@@ -240,9 +241,11 @@ function ParticipantRow({
                 onOpen(participant.login);
             }}
         >
-            <span className={`discussion-participant__avatar${participant.bot ? ' is-bot' : ''}`} aria-hidden="true">
-                {initials(participant.name)}
-            </span>
+            <Avatar
+                className="discussion-participant__avatar"
+                name={participant.name}
+                url={participant.avatarUrl}
+            />
             <span className="discussion-participant__body">
                 <span className="discussion-participant__name-line">
                     <span className="discussion-participant__name">{participant.name}</span>
@@ -297,9 +300,11 @@ function OutsideThreadCard({
     return (
         <article className="discussion-thread">
             <div className="discussion-thread__head">
-                <span className="discussion-thread__avatar" aria-hidden="true">
-                    {initials(authorName(thread.root))}
-                </span>
+                <Avatar
+                    className="discussion-thread__avatar"
+                    name={authorName(thread.root)}
+                    url={thread.root.author.avatarUrl}
+                />
                 <span className="discussion-thread__author">{authorName(thread.root)}</span>
                 <span className="discussion-card__spacer" />
                 <span className={`discussion-thread__state${state === 'open' ? ' is-open' : ''}`}>
@@ -393,15 +398,6 @@ function useComposerSnapshot(store: ThreadStore, key: string): ComposerSnapshot 
     const subscribe = useCallback((listener: () => void) => store.subscribeComposer(key, listener), [key, store]);
     const getSnapshot = useCallback(() => store.getComposer(key), [key, store]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function initials(name: string): string {
-    return name
-        .split(/[\s._-]+/u)
-        .filter((part) => part !== '')
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('');
 }
 
 const EMPTY_THREADS: readonly Thread[] = [];

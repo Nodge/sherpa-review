@@ -80,7 +80,7 @@ function mountReply() {
         pinnedTo: null,
         root: {
             id: 'root-1',
-            author: { login: 'reviewer', displayName: null, bot: false },
+            author: { login: 'reviewer', displayName: null, bot: false, avatarUrl: null },
             body: 'root',
             draft: false,
             issue: null,
@@ -339,7 +339,7 @@ describe('comment composer', () => {
                 outcome: 'saved' as const,
                 comment: {
                     id: 'draft-1',
-                    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+                    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
                     body: 'finished draft',
                     draft: true,
                     issue: null,

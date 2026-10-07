@@ -128,7 +128,7 @@ function fileForGallery() {
 function lineDraft(): Thread {
     const root: Comment = {
         id: 'gallery-line-draft',
-        author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+        author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
         body: 'The window boundary must be checked before calculating remainingMs.',
         draft: true,
         // The thread root carries the host issue status. Editing opens the toggle with that state.

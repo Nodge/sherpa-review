@@ -1,5 +1,6 @@
 import type { Thread } from '@sherpa/protocol';
 
+import { Avatar } from '../components/avatar.tsx';
 import { useT } from '../i18n/index.js';
 import { authorName, commentFirstLine, threadCommentCount } from './model.js';
 import type { ThreadStore } from './store.js';
@@ -50,24 +51,14 @@ export function ThreadMarker({
                 );
             }}
         >
-            <span
-                className={`thread-marker__avatar${first.root.author.bot ? ' thread-marker__avatar--bot' : ''}`}
-                aria-hidden="true"
-            >
-                {initials(first.root.author.displayName ?? first.root.author.login)}
-            </span>
+            <Avatar
+                className="thread-marker__avatar"
+                name={first.root.author.displayName ?? first.root.author.login}
+                url={first.root.author.avatarUrl}
+            />
             <span className="thread-marker__count" aria-hidden="true">
                 {resolved ? '✓' : messages}
             </span>
         </button>
     );
-}
-
-function initials(name: string): string {
-    return name
-        .split(/[\s._-]+/u)
-        .filter((part) => part !== '')
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('');
 }

@@ -35,10 +35,7 @@
     opacity: 0.7;
 }
 
-/*
- * A 14px avatar leaves a 1px gap to the outline on each side. The pill's inner curve has radius 8,
- * so the bot's square (radius 5) fits inside it. The corners of a 16px square would cross the outline.
- */
+/* Avatar 14 with a 1px gap to the outline on each side: an outlined h18 pill. */
 .thread-marker__avatar {
     display: flex;
     align-items: center;
@@ -53,10 +50,6 @@
     font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
-}
-
-.thread-marker__avatar--bot {
-    border-radius: var(--radius-badge);
 }
 
 .thread-marker__count {
@@ -294,10 +287,6 @@
     font-size: var(--font-size-avatar-glyph);
     font-weight: 600;
     color: var(--text-secondary);
-}
-
-.thread__avatar--bot {
-    border-radius: var(--radius-key);
 }
 
 .thread__author {

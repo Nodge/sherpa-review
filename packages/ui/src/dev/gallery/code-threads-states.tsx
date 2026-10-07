@@ -1,4 +1,4 @@
-import { fixtureIteration } from '@sherpa/fixtures';
+import { fixtureIteration, GALLERY_AVATAR_BROKEN, GALLERY_AVATAR_PHOTOS, withAvatars } from '@sherpa/fixtures';
 import type { Comment, FileDiff, Thread } from '@sherpa/protocol';
 import type { ReactNode } from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
@@ -30,8 +30,14 @@ const NEW_FILE = fileForGallery('services/orders/src/infra/clock.ts');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 // The gallery's "me" is the same reviewer as in the fixture, used to determine what is "own".
 const ME = DATA.currentUser;
-const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true };
-const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false };
+const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true, avatarUrl: null };
+const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false, avatarUrl: null };
+/** Photos for avatar states: the other participant and bot have photos, the reviewer's fails to load. */
+const PHOTOS = new Map([
+    [OTHER.login, GALLERY_AVATAR_PHOTOS[0]],
+    [BOT.login, GALLERY_AVATAR_PHOTOS[2]],
+    [ME.login, GALLERY_AVATAR_BROKEN],
+]);
 
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('gallery does not save')),
@@ -115,6 +121,16 @@ export const CODE_THREAD_STATES: readonly CodeThreadGalleryState[] = [
         id: 'code-threads-last-line',
         title: 'new file, thread on the last line: marker at the bottom corner of the border',
         render: () => <CardState file={NEW_FILE} threads={lastLineThreads()} collapseAll />,
+    },
+    {
+        id: 'code-threads-avatars',
+        title: 'markers with photos: round photo for both human and bot',
+        render: () => <CardState threads={withAvatars(markerThreads(), PHOTOS)} collapseAll />,
+    },
+    {
+        id: 'code-threads-avatars-open',
+        title: 'expanded thread with photos: a photo that fails to load falls back to initials',
+        render: () => <CardState threads={withAvatars(openAndResolved(), PHOTOS)} />,
     },
 ];
 

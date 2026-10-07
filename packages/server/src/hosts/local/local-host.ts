@@ -626,7 +626,7 @@ export class LocalHost implements ReviewHost, FeedbackHost {
     }
 
     private userOf(login: string): ReviewUser {
-        return { login, displayName: null, bot: false };
+        return { login, displayName: null, bot: false, avatarUrl: null };
     }
 
     private publishVerdicts(): readonly Verdict[] {

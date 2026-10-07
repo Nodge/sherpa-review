@@ -18,9 +18,9 @@ import type { PublishedCommentTransport } from '../../threads/transport.js';
 const DATA = fixtureIteration('medium');
 const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
-const ME = DATA.pr.viewer ?? { login: 'avery', displayName: 'Avery Vance', bot: false };
-const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false };
-const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true };
+const ME = DATA.pr.viewer ?? { login: 'avery', displayName: 'Avery Vance', bot: false, avatarUrl: null };
+const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false, avatarUrl: null };
+const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true, avatarUrl: null };
 
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('gallery does not save')),

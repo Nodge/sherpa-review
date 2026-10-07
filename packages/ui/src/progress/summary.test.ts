@@ -18,7 +18,7 @@ function state(seen: number, total: number, read = false): FileReadState {
 function comment(id: string, draft: boolean, replies: Comment[] = []): Comment {
     return {
         id,
-        author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+        author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
         body: `text ${id}`,
         draft,
         issue: null,

@@ -4,6 +4,7 @@ import type { ReactNode, Ref } from 'react';
 import type { FileFilter } from '../filters/lens-filters.js';
 import type { MessageKey } from '../i18n/index.js';
 import { relativeTime, useFormat, useLocale, useT } from '../i18n/index.js';
+import { Avatar } from './avatar.tsx';
 import './pr-header.css';
 
 /**
@@ -115,9 +116,12 @@ function DefaultHeader({ ref, pr, counts, pci, pciActive, onTogglePci, aside = n
 
             <div className="pr-header__bottom">
                 <div className="pr-header__author">
-                    <span className="pr-header__avatar" aria-hidden="true">
-                        {initials(pr.author.displayName ?? pr.author.login)}
-                    </span>
+                    <Avatar
+                        className="pr-header__avatar"
+                        name={pr.author.displayName ?? pr.author.login}
+                        url={pr.author.avatarUrl}
+                        initialsRule="pair"
+                    />
                     <span>{pr.author.login}</span>
                     <Separator />
                     <span>{pr.statusLabel}</span>
@@ -188,17 +192,4 @@ function Separator() {
             ·
         </span>
     );
-}
-
-/** One or two letters for the avatar circle: first and last name, or the first letters of the login. */
-function initials(name: string): string {
-    const parts = name.split(/[\s._-]+/).filter((part) => part !== '');
-    if (parts.length >= 2) {
-        return `${first(parts[0])}${first(parts[1])}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-}
-
-function first(part: string | undefined): string {
-    return part?.slice(0, 1) ?? '';
 }

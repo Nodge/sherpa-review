@@ -18,6 +18,7 @@ import {
     PROTOCOL_VERSION,
     protocolVersionsCompatible,
     RESULT_MAX_BYTES,
+    reviewUserSchema,
     routeProvenanceSchema,
     routeSectionResultSchema,
     routeSkeletonResultSchema,
@@ -137,7 +138,7 @@ describe('discovery manifest', () => {
 });
 
 describe('review domain', () => {
-    const author = { login: 'alice', displayName: null, bot: false };
+    const author = { login: 'alice', displayName: null, bot: false, avatarUrl: null };
     const comment = (id: string, replies: unknown[] = []) => ({
         id,
         author,
@@ -181,6 +182,17 @@ describe('review domain', () => {
         expect(iterationSchema.parse(iteration)).toEqual(iteration);
         expect(iterationSchema.safeParse({ ...iteration, status: 'gone' }).success).toBe(true);
         expect(iterationSchema.safeParse({ ...iteration, status: 'stale' }).success).toBe(false);
+    });
+
+    it('requires an avatar field containing an https URL or null', () => {
+        const photo = { ...author, avatarUrl: 'https://avatars.githubusercontent.com/alice?s=100' };
+        expect(reviewUserSchema.parse(photo)).toEqual(photo);
+        expect(reviewUserSchema.safeParse(author).success).toBe(true);
+        const broken = ['http://avatars.githubusercontent.com/a.jpg', 'javascript:alert(1)', 'data:image/png;base64,AA', 'avatar', ''];
+        for (const avatarUrl of broken) {
+            expect(reviewUserSchema.safeParse({ ...author, avatarUrl }).success).toBe(false);
+        }
+        expect(reviewUserSchema.safeParse({ login: 'alice', displayName: null, bot: false }).success).toBe(false);
     });
 
     it('fails closed: an invalid reply deep in the tree rejects the entire thread', () => {

@@ -15,7 +15,7 @@ const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const SAVED_AT = Date.parse('2026-08-28T14:02:00');
 const DRAFT: Comment = {
     id: 'gallery-composer-draft',
-    author: { login: 'alice', displayName: 'Alice Ingram', bot: false },
+    author: { login: 'alice', displayName: 'Alice Ingram', bot: false, avatarUrl: null },
     body: 'I will check one more edge case before Ship.',
     draft: true,
     issue: true,

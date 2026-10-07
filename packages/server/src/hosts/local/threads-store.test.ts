@@ -34,6 +34,35 @@ describe('file-backed thread storage', () => {
         expect(fs.readdirSync(path.dirname(filePath))).toEqual(['local-review.json']);
     });
 
+    it('reads a file written before `avatarUrl` with a null author photo', async () => {
+        const author = { login: 'alice', displayName: null, bot: false };
+        const root = {
+            id: 'c1',
+            author,
+            body: 'text',
+            draft: false,
+            createdAt: '2026-10-01T00:00:00.000Z',
+            editedAt: null,
+            idempotencyKey: null,
+            replies: [],
+        };
+        const thread = {
+            id: 't1',
+            anchor: null,
+            fileId: null,
+            fileHash: null,
+            resolved: false,
+            resolvedBy: null,
+            pinnedTo: null,
+            root,
+        };
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, JSON.stringify({ nextId: 2, verdict: null, threads: [thread], rounds: [] }));
+
+        const data = await fileThreadsStore(filePath).read();
+        expect(data.threads[0]?.root.author).toEqual({ ...author, avatarUrl: null });
+    });
+
     it('fails on an unexpected format with the path instead of silently resetting', async () => {
         fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, '{"nextId":"many"}');

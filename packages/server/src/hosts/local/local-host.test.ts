@@ -227,7 +227,7 @@ describe('local host on the working tree', () => {
         });
         expect(pr.author.login).toBe(fake.login);
         // The local tree is read by its owner.
-        expect(pr.viewer).toEqual({ login: fake.login, displayName: null, bot: false });
+        expect(pr.viewer).toEqual({ login: fake.login, displayName: null, bot: false, avatarUrl: null });
         expect(pr.capabilities).toEqual({
             publishVerdicts: ['comment'],
             fileViewedSync: false,
@@ -250,7 +250,7 @@ describe('local host on the working tree', () => {
         });
 
         expect((await host.getPr()).verdicts).toEqual([
-            { user: { login: fake.login, displayName: null, bot: false }, verdict: 'ship' },
+            { user: { login: fake.login, displayName: null, bot: false, avatarUrl: null }, verdict: 'ship' },
         ]);
 
         fake.writeDisk(`${PREFIX}/src/a.ts`, 'const a = 3;\n');
@@ -796,7 +796,7 @@ describe('local host on the working tree', () => {
         await host.completeRound(
             round?.id ?? '',
             { replies: [{ threadId: comment.id, body: 'extracted a constant' }], summary: 'fixed one thing' },
-            { login: 'claude-code', displayName: 'Agent · claude-opus-5', bot: true },
+            { login: 'claude-code', displayName: 'Agent · claude-opus-5', bot: true, avatarUrl: null },
         );
         stop();
 
@@ -805,7 +805,7 @@ describe('local host on the working tree', () => {
         expect(thread?.root.replies[0]).toMatchObject({
             body: 'extracted a constant',
             draft: false,
-            author: { login: 'claude-code', displayName: 'Agent · claude-opus-5', bot: true },
+            author: { login: 'claude-code', displayName: 'Agent · claude-opus-5', bot: true, avatarUrl: null },
         });
         expect(await host.pendingRounds()).toEqual([]);
         // The round summary is a PR-level discussion by the same author.
@@ -850,7 +850,7 @@ describe('local host on the working tree', () => {
         await host.completeRound(
             round?.id ?? '',
             { replies: [{ threadId: comment.id, body: 'fixed' }], summary: 'summary' },
-            { login: 'claude-code', displayName: 'Agent', bot: true },
+            { login: 'claude-code', displayName: 'Agent', bot: true, avatarUrl: null },
         );
         const reply = (await host.getThreads()).find((candidate) => candidate.id === comment.id)?.root.replies[0];
 
@@ -868,7 +868,7 @@ describe('local host on the working tree', () => {
             host.completeRound(
                 round?.id ?? '',
                 { replies: [{ threadId: 'not-ours', body: 'reply' }], summary: 'summary' },
-                { login: 'agent', displayName: 'Agent', bot: true },
+                { login: 'agent', displayName: 'Agent', bot: true, avatarUrl: null },
             ),
         ).rejects.toThrow('is not in review round');
     });

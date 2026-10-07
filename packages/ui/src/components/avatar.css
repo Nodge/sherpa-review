@@ -1,0 +1,16 @@
+/* Shared avatar styles. The caller's class sets size, circle and background. */
+
+.avatar {
+    position: relative;
+}
+
+/* The photo fully covers the initials and follows the box's circle. */
+.avatar__photo {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+}

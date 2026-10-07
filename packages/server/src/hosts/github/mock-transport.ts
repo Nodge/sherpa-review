@@ -16,6 +16,8 @@ export const MOCK_OWNER = 'acme';
 export const MOCK_REPO = 'sherpa';
 export const MOCK_NUMBER = 42;
 export const MOCK_VIEWER = 'alice';
+/** The token owner's photo. GitHub returns it in `viewer.avatarUrl`. */
+export const MOCK_VIEWER_AVATAR = 'https://avatars.githubusercontent.com/u/1?v=4';
 
 export const MOCK_PR_NODE_ID = 'PR_kwDOSherpa42';
 export const MOCK_HEAD_OID = '4f1c9a1b2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f70';
@@ -397,7 +399,7 @@ function graphqlData(
             if (viewerLogin === null) {
                 throw new Error('GitHub mock: the test forbids whoami, but the adapter requested it');
             }
-            return { viewer: { login: viewerLogin, name: state.viewer().name ?? null } };
+            return { viewer: { login: viewerLogin, name: state.viewer().name ?? null, avatarUrl: MOCK_VIEWER_AVATAR } };
         }
         case 'SherpaPr':
             return { repository: { pullRequest: metaNode(state) } };

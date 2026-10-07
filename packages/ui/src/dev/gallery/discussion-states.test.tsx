@@ -1,3 +1,4 @@
+import { GALLERY_AVATAR_PHOTOS } from '@sherpa/fixtures';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -20,6 +21,7 @@ describe('Discussion card gallery', () => {
             'discussion-people',
             'discussion-scale',
             'discussion-outside-open',
+            'discussion-avatars',
         ]);
     });
 
@@ -66,5 +68,14 @@ describe('Discussion card gallery', () => {
         // Bot threads never appear outside the diff: bot bodies stay hidden even when the fold is expanded.
         expect(html).not.toContain('Possible context leak');
         expect(html).toContain('thread-composer');
+    });
+
+    it('photos: people and bot in rows and threads outside the diff', () => {
+        const html = markup('discussion-avatars');
+
+        // Three people and a bot in the list, 2 human threads outside the diff. A broken photo falls back in the browser.
+        expect(html.split('class="avatar__photo"').length - 1).toBe(6);
+        expect(html).toContain(GALLERY_AVATAR_PHOTOS[0]);
+        expect(html).toContain(GALLERY_AVATAR_PHOTOS[2]);
     });
 });

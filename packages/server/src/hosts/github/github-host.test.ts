@@ -17,7 +17,9 @@ import {
     MOCK_NUMBER,
     MOCK_OWNER,
     MOCK_REPO,
+    MOCK_VIEWER_AVATAR,
 } from './mock-transport.js';
+import { avatarOf, userOf } from './threads.js';
 
 /**
  * GitHub adapter against the recorded API: header, diff and thread mapping, drafts in a pending review,
@@ -83,7 +85,7 @@ describe('GitHub adapter: reads', () => {
             id: '42',
             url: 'https://github.com/acme/sherpa/pull/42',
             title: 'grid: count columns correctly',
-            author: { login: 'carol', displayName: 'Carol Danvers', bot: false },
+            author: { login: 'carol', displayName: 'Carol Danvers', bot: false, avatarUrl: null },
             fromBranch: 'feature/columns',
             toBranch: 'main',
             state: 'open',
@@ -101,7 +103,7 @@ describe('GitHub adapter: reads', () => {
                 blobs: true,
             },
             verdicts: [],
-            viewer: { login: 'alice', displayName: 'Alice', bot: false },
+            viewer: { login: 'alice', displayName: 'Alice', bot: false, avatarUrl: MOCK_VIEWER_AVATAR },
         });
     });
 
@@ -110,9 +112,17 @@ describe('GitHub adapter: reads', () => {
             login: 'alice',
             displayName: 'Alice',
             bot: false,
+            avatarUrl: MOCK_VIEWER_AVATAR,
         });
         // `editPublished` depends on identity. Without it, the header would misrepresent edit permissions.
         await expect(makeHost({ viewer: null }).getPr()).rejects.toThrow(/token owner/);
+    });
+
+    it('takes the author photo from GitHub `avatarUrl`, allowing only https', () => {
+        expect(userOf({ login: 'bob', __typename: 'User', avatarUrl: MOCK_VIEWER_AVATAR }).avatarUrl).toBe(MOCK_VIEWER_AVATAR);
+        expect(userOf({ login: 'ci[bot]', __typename: 'Bot', avatarUrl: MOCK_VIEWER_AVATAR }).avatarUrl).toBe(MOCK_VIEWER_AVATAR);
+        expect(avatarOf('http://ghe.local/avatars/u/1')).toBeNull();
+        expect(avatarOf(undefined)).toBeNull();
     });
 
     it('maps draft PRs and states to status and state', async () => {
@@ -152,7 +162,7 @@ describe('GitHub adapter: reads', () => {
         await host.publishBatch('request_changes');
 
         expect((await host.getPr()).verdicts).toEqual([
-            { user: { login: 'alice', displayName: null, bot: false }, verdict: 'request_changes' },
+            { user: { login: 'alice', displayName: null, bot: false, avatarUrl: null }, verdict: 'request_changes' },
         ]);
     });
 
@@ -313,7 +323,7 @@ describe('GitHub adapter: reads', () => {
             resolvedBy: 'bob',
             outdated: true,
         });
-        expect(threads[1]?.root.author).toEqual({ login: 'review-bot[bot]', displayName: null, bot: true });
+        expect(threads[1]?.root.author).toEqual({ login: 'review-bot[bot]', displayName: null, bot: true, avatarUrl: null });
         expect(threads[1]?.root.editedAt).toBe('2026-09-20T09:11:00.000Z');
 
         // Multiline anchor: line is the start, size is the span.

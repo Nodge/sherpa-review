@@ -21,6 +21,11 @@ export const reviewUserSchema = z.object({
     /** Human-readable source name. Bots use a label such as "AI Review (…)". */
     displayName: z.string().nullable(),
     bot: z.boolean(),
+    /**
+     * Person's photo, loaded directly by the reviewer's browser. `null` means the host has no photo,
+     * so the UI draws initials. Never passed to the model.
+     */
+    avatarUrl: z.url({ protocol: /^https$/ }).nullable(),
 });
 export type ReviewUser = z.infer<typeof reviewUserSchema>;
 

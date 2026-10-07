@@ -61,7 +61,7 @@ Sticky, height 46px, background `#0d0e10`, bottom border `1px solid #333741`, ho
 
 Two columns in one scrollable document. **Not a stepper**: no next/prev, no takeover.
 
-**PR header** (padding 26px clamp(30px, 2.4vw, 60px) 0): meta line 11.5px mono — `+806` `#86d9a8`, `−56` `#e8a29c`, "18 files", branch, then the **PCI DSS filter chip** (see Filters). Title 22px/600, letter-spacing −.015em, line-height 1.25, `text-wrap:pretty`. Author row 13px `#ffffff` with an 18px avatar. On the right, a snapshot selector: height 30px, `#1d2020`, border `1px solid #363b44`, radius 7px, 11.5px mono label `snapshot 9f3c1ab · current` (or `· stale`).
+**PR header** (padding 26px clamp(30px, 2.4vw, 60px) 0): meta line 11.5px mono: `+806` `#86d9a8`, `−56` `#e8a29c`, "18 files", branch, then the **PCI DSS filter chip** (see Filters). Title 22px/600, letter-spacing −.015em, line-height 1.25, `text-wrap:pretty`. Author row 13px `#ffffff` with an 18px avatar: the person's photo when the host provides one, initials otherwise or when the photo fails to load. On the right, a snapshot selector: height 30px, `#1d2020`, border `1px solid #363b44`, radius 7px, 11.5px mono label `snapshot 9f3c1ab · current` (or `· stale`).
 
 **Sticky toolbar** (top:46px, z-index 30, background `rgba(13,14,16,.92)`, `backdrop-filter:blur(8px)`, bottom border `1px solid #2c3038`, padding 10px clamp(30px, 2.4vw, 60px) 11px):
 
@@ -98,7 +98,7 @@ Right column: one card per hunk, border `1px solid #363b44`, radius 9px, bg `#11
 
 ### 3. Comment threads (inside hunk cards)
 
-Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg `#1a1b1e` opacity 1. bot threads bg `#16171b` opacity .72 with a source chip ("AI review · bot", 11px mono, border `#4a515c`). resolved threads bg `#121315` opacity .72 with a `resolved` status chip. Author row: 18px avatar (bots get `border-radius:4px`), name 12.5px/500, meta 11px mono (`order_service.py:148 · 2h ago`), status/reply toggle on the right.
+Rows appended under the diff, top border `1px solid #2c3038`. Person threads bg `#1a1b1e` opacity 1. Bot threads bg `#16171b` opacity .72 with a source chip ("AI review · bot", 11px mono, border `#4a515c`). Resolved threads bg `#121315` opacity .72 with a `resolved` status chip. Author row: 18px round avatar, bots included: the photo when the host provides one, initials otherwise. Name 12.5px/500, meta 11px mono (`order_service.py:148 · 2h ago`), status/reply toggle on the right.
 
 **Replies support arbitrary nesting.** The reply tree is flattened for rendering: each reply carries a depth; indent = `min(depth−1,3)×15px` plus a 12px padding and a `1px solid #333741` left rule. Beyond depth 4 the indent stops growing and a `↳ replying to <author>` hint (11px mono `#dae4f3`) is shown instead, so the code column never gets squeezed. The reply count on the toggle counts the whole tree ("4 replies ›"). A reviewer's own unpublished reply carries a `draft · publishes on ship` chip (`#e2b878` on `#241f14`).
 

@@ -293,6 +293,7 @@ export class FeedbackOrchestrator {
             login: connected?.harness ?? 'agent',
             displayName: model === undefined ? name : `${name} · ${model}`,
             bot: true,
+            avatarUrl: null,
         };
     }
 
