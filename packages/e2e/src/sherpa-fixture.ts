@@ -10,6 +10,7 @@ import { expect, test as base } from '@playwright/test';
 import { FakeWorker } from '@sherpa/cli/fake-worker';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const SERVER_DIR = path.join(REPO_ROOT, 'packages/server');
 const UI_DIST = path.join(REPO_ROOT, 'packages/ui/dist');
 /** `global-setup` builds the CLI bundle. The fake worker uses the same artifact as production. */
 const CLI_BUNDLE = path.join(REPO_ROOT, 'packages/cli/dist/sherpa.mjs');
@@ -198,12 +199,14 @@ async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): 
         await seedOnboardingDone(sherpaDir);
     }
     const workDir = await mkdtemp(path.join(tmpdir(), 'sherpa-e2e-work-'));
+    // The server is a direct child of the fixture, without pnpm/tsx wrappers. Otherwise SIGTERM on shutdown
+    // reaches the wrapper, while the server's node process outlives it and keeps the PR occupied.
     const child = spawn(
-        'pnpm',
+        process.execPath,
         [
-            '--filter',
-            '@sherpa/server',
-            'dev',
+            '--import',
+            'tsx',
+            'src/dev.ts',
             '--pr',
             prKey,
             '--sherpa-dir',
@@ -213,7 +216,7 @@ async function startSherpaServer(prKey: FixturePrKey, options?: LaunchOptions): 
             ...(options?.installDir === undefined ? [] : ['--install-dir', options.installDir]),
         ],
         {
-            cwd: REPO_ROOT,
+            cwd: SERVER_DIR,
             stdio: ['pipe', 'pipe', 'pipe'],
         },
     );

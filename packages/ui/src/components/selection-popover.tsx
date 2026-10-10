@@ -145,10 +145,22 @@ export function SelectionPopover(props: SelectionPopoverProps) {
         gallery === undefined ? null : { ...gallery.position, placement: 'below' },
     );
     const popoverRef = useRef<HTMLDivElement | null>(null);
-    const openingTop = useRef<number | null>(null);
+    const opening = useRef<{ top: number; width: number; height: number } | null>(null);
     const rowsCache = useRef<SelectionRowsCache | null>(null);
     const measureFrame = useRef<number | null>(null);
     const scrollFrame = useRef<number | null>(null);
+    /**
+     * Baseline for closing on scroll. Host relayout (chat panel opening, window resize)
+     * moves lines without a reviewer gesture, so the baseline resets when the host size changes.
+     */
+    const openingTopFor = useCallback((host: HTMLElement, top: number): number => {
+        const current = opening.current;
+        if (current !== null && current.width === host.clientWidth && current.height === host.clientHeight) {
+            return current.top;
+        }
+        opening.current = { top, width: host.clientWidth, height: host.clientHeight };
+        return top;
+    }, []);
     useLayoutEffect(() => {
         onSelectionAnchorChange?.(anchor);
         return () => {
@@ -201,9 +213,9 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 ...popoverViewportBounds(host),
             }),
         );
-        openingTop.current ??= bounds.top;
+        openingTopFor(host, bounds.top);
         return bounds;
-    }, [gallery, props.host, selectionBounds]);
+    }, [gallery, openingTopFor, props.host, selectionBounds]);
     const scheduleMeasure = useCallback(() => {
         if (measureFrame.current !== null) {
             return;
@@ -254,8 +266,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                     onClear();
                     return;
                 }
-                openingTop.current ??= bounds.top;
-                if (selectionScrolledPast(openingTop.current, bounds.top)) {
+                if (selectionScrolledPast(openingTopFor(host, bounds.top), bounds.top)) {
                     onClear();
                 }
             });
@@ -268,7 +279,7 @@ export function SelectionPopover(props: SelectionPopoverProps) {
                 scrollFrame.current = null;
             }
         };
-    }, [dragging, gallery, onClear, props.host, selectionBounds]);
+    }, [dragging, gallery, onClear, openingTopFor, props.host, selectionBounds]);
 
     if (dragging || anchor === null || count === 0) {
         return null;
