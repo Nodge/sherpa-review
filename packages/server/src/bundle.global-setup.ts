@@ -11,7 +11,7 @@ const uiRoot = path.resolve(packageRoot, '../ui');
  * and esbuild overwrites the bundle non-atomically. If each file built it separately, another fork
  * could read a truncated file.
  *
- * The build chain does not build the UI (the server bundle only embeds the existing `ui/dist`), but
+ * The UI build is not part of the build chain (the server module only embeds the existing `ui/dist`), but
  * `dist` is not stored in git. On a clean checkout we build the UI here, otherwise the bundle has nothing to embed.
  */
 export function setup(): void {

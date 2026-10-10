@@ -8,6 +8,11 @@ export type Command =
     | { readonly kind: 'version' }
     | { readonly kind: 'help' }
     | {
+          readonly kind: 'server';
+          /** Server arguments passed through unchanged. The server module's `runServer` parses them, not the CLI. */
+          readonly argv: readonly string[];
+      }
+    | {
           readonly kind: 'up';
           readonly prKey: string | undefined;
           /** Local review project directory (`--local`). Mutually exclusive with `--pr`. */
@@ -87,6 +92,10 @@ const LABEL_MAX_CHARS = 64;
  * The model gets command formats wrong, so output must correct it (`docs/protocol.md §1`).
  */
 export function parseArgs(argv: readonly string[]): Command {
+    // Before checking `--version`/`--help`: arguments after `server`, including these flags, belong to the server.
+    if (argv[0] === 'server') {
+        return { kind: 'server', argv: argv.slice(1) };
+    }
     if (argv.includes('--version') || argv.includes('-v')) {
         return { kind: 'version' };
     }

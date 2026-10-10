@@ -159,7 +159,7 @@ All are optional. Sherpa uses defaults when they are absent.
 | `SHERPA_DIR` | Sherpa state root | `~/.sherpa` |
 | `SHERPA_PR` | PR key when `--pr` is not set | unset |
 | `SHERPA_LISTEN_HOST` | Listen address for a new server. `::` enables IPv6 and IPv4 | `127.0.0.1` |
-| `SHERPA_SERVER_BIN` | Path to the server bundle | adjacent `sherpa-server.mjs` in the skill directory |
+| `SHERPA_SERVER_BIN` | Path to the server module | adjacent `sherpa-server.mjs` in the skill directory |
 
 | `SHERPA_IDLE_SECONDS` | Debug. Idle shutdown threshold in seconds, `0` disables it | `900` (15 minutes) |
 | `SHERPA_WORKER_ID` | Debug. Pins the worker session identity | identity from this PR's `worker-id` file |
@@ -219,4 +219,4 @@ The Feedback form also links to a [project discussion](https://github.com/quillm
 
 ## Development
 
-The source is next to the distribution: a TypeScript pnpm monorepo, built into two esbuild bundles. [`docs/`](docs/README.md) explains how it works and why. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers building, running and testing.
+The source lives beside the distribution: a TypeScript pnpm monorepo built with esbuild, with one `sherpa` command and an adjacent server module. See [`docs/`](docs/README.md) for how the system works and why, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for building, running and testing.

@@ -34,7 +34,7 @@ import {
 } from './paths.js';
 import type { CommandRunner } from './pr-discovery.js';
 import type { EnsureServerOptions, EnsureServerResult } from './up.js';
-import { ensureServer } from './up.js';
+import { ensureServer, loadServerModule, resolveServerBin } from './up.js';
 import { CLI_VERSION } from './version.js';
 
 /** Invocation environment. Tests supply their own to run commands as functions instead of processes. */
@@ -42,8 +42,10 @@ export interface CliIo {
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly out: (text: string) => void;
     readonly err: (text: string) => void;
-    /** Path to the running CLI file: `up` looks for the server bundle beside it. Defaults to `process.argv[1]`. */
+    /** Path to the running CLI file. The server module sits next to it. Defaults to `process.argv[1]`. */
     readonly entry?: string;
+    /** Node flags for the server daemon started by `up`. None by default. */
+    readonly daemonNodeFlags?: readonly string[];
     /** External command runner for PR discovery from cwd. Defaults to the real Git executable. */
     readonly runCommand?: CommandRunner;
     /** Test substitute for server discovery/startup. */
@@ -68,6 +70,8 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
             case 'help':
                 io.out(helpText());
                 return 0;
+            case 'server':
+                return await server(command, io);
             case 'up':
                 return await up(command, io);
             case 'worker-register':
@@ -107,6 +111,7 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         sherpaDir: sherpaDirFrom(io.env),
         entry: io.entry ?? process.argv[1],
         serverBin: serverBinOverrideFrom(io.env),
+        nodeFlags: io.daemonNodeFlags ?? [],
         ...(local === null
             ? {}
             : { repo: local.repo, base: local.base, branch: local.branch, verdicts: command.verdicts }),
@@ -145,6 +150,13 @@ async function up(command: Extract<Command, { kind: 'up' }>, io: CliIo): Promise
         }
     }
     return 0;
+}
+
+/** PR server process that `up` daemonizes. */
+async function server(command: Extract<Command, { kind: 'server' }>, io: CliIo): Promise<number> {
+    const serverBin = await resolveServerBin(io.entry ?? process.argv[1], serverBinOverrideFrom(io.env));
+    const serverModule = await loadServerModule(serverBin);
+    return serverModule.runServer(command.argv);
 }
 
 async function workerRegister(command: Extract<Command, { kind: 'worker-register' }>, io: CliIo): Promise<number> {

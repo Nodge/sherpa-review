@@ -30,7 +30,7 @@ State layout and storage are in `docs/architecture.md`.
 
 ## 3. CLI `sherpa`
 
-A thin client distributed with the skill as one self-contained `.mjs` beside the server bundle. Why not plain `curl`:
+A thin client distributed with the skill as one self-contained `.mjs`. The server module sits beside it, and the CLI loads it only in `sherpa server`. Why not plain `curl`:
 
 - **Server discovery and authorization are built in**, so the agent needs neither the port nor the token.
 - **The contract is versioned** in one place instead of being spread across skill prompts.
@@ -39,6 +39,7 @@ A thin client distributed with the skill as one self-contained `.mjs` beside the
 | Command | Semantics |
 |---|---|
 | `sherpa up` | Bootstraps the session: starts the review server (or finds a live one through the manifest), registers as a worker, prints the UI link and the next loop step. `--local <path>` instead of `--pr` starts a working-tree review of the project directory. `--base <ref>` sets the comparison base. `--verdicts <instruction>` replaces Comment with Ship and Request changes and passes the user's instruction for the review outcome. A `review.feedback` task with a verdict repeats it to the agent. The server starts as a background daemon and survives CLI exit (`packages/cli/src/up.ts`). On a cold start it opens the browser unless `--no-open` is passed. |
+| `sherpa server` | The PR server process. `up` daemonizes it, and the model doesn't need it. Arguments pass to the server module unchanged. |
 | `sherpa worker register` | Only registers the session as a PR worker, for reconnecting to an existing server. |
 | `sherpa worker next` | Waits indefinitely for a task and returns only with a task, `done` or an error. Internally it loops over ordinary long-poll requests with a server window of `LONG_POLL_DEFAULT_SECONDS` = 240 s. The CLI consumes `idle` responses and immediately sends the next request. The request doesn't specify the window. Each request is a sign of life. While it is pending, the open connection itself is the sign (§7). Leases a task. |
 | `sherpa task complete <id> --file <path>` | Submits the result. The server validates it on receipt and fails closed. It prints validation errors as a list in prompt format: "fix and call complete again". Repeating complete on a closed task is a no-op. |
@@ -144,7 +145,7 @@ The protocol version is `PROTOCOL_VERSION` in `packages/protocol/src/version.ts`
 
 The handshake happens on **every** worker request, not just the first. The CLI keeps no state between invocations, and versions cost almost nothing in the body (the shared part of the request schemas is in `messages.ts`). Incompatibility returns `version_incompatible` with the plain-language message "update the skill and CLI together and restart the server, they ship together". Both the model in its output and the reviewer in the UI see it. The skill with its CLI and the server deploy independently. Version drift is inevitable in a large team, so it gets an explicit check.
 
-The skill distribution is versioned separately: `version.json` beside the bundles (`distributionVersionSchema` in `packages/protocol/src/distribution.ts`). The server reads the distribution file from main, compares it with the embedded version and, when a newer one exists, shows a UI toast with what is new and an update command. It downloads and installs nothing itself (`packages/server/src/update-check.ts`). The check result is cached for half an hour. Settings remember a version the reviewer dismissed.
+The skill distribution is versioned separately: `version.json` in the skill directory root, next to `bin/` (`distributionVersionSchema` in `packages/protocol/src/distribution.ts`). The server reads the distribution file from the main branch, compares it with the embedded version and, when a new version is available, shows a UI toast with release notes and an update command. It downloads or installs nothing itself (`packages/server/src/update-check.ts`). The check result is cached for half an hour. A version dismissed by the reviewer is remembered in settings.
 
 ## 10. Endpoints
 

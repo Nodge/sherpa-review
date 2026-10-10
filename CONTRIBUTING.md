@@ -22,13 +22,13 @@ These must pass before every commit. E2E is outside the required checks. `packag
 
 `packages/protocol` contains zod schemas and types for everything that crosses a process boundary: worker tasks and messages, the UI snapshot, route, chat, server manifest, `ReviewHost` interface and protocol version. Its only dependency is `zod`. Every other package depends on it.
 
-`packages/server` is a single-PR server: HTTP and SSE, a `node:sqlite` database, task queue, worker registry, route and chat orchestrators, host adapters (`src/hosts/`), update check. esbuild builds it into one `sherpa-server.mjs` with embedded UI assets.
+`packages/server` runs the server for one PR: HTTP and SSE, a `node:sqlite` database, task queue, worker registry, route and chat orchestrators, host adapters (`src/hosts/`) and update checks. esbuild bundles it into one `sherpa-server.mjs` module with the UI assets embedded. The `runServer` export starts the server. The CLI calls it through `sherpa server`.
 
 `packages/ui` is the reviewer's React application: diff, route, discussions, chat, settings, design tokens in `src/styles/` and development pages in `src/dev/`. vite builds it.
 
 `packages/cli` is the thin `sherpa` CLI (`up`, `worker next`, and others). The worker loop calls it each time, so it starts fast and has no runtime dependencies. One `sherpa.mjs` bundle.
 
-`packages/skill` is the harness distribution: `SKILL.md` plus both bundles in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release copies it there, and committing that directory delivers the update to users.
+`packages/skill` is the harness distribution: `SKILL.md` plus the CLI and server module in `dist/bin/`. `dist/` itself is a build artifact and is not versioned (`.gitignore` excludes `packages/*/dist/`). Its copy in the root `skill/` directory is versioned. The release script puts it there, and committing this directory delivers the update to users.
 
 `packages/fixtures` contains deterministic PRs (`medium`, `small`, `large`, `edge`, `huge`, `empty`), a fixture `ReviewHost` and domain object builders. Development mode, the state gallery and e2e use them.
 
@@ -52,7 +52,7 @@ pnpm --filter @sherpa/ui dev
 
 The development proxy in `packages/ui/vite.config.ts` forwards `/api` to a running server. It takes the address from `SHERPA_SERVER`, or from the first manifest in `~/.sherpa/servers/*.json`. The port is ephemeral and cannot be hardcoded. Starting a server after `vite dev` requires restarting vite. Open `http://localhost:5173/#t=<token>` with the token from the link the server printed.
 
-To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into your harness: `~/.claude/skills/sherpa` (Claude Code) or `~/.agents/skills/sherpa` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server bundle lookup beside the CLI if you need a different bundle.
+To use the skill from a checkout, build it (`pnpm --filter @sherpa/ui build && pnpm --filter @sherpa/skill build`) and symlink the distribution into the harness: `~/.claude/skills/sherpa` (Claude Code) or `~/.agents/skills/sherpa` (Codex) → `<repo>/packages/skill/dist`. `SHERPA_SERVER_BIN` overrides the server module lookup beside the CLI if you need a different module.
 
 ## State gallery
 

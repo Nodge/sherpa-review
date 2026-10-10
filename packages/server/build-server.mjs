@@ -1,4 +1,4 @@
-import { chmodSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -22,8 +22,9 @@ try {
 }
 
 /**
- * Server bundle: one self-contained ESM file with embedded UI assets. No native dependencies:
+ * Server module: one self-contained ESM file with embedded UI assets. No native dependencies:
  * storage uses the built-in `node:sqlite`, so the entire server bundles into one file (docs/protocol.md §2).
+ * The file is not executable: the CLI loads it with `import()` in `sherpa server` and calls the `runServer` export.
  */
 await build({
     entryPoints: [resolve(root, 'src/bundle.ts')],
@@ -33,13 +34,10 @@ await build({
     platform: 'node',
     target: 'node22.13',
     packages: 'bundle',
-    banner: { js: '#!/usr/bin/env node' },
     define: { __SHERPA_VERSION__: JSON.stringify(version) },
     plugins: [inlineUiAssets(assetsModule, assets)],
     logLevel: 'info',
 });
-
-chmodSync(outfile, 0o755);
 
 /**
  * Replaces the `src/ui-assets.ts` module: the map is empty in source, filled with `ui/dist` contents in the bundle.

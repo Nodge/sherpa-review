@@ -16,6 +16,9 @@ import { taskResultDirFor, taskResultFileFor, taskResultRootFor } from './paths.
 
 const PR_KEY = 'github-quillmart--quillmart--777';
 
+/** Built CLI (`src/bundle.global-setup.ts`). Its own `up` spawns it as a daemon. */
+const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
+
 interface Invocation {
     readonly code: number;
     readonly stdout: string;
@@ -61,6 +64,7 @@ describe('CLI against server', () => {
 
     interface Overrides {
         readonly extraEnv?: Record<string, string>;
+        readonly entry?: string;
         readonly ensureServer?: NonNullable<CliIo['ensureServer']>;
         readonly openBrowser?: NonNullable<CliIo['openBrowser']>;
         readonly runCommand?: NonNullable<CliIo['runCommand']>;
@@ -74,8 +78,8 @@ describe('CLI against server', () => {
             env: { SHERPA_DIR: sherpaDir, SHERPA_PR: PR_KEY, ...overrides.extraEnv },
             out: (text) => stdout.push(text),
             err: (text) => stderr.push(text),
-            // No server bundle beside the test file: it is not needed when the server is already running.
-            entry: fileURLToPath(import.meta.url),
+            // There is no server module beside the test file. An already running server doesn't need it.
+            entry: overrides.entry ?? fileURLToPath(import.meta.url),
             // Result files go into the test working directory instead of the system tmp.
             tmpDir: overrides.tmpDir ?? workDir,
             ...(overrides.ensureServer === undefined ? {} : { ensureServer: overrides.ensureServer }),
@@ -87,10 +91,10 @@ describe('CLI against server', () => {
         return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
     }
 
-    /** Executable server bundle substitute: these tests only care about process behaviour. */
-    async function fakeServerBin(body: string): Promise<string> {
+    /** Substitute server module. These tests don't need a real server. */
+    async function fakeServerBin(source: string): Promise<string> {
         const file = path.join(workDir, 'sherpa-server.mjs');
-        await fs.writeFile(file, `${body}\n`, { mode: 0o755 });
+        await fs.writeFile(file, `${source}\n`);
         return file;
     }
 
@@ -400,15 +404,61 @@ describe('CLI against server', () => {
         expect(result.stderr).toContain('do not start the worker loop');
     });
 
-    it('up with a failed server bundle passes its output to the model unchanged', async () => {
-        const failing = await fakeServerBin("console.error('cannot open storage'); process.exit(1);");
+    it('up with a crashed server passes its output to the model unchanged', async () => {
+        const failing = await fakeServerBin(
+            "export async function runServer() { console.error('cannot open storage'); return 1; }",
+        );
 
-        const result = await sherpaWith({ extraEnv: { SHERPA_SERVER_BIN: failing } }, 'up');
+        const result = await sherpaWith({ extraEnv: { SHERPA_SERVER_BIN: failing }, entry: CLI_BUNDLE }, 'up');
 
         expect(result.code).toBe(1);
         expect(result.stderr).toContain('cannot open storage');
         expect(result.stderr).toContain('do not start the worker loop');
     }, 20_000);
+
+    it('server passes arguments to the server module unchanged and returns its exit code', async () => {
+        const recorded = path.join(workDir, 'argv.json');
+        const echo = await fakeServerBin(
+            `import fs from 'node:fs';\n` +
+                `export async function runServer(argv) { fs.writeFileSync(${JSON.stringify(recorded)}, JSON.stringify(argv)); return 7; }`,
+        );
+
+        const result = await sherpaWith(
+            { extraEnv: { SHERPA_SERVER_BIN: echo } },
+            'server',
+            '--pr',
+            PR_KEY,
+            '--help',
+            '--version',
+        );
+
+        expect(result.code).toBe(7);
+        expect(JSON.parse(await fs.readFile(recorded, 'utf8'))).toEqual(['--pr', PR_KEY, '--help', '--version']);
+    });
+
+    it('server with a module missing runServer reports an incomplete distribution', async () => {
+        const broken = await fakeServerBin('export const version = 1;');
+
+        const result = await sherpaWith({ extraEnv: { SHERPA_SERVER_BIN: broken } }, 'server', '--pr', PR_KEY);
+
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('skill distribution is incomplete');
+    });
+
+    it('server reports clear errors for a missing module beside the CLI and a nonexistent SHERPA_SERVER_BIN', async () => {
+        const lonely = await sherpaWith({}, 'server', '--pr', PR_KEY);
+        const missing = await sherpaWith(
+            { extraEnv: { SHERPA_SERVER_BIN: path.join(workDir, 'nonexistent.mjs') } },
+            'server',
+            '--pr',
+            PR_KEY,
+        );
+
+        expect(lonely.code).toBe(1);
+        expect(lonely.stderr).toContain('skill distribution is incomplete');
+        expect(missing.code).toBe(1);
+        expect(missing.stderr).toContain('SHERPA_SERVER_BIN points at');
+    });
 
     it('register makes the session a worker and saves it in the state file', async () => {
         const running = await start();

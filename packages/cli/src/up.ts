@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 
 import type { ServerManifest } from '@sherpa/protocol';
 
@@ -11,7 +12,7 @@ import { CliError } from './errors.js';
 import { formatUiUrl } from './format.js';
 import { manifestPathFor, serverLogPathFor } from './paths.js';
 
-/** The server bundle is a sibling file in the skill directory, beside the CLI itself. */
+/** The server module is an adjacent file in the skill directory, next to the CLI itself. */
 const SERVER_BIN_NAME = 'sherpa-server.mjs';
 
 /** How long to wait for the daemon to publish a live manifest. */
@@ -27,13 +28,6 @@ const LOG_TAIL_LINES = 20;
 /** State directory permissions: only the owner can read the contents (`docs/architecture.md §6`). */
 const STATE_DIR_MODE = 0o700;
 
-/**
- * The server may call services signed by an internal CA. That CA is in the system
- * store, but Node trusts only its own bundle by default and fails with `SELF_SIGNED_CERT_IN_CHAIN`.
- * The flag appeared in 22.15/23.8. Older supported runtimes (minimum 22.13) omit it.
- */
-const SYSTEM_CA_FLAG = '--use-system-ca';
-
 /** How long to wait for exit after each signal in `terminateChild`. */
 const TERMINATE_GRACE_MS = 2_000;
 const EXIT_POLL_INTERVAL_MS = 20;
@@ -48,12 +42,17 @@ export interface EnsureServerOptions {
     /** State root: the server does not read `SHERPA_DIR`. The CLI passes it the path. */
     readonly sherpaDir: string;
     /**
-     * Path to the running CLI file (`process.argv[1]`): the server bundle sits beside it, and the directory
-     * above is the distribution root, passed to the server as `--install-dir`.
+     * Path to the running CLI file (`process.argv[1]`). `up` spawns it as the `sherpa server` daemon. The server module
+     * sits beside it, with the distribution root one directory above, passed to the server as `--install-dir`.
      */
     readonly entry: string | undefined;
-    /** Explicit server bundle path from `SHERPA_SERVER_BIN`, for development scenarios. */
+    /** Explicit server module path from `SHERPA_SERVER_BIN`, for development. */
     readonly serverBin?: string | undefined;
+    /**
+     * Node flags for the daemon process. Flags unknown to the current runtime are silently dropped.
+     * The CLI composition root (`index.ts`) supplies the values.
+     */
+    readonly nodeFlags?: readonly string[];
     /**
      * Local review: project directory, comparison base, the branch defining the key, and the instruction
      * for the review outcome. Only the CLI knows these. It passes them as server arguments, stored in the key's state
@@ -68,6 +67,11 @@ export interface EnsureServerOptions {
     readonly startupTimeoutMs?: number;
 }
 
+/** What the CLI expects from the server module. The CLI does not import `@sherpa/server` types. */
+export interface ServerModule {
+    readonly runServer: (argv: readonly string[]) => Promise<number>;
+}
+
 /** Spawned daemon and its spawn error, which arrives asynchronously as a separate event. */
 interface Daemon {
     readonly process: ChildProcess;
@@ -76,7 +80,7 @@ interface Daemon {
 
 /**
  * Ensures the PR server is running and returns a UI link for the reviewer. Idempotent: a live server for this PR
- * through the manifest (`docs/protocol.md §8`) and reused. Otherwise a daemon starts from the server bundle,
+ * is found by its manifest (`docs/protocol.md §8`) and reused. Otherwise starts a `sherpa server` daemon
  * that outlives the CLI. Neither pnpm nor a repository checkout is required.
  */
 export async function ensureServer(options: EnsureServerOptions): Promise<EnsureServerResult> {
@@ -87,9 +91,13 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
         return { uiUrl: formatUiUrl(running.port, running.token, running.uiHost), started: false };
     }
 
-    const serverBin = await resolveServerBin(options.entry, options.serverBin);
+    const entry = await realEntry(options.entry);
+    if (entry === null) {
+        throw new CliError(INCOMPLETE_DISTRIBUTION);
+    }
+    const serverBin = await resolveServerBin(entry, options.serverBin);
     const logPath = await prepareLogPath(options.sherpaDir, options.prKey);
-    const daemon = await spawnDaemon(serverBin, options, logPath);
+    const daemon = await spawnDaemon(entry, serverBin, options, logPath);
 
     const timeoutMs = options.startupTimeoutMs ?? STARTUP_TIMEOUT_MS;
     const manifest = await waitForLiveManifest(manifestPath, options.prKey, daemon, timeoutMs);
@@ -104,7 +112,7 @@ export async function ensureServer(options: EnsureServerOptions): Promise<Ensure
 }
 
 /**
- * Server bundle path. Normally a sibling file in the skill directory. The real path is resolved
+ * Path to the server module. Normally the adjacent file in the skill directory. Resolves the real path
  * through realpath because the skill directory is installed as a symlink (`~/.claude/skills/sherpa`).
  * `SHERPA_SERVER_BIN` overrides discovery for development runs and tests.
  */
@@ -128,14 +136,41 @@ export async function resolveServerBin(entry: string | undefined, override: stri
 }
 
 async function neighbourServerBin(entry: string | undefined): Promise<string | null> {
+    const real = await realEntry(entry);
+    return real === null ? null : path.join(path.dirname(real), SERVER_BIN_NAME);
+}
+
+/** Real CLI file path, or null if the path is missing or points nowhere. */
+async function realEntry(entry: string | undefined): Promise<string | null> {
     if (entry === undefined || entry.trim() === '') {
         return null;
     }
     try {
-        return path.join(path.dirname(await fs.realpath(entry)), SERVER_BIN_NAME);
+        return await fs.realpath(entry);
     } catch {
         return null;
     }
+}
+
+/**
+ * Loads the server module. Called only from `sherpa server`: the path is computed at runtime, so
+ * esbuild does not pull the server into the CLI bundle, and other commands do not load it.
+ */
+export async function loadServerModule(file: string): Promise<ServerModule> {
+    let loaded: unknown;
+    try {
+        loaded = await import(/* @vite-ignore */ pathToFileURL(file).href);
+    } catch (error) {
+        // A broken file (for example, an incomplete release write) needs its path and cause in server.log, not a retry instruction.
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new CliError(
+            `sherpa: the Sherpa server module ${file} failed to load — ${detail}.\n${REINSTALL_HINT}`,
+        );
+    }
+    if (!isRecord(loaded) || typeof loaded.runServer !== 'function') {
+        throw new CliError(INCOMPLETE_DISTRIBUTION);
+    }
+    return loaded as unknown as ServerModule;
 }
 
 /**
@@ -175,18 +210,25 @@ function isProcessAlive(pid: number): boolean {
 }
 
 /**
- * Server daemon: detached + unref so it outlives the CLI. stdio goes to a log file,
- * which nothing reads at runtime, but the user can inspect when the server fails to start.
- * No token in the log: the CLI reads the manifest and builds the link with the token.
+ * The server daemon is the same CLI running `sherpa server`: detached + unref so it outlives the CLI.
+ * The discovered server module is passed to the child in `SHERPA_SERVER_BIN`, so it loads exactly what
+ * the parent checked. stdio goes to a log file. Nothing reads it at runtime, but it remains for the user
+ * when startup fails. The log has no token: the CLI builds the token link after reading the manifest.
  *
  * `--install-dir` is the distribution directory (parent of `bin/`). Only the
  * CLI, and the server needs it to check for a newer version in main.
  */
-async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logPath: string): Promise<Daemon> {
+async function spawnDaemon(
+    entry: string,
+    serverBin: string,
+    options: EnsureServerOptions,
+    logPath: string,
+): Promise<Daemon> {
     const installDir = path.dirname(path.dirname(await fs.realpath(serverBin)));
     const args = [
-        ...systemCaArgs(),
-        serverBin,
+        ...supportedNodeFlags(options.nodeFlags ?? []),
+        entry,
+        'server',
         '--pr',
         options.prKey,
         '--sherpa-dir',
@@ -204,6 +246,7 @@ async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logP
         const child = spawn(process.execPath, args, {
             detached: true,
             stdio: ['ignore', log.fd, log.fd],
+            env: { ...process.env, SHERPA_SERVER_BIN: serverBin },
         });
         const daemon: Daemon = { process: child, spawnError: null };
         // Without a listener, an 'error' event (such as ENOENT on execPath) would crash the CLI with an exception.
@@ -218,9 +261,9 @@ async function spawnDaemon(serverBin: string, options: EnsureServerOptions, logP
     }
 }
 
-/** System certificate store flag for the daemon, only if the current Node supports it. */
-export function systemCaArgs(): readonly string[] {
-    return process.allowedNodeEnvironmentFlags.has(SYSTEM_CA_FLAG) ? [SYSTEM_CA_FLAG] : [];
+/** Node flags recognized by the current runtime. An unknown flag would crash the daemon at startup. */
+function supportedNodeFlags(flags: readonly string[]): readonly string[] {
+    return flags.filter((flag) => process.allowedNodeEnvironmentFlags.has(flag));
 }
 
 /** Waits for the daemon to publish a manifest and answer `/healthz`. No point waiting if it died or failed to start. */
@@ -328,10 +371,12 @@ async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<bool
     return hasExited(child);
 }
 
-const INCOMPLETE_DISTRIBUTION =
-    `sherpa: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa.mjs.\n` +
+const REINSTALL_HINT =
     'Reinstall the Sherpa skill as a whole (the directory with SKILL.md and bin/). ' +
     'Show this text to the user and stop — do not start the worker loop.';
+
+const INCOMPLETE_DISTRIBUTION =
+    `sherpa: the skill distribution is incomplete — ${SERVER_BIN_NAME} must sit next to sherpa.mjs.\n${REINSTALL_HINT}`;
 
 async function isFile(filePath: string): Promise<boolean> {
     try {

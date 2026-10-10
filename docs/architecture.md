@@ -11,14 +11,14 @@ A pnpm monorepo with 7 packages, TypeScript throughout, Node ≥ 22.13.
 | `@sherpa/protocol` | Zod schemas and types for everything that crosses boundaries: tasks and RPC messages, the review domain model, the `ReviewHost` interface, route snapshots, UI endpoints and events, the discovery manifest, limits and protocol version. No code with side effects, only schemas and pure checks |
 | `@sherpa/server` | Single-PR daemon: HTTP layer, task queue with leases, host adapters, route and chat orchestrators, result validator, storage |
 | `@sherpa/ui` | Reviewer's web interface: React 19, Vite build |
-| `@sherpa/cli` | The single `sherpa` executable used by the agent |
-| `@sherpa/skill` | Harness distribution: `SKILL.md` and `bin/` with 2 bundles |
+| `@sherpa/cli` | The single `sherpa` executable used by the agent. It also starts the server with `sherpa server` |
+| `@sherpa/skill` | Harness distribution: `SKILL.md` and `bin/` with the command and server module |
 | `@sherpa/fixtures` | Fixture host and deterministic data for development mode, the state gallery, e2e and performance measurements |
 | `@sherpa/e2e` | End-to-end Playwright scenarios and performance measurements |
 
 esbuild builds the **CLI** into one self-contained `.mjs` file. It has no runtime dependencies. Built-in `fetch` and the standard library are enough.
 
-The **server** builds the same way into one ESM file, `sherpa-server.mjs`, with UI assets embedded. `packages/server/build-server.mjs` reads `packages/ui/dist` and replaces `src/ui-assets.ts` with a map of "path inside the build → base64 contents". This map is intentionally empty in source. Development serves the UI from disk, the distribution serves it from memory, and the code has no mode-specific branches.
+The **server** builds the same way into one ESM module, `sherpa-server.mjs`, with UI assets embedded in it. Importing the module executes nothing. Its `runServer(argv)` export starts the server. `packages/server/build-server.mjs` reads `packages/ui/dist` and replaces the `src/ui-assets.ts` module with a map of "path within the build → base64 contents". This map is deliberately empty in the source. Development runs serve the UI from disk, the distribution serves it from memory, with no mode branches in the code.
 
 Storage uses built-in `node:sqlite`. This sets the minimum Node version and lets the server build into a single file with no native dependencies.
 
@@ -26,7 +26,7 @@ SQLite loads on demand through `createRequire`, without a static import. Otherwi
 
 The **skill distribution** is the `packages/skill/dist` directory: `SKILL.md`, `bin/sherpa.mjs`, `bin/sherpa-server.mjs`, `version.json`. The harness links to `dist`. Source files do not go into the harness.
 
-There are 2 bundles because the agent loop invokes the CLI on every call, and a server with embedded UI would add unnecessary weight. Both use the same distribution version, the `version` field in the root `package.json`.
+One command, `sherpa`, in 2 files. Only `sherpa.mjs` is executable. The CLI loads the server module with `import()` at a path computed at runtime, and only in `sherpa server`. This keeps esbuild from pulling the server into the CLI bundle, so the agent loop, which runs the CLI for every call, does not load the server and its embedded UI. `sherpa up` spawns the daemon as `node <runtime flags> <sherpa.mjs> server …` and passes the located module in `SHERPA_SERVER_BIN`. The CLI composition root (`packages/cli/src/index.ts`) sets the daemon's runtime flags (currently `--use-system-ca`). The `up` core only filters out flags the current Node does not recognise. Both files share one distribution version, the `version` field of the root `package.json`.
 
 IBM Plex fonts ship with the distribution. They come from npm packages and go into the build (`packages/ui/src/styles/fonts.css`), so no network is needed at runtime. A restricted network would block Google Fonts. Telemetry collection in these packages' `postinstall` is disabled in `pnpm-workspace.yaml`.
 
@@ -34,7 +34,7 @@ The UI keeps state outside the React tree, in stores with subscriptions and `use
 
 ## 2. Data flow
 
-The agent in the reviewer's harness receives a PR key like `<host>-<pr>` and runs `sherpa up`. The command is idempotent. It finds and reuses a live server for this PR through the manifest, or starts a daemon from the adjacent bundle that survives the CLI exiting (`packages/cli/src/up.ts`). Neither pnpm nor a repository checkout is needed. `up` prints a UI link and opens the browser on a cold start.
+The agent in the reviewer's harness receives a PR key in the form `<host>-<pr>` and runs `sherpa up`. The command is idempotent. It finds and reuses a live server for this PR through its manifest, or starts a daemon that survives the CLI's exit (`packages/cli/src/up.ts`). The daemon runs the same CLI with `sherpa server`, which loads the adjacent server module. Neither pnpm nor a repository checkout is needed. `up` prints a UI link and opens the browser on a cold start.
 
 The PR key is optional: without it the CLI discovers the PR from the launch directory, through the Git checkout, current branch and branch PR (`packages/cli/src/pr-discovery.ts`). No step in this chain may crash the command. A failure at any step becomes a one-line explanation for the user.
 

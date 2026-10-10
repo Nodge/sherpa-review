@@ -9,14 +9,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { CliError } from './errors.js';
 import { manifestPathFor } from './paths.js';
-import { ensureServer, hasExited, resolveServerBin, terminateChild } from './up.js';
+import { ensureServer, hasExited, loadServerModule, resolveServerBin, terminateChild } from './up.js';
 
 const PR_KEY = 'github-quillmart--quillmart--777';
+
+/**
+ * Bundled CLI (`src/bundle.global-setup.ts`): the daemon is the same CLI running `sherpa server`, so
+ * the test spawns the real bundle and replaces only the server module.
+ */
+const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
 
 /** Short manifest wait: failure cases should not cost ten seconds per test. */
 const STARTUP_TIMEOUT_MS = 1_500;
 
-describe('server bundle discovery', () => {
+describe('server module discovery', () => {
     let workDir: string;
     let binDir: string;
 
@@ -73,6 +79,33 @@ describe('server bundle discovery', () => {
             resolveServerBin(path.join(binDir, 'sherpa.mjs'), path.join(workDir, 'nonexistent.mjs')),
         ).rejects.toThrow('SHERPA_SERVER_BIN');
     });
+
+    it('reports an incomplete distribution for a module without runServer', async () => {
+        const broken = path.join(workDir, 'without-runServer.mjs');
+        await fs.writeFile(broken, 'export const runServer = 42;\n');
+
+        await expect(loadServerModule(broken)).rejects.toThrow('skill distribution is incomplete');
+    });
+
+    it('reports the path and cause for a broken server module instead of asking to retry', async () => {
+        const truncated = path.join(workDir, 'incomplete.mjs');
+        await fs.writeFile(truncated, 'export async function runServer(argv) {\n');
+
+        const error: unknown = await loadServerModule(truncated).catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(CliError);
+        expect((error as CliError).message).toContain(`${truncated} failed to load`);
+        expect((error as CliError).message).toContain('do not start the worker loop');
+    });
+
+    it('loads a module with runServer and calls it with the arguments unchanged', async () => {
+        const file = path.join(workDir, 'echo-server.mjs');
+        await fs.writeFile(file, 'export async function runServer(argv) { return argv.length; }\n');
+
+        const loaded = await loadServerModule(file);
+
+        await expect(loaded.runServer(['--pr', PR_KEY])).resolves.toBe(2);
+    });
 });
 
 describe('server startup in `up`', () => {
@@ -97,37 +130,38 @@ describe('server startup in `up`', () => {
     });
 
     /**
-     * Server bundle substitute: a real process, because this tests daemonization and waiting.
-     * The layout matches the distribution (`<root>/bin/`), which the CLI uses to infer `--install-dir`.
+     * Replaces the server module. The daemon is a real CLI process because the test checks daemonization
+     * and waiting. The layout matches the distribution (`<root>/bin/`), which the CLI uses to derive `--install-dir`.
+     * `body` is the body of the exported `runServer(argv)`.
      */
     async function fakeServer(body: string): Promise<string> {
         const binDir = path.join(workDir, 'skill', 'bin');
         await fs.mkdir(binDir, { recursive: true });
         const file = path.join(binDir, 'sherpa-server.mjs');
-        await fs.writeFile(file, `${body}\n`, { mode: 0o755 });
+        await fs.writeFile(file, `export async function runServer(argv) {\n${body}\nreturn 0;\n}\n`);
         return file;
     }
 
     /** A server that does the essentials: listens on a port, answers `/healthz` and publishes a manifest. */
     const WORKING_SERVER = `
-        import http from 'node:http';
-        import fs from 'node:fs/promises';
-        import path from 'node:path';
+        const http = await import('node:http');
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
 
-        const prKey = process.argv[process.argv.indexOf('--pr') + 1];
-        const sherpaDir = process.argv[process.argv.indexOf('--sherpa-dir') + 1];
-        const installDir = process.argv[process.argv.indexOf('--install-dir') + 1];
-        const repoIndex = process.argv.indexOf('--repo');
-        const repo = repoIndex === -1 ? null : process.argv[repoIndex + 1];
-        const baseIndex = process.argv.indexOf('--base');
-        const base = baseIndex === -1 ? null : process.argv[baseIndex + 1];
-        const branchIndex = process.argv.indexOf('--branch');
-        const branch = branchIndex === -1 ? null : process.argv[branchIndex + 1];
-        const verdictsIndex = process.argv.indexOf('--verdicts');
-        const verdicts = verdictsIndex === -1 ? null : process.argv[verdictsIndex + 1];
+        const prKey = argv[argv.indexOf('--pr') + 1];
+        const sherpaDir = argv[argv.indexOf('--sherpa-dir') + 1];
+        const installDir = argv[argv.indexOf('--install-dir') + 1];
+        const repoIndex = argv.indexOf('--repo');
+        const repo = repoIndex === -1 ? null : argv[repoIndex + 1];
+        const baseIndex = argv.indexOf('--base');
+        const base = baseIndex === -1 ? null : argv[baseIndex + 1];
+        const branchIndex = argv.indexOf('--branch');
+        const branch = branchIndex === -1 ? null : argv[branchIndex + 1];
+        const verdictsIndex = argv.indexOf('--verdicts');
+        const verdicts = verdictsIndex === -1 ? null : argv[verdictsIndex + 1];
         const token = 'f'.repeat(64);
 
-        let slowFirstHealth = process.argv.includes('--slow-first-health');
+        let slowFirstHealth = argv.includes('--slow-first-health');
         const server = http.createServer((req, res) => {
             const respond = () => {
                 res.writeHead(200, { 'content-type': 'application/json' });
@@ -164,13 +198,15 @@ describe('server startup in `up`', () => {
     async function up(
         serverBin: string,
         local?: { repo: string; base?: string; branch?: string; verdicts?: string },
+        nodeFlags?: readonly string[],
     ) {
         return ensureServer({
             prKey: PR_KEY,
             sherpaDir,
-            entry: undefined,
+            entry: CLI_BUNDLE,
             serverBin,
             startupTimeoutMs: STARTUP_TIMEOUT_MS,
+            ...(nodeFlags === undefined ? {} : { nodeFlags }),
             ...(local === undefined
                 ? {}
                 : { repo: local.repo, base: local.base, branch: local.branch, verdicts: local.verdicts }),
@@ -188,22 +224,41 @@ describe('server startup in `up`', () => {
         throw new Error('server did not publish a manifest');
     }
 
-    it.skipIf(!process.allowedNodeEnvironmentFlags.has('--use-system-ca'))(
-        'daemon receives `--use-system-ca` so Node trusts the internal CA',
-        async () => {
-            const guarded = `
-                if (!process.execArgv.includes('--use-system-ca')) {
-                    console.error('missing --use-system-ca');
-                    process.exit(3);
-                }
-                ${WORKING_SERVER}
-            `;
+    it('passes the supplied Node flags to the daemon and drops flags the runtime does not recognize', async () => {
+        const guarded = `
+            if (!process.execArgv.includes('--no-warnings') || process.execArgv.includes('--no-such-node-flag')) {
+                console.error('runtime flags: ' + process.execArgv.join(' '));
+                process.exit(3);
+            }
+            ${WORKING_SERVER}
+        `;
 
-            const result = await up(await fakeServer(guarded));
+        const result = await up(await fakeServer(guarded), undefined, ['--no-warnings', '--no-such-node-flag']);
 
-            expect(result.started).toBe(true);
-        },
-    );
+        expect(result.started).toBe(true);
+    });
+
+    it('runs the same CLI as `sherpa server` and passes the server module in SHERPA_SERVER_BIN', async () => {
+        const recording = `
+            const fsSync = await import('node:fs');
+            const sherpaDirArg = argv[argv.indexOf('--sherpa-dir') + 1];
+            fsSync.writeFileSync(
+                sherpaDirArg + '/daemon.json',
+                JSON.stringify({ argv: process.argv.slice(1), serverBin: process.env.SHERPA_SERVER_BIN }),
+            );
+            ${WORKING_SERVER}
+        `;
+        const serverBin = await fakeServer(recording);
+
+        await up(serverBin);
+
+        const daemon = JSON.parse(await fs.readFile(path.join(sherpaDir, 'daemon.json'), 'utf8')) as {
+            argv: string[];
+            serverBin: string;
+        };
+        expect(daemon.argv.slice(0, 4)).toEqual([await fs.realpath(CLI_BUNDLE), 'server', '--pr', PR_KEY]);
+        expect(daemon.serverBin).toBe(serverBin);
+    });
 
     it('starts the daemon when there is no manifest and builds the link from its manifest', async () => {
         const result = await up(await fakeServer(WORKING_SERVER));
@@ -284,8 +339,8 @@ describe('server startup in `up`', () => {
         const serverBin = await fakeServer(WORKING_SERVER);
         const foreign = spawn(
             process.execPath,
-            [serverBin, '--pr', PR_KEY, '--sherpa-dir', sherpaDir, '--slow-first-health'],
-            { stdio: 'ignore' },
+            [CLI_BUNDLE, 'server', '--pr', PR_KEY, '--sherpa-dir', sherpaDir, '--slow-first-health'],
+            { stdio: 'ignore', env: { ...process.env, SHERPA_SERVER_BIN: serverBin } },
         );
         spawned.push(foreign);
         const foreignManifest = await waitForManifest();
@@ -316,14 +371,14 @@ describe('server startup in `up`', () => {
     }, 20_000);
 
     it('returns immediately when the server dies instead of waiting for the timeout', async () => {
-        const dying = await fakeServer("console.error('cannot open storage'); process.exit(1);");
+        const dying = await fakeServer("console.error('cannot open storage'); return 1;");
 
         const started = Date.now();
         await expect(up(dying)).rejects.toThrow('cannot open storage');
         expect(Date.now() - started).toBeLessThan(STARTUP_TIMEOUT_MS);
     });
 
-    it('a missing server bundle reports an incomplete distribution without spawning anything', async () => {
+    it('reports an incomplete distribution without spawning when the server module is missing', async () => {
         await expect(
             ensureServer({
                 prKey: PR_KEY,
@@ -331,6 +386,15 @@ describe('server startup in `up`', () => {
                 entry: undefined,
                 startupTimeoutMs: STARTUP_TIMEOUT_MS,
             }),
+        ).rejects.toThrow('skill distribution is incomplete');
+    });
+
+    // The daemon is the CLI itself. Without its path, there is nothing to spawn even with an explicit server module.
+    it('returns the same error without the CLI path even when SHERPA_SERVER_BIN is set', async () => {
+        const serverBin = await fakeServer(WORKING_SERVER);
+
+        await expect(
+            ensureServer({ prKey: PR_KEY, sherpaDir, entry: undefined, serverBin, startupTimeoutMs: STARTUP_TIMEOUT_MS }),
         ).rejects.toThrow('skill distribution is incomplete');
     });
 

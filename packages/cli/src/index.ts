@@ -1,6 +1,13 @@
 import { run } from './cli.js';
 import { checkNodeVersion } from './runtime.js';
 
+/**
+ * Node flags for the server daemon. A host or issue service may use certificates signed by a private
+ * CA in the system store, but Node trusts only its own bundle out of the box and fails on
+ * `SELF_SIGNED_CERT_IN_CHAIN`. The flag appeared in 22.15/23.8. Older runtimes won't receive it.
+ */
+const DAEMON_NODE_FLAGS = ['--use-system-ca'];
+
 /** `sherpa` CLI entry point: runtime check, command invocation, exit code. */
 async function main(): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
@@ -17,6 +24,7 @@ async function main(): Promise<number> {
         err: (text) => {
             process.stderr.write(`${text}\n`);
         },
+        daemonNodeFlags: DAEMON_NODE_FLAGS,
     });
 }
 

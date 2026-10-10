@@ -65,6 +65,8 @@ describe('CLI build', () => {
 
         expect(bundle).not.toContain('node:sqlite');
         expect(bundle).not.toContain('<!doctype html');
+        // The CLI loads the server module with `import()` from a path computed at runtime, keeping it out of the bundle.
+        expect(bundle).not.toContain('function startServer(');
         expect(statSync(bundlePath).size).toBeLessThan(1024 * 1024);
     });
 });

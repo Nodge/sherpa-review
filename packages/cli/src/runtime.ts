@@ -1,6 +1,6 @@
 /**
  * Minimum Node version: built-in `node:sqlite` has been available without a flag since 22.13, and
- * the Sherpa server uses it. The threshold applies to the whole distribution. The CLI and server bundle share
+ * Sherpa's server depends on it. The threshold applies to the whole distribution. The CLI and server module share
  * a directory and a runtime, so `@sherpa/server` repeats the same check (`src/runtime.ts`).
  */
 export const MIN_NODE_MAJOR = 22;

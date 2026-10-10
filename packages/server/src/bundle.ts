@@ -15,20 +15,22 @@ import { startServer } from './server.js';
 import { bundledAssets } from './static.js';
 import { UI_ASSETS } from './ui-assets.js';
 
-/**
- * Server bundle entry point `sherpa-server.mjs`: foreground server process for one PR.
- * `sherpa up` handles daemonization, logging and waiting for the manifest. This is just the server,
- * that lives until SIGINT/SIGTERM or the idle threshold (`idle.ts`). The UI is embedded in the bundle and served
- * from memory (docs/protocol.md §2).
- *
- * No token in stdout: output goes to a log file that outlives the server, and the CLI prints the link with the token
- * after reading the manifest.
- */
+// The model may read the `sherpa` CLI subcommand output, so it is in English.
 const USAGE =
-    'Usage: sherpa-server.mjs --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
-    '[--repo <project directory>] [--base <ref>] [--branch <branch>] [--verdicts <instruction>]';
+    'Usage: sherpa server --pr <PR key> [--sherpa-dir <path>] [--install-dir <path>] ' +
+    '[--repo <project dir>] [--base <ref>] [--branch <branch>] [--verdicts <instruction>] ' +
+    '(started by `sherpa up`, not meant to be run by hand)';
 
-async function main(argv: readonly string[]): Promise<number> {
+/**
+ * Foreground server process for one PR. Importing `sherpa-server.mjs` runs nothing:
+ * the CLI calls `runServer` in `sherpa server`, the process daemonized by `sherpa up`. Logging and
+ * waiting for the manifest belong to `up`. This is just the server, which lives until SIGINT/SIGTERM or
+ * the idle threshold (`idle.ts`). The UI is embedded in the bundle and served from memory (docs/protocol.md §2).
+ *
+ * Exit code is 0 after startup: the open server keeps the process alive. No token in stdout: output goes
+ * to a log file that outlives the server. The CLI prints the token-bearing link after reading the manifest.
+ */
+export async function runServer(argv: readonly string[]): Promise<number> {
     const versionError = checkNodeVersion(process.versions.node);
     if (versionError !== null) {
         process.stderr.write(`${versionError}\n`);
@@ -127,9 +129,4 @@ function writeLog(text: string): void {
 
 function messageOf(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
-}
-
-const code = await main(process.argv.slice(2));
-if (code !== 0) {
-    process.exitCode = code;
 }

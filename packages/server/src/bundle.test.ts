@@ -33,10 +33,11 @@ const releaseVersion = (
 ).version;
 
 /**
- * Server bundle as the skill distribution sees it: a separate process running plain node, state in tmp,
- * UI embedded inside. Neither a checkout nor `ui/dist` is present beside the process.
+ * The server module as the skill distribution sees it: a separate process running plain node, state in tmp,
+ * UI embedded. Neither a checkout nor `ui/dist` exists beside the process. In the distribution the module is loaded by
+ * `sherpa server` from the CLI. Here a two-line wrapper keeps the server package independent of the CLI.
  */
-describe('server bundle', () => {
+describe('server module', () => {
     let sherpaDir: string;
     let workDir: string;
     let child: ChildProcess | null;
@@ -56,15 +57,32 @@ describe('server bundle', () => {
         await removeTempSherpaDir(workDir);
     });
 
-    function launch(...args: string[]): ChildProcess {
-        child = spawn(process.execPath, [bundlePath, ...args], { cwd: workDir, stdio: ['ignore', 'pipe', 'pipe'] });
+    /** Module wrapper. `prelude` runs before the import. */
+    async function writeWrapper(prelude = ''): Promise<string> {
+        const wrapper = path.join(workDir, 'run-server.mjs');
+        await writeFile(
+            wrapper,
+            `${prelude}\n` +
+                `const { runServer } = await import(${JSON.stringify(pathToFileURL(bundlePath).href)});\n` +
+                'process.exitCode = await runServer(process.argv.slice(2));\n',
+            'utf8',
+        );
+        return wrapper;
+    }
+
+    async function launch(args: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<ChildProcess> {
+        child = spawn(process.execPath, [await writeWrapper(), ...args], {
+            cwd: workDir,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env,
+        });
         return child;
     }
 
     it(
         'starts in a separate process and serves the embedded UI from memory',
         async () => {
-            launch('--pr', PR_KEY, '--sherpa-dir', sherpaDir);
+            await launch(['--pr', PR_KEY, '--sherpa-dir', sherpaDir]);
 
             const manifest = await waitForManifest(sherpaDir);
             expect(manifest.pid).not.toBe(process.pid);
@@ -99,7 +117,7 @@ describe('server bundle', () => {
     it(
         'worker endpoint responds and the process stops on SIGTERM',
         async () => {
-            const server = launch('--pr', PR_KEY, '--sherpa-dir', sherpaDir);
+            const server = await launch(['--pr', PR_KEY, '--sherpa-dir', sherpaDir]);
             const manifest = await waitForManifest(sherpaDir);
 
             const response = await fetch(`http://127.0.0.1:${String(manifest.port)}${WORKER_ENDPOINTS.register}`, {
@@ -131,13 +149,12 @@ describe('server bundle', () => {
         'shuts down when idle: removes the manifest and logs the reason',
         async () => {
             // The threshold is shortened with an undocumented variable. The test cannot wait a quarter of an hour.
-            child = spawn(process.execPath, [bundlePath, '--pr', PR_KEY, '--sherpa-dir', sherpaDir], {
-                cwd: workDir,
-                stdio: ['ignore', 'pipe', 'pipe'],
-                env: { ...process.env, SHERPA_IDLE_SECONDS: '2' },
+            const server = await launch(['--pr', PR_KEY, '--sherpa-dir', sherpaDir], {
+                ...process.env,
+                SHERPA_IDLE_SECONDS: '2',
             });
 
-            const { code, stdout } = await collectExit(child);
+            const { code, stdout } = await collectExit(server);
             expect(code).toBe(0);
             expect(stdout).toContain('start: PR');
             expect(stdout).toContain('idle shutdown: 2 s');
@@ -149,11 +166,32 @@ describe('server bundle', () => {
     it(
         'prints usage and exits with a nonzero code when the PR key is missing',
         async () => {
-            const server = launch();
+            const server = await launch([]);
             const { code, stderr } = await collectExit(server);
 
             expect(code).toBe(1);
-            expect(stderr).toContain('--pr');
+            expect(stderr).toContain('sherpa server --pr');
+        },
+        TEST_TIMEOUT_MS,
+    );
+
+    // The module sits beside the CLI in the distribution: importing it alone must not start the server.
+    it(
+        'importing the module alone starts nothing',
+        async () => {
+            const importer = path.join(workDir, 'import-only.mjs');
+            await writeFile(importer, `await import(${JSON.stringify(pathToFileURL(bundlePath).href)});\n`, 'utf8');
+
+            child = spawn(process.execPath, [importer, '--pr', PR_KEY, '--sherpa-dir', sherpaDir], {
+                cwd: workDir,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            const { code, stdout, stderr } = await collectExit(child);
+
+            expect(code).toBe(0);
+            expect(stdout).toBe('');
+            expect(stderr).toBe('');
+            expect(await readManifest(manifestPathFor(sherpaDir, PR_KEY))).toBeNull();
         },
         TEST_TIMEOUT_MS,
     );
@@ -169,13 +207,9 @@ describe('server bundle', () => {
     it(
         'explains what to do on an unsupported Node version',
         async () => {
-            // Override the runtime version in a wrapper: there is no way to run the bundle itself on that Node version.
-            const wrapper = path.join(workDir, 'old-node.mjs');
-            await writeFile(
-                wrapper,
-                `Object.defineProperty(process.versions, 'node', { value: '22.12.0' });\n` +
-                    `await import(${JSON.stringify(pathToFileURL(bundlePath).href)});\n`,
-                'utf8',
+            // Override the runtime version in the wrapper: there is no such Node available to run the module itself.
+            const wrapper = await writeWrapper(
+                `Object.defineProperty(process.versions, 'node', { value: '22.12.0' });`,
             );
 
             child = spawn(process.execPath, [wrapper, '--pr', PR_KEY, '--sherpa-dir', sherpaDir], {
@@ -223,7 +257,7 @@ async function waitForManifest(sherpaDir: string): Promise<{ port: number; pid: 
         return manifest !== null;
     });
     if (manifest === null) {
-        throw new Error('server bundle did not publish a manifest');
+        throw new Error('server module did not publish a manifest');
     }
     return manifest;
 }

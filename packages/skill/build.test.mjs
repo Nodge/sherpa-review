@@ -1,10 +1,12 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const distDir = join(packageRoot, 'dist');
@@ -15,22 +17,26 @@ const uiRoot = resolve(packageRoot, '../ui');
 /** Distribution version from the root package.json, the single source for all three bundles. */
 const releaseVersion = JSON.parse(readFileSync(join(packageRoot, '../../package.json'), 'utf8')).version;
 
-describe('skill package build', () => {
-    beforeAll(() => {
-        // The UI build is not part of the chain (the server bundle embeds the built `ui/dist`), but `dist`
-        // is not tracked in git. Build it here on a clean checkout, or the bundle has nothing to embed.
-        if (!existsSync(join(uiRoot, 'dist', 'index.html'))) {
-            execFileSync('pnpm', ['--filter', '@sherpa/ui', 'build'], { cwd: uiRoot, stdio: 'pipe' });
-        }
-        execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
-    }, 120_000);
+// One build for the whole file: both suites check a fresh `dist/`, even when only one of them runs.
+beforeAll(() => {
+    // The chain does not build the UI (the server module embeds a prebuilt `ui/dist`), but `dist`
+    // is not stored in git. Build it here on a clean checkout so the module has something to embed.
+    if (!existsSync(join(uiRoot, 'dist', 'index.html'))) {
+        execFileSync('pnpm', ['--filter', '@sherpa/ui', 'build'], { cwd: uiRoot, stdio: 'pipe' });
+    }
+    execFileSync(process.execPath, ['build.mjs'], { cwd: packageRoot, stdio: 'pipe' });
+}, 120_000);
 
+describe('skill package build', () => {
     // The harness links to `dist/`. An extra file there is junk in the installed skill.
-    it('dist/ is a self-contained distribution: SKILL.md and exactly two bundles in bin/', () => {
+    it('makes dist/ a self-contained distribution: SKILL.md, the command and the server module in bin/', () => {
         expect(readdirSync(distDir).sort()).toEqual(['SKILL.md', 'bin', 'version.json']);
         expect(readdirSync(binDir).sort()).toEqual(['sherpa-server.mjs', 'sherpa.mjs']);
         expect(statSync(cliPath).isFile()).toBe(true);
         expect(statSync(serverPath).isFile()).toBe(true);
+        // There is only one command: the server module does not run directly, the CLI loads it.
+        expect(statSync(cliPath).mode & 0o111).toBe(0o111);
+        expect(statSync(serverPath).mode & 0o111).toBe(0);
         expect(readFileSync(join(distDir, 'SKILL.md'), 'utf8')).toBe(
             readFileSync(join(packageRoot, 'SKILL.md'), 'utf8'),
         );
@@ -59,7 +65,7 @@ describe('skill package build', () => {
     });
 
     // The worker loop calls the CLI on every request. The server and UI would add overhead to every step.
-    it('keeps the server and UI in a separate bundle from the CLI', () => {
+    it('keeps the server and UI in the server module, outside the CLI', () => {
         expect(statSync(cliPath).size).toBeLessThan(statSync(serverPath).size);
         expect(readFileSync(cliPath, 'utf8')).not.toContain('node:sqlite');
         expect(readFileSync(serverPath, 'utf8')).toContain('node:sqlite');
@@ -110,6 +116,122 @@ describe('skill package build', () => {
         expect(skill).not.toContain('worker register');
     });
 });
+
+/**
+ * The distribution as the user sees it: a copy of `dist/` in another directory, plain node, its own state.
+ * Uses a fixture key because live review hosts are forbidden in tests (docs/testing.md).
+ */
+describe('running the built distribution', () => {
+    const PR_KEY = 'fixture-medium';
+    let workDir;
+    let skillDir;
+    let sherpaDir;
+
+    beforeEach(() => {
+        workDir = mkdtempSync(join(tmpdir(), 'sherpa-skill-'));
+        skillDir = join(workDir, 'skill');
+        sherpaDir = join(workDir, 'state');
+        cpSync(distDir, skillDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+        const manifest = readManifest();
+        if (manifest !== null) {
+            await stopProcess(manifest.pid);
+        }
+        rmSync(workDir, { recursive: true, force: true });
+    });
+
+    function sherpa(args, extraEnv = {}) {
+        // The test environment must not override server discovery or the PR key.
+        const { SHERPA_SERVER_BIN: _bin, SHERPA_PR: _pr, SHERPA_WORKER_ID: _worker, ...inherited } = process.env;
+        const env = { ...inherited, SHERPA_DIR: sherpaDir, ...extraEnv };
+        return spawnSync(process.execPath, [join(skillDir, 'bin', 'sherpa.mjs'), ...args], {
+            cwd: workDir,
+            encoding: 'utf8',
+            env,
+            // `worker next` waits for a task indefinitely. The test only needs it to reach the request.
+            timeout: 20_000,
+        });
+    }
+
+    function up() {
+        return sherpa(['up', '--pr', PR_KEY, '--no-open', '--harness', 'test']);
+    }
+
+    function readManifest() {
+        const file = join(sherpaDir, 'servers', `${PR_KEY}.json`);
+        return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+    }
+
+    it('starts the server on a cold up and reuses it on a warm one', () => {
+        const cold = up();
+        expect(cold.status, cold.stderr).toBe(0);
+        const first = readManifest();
+        expect(first).not.toBeNull();
+        expect(cold.stdout).toContain(`http://127.0.0.1:${String(first.port)}/#t=`);
+
+        // The daemon is this same CLI running `sherpa server`, with Node flags from the CLI root (`src/index.ts`):
+        // without `--use-system-ca`, the server does not trust the custom CA that signs the hosts.
+        const daemon = execFileSync('ps', ['-o', 'args=', '-p', String(first.pid)], { encoding: 'utf8' });
+        expect(daemon).toContain(`bin/sherpa.mjs server --pr ${PR_KEY}`);
+        if (process.allowedNodeEnvironmentFlags.has('--use-system-ca')) {
+            expect(daemon).toContain('--use-system-ca');
+        }
+
+        const warm = up();
+        expect(warm.status, warm.stderr).toBe(0);
+        const second = readManifest();
+        expect({ port: second.port, pid: second.pid }).toEqual({ port: first.port, pid: first.pid });
+        expect(warm.stdout).toContain(`http://127.0.0.1:${String(first.port)}/#t=`);
+    }, 60_000);
+
+    // The worker loop calls the CLI on every request. It must not load the server module.
+    it('does not load the server module on worker next but does on server', () => {
+        const marker = join(workDir, 'server-loaded');
+        const probe = join(workDir, 'probe-server.mjs');
+        writeFileSync(
+            probe,
+            `import { writeFileSync } from 'node:fs';\n` +
+                `writeFileSync(${JSON.stringify(marker)}, 'loaded');\n` +
+                'export async function runServer() { return 0; }\n',
+        );
+
+        // The server is running and the worker is registered. `next` reaches a response without failing at manifest discovery.
+        expect(up().status).toBe(0);
+        const next = sherpa(['worker', 'next', '--pr', PR_KEY], { SHERPA_SERVER_BIN: probe });
+        expect(next.status, next.stderr).toBe(0);
+        expect(next.stdout).toContain('TASK');
+        expect(existsSync(marker)).toBe(false);
+
+        // The probe works: `sherpa server` loads it.
+        const server = sherpa(['server', '--pr', PR_KEY], { SHERPA_SERVER_BIN: probe });
+        expect(server.status, server.stderr).toBe(0);
+        expect(existsSync(marker)).toBe(true);
+    }, 60_000);
+});
+
+/** Stops the daemon by PID with SIGTERM and waits so the server does not outlive the test. */
+async function stopProcess(pid) {
+    try {
+        process.kill(pid, 'SIGTERM');
+    } catch {
+        return;
+    }
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        try {
+            process.kill(pid, 0);
+        } catch {
+            return;
+        }
+        await delay(50);
+    }
+    try {
+        process.kill(pid, 'SIGKILL');
+    } catch {
+        // Already stopped.
+    }
+}
 
 function git(args) {
     try {
