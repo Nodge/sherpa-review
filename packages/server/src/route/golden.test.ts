@@ -116,7 +116,7 @@ describe('route validator: end-to-end golden test on the medium fixture', () => 
         expect(filling?.tests.length).toBe(12);
         expect(filling?.droppedClaims).toBe(2);
         expect(filling?.validationNotes).toEqual([
-            '2 claims dropped: the anchor pointed at `services/orders/src/domain/__tests__/factories.ts`, which is not in this diff.',
+            routeStrings('ru').claimsMissingFiles(['services/orders/src/domain/__tests__/factories.ts', 'services/orders/src/domain/__tests__/factories.ts']),
         ]);
         // `uncovered` stays in the digest without a test anchor because it describes behavior without coverage.
         expect(filling?.tests.filter((claim) => claim.anchor === null).map((claim) => claim.kind)).toEqual([

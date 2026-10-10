@@ -162,7 +162,7 @@ function threads(): Thread[] {
             anchor: anchor(DIFF_ID, `${modulePath(5)}/service.ts`, { side: 'new', line: 13 }),
             root: comment({
                 id: '5300198',
-                author: bot('ai-review-bot-canary', 'AI Review'),
+                author: bot('ai-review-bot-canary', 'AI Review (canary)'),
                 body: 'The error branch of `loadOrder` is not covered by tests.',
                 createdAt: '2026-08-19T10:57:00.000Z',
                 issue: true,

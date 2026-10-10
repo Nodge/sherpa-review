@@ -258,7 +258,7 @@ describe('medium fixture', () => {
         expect(data.diff.files.filter((file) => file.generated).every((file) => !zoned.has(file.path))).toBe(true);
     });
 
-    it('has a deep branching thread (observed host maximum is 14)', () => {
+    it('includes a deep branching thread', () => {
         const deepest = data.threads.reduce((max, thread) => Math.max(max, depthOf(thread.root)), 0);
         expect(deepest).toBeGreaterThan(6);
         expect(data.threads.some((thread) => hasBranching(thread.root))).toBe(true);
@@ -276,7 +276,7 @@ describe('medium fixture', () => {
         expect(data.threads.filter((thread) => thread.anchor === null).length).toBe(1);
     });
 
-    it('comment ids follow the host sign convention', () => {
+    it('uses positive ids for line comments and negative ids for PR comments', () => {
         for (const thread of data.threads) {
             const inline = thread.anchor !== null;
             expect(Number(thread.root.id) > 0).toBe(inline);

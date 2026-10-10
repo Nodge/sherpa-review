@@ -163,7 +163,7 @@ function fullReviewSpec(locale: 'ru' | 'en', s: Strings): void {
             const pciAuditFile = page.locator(
                 '.file-tree__row--file[title^="services/orders/src/payments/pci-audit.ts · "]',
             );
-            const unrelatedFile = page.locator('.file-tree__row--file[title^="services/orders/.github/CODEOWNERS · "]');
+            const unrelatedFile = page.locator('.file-tree__row--file[title^=".github/CODEOWNERS · "]');
             await expect(pciAuditFile).toHaveCount(1);
             await expect(unrelatedFile).toHaveCount(1);
 

@@ -119,7 +119,7 @@ export function hashHex(input: string, length: number): string {
 }
 
 /**
- * Opaque diff item id. Its format resembles a review host id (`eid:1:<base64>`):
+ * Opaque diff element id in the form `eid:1:<base64>`:
  * consumers must not parse it, and its appearance makes this clear.
  */
 export function makeFileId(diffId: HostId, path: string): HostId {

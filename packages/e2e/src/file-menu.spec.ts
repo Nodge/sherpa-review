@@ -17,7 +17,8 @@ test('file menu: tree right-click, card-header ⋯, clipboard and viewed mark', 
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
 
     const menu = page.getByRole('menu');
-    const row = page.locator('.file-tree__row--file').first();
+    // A generated file already counts as viewed, so use the first regular file.
+    const row = page.locator('.file-tree__row--file:not(.is-generated)').first();
 
     await test.step('right-clicking a tree row opens the menu', async () => {
         await row.click({ button: 'right' });
@@ -39,7 +40,7 @@ test('file menu: tree right-click, card-header ⋯, clipboard and viewed mark', 
     });
 
     await test.step('⋯ in the card header marks the file viewed', async () => {
-        const card = page.locator('.file-card').first();
+        const card = page.locator('.file-card:not(.file-card--generated)').first();
         const fileId = await card.getAttribute('data-file');
         const path = await card.locator('.file-card__path').getAttribute('title');
         // The tree row for the same file: its read checkbox must change.

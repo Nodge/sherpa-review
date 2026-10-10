@@ -225,7 +225,7 @@ export const MODEL_STOPS: StopSpec[] = [
             '- pharmacy: 5 minutes',
             '- everything else: the default 30 minutes',
             '',
-            'The **shortest** window wins in the cart. As a consequence, whether an order can still be edited is calculated in exactly one place and depends on the clock, which tests replace with [`FrozenClock`](#file-services/orders/src/infra/clock.ts). The rollout order is in [#2281](https://github.com/quillmart/quillmart/issues/2281).',
+            'The **shortest** window wins in a cart. As a result, "can the order still be edited" is computed in exactly one place and depends on a clock that tests replace with [`FrozenClock`](#file-services/orders/src/infra/clock.ts). The rollout order is in [#2281](https://github.com/quillmart/quillmart/issues/2281).',
         ].join('\n'),
         bridge: 'Next, how the edit policy stopped doing its own time calculations.',
         anchors: [at(P.window, 'new', 1, 94), at(P.clock, 'new', 1, 33)],
@@ -389,7 +389,7 @@ export const SUMMARY_PARTS = [
         '',
         'The generated PSP schema moved from `pan` to `token`: **the old field is no longer sent** in the request.',
     ].join('\n'),
-    'The rules are described in the new [`docs/edit-window.md`](#file-services/orders/docs/edit-window.md), along with the rollout order behind the `checkout_edit_window` flag. The window tests are new, and the policy and endpoint tests have been rewritten. The ownership config `.github/CODEOWNERS`, generated `ci.yml` and the tail of the generated PSP schema remain outside the route.',
+    'The new [`docs/edit-window.md`](#file-services/orders/docs/edit-window.md) describes the rules and rollout order behind the `checkout_edit_window` flag. Window tests were written from scratch, and policy and endpoint tests were rewritten. The `CODEOWNERS` ownership rules, generated `ci.yml` and the rest of the generated PSP schema remain outside the route.',
 ];
 
 export const SUMMARY = SUMMARY_PARTS.join('\n\n');
@@ -548,7 +548,7 @@ export function makeMediumRouteStates(): Record<'none' | 'reading' | 'filling' |
             stale: null,
             failure: {
                 message:
-                    'Generation stopped at validation: 2 stops reference services/orders/src/domain/order-state.ts, which is not in this diff.',
+                    'Generation stopped at validation: 2 stops reference services/orders/src/domain/order-state.ts, which is outside this diff.',
                 rawOutput: FAILED_RAW_OUTPUT,
             },
         },

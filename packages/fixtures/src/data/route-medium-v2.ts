@@ -123,7 +123,7 @@ const CHANGED: Record<string, StopChangeSpec> = {
     },
     s03: {
         kind: 'changed',
-        reason: 'Following the comment from iris, the remaining time moved to `api/rejection-status.ts` and is returned only for `edit-window-closed`. PAN masking left the PR with `card-token.ts`, while the audit and PSP schema remain.',
+        reason: 'Following the comment from Iris, remaining time moved to `api/rejection-status.ts` and is returned only for `edit-window-closed`. PAN masking left the PR along with `card-token.ts`, while the audit and PSP schema remain.',
         threadIds: ['4820242'],
         paragraph:
             'The new `api/rejection-status.ts` builds the rejection body: `remainingMs` is returned only for `edit-window-closed` and is no longer in responses for other reasons. The `patchOrder` and `getEditWindow` endpoints still validate the body against a schema, PCI audit records receive `recordedAt`, and the generated PSP schema stays on v4 with `token` instead of `pan`. The only payment change removed from the PR was PAN masking in the `reauthorize` log, along with `card-token.ts`. Consequence: the response contract is more precise, and the PCI scope of the PR narrows to the audit and generated schema.',

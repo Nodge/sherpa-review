@@ -30,7 +30,7 @@ const NEW_FILE = fileForGallery('services/orders/src/infra/clock.ts');
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 // The gallery's "me" is the same reviewer as in the fixture, used to determine what is "own".
 const ME = DATA.currentUser;
-const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true, avatarUrl: null };
+const BOT = { login: 'lint-bot', displayName: 'Lint Bot', bot: true, avatarUrl: null };
 const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false, avatarUrl: null };
 /** Photos for avatar states: the other participant and bot have photos, the reviewer's fails to load. */
 const PHOTOS = new Map([

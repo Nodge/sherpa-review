@@ -348,7 +348,7 @@ describe('rowIndent', () => {
                 file('checkout/ui/assets/countdown-icon.svg'),
                 file('checkout/ui/assets/legacy-window-badge.png'),
                 file('checkout/src/order.ts'),
-                file('checkout/.github/CODEOWNERS'),
+                file('checkout/config.yaml'),
             ]),
         );
         const indent = (label: string): number => {
@@ -359,7 +359,7 @@ describe('rowIndent', () => {
             return rowIndent(row);
         };
 
-        expect(indent('.github/CODEOWNERS')).toBe(indent('ui/assets'));
+        expect(indent('config.yaml')).toBe(indent('ui/assets'));
         expect(indent('src')).toBe(indent('ui/assets'));
         // A two-segment chain is one level. Its children are one level deeper, not two.
         expect(indent('countdown-icon.svg')).toBe(indent('ui/assets') + TREE_INDENT_STEP);

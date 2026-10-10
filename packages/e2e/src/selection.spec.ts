@@ -15,6 +15,11 @@ test('the active selection survives text selection and is replaced by a new gutt
     await page.goto(server.url);
     await page.getByRole('tab', { name: 'Full diff', exact: true }).click();
     await expect(card(page).locator('.diff-row[data-key="a18"]')).toBeAttached();
+    // The card is not first. Otherwise the drags below would scroll the list, and scrolling
+    // past the selection would close it, so these steps would test the wrong behaviour.
+    await card(page).evaluate((element) => {
+        element.scrollIntoView({ block: 'start' });
+    });
 
     await test.step('a gutter drag selects a range', async () => {
         await dragBetween(page, gutter(page, 'a3'), gutter(page, 'a6'));

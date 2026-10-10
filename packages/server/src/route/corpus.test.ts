@@ -539,7 +539,7 @@ describe('route validator: reduced functionality', () => {
             '51-94',
         ]);
         expect(result.value[0]?.validationNotes).toEqual([
-            'Part of range `services/orders/src/domain/edit-window.ts` 40–94 is already explained by stop 01 — the anchor was trimmed.',
+            routeStrings('ru').rangeTrimmed(WINDOW, '40–94', '01'),
         ]);
     });
 
@@ -580,7 +580,7 @@ describe('route validator: reduced functionality', () => {
         }
         expect(result.value[0]?.anchors.map((anchor) => anchor.path)).toEqual([CLOCK]);
         expect(result.value[0]?.validationNotes).toEqual([
-            'Range `services/orders/src/domain/edit-window.ts` 10–20 is already explained by stop 01.',
+            routeStrings('ru').rangeTaken(WINDOW, '10–20', '01'),
         ]);
     });
 
@@ -633,7 +633,7 @@ describe('route validator: reduced functionality', () => {
         }
         expect(result.value[0]?.droppedClaims).toBe(1);
         expect(result.value[0]?.validationNotes).toEqual([
-            'One claim dropped: the anchor pointed at `services/orders/src/domain/__tests__/factories.ts`, which is not in this diff.',
+            routeStrings('ru').claimsMissingFiles(['services/orders/src/domain/__tests__/factories.ts']),
         ]);
     });
 
@@ -686,7 +686,7 @@ describe('route validator: reduced functionality', () => {
         }
         expect(result.value[0]?.anchors.map((anchor) => anchor.path)).toEqual([WINDOW]);
         expect(result.value[0]?.validationNotes).toEqual([
-            'Anchor on `services/orders/src/domain/order-state.ts` dropped: the file is not in this diff.',
+            routeStrings('ru').anchorFileMissing('services/orders/src/domain/order-state.ts'),
         ]);
     });
 

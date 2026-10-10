@@ -194,7 +194,7 @@ export const fileDiffSchema = z.object({
     binary: z.boolean(),
     /**
      * "The team does not require review of this file": the file is excluded from the active review rules
-     * (CODEOWNERS or host equivalent). This is not a heuristic, the review tool follows team policy.
+     * (CODEOWNERS or the host's equivalent). No heuristic here. The review tool follows team policy.
      */
     generated: z.boolean(),
     additions: z.number().int().min(0),
@@ -389,7 +389,7 @@ export const publishResultSchema = z.object({
 export type PublishResult = z.infer<typeof publishResultSchema>;
 
 /**
- * An ownership lens zone: a boundary from CODEOWNERS,
+ * Ownership zone for the ownership lens: the boundary from the ownership file (CODEOWNERS or the host's equivalent),
  * the owning configuration directory, or a subpath within it for subpath rules.
  * A diff file belongs to at most one zone, the deepest boundary.
  * Zones describe the entire PR (not just the reviewer's zones) and remain meaningful even when
@@ -401,7 +401,7 @@ export const lensZoneSchema = z.object({
     /** The reviewer owns the zone ("you · owner" chip). */
     mine: z.boolean(),
     /**
-     * Owner name for the chip (ownership rule alias, for example `modules-team`).
+     * Owner name for the chip (an ownership rule alias, such as `@org/modules-team`).
      * null means the rule has no alias, so the UI uses an unnamed chip label.
      */
     owner: z.string().nullable(),
@@ -426,7 +426,7 @@ export const lensSchema = z.object({
      * PR ownership zones, only for the ownership lens. null means the implementation does not
      * distinguish zones (directory fallback in the review host, extra lenses), so the UI groups
      * files by path prefix. The UI also groups files outside all zones
-     * (generated files and files not covered by CODEOWNERS).
+     * (generated files, files not covered by ownership rules).
      */
     zones: z.array(lensZoneSchema).nullable(),
 });

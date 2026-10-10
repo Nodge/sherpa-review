@@ -13,7 +13,8 @@ test('a collapsed tree directory and file card survive a reload', async ({ page,
 
     const dir = page.locator('.file-tree__row--dir').first();
     const dirLabel = (await dir.textContent()) ?? '';
-    const card = page.locator('.file-card').first();
+    // A generated card starts collapsed. Test manual collapse on a regular one.
+    const card = page.locator('.file-card:not(.file-card--generated)').first();
     const cardPath = (await card.locator('.file-card__name').textContent()) ?? '';
     await expect(dir).toHaveAttribute('aria-expanded', 'true');
 
@@ -33,7 +34,7 @@ test('a collapsed tree directory and file card survive a reload', async ({ page,
     const reloadedDir = page.locator('.file-tree__row--dir').first();
     await expect(reloadedDir).toHaveText(dirLabel);
     await expect(reloadedDir).toHaveAttribute('aria-expanded', 'false');
-    const reloadedCard = page.locator('.file-card').first();
+    const reloadedCard = page.locator('.file-card:not(.file-card--generated)').first();
     await expect(reloadedCard.locator('.file-card__name')).toHaveText(cardPath);
     await expect(reloadedCard.locator('.file-card__collapsed--file')).toContainText('collapsed by hand');
 });

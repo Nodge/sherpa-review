@@ -145,7 +145,7 @@ describe('author lens in the full diff', () => {
 
         expect(host.textContent).toContain('ada body');
         expect(host.textContent).not.toContain('morgan body');
-        expect(host.querySelector('.thread-chip--author')?.textContent).toContain('треды: ada');
+        expect(host.querySelector('.thread-chip--author')?.textContent).toContain('threads: ada');
     });
 
     it('clears the lens and restores other authors\' threads on chip click', () => {

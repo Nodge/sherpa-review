@@ -28,7 +28,7 @@ describe('language from the file path', () => {
     it('extensions for other languages', () => {
         expect(languageOf('service/order_service.py')).toBe('python');
         expect(languageOf('cmd/main.go')).toBe('go');
-        expect(languageOf('services/orders/.github/CODEOWNERS')).toBe('yaml');
+        expect(languageOf('.github/workflows/ci.yml')).toBe('yaml');
         expect(languageOf('README.md')).toBe('markdown');
         expect(languageOf('api/order.proto')).toBe('protobuf');
         expect(languageOf('src/main/java/Order.kt')).toBe('kotlin');

@@ -77,7 +77,7 @@ function edgeFailedState(): UiRouteState {
         stale: null,
         failure: {
             message:
-                'Generation stopped at validation: stop 02 references services/orders/src/infra/clock.ts, which is not in this iteration. The file was renamed to infra/time/clock.ts.',
+                'Generation stopped at validation: stop 02 references services/orders/src/infra/clock.ts, which is absent from this iteration. The file was renamed to infra/time/clock.ts.',
             rawOutput: `{
   "stops": [
     {

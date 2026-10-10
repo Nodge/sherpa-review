@@ -66,6 +66,11 @@ export function contextLineAt(path: string, line: number): string {
     if (path.endsWith('.md')) {
         return line % 4 === 0 ? '' : `- ${identifierAt(line)}: see the checkout runbook.`;
     }
+    if (path.endsWith('CODEOWNERS')) {
+        return line % 4 === 0
+            ? ''
+            : `/services/orders/src/${identifierAt(line)}/ @quillmart/checkout-${identifierAt(line + 1).toLowerCase()}`;
+    }
     return tsLines(' ', 1, line)[0]?.slice(1) ?? '';
 }
 

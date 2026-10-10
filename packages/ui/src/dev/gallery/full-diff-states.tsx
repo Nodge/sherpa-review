@@ -203,6 +203,14 @@ const MEDIUM_VIEWED = [
 const READ_DIMMED_VIEWED = [...MEDIUM_VIEWED, 'services/orders/docs/edit-window.md'];
 
 /**
+ * Diff without `.github/`, so the regular `docs/edit-window.md` is on top: otherwise the generated
+ * `ci.yml` comes first, and its label is dimmed as generated.
+ */
+const READ_DIMMED_PATHS = fixtureIteration('medium')
+    .diff.files.map((file) => file.path)
+    .filter((path) => !path.startsWith('.github/'));
+
+/**
  * Partial file coverage: ranges come from the file's own changed lines, so "N of M"
  * in the tooltip is the actual model count, not a made-up number.
  */
@@ -325,7 +333,7 @@ function sourceThreadsOnHandlers(): Thread[] {
 
 const HANDLERS = 'services/orders/src/api/handlers.ts';
 
-/** Photos for the `medium` fixture: the PR author, two commenters and AI review have photos. Iris's fails to load. */
+/** Photos for the `medium` fixture: the PR author, 2 commenters and AI review have them, Iris's fails to load. */
 const MEDIUM_PHOTOS: ReadonlyMap<string, string> = new Map([
     [fixtureIteration('medium').pr.author.login, GALLERY_AVATAR_PHOTOS[1]],
     ['alice', GALLERY_AVATAR_PHOTOS[0]],
@@ -411,7 +419,7 @@ const MARKDOWN_SHOWCASE = [
     '',
     'Nested list:',
     '',
-    '- first item with a link [to the issue](https://github.com/quillmart/quillmart/issues/2281)',
+    '- first item with a link [to an issue](https://github.com/quillmart/quillmart/issues/2281)',
     '  - nested item with `code`',
     '- second item',
     '',
@@ -430,13 +438,13 @@ const MARKDOWN_SHOWCASE = [
     '',
     '| File | Lines | Comment |',
     '| :--- | ---: | :---: |',
-    '| `services/orders/src/domain/edit-window.ts` | 128 | centered |',
+    '| `services/orders/src/domain/edit-window.ts` | 128 | centred |',
     '| `handlers.ts` | 42 | pipe \\| inside a cell |',
-    '| the unbroken token services_orders_domain_edit_window_policy_decision_remaining_ms stretches the table to the right | 7 | and enables scrolling |',
+    '| unbroken token services_orders_domain_edit_window_policy_decision_remaining_ms pushes the table right | 7 | and enables scrolling |',
     '',
     'A long bare URL wraps instead of stretching the column:',
-    'https://wiki.example.internal/checkout/security/incident-response/historical-records-scrubbing/#retention',
-    'A bare long token without a link does too: services_orders_domain_edit_window_policy_decision_remaining_ms_threshold_constant',
+    'https://github.com/quillmart/quillmart/wiki/Orders-security-PCI-incident-response-historical-records-scrubbing#section-on-data-retention',
+    'A long bare token without a link wraps too: services_orders_domain_edit_window_policy_decision_remaining_ms_threshold_constant',
     '',
     '```ts',
     'const decision = policy.decide(order, clock.now());',
@@ -521,7 +529,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
     },
     {
         id: 'full-diff-mine-disabled',
-        title: 'no CODEOWNERS zone: My files is disabled with a reason',
+        title: 'no CODEOWNERS zone: "My files" disabled with a reason',
         render: () => <WorkspaceState fixture="edge" />,
     },
     {
@@ -546,6 +554,7 @@ export const FULL_DIFF_STATES: readonly FullDiffGalleryState[] = [
         render: () => (
             <WorkspaceState
                 fixture="medium"
+                paths={READ_DIMMED_PATHS}
                 viewed={READ_DIMMED_VIEWED}
                 records={[partialRecord('medium', 'services/orders/src/domain/edit-window.ts', 0.4)]}
             />

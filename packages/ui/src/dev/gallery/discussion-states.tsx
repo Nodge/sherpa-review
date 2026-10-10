@@ -36,7 +36,7 @@ const SCALE_FILE_IDS = new Set([anchor(DIFF_ID, ALIVE).fileId]);
 
 const BOTS = [
     bot('ai-review-bot', 'AI Review'),
-    bot('lint-bot', 'AI Review (style)'),
+    bot('lint-bot', 'Lint Bot'),
     bot('sec-scanner', 'Security Scanner'),
     bot('perf-watch', 'Perf Watch'),
     bot('style-guard', 'Style Guard'),

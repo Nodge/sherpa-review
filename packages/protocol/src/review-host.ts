@@ -125,14 +125,14 @@ export interface ReviewHost {
     getBlob?(blobId: HostId): Promise<Uint8Array | null>;
 
     /**
-     * The name the host gives its ownership zone source in UI labels ("My files · CODEOWNERS"):
+     * The host's name for the ownership zone source in UI labels ("My files · CODEOWNERS"):
      * the rules filename or the source of the zone in local review. The UI does not translate it.
      * null means the host has no ownership concept. In that case `ownershipLens` also returns null.
      */
     readonly ownershipSource: string | null;
 
     /**
-     * The "My files" lens (CODEOWNERS). null means the host has no ownership concept.
+     * "My files" lens (CODEOWNERS or the host's equivalent). null means the host has no ownership concept.
      * The lens's `zones` includes all PR zones with boundaries and owners (not just the
      * reviewer's). null means the implementation only distinguishes "mine/not mine" membership.
      */

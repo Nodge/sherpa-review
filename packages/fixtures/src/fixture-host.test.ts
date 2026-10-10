@@ -72,7 +72,7 @@ describe('FixtureHost', () => {
         expect(await makeFixtureHost('medium').saveDraft({ body: 'one', parentId: null, anchor: null })).toEqual(first);
     });
 
-    it('draft id follows the host sign convention', async () => {
+    it('draft ids are positive for inline comments and negative for PR comments', async () => {
         const host = makeFixtureHost('medium');
         const diff = await host.getDiff();
         const file = diff.files.at(0);

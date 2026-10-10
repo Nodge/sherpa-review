@@ -335,7 +335,8 @@ test('keyboard: the SPEC-elements §5 map on fixture-medium', async ({ page, lau
 
     await test.step('v in the tree marks the file under the pointer viewed', async () => {
         const tree = page.getByRole('tree', { name: 'File tree' });
-        const row = page.locator('.file-tree__row--file').first();
+        // A generated file already counts as viewed: `v` would clear its mark.
+        const row = page.locator('.file-tree__row--file:not(.is-generated)').first();
         await row.click();
         await tree.focus();
         await page.keyboard.press('v');

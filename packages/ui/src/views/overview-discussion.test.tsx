@@ -179,7 +179,7 @@ describe('discussion card in Overview', () => {
 
         click(host, '.discussion-card__more');
 
-        // The ninth row is riley, who has no threads of their own, only a reply in someone else's.
+        // The ninth row is riley: they have no threads of their own, only a reply in someone else's.
         expect(rows(host)).toHaveLength(9);
         expect(rows(host)).toContain('riley');
         expect(host.querySelector('.discussion-card__more')).toBeNull();
@@ -203,7 +203,7 @@ describe('discussion card in Overview', () => {
     it('sets an author lens and opens Full diff when a participant is clicked', () => {
         const { host, session } = mount();
 
-        // Most open threads come first: ada has 2 (one at code, one at PR level).
+        // The first row has the most open threads: ada has two, one at code and one at PR level.
         click(host, '.discussion-participant');
 
         expect(session.getSnapshot().threadAuthor).toBe('ada');

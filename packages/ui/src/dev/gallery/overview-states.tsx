@@ -35,7 +35,7 @@ const UNAVAILABLE_OWNERSHIP: Lens = {
     }),
     available: false,
     paths: [],
-    note: 'The review host could not determine your ownership zone from CODEOWNERS.',
+    note: 'Could not determine your ownership zone from CODEOWNERS.',
     zones: DATA.ownership?.zones?.map((zone) => ({ ...zone, mine: false })) ?? null,
 };
 

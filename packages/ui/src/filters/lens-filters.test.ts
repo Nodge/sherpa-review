@@ -64,7 +64,7 @@ describe('buildFileFilters', () => {
 
         expect(filters.map((filter) => [filter.label, filter.count])).toEqual([
             [ruDictionary['lens.all'], 3],
-            ['My files · CODEOWNERS', 1],
+            [ruDictionary['lens.mine']('CODEOWNERS'), 1],
             [ruDictionary['lens.audit']('PCI DSS'), 1],
             [ruDictionary['lens.generated'], 1],
         ]);

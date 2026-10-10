@@ -16,8 +16,8 @@ import { FileContextMenu, useContextMenu } from './context-menu.tsx';
 
 const FILE: FileMenuTarget = {
     path: 'services/orders/src/domain/order.ts',
-    hostFileUrl: 'https://github.com/quillmart/quillmart/blob/9f3c1ab/services/orders/src/domain/order.ts',
-    blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab/services/orders/src/domain/order.ts',
+    hostFileUrl: 'https://github.com/quillmart/quillmart/blob/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/order.ts',
+    blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/order.ts',
 };
 
 const mounted: (() => void)[] = [];

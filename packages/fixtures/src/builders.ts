@@ -13,8 +13,8 @@ export function human(login: string, displayName: string | null = null): ReviewU
 }
 
 /**
- * Bot source. `displayName` is a label such as "AI Review (security)": the host
- * supplies it, and the UI shows it as a source chip.
+ * Source bot. `displayName` is a label such as "AI Review (security)" supplied by the host.
+ * The UI displays it as a source chip.
  */
 export function bot(login: string, displayName: string): ReviewUser {
     return { login, displayName, bot: true, avatarUrl: null };
@@ -49,7 +49,7 @@ export function comment(spec: CommentSpec): Comment {
 }
 
 export interface ThreadSpec {
-    /** Defaults to the root comment id: the host identifies a thread by its root. */
+    /** Defaults to the root comment id: the thread is its root. */
     id?: HostId;
     anchor: FileAnchor | null;
     resolved?: boolean;

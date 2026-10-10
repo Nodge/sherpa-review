@@ -188,11 +188,11 @@ const SAMPLES: readonly Sample[] = [
             '#!/usr/bin/env bash',
             'set -euo pipefail',
             '',
-            '# Roll the edit-window policy out to one DC at a time.',
+            '# Roll the edit-window policy out to one region at a time.',
             'for dc in eu-west us-east; do',
             '-    echo "rolling $dc"',
             '+    echo "rolling ${dc} at $(date +%s)" # log',
-            
+            '    ./scripts/deploy.sh --region "$dc" --service orders',
             'done',
         ],
     },
@@ -213,7 +213,7 @@ const SAMPLES: readonly Sample[] = [
         path: 'services/orders/package.json',
         lines: [
             '{',
-            '  "name": "@services/orders",',
+            '  "name": "@quillmart/orders",',
             '  "private": true,',
             '-  "editWindowMs": 1800000,',
             '+  "editWindowMs": 1800000,',

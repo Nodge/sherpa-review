@@ -176,9 +176,9 @@ const TALL_PARAGRAPH = [
     '- alcohol: no window at all',
     '- everything else: the standard 30 minutes',
     '',
-    'The **shortest** window wins in the cart, and whether an order can still be edited is calculated in exactly one place: tests replace the clock with [`FrozenClock`](#file-services/orders/src/infra/clock.ts), while production uses the system clock.',
+    'The **shortest** window wins in a cart, and the answer to "can the order still be edited" is calculated in one place: tests substitute [`FrozenClock`](#file-services/orders/src/infra/clock.ts), and production uses the system clock.',
     '',
-    'As a consequence, [stop 02](#stop-2) explains the rejection codes, [#2281](https://github.com/quillmart/quillmart/issues/2281) describes the rollout order, and nothing reads the old `checkout.edit_window_hours` config anymore.',
+    'Consequence: [stop 02](#stop-2) covers refusal codes, [#2281](https://github.com/quillmart/quillmart/issues/2281) describes the rollout order, and nothing reads the old `checkout.edit_window_hours` config anymore.',
 ].join('\n');
 
 /** A stop without any anchors: the right column must show a dashed card instead of empty space. */

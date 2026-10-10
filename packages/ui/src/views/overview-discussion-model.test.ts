@@ -127,7 +127,7 @@ describe('discussion card model', () => {
 
         const summary = discussionSummary(threads, FILE_IDS);
 
-        // riley has no threads of their own, but their lens shows something, so they get a row too.
+        // riley has no threads of their own, but their lens shows results, so they also get a row.
         expect(summary.participants.map((row) => [row.login, row.threads, row.open])).toEqual([
             ['ada', 2, 2],
             ['riley', 1, 1],

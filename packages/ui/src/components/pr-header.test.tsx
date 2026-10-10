@@ -37,7 +37,7 @@ describe('standard PR header', () => {
     });
 
     it('uses two letters for a single-word login when the author has no avatar photo', () => {
-        const author = { login: 'alice', displayName: null, bot: false, avatarUrl: null };
+        const author = { login: 'nolan', displayName: null, bot: false, avatarUrl: null };
 
         expect(render(null, { ...DATA.pr, author })).toContain(
             '<span class="avatar pr-header__avatar" aria-hidden="true">NO</span>',

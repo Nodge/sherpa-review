@@ -157,8 +157,8 @@ describe('agreement with the count', () => {
         expect(changedWords(t('route.stop.conflicts', 1), t('route.stop.conflicts', 2))).toBe(3);
         expect(changedWords(t('route.other.conflicts', 1), t('route.other.conflicts', 2))).toBe(6);
         expect(changedWords(t('banner.generationCap', 1), t('banner.generationCap', 2))).toBe(4);
-        expect(t('overview.ownership.stats', 'CODEOWNERS', 1, 1, 5, 21)).toBe(
-            'CODEOWNERS · 1 of 1 file · 5 of 21 lines are yours',
+        expect(changedWords(t('overview.ownership.stats', 'CODEOWNERS', 1, 1, 5, 21), t('overview.ownership.stats', 'CODEOWNERS', 1, 2, 5, 22))).toBe(
+            4,
         );
         expect(changedWords(t('palette.truncated', 21), t('palette.truncated', 1))).toBe(1);
     });

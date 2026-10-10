@@ -20,7 +20,7 @@ const FILE_IDS = new Set(DATA.diff.files.map((file) => file.fileId));
 const NOW = Date.parse('2026-08-31T12:00:00.000Z');
 const ME = DATA.pr.viewer ?? { login: 'avery', displayName: 'Avery Vance', bot: false, avatarUrl: null };
 const OTHER = { login: 'kai', displayName: 'Kai Kennedy', bot: false, avatarUrl: null };
-const BOT = { login: 'lint-bot', displayName: 'AI Review (style)', bot: true, avatarUrl: null };
+const BOT = { login: 'lint-bot', displayName: 'Lint Bot', bot: true, avatarUrl: null };
 
 const TRANSPORT: ComposerTransport = {
     save: () => Promise.reject(new Error('gallery does not save')),
@@ -78,7 +78,7 @@ const MINE = thread('pr-mine', '2026-08-31T10:40:00.000Z', {
 const BOT_THREAD = thread('pr-bot', '2026-08-31T09:20:00.000Z', {
     id: 'pr-bot-root',
     author: BOT,
-    body: 'The linter sees no changes in `.github/CODEOWNERS`: the ownership zone is unchanged.',
+    body: 'The linter sees no changes in `CODEOWNERS`: the ownership zone is unchanged.',
 });
 const RESOLVED = thread(
     'pr-resolved',

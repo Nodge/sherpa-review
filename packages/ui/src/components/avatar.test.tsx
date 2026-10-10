@@ -92,15 +92,15 @@ describe('avatar', () => {
     it('uses two letters for a single-word login in the PR header, both without a photo and after an error', () => {
         expect(
             renderToStaticMarkup(
-                <Avatar className="pr-header__avatar" name="alice" url={null} initialsRule="pair" />,
+                <Avatar className="pr-header__avatar" name="nolan" url={null} initialsRule="pair" />,
             ),
         ).toBe('<span class="avatar pr-header__avatar" aria-hidden="true">NO</span>');
 
-        const { host } = mount(PHOTO, { name: 'alice', initialsRule: 'pair' });
+        const { host } = mount(PHOTO, { name: 'nolan', initialsRule: 'pair' });
         fail(host);
         expect(host.textContent).toBe('NO');
 
-        const thread = mount(null, { name: 'alice' });
+        const thread = mount(null, { name: 'nolan' });
         expect(thread.host.textContent).toBe('N');
     });
 
@@ -108,11 +108,11 @@ describe('avatar', () => {
         expect(initials('Alice Ingram')).toBe('AI');
         expect(initials('lint-bot')).toBe('LB');
         expect(initials('a.vance')).toBe('AV');
-        expect(initials('alice')).toBe('A');
+        expect(initials('nolan')).toBe('N');
     });
 
     it('takes the first two letters of a single word for header initials', () => {
-        expect(pairInitials('alice')).toBe('AL');
+        expect(pairInitials('nolan')).toBe('NO');
         expect(pairInitials('Alice Ingram')).toBe('AI');
         expect(pairInitials('a.vance')).toBe('AV');
     });

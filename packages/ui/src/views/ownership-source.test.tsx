@@ -13,8 +13,8 @@ import { ViewFrame } from './view-frames.tsx';
 
 /**
  * The ownership zone source uses the name supplied by the host (`ownershipSource`): GitHub uses
- * CODEOWNERS. The name appears in the Overview header and in the "My files" filter label
- * rendered by Route and Full diff.
+ * CODEOWNERS, another host uses its own name (MAINTAINERS here). The name appears both in the Overview header
+ * and in the "My files" filter label rendered by Route and Full diff.
  */
 
 const DATA = fixtureIteration('medium');
@@ -50,7 +50,7 @@ describe('Overview: ownership zone source name', () => {
 
         expect(html).toContain('CODEOWNERS · ');
         expect(html).toContain('Your ownership zone by CODEOWNERS.');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).not.toContain('MAINTAINERS');
     });
 
     it('shows the host explanation even when the lens is working', () => {
@@ -60,12 +60,13 @@ describe('Overview: ownership zone source name', () => {
         expect(render('CODEOWNERS', ownership)).toContain(note);
     });
 
-    it('uses CODEOWNERS to label ownership zones', () => {
-        const html = render('CODEOWNERS');
+    it('labels zones with the MAINTAINERS source', () => {
+        const html = render('MAINTAINERS');
 
-        expect(html).toContain('CODEOWNERS · ');
-        expect(html).toContain('Your ownership zone according to CODEOWNERS.');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).toContain('MAINTAINERS · ');
+        expect(html).toContain('Your ownership zone by MAINTAINERS.');
+        expect(html).not.toContain('CODEOWNERS · ');
+        expect(html).not.toContain('by CODEOWNERS');
     });
 });
 
@@ -106,7 +107,7 @@ describe('Overview without lenses', () => {
         );
 
         expect(html).toContain('>Ownership zone unavailable<');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).not.toContain('CODEOWNERS · ');
     });
 });
 
@@ -115,20 +116,20 @@ describe('"My files" filter: zone source name', () => {
         const html = renderRoute('CODEOWNERS');
 
         expect(html).toContain('My files · CODEOWNERS');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).not.toContain('MAINTAINERS');
     });
 
     it('labels the local review filter with its own source', () => {
         const html = renderRoute('git diff');
 
         expect(html).toContain('My files · git diff');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).not.toContain('My files · CODEOWNERS');
     });
 
-    it('uses CODEOWNERS to label the filter', () => {
-        const html = renderRoute('CODEOWNERS');
+    it('labels the filter with the MAINTAINERS source', () => {
+        const html = renderRoute('MAINTAINERS');
 
-        expect(html).toContain('My files · CODEOWNERS');
-        expect(html).not.toContain('CODEOWNERS');
+        expect(html).toContain('My files · MAINTAINERS');
+        expect(html).not.toContain('My files · CODEOWNERS');
     });
 });

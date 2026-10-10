@@ -21,7 +21,7 @@ import { fixtureBlob } from './patch.js';
 
 /**
  * `ReviewHost` implementation backed by deterministic fixtures. It supports
- * UI development without a live review host, the state gallery, contract tests and e2e.
+ * UI development without a real host, the state gallery, contract tests and e2e.
  *
  * Rules:
  * - no `Date.now()`/`Math.random()`: mutation timestamps are computed from the fixture's `mutationEpoch`
@@ -33,7 +33,7 @@ import { fixtureBlob } from './patch.js';
 /** Step between mutation timestamps: one minute, so draft order is readable at a glance. */
 const MUTATION_STEP_MS = 60_000;
 
-/** Draft id bases. Host sign convention: inline positive, PR-level negative. */
+/** Draft id bases: inline ids are positive, PR-level ids are negative. */
 const INLINE_DRAFT_ID_BASE = 9_000_000;
 const PR_LEVEL_DRAFT_ID_BASE = 70_000;
 
@@ -155,7 +155,7 @@ function normalizeThreadResolve(thread: Thread): void {
 }
 
 /**
- * Status label after applying a verdict, in the wording shown by the host.
+ * Status label after an applied verdict, in the host's own display wording.
  * null means this verdict mode has no status and leaves it unchanged.
  */
 const STATUS_LABELS: Readonly<Record<Verdict, string | null>> = {
@@ -166,7 +166,6 @@ const STATUS_LABELS: Readonly<Record<Verdict, string | null>> = {
 };
 
 export class FixtureHost implements ReviewHost {
-    /** Fixtures reproduce ownership zones. */
     readonly ownershipSource = 'CODEOWNERS';
 
     private readonly data: FixtureData;
@@ -383,7 +382,7 @@ export class FixtureHost implements ReviewHost {
         return Promise.resolve();
     }
 
-    /** Physically deletes the draft, matching the review host, instead of marking it deleted. */
+    /** A draft is physically removed instead of marked deleted. */
     deleteDraft(commentId: HostId): Promise<void> {
         const found = locate(this.activeData().threads, commentId);
         if (found === null) {
@@ -409,7 +408,7 @@ export class FixtureHost implements ReviewHost {
     }
 
     /**
-     * Thread-level resolution. A host with per-comment resolution updates the
+     * Thread-level resolution. For a host with per-comment resolution, this is the root
      * comment's status: it becomes an issue in the requested state, and the thread is recomputed
      * by the rule. An open issue in a reply keeps the thread open.
      */

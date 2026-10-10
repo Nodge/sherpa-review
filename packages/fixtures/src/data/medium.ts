@@ -19,6 +19,17 @@ const DIFF_ID = '182734';
 const BASE_COMMIT = '4c1f0b7a9d3e5f2b8c6a1d4e7f0b3c5a9d2e6f81';
 const HEAD_COMMIT = '9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316';
 
+const REPO_URL = 'https://github.com/quillmart/quillmart';
+
+/**
+ * Not every fixture file has blame: the "Blame" action in the card header must be hidden
+ * when the host has nothing to offer (`blameUrl: null`).
+ */
+const BLAME_PATHS: ReadonlySet<string> = new Set([
+    'services/orders/src/domain/policies/edit-policy.ts',
+    'services/orders/src/domain/order.ts',
+]);
+
 /** Declared PR size: the design handoff counts plus three images. */
 export const MEDIUM_TOTALS = { files: 21, additions: 812, deletions: 56 } as const;
 
@@ -227,10 +238,7 @@ const HAND_WRITTEN: readonly FileSpec[] = [
         ],
     },
     {
-        // Not every fixture file has Blame. The "Blame" action in the card header must
-        // hide when the host has no target to offer (`blameUrl: null`).
         path: 'services/orders/src/domain/policies/edit-policy.ts',
-        blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/policies/edit-policy.ts',
         changeType: 'modify',
         hunks: [
             {
@@ -301,7 +309,6 @@ const HAND_WRITTEN: readonly FileSpec[] = [
     },
     {
         path: 'services/orders/src/domain/order.ts',
-        blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/order.ts',
         changeType: 'modify',
         hunks: [
             {
@@ -1133,20 +1140,20 @@ const LOCK_OFFSET_V2 = 137;
 const LOCK_COUNTS = lockCounts(HAND_WRITTEN.map((spec) => makeFileDiff(DIFF_ID, spec)));
 
 /**
- * Host web file link (`hostFileUrl`), using a file URL at the iteration head
- * with the path relative to the repository root, without encoding. Every fixture file has one:
- * the "Copy file link" menu item cannot be tested without it.
+ * File links in the host web UI at the iteration head. Every fixture file has `hostFileUrl`:
+ * it is needed to check the "Copy file link" menu item. Only `BLAME_PATHS` have `blameUrl`.
  */
-function withHostFileUrl(spec: FileSpec, headCommit: string): FileSpec {
+function withHostLinks(spec: FileSpec, headCommit: string): FileSpec {
     return {
         ...spec,
-        hostFileUrl: `https://github.com/quillmart/quillmart/blob/${headCommit}/${spec.path}`,
+        hostFileUrl: `${REPO_URL}/blob/${headCommit}/${spec.path}`,
+        ...(BLAME_PATHS.has(spec.path) ? { blameUrl: `${REPO_URL}/blame/${headCommit}/${spec.path}` } : {}),
     };
 }
 
 function files(): FileDiff[] {
     const specs = [...HAND_WRITTEN, lockSpec(LOCK_COUNTS, LOCK_OFFSET_V1)];
-    return specs.map((spec) => makeFileDiff(DIFF_ID, withHostFileUrl(spec, HEAD_COMMIT)));
+    return specs.map((spec) => makeFileDiff(DIFF_ID, withHostLinks(spec, HEAD_COMMIT)));
 }
 
 /*
@@ -1159,7 +1166,6 @@ function files(): FileDiff[] {
 /** `default` in `switch` to address the linter comment, plus rejection reasons in a separate constant. */
 const EDIT_POLICY_V2: FileSpec = {
     path: 'services/orders/src/domain/policies/edit-policy.ts',
-    blameUrl: 'https://github.com/quillmart/quillmart/blame/9f3c1ab6d4e2705c8a1b3f9d6e4c2a08b7d5f316/services/orders/src/domain/policies/edit-policy.ts',
     changeType: 'modify',
     hunks: [
         {
@@ -1407,7 +1413,7 @@ function filesAfterPush(
         REJECTION_STATUS_V2,
         lockSpec(LOCK_COUNTS, LOCK_OFFSET_V2),
     ];
-    return specs.map((spec) => makeFileDiff(diffId, withHostFileUrl(spec, headCommit)));
+    return specs.map((spec) => makeFileDiff(diffId, withHostLinks(spec, headCommit)));
 }
 
 /**
@@ -1427,7 +1433,7 @@ function slice(
             diffId: head.diffId,
             baseCommit: base.headCommit,
             headCommit: head.headCommit,
-            files: specs.map((spec) => makeFileDiff(key, withHostFileUrl(spec, head.headCommit))),
+            files: specs.map((spec) => makeFileDiff(key, withHostLinks(spec, head.headCommit))),
         },
     };
 }
@@ -1626,8 +1632,8 @@ function interdiffs(): FixtureInterdiff[] {
 
 /**
  * Threads: 4 human (including resolved, outdated, and a deep branching chain),
- * 2 bot threads and one PR-level thread. Ids follow the host convention: inline ids are positive,
- * PR-level ids are negative. Code must not assume `id > 0`.
+ * 2 bot threads, and one PR thread. Inline thread ids are positive, PR thread ids are negative:
+ * code must not assume `id > 0`.
  *
  * `second` contains the same threads as seen after the push: anchors are reanchored to its files,
  * `pinnedTo` stays on v1, and threads on changed ranges are marked `outdated`.
@@ -1695,7 +1701,7 @@ function threads(diffId: HostId, second = false): Thread[] {
         ],
     });
 
-    // The author's reply arrives with the push: it addresses iris's comment with a completed fix.
+    // The author reply arrives with the push: it answers Iris with the completed fix.
     const authorFollowUp = comment({
         id: '4820288',
         author: AUTHOR,
@@ -1839,7 +1845,7 @@ function threads(diffId: HostId, second = false): Thread[] {
     ];
 }
 
-/** Ownership: 12 "my" files out of 21. Zones at different depths follow the `.github/CODEOWNERS` rules. */
+/** Ownership: 12 "My files" out of 21. Zones at different depths follow `.github/CODEOWNERS` rules. */
 const MY_FILES = [
     'services/orders/src/domain/edit-window.ts',
     'services/orders/src/domain/order.ts',

@@ -176,7 +176,7 @@ describe('thread marker at the card edge', () => {
 
         expect(marker).toContain('thread-marker');
         expect(marker).toContain('aria-expanded="false"');
-        expect(marker).toContain('Раскрыть: Kai Kennedy · вопрос по строке');
+        expect(marker).toContain('Expand: Kai Kennedy · a question about the line');
         expect(markerHtml([lineThread('m1', LINE)], LINE + 1)).not.toContain('thread-marker');
     });
 

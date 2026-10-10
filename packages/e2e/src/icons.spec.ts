@@ -96,10 +96,11 @@ for (const mode of ['unified', 'split'] as const) {
         }
         await expect(page.locator(`.diff-rows--${mode}`).first()).toBeVisible();
 
+        // In split mode, use a row with both halves: its second button must not capture hover.
         const gutterSelector =
             mode === 'unified'
                 ? '.diff-row__gutter--comment:has(.diff-row__comment)'
-                : '.diff-row__gutter--comment:is(.diff-side--add, .diff-side--del):has(.diff-row__comment)';
+                : '.diff-row--pair:has(> .diff-side--del .diff-row__comment):has(> .diff-side--add .diff-row__comment) > .diff-row__gutter--comment:has(.diff-row__comment)';
         const gutter = page.locator(gutterSelector).filter({ hasText: /\d/ }).first();
         const row = gutter.locator('..');
         const button = gutter.locator('.diff-row__comment');

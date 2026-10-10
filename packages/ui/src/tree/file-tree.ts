@@ -11,7 +11,7 @@ import { inTreeOrder } from './file-order.js';
  * docs/design/README.md §10). Pure module. Building, aggregation, collapse and search run
  * without React or the DOM. Rendering only draws the prepared rows.
  *
- * Chains of directories containing a single directory combine into one row (`services/orders`,
+ * Chains of directories with a single directory child combine into one row (`services/orders`,
  * `api/v3`), so a tree of two dozen files fits the panel instead of taking one row
  * per path segment. A directory with a single file does not combine with its file.
  * File rows show only the name (docs/design/SPEC-theming-2026-09-12.md §6a).

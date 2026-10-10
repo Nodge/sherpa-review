@@ -54,7 +54,7 @@ const ANSWER_PR = [
     'Order → EditWindow.state → EditPolicy.decide → HTTP status + audit',
     '```',
     '',
-    'The diff does not show rollout configuration beyond `docs/edit-window.md` and `.github/workflows/ci.yml`, so the actual flag values in each environment cannot be confirmed.',
+    'The diff shows no rollout configuration beyond `docs/edit-window.md` and `.github/workflows/ci.yml`, so the actual flag values per environment cannot be confirmed.',
 ].join('\n');
 
 const ANSWER_CLASS = [
