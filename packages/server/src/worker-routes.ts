@@ -113,8 +113,8 @@ export function createWorkerRoutes(options: WorkerRoutesOptions): Route[] {
                 const body: WorkerRegisterResponse = {
                     kind: 'registered',
                     message:
-                        'This session is registered as the worker of this PR. Run `sherpa worker next` ' +
-                        'and follow the instructions in its output.',
+                        'This session is registered as the worker of this PR. Run `worker next` and follow the ' +
+                        'instructions in its output.',
                     // The CLI compares the instruction with the echo. An older server silently drops the request field.
                     ...(applied === undefined ? {} : { localVerdicts: applied }),
                 };

@@ -238,6 +238,14 @@ const MISSING_LOCAL_PATH =
     'sherpa: `--local` needs the path of the project directory to review.\n' +
     'Call `sherpa up --local <path>` — `.` is the directory you are in right now.';
 
+/**
+ * Parse error hints don't print a complete command because the PR key and CLI path aren't known here.
+ * The full command is already in the task output.
+ */
+const COPY_PRINTED_COMMAND =
+    'Copy the full command printed with the task — it carries the CLI path and `--pr` — and fill in ' +
+    'only its `"..."` placeholder, if it has one.';
+
 function parseWorkerCommand(
     positionals: readonly string[],
     options: ReadonlyMap<OptionName, string>,
@@ -246,7 +254,8 @@ function parseWorkerCommand(
     const sub = positionals[1];
     if ((sub !== 'next' && sub !== 'register') || positionals.length > 2) {
         throw new CliError(
-            'sherpa: group `worker` has two commands — `sherpa worker next` and `sherpa worker register`.',
+            'sherpa: group `worker` has two commands — `worker next` and `worker register`.\n' +
+                'Run the full `worker next` command printed by `up`: it carries the CLI path and `--pr`.',
         );
     }
     if (sub === 'register') {
@@ -291,13 +300,13 @@ function parseTaskCommand(
     if (sub !== 'complete' && sub !== 'progress' && sub !== 'fail') {
         throw new CliError(
             'sherpa: group `task` has three commands — `complete`, `progress`, `fail`.\n' +
-                'For example: `sherpa task complete 42 --file answer.md`.',
+                `Syntax: \`task complete <id> --file <path>\`. ${COPY_PRINTED_COMMAND}`,
         );
     }
     if (positionals.length > 3) {
         throw new CliError(
             `sherpa: unexpected arguments after \`task ${sub}\`: ${positionals.slice(3).join(' ')}.\n` +
-                `Expected \`sherpa task ${sub} <id> ${requiredOptionOf(sub)} "..."\`.`,
+                `Syntax: ${taskSyntaxOf(sub)}. ${COPY_PRINTED_COMMAND}`,
         );
     }
 
@@ -316,8 +325,8 @@ function parseTaskCommand(
 function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     if (raw === undefined) {
         throw new CliError(
-            `sherpa: no task number given.\nCall \`sherpa task ${sub} <id> ${requiredOptionOf(sub)} "..."\`; ` +
-                'the task number comes from the output of `sherpa worker next`.',
+            `sherpa: no task number given.\nSyntax: ${taskSyntaxOf(sub)}. The task number comes from the ` +
+                `output of \`worker next\`. ${COPY_PRINTED_COMMAND}`,
         );
     }
 
@@ -327,7 +336,8 @@ function parseTaskId(raw: string | undefined, sub: TaskSubcommand): number {
     if (!Number.isInteger(taskId) || taskId <= 0) {
         throw new CliError(
             `sherpa: the task number must be a positive number, got ${JSON.stringify(raw)}.\n` +
-                'Take the number from the output of `sherpa worker next` (the `TASK sherpa/<id>` line).',
+                'Take the number from the output of `worker next` (the `TASK sherpa/<id>` line). ' +
+                COPY_PRINTED_COMMAND,
         );
     }
     return taskId;
@@ -338,10 +348,15 @@ function requireOption(options: ReadonlyMap<OptionName, string>, name: OptionNam
     if (value === undefined || value === '') {
         throw new CliError(
             `sherpa: \`task ${sub}\` requires ${name}.\n` +
-                `Call \`sherpa task ${sub} <id> ${name} ${name === '--file' ? '<path>' : '"..."'}\`.`,
+                `Syntax: ${taskSyntaxOf(sub)}. ${COPY_PRINTED_COMMAND}`,
         );
     }
     return value;
+}
+
+function taskSyntaxOf(sub: TaskSubcommand): string {
+    const option = requiredOptionOf(sub);
+    return `\`task ${sub} <id> ${option} ${option === '--file' ? '<path>' : '"..."'}\``;
 }
 
 function requiredOptionOf(sub: TaskSubcommand): OptionName {

@@ -10,6 +10,8 @@ import { startServer } from '@sherpa/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FakeWorker } from './fake-worker.js';
+import type { CommandTarget } from './format.js';
+import { taskCompleteCommand, workerNextCommand } from './format.js';
 import { taskResultDirFor, taskResultFileFor, workerIdPathFor } from './paths.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,6 +19,8 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const bundlePath = path.join(packageRoot, 'dist', 'sherpa.mjs');
 
 const PR_KEY = 'github-quillmart--quillmart--909';
+/** How the CLI names itself in printed commands. Worker processes run the bundle at this path. */
+const TARGET: CommandTarget = { cliPath: bundlePath, prKey: PR_KEY };
 /** Short long-poll window. The bundle loops `next` through frequent `idle` responses, as a real server does every four minutes. */
 const LONG_POLL_SECONDS = 0.2;
 /** Time shift guaranteed to outlast an interactive task lease (and the worker death timeout too). */
@@ -85,7 +89,7 @@ describe('worker session scenarios', () => {
         expect(issued.stdout).toContain('attempt 1');
         // The result path is under the process tmp directory, unique to each session and attempt.
         const firstFile = await resultFileOf(taskId, 1);
-        expect(issued.stdout).toContain(`--file ${firstFile}`);
+        expect(issued.stdout).toContain(taskCompleteCommand(TARGET, taskId, firstFile));
 
         // The session disappeared without another call. There is nothing to wait for, so advance the clock.
         advance(PAST_LEASE_SECONDS);
@@ -120,9 +124,7 @@ describe('worker session scenarios', () => {
         expect(rejected.code).toBe(0);
         expect(rejected.stdout).toContain('rejected');
         expect(rejected.stdout).toContain('1. ');
-        expect(rejected.stdout).toContain(
-            `sherpa task complete ${String(taskId)} --file ${path.join(workDir, 'result-1.md')}`,
-        );
+        expect(rejected.stdout).toContain(taskCompleteCommand(TARGET, taskId, path.join(workDir, 'result-1.md')));
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
 
         const accepted = await worker.complete(taskId, 'Valid result.');
@@ -141,7 +143,7 @@ describe('worker session scenarios', () => {
 
         expect(repeated.code).toBe(0);
         expect(repeated.stdout).toContain('is already finished');
-        expect(repeated.stdout).toContain('sherpa worker next');
+        expect(repeated.stdout).toContain(workerNextCommand(TARGET));
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'done', result: 'First result.' });
     });
 
@@ -155,7 +157,7 @@ describe('worker session scenarios', () => {
         const late = await worker.complete(taskId, 'Late result.');
         expect(late.code).toBe(1);
         // There is no grace period, but the text leads back into the loop instead of a dead end.
-        expect(late.stderr).toContain('worker next');
+        expect(late.stderr).toContain(workerNextCommand(TARGET));
         expect(late.stderr).not.toContain('lease_not_held');
         expect(server.queue.getTask(taskId)).toMatchObject({ status: 'queued', attempt: 2, workerId: null });
 
@@ -180,7 +182,7 @@ describe('worker session scenarios', () => {
         const progress = await worker.progress(taskId, 'still working');
         expect(progress.code).toBe(0);
         expect(progress.stdout).toContain('has been cancelled');
-        expect(progress.stdout).toContain('sherpa worker next');
+        expect(progress.stdout).toContain(workerNextCommand(TARGET));
 
         const completed = await worker.complete(taskId, 'Result for the cancelled task.');
         expect(completed.code).toBe(0);

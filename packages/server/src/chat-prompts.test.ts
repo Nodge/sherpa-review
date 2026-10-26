@@ -34,4 +34,14 @@ describe('chat guide', () => {
         expect(chatInstructions('ru')).toContain('in Russian');
         expect(chatInstructions('en')).toContain('in English');
     });
+
+    // Commands come from task output, which includes the full CLI path and `--pr`.
+    it('refers to the printed submission commands instead of bare `sherpa task`', () => {
+        for (const locale of LOCALES) {
+            const guide = chatGuide(locale);
+            expect(guide).toContain('the `task complete` command printed\nby the task, copied as is');
+            expect(guide).toContain('the printed `task fail` command');
+            expect(guide).not.toContain('sherpa task');
+        }
+    });
 });

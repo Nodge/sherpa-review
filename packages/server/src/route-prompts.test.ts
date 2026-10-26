@@ -85,7 +85,10 @@ describe('route guides', () => {
             for (const guide of guides(locale)) {
                 expect(guide).toContain('The server is the only validator.');
                 expect(guide).toContain('Never end the task silently');
-                expect(guide).toContain('sherpa task fail <id> --reason <text>');
+                expect(guide).toContain('the printed `task fail` command');
+                // Commands come from the task output, which has the full CLI path and `--pr`.
+                expect(guide).toContain('the `task complete` command printed by the task, copied as is');
+                expect(guide).not.toContain('sherpa task');
                 expect(guide).toContain('do\nnot install validators or packages');
             }
         }

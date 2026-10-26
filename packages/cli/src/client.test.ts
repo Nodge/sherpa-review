@@ -28,7 +28,9 @@ describe('next transport: failure before reaching the network', () => {
             workerId: 'w-1',
         };
 
-        const failure = await requestNext(connection).catch((error: unknown) => error);
+        const target = { cliPath: '/opt/sherpa/sherpa.mjs', prKey: connection.prKey };
+
+        const failure = await requestNext(connection, target).catch((error: unknown) => error);
 
         expect(failure).toBeInstanceOf(CliError);
         expect((failure as CliError).message).toContain('fixture-medium');

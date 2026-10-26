@@ -33,7 +33,7 @@ import type { ZodType } from 'zod';
 import type { ServerConnection } from './discovery.js';
 import { serverUnavailable } from './discovery.js';
 import { CliError, RpcCallError } from './errors.js';
-import type { CallRole } from './format.js';
+import type { CallRole, CommandTarget } from './format.js';
 import { formatRpcError } from './format.js';
 import { CLI_VERSION } from './version.js';
 
@@ -57,6 +57,7 @@ export interface WorkerLabels {
 /** Registers a session as the PR worker (`docs/protocol.md §7`): first skill invocation and every reconnection. */
 export async function requestRegister(
     connection: ServerConnection,
+    target: CommandTarget,
     labels: WorkerLabels,
     /** Instruction for the outcome of a local review (`up --local`): null clears the mode, undefined leaves it unchanged. */
     localVerdicts?: string | null,
@@ -73,6 +74,7 @@ export async function requestRegister(
         responseSchema: workerRegisterResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
         role: 'register',
+        target,
     });
 }
 
@@ -80,7 +82,7 @@ export async function requestRegister(
  * One long-poll for the next task using the server's window. Uses `node:http`, not `fetch`:
  * see `sendViaHttp`.
  */
-export async function requestNext(connection: ServerConnection): Promise<WorkerNextResponse> {
+export async function requestNext(connection: ServerConnection, target: CommandTarget): Promise<WorkerNextResponse> {
     return callWorker<WorkerNextRequest, WorkerNextResponse>(connection, {
         endpoint: WORKER_ENDPOINTS.next,
         payload: {},
@@ -88,12 +90,14 @@ export async function requestNext(connection: ServerConnection): Promise<WorkerN
         responseSchema: workerNextResponseSchema,
         timeoutMs: NEXT_TIMEOUT_MS,
         role: 'worker',
+        target,
         send: sendViaHttp,
     });
 }
 
 export async function requestComplete(
     connection: ServerConnection,
+    target: CommandTarget,
     taskId: number,
     result: string,
 ): Promise<TaskCompleteResponse> {
@@ -104,11 +108,13 @@ export async function requestComplete(
         responseSchema: taskCompleteResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
         role: 'worker',
+        target,
     });
 }
 
 export async function requestProgress(
     connection: ServerConnection,
+    target: CommandTarget,
     taskId: number,
     text: string,
 ): Promise<TaskAckResponse> {
@@ -119,11 +125,13 @@ export async function requestProgress(
         responseSchema: taskAckResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
         role: 'worker',
+        target,
     });
 }
 
 export async function requestFail(
     connection: ServerConnection,
+    target: CommandTarget,
     taskId: number,
     reason: string,
 ): Promise<TaskAckResponse> {
@@ -134,6 +142,7 @@ export async function requestFail(
         responseSchema: taskAckResponseSchema,
         timeoutMs: DEFAULT_TIMEOUT_MS,
         role: 'worker',
+        target,
     });
 }
 
@@ -151,6 +160,8 @@ interface WorkerCall<TRequest extends WorkerRequestBase, TResponse> {
     readonly timeoutMs: number;
     /** Call role. Determines the next-step message on a worker conflict. */
     readonly role: CallRole;
+    /** How to invoke the CLI in the next step appended to the server error. */
+    readonly target: CommandTarget;
     /** Call transport. Defaults to `fetch`. Response parsing is independent of it. */
     readonly send?: Transport;
 }
@@ -193,7 +204,7 @@ async function callWorker<TRequest extends WorkerRequestBase, TResponse>(
 
     if (!response.ok) {
         const failure = parseRpcError(response.text);
-        throw new RpcCallError(failure.code, formatRpcError(failure, call.role));
+        throw new RpcCallError(failure.code, formatRpcError(failure, call.role, call.target));
     }
 
     const parsed = call.responseSchema.safeParse(parseJson(response.text));

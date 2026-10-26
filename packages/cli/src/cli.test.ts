@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readResultFile } from './cli.js';
 import { CliError } from './errors.js';
 
+const TARGET = { cliPath: '/opt/sherpa/sherpa.mjs', prKey: 'github-quillmart--quillmart--1' };
+
 describe('result size precheck', () => {
     let workDir: string;
 
@@ -29,22 +31,23 @@ describe('result size precheck', () => {
         const atLimit = await writeResult('at-limit.md', 'a'.repeat(RESULT_MAX_BYTES));
         const overLimit = await writeResult('over-limit.md', 'a'.repeat(RESULT_MAX_BYTES + 1));
 
-        await expect(readResultFile(atLimit, 42)).resolves.toHaveLength(RESULT_MAX_BYTES);
-        await expect(readResultFile(overLimit, 42)).rejects.toThrow('the limit is 256 KB');
+        await expect(readResultFile(atLimit, 42, TARGET)).resolves.toHaveLength(RESULT_MAX_BYTES);
+        await expect(readResultFile(overLimit, 42, TARGET)).rejects.toThrow('the limit is 256 KB');
     });
 
     it('counts size in bytes, not characters', async () => {
         // 'é' takes two bytes in UTF-8. By string length, the file would fit within the limit.
         const file = await writeResult('utf8.md', 'é'.repeat(RESULT_MAX_BYTES / 2 + 1));
 
-        await expect(readResultFile(file, 42)).rejects.toThrow(CliError);
+        await expect(readResultFile(file, 42, TARGET)).rejects.toThrow(CliError);
     });
 
     it('missing file or a directory: clear error with a hint', async () => {
         const missing = path.join(workDir, 'missing.md');
-        await expect(readResultFile(missing, 42)).rejects.toThrow(
-            `Write the result to ${missing} and call \`sherpa task complete 42 --file ${missing}\` again.`,
+        await expect(readResultFile(missing, 42, TARGET)).rejects.toThrow(
+            `Write the result to ${missing} and call ` +
+                `\`node /opt/sherpa/sherpa.mjs task complete 42 --file '${missing}' --pr github-quillmart--quillmart--1\` again.`,
         );
-        await expect(readResultFile(workDir, 42)).rejects.toThrow('is not a file');
+        await expect(readResultFile(workDir, 42, TARGET)).rejects.toThrow('is not a file');
     });
 });

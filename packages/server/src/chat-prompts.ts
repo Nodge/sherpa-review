@@ -85,15 +85,15 @@ permission to fill gaps from memory.
 Produce one non-empty Markdown file. There is no JSON schema and nobody checks a schema for chat
 answers. Do not wrap the answer in JSON and do not add a markdown fence around the whole file.
 
-Keep the result under 256 KB. Save it to a file and submit it with the \`sherpa task complete\` command
-printed by the task. Exceeding the queue limit is a fatal task error: the queue closes the task as failed,
+Keep the result under 256 KB. Save it to a file and submit it with the \`task complete\` command printed
+by the task, copied as is. Exceeding the queue limit is a fatal task error: the queue closes the task as failed,
 so there is no corrected resubmission. Write compactly on the first attempt.
 
 An empty answer, emoji or a filler phrase above causes a validation rejection while the task remains
 open. That rejection is part of the normal loop: fix the named problem and submit the corrected file
 again.
 
-Never end silently. If answering is truly impossible, use the printed \`sherpa task fail\` command with a
+Never end silently. If answering is truly impossible, use the printed \`task fail\` command with a
 concrete reason. Do not install validators or packages in the reviewer's environment.`;
 }
 

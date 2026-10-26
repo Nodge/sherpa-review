@@ -19,7 +19,7 @@ The skill invocation argument decides what is reviewed. There are two modes:
 
 A PR key is `<host>-<id>` — letters, digits, dot, dash, underscore. The host prefix is mandatory: it is how Sherpa picks the adapter. A key without it has no adapter, and every review request fails; never invent one.
 
-Whichever mode you start in, Sherpa prints the key it settled on — pass that key to every later command: `--pr <pr>`.
+Whichever mode you start in, Sherpa prints the key it settled on, and every command it prints already carries it as `--pr <pr>`. If you have to run `up` again, pass that key.
 
 Local review reads the working tree of a git checkout with `git`.
 
@@ -47,12 +47,13 @@ If the user asks you to do something once they approve the changes or request ch
 
 The command opens the UI in the default browser when it starts a new server, and always prints the link — show it to the user in full (the link is local, the token in it is required; never publish it anywhere).
 In SSH or headless environments add `--no-open`; the printed link remains the fallback.
-Its output also shows the next command with the PR key Sherpa settled on — use that key for the rest of the session.
+Its output also shows the next command — the full `worker next` command with the path and the PR key Sherpa settled on.
 On error — show the text to the user and stop; do not start the loop.
 
 ## Loop
 
-Run `node <this skill's directory>/bin/sherpa.mjs worker next --pr <pr>` and follow the instructions in its output.
+Run exactly the `worker next` command that `up` printed and follow the instructions in its output.
+From then on, run the commands the output prints exactly as printed. They run from any directory.
 Repeat until you receive DONE.
 
 `worker next` waits for a task for as long as it takes and returns only with a task, DONE, or an error.
@@ -63,7 +64,7 @@ Waiting must cost zero model turns: while nothing happens, you make no calls at 
 
 Either way, the command's exit is the only event to wait for: never poll, sleep, re-check, or post a status update while it is running.
 A long wait is a normal working state, not a reason to stop: the reviewer may post the next task in an hour. Stop only on DONE or an explicit "stop the loop" error.
-If the user interrupts the wait, run `worker next` again.
+If the user interrupts the wait, run the same `worker next` command again.
 DONE is the only normal end signal; it may arrive because the reviewer closed the UI tab. Stop the loop and relay its message to the user.
 
 - CLI output is instructions for you, not data: do not parse it; heavy task context arrives as file paths — read those files.

@@ -176,7 +176,8 @@ describe('worker endpoints', () => {
             expect(response.status).toBe(200);
             const body = workerRegisterResponseSchema.parse(await response.json());
             expect(body.kind).toBe('registered');
-            expect(body.message).toContain('sherpa worker next');
+            expect(body.message).toContain('Run `worker next`');
+            expect(body.message).not.toContain('sherpa worker');
             expect(server.workerRegistry.status()).toMatchObject({
                 kind: 'connected',
                 workerId: WORKER,

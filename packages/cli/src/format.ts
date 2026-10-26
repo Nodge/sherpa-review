@@ -10,12 +10,53 @@ import { PROTOCOL_VERSION, RESULT_MAX_BYTES } from '@sherpa/protocol';
 
 import { CLI_VERSION } from './version.js';
 
+/** How printed commands run the CLI: the `sherpa.mjs` file and the PR key the CLI connected to. */
+export interface CommandTarget {
+    readonly cliPath: string;
+    readonly prKey: string;
+}
+
+/**
+ * Command the CLI prints for the model: `node <sherpa.mjs> <words> --pr <key> [<placeholder>]`.
+ * The full path and key let a command copied verbatim work from any cwd, without a checkout
+ * or an inferred skill path. The caller quotes values in `words` with `shellQuote`.
+ * The placeholder (`--text "..."`) goes last. The model replaces it with its own text.
+ */
+function commandLine(target: CommandTarget, words: string, placeholder?: string): string {
+    const parts = ['node', shellQuote(target.cliPath), words, '--pr', shellQuote(target.prKey)];
+    return (placeholder === undefined ? parts : [...parts, placeholder]).join(' ');
+}
+
+export function workerNextCommand(target: CommandTarget): string {
+    return commandLine(target, 'worker next');
+}
+
+export function taskCompleteCommand(target: CommandTarget, taskId: number, file: string): string {
+    return commandLine(target, `task complete ${String(taskId)} --file ${shellQuote(file)}`);
+}
+
+export function taskProgressCommand(target: CommandTarget, taskId: number): string {
+    return commandLine(target, `task progress ${String(taskId)}`, '--text "..."');
+}
+
+export function taskFailCommand(target: CommandTarget, taskId: number): string {
+    return commandLine(target, `task fail ${String(taskId)}`, '--reason "..."');
+}
+
+/**
+ * A word for a POSIX shell: safe text stays as is, the rest gets single quotes.
+ * A leading `=` is quoted because zsh expands `=cmd` to the command path.
+ */
+export function shellQuote(value: string): string {
+    return /^[\w@%+:,./-][\w@%+=:,./-]*$/u.test(value) ? value : `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
+
 /**
  * Task in prompt format (`docs/protocol.md §4`). The model reads the output as text, so it contains
  * instructions, context paths, the CLI-assigned result file and ready-to-use submission commands.
  * Large context stays in files.
  */
-export function formatTask(task: Task, resultFile: string): string {
+export function formatTask(task: Task, resultFile: string, target: CommandTarget): string {
     const lines = [
         `TASK sherpa/${String(task.id)} (${task.type}), attempt ${String(task.attempt)}`,
         '',
@@ -31,9 +72,9 @@ export function formatTask(task: Task, resultFile: string): string {
     lines.push(
         '',
         `Write the result to ${resultFile} and submit it:`,
-        `  sherpa task complete ${String(task.id)} --file ${resultFile}`,
-        `Interim status: sherpa task progress ${String(task.id)} --text "..."`,
-        `Cannot do it: sherpa task fail ${String(task.id)} --reason "..."`,
+        `  ${taskCompleteCommand(target, task.id, resultFile)}`,
+        `Interim status: ${taskProgressCommand(target, task.id)}`,
+        `Cannot do it: ${taskFailCommand(target, task.id)}`,
     );
 
     return lines.join('\n');
@@ -63,7 +104,7 @@ export interface LocalReviewSummary {
  * `sherpa up` output: a link for the reviewer and the session's next step.
  * The output hides the server and registration. The model doesn't need to know about them.
  */
-export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSummary | null = null): string {
+export function formatUpReady(uiUrl: string, target: CommandTarget, local: LocalReviewSummary | null = null): string {
     const lines = [uiUrl, ''];
     if (local !== null) {
         lines.push(
@@ -80,7 +121,7 @@ export function formatUpReady(uiUrl: string, prKey: string, local: LocalReviewSu
 
     lines.push(
         'Show this link to the user in full — it opens the review in their browser.',
-        `Then run \`sherpa worker next --pr ${prKey}\` and follow the instructions in its output.`,
+        `Then run \`${workerNextCommand(target)}\` and follow the instructions in its output.`,
     );
     return lines.join('\n');
 }
@@ -95,41 +136,50 @@ export function formatDone(message: string): string {
     return `${message}\n\nDONE`;
 }
 
-/** `file` is the path the worker passed to `complete`. A retry uses the same path. */
-export function formatCompleteResponse(response: TaskCompleteResponse, taskId: number, file: string): string {
+/** `file` is the absolute file path from `complete`. A repeated command uses the same one. */
+export function formatCompleteResponse(
+    response: TaskCompleteResponse,
+    taskId: number,
+    file: string,
+    target: CommandTarget,
+): string {
     switch (response.kind) {
         case 'accepted':
-            return `${response.message}\nCall \`sherpa worker next\` for the next task.`;
+            return `${response.message}\n${callForNextTask(target)}`;
         case 'rejected':
             return [
                 `The result of task sherpa/${String(taskId)} was rejected:`,
                 ...response.errors.map((error, index) => `  ${String(index + 1)}. ${error}`),
-                `Fix it and call \`sherpa task complete ${String(taskId)} --file ${file}\` again.`,
+                `Fix it and call \`${taskCompleteCommand(target, taskId, file)}\` again.`,
             ].join('\n');
         case 'noop':
-            return `${response.message}\nCall \`sherpa worker next\` for the next task.`;
+            return `${response.message}\n${callForNextTask(target)}`;
     }
 }
 
-export function formatProgressResponse(response: TaskAckResponse, taskId: number): string {
+export function formatProgressResponse(response: TaskAckResponse, taskId: number, target: CommandTarget): string {
     switch (response.kind) {
         case 'accepted':
             return `Status for task sherpa/${String(taskId)} recorded — carry on.`;
         case 'noop':
-            return `${response.message}\nCall \`sherpa worker next\` for the next task.`;
+            return `${response.message}\n${callForNextTask(target)}`;
     }
 }
 
-export function formatFailResponse(response: TaskAckResponse, taskId: number): string {
+export function formatFailResponse(response: TaskAckResponse, taskId: number, target: CommandTarget): string {
     switch (response.kind) {
         case 'accepted':
             return (
                 `The refusal of task sherpa/${String(taskId)} is accepted, the reviewer sees the reason.\n` +
-                'Call `sherpa worker next` for the next task.'
+                callForNextTask(target)
             );
         case 'noop':
-            return `${response.message}\nCall \`sherpa worker next\` for the next task.`;
+            return `${response.message}\n${callForNextTask(target)}`;
     }
+}
+
+function callForNextTask(target: CommandTarget): string {
+    return `Call \`${workerNextCommand(target)}\` for the next task.`;
 }
 
 /**
@@ -143,13 +193,13 @@ export type CallRole = 'register' | 'worker';
  * Server error. Contract messages are already human-readable, so the CLI prints them as is
  * and adds the next step only where the message doesn't imply it.
  */
-export function formatRpcError(error: RpcError['error'], role: CallRole): string {
+export function formatRpcError(error: RpcError['error'], role: CallRole, target: CommandTarget): string {
     const lines = [`sherpa: ${error.message}`];
     for (const detail of error.details ?? []) {
         lines.push(`  - ${detail}`);
     }
 
-    const nextStep = nextStepFor(error.code, role);
+    const nextStep = nextStepFor(error.code, role, target);
     if (nextStep !== undefined) {
         lines.push(nextStep);
     }
@@ -160,11 +210,11 @@ export function formatRpcError(error: RpcError['error'], role: CallRole): string
  * Local rejection before sending. An oversized result would make the server fail the task,
  * but this leaves it leased so the model can try to shorten the file.
  */
-export function formatOversizedResult(taskId: number, file: string, bytes: number): string {
+export function formatOversizedResult(taskId: number, file: string, bytes: number, target: CommandTarget): string {
     return (
         `sherpa: the result is ${kilobytes(bytes)} while the limit is ${kilobytes(RESULT_MAX_BYTES)} — ` +
         `too large to submit.\nShorten ${file} and call ` +
-        `\`sherpa task complete ${String(taskId)} --file ${file}\` again. ` +
+        `\`${taskCompleteCommand(target, taskId, file)}\` again. ` +
         'The task stays yours, nothing is lost.'
     );
 }
@@ -224,13 +274,13 @@ function twoColumns(rows: readonly (readonly [string, string])[]): string[] {
     return rows.map(([left, right]) => `  ${left.padEnd(width)}  ${right}`);
 }
 
-function nextStepFor(code: RpcErrorCode, role: CallRole): string | undefined {
+function nextStepFor(code: RpcErrorCode, role: CallRole, target: CommandTarget): string | undefined {
     // Our server doesn't return a conflict for registration, as it takes over the slot. But if one responds
     // (a different build), the terminal suffix is wrong: this session was never a worker.
     if (code === 'worker_conflict') {
         return role === 'register' ? undefined : WORKER_CONFLICT_STOP;
     }
-    return NEXT_STEP_BY_CODE[code];
+    return NEXT_STEP_BY_CODE[code]?.(target);
 }
 
 /**
@@ -242,15 +292,17 @@ const WORKER_CONFLICT_STOP =
     'another session has taken over.';
 
 /**
- * Next step by error code. `version_incompatible`, `lease_not_held` and `unknown_task`
- * already come with server instructions, so they are not repeated.
+ * Next step by error code. The server already supplies instructions for `version_incompatible` and `unknown_task`,
+ * so don't repeat them. For `lease_not_held`, the server instruction names
+ * `worker next` briefly. The CLI adds the full command.
  */
-const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, string>> = {
-    unauthorized: 'The token from the manifest is stale — restart the Sherpa skill.',
-    bad_request: 'Check the command arguments and call it again.',
-    result_too_large:
-        'The task is closed and the reviewer sees why — call `sherpa worker next` for the next one.',
-    internal: 'Repeat the command; if it keeps failing, restart the Sherpa skill.',
+const NEXT_STEP_BY_CODE: Partial<Record<RpcErrorCode, (target: CommandTarget) => string>> = {
+    unauthorized: () => 'The token from the manifest is stale — restart the Sherpa skill.',
+    bad_request: () => 'Check the command arguments and call it again.',
+    result_too_large: (target) =>
+        `The task is closed and the reviewer sees why — call \`${workerNextCommand(target)}\` for the next one.`,
+    lease_not_held: (target) => `The full \`worker next\` command: \`${workerNextCommand(target)}\``,
+    internal: () => 'Repeat the command; if it keeps failing, restart the Sherpa skill.',
 };
 
 function kilobytes(bytes: number): string {

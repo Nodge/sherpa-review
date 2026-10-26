@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliIo } from './cli.js';
 import { run } from './cli.js';
+import type { CommandTarget } from './format.js';
+import { taskCompleteCommand, workerNextCommand } from './format.js';
 import { localPrKey } from './local.js';
 import { taskResultDirFor, taskResultFileFor, taskResultRootFor } from './paths.js';
 
@@ -18,6 +20,13 @@ const PR_KEY = 'github-quillmart--quillmart--777';
 
 /** Built CLI (`src/bundle.global-setup.ts`). Its own `up` spawns it as a daemon. */
 const CLI_BUNDLE = path.resolve(import.meta.dirname, '..', 'dist', 'sherpa.mjs');
+
+/** Default CLI entry path in these tests is the test file. The CLI prints it in commands too. */
+const TEST_ENTRY = fileURLToPath(import.meta.url);
+const TARGET: CommandTarget = { cliPath: TEST_ENTRY, prKey: PR_KEY };
+
+/** A command without the CLI path cannot run outside the skill directory and a checkout. */
+const BARE_COMMAND = /(^|[^/\w.-])sherpa (up|worker|task)\b/mu;
 
 interface Invocation {
     readonly code: number;
@@ -79,7 +88,7 @@ describe('CLI against server', () => {
             out: (text) => stdout.push(text),
             err: (text) => stderr.push(text),
             // There is no server module beside the test file. An already running server doesn't need it.
-            entry: overrides.entry ?? fileURLToPath(import.meta.url),
+            entry: overrides.entry ?? TEST_ENTRY,
             // Result files go into the test working directory instead of the system tmp.
             tmpDir: overrides.tmpDir ?? workDir,
             ...(overrides.ensureServer === undefined ? {} : { ensureServer: overrides.ensureServer }),
@@ -142,7 +151,8 @@ describe('CLI against server', () => {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain(`http://127.0.0.1:${String(running.port)}/#t=`);
         expect(result.stdout).toContain('Show this link to the user in full');
-        expect(result.stdout).toContain(`sherpa worker next --pr ${PR_KEY}`);
+        expect(result.stdout).toContain(`Then run \`${workerNextCommand(TARGET)}\``);
+        expect(result.stdout).not.toMatch(BARE_COMMAND);
         // Output never mentions the server or registration. The model has no need to know about them.
         expect(result.stdout).not.toContain('register');
         expect(opened).toEqual([]);
@@ -180,7 +190,7 @@ describe('CLI against server', () => {
         expect(result.stdout).toContain(`http://127.0.0.1:${String(server.port)}/#t=`);
         expect(result.stdout).toContain('Reviewing the working tree of');
         expect(result.stdout).toContain('on branch feature, base main~3');
-        expect(result.stdout).toContain(`sherpa worker next --pr ${localKey}`);
+        expect(result.stdout).toContain(workerNextCommand({ cliPath: TEST_ENTRY, prKey: localKey }));
         expect(server.workerRegistry.status()).toMatchObject({ kind: 'connected' });
     });
 
@@ -466,7 +476,8 @@ describe('CLI against server', () => {
         const result = await sherpa('worker', 'register', '--harness', 'claude-code');
 
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('sherpa worker next');
+        expect(result.stdout).toContain(`The full \`worker next\` command: \`${workerNextCommand(TARGET)}\``);
+        expect(result.stdout).not.toMatch(BARE_COMMAND);
         const workerId = await readWorkerIdFile();
         expect(running.workerRegistry.status()).toMatchObject({
             kind: 'connected',
@@ -518,7 +529,8 @@ describe('CLI against server', () => {
         const second = await sherpa('worker', 'register', '--harness', 'codex');
 
         expect(second.code).toBe(0);
-        expect(second.stdout).toContain('sherpa worker next');
+        expect(second.stdout).toContain(workerNextCommand(TARGET));
+        expect(second.stdout).not.toMatch(BARE_COMMAND);
         const workerId = await readWorkerIdFile();
         expect(workerId).not.toBe(first);
         expect(running.workerRegistry.status()).toMatchObject({
@@ -593,7 +605,8 @@ describe('CLI against server', () => {
         expect(issued.stdout).toContain('Context: /tmp/sherpa/task-context.md');
         const resultFile = await resultFileOf(taskId);
         expect(issued.stdout).toContain(`Write the result to ${resultFile} and submit it:`);
-        expect(issued.stdout).toContain(`sherpa task complete ${String(taskId)} --file ${resultFile}`);
+        expect(issued.stdout).toContain(taskCompleteCommand(TARGET, taskId, resultFile));
+        expect(issued.stdout).not.toMatch(BARE_COMMAND);
 
         const progress = await sherpa('task', 'progress', String(taskId), '--text', 'reading the diff');
         expect(progress.code).toBe(0);
@@ -603,7 +616,9 @@ describe('CLI against server', () => {
         const completed = await sherpa('task', 'complete', String(taskId), '--file', resultFile);
         expect(completed.code).toBe(0);
         expect(completed.stdout).toContain('accepted');
-        expect(completed.stdout).toContain('sherpa worker next');
+        expect(completed.stdout).toContain(workerNextCommand(TARGET));
+        expect(progress.stdout).not.toMatch(BARE_COMMAND);
+        expect(completed.stdout).not.toMatch(BARE_COMMAND);
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'done', result: 'Finished answer.' });
 
         // A submitted task is never issued again. The next `next` call takes a new one.
@@ -669,7 +684,7 @@ describe('CLI against server', () => {
 
         expect(open.code).toBe(1);
         expect(open.stderr).toContain(`${root} is open to other users`);
-        expect(open.stderr).toContain('call `sherpa worker next` again');
+        expect(open.stderr).toContain(`call \`${workerNextCommand(TARGET)}\` again`);
         expect(running.queue.getTask(taskId)?.status).toBe('queued');
 
         await fs.rm(root, { recursive: true });
@@ -693,7 +708,7 @@ describe('CLI against server', () => {
 
         expect(result.code).toBe(1);
         expect(result.stderr).toContain('cannot prepare the directory for task results');
-        expect(result.stderr).toContain('call `sherpa worker next` again');
+        expect(result.stderr).toContain(`call \`${workerNextCommand(TARGET)}\` again`);
         expect(running.queue.getTask(taskId)?.status).toBe('queued');
     });
 
@@ -709,8 +724,23 @@ describe('CLI against server', () => {
         expect(rejected.code).toBe(0);
         expect(rejected.stdout).toContain('rejected');
         expect(rejected.stdout).toContain('1. ');
-        expect(rejected.stdout).toContain(`sherpa task complete ${String(taskId)} --file ${file}`);
+        expect(rejected.stdout).toContain(taskCompleteCommand(TARGET, taskId, file));
+        expect(rejected.stdout).not.toMatch(BARE_COMMAND);
         expect(running.queue.getTask(taskId)?.status).toBe('leased');
+    });
+
+    it('relative --file: the resubmission command names the file by its absolute path', async () => {
+        const running = await start();
+        const taskId = enqueueEcho(running);
+        await sherpa('worker', 'next');
+        const file = await writeFile('empty.md', '   \n');
+        const missing = path.join(workDir, 'missing.md');
+
+        const rejected = await sherpa('task', 'complete', String(taskId), '--file', path.relative(process.cwd(), file));
+        const absent = await sherpa('task', 'complete', String(taskId), '--file', path.relative(process.cwd(), missing));
+
+        expect(rejected.stdout).toContain(taskCompleteCommand(TARGET, taskId, file));
+        expect(absent.stderr).toContain(taskCompleteCommand(TARGET, taskId, missing));
     });
 
     it('rejects an oversized result locally before sending it', async () => {
@@ -724,6 +754,8 @@ describe('CLI against server', () => {
         expect(refused.code).toBe(1);
         expect(refused.stderr).toContain('the limit is 256 KB');
         expect(refused.stderr).toContain('The task stays yours');
+        expect(refused.stderr).toContain(taskCompleteCommand(TARGET, taskId, file));
+        expect(refused.stderr).not.toMatch(BARE_COMMAND);
         // The server never saw the attempt. The task is still leased, not failed.
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
     });
@@ -752,7 +784,7 @@ describe('CLI against server', () => {
 
         expect(repeated.code).toBe(0);
         expect(repeated.stdout).toContain('is already finished');
-        expect(repeated.stdout).toContain('sherpa worker next');
+        expect(repeated.stdout).toContain(workerNextCommand(TARGET));
     });
 
     it('task refusal reaches the queue with its reason', async () => {
@@ -764,6 +796,8 @@ describe('CLI against server', () => {
 
         expect(failed.code).toBe(0);
         expect(failed.stdout).toContain('refusal');
+        expect(failed.stdout).toContain(workerNextCommand(TARGET));
+        expect(failed.stdout).not.toMatch(BARE_COMMAND);
         expect(running.queue.getTask(taskId)).toMatchObject({
             status: 'failed',
             failReason: 'no access to the repository',
@@ -790,7 +824,8 @@ describe('CLI against server', () => {
 
         expect(result.code).toBe(1);
         expect(result.stderr).toContain(`Write the result to ${missing}`);
-        expect(result.stderr).toContain(`sherpa task complete ${String(taskId)} --file ${missing}`);
+        expect(result.stderr).toContain(taskCompleteCommand(TARGET, taskId, missing));
+        expect(result.stderr).not.toMatch(BARE_COMMAND);
         expect(running.queue.getTask(taskId)).toMatchObject({ status: 'leased', result: null });
     });
 

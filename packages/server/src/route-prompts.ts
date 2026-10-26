@@ -158,8 +158,8 @@ ${voiceBlock(locale)}`;
 const COMMON_RESULT = `## Result
 
 Produce a single JSON document that matches the schema file attached to the task. Write it to a
-file and submit it with \`sherpa task complete <id> --file <path>\`; the result must stay under
-256 KB.
+file and submit it with the \`task complete\` command printed by the task, copied as is. The result
+must stay under 256 KB.
 
 The server validates the result before accepting it (fail-closed). A rejected result comes back
 as a list of errors with the path to the offending field of your JSON — fix exactly those places
@@ -169,7 +169,7 @@ for permission: the rejection is part of the normal loop.
 The server is the only validator. Do not check the document against the schema yourself and do
 not install validators or packages for that — the environment you run in is not yours to change.
 Never end the task silently: submit what you produced even if you could not check it locally,
-and if submitting is truly impossible, report it with \`sherpa task fail <id> --reason <text>\`.
+and if submitting is truly impossible, report it with the printed \`task fail\` command and a reason.
 A result you keep to yourself leaves the reviewer waiting in front of an empty screen.
 
 Return JSON only: no prose around it, no markdown fence, no comments inside.`;

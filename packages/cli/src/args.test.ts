@@ -236,4 +236,22 @@ describe('argument parsing', () => {
             expect(() => parseArgs(argv), argv.join(' ')).toThrow(contains);
         }
     });
+
+    it('loop command parse errors never suggest bare `sherpa …` without a path and --pr', () => {
+        expect(() => parseArgs(['worker'])).toThrow('Run the full `worker next` command printed by `up`');
+        expect(() => parseArgs(['worker'])).not.toThrow(/`sherpa (worker|task)\b/u);
+
+        const loopCalls = [
+            ['task'],
+            ['task', 'complete'],
+            ['task', 'fail', 'abc', '--reason', 'x'],
+            ['task', 'fail', '1'],
+            ['task', 'progress', '1', '2', '--text', 'x'],
+        ];
+
+        for (const argv of loopCalls) {
+            expect(() => parseArgs(argv), argv.join(' ')).toThrow('Copy the full command printed');
+            expect(() => parseArgs(argv), argv.join(' ')).not.toThrow(/`sherpa (worker|task)\b/u);
+        }
+    });
 });

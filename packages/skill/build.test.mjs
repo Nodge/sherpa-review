@@ -76,7 +76,9 @@ describe('skill package build', () => {
 
         expect(skill).toMatch(/^---\nname: sherpa\n/u);
         expect(skill).toContain('bin/sherpa.mjs up --pr');
-        expect(skill).toContain('bin/sherpa.mjs worker next --pr');
+        // The loop uses exactly the command printed by `up`, including the full path and `--pr`.
+        expect(skill).toContain('exactly the `worker next` command that `up` printed');
+        expect(skill).not.toContain('bin/sherpa.mjs worker next');
         expect(skill).toContain('--model');
         expect(skill).toContain('DONE');
         // Shared task context rule: a path under `shared/` is read once per session.
@@ -185,6 +187,36 @@ describe('running the built distribution', () => {
         expect({ port: second.port, pid: second.pid }).toEqual({ port: first.port, pid: first.pid });
         expect(warm.stdout).toContain(`http://127.0.0.1:${String(first.port)}/#t=`);
     }, 60_000);
+
+    /** Takes commands from output as is and runs them in a shell from another cwd without `SHERPA_PR`. */
+    it('runs printed loop commands as is from any cwd', () => {
+        const ready = up();
+        expect(ready.status, ready.stderr).toBe(0);
+        const nextCommand = /Then run `([^`]+)`/u.exec(ready.stdout)?.[1];
+        expect(nextCommand).toMatch(new RegExp(`^node \\S+/bin/sherpa\\.mjs worker next --pr ${PR_KEY}$`, 'u'));
+
+        const issued = shell(nextCommand);
+        expect(issued.status, issued.stderr).toBe(0);
+        expect(issued.stdout).toContain('TASK sherpa/');
+        const failCommand = /Cannot do it: (.+) --reason "\.\.\."$/mu.exec(issued.stdout)?.[1];
+        expect(failCommand).toContain(`--pr ${PR_KEY}`);
+
+        const failed = shell(`${failCommand} --reason "checking the loop from another cwd"`);
+        expect(failed.status, failed.stderr).toBe(0);
+        expect(failed.stdout).toContain('is accepted');
+        expect(failed.stdout).toContain(nextCommand);
+    }, 60_000);
+
+    /** Runs the output command as a harness would: in a shell, outside the checkout, without a key in the environment. */
+    function shell(command) {
+        const { SHERPA_SERVER_BIN: _bin, SHERPA_PR: _pr, SHERPA_WORKER_ID: _worker, ...inherited } = process.env;
+        return spawnSync('/bin/sh', ['-c', command], {
+            cwd: tmpdir(),
+            encoding: 'utf8',
+            env: { ...inherited, SHERPA_DIR: sherpaDir },
+            timeout: 20_000,
+        });
+    }
 
     // The worker loop calls the CLI on every request. It must not load the server module.
     it('does not load the server module on worker next but does on server', () => {
